@@ -1,6 +1,6 @@
 ---
 ics: TBD
-title: IBC Eureka
+title: IBC v2
 stage: EXPERIMENTAL
 category: IBC/TAO
 kind: interface
@@ -9,7 +9,7 @@ author: Aditya Sripal <aditya@interchain.io>
 created: 2024-08-15
 ---
 
-## IBC Eureka
+## IBC v2
 
 ### Context
 
@@ -21,7 +21,7 @@ Writing an implementation from scratch is a problem many ecosystems face as a ma
 
 The goal of this document is to serve as the simplest IBC specification that will allow new ecosystems to implement a protocol that can communicate with fully implemented IBC chains using the same security assumptions. It will also explain the motivations of the original design choices of the IBC protocol and how the new ibc architecture rethinks these design choices while still retaining the desired properties of IBC.
 
-The IBC eureka protocol must have the same security properties as IBC, and must be completely compatible with IBC applications. It may not have the full flexibility offered by standard IBC.
+The IBC v2 protocol must have the same security properties as IBC, and must be completely compatible with IBC applications. It may not have the full flexibility offered by standard IBC.
 
 ### Desired Properties
 
@@ -37,7 +37,7 @@ The IBC eureka protocol must have the same security properties as IBC, and must 
 
 The light client module can be implemented exactly as-is with regards to its functionality. It **must** have external endpoints for relayers (off-chain processes that have full-node access to other chains in the network) to initialize a client, update the client, and submit misbehaviour in case the trust model of the client is violated by the counterparty consensus mechanism (e.g. committing to different headers for the same height).
 
-The implementation of each of these endpoints will be specific to the particular consensus mechanism targetted. The choice of consensus algorithm itself is arbitrary, it may be a Proof-of-Stake algorithm like CometBFT, or a multisig of trusted authorities, or a rollup that relies on an additional underlying client in order to verify its consensus. However, a light client must have the ability to define finality for a given snapshot of the state machine, this may be either through single-slot finality or a finality gadget.
+The implementation of each of these endpoints will be specific to the particular consensus mechanism targeted. The choice of consensus algorithm itself is arbitrary, it may be a Proof-of-Stake algorithm like CometBFT, or a multisig of trusted authorities, or a rollup that relies on an additional underlying client in order to verify its consensus. However, a light client must have the ability to define finality for a given snapshot of the state machine, this may be either through single-slot finality or a finality gadget.
 
 Thus, the endpoints themselves should accept arbitrary bytes for the arguments passed into these client endpoints as it is up to each individual client implementation to unmarshal these bytes into the structures they expect.
 
@@ -57,7 +57,7 @@ function updateClient(
     header: bytes,
 ): error
 
-// once a client has been created, relayers can submit misbehaviour that proves the counterparty chain
+// once a client has been created, relayers can submit misbehaviour that proves the counterparty chain violated the trust model.
 // The light client must verify the misbehaviour using the trust model of the consensus mechanism
 // and execute some custom logic such as freezing the client from accepting future updates and proof verification.
 function submitMisbehaviour(
@@ -71,7 +71,7 @@ function submitMisbehaviour(
 
 ### Core IBC Functionality
 
-IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. IBC Eureka intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
+IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. IBC v2 intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
 
 Properties of Connection:
 
@@ -96,7 +96,7 @@ Properties of Channel:
 
 In core IBC, the connection and channel handshakes serve to ensure the validity of counterparty clients, ensure the IBC and application versions are mutually compatible, as well as providing unique identifiers for each side to refer to the counterparty.
 
-Since we are removing handshakes in IBC lite, we must have a different way to provide the chain with knowledge of the counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us; we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace; but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counteparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
+Since we are removing handshakes in IBC lite, we must have a different way to provide the chain with knowledge of the counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us; we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace; but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counterparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
 
 Thus, IBC lite will introduce a new message `ProvideCounterparty` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `ProvideCounterparty` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `ProvideCounterparty` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
 
@@ -107,15 +107,15 @@ interface Counterparty {
 }
 
 function ProvideCounterparty(
-    channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
-    counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    clientIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
+    counterpartyClientIdentifier: Identifier, // this is the counterparty's identifier of our chain
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
     counterparty = Counterparty{
-        channelId: counterpartyChannelIdentifier,
+        clientId: counterpartyClientIdentifier,
         keyPrefix: counterpartyKeyPrefix
     }
 
@@ -123,9 +123,9 @@ function ProvideCounterparty(
 }
 
 // getCounterparty retrieves the stored counterparty identifier
-// given the channelIdentifier on our chain once it is provided
-function getCounterparty(channelIdentifier: Identifier): Counterparty {
-    return privateStore.get(counterpartyPath(channelIdentifier))
+// given the clientIdentifier on our chain once it is provided
+function getCounterparty(clientIdentifier: Identifier): Counterparty {
+    return privateStore.get(counterpartyPath(clientIdentifier))
 }
 ```
 
@@ -192,7 +192,6 @@ function sendPacket(
 
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     sequence = channelStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
-    
     // store commitment to the packet data & packet timeout
     channelStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
@@ -245,7 +244,7 @@ function recvPacket(
     assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
-  
+
     // we must set the receipt so it can be verified on the other side
     // this receipt does not contain any data, since the packet has not yet been processed
     // it's the sentinel success receipt: []byte{0x01}
@@ -274,7 +273,7 @@ function recvPacket(
     cbs = router.callbacks[packet.destPort]
     // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
     ack = cbs.OnRecvPacket(packet, relayer)
-    
+
     if ack != nil {
         channelStore.set(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence), ack)
     }
@@ -294,7 +293,7 @@ function acknowledgePacket(
     // assert dest channel is sourceChannel's counterparty channel identifier
     counterparty = getCounterparty(packet.destChannel)
     assert(packet.sourceChannel == counterparty.channelId)
-   
+
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
 
@@ -331,7 +330,7 @@ function timeoutPacket(
     // assert dest channel is sourceChannel's counterparty channel identifier
     counterparty = getCounterparty(packet.destChannel)
     assert(packet.sourceChannel == counterparty.channelId)
-   
+
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
 
@@ -345,7 +344,7 @@ function timeoutPacket(
     assert(err != nil)
 
     // check that timeout height or timeout timestamp has passed on the other end
-    asert(
+    assert(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
 
@@ -381,12 +380,12 @@ Similarly, for packet flow messages sent to the sender (AcknowledgePacket, Timeo
 
 Claim: If the clients are setup correctly, then a chain cannot mistake a packet flow message intended for a different chain as a valid message from a valid counterparty.
 
-We must note that client identifiers are unique to each chain but are not globally unique. Let us first consider a user that correctly specifies the source and destination identifiers in the packet. 
+We must note that client identifiers are unique to each chain but are not globally unique. Let us first consider a user that correctly specifies the source and destination identifiers in the packet.
 
 We wish to ensure that well-formed packets (i.e. packets with correctly setup client ids) cannot have packet flow messages succeed on third-party chains. Ill-formed packets (i.e. packets with invalid client ids) may in some cases complete in invalid states; however we must ensure that any completed state from these packets cannot mix with the state of other valid packets.
 
 We are guaranteed that the source identifier is unique on the source chain, the destination identifier is unique on the destination chain. Additionally, the destination identifier points to a valid client of the source chain, and the source identifier points to a valid client of the destination chain.
 
-Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain. 
+Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain.
 
-In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client on the destination chain (retrieved using destination identifier) with the packet commitment path derived by the source identifier. This verification check can only pass if the chain identified by the destination client committed the packet we received under the source channel identifier. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct . Since the sender only sends packets intended for the desination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the reciver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
+In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client on the destination chain (retrieved using destination identifier) with the packet commitment path derived by the source identifier. This verification check can only pass if the chain identified by the destination client committed the packet we received under the source channel identifier. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct . Since the sender only sends packets intended for the destination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the receiver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
