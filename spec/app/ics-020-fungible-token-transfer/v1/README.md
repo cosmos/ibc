@@ -9,7 +9,7 @@ kind: instantiation
 version compatibility: ibc-go v7.0.0, ibc-rs v0.53.0
 author: Christopher Goes <cwgoes@interchain.berlin>
 created: 2019-07-15 
-modified: 2020-02-24
+modified: 2024-10-31
 ---
 
 ## Synopsis
@@ -113,29 +113,17 @@ interface ModuleState {
 
 The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC routing module.
 
-#### Port & channel setup
+#### Application callback setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to register the application callbacks in the IBC router.
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("transfer", ModuleCallbacks{
-    onChanOpenInit,
-    onChanOpenTry,
-    onChanOpenAck,
-    onChanOpenConfirm,
-    onChanCloseInit,
-    onChanCloseConfirm,
-    onRecvPacket,
-    onTimeoutPacket,
-    onAcknowledgePacket,
-    onTimeoutPacketClose
-  })
-  claimCapability("port", capability)
+  IBCRouter.callbacks["transfer"]=[onSendPacket,onRecvPacket,onAcknowledgePacket,onTimeoutPacket]
 }
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the fungible token transfer module on separate chains.
+Once the `setup` function has been called, the application callbacks are registered and accessible in the IBC router.  
 
 An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
 to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
@@ -143,93 +131,24 @@ that the module itself doesn't need to worry about what connections or channels 
 
 #### Routing module callbacks
 
-##### Channel lifecycle management
-
-Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
-
-- The channel being created is unordered.
-- The version string is `ics20-1`.
+##### Utility functions
 
 ```typescript
-function onChanOpenInit(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  version: string) => (version: string, err: Error) {
-  // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1" or empty
-  // if empty, we return the default transfer version to core IBC
-  // as the version for this channel
-  abortTransactionUnless(version === "ics20-1" || version === "")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
-  return "ics20-1", nil
-}
-```
-
-```typescript
-function onChanOpenTry(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) => (version: string, err: Error) {
-  // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1"
-  abortTransactionUnless(counterpartyVersion === "ics20-1")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
-  // return version that this chain will use given the
-  // counterparty version
-  return "ics20-1", nil
-}
-```
-
-```typescript
-function onChanOpenAck(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) {
-  // port has already been validated
-  // assert that counterparty selected version is "ics20-1"
-  abortTransactionUnless(counterpartyVersion === "ics20-1")
-}
-```
-
-```typescript
-function onChanOpenConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-  // accept channel confirmations, port has already been validated, version has already been validated
-}
-```
-
-```typescript
-function onChanCloseInit(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-    // always abort transaction
-    abortTransactionUnless(FALSE)
-}
-```
-
-```typescript
-function onChanCloseConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-  // no action necessary
+function unmarshal(encoding: Encoding, version: string, appData: bytes): bytes{
+  if (version == "ics20-v1"){
+     FungibleTokenPacketData data = decode(encoding,appData)
+     return data;
+  } else{
+    return nil 
+  } 
 }
 ```
 
 ##### Packet relay
+
+This specification defines packet handling semantics.
+
+Both machines `A` and `B` accept new packet from any module on another machine, if and only if the version string is `ics20-1`.
 
 In plain English, between chains `A` and `B`:
 
@@ -240,81 +159,75 @@ In plain English, between chains `A` and `B`:
   an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
   to take appropriate action based on the nature of the failure.
 
-`sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+`onSendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
-function sendFungibleTokens(
-  denomination: string,
-  amount: uint256,
-  sender: string,
-  receiver: string,
-  sourcePort: string,
-  sourceChannel: string,
-  timeoutHeight: Height,
-  timeoutTimestamp: uint64, // in unix nanoseconds
-): uint64 {
-    prefix = "{sourcePort}/{sourceChannel}/"
+function onSendFungibleTokens(
+  sourceChannelId:bytes,
+  payload: Payload
+  ): bool {
+
+    appData=unmarshal(payload.encoding,payload.version,payload.appData)
+    abortTransactionUnless(appData!=nil)
+
+    prefix = "{payload.sourcePort}/{sourceChannelId}/"
     // we are the source if the denomination is not prefixed
-    source = denomination.slice(0, len(prefix)) !== prefix
+    source = appData.denom.slice(0, len(prefix)) !== prefix
     if source {
       // determine escrow account
-      escrowAccount = channelEscrowAddresses[sourceChannel]
+      escrowAccount = channelEscrowAddresses[sourceChannelId]
       // escrow source tokens (assumed to fail if balance insufficient)
-      bank.TransferCoins(sender, escrowAccount, denomination, amount)
+      bank.TransferCoins(appData.sender, escrowAccount, appData.denom, appData.amount)
     } else {
       // receiver is source chain, burn vouchers
-      bank.BurnCoins(sender, denomination, amount)
+      bank.BurnCoins(appData.sender, appData.denom, appData.amount)
     }
 
-    // create FungibleTokenPacket data
-    data = FungibleTokenPacketData{denomination, amount, sender, receiver}
-
-    // send packet using the interface defined in ICS4
-    sequence = handler.sendPacket(
-      getCapability("port"),
-      sourcePort,
-      sourceChannel,
-      timeoutHeight,
-      timeoutTimestamp,
-      json.marshal(data) // json-marshalled bytes of packet data
-    )
-
-    return sequence
+    return true
 }
 ```
 
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
-  assert(data.denom !== "")
-  assert(data.amount > 0)
-  assert(data.sender !== "")
-  assert(data.receiver !== "")
+function onRecvPacket(
+  destChannelId: bytes,
+  sourceChannelId: bytes,
+  sequence: uint64, 
+  payload: Payload,
+  relayer: address
+): (bytes,bool) {
+
+  appData=unmarshal(payload.encoding,payload.version,payload.appData)
+  abortTransactionUnless(appData!=nil)
+
+  assert(appData.denom !== "")
+  assert(appData.amount > 0)
+  assert(appData.sender !== "")
+  assert(appData.receiver !== "")
 
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+  prefix = "{payload.sourcePort}/{sourceChannelId}/"
   // we are the source if the packets were prefixed by the sending chain
-  source = data.denom.slice(0, len(prefix)) === prefix
+  source = appData.denom.slice(0, len(prefix)) === prefix
   if source {
     // receiver is source chain: unescrow tokens
     // determine escrow account
-    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    escrowAccount = channelEscrowAddresses[destChannelId]
     // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    err = bank.TransferCoins(escrowAccount, data.receiver, data.denom.slice(len(prefix)), data.amount)
+    err = bank.TransferCoins(escrowAccount, appData.receiver, appData.denom.slice(len(prefix)), appData.amount)
     if (err !== nil)
       ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
   } else {
     prefix = "{packet.destPort}/{packet.destChannel}/"
-    prefixedDenomination = prefix + data.denom
+    prefixedDenomination = prefix + appData.denom
     // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-    err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
+    err = bank.MintCoins(appData.receiver, prefixedDenomination, appData.amount)
     if (err !== nil)
       ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
   }
-  return ack
+  return ack,true
 }
 ```
 
@@ -322,45 +235,59 @@ function onRecvPacket(packet: Packet) {
 
 ```typescript
 function onAcknowledgePacket(
-  packet: Packet,
-  acknowledgement: bytes) {
+  sourceChannelId: bytes,
+  destChannelId: bytes, // This parameter won't be used. It's provided in input for adherence with ics04
+  sequence: uint64, // This parameter won't be used. It's provided in input for adherence with ics04
+  payload: Payload, 
+  acknowledgement: bytes, 
+  relayer: address
+  ): bool {
   // if the transfer failed, refund the tokens
-  if (!acknowledgement.success)
-    refundTokens(packet)
+  if (!acknowledgement.success){
+    refundTokens(sourceChannelId,payload)
+  }
+  return true
 }
 ```
 
 `onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
 
 ```typescript
-function onTimeoutPacket(packet: Packet) {
+function onTimeoutPacket(
+  sourceChannelId: bytes,
+  destChannelId: bytes, // This parameter won't be used. It's provided in input for adherence with ics04 
+  sequence: uint64, // This parameter won't be used. It's provided in input for adherence with ics04
+  payload: Payload, 
+  relayer: address
+  ): bool {
   // the packet timed-out, so refund the tokens
-  refundTokens(packet)
+  refundTokens(sourceChannelId,payload)
+  return true
 }
 ```
 
 `refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
 
 ```typescript
-function refundTokens(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+function refundTokens(
+  sourceChannelId: bytes,
+  payload: Payload
+  ){
+
+  appData=unmarshal(payload.encoding,payload.version,payload.appData)
+  abortTransactionUnless(appData!=nil)
+
+  prefix = "{payload.sourcePort}/{sourceChannelId}/"
   // we are the source if the denomination is not prefixed
-  source = data.denom.slice(0, len(prefix)) !== prefix
+  source = appData.denom.slice(0, len(prefix)) !== prefix
   if source {
     // sender was source chain, unescrow tokens back to sender
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, data.sender, data.denom, data.amount)
+    escrowAccount = channelEscrowAddresses[sourceChannelId]
+    bank.TransferCoins(escrowAccount, appData.sender, appData.denom, appData.amount)
   } else {
     // receiver was source chain, mint vouchers back to sender
-    bank.MintCoins(data.sender, data.denom, data.amount)
+    bank.MintCoins(appData.sender, appData.denom, appData.amount)
   }
-}
-```
-
-```typescript
-function onTimeoutPacketClose(packet: Packet) {
-  // can't happen, only unordered channels allowed
 }
 ```
 
@@ -441,6 +368,8 @@ Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 July 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
+
+Oct 31, 2024 - [Support for IBC TAO V2](https://github.com/cosmos/ibc/pull/1157)
 
 ## Copyright
 

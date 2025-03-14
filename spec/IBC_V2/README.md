@@ -192,7 +192,6 @@ function sendPacket(
 
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     sequence = channelStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
-
     // store commitment to the packet data & packet timeout
     channelStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),

@@ -8,7 +8,7 @@ implements: 2
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-10
-modified: 2024-08-19
+modified: 2019-12-19
 ---
 
 ## Synopsis
@@ -59,7 +59,7 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, delayTimePeriod, delayBlockPeriod, latest height, latest timestamp (block time), and a possible frozen height. 
+The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
 
 ```typescript
 interface ClientState {
@@ -67,8 +67,6 @@ interface ClientState {
   trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
-  delayTimePeriod: uint64 
-  delayBlockPeriod: uint64 
   latestHeight: Height
   frozenHeight: Maybe<uint64>
   upgradePath: []string
@@ -379,6 +377,8 @@ These functions utilise the `proofSpecs` with which the client was initialised.
 function verifyMembership(
   clientState: ClientState,
   height: Height,
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
   value: []byte
@@ -388,9 +388,9 @@ function verifyMembership(
   // check that the client is unfrozen or frozen at a higher height
   assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
   // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + clientState.delayTimePeriod)
+  assert(currentTimestamp() >= processedTime + delayPeriodTime)
   // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + clientState.delayBlockPeriod)
+  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
   // fetch the previously verified commitment root & verify membership
   // Implementations may choose how to pass in the identifier
   // ibc-go provides the identifier-prefixed store to this method
@@ -406,6 +406,8 @@ function verifyMembership(
 function verifyNonMembership(
   clientState: ClientState,
   height: Height,
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath
 ): Error {
@@ -414,9 +416,9 @@ function verifyNonMembership(
   // check that the client is unfrozen or frozen at a higher height
   assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
   // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + clientState.delayTimePeriod)
+  assert(currentTimestamp() >= processedTime + delayPeriodTime)
   // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + clientState.delayBlockPeriod)
+  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
   // fetch the previously verified commitment root & verify membership
   // Implementations may choose how to pass in the identifier
   // ibc-go provides the identifier-prefixed store to this method
@@ -450,10 +452,7 @@ Not applicable. Alterations to the client verification algorithm will require a 
 ## History
 
 December 10th, 2019 - Initial version
-
 December 19th, 2019 - Final first draft
-
-August 19th, 2024 - [Support for IBC/TAO V2](https://github.com/cosmos/ibc/pull/1137)
 
 ## Copyright
 
