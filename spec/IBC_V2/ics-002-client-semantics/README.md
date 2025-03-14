@@ -52,16 +52,6 @@ One *write-only* client could be used to store state updates (without the abilit
 while many *read-only* clients with different finality thresholds (confirmation depths after which 
 state updates are considered final) are used to verify state updates. 
 
-The client protocol should also support third-party introduction.
-For example, if `A`, `B`, and `C` are three state machines, with 
-Alice a module on `A`, Bob a module on `B`, and Carol a module on `C`, such that
-Alice knows both Bob and Carol, but Bob knows only Alice and not Carol, 
-then Alice can utilise an existing channel to Bob to communicate the canonically-serialisable 
-validity predicate for Carol. Bob can then use this validity predicate to open a connection and channel 
-so that Bob and Carol can talk directly.
-If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
-connection attempt, so that Carol knows to accept the incoming request.
-
 Client interfaces should also be constructed so that custom validation logic can be provided safely
 to define a custom client at runtime, as long as the underlying state machine can provide an
 appropriate gas metering mechanism to charge for compute and storage. On a host state machine
@@ -69,8 +59,6 @@ which supports WASM execution, for example, the validity predicate and misbehavi
 could be provided as executable WASM functions when the client instance is created.
 
 ### Definitions
-
-- `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
 - `Consensus` is a state update generating algorithm. It takes the previous state of a state machine together 
   with a set of messages (i.e., state machine transactions) and generates a valid state update of the state machine.
@@ -95,12 +83,6 @@ types may require additional properties.
 - `Height` specifies the order of the state updates of a state machine, e.g., a sequence number. 
   This entails that each state update is mapped to a `Height`.
 
-- `CommitmentRoot` is as defined in [ICS 23]( ../../ics-023-vector-commitments). 
-  It provides an efficient way for higher-level protocol abstractions to verify whether
-  a particular state transition has occurred on the remote state machine, i.e.,
-  it enables proofs of inclusion or non-inclusion of particular values at particular paths 
-  in the state of the remote state machine at particular `Height`s.
-
 - `ClientMessage` is an arbitrary message defined by the client type that relayers can submit in order to update the client.
   The ClientMessage may be intended as a regular update which may add new consensus state for proof verification, or it may contain
   misbehaviour which should freeze the client.
@@ -108,24 +90,29 @@ types may require additional properties.
 - `ValidityPredicate` is a function that validates a ClientMessage sent by a relayer in order to update the client. 
   Using the `ValidityPredicate` SHOULD be more computationally efficient than executing `Consensus`.
 
+```typescript
+type ValidityPredicate = (clientState: bytes, trustedConsensusState: bytes, trustedHeight: Number) => (newConsensusState: bytes, newHeight: Number, err: Error)
+```
+
 - `ConsensusState` is the *trusted view* of the state of a state machine at a particular `Height`.
-  It MUST contain sufficient information to enable the `ValidityPredicate` to validate state updates, 
+  It MUST contain sufficient information to enable the `ValidityPredicate` to validate future state updates, 
   which can then be used to generate new `ConsensusState`s. 
-  It MUST be serialisable in a canonical fashion so that remote parties, such as remote state machines,
-  can check whether a particular `ConsensusState` was stored by a particular state machine.
-  It MUST be introspectable by the state machine whose view it represents, 
-  i.e., a state machine can look up its own `ConsensusState`s at past `Height`s.
 
 - `ClientState` is the state of a client. It MUST expose an interface to higher-level protocol abstractions, 
   e.g., functions to verify proofs of the existence of particular values at particular paths at particular `Height`s.
 
 - `MisbehaviourPredicate` is a function that checks whether the rules of `Consensus` were broken, 
   in which case the client MUST be *frozen*, i.e., no subsequent `ConsensusState`s can be generated.
+  Verification against the client after it is frozen will also fail.
+
+```typescript
+type MisbehaviourPredicate = (clientState: bytes, trustedConsensusState: bytes, trustedHeight: Number, misbehaviour: bytes) => bool
+```
 
 - `Misbehaviour` is the proof needed by the `MisbehaviourPredicate` to determine whether 
   a violation of the consensus protocol occurred. For example, in the case the state machine 
   is a blockchain, a `Misbehaviour` might consist of two signed block headers with 
-  different `CommitmentRoot`s, but the same `Height`.
+  different `ConsensusState` for the same `Height`.
 
 ### Desired Properties
 
@@ -141,7 +128,9 @@ the `Consensus` of the remote state machine.
 In case of misbehavior, the behaviour of the `ValidityPredicate` might differ from the behaviour of 
 the remote state machine and its `Consensus` (since clients do not execute the `Consensus` of the 
 remote state machine). In this case, a `Misbehaviour` SHOULD be submitted to the host state machine, 
-which would result in the client being frozen and higher-level intervention being necessary.
+which would result in the client being frozen. Once the client is frozen, a recovery mechanism to address
+the situation must occur before client processing can presume. This recovery mechanism is out-of-scope 
+of the IBC protocol as the specific recovery needed is highly case-dependent.
 
 ## Technical Specification
 
@@ -149,11 +138,9 @@ This specification outlines what each *client type* must define. A client type i
 of the data structures, initialisation logic, validity predicate, and misbehaviour predicate required
 to operate a light client. State machines implementing the IBC protocol can support any number of client
 types, and each client type can be instantiated with different initial consensus states in order to track
-different consensus instances. In order to establish a connection between two state machines (see [ICS 3]( ../../ics-003-connection-semantics)),
-the state machines must each support the client type corresponding to the other state machine's consensus algorithm.
+different consensus instances.
 
-Specific client types shall be defined in later versions of this specification and a canonical list shall exist in this repository.
-State machines implementing the IBC protocol are expected to respect these client types, although they may elect to support only a subset.
+Specific client types and their specifications are defined in the light clients section of this repository.
 
 ### Data Structures
 
@@ -190,21 +177,17 @@ the consensus process, including signatures and validator set metadata.
 
 `ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
 for each `ConsensusState` (such that each height has exactly one associated consensus state).
-Two `ConsensusState`s on the same chain SHOULD NOT have the same height if they do not have
-equal commitment roots. Such an event is called an "equivocation" and MUST be classified
+There MUST NOT be two valid `ConensusState`s for the same height. 
+Such an event is called an "equivocation" and MUST be classified
 as misbehaviour. Should one occur, a proof should be generated and submitted so that the client can be frozen
 and previous state roots invalidated as necessary.
-
-The `ConsensusState` of a chain MUST have a canonical serialisation, so that other chains can check
-that a stored consensus state is equal to another (see [ICS 24](../ics-024-host-requirements) for the keyspace table).
 
 ```typescript
 type ConsensusState = bytes
 ```
 
-The `ConsensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
-
-The `ConsensusState` MUST define a `getTimestamp()` method which returns the timestamp associated with that consensus state:
+The `ConsensusState` MUST define a `getTimestamp()` method which returns the timestamp **in seconds** associated with that consensus state.
+This timestamp MUST be the timestamp used in the counterparty state machine and agreed to by `Consensus`.
 
 ```typescript
 type getTimestamp = ConsensusState => uint64
@@ -254,92 +237,14 @@ A `ClientMessage` is an opaque data structure defined by a client type which pro
 type ClientMessage = bytes
 ```
 
-### Store paths
-
-Client state paths are stored under a unique client identifier.
-
-```typescript
-function clientStatePath(id: Identifier): Path {
-  return "clients/{id}/clientState"
-}
-```
-
-Consensus state paths are stored under a unique combination of client identifier and height:
-
-```typescript
-function consensusStatePath(id: Identifier, height: Height): Path {
-  return "clients/{id}/consensusStates/{height}"
-}
-```
-
-#### Validity predicate
-
-A validity predicate is an opaque function defined by a client type to verify `ClientMessage`s depending on the current `ConsensusState`.
-Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
-for the given parent `ClientMessage` and the list of network messages.
-
-The validity predicate is defined as:
-
-```typescript
-type verifyClientMessage = (ClientMessage) => Void
-```
-
-`verifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
-
-#### Misbehaviour predicate
-
-A misbehaviour predicate is an opaque function defined by a client type, used to check if a ClientMessage
-constitutes a violation of the consensus protocol. For example, if the state machine is a blockchain, this might be two signed headers
-with different state roots but the same height, a signed header containing invalid
-state transitions, or other proof of malfeasance as defined by the consensus algorithm.
-
-The misbehaviour predicate is defined as
-
-```typescript
-type checkForMisbehaviour = (ClientMessage) => bool
-```
-
-`checkForMisbehaviour` MUST throw an exception if the provided proof of misbehaviour was not valid.
-
-#### Update state
-
-Function `updateState` is an opaque function defined by a client type that will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessage`s.
-
-```typescript
-type updateState = (ClientMessage) => Void
-```
-
-`verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return false before this function is called.
-
-The client MUST also mutate internal state to store
-now-finalised consensus roots and update any necessary signature authority tracking (e.g.
-changes to the validator set) for future calls to the validity predicate.
-
-Clients MAY have time-sensitive validity predicates, such that if no ClientMessage is provided for a period of time
-(e.g. an unbonding period of three weeks) it will no longer be possible to update the client, i.e., the client is being frozen. 
-In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
-to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
-
-#### Update state on misbehaviour
-
-Function `updateStateOnMisbehaviour` is an opaque function defined by a client type that will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
-
-```typescript
-type updateStateOnMisbehaviour = (ClientMessage) => Void
-```
-
-`verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return `true` before this function is called.
-
-The client MUST also mutate internal state to mark appropriate heights which
-were previously considered valid as invalid, according to the nature of the misbehaviour.
-
-Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
-A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
-to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
-
 #### `CommitmentProof`
 
-`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23]( ../../ics-023-vector-commitments).
+`CommitmentProof` is an opaque data structure defined by the client type.
+
+```typescript
+type CommitmentProof = bytes
+```
+
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
@@ -349,7 +254,7 @@ Client types must define functions to authenticate internal state of the state m
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). 
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-provable-keys/README.md)). 
 
 ```typescript
 type verifyMembership = (
@@ -364,7 +269,7 @@ type verifyMembership = (
 `verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)).
 
-Since the verification method is designed to give complete control to client implementations, clients can support chains that do not provide absence proofs by verifying the existence of a non-empty sentinel `ABSENCE` value. Thus in these special cases, the proof provided will be an ICS-23 Existence proof, and the client will verify that the `ABSENCE` value is stored under the given path for the given height.
+Since the verification method is designed to give complete control to client implementations, clients can support chains that do not provide absence proofs by verifying the existence of a non-empty sentinel `ABSENCE` value. Thus in these special cases, the proof provided will be an Existence proof, and the client will verify that the `ABSENCE` value is stored under the given path for the given height.
 
 ```typescript
 type verifyNonMembership = (
@@ -373,57 +278,6 @@ type verifyNonMembership = (
   proof: CommitmentProof,
   path: CommitmentPath)
   => Error
-```
-
-### Query interface
-
-#### Chain queries
-
-These query endpoints are assumed to be exposed over HTTP or an equivalent RPC API by nodes of the chain associated with a particular client.
-
-`queryUpdate` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of clientMessage for a given height. This endpoint is assumed to be untrusted.
-
-```typescript
-type queryUpdate = (height: Height) => ClientMessage
-```
-
-`queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
-When used in this fashion, the returned `ConsensusState` MUST be manually confirmed by the querying entity, since it is subjective. This endpoint is assumed to be untrusted. The precise nature of the
-`ConsensusState` may vary per client type.
-
-```typescript
-type queryChainConsensusState = (height: Height) => ConsensusState
-```
-
-Note that retrieval of past consensus states by height (as opposed to just the current consensus state) is convenient but not required.
-
-`queryChainConsensusState` MAY also return other data necessary to create clients, such as the "unbonding period" for certain proof-of-stake security models. This data MUST also be verified by the querying entity.
-
-#### On-chain state queries
-
-This specification defines a single function to query the state of a client by-identifier.
-
-```typescript
-function queryClientState(identifier: Identifier): ClientState {
-  return provableStore.get(clientStatePath(identifier))
-}
-```
-
-The `ClientState` type SHOULD expose its latest verified height (from which the consensus state can then be retrieved using `queryConsensusState` if desired).
-
-```typescript
-type latestHeight = (state: ClientState) => Height
-```
-
-Client types SHOULD define the following standardised query functions in order to allow relayers & other off-chain entities to interface with on-chain state in a standard API.
-
-`queryConsensusState` allows stored consensus states to be retrieved by height.
-
-```typescript
-type queryConsensusState = (
-  identifier: Identifier,
-  height: Height,
-) => ConsensusState
 ```
 
 #### Implementation strategies
@@ -449,8 +303,8 @@ security assumptions of proxy state machine correctness.
 
 ##### Merklized state trees
 
-For clients of state machines with Merklized state trees, these functions can be implemented by calling the [ICS-23]( ../../ics-023-vector-commitments/README.md) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
-root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23]( ../../ics-023-vector-commitments).
+For clients of state machines with Merklized state trees, these functions can be implemented as MerkleTree Existence and NonExistence proofs. Client implementations may choose to implement these methods for the specific tree used by the counterparty chain or they can use the tree-generic [ICS-23](github.com/cosmos/ics23) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
+root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights for any ICS-23 compliant tree given a ProofSpec that describes how the tree is constructed. In this case, the ICS-23 `ProofSpec` MUST be provided to the client on initialization.
 
 ```typescript
 type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean
@@ -459,6 +313,22 @@ type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => b
 ```typescript
 type verifyNonMembership = (ClientState, Height, CommitmentProof, Path) => boolean
 ```
+
+ProofVerification Inputs:
+- `clientId: bytes`: The identifier of the client that will verify the proof.
+- `Height: Number`: The height for the consensus state that the proof will be verified against.
+- `Path: CommitmentPath`: The path of the key being proven. In the IBC protocol, this will be an ICS24 standardized path prefixed by the `CommitmentPrefix` registered on the counterparty. The `Path` MUST be constructed by the IBC handler given the IBC message, it MUST NOT be provided by the relayer as the relayer is untrusted.
+- `Value: Optional<bytes>`: The value being proven.  If it is non-empty this is a membership proof. If the value is nil, this is a non-membership proof.
+
+ProofVerification Preconditions:
+- A client has already been created for the `clientId`.
+- A `ConsensusState` is stored for the given `Height`.
+
+ProofVerification Postconditions:
+- Proof verification should be stateless in most cases. In the case that the proof verification is a signature check, we may wish to increment a nonce to prevent replay attacks.
+
+ProofVerification Errorconditions:
+- `CommitmentProof` does not successfully verify with the provided `CommitmentPath` and `Value` with the retrieved `ConsensusState` for the provided `Height`.
 
 ### Sub-protocols
 
@@ -485,94 +355,99 @@ a particular past root to reference, which is looked up by height. IBC handler f
 must ensure that they also perform any requisite checks on the height passed in by the caller to ensure
 logical correctness.
 
-#### Create
+#### CreateClient
 
-Calling `createClient` with the client state and initial consensus state creates a new client.
+Calling `createClient` with the client state and initial consensus state creates a new client. The intiator of this client is responsible for setting all of the initial parameters of the `ClientState` and the initial root-of-trust `ConsensusState`. The client implementation is then responsible for executing the light client `ValidityPredicate` against these initial parameters. Thus, once a root-of-trust is instantiated; the light client guarantees to preserve that trust within the confines of the security model as parameterized by the `ClientState`. If a user verifies that a client is a valid client of the counterparty chain once, they can be guaranteed that it will remain a valid client into the future so long as the `MisbehaviourPredicate` is not triggered. If the `MisbehaviourPredicate` is triggered however, this can be submitted as misbehaviour to freeze the IBC light client operations.
 
-```typescript
-function createClient(clientState: clientState, consensusState: ConsensusState): identifier {
-  // implementations may define a identifier generation function
-  identifier = generateClientIdentifier()
-  abortTransactionUnless(privateStore.get(clientStatePath(identifier)) === null)
-  initialise(identifier, clientState, consensusState)
-  return Identifier
-}
-```
+CreateClient Inputs:
+`clientType: string`: This is the client-type that references a particular light client implementation on the chain. The `CreateClient` message will create a new instance of the given client-type.
+`ClientState: bytes`: This is the opaque client state as defined for the given client type. It will contain any parameters needed for verifying client updates and proof verification against a `ConsensusState`. The `ClientState` parameterizes the security model as implemented by the client type.
+`ConsensusState: bytes`: This is the opaque consensus state as defined for the given client type. It is the initial consensus state provided and MUST be capable of being used by the `ValidityPredicate` to add new `ConsensusState`s to the client. The initial `ConsensusState` MAY also be used for proof verification but it is not necessary.
+`Height: Number`: This is the height that is associated with the initial consensus state.
+
+CreateClient Preconditions:
+- The provided `clientType` is supported by the chain and can be routed to by the IBC handler.
+
+CreateClient PostConditions:
+- A unique identifier `clientId` is generated for the client
+- The provided `ClientState` is persisted to state and retrievable given the `clientId`.
+- The provided `ConsensusState` is persisted to state and retrievable given the `clientId` and `height`.
+
+CreateClient ErrorConditions:
+- The provided `ClientState` is invalid given the client type.
+- The provided `ConsensusState` is invalid given the client type.
+- The `Height` is not a positive number.
 
 #### RegisterCounterparty
 
-IBC version 2 introduces a `registerCounterparty` procedure. Calling `registerCounterparty` with the clientId will register the counterparty clientId 
+IBC Version 2 introduces a `registerCounterparty` procedure. Calling `registerCounterparty` with the clientId will register the counterparty clientId 
 that the counterparty will use to write packet messages intended for our chain. All ICS24 provable paths to our chain will be keyed on the counterparty clientId, so each client must be aware of the counterparty's identifier in order to construct the path for key verification and ensure there is an authenticated stream of packet data between the clients that do not get written to by other clients.
+The `registerCounterparty` also includes the `CommitmentPrefix` to use for the counterparty chain. Most chains will not store the ICS24 directly under the root of a MerkleTree and will instead store the standardized paths under a custom prefix, thus the counterparty client must be given this information to verify proofs correctly. The `CommitmentPrefix` is defined as an array of byte arrays to support nested Merkle trees. In this case, each element of the outer array is a key for each tree in the nested structure ordered from the top-most tree to the lowest level tree. In this case, the ICS24 path is appended to the key of the lowest-level tree (i.e. the last element of the commitment prefix) in order to get the full `CommitmentPath` for proof verification.
 
-```typescript
-function registerCounterparty(clientId: identifier, counterpartyId: identifier) {
+RegisterCounterparty Inputs:
+`clientId: bytes`: The clientId on the executing chain.
+`counterpartyClientId: bytes`: The identifier of the client used by the counterparty chain to verify the executing chain.
+`counterpartyCommitmentPrefix: []bytes`: The prefix used by the counterparty chain.
 
-}
-```
+RegisterCounterparty Preconditions:
+- A client has already been created for the `clientId`
 
-#### Query
+RegisterCounterparty Postconditions:
+- The `counterpartyClientId` is retrievable given the `clientId`.
+- The `counterpartyCommitmentPrefix` is retrievable given the `clientId`.
 
-Client consensus state and client internal state can be queried by identifier, but
-the specific paths which must be queried are defined by each client type.
+RegisterCounterparty ErrorConditions:
+- There does not exist a client for the given `clientId`
+- `RegisterCounterparty` has already been called for the given `clientId`
+
+NOTE: Once the clients and counterparties have been registered on both sides, the connection between the clients is established and packet flow between the clients may commence. Users are expected to verify that the clients and counterparties are set correctly before using the connection to send packets. They may do this directly themselves or through social consensus.
+NOTE: `RegisterCounterparty` is setting information that will be crucial for proper proof verification of IBC messages using our client. Thus, it must be authenticated properly. The `RegisterCounterparty` message can be permissionless in which case the fields must be authenticated against the counterparty chain using the client which may prove difficult and cumbersome. It is RECOMMENDED to simply ensure that the client creator address is the same as the one that registers the counterparty. Once the client and counterparty are set by the same creator, users can decide if the configuration is secure out-of-band.
 
 #### Update
 
 Updating a client is done by submitting a new `ClientMessage`. The `Identifier` is used to point to the
-stored `ClientState` that the logic will update. When a new `ClientMessage` is verified with
-the stored `ClientState`'s validity predicate and `ConsensusState`, the client MUST
-update its internal state accordingly, possibly finalising commitment roots and
-updating the signature authority logic in the stored consensus state.
+stored `ClientState` that the logic will update. When a new `ClientMessage` is verified using the `ValidityPredicate` with
+the stored `ClientState` and a previously stored `ConsensusState`, the client MUST then add a new `ConsensusState` with a new `Height`.
 
 If a client can no longer be updated (if, for example, the trusting period has passed),
-it will no longer be possible to send any packets over connections & channels associated
-with that client, or timeout any packets in-flight (since the height & timestamp on the
-destination chain can no longer be verified). Manual intervention must take place to
-reset the client state or migrate the connections & channels to another client. This
+then new packet flow will not be able to be processed. Manual intervention must take place to
+reset the client state or migrate the client. This
 cannot safely be done completely automatically, but chains implementing IBC could elect
 to allow governance mechanisms to perform these actions
 (perhaps even per-client/connection/channel in a multi-sig or contract).
 
-```typescript
-function updateClient(
-  id: Identifier,
-  clientMessage: ClientMessage) {
-    // get clientState from store with id
-    clientState = provableStore.get(clientStatePath(id))
-    abortTransactionUnless(clientState !== null)
+UpdateClient Inputs:
+`clientId: bytes`: The identifier of the client being updated.
+`clientMessage: bytes`: The opaque clientMessage to update the client as defined by the given `clientType`. It MUST include the `trustedHeight` we wish to update from. This `trustedHeight` will be used to retrieve a trusted ConsensusState which we will use to update to a new consensus state using the `ValidityPredicate`.
 
-    verifyClientMessage(clientMessage)
-    
-    foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
-    if foundMisbehaviour {
-      updateStateOnMisbehaviour(clientMessage)
-      // emit misbehaviour event
-    }
-    else {    
-      updateState(clientMessage) // expects no-op on duplicate clientMessage
-      // emit update event
-    }
-}
-```
+UpdateClient Preconditions:
+- A client has already been created for the `clientId`
+
+UpdateClient Postconditions:
+- A new `ConsensusState` is added to the client and persisted with a new `Height`
+- Implementations MAY automatically detect misbehaviour in `UpdateClient` if the update itself is proof of misbehaviour (e.g. There is already a different `ConsensusState` for the given height, or time monotonicity is broken). It is recommended to automatically freeze the client in this case to avoid having to send a redundant `submitMisbehaviour` message.
+
+UpdateClient ErrorConditions:
+- The trusted `ConsensusState` referenced in the `ClientMessage` does not exist in state
+- `ValidityPredicate(clientState, trustedConsensusState, trustedHeight)` returns an error
 
 #### Misbehaviour
 
-A relayer may alert the client to the misbehaviour directly, possibly invalidating
-previously valid state roots & preventing future updates.
+If `Consensus` of the counterparty chain is violated, then the relayer can submit proof of this as misbehaviour. Once the client is frozen, no updates may take place and all proof verification will fail. The client may be unfrozen by an out-of-band protocol once trust in the counterparty `Consensus` is restored and any invalid state caused by the break in `Consensus` is reverted on the executing chain.
 
-```typescript
-function submitMisbehaviourToClient(
-  id: Identifier,
-  clientMessage: ClientMessage) {
-    clientState = provableStore.get(clientStatePath(id))
-    abortTransactionUnless(clientState !== null)
-    // authenticate client message
-    verifyClientMessage(clientMessage)
-    // check that client message is valid instance of misbehaviour
-    abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
-    // update state based on misbehaviour
-    updateStateOnMisbehaviour(misbehaviour)
-}
-```
+SubmitMisbehaviour Inputs:
+`clientId: bytes`: The identifier of the client being frozen.
+`clientMessage: bytes`: The opaque clientMessage to freeze the client as defined by the given `clientType`. It MUST include the `trustedHeight` we wish to verify misbehaviour from. This `trustedHeight` will be used to retrieve a trusted ConsensusState which we will use to freeze the client given the `MisbehaviourPredicate`. It MUST also include the misbehaviour being submitted.
+
+SubmitMisbehaviour Preconditions:
+- A client has already been created for the `clientId`.
+
+SubmitMisbehaviour Postconditions:
+- The client is frozen, update and proof verification will fail until client is unfrozen again.
+
+SubmitMisbehaviour ErrorConditions:
+- The trusted `ConsensusState` referenced in the `ClientMessage` does not exist in state.
+- `MisbehaviourPredicate(clientState, trustedConsensusState, trustedHeight, misbehaviour)` returns `false`.
 
 ### Properties & Invariants
 

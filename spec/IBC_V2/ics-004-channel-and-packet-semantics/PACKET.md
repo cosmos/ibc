@@ -6,16 +6,10 @@ The IBC packet sends application data from a source chain to a destination chain
 
 ```typescript
 interface Packet {
-    // identifier for the channel on source chain
-    // channel must contain identifier of counterparty channel
-    // and the client identifier for the client on source chain
-    // that tracks dest chain
-    sourceChannel: bytes,
-    // identifier for the channel on dest chain
-    // channel must contain identifier of counterparty channel
-    // and the client identifier for the client on dest chain
-    // that tracks source chain
-    destChannel: bytes,
+    // identifier for the destination-chain client existing on source chain
+    sourceClientId: bytes,
+    // identifier for the source-chain client existing on destination chain
+    destClientId: bytes,
     // the sequence uniquely identifies this packet
     // in the stream of packets from source to dest chain
     sequence: uint64,
@@ -58,15 +52,15 @@ interface Payload {
 }
 ```
 
-The source and destination identifiers at the top-level of the packet identifiers the chains communicating. The source identifier **must** be unique on the source chain and is a pointer to the destination chain. The destination identifier **must** be a unique identifier on the destination chain and is a pointer to the source chain. The sequence is a monotonically incrementing nonce to uniquely identify packets sent between the source and destination chain.
+The source and destination client identifiers at the top-level of the packet identify the chains communicating. The `sourceClient` identifier **must** be unique on the source chain and is a pointer to the destination chain client on the source chain. The `destinationClient` identifier **must** be a unique identifier on the destination chain and is a pointer to the source chain client on the destination chain. The sequence is a monotonically incrementing nonce to uniquely identify packets sent between the source and destination chain.
 
 The timeout is the UNIX timestamp in seconds that must be passed on the **destination** chain before the packet is invalid and no longer capable of being received. Note that the timeout timestamp is assessed against the destination chain's clock which may drift relative to the clocks of the sender chain or a third party observer. If a packet is received on the destination chain after the timeout timestamp has passed relative to the destination chain's clock; the packet must be rejected so that it can be safely timed out and reverted by the sender chain.
 
 In version 2 of the IBC specification, implementations **MAY** support multiple application data within the same packet. This can be represented by a list of payloads. Implementations may choose to only support a single payload per packet, in which case they can just reject incoming packets sent with multiple payloads.
 
-Each payload will include its own `Encoding` and `AppVersion` that will be sent to the application to instruct it how to decode and interpret the opaque application data. The application must be able to support the provided `Encoding` and `AppVersion` in order to process the `AppData`. If the receiving application does not support the encoding or app version, then the application **must** return an error to IBC core. If the receiving application does support the provided encoding and app version, then the application must decode the application as specified by the `Encoding` enum and then process the application as expected by the counterparty given the agreed-upon app version. Since the `Encoding` and `AppVersion` are now in each packet they can be changed on a per-packet basis and an application can simultaneously support many encodings and app versions from a counterparty. This is in stark contrast to IBC version 1 where the channel prenegotiated the channel version (which implicitly negotiates the encoding as well); so that changing the app version after channel opening is very difficult.
+Each payload will include its own `Encoding` and `AppVersion` that will be sent to the application to instruct it how to decode and interpret the opaque application data. The application must be able to support the provided `Encoding` and `AppVersion` in order to process the `AppData`. If the receiving application does not support the encoding or app version, then the application **must** return an error to IBC core. If the receiving application does support the provided encoding and app version, then the application must decode the application as specified by the `Encoding` string and then process the application as expected by the counterparty given the agreed-upon app version. Since the `Encoding` and `AppVersion` are now in each packet they can be changed on a per-packet basis and an application can simultaneously support many encodings and app versions from a counterparty. This is in stark contrast to IBC version 1 where the channel prenegotiated the channel version (which implicitly negotiates the encoding as well); so that changing the app version after channel opening is very difficult.
 
-The packet must be committed to as specified in the ICS24 specification. In order to do this we must first commit the packet data and timeout. The timeout is encoded in LittleEndian format. The packet data which is a list of payloads is committed to by hashing each individual field of the payload and successively concatenating them together. This ensures a standard unambigious commitment for a given packet. Thus a given packet will always create the exact same commitment by all compliant implementations and two different packets will never create the same commitment by a compliant implementation.
+All implementations must commit the packet in the standardized IBC commitment format to satisfy the protocol. In order to do this we must first commit the packet data and timeout. The timeout is encoded in LittleEndian format. The packet data which is a list of payloads is committed to by hashing each individual field of the payload and successively concatenating them together. This ensures a standard unambigious commitment for a given packet. Thus a given packet will always create the exact same commitment by all compliant implementations and two different packets will never create the same commitment by a compliant implementation.
 
 ```typescript
 // commitPayload hashes all the fields of the packet data to create a standard size
@@ -82,7 +76,7 @@ func commitPayload(payload: Payload): bytes {
 
 // commitV2Packet commits to all fields in the packet
 // by hashing each individual field and then hashing these fields together
-// Note: SourceChannel and the sequence are omitted since they will be included in the key
+// Note: SourceClient and the sequence are omitted since they will be included in the key
 // Every other field of the packet is committed to in the packet which will be stored in the
 // packet commitment value
 // The final preimage will be prepended by the byte 0x02 before hashing in order to clearly define the protocol version
@@ -93,7 +87,7 @@ func commitV2Packet(packet: Packet) {
     for p in packet.payload {
         appBytes = append(appBytes, commitPayload(p))
     }
-    buffer = sha256.Hash(packet.destChannel)
+    buffer = sha256.Hash(packet.destClient)
     buffer = append(buffer, sha256.hash(timeoutBytes))
     buffer = append(buffer, sha256.hash(appBytes))
     buffer = append([]byte{0x02}, buffer)
