@@ -14,7 +14,9 @@ modified: 2024-08-22
 
 ## Synopsis
 
-This standard specifies the properties that consensus algorithms of state machines implementing the inter-blockchain
+The IBC protocol provides secure packet flow between applications on different ledgers by verifying the packet messages using clients of the counterparty state machines. While ICS-4 defines the core packet flow logic between two chains and the provable commitments they must make in order to communicate, this standard ICS-2 specifies **how** a chain verifies the IBC provable commitments of the counterparty which is crucial to securely receive and process a packet flow message arriving from the counterparty.
+
+This standard focuses on how to keep track of the counterparty consensus and verify the state machine; it also  specifies the properties that consensus algorithms of state machines implementing the inter-blockchain
 communication (IBC) protocol are required to satisfy. 
 These properties are necessary for efficient and safe verification in the higher-level protocol abstractions. 
 The algorithm utilised in IBC to verify the state updates of a remote state machine is referred to as a *validity predicate*. 
@@ -34,8 +36,7 @@ such as a user inspecting the state of the state machine and deciding whether or
 
 ### Motivation
 
-In the IBC protocol, an actor, which may be an end user, an off-chain process, or a module on a state machine,
-needs to be able to verify updates to the state of another state machine (i.e., the *remote state machine*). 
+The IBC protocol needs to be able to verify updates to the state of another state machine (i.e., the *remote state machine*). 
 This entails accepting *only* the state updates that were agreed upon by the remote state machine's consensus algorithm. 
 A light client of the remote state machine is the algorithm that enables the actor to verify state updates of that state machine. 
 Note that light clients will generally not include validation of the entire state transition logic
