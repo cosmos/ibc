@@ -65,6 +65,7 @@ interface Packet {
 SendPacket ErrorConditions:
 - The sending client is invalid (expired or frozen)
 - The provided `timeoutTimstamp` has already elapsed
+- The sending application is not allowed to send the provided payload to the requested receiving application as identified by `payload.DestPort`
 
 NOTE: IBC v2 allows multiple payloads coming from multiple applications to be sent in the same packet. If an implementation chooses to support this feature, they may either provide an entrypoint in the core handler to send multiple packets, which must then call each individual application `OnSendPacket` callback to validate their individual payload and do application-specific sending logic; or they may queue the payloads coming from each application until the packet is ready to be committed.
 
@@ -73,8 +74,6 @@ NOTE: IBC v2 allows multiple payloads coming from multiple applications to be se
 The IBC core handler MAY expose the following function signature to the ICS26 applications registed on the port router, so that the application can write acknowledgements asynchronously.
 
 This is only necessary if the implementation supports processing packets asynchronously. In this case, an application may process the packet asynchronously from when the IBC core handler receives the packet. Thus, the acknowledgement cannot be returned as part of the `OnRecvPacket` callback and must be submitted to the core IBC handler by the ICS26 application at a later time. Thus, we must introduce a new endpoint on the IBC handler for the ICS26 application to call when it is done processing a receive packet and wants to write the acknowledgement.
-
-WriteAcknowledgement Inputs:
 
 WriteAcknowledgement Inputs:
 `destClientId: bytes`: Identifier of the sender chain client that exist on the receiving chain
@@ -96,3 +95,67 @@ NOTE: In the case that the packet contained multiple payloads, the IBC core hand
 ### ICS26 Interface Exposed to Core Handler
 
 Modules must expose the following function signatures to the routing module, which are called upon the receipt of various datagrams:
+
+
+### OnRecvPacket
+
+OnRecvPacket Inputs:
+`sourceClientId: bytes`: This is the identifier of the client on the sending chain. NOTE: This is an identifier on the counterparty chain provided as information for the application, but it should not be treated as a unique identifier on the receiving chain.
+`destClientId: bytes`: This is the identifier of the receiving chain (i.e. executing chain)
+`sequence: uint64`: This is the unique sequence for the packet in the stream of packets from sending chain to destination chain. The tuple `(destClientId, sequence)` uniquely identifies the packet on this chain.
+`payload: Payload`. This is the payload that an application registered by `payload.SourcePort` on the sending chain sends to the executing application
+
+OnRecvPacket Preconditions:
+- The application is registered on the port router with `payload.DestPort`
+- The destination client exists for `destClientId`
+- All IBC/TAO verification checks have already been authenticated by IBC core handler. Thus, when the application receives a packet; it can be guaranteed of its authenticity and need only perform the relevant application logic for the given payload.
+
+OnRecvPacket Postconditions:
+- The application has executed all app-specific logic for the given payload and made the appropriate state changes
+- The application returns an app acknowledgment `ack: bytes` to the core IBC handler to be written as an acknowledgement of the payload in this packet.
+
+OnRecvPacket ErrorConditions:
+- The sending application as identified by `payload.SourcePortId` is not allowed to send a payload to the receiving application
+- The requested version as identified by `payload.Version` is unsupported
+- The requested encoding as identified by `payload.Encoding` is unsupported
+- An error occured while processing the `payload.Value` after decoding with `payload.Encoding` and processing the payload in the manner expected by `payload.Version`.
+
+IMPORTANT: If the `OnRecvPacket` callback errors for any reason, the state changes made during the callback MUST be reverted and the IBC core handler MUST write the `SENTINEL_ERROR_ACKNOWLEDGEMENT` for this packet even if other payloads in the packet are received successfully.
+
+### OnAcknowledgePacket
+
+OnAcknowledgePacket Inputs:
+`sourceClientId: bytes`: This is the identifier of the client on the sending chain (i.e. executing chain).
+`destClientId: bytes`: This is the identifier of the receiving chain. NOTE: This is an identifier on the counterparty chain provided as information for the application, but it should not be treated as a unique identifier on the receiving chain.
+`sequence: uint64`: This is the unique sequence for the packet in the stream of packets from sending chain to destination chain. The tuple `(sourceClientId, sequence)` uniquely identifies the packet on this chain.
+`acknowledgement: bytes`: This is the acknowledgement that the receiving application sent for the payload that we previously sent. It may be a successful acknowledgement with app-specific information or it may be the `SENTINEL_ERROR_ACKNOWLEDGEMENT` in which case we should handle any app-specific logic needed for a packet that failed to be sent.
+`payload: Payload`: This is the original payload that we previously sent
+
+OnAcknowledgementPreconditions:
+- This application had previously sent the provided payload in a packet with the provided `sourceClientId` and `sequence`.
+- All IBC/TAO verification checks have already been authenticated by IBC core handler. Thus, when the application receives an acknowledgement; it can be guaranteed of its authenticity and need only perform the relevant application logic for the given acknowledgement and payload.
+
+OnAcknowledgement Postconditions:
+- The application has executed all app-specific logic for the given payload and acknowledgment and made the appropriate state changes
+- If the acknowledgement was the `SENTINEL_ERROR_ACKNOWLEDGEMENT`, this will usually involve reverting whatever application state changes were made during `SendPacket` (e.g. unescrowing tokens for transfer)
+
+OnAcknowledgement Errorconditions:
+- Application specific errors may occur while processing the acknowledgement. The packet lifecycle is already complete. Implementations MAY choose to allow retries or not.
+
+### OnTimeoutPacket
+
+OnTimeoutPacket Inputs:
+`sourceClientId: bytes`: This is the identifier of the client on the sending chain (i.e. executing chain).
+`destClientId: bytes`: This is the identifier of the receiving chain. NOTE: This is an identifier on the counterparty chain provided as information for the application, but it should not be treated as a unique identifier on the receiving chain.
+`sequence: uint64`: This is the unique sequence for the packet in the stream of packets from sending chain to destination chain. The tuple `(sourceClientId, sequence)` uniquely identifies the packet on this chain.
+`payload: Payload`: This is the original payload that we previously sent
+
+OnTimeoutPacket Preconditions:
+- This application had previously sent the provided payload in a packet with the provided `sourceClientId` and `sequence`.
+- All IBC/TAO verification checks have already been authenticated by IBC core handler. Thus, when the application receives an acknowledgement; it can be guaranteed of its authenticity and need only perform the relevant application logic for the given acknowledgement and payload.
+
+OnTimeoutPacket Postconditions:
+- The application has executed all app-specific logic for the given payload and made the appropriate state changes. This will usually involve reverting whatever application state changes were made during `SendPacket` (e.g. unescrowing tokens for transfer)
+
+OnTimeoutPacket Errorconditions:
+- Application specific errors may occur while processing the acknowledgement. The packet lifecycle is already complete. Implementations MAY choose to allow retries or not.
