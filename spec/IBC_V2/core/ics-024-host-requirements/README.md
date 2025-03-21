@@ -96,11 +96,11 @@ IBC/TAO implementations MUST implement the following paths for the `provableStor
 
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
 
-| Value                      | Path format                                       | Value type | Defined in                           |
-| -------------------------- | ------------------------------------------------- | ---------- | ------------------------------------ |
-| Packet Commitment          | {channelIdentifier}|0x1|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| Packet Receipt             | {channelIdentifier}|0x2|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| Acknowledgement Commitment | {channelIdentifier}|0x3|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Value                      | Path format                                  |
+| -------------------------- | -------------------------------------------- |
+| Packet Commitment          | {sourceClientId}0x1{bigEndianUint64Sequence} |
+| Packet Receipt             | {destClientId}0x2{bigEndianUint64Sequence}   |
+| Acknowledgement Commitment | {destClientId}0x3{bigEndianUint64Sequence}   |
 
 IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specifed in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET.md).
 

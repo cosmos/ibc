@@ -161,10 +161,10 @@ IBC/TAO implementations MUST implement the following paths for the `provableStor
 
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
 
-| Value                      | Path format                                    | Value type |
-| -------------------------- | ---------------------------------------------- | ---------- |
-| Packet Commitment          | {sourceClientId}|0x1|{bigEndianUint64Sequence} | bytes      |
-| Packet Receipt             | {destClientId}|0x2|{bigEndianUint64Sequence}   | bytes      |
-| Acknowledgement Commitment | {destClientId}|0x3|{bigEndianUint64Sequence}   | bytes      |
+| Value                      | Path format                                    |
+| -------------------------- | ---------------------------------------------- |
+| Packet Commitment          | {sourceClientId}0x1{bigEndianUint64Sequence}   |
+| Packet Receipt             | {destClientId}0x2{bigEndianUint64Sequence}     |
+| Acknowledgement Commitment | {destClientId}0x3{bigEndianUint64Sequence}     |
 
 Note that the IBC protocol ensures that the packet `(sourceClientId, sequence)` tuple uniquely identifies a packet on the sending chain, and the `(destClientId, sequence)` tuple uniquely identifies a packet on the receiving chain. This property along with the byte separator between the client identifier and sequence in the standardized paths ensures that commitments, receipts, and acknowledgements are each written to different paths for the same packet. Thus, so long as the host requirements specified in ICS24 are respected; a provable key written to state by the IBC handler for a given packet will never be overwritten with a different value. This ensures secure and correct communication between chains in the IBC ecosystem.
