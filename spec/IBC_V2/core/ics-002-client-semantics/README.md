@@ -4,9 +4,9 @@ title: Client Semantics
 stage: draft
 category: IBC/TAO
 kind: interface
-requires: 23, 24
-required-by: 3
-version compatibility: ibc-go v7.0.0
+requires: 24
+required-by: 4
+version compatibility: ibc-go v10.0.0
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
 modified: 2024-08-22

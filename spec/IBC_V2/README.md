@@ -1,9 +1,6 @@
 ---
-ics: TBD
 title: IBC v2
 stage: EXPERIMENTAL
-category: IBC/TAO
-kind: interface
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
 created: 2024-08-15

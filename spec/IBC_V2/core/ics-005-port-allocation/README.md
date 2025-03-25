@@ -6,7 +6,7 @@ required-by: 4
 category: IBC/TAO
 kind: interface
 version compatibility: ibc-go v10.0.0
-author: Aditya Sripal
+author: Aditya Sripal <aditya@interchain.io>
 created: 2024-05-17
 ---
 

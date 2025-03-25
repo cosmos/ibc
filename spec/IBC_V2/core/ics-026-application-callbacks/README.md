@@ -5,7 +5,7 @@ stage: Draft
 category: IBC/TAO
 kind: instantiation
 version compatibility: ibc-go v10.0.0
-author: Aditya Sripal <cwgoes@tendermint.com>
+author: Aditya Sripal <aditya@interchain.io>
 created: 2025-03-19
 ---
 

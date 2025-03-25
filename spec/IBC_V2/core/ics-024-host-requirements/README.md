@@ -4,7 +4,6 @@ title: Host State Machine Requirements
 stage: draft
 category: IBC/TAO
 kind: interface
-requires: 23
 required-by: 4
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
