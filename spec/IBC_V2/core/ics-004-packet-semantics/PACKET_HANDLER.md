@@ -29,6 +29,7 @@ interface Payload {
 The packet is never directly serialised and sent to counterparty chains. Instead a standardized non-malleable committment to the packet data is stored under the standardized unique key for the packet as defined in ICS-24. Thus, implementations MAY make individual choices on the exact packet structure and serialization scheme they use internally so long as they respect the standardized commitment defined by the IBC protocol when writing to the provable store.
 
 Packet Invariants:
+
 - None of the packet fields are allowed to be empty
 - For every payload included, none of the payload fields are allowed to be empty
 
@@ -49,6 +50,7 @@ interface Acknowledgement {
 ```
 
 Acknowledgement Invariants:
+
 - If the acknowledgement interface includes an error acknowledgement then there must be only a single element in the array with the error acknowledgement
 - There CANNOT be multiple app acknowledgements where an element is the error acknowledgement
 - If there are multiple app acknowledgements, the length of the app acknowledgements is the same length as the payloads in the associated packet and each acknowledgement is associated with the payload in the same position in the payload array.
@@ -60,33 +62,38 @@ SendPacket is called by users to execute an inter-blockchain flow. The user subm
 The user may be an off-chain process or an on-chain actor. In either case, the user is not trusted by the IBC protocol. The IBC application is responsible for properly authenticating that the user is allowed to send the requested app data using the IBC application's port as specified in the source port of the payload. The IBC application is also responsible for executing any app-specific logic that must run before the IBC packet can be sent (e.g. escrowing user's tokens before sending a fungible token transfer packet).
 
 SendPacket Inputs:
-`payload: Payload[]`: List of payloads that are to be sent from source applications on sending chain to corresponding destination applications on the receiving chain. Implementations MAY choose to only support a single payload per packet.
+
+`payloads: Payload[]`: List of payloads that are to be sent from source applications on sending chain to corresponding destination applications on the receiving chain. Implementations MAY choose to only support a single payload per packet.
 `sourceClientId: bytes`: Identifier of the receiver chain client that exists on the sending chain.
 `timeoutTimestamp: uint64`: The timeout in UNIX seconds after which the packet is no longer receivable on the receiving chain. NOTE: This timestamp is evaluated against the **receiving chain** clock as there may be drift between the sending chain and receiving chain clocks
 
 SendPacket Preconditions:
+
 - A valid client exists on the sending chain with the `sourceClientId`
 - There exists a mapping on the sending chain from `sourceClientId` to `Counterparty`
 
 SendPacket Postconditions:
+
 - The sending application(s) as identified by the source port(s) in the payload(s) have all executed their sendPacket logic successfully
 - The following packet gets committed and stored under the packet commitment path as specified by ICS24:
 ```typescript
 interface Packet {
-    sourceClientId: msg.sourceClientId,
-    destClientId: counterparty.ClientId,
+    sourceClientId: sourceClientId,
+    destClientId: getCounterparty(sourceClientId).ClientId, // destClientId should be filled in with the registered counterparty id for provided sourceClientId
     sequence: generateUniqueSequence(sourceClientId),
-    timeoutTimestamp: msg.timeoutTimestamp
-    data: msg.Payloads
+    timeoutTimestamp: timeoutTimestamp
+    data: payloads
 }
 ```
 - Since the packet is committed to with a hash in-state, implementations must provide the packet fields for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxilliary key if the implementing platform does not have an event system.
 
 SendPacket Errorconditions:
+
 - Any of the sending applications returns an error during its sendPacket logic execution
 - The sending client is invalid (expired or frozen)
 
 SendPacket Invariants:
+
 - The sourceClientId MUST exist on the sending chain
 - The destClientId MUST be the registered counterparty of the sourceClientId on the sending chain
 - The sending chain MUST NOT have sent a previous packet with the same `sourceClientId` and `sequence`
@@ -103,14 +110,17 @@ RecvPacket Inputs:
 `proofHeight: Number`: This is the height of the counterparty chain from which the proof was generated. A corresponding consensus state for this height must exist on the destination client for the proof to verify correctly.
 
 RecvPacket Preconditions:
+
 - A valid client exists on the receiving chain with `destClientId`
 - There exists a mapping from `destClientId` to `Counterparty`
 
 RecvPacket Postconditions:
+
 - A packet receipt is stored under the specified ICS24 with the `destClientId` and `sequence`
 - All receiving application(s) as identified by the destPort(s) in the payload(s) have executed their recvPacket logic
 
 RecvPacket Errorconditions:
+
 - `Counterparty.ClientId` != `packet.sourceClientId` ensures that packet was sent by expected counterparty
 - `packet.TimeoutTimestamp` >= `chain.BlockTime()` ensures we cannot receive successfully if packet can be timed out on sending chain
 - Packet receipt does not already exist in state for the `destClientId` and `sequence`. This prevents replay attacks
@@ -119,15 +129,18 @@ RecvPacket Errorconditions:
 ### WriteAcknowledgement
 
 WriteAcknowledgement Inputs:
+
 `destClientId: bytes`: Identifier of the sender chain client that exist on the receiving chain
 `sequence: uint64`: Unique sequence identifying the packet from sending chain to receiving chain
 `ack: Acknowledgement`: Acknowledgement collected by receiving chain from all receiving applications after they have returned their individual acknowledgement. If any individual application errors, the entire acknowledgement MUST have a single element with just the SENTINEL ERROR ACKNOWLEDGEMENT. If all applications successfully received, then every application must have its own acknowledgement set in the `Acknowledgement` in the same order that they existed in the payload of the sending packet.
 
 WriteAcknowledgement Preconditions:
+
 - A packet receipt is stored under the specified ICS24 with the `destClientId` and `sequence`
 - An acknowledgement for the `destClientId` and `sequence` has not already been written under the ICS24 path
 
 WriteAcknowledgement Postconditions:
+
 - The acknowledgement is committed and written to the acknowledgement path as specified in ICS24
 - Since the acknowledgement is being hashed, the full acknowledgement fields should be made available for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxilliary key if the implementing platform does not have an event system.
 - Implementors SHOULD also emit the full packet again in `WriteAcknowledgement` since the sender chain is only expected to store the packet commitment and not the full packet; relayers are expected to pass the packet back to the sender chain to process the acknowledgement. Thus, in order to support stateless relayers it is helpful to re-emit the packet fields on `WriteAcknowledgement` so the relayer can reconstruct the packet. 
@@ -137,21 +150,25 @@ WriteAcknowledgement Postconditions:
 ### AcknowledgePacket
 
 AcknowledgePacket Inputs:
+
 `packet: Packet`: The packet that was originally sent by our chain
 `acknowledgement: Acknowledgement`: The acknowledgement written by the receiving chain for the packet
 `proof: bytes`:  An opaque proof that will be sent to the source client. The source client is responsible for interpreting the proof and verifying it against the acknowledgement key/value provided by the packet handler.
 `proofHeight: Number`: This is the height of the counterparty chain from which the proof was generated. A corresponding consensus state for this height must exist on the source client for the proof to verify correctly.
 
 AcknowledgePacket Preconditions:
+
 - A valid client exists on the sending chain with the `sourceClientId`
 - There exists a mapping on the sending chain from `sourceClientId` to `Counterparty`
 - A packet commitment has been stored under the ICS24 packet path with `sourceClientId` and `sequence`
 
 AcknowledgePacket Postconditions:
+
 - All sending applications execute the ackPacket logic with the payload and the individual acknowledgement for that payload or the universal `ErrorAcknowledgement`.
 - Stored commitment for the packet is deleted
 
 AcknowledgePacket Errorconditions:
+
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Membership proof of the acknowledgement commitment on the receiving chain as standardized by ICS24 does not verify
@@ -159,20 +176,24 @@ AcknowledgePacket Errorconditions:
 ### TimeoutPacket
 
 TimeoutPacket Inputs:
+
 `packet: Packet`: The packet that was originally sent by our chain
 `proof: bytes`: An opaque non-existence proof that will be sent to the source client. The source client is responsible for interpreting the proof and verifying it against the receipt key provided by the packet handler.
 `proofHeight: Number`: This is the height of the counterparty chain from which the proof was generated. A corresponding consensus state for this height must exist on the source client for the proof to verify correctly.
 
 TimeoutPacket Preconditions:
+
 - A valid client exists on the sending chain with the `sourceClientId`
 - There exists a mapping on the sending chain from `sourceClientId` to `Counterparty`
 - A packet commitment has been stored under the ICS24 packet path with `sourceClientId` and `sequence`
 
 TimeoutPacket Postconditions:
+
 - All sending applications execute the timeoutPacket logic with the payload.
 - Stored commitment for the packet is deleted
 
 TimeoutPacket Errorconditions:
+
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Non-Membership proof of the packet receipt on the receiving chain as standardized by ICS24 does not verify

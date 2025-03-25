@@ -307,30 +307,6 @@ security assumptions of proxy state machine correctness.
 For clients of state machines with Merklized state trees, these functions can be implemented as MerkleTree Existence and NonExistence proofs. Client implementations may choose to implement these methods for the specific tree used by the counterparty chain or they can use the tree-generic [ICS-23](github.com/cosmos/ics23) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
 root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights for any ICS-23 compliant tree given a ProofSpec that describes how the tree is constructed. In this case, the ICS-23 `ProofSpec` MUST be provided to the client on initialization.
 
-```typescript
-type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean
-```
-
-```typescript
-type verifyNonMembership = (ClientState, Height, CommitmentProof, Path) => boolean
-```
-
-ProofVerification Inputs:
-- `clientId: bytes`: The identifier of the client that will verify the proof.
-- `Height: Number`: The height for the consensus state that the proof will be verified against.
-- `Path: CommitmentPath`: The path of the key being proven. In the IBC protocol, this will be an ICS24 standardized path prefixed by the `CommitmentPrefix` registered on the counterparty. The `Path` MUST be constructed by the IBC handler given the IBC message, it MUST NOT be provided by the relayer as the relayer is untrusted.
-- `Value: Optional<bytes>`: The value being proven.  If it is non-empty this is a membership proof. If the value is nil, this is a non-membership proof.
-
-ProofVerification Preconditions:
-- A client has already been created for the `clientId`.
-- A `ConsensusState` is stored for the given `Height`.
-
-ProofVerification Postconditions:
-- Proof verification should be stateless in most cases. In the case that the proof verification is a signature check, we may wish to increment a nonce to prevent replay attacks.
-
-ProofVerification Errorconditions:
-- `CommitmentProof` does not successfully verify with the provided `CommitmentPath` and `Value` with the retrieved `ConsensusState` for the provided `Height`.
-
 ### Sub-protocols
 
 IBC handlers MUST implement the functions defined below.
@@ -361,20 +337,24 @@ logical correctness.
 Calling `createClient` with the client state and initial consensus state creates a new client. The intiator of this client is responsible for setting all of the initial parameters of the `ClientState` and the initial root-of-trust `ConsensusState`. The client implementation is then responsible for executing the light client `ValidityPredicate` against these initial parameters. Thus, once a root-of-trust is instantiated; the light client guarantees to preserve that trust within the confines of the security model as parameterized by the `ClientState`. If a user verifies that a client is a valid client of the counterparty chain once, they can be guaranteed that it will remain a valid client into the future so long as the `MisbehaviourPredicate` is not triggered. If the `MisbehaviourPredicate` is triggered however, this can be submitted as misbehaviour to freeze the IBC light client operations.
 
 CreateClient Inputs:
+
 `clientType: string`: This is the client-type that references a particular light client implementation on the chain. The `CreateClient` message will create a new instance of the given client-type.
 `ClientState: bytes`: This is the opaque client state as defined for the given client type. It will contain any parameters needed for verifying client updates and proof verification against a `ConsensusState`. The `ClientState` parameterizes the security model as implemented by the client type.
 `ConsensusState: bytes`: This is the opaque consensus state as defined for the given client type. It is the initial consensus state provided and MUST be capable of being used by the `ValidityPredicate` to add new `ConsensusState`s to the client. The initial `ConsensusState` MAY also be used for proof verification but it is not necessary.
 `Height: Number`: This is the height that is associated with the initial consensus state.
 
 CreateClient Preconditions:
+
 - The provided `clientType` is supported by the chain and can be routed to by the IBC handler.
 
 CreateClient PostConditions:
+
 - A unique identifier `clientId` is generated for the client
 - The provided `ClientState` is persisted to state and retrievable given the `clientId`.
 - The provided `ConsensusState` is persisted to state and retrievable given the `clientId` and `height`.
 
 CreateClient ErrorConditions:
+
 - The provided `ClientState` is invalid given the client type.
 - The provided `ConsensusState` is invalid given the client type.
 - The `Height` is not a positive number.
@@ -386,18 +366,22 @@ that the counterparty will use to write packet messages intended for our chain. 
 The `registerCounterparty` also includes the `CommitmentPrefix` to use for the counterparty chain. Most chains will not store the ICS24 directly under the root of a MerkleTree and will instead store the standardized paths under a custom prefix, thus the counterparty client must be given this information to verify proofs correctly. The `CommitmentPrefix` is defined as an array of byte arrays to support nested Merkle trees. In this case, each element of the outer array is a key for each tree in the nested structure ordered from the top-most tree to the lowest level tree. In this case, the ICS24 path is appended to the key of the lowest-level tree (i.e. the last element of the commitment prefix) in order to get the full `CommitmentPath` for proof verification.
 
 RegisterCounterparty Inputs:
+
 `clientId: bytes`: The clientId on the executing chain.
 `counterpartyClientId: bytes`: The identifier of the client used by the counterparty chain to verify the executing chain.
 `counterpartyCommitmentPrefix: []bytes`: The prefix used by the counterparty chain.
 
 RegisterCounterparty Preconditions:
+
 - A client has already been created for the `clientId`
 
 RegisterCounterparty Postconditions:
+
 - The `counterpartyClientId` is retrievable given the `clientId`.
 - The `counterpartyCommitmentPrefix` is retrievable given the `clientId`.
 
 RegisterCounterparty ErrorConditions:
+
 - There does not exist a client for the given `clientId`
 - `RegisterCounterparty` has already been called for the given `clientId`
 
@@ -418,17 +402,21 @@ to allow governance mechanisms to perform these actions
 (perhaps even per-client/connection/channel in a multi-sig or contract).
 
 UpdateClient Inputs:
+
 `clientId: bytes`: The identifier of the client being updated.
 `clientMessage: bytes`: The opaque clientMessage to update the client as defined by the given `clientType`. It MUST include the `trustedHeight` we wish to update from. This `trustedHeight` will be used to retrieve a trusted ConsensusState which we will use to update to a new consensus state using the `ValidityPredicate`.
 
 UpdateClient Preconditions:
+
 - A client has already been created for the `clientId`
 
 UpdateClient Postconditions:
+
 - A new `ConsensusState` is added to the client and persisted with a new `Height`
 - Implementations MAY automatically detect misbehaviour in `UpdateClient` if the update itself is proof of misbehaviour (e.g. There is already a different `ConsensusState` for the given height, or time monotonicity is broken). It is recommended to automatically freeze the client in this case to avoid having to send a redundant `submitMisbehaviour` message.
 
 UpdateClient ErrorConditions:
+
 - The trusted `ConsensusState` referenced in the `ClientMessage` does not exist in state
 - `ValidityPredicate(clientState, trustedConsensusState, trustedHeight)` returns an error
 
@@ -441,14 +429,49 @@ SubmitMisbehaviour Inputs:
 `clientMessage: bytes`: The opaque clientMessage to freeze the client as defined by the given `clientType`. It MUST include the `trustedHeight` we wish to verify misbehaviour from. This `trustedHeight` will be used to retrieve a trusted ConsensusState which we will use to freeze the client given the `MisbehaviourPredicate`. It MUST also include the misbehaviour being submitted.
 
 SubmitMisbehaviour Preconditions:
+
 - A client has already been created for the `clientId`.
 
 SubmitMisbehaviour Postconditions:
+
 - The client is frozen, update and proof verification will fail until client is unfrozen again.
 
 SubmitMisbehaviour ErrorConditions:
+
 - The trusted `ConsensusState` referenced in the `ClientMessage` does not exist in state.
 - `MisbehaviourPredicate(clientState, trustedConsensusState, trustedHeight, misbehaviour)` returns `false`.
+
+### VerifyMembership and VerifyNonmembership
+
+The IBC core packet handler uses the consensus states created in `UpdateClient` to verify ICS-4 standardized paths to authenticate packet messages. In order to do this, the IBC packet handler constructs the expected key/value for the given packet flow message and sends the expected path and value to the client along with the relayer-provided proof to the client for verification. Note that the proof is relayer provided, but the path and value are constructed by the IBC packet handler for the given packet. Thus, the relayer cannot forge proofs for packets that did not get sent. IBC Packet handler must also have the ability to prove nonmembership of a given path in order to enable timeout processing. Thus, clients must expose the following `verifyMembership` and `verifyNonMembership` methods:
+
+```typescript
+type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean
+```
+
+```typescript
+type verifyNonMembership = (ClientState, Height, CommitmentProof, Path) => boolean
+```
+
+ProofVerification Inputs:
+
+- `clientId: bytes`: The identifier of the client that will verify the proof.
+- `Height: Number`: The height for the consensus state that the proof will be verified against.
+- `Path: CommitmentPath`: The path of the key being proven. In the IBC protocol, this will be an ICS24 standardized path prefixed by the `CommitmentPrefix` registered on the counterparty. The `Path` MUST be constructed by the IBC handler given the IBC message, it MUST NOT be provided by the relayer as the relayer is untrusted.
+- `Value: Optional<bytes>`: The value being proven.  If it is non-empty this is a membership proof. If the value is nil, this is a non-membership proof.
+
+ProofVerification Preconditions:
+
+- A client has already been created for the `clientId`.
+- A `ConsensusState` is stored for the given `Height`.
+
+ProofVerification Postconditions:
+
+- Proof verification should be stateless in most cases. In the case that the proof verification is a signature check, we may wish to increment a nonce to prevent replay attacks.
+
+ProofVerification Errorconditions:
+
+- `CommitmentProof` does not successfully verify with the provided `CommitmentPath` and `Value` with the retrieved `ConsensusState` for the provided `Height`.
 
 ### Properties & Invariants
 

@@ -85,7 +85,7 @@ type delete = (path: Path) => void
 
 `Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. The specific Path and Values required to be written to the provable store are defined in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET.md).
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET_HANDLER.md)) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`.
+These functions MUST be permissioned to the IBC packet handler module (the implementation of which is described in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET_HANDLER.md)) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`.
 
 In most cases, this will be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire state machine. This is why ICS-2 defines a `counterpartyCommitmentPrefix` that is associated with the client. The IBC handler will prefix the `counterpartyCommitmentPrefix` to the ICS-4 standardized path before proof verification against a `ConsensusState` in the client.
 

@@ -35,9 +35,11 @@ function registerPort(portId: Identifier, cbs: ICS26App) => void
 ```
 
 RegisterPort Preconditions:
+
 - There is no other application that is registered on the port router for the given `portId`.
 
 RegisterPort Postconditions:
+
 - The ICS26 application is registered on the provided `portId`.
 - Any incoming packet flow message addressed to the `portId` is routed to the ICS26 application. Any outgoing packet flow message addressed by the `portId` MUST come from the ICS26 application
 
