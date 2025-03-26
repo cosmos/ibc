@@ -54,6 +54,7 @@ SendPacket Preconditions:
 SendPacket Postconditions:
 
 - The following packet gets committed and stored under the packet commitment path as specified by ICS24:
+
 ```typescript
 interface Packet {
     sourceClientId: sourceClientId,
@@ -63,6 +64,7 @@ interface Packet {
     data: msg.Payloads
 }
 ```
+
 - The sequence is returned to the ICS26 application
 
 SendPacket ErrorConditions:
@@ -98,11 +100,9 @@ WriteAcknowledgement Postconditions:
 
 NOTE: In the case that the packet contained multiple payloads, the IBC core handler MUST wait for all applications to return their individual acknowledgements for the packet before commiting the acknowledgment. If ANY application returns the error acknowledgement, then the acknowledgement for the entire packet only contains the `ERROR_SENTINEL_ACKNOWLEDGEMENT`. Otherwise, the acknowledgment is a list containing each applications individual acknowledgment in the same order that their associated payload existed in the packet.
 
-
 ### ICS26 Interface Exposed to Core Handler
 
 Modules must expose the following function signatures to the routing module, which are called upon the receipt of various datagrams:
-
 
 #### OnRecvPacket
 

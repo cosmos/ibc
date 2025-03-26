@@ -2,7 +2,7 @@
 
 The packet handler specification defines the semantics and behavior that implementations must enforce in order to support IBC v2 protocol.
 
-### Packet Structure
+## Packet Structure
 
 A `Packet` in the interblockchain communication protocol is the primary interface by which applications will send data to counterparty applications on other chains. It is defined as follows:
 
@@ -33,11 +33,11 @@ Packet Invariants:
 - None of the packet fields are allowed to be empty
 - For every payload included, none of the payload fields are allowed to be empty
 
-### Receipt
+## Receipt
 
 A `Receipt` is a sentinel byte that is stored under the standardized provable ReceiptPath of a given packet by the receiving chain when it successfully receives the packet. This prevents replay attacks and also the possibility of timing out a packet on the sender chain when the packet has already been received. The specific value of the receipt does not matter so long as its not empty.
 
-### Acknowledgement Structure
+## Acknowledgement Structure
 
 An `Acknowledgement` is the interface that will be used by receiving applications to return application specific information back to the sender. If every application successfully received its payload, then each receiving application will return their custom acknowledgement bytes which will be appended to the acknowledgement array. If **any** application returns an error, then the acknowledgement will have a single element with a sentinel error acknowledgement.
 
@@ -55,7 +55,7 @@ Acknowledgement Invariants:
 - There CANNOT be multiple app acknowledgements where an element is the error acknowledgement
 - If there are multiple app acknowledgements, the length of the app acknowledgements is the same length as the payloads in the associated packet and each acknowledgement is associated with the payload in the same position in the payload array.
 
-### SendPacket
+## SendPacket
 
 SendPacket is called by users to execute an inter-blockchain flow. The user submits a message with a payload(s) for each IBC application they wish to interact with. The SendPacket handler must call the sendPacket logic of each sending application as identified by the sourcePort of the payload. If none of the sending applications error, then the sendPacket handler must construct the packet with the user-provided sourceClient, payloads, and timeout and the destinationClient it retrieves from the counterparty storage given the sourceClient and a generated sequence that is unique for the sourceClientId. It will commit the packet with the ICS24 commitment function under the ICS24 path. The sending chain MAY store the ICS24 path under a custom prefix in the provable store. In this case, the counterparty must have knowledge of the custom prefix as provided by the relayer on setup. The sending chain SHOULD check the provided timestamp against an authenticated time oracle (local BFT time or destination client latest timestamp) and preemptively reject a user-provided packet with a timestamp that has already passed.
 
@@ -76,6 +76,7 @@ SendPacket Postconditions:
 
 - The sending application(s) as identified by the source port(s) in the payload(s) have all executed their sendPacket logic successfully
 - The following packet gets committed and stored under the packet commitment path as specified by ICS24:
+
 ```typescript
 interface Packet {
     sourceClientId: sourceClientId,
@@ -85,6 +86,7 @@ interface Packet {
     data: payloads
 }
 ```
+
 - Since the packet is committed to with a hash in-state, implementations must provide the packet fields for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxilliary key if the implementing platform does not have an event system.
 
 SendPacket Errorconditions:
@@ -98,7 +100,7 @@ SendPacket Invariants:
 - The destClientId MUST be the registered counterparty of the sourceClientId on the sending chain
 - The sending chain MUST NOT have sent a previous packet with the same `sourceClientId` and `sequence`
 
-### RecvPacket
+## RecvPacket
 
 RecvPacket is called by relayers once a packet has been committed on the sender chain in order to process the packet on the receiving chain. Since the relayer is not trusted, the relayer must provide a proof that the sender chain had indeed committed the provided packet which will be verified against the `destClient` on the receiving chain.
 
@@ -126,7 +128,7 @@ RecvPacket Errorconditions:
 - Packet receipt does not already exist in state for the `destClientId` and `sequence`. This prevents replay attacks
 - Membership proof does not successfully verify
 
-### WriteAcknowledgement
+## WriteAcknowledgement
 
 WriteAcknowledgement Inputs:
 
@@ -147,7 +149,7 @@ WriteAcknowledgement Postconditions:
 - If the acknowledgement is successful, then all receiving applications must have executed their recvPacket logic and written state
 - If the acknowledgement is unsuccessful (ie ERROR ACK), any state changes made by the receiving applications MUST all be reverted. This ensure atomic execution of the multi-payload packet.
 
-### AcknowledgePacket
+## AcknowledgePacket
 
 AcknowledgePacket Inputs:
 
@@ -173,7 +175,7 @@ AcknowledgePacket Errorconditions:
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Membership proof of the acknowledgement commitment on the receiving chain as standardized by ICS24 does not verify
 
-### TimeoutPacket
+## TimeoutPacket
 
 TimeoutPacket Inputs:
 
@@ -197,5 +199,3 @@ TimeoutPacket Errorconditions:
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Non-Membership proof of the packet receipt on the receiving chain as standardized by ICS24 does not verify
-
-
