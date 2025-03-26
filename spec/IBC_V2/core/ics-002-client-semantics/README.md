@@ -255,7 +255,7 @@ Client types must define functions to authenticate internal state of the state m
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-provable-keys/README.md)). 
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 4](../ics-004-packet-semantics/PACKET.md)). 
 
 ```typescript
 type verifyMembership = (
@@ -304,7 +304,7 @@ security assumptions of proxy state machine correctness.
 
 ##### Merklized state trees
 
-For clients of state machines with Merklized state trees, these functions can be implemented as MerkleTree Existence and NonExistence proofs. Client implementations may choose to implement these methods for the specific tree used by the counterparty chain or they can use the tree-generic [ICS-23](github.com/cosmos/ics23) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
+For clients of state machines with Merklized state trees, these functions can be implemented as MerkleTree Existence and NonExistence proofs. Client implementations may choose to implement these methods for the specific tree used by the counterparty chain or they can use the tree-generic [ICS-23](https://github.com/cosmos/ics23) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
 root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights for any ICS-23 compliant tree given a ProofSpec that describes how the tree is constructed. In this case, the ICS-23 `ProofSpec` MUST be provided to the client on initialization.
 
 ### Sub-protocols

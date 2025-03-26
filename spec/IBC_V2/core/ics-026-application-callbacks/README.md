@@ -21,7 +21,7 @@ The default IBC handler uses a receiver call pattern, where modules must individ
 
 ### Payload Structure
 
-The payload structure is reproduced from [ICS-4](../ics-004-channel-and-packet-semantics/PACKET.md) since all of the following application functions are operating on the payloads that are being sent in the packets.
+The payload structure is reproduced from [ICS-4](../ics-004-packet-semantics/PACKET.md) since all of the following application functions are operating on the payloads that are being sent in the packets.
 
 ```typescript
 interface Payload {

@@ -157,7 +157,7 @@ func receiptPath(packet: Packet) {
 
 ## Provable Path-space
 
-IBC/TAO implementations MUST implement the following paths for the `provableStore` in the exact format specified. This is because counterparty IBC/TAO implementations will construct the paths according to this specification and send it to the light client to verify the IBC specified value stored under the IBC specified path. The `provableStore` is specified in [ICS24 Host Requirements](../ics-024-provable-keys/README.md)
+IBC/TAO implementations MUST implement the following paths for the `provableStore` in the exact format specified. This is because counterparty IBC/TAO implementations will construct the paths according to this specification and send it to the light client to verify the IBC specified value stored under the IBC specified path. The `provableStore` is specified in [ICS24 Host Requirements](../ics-024-host-requirements/README.md)
 
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
 

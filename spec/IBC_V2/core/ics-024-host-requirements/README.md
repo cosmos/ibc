@@ -83,9 +83,9 @@ a Path from the key/value store as well though it is not required:
 type delete = (path: Path) => void
 ```
 
-`Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. The specific Path and Values required to be written to the provable store are defined in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET.md).
+`Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. The specific Path and Values required to be written to the provable store are defined in [ICS-4](../ics-004-packet-semantics/PACKET.md).
 
-These functions MUST be permissioned to the IBC packet handler module (the implementation of which is described in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET_HANDLER.md)) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`.
+These functions MUST be permissioned to the IBC packet handler module (the implementation of which is described in [ICS-4](../ics-004-packet-semantics/PACKET_HANDLER.md)) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`.
 
 In most cases, this will be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire state machine. This is why ICS-2 defines a `counterpartyCommitmentPrefix` that is associated with the client. The IBC handler will prefix the `counterpartyCommitmentPrefix` to the ICS-4 standardized path before proof verification against a `ConsensusState` in the client.
 
@@ -101,7 +101,7 @@ Future paths may be used in future versions of the protocol, so the entire key-s
 | Packet Receipt             | {destClientId}0x2{bigEndianUint64Sequence}   |
 | Acknowledgement Commitment | {destClientId}0x3{bigEndianUint64Sequence}   |
 
-IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specifed in [ICS-4](../ics-004-channel-and-packet-semantics/PACKET.md).
+IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specifed in [ICS-4](../ics-004-packet-semantics/PACKET.md).
 
 As mentioned above, the provable path space controlled by the IBC handler may be prefixed in a global provable key/value store. In this case, the prefix must be appended by the IBC handler before the proof is verified.
 
