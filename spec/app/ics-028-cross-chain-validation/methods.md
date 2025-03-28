@@ -447,8 +447,10 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
   // the validator set is the same as the validator set 
   // from own consensus state at current height
   // 
-  // TODO: ownConsensusState.validatorSet VS consensusState.nextValidatorsHash
-  //       specify which validator set is used as the initial val set
+  // Using ownConsensusState.validatorSet as the initial validator set is preferred
+  // over consensusState.nextValidatorsHash because it provides the full validator set
+  // information directly rather than just a hash, ensuring complete validator data
+  // is available for the consumer chain initialization.
   ownConsensusState = getConsensusState(getCurrentHeight())
   initialValSet = ownConsensusState.validatorSet
 
