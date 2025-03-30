@@ -17,7 +17,7 @@ Without this check, it is possible in very unlucky circumstances to have two cha
 While it is beneficial that misconfigured connection attempts are blocked from completing, the client validation in the connection handshake introduced a lot of problems for the upgradability and flexibility of the protocol.
 
 - Not all chains have the ability to introspect their own consensus, specifically their own consensus history which is required to validate a counterparty's previous consensus state.
-- Explicit verification of a counterparty client state and consensus state makes adding new implementions of the same consensus difficult since the validation of any new client implementations must be supported on the counterparty you want to use it with. Thus, the structure of `ClientState` and `ConsensusState` is very difficult to change without interchain coordination.
+- Explicit verification of a counterparty client state and consensus state makes adding new implementations of the same consensus difficult since the validation of any new client implementations must be supported on the counterparty you want to use it with. Thus, the structure of `ClientState` and `ConsensusState` is very difficult to change without interchain coordination.
 - Similarly, the proofs rely on ICS24 paths for the `ClientState` and `ConsensusState`. Thus, changing the key paths to a more efficient representation is very difficult without interchain coordination.
 
 ## Social Consensus
