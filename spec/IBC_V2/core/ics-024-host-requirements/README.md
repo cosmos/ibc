@@ -101,7 +101,7 @@ Future paths may be used in future versions of the protocol, so the entire key-s
 | Packet Receipt             | {destClientId}0x2{bigEndianUint64Sequence}   |
 | Acknowledgement Commitment | {destClientId}0x3{bigEndianUint64Sequence}   |
 
-IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specifed in [ICS-4](../ics-004-packet-semantics/PACKET.md).
+IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specified in [ICS-4](../ics-004-packet-semantics/PACKET.md).
 
 As mentioned above, the provable path space controlled by the IBC handler may be prefixed in a global provable key/value store. In this case, the prefix must be appended by the IBC handler before the proof is verified.
 
@@ -113,7 +113,7 @@ In the case, the state machine does not support `NonMembership` proofs; a client
 
 The state machine MUST make updates sequentially so that all state updates happen in order and can be associated with a unique `Height` in that order. Each state update at a height `h` MUST be eventually **finalized** at a finite timestamp `t` such that the order of state updates from the initial state up to `h` will never change after time `t`.
 
-IBC handlers will only accept packet-flow messages from state updates which are already deemed to be finalized. In cases where the finality property is probabilistically guaranteed, this probabilitic guarantee must be handled within the ICS-2 client in order to provide a final view of the remote state machine for the ICS-4 packet handler.
+IBC handlers will only accept packet-flow messages from state updates which are already deemed to be finalized. In cases where the finality property is probabilistically guaranteed, this probabilistic guarantee must be handled within the ICS-2 client in order to provide a final view of the remote state machine for the ICS-4 packet handler.
 
 ### Time
 
