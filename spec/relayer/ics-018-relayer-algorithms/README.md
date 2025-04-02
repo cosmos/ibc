@@ -46,15 +46,27 @@ Different relayers may relay between different chains — as long as each pair o
 
 ```typescript
 function relay(C: Set<Chain>) {
-  for (const chain of C)
-    for (const counterparty of C)
-      if (counterparty !== chain) {
-        const datagrams = chain.pendingDatagrams(counterparty)
-        for (const localDatagram of datagrams[0])
-          chain.submitDatagram(localDatagram)
-        for (const counterpartyDatagram of datagrams[1])
-          counterparty.submitDatagram(counterpartyDatagram)
+  for (const chain of C) {
+    for (const counterparty of C) {
+      if (counterparty === chain) continue;
+      
+      const [localDatagrams, counterpartyDatagrams] = chain.pendingDatagrams(counterparty);
+      
+      // Submit local datagrams in batch if available
+      if (localDatagrams.length) {
+        for (const datagram of localDatagrams) {
+          chain.submitDatagram(datagram);
+        }
       }
+      
+      // Submit counterparty datagrams in batch if available
+      if (counterpartyDatagrams.length) {
+        for (const datagram of counterpartyDatagrams) {
+          counterparty.submitDatagram(datagram);
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -115,30 +127,40 @@ Which relayer process is responsible for which datagrams is a flexible choice - 
 
 ```typescript
 function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>> {
-  const localDatagrams = []
-  const counterpartyDatagrams = []
+  const localDatagrams = [];
+  const counterpartyDatagrams = [];
 
   // ICS2 : Clients
   // - Determine if light client needs to be updated (local & counterparty)
-  height = chain.latestHeight()
-  client = counterparty.queryClientConsensusState(chain)
-  if client.height < height {
-    header = chain.latestHeader()
-    counterpartyDatagrams.push(ClientUpdate{chain, header})
+  const height = chain.latestHeight();
+  const counterpartyHeight = counterparty.latestHeight();
+  
+  // Check if counterparty client needs update
+  const clientOnCounterparty = counterparty.queryClientConsensusState(chain);
+  if (clientOnCounterparty.height < height) {
+    counterpartyDatagrams.push(ClientUpdate{
+      chain, 
+      header: chain.latestHeader()
+    });
   }
-  counterpartyHeight = counterparty.latestHeight()
-  client = chain.queryClientConsensusState(counterparty)
-  if client.height < counterpartyHeight {
-    header = counterparty.latestHeader()
-    localDatagrams.push(ClientUpdate{counterparty, header})
+  
+  // Check if local client needs update
+  const clientOnChain = chain.queryClientConsensusState(counterparty);
+  if (clientOnChain.height < counterpartyHeight) {
+    localDatagrams.push(ClientUpdate{
+      counterparty, 
+      header: counterparty.latestHeader()
+    });
   }
 
   // ICS3 : Connections
   // - Determine if any connection handshakes are in progress
-  connections = chain.getConnectionsUsingClient(counterparty)
+  const connections = chain.getConnectionsUsingClient(counterparty);
   for (const localEnd of connections) {
-    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
-    if (localEnd.state === INIT && remoteEnd === null)
+    const remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier);
+    
+    // Handle different connection states
+    if (localEnd.state === INIT && !remoteEnd) {
       // Handshake has started locally (1 step done), relay `connOpenTry` to the remote end
       counterpartyDatagrams.push(ConnOpenTry{
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
@@ -152,8 +174,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         proofConsensus: localEnd.client.consensusState.proof(),
         proofHeight: height,
         consensusHeight: localEnd.client.height,
-      })
-    else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
+      });
+    } else if (localEnd.state === INIT && remoteEnd?.state === TRYOPEN) {
       // Handshake has started on the other end (2 steps done), relay `connOpenAck` to the local end
       localDatagrams.push(ConnOpenAck{
         identifier: localEnd.identifier,
@@ -162,24 +184,27 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         proofConsensus: remoteEnd.client.consensusState.proof(),
         proofHeight: counterpartyHeight,
         consensusHeight: remoteEnd.client.height,
-      })
-    else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
+      });
+    } else if (localEnd.state === OPEN && remoteEnd?.state === TRYOPEN) {
       // Handshake has confirmed locally (3 steps done), relay `connOpenConfirm` to the remote end
       counterpartyDatagrams.push(ConnOpenConfirm{
         identifier: remoteEnd.identifier,
         proofAck: localEnd.proof(height),
         proofHeight: height,
-      })
+      });
+    }
   }
 
   // ICS4 : Channels & Packets
   // - Determine if any channel handshakes are in progress
   // - Determine if any packets, acknowledgements, or timeouts need to be relayed
-  channels = chain.getChannelsUsingConnections(connections)
+  const channels = chain.getChannelsUsingConnections(connections);
   for (const localEnd of channels) {
-    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
+    const remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier);
+    if (!remoteEnd) continue;
+    
     // Deal with handshakes in progress
-    if (localEnd.state === INIT && remoteEnd === null)
+    if (localEnd.state === INIT && !remoteEnd) {
       // Handshake has started locally (1 step done), relay `chanOpenTry` to the remote end
       counterpartyDatagrams.push(ChanOpenTry{
         order: localEnd.order,
@@ -192,8 +217,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         counterpartyVersion: localEnd.version,
         proofInit: localEnd.proof(height),
         proofHeight: height,
-      })
-    else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
+      });
+    } else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN) {
       // Handshake has started on the other end (2 steps done), relay `chanOpenAck` to the local end
       localDatagrams.push(ChanOpenAck{
         portIdentifier: localEnd.portIdentifier,
@@ -201,48 +226,65 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         version: remoteEnd.version,
         proofTry: remoteEnd.proof(counterpartyHeight),
         proofHeight: counterpartyHeight,
-      })
-    else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
+      });
+    } else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN) {
       // Handshake has confirmed locally (3 steps done), relay `chanOpenConfirm` to the remote end
       counterpartyDatagrams.push(ChanOpenConfirm{
         portIdentifier: remoteEnd.portIdentifier,
         channelIdentifier: remoteEnd.channelIdentifier,
         proofAck: localEnd.proof(height),
         proofHeight: height
-      })
-
-    // Deal with packets
-    // First, scan logs for sent packets and relay all of them
-    sentPacketLogs = queryByTopic(height, "sendPacket")
-    for (const logEntry of sentPacketLogs) {
-      // relay packet with this sequence number
-      packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
-                          localEnd.portIdentifier, localEnd.channelIdentifier,
-                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
-      counterpartyDatagrams.push(PacketRecv{
-        packet: packetData,
-        proof: packet.proof(),
-        proofHeight: height,
-      })
+      });
     }
 
-    // Then, scan logs for acknowledgements, relay back to sending chain
-    recvPacketLogs = queryByTopic(height, "writeAcknowledgement")
+    // Process packets
+    // First, scan logs for sent packets and relay all of them
+    const sentPacketLogs = queryByTopic(height, "sendPacket");
+    for (const logEntry of sentPacketLogs) {
+      // relay packet with this sequence number
+      const packetData = Packet{
+        logEntry.sequence, 
+        logEntry.timeoutHeight, 
+        logEntry.timeoutTimestamp,
+        localEnd.portIdentifier, 
+        localEnd.channelIdentifier,
+        remoteEnd.portIdentifier, 
+        remoteEnd.channelIdentifier, 
+        logEntry.data
+      };
+      
+      counterpartyDatagrams.push(PacketRecv{
+        packet: packetData,
+        proof: packetData.proof(),
+        proofHeight: height,
+      });
+    }
+
+    // Process acknowledgements
+    const recvPacketLogs = queryByTopic(height, "writeAcknowledgement");
     for (const logEntry of recvPacketLogs) {
       // relay packet acknowledgement with this sequence number
-      packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
-                          localEnd.portIdentifier, localEnd.channelIdentifier,
-                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
+      const packetData = Packet{
+        logEntry.sequence, 
+        logEntry.timeoutHeight, 
+        logEntry.timeoutTimestamp,
+        localEnd.portIdentifier, 
+        localEnd.channelIdentifier,
+        remoteEnd.portIdentifier, 
+        remoteEnd.channelIdentifier, 
+        logEntry.data
+      };
+      
       counterpartyDatagrams.push(PacketAcknowledgement{
         packet: packetData,
         acknowledgement: logEntry.acknowledgement,
-        proof: packet.proof(),
+        proof: packetData.proof(),
         proofHeight: height,
-      })
+      });
     }
   }
 
-  return [localDatagrams, counterpartyDatagrams]
+  return [localDatagrams, counterpartyDatagrams];
 }
 ```
 
