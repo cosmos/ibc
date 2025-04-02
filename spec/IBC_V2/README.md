@@ -2,7 +2,7 @@
 title: IBC v2
 stage: EXPERIMENTAL
 version compatibility: ibc-go v10.0.0
-author: Aditya Sripal <aditya@interchain.io>
+author: Aditya Sripal <aditya@interchainlabs.io>
 created: 2024-08-15
 ---
 
