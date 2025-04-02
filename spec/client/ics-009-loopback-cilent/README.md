@@ -127,7 +127,7 @@ function updateState(clientMsg: clientMessage) {
 
   // retrieve the latest height from the local ledger
   height = getSelfHeight()
-  clientState.latestHeight = header.height
+  clientState.latestHeight = height
 
   // save the client state
   provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
