@@ -564,7 +564,7 @@ function onRecvPacket(packet: Packet) {
       forwarding.hops[0].portId,
       forwarding.hops[0].channelId,
       Height{},
-      currentTime() + DefaultHopTimeoutPeriod,
+      originalTimeoutTimestamp,
     )
     // store packet for future sending ack
     privateStore.set(packetForwardPath(forwarding.hops[0].portId, forwarding.hops[0].channelId, packetSequence), packet)
