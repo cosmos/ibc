@@ -51,10 +51,10 @@ function onChanUpgradeInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   proposedOrdering: ChannelOrder,
-  proposedConnectionHops: [Identifier],
-  proposedVersion: string) => (version: string, err: Error) {
+  proposedConnectionHops: Identifier[],
+  proposedVersion: string): [string, Error | null] {
     // defined by the module
-} (version: string)
+}
 ```
 
 ### **OnChanUpgradeTry**
@@ -71,10 +71,10 @@ function onChanUpgradeTry(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   proposedOrdering: ChannelOrder,
-  proposedConnectionHops: [Identifier],
-  proposedVersion: string) => (version: string, err: Error) {
+  proposedConnectionHops: Identifier[],
+  proposedVersion: string): [string, Error | null] {
     // defined by the module
-} (version: string)
+}
 ```
 
 ### **OnChanUpgradeAck**
@@ -88,7 +88,7 @@ is unsupported. If an error is returned by the callback, core IBC will abort the
 function onChanUpgradeAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyVersion: string) => Error {
+  counterpartyVersion: string): Error | null {
     // defined by the module
 }
 ```
