@@ -80,8 +80,8 @@ sequenceDiagram
     chain B->>chain B: Unlock (unescrow) vouchers ("transfer/ChannelToA/denom")
     Note over chain B,chain A: B is sink zone: B -> A
     chain B->>chain B: Burn vouchers ("transfer/channelToA/denom")
-    chain B->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
-    chain A->>chain A: Unlock (unescrow) vouchers ("transfer/ChannelToA/denom")
+    chain B->>chain A: Send transfer packet with vouchers ("transfer/ChannelToA/denom")
+    chain A->>chain A: Unlock (unescrow) vouchers ("denom")
 ```
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
