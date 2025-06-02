@@ -129,7 +129,7 @@ OnRecvPacket ErrorConditions:
 - The sending application as identified by `payload.SourcePortId` is not allowed to send a payload to the receiving application
 - The requested version as identified by `payload.Version` is unsupported
 - The requested encoding as identified by `payload.Encoding` is unsupported
-- An error occured while processing the `payload.Value` after decoding with `payload.Encoding` and processing the payload in the manner expected by `payload.Version`.
+- An error occurred while processing the `payload.Value` after decoding with `payload.Encoding` and processing the payload in the manner expected by `payload.Version`.
 
 IMPORTANT: If the `OnRecvPacket` callback errors for any reason, the state changes made during the callback MUST be reverted and the IBC core handler MUST write the `SENTINEL_ERROR_ACKNOWLEDGEMENT` for this packet even if other payloads in the packet are received successfully.
 
