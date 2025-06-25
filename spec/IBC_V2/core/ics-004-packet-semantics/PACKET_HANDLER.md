@@ -177,6 +177,7 @@ AcknowledgePacket Errorconditions:
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Membership proof of the acknowledgement commitment on the receiving chain as standardized by ICS24 does not verify
+- Any of the applications return an error during the `AcknowledgePacket` callback for their payload. Applications should generally not error on AcknowledgePacket. If this occurs, it is most likely a bug so the error should revert the transaction and allow for the bug to be patched before resubmitting the transaction.
 
 ## TimeoutPacket
 
@@ -202,3 +203,4 @@ TimeoutPacket Errorconditions:
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Non-Membership proof of the packet receipt on the receiving chain as standardized by ICS24 does not verify
+- Any of the applications return an error during the `TimeoutPacket` callback for their payload. Applications should generally not error on TimeoutPacket. If this occurs, it is most likely a bug so the error should revert the transaction and allow for the bug to be patched before resubmitting the transaction.
