@@ -119,7 +119,10 @@ RecvPacket Preconditions:
 RecvPacket Postconditions:
 
 - A packet receipt is stored under the specified ICS24 with the `destClientId` and `sequence`
-- All receiving application(s) as identified by the destPort(s) in the payload(s) have executed their recvPacket logic
+- All receiving application(s) as identified by the destPort(s) in the payload(s) have executed their recvPacket logic. If **any** of the payloads return an error during processing, then all application state changes for all payloads **must** be reverted. If all payloads are processed successfully, then all applications state changes are written. This ensures atomic execution for the payloads batched together in a single packet.
+- If any payload returns an error, then the single `SENTINEL ERROR ACKNOWLEDGEMENT` is written using `WriteAcknowledgment`. If all payloads succeed and return an app-specific acknowledgement, then each app acknowledgement is included in the list of `AppAcknowledgement` in the final packet `Acknowledgement` in the **exact** order that their corresponding payloads were included in the packet.
+
+NOTE: It is possible for applications to process their payload asynchronously to the `RecvPacket` transaction execution. In this case, the IBC core handler **must** await all applications returning their individual application acknowledgements before writing the acknowledgement with app acknowledgements in the order of their corresponding payloads in the original packet **not** the order in which the applications return their asynchronous acknowledgements which may be different orders. IBC allows multiple payloads intended for the same application to be batched in the same packet. Thus, if an implementation wishes to support multiple payloads and asynchronous acknowledgements together, then there must be a way for core IBC to know which payload a particular acknowledgment is being written for. This may be done by providing the index of the payload list during `recvPacket` application callback, so that the application can return the same index when writing the acknowledgment so that it can be placed in the right order. Otherwise, implementations may simply block asynchronous acknowledgment support for multi-payload packets
 
 RecvPacket Errorconditions:
 
@@ -174,6 +177,7 @@ AcknowledgePacket Errorconditions:
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Membership proof of the acknowledgement commitment on the receiving chain as standardized by ICS24 does not verify
+- Any of the applications return an error during the `AcknowledgePacket` callback for their payload. Applications should generally not error on AcknowledgePacket. If this occurs, it is most likely a bug so the error should revert the transaction and allow for the bug to be patched before resubmitting the transaction.
 
 ## TimeoutPacket
 
@@ -199,3 +203,4 @@ TimeoutPacket Errorconditions:
 - `packet.destClient` != `counterparty.ClientId`. This should never happen if the second error condition is not true, since we constructed the packet correctly earlier
 - The packet provided by the relayer does not commit to the stored commitment we have stored for the `sourceClientId` and `sequence`
 - Non-Membership proof of the packet receipt on the receiving chain as standardized by ICS24 does not verify
+- Any of the applications return an error during the `TimeoutPacket` callback for their payload. Applications should generally not error on TimeoutPacket. If this occurs, it is most likely a bug so the error should revert the transaction and allow for the bug to be patched before resubmitting the transaction.
