@@ -19,4 +19,3 @@ This document serves as a glossary of terms for IBC v2 so that new readers can f
 **relayer**: The relayer is an off-chain process that enables cross-chain communication between IBC chains. It keeps the clients updated by submitting client-specific messages to execute the validity predicate and add new commitments. It also enables packet flow by verifying the packet flow against the state commitments stored in the IBC client. Since everything provided by the relayer is verified on-chain before being used, the relayer is not trusted for security and is only relied upon for liveness of the IBC connections.
 
 **IBC Connection**: An IBC connection is the flow of packets between two chains.
-
