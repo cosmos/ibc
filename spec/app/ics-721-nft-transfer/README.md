@@ -10,7 +10,7 @@ created: 2021-11-10
 modified: 2022-12-15
 ---
 
-> This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
+> This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content there from, while replacing `bank` module based asset tracking logic with that of the `nft` module.
 
 ## Synopsis
 
