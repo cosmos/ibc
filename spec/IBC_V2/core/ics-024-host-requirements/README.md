@@ -101,7 +101,7 @@ Future paths may be used in future versions of the protocol, so the entire key-s
 | Packet Receipt             | {destClientId}0x2{bigEndianUint64Sequence}   |
 | Acknowledgement Commitment | {destClientId}0x3{bigEndianUint64Sequence}   |
 
-IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specifed in [ICS-4](../ics-004-packet-semantics/PACKET.md).
+IBC V2 only proves commitments related to packet handling, thus the commitments and how to construct them are specified in [ICS-4](../ics-004-packet-semantics/PACKET.md).
 
 As mentioned above, the provable path space controlled by the IBC handler may be prefixed in a global provable key/value store. In this case, the prefix must be appended by the IBC handler before the proof is verified.
 
