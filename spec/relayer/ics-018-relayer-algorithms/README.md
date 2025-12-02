@@ -266,6 +266,723 @@ The relay process must have access to accounts on both chains with sufficient ba
 
 Any number of relayer processes may be safely run in parallel (and indeed, it is expected that separate relayers will serve separate subsets of the interchain). However, they may consume unnecessary fees if they submit the same proof multiple times, so some minimal coordination may be ideal (such as assigning particular relayers to particular packets or scanning mempools for pending transactions).
 
+### Events
+
+As specified in [ICS 24](../../core/ics-024-host-requirements/README.md#event-logging-system),
+the host state machine MUST provide an event logging system that can make event logs available 
+to relayers (by streaming and/or querying). This section specifies the events emitted by code
+IBC that relayers need to use to complete client, connection and channel lifecycles, relay and 
+timeout packets.
+
+Events emitted by core IBC are JSON-encoded objects following the schema:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "type",
+    "attributes"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "pattern": "^(\\.\\./)+events\\.schema\\.json$"
+    },
+    "type": {
+      "type": "string",
+      "description": "Type of event (e.g. create_client, send_packet)"
+    },
+    "attributes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Event attribute key (e.g. client_id, packet_timeout_timestamp)"
+          },
+          "value": {
+            "type": "string",
+            "description": "Event attribute value (e.g. 07-tendermint-1, 1686296228260054000)"
+          },
+        }
+      }
+    }
+  }
+}
+```
+
+#### Client lifecycle
+
+Format of the event emitted when a client is created in the `clientCreate` handler:
+
+```json
+{
+  "type": "create_client",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "client_type",
+      "value": "{clientType}"
+    },
+    {
+      "key": "consensus_height",
+      "value": "{consensusHeight}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a client is updated with new `ClientState` 
+and `ConsensusState` information in the `clientUpdate` handler:
+
+```json
+{
+  "type": "update_client",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "client_type",
+      "value": "{clientType}"
+    },
+    {
+      "key": "consensus_heights",
+      "value": "{string.Join(consensusHeights, ',')"
+    },
+    {
+      "key": "header",
+      "value": "{hex.encode(protobuf.marshal(header))"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a client is frozen due to misbehaviour in 
+`updateClient` handler:
+
+```json
+{
+  "type": "client_misbehaviour",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "client_type",
+      "value": "{clientType}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a non-active (i.e. frozen or expired) client is 
+sustituted with a new active client:
+
+```json
+{
+  "type": "update_client_proposal",
+  "attributes": [
+    {
+      "key": "subject_client_id",
+      "value": "{subjectClientId}"
+    },
+    {
+      "key": "client_type",
+      "value": "{substituteClientState.clientType}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when an IBC client breaking upgrade is scheduled:
+
+```json
+{
+  "type": "upgrade_client_proposal",
+  "attributes": [
+    {
+      "key": "title",
+      "value": "{title}"
+    },
+    {
+      "key": "upgrade_plan_height",
+      "value": "{plan.height}"
+    }
+  ]
+}
+```
+
+#### Connection lifecycle
+
+Format of the event emitted when a connection end in `INIT` state is successfully added in 
+the `connOpenInit` handler:
+
+```json
+{
+  "type": "connection_open_init",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionId}"
+    },
+    {
+      "key": "counterparty_client_id",
+      "value": "{counterparty.clientId}"
+    },
+    {
+      "key": "counterparty_connection_id",
+      "value": "{counterparty.connectionId}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a connection end in `TRY` state is is successfully added in 
+the `connOpenTry` handler:
+
+```json
+{
+  "type": "connection_open_try",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionId}"
+    },
+    {
+      "key": "counterparty_client_id",
+      "value": "{counterparty.clientId}"
+    },
+    {
+      "key": "counterparty_connection_id",
+      "value": "{counterparty.connectionId}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when an existing connection end in `INIT` is successfully updated 
+to `OPEN` state in the `connOpenAck` handler:
+
+```json
+{
+  "type": "connection_open_ack",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionId}"
+    },
+    {
+      "key": "counterparty_client_id",
+      "value": "{counterparty.clientId}"
+    },
+    {
+      "key": "counterparty_connection_id",
+      "value": "{counterparty.connectionId}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when an existing connection end in `TRY` state is successfully updated 
+to `OPEN` state in the `connOpenConfirm` handler:
+
+```json
+{
+  "type": "connection_open_confirm",
+  "attributes": [
+    {
+      "key": "client_id",
+      "value": "{clientId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionId}"
+    },
+    {
+      "key": "counterparty_client_id",
+      "value": "{counterparty.clientId}"
+    },
+    {
+      "key": "counterparty_connection_id",
+      "value": "{counterparty.connectionId}"
+    }
+  ]
+}
+```
+
+#### Channel lifecycle
+
+Format of the event emitted when a channel end in `INIT` state is successfully added in 
+the `handleChanOpenInit` datagram handler:
+
+```json
+{
+  "type": "channel_open_init",
+  "attributes": [
+    {
+      "key": "port_id",
+      "value": "{portId}"
+    },
+    {
+      "key": "channel_id",
+      "value": "{channelId}"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "{counterparty.portId}"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "{counterparty.channelId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    },
+    {
+      "key": "version",
+      "value": "{version}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a channel end in `TRY` state is successfully added in 
+the `handleChanOpenTry` datagram handler:
+
+```json
+{
+  "type": "channel_open_try",
+  "attributes": [
+    {
+      "key": "port_id",
+      "value": "{portId}"
+    },
+    {
+      "key": "channel_id",
+      "value": "{channelId}"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "{counterparty.portId}"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "{counterparty.channelId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    },
+    {
+      "key": "version",
+      "value": "{version}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when an existing channel end in `INIT` is successfully updated 
+to `OPEN` state in the `handleChanOpenAck` datagram handler:
+
+```json
+{
+  "type": "channel_open_ack",
+  "attributes": [
+    {
+      "key": "port_id",
+      "value": "{portId}"
+    },
+    {
+      "key": "channel_id",
+      "value": "{channelId}"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "{counterparty.portId}"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "{counterparty.channelId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a channel end in `INIT` state is successfully added in 
+the `handleChanOpenConfirm` datagram handler:
+
+```json
+{
+  "type": "channel_open_confirm",
+  "attributes": [
+    {
+      "key": "port_id",
+      "value": "{portId}"
+    },
+    {
+      "key": "channel_id",
+      "value": "{channelId}"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "{counterparty.portId}"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "{counterparty.channelId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a channel end state is successfully updated to `CLOSED` state in 
+the `chanCloseInit` handler:
+
+```json
+{
+  "type": "channel_close_init",
+  "attributes": [
+    {
+      "key": "port_id",
+      "value": "{portId}"
+    },
+    {
+      "key": "channel_id",
+      "value": "{channelId}"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "{counterparty.portId}"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "{counterparty.channelId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a channel end state is successfully updated to `CLOSED` state in 
+the `chanCloseConfirm` handler:
+
+```json
+{
+  "type": "channel_close_confirm",
+  "attributes": [
+    {
+      "key": "port_id",
+      "value": "{portId}"
+    },
+    {
+      "key": "channel_id",
+      "value": "{channelId}"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "{counterparty.portId}"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "{counterparty.channelId}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+### Packet send
+
+Format of the event emitted when a module sends a packet:
+
+```json
+{
+  "type": "send_packet",
+  "attributes": [
+    {
+      "key": "packet_data_hex",
+      "value": "{hex.encode(data)}"
+    },
+    {
+      "key": "packet_timeout_height",
+      "value": "{timeoutHeight}"
+    },
+    {
+      "key": "packet_timeout_timestamp",
+      "value": "{timeoutTimestamp}"
+    },
+    {
+      "key": "packet_sequence",
+      "value": "{sequence}"
+    },
+    {
+      "key": "packet_src_port",
+      "value": "{sourcePort}"
+    },
+    {
+      "key": "packet_src_channel",
+      "value": "{sourceChannel}"
+    },
+    {
+      "key": "packet_dst_port",
+      "value": "{destinationPort}"
+    },
+    {
+      "key": "packet_dst_channel",
+      "value": "{destinationChannel}"
+    },
+    {
+      "key": "packet_channel_ordering",
+      "value": "{ordering.string()}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+### Packet relay
+
+Format of the event emitted when a module receives a packet in the `recvPacket` handler:
+
+```json
+{
+  "type": "recv_packet",
+  "attributes": [
+    {
+      "key": "packet_data_hex",
+      "value": "{hex.encode(data)}"
+    },
+    {
+      "key": "packet_timeout_height",
+      "value": "{timeoutHeight}"
+    },
+    {
+      "key": "packet_timeout_timestamp",
+      "value": "{timeoutTimestamp}"
+    },
+    {
+      "key": "packet_sequence",
+      "value": "{sequence}"
+    },
+    {
+      "key": "packet_src_port",
+      "value": "{sourcePort}"
+    },
+    {
+      "key": "packet_src_channel",
+      "value": "{sourceChannel}"
+    },
+    {
+      "key": "packet_dst_port",
+      "value": "{destinationPort}"
+    },
+    {
+      "key": "packet_dst_channel",
+      "value": "{destinationChannel}"
+    },
+    {
+      "key": "packet_channel_ordering",
+      "value": "{ordering.string()}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a module writes an acknowledgement after receiving a packet
+in the `handlePacketRecv` datagram handler:
+
+```json
+{
+  "type": "write_acknowledgement",
+  "attributes": [
+    {
+      "key": "packet_data_hex",
+      "value": "{hex.encode(data)}"
+    },
+    {
+      "key": "packet_timeout_height",
+      "value": "{timeoutHeight}"
+    },
+    {
+      "key": "packet_timeout_timestamp",
+      "value": "{timeoutTimestamp}"
+    },
+    {
+      "key": "packet_sequence",
+      "value": "{sequence}"
+    },
+    {
+      "key": "packet_src_port",
+      "value": "{sourcePort}"
+    },
+    {
+      "key": "packet_src_channel",
+      "value": "{sourceChannel}"
+    },
+    {
+      "key": "packet_dst_port",
+      "value": "{destinationPort}"
+    },
+    {
+      "key": "packet_dst_channel",
+      "value": "{destinationChannel}"
+    },
+    {
+      "key": "packet_ack_hex",
+      "value": "{hex.encode(ack)}"
+    },
+    {
+      "key": "packet_channel_ordering",
+      "value": "{ordering.string()}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+Format of the event emitted when a module acknowledges a packet in the `acknowledgePacket` handler:
+
+```json
+{
+  "type": "acknowledge_packet",
+  "attributes": [
+    {
+      "key": "packet_timeout_height",
+      "value": "{timeoutHeight}"
+    },
+    {
+      "key": "packet_timeout_timestamp",
+      "value": "{timeoutTimestamp}"
+    },
+    {
+      "key": "packet_sequence",
+      "value": "{sequence}"
+    },
+    {
+      "key": "packet_src_port",
+      "value": "{sourcePort}"
+    },
+    {
+      "key": "packet_src_channel",
+      "value": "{sourceChannel}"
+    },
+    {
+      "key": "packet_dst_port",
+      "value": "{destinationPort}"
+    },
+    {
+      "key": "packet_dst_channel",
+      "value": "{destinationChannel}"
+    },
+    {
+      "key": "packet_channel_ordering",
+      "value": "{ordering.string()}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
+### Packet timeouts
+
+Format of the event emitted when  `timeoutPacket` or `timeoutOnClose` handlers:
+
+```json
+{
+  "type": "timeout_packet",
+  "attributes": [
+    {
+      "key": "packet_timeout_height",
+      "value": "{timeoutHeight}"
+    },
+    {
+      "key": "packet_timeout_timestamp",
+      "value": "{timeoutTimestamp}"
+    },
+    {
+      "key": "packet_sequence",
+      "value": "{sequence}"
+    },
+    {
+      "key": "packet_src_port",
+      "value": "{sourcePort}"
+    },
+    {
+      "key": "packet_src_channel",
+      "value": "{sourceChannel}"
+    },
+    {
+      "key": "packet_dst_port",
+      "value": "{destinationPort}"
+    },
+    {
+      "key": "packet_dst_channel",
+      "value": "{destinationChannel}"
+    },
+    {
+      "key": "packet_channel_ordering",
+      "value": "{ordering.string()}"
+    },
+    {
+      "key": "connection_id",
+      "value": "{connectionHops[0]}"
+    }
+  ]
+}
+```
+
 ## Backwards Compatibility
 
 Not applicable. The relayer process is off-chain and can be upgraded or downgraded as necessary.
