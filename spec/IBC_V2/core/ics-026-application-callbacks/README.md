@@ -77,7 +77,7 @@ NOTE: IBC v2 allows multiple payloads coming from multiple applications to be se
 
 #### WriteAcknowledgement
 
-The IBC core handler MAY expose the following function signature to the ICS26 applications registed on the port router, so that the application can write acknowledgements asynchronously.
+The IBC core handler MAY expose the following function signature to the ICS26 applications registered on the port router, so that the application can write acknowledgements asynchronously.
 
 This is only necessary if the implementation supports processing packets asynchronously. In this case, an application may process the packet asynchronously from when the IBC core handler receives the packet. Thus, the acknowledgement cannot be returned as part of the `OnRecvPacket` callback and must be submitted to the core IBC handler by the ICS26 application at a later time. Thus, we must introduce a new endpoint on the IBC handler for the ICS26 application to call when it is done processing a receive packet and wants to write the acknowledgement.
 
@@ -98,7 +98,7 @@ WriteAcknowledgement Postconditions:
 - If the acknowledgement is successful, then all receiving applications must have executed their recvPacket logic and written state
 - If the acknowledgement is unsuccessful (ie ERROR ACK), any state changes made by the receiving applications MUST all be reverted. This ensure atomic execution of the multi-payload packet.
 
-NOTE: In the case that the packet contained multiple payloads, the IBC core handler MUST wait for all applications to return their individual acknowledgements for the packet before commiting the acknowledgment. If ANY application returns the error acknowledgement, then the acknowledgement for the entire packet only contains the `ERROR_SENTINEL_ACKNOWLEDGEMENT`. Otherwise, the acknowledgment is a list containing each applications individual acknowledgment in the same order that their associated payload existed in the packet.
+NOTE: In the case that the packet contained multiple payloads, the IBC core handler MUST wait for all applications to return their individual acknowledgements for the packet before committing the acknowledgment. If ANY application returns the error acknowledgement, then the acknowledgement for the entire packet only contains the `ERROR_SENTINEL_ACKNOWLEDGEMENT`. Otherwise, the acknowledgment is a list containing each applications individual acknowledgment in the same order that their associated payload existed in the packet.
 
 ### ICS26 Interface Exposed to Core Handler
 
@@ -129,7 +129,7 @@ OnRecvPacket ErrorConditions:
 - The sending application as identified by `payload.SourcePortId` is not allowed to send a payload to the receiving application
 - The requested version as identified by `payload.Version` is unsupported
 - The requested encoding as identified by `payload.Encoding` is unsupported
-- An error occured while processing the `payload.Value` after decoding with `payload.Encoding` and processing the payload in the manner expected by `payload.Version`.
+- An error occurred while processing the `payload.Value` after decoding with `payload.Encoding` and processing the payload in the manner expected by `payload.Version`.
 
 IMPORTANT: If the `OnRecvPacket` callback errors for any reason, the state changes made during the callback MUST be reverted and the IBC core handler MUST write the `SENTINEL_ERROR_ACKNOWLEDGEMENT` for this packet even if other payloads in the packet are received successfully.
 
