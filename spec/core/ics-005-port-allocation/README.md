@@ -19,7 +19,7 @@ Ports can then be used to open channels and can be transferred or later released
 
 ### Motivation
 
-The interblockchain communication protocol is designed to facilitate module-to-module traffic, where modules are independent, possibly mutually distrusted, self-contained
+The inter-blockchain communication protocol is designed to facilitate module-to-module traffic, where modules are independent, possibly mutually distrusted, self-contained
 elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules.
 This specification defines the *port allocation and ownership* system which realises that model.
 

@@ -14,7 +14,7 @@ modified: 2022-09-14
 
 ## Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockchain communication protocol.
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the inter-blockchain communication protocol.
 
 ### Motivation
 
