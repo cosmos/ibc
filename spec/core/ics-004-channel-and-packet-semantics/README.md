@@ -632,7 +632,7 @@ function chanCloseFrozen(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     hopsLength = channel.connectionHops.length
-    abortTransactionUnless(hopsLength === 1)
+    abortTransactionUnless(hopsLength > 1)
     abortTransactionUnless(channel.state !== CLOSED)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
