@@ -177,7 +177,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   // - Determine if any packets, acknowledgements, or timeouts need to be relayed
   channels = chain.getChannelsUsingConnections(connections)
   for (const localEnd of channels) {
-    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
+    remoteEnd = counterparty.getChannel(localEnd.counterpartyPortIdentifier, localEnd.counterpartyChannelIdentifier)
     // Deal with handshakes in progress
     if (localEnd.state === INIT && remoteEnd === null)
       // Handshake has started locally (1 step done), relay `chanOpenTry` to the remote end
