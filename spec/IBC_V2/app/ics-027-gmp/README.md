@@ -101,7 +101,7 @@ Implementations maintain GMP account mappings in module state. Fields of `Module
 ```typescript
 interface ModuleState {
   accounts: Map<AccountIdentifierHash, string> // derived account or contract address
-  accountIdentifiers: Map<string, AccountIdentifier> // optional reverse lookup
+  accountIdentifiers: Map<string, AccountIdentifier> // reverse lookup
 }
 ```
 
@@ -161,14 +161,14 @@ When a GMP packet is received on `gmpport`:
 ```typescript
 function onRecvPacket(packet: Packet, payload: Payload): bytes {
   // validate port/version/encoding
-  abortTransactionUnless(payload.version == "ics27-2")
-  abortTransactionUnless(payload.sourcePort == "gmpport")
-  abortTransactionUnless(payload.destPort == "gmpport")
-  abortTransactionUnless(isSupportedEncoding(payload.encoding))
+  assert(payload.version == "ics27-2")
+  assert(payload.sourcePort == "gmpport")
+  assert(payload.destPort == "gmpport")
+  assert(isSupportedEncoding(payload.encoding))
 
   // decode and validate packet data
   GMPPacketData data = decode(payload.value, payload.encoding)
-  abortTransactionUnless(validate(data))
+  assert(validate(data))
 
   // derive or create the GMP account
   AccountIdentifier id = AccountIdentifier{
@@ -215,8 +215,8 @@ The protocol reserves the `encoding` field for future additions and allows desti
 ## Example Implementations
 
 - ibc-go GMP module: https://github.com/cosmos/ibc-go
-- solidity-ibc-eureka GMP contracts: https://github.com/cosmos/solidity-ibc-eureka
-- solana-ibc-eureka GMP program: https://github.com/cosmos/solidity-ibc-eureka
+- solidity GMP contract: https://github.com/cosmos/solidity-ibc-eureka
+- solana GMP program: https://github.com/cosmos/solidity-ibc-eureka
 
 ## Open Questions
 
@@ -225,7 +225,7 @@ The protocol reserves the `encoding` field for future additions and allows desti
 
 ## History
 
-- 2024-2025: Proof-of-concept implementations across Cosmos SDK, EVM, and Solana
+- 2025: Proof-of-concept implementations across Cosmos SDK, EVM, and Solana
 - 2026-01-26: Initial draft of ICS27-GMP specification
 
 ## Copyright
