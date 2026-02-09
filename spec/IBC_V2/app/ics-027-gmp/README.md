@@ -4,8 +4,8 @@ title: General Message Passing (GMP)
 stage: Draft
 category: IBC/APP
 kind: instantiation
-requires: 25, 26
-author: IBC GMP contributors <ibc@interchain.io>
+requires: 26
+author: Serdar Turkmenafsar <serdar@cosmoslabs.io>
 created: 2026-01-26
 modified: 2026-01-26
 ---
@@ -131,7 +131,7 @@ message AccountIdentifier {
 }
 ```
 
-Implementations must produce the same derived account for identical inputs and must reject invalid `client_id` values according to local rules. Because `client_id` is the client identifier of the chain deriving the account.
+Implementations must produce the same derived account for identical inputs and must reject invalid `client_id` values according to local rules. Because `client_id` is the client identifier on the chain deriving the account.
 
 ### Sender State Machine
 
@@ -148,7 +148,7 @@ Implementations must produce the same derived account for identical inputs and m
    - `payload.version = ics27-2`
    - `payload.encoding = MsgSendCall.encoding`
    - `payload.value = Marshal(GMPPacketData)`
-6. Send the packet using the v2 packet handler.
+6. Send the packet using the ICS-26 `SendPacket` handler.
 
 ### Packet relay
 
@@ -217,11 +217,6 @@ The protocol reserves the `encoding` field for future additions and allows desti
 - ibc-go GMP module: https://github.com/cosmos/ibc-go
 - solidity GMP contract: https://github.com/cosmos/solidity-ibc-eureka
 - solana GMP program: https://github.com/cosmos/solidity-ibc-eureka
-
-## Open Questions
-
-- Confirm author list and maintainers for the specification.
-- Confirm whether the default encoding should be `application/x-protobuf` or `application/x-solidity-abi` across implementations.
 
 ## History
 
