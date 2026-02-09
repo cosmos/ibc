@@ -94,6 +94,19 @@ message Acknowledgement {
 
 The acknowledgement payload is opaque to the protocol; destination runtimes define the encoding of `result`.
 
+### Module State
+
+Implementations maintain GMP account mappings in module state. Fields of `ModuleState` are assumed to be in scope.
+
+```typescript
+interface ModuleState {
+  accounts: Map<AccountIdentifierHash, string> // derived account or contract address
+  accountIdentifiers: Map<string, AccountIdentifier> // optional reverse lookup
+}
+```
+
+Implementations may store additional configuration required to instantiate accounts (e.g. account code hash, beacon address, or router reference).
+
 ### Encodings
 
 ICS27-GMP supports multiple serialization encodings for `GMPPacketData` and acknowledgements. Payload encoding follows the per-packet `encoding` field defined by IBC v2 (see `spec/IBC_V2/core/ics-004-packet-semantics/PACKET.md`).
@@ -145,12 +158,34 @@ Implementations must produce the same derived account for identical inputs and m
 
 When a GMP packet is received on `gmpport`:
 
-1. Verify `payload.version` is `ics27-2` and the ports are `gmpport`.
-2. Unmarshal `GMPPacketData` according to `payload.encoding`.
-3. Validate `GMPPacketData` size constraints.
-4. Derive the GMP account from `(packet.dest_client, packet.sender, packet.salt)`, where `packet.dest_client` is the destination chain's client identifier tracking the source chain.
-5. Execute the payload using the chain’s execution environment, attributing the call to the derived GMP account.
-6. Return an acknowledgement containing the execution result.
+```typescript
+function onRecvPacket(packet: Packet, payload: Payload): bytes {
+  // validate port/version/encoding
+  abortTransactionUnless(payload.version == "ics27-2")
+  abortTransactionUnless(payload.sourcePort == "gmpport")
+  abortTransactionUnless(payload.destPort == "gmpport")
+  abortTransactionUnless(isSupportedEncoding(payload.encoding))
+
+  // decode and validate packet data
+  GMPPacketData data = decode(payload.value, payload.encoding)
+  abortTransactionUnless(validate(data))
+
+  // derive or create the GMP account
+  AccountIdentifier id = AccountIdentifier{
+    client_id: packet.dest_client,
+    sender: data.sender,
+    salt: data.salt,
+  }
+  account = getOrCreateAccount(id)
+
+  // execute payload as the derived account
+  result = account.execute(data.receiver, data.payload)
+
+  return acknowledgement(result)
+}
+```
+
+Implementations must derive the GMP account from `(packet.dest_client, data.sender, data.salt)` where `packet.dest_client` is the destination chain's client identifier tracking the source chain.
 
 #### `onTimeoutPacket`
 
