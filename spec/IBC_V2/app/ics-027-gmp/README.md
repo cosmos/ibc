@@ -137,15 +137,28 @@ Implementations must produce the same derived account for identical inputs and m
    - `payload.value = Marshal(GMPPacketData)`
 6. Send the packet using the v2 packet handler.
 
-### Receiver State Machine
+### Packet relay
+
+`onRecvPacket`, `onTimeoutPacket`, and `onAcknowledgementPacket` are invoked by the IBC routing module when GMP packets are relayed.
+
+#### `onRecvPacket`
 
 When a GMP packet is received on `gmpport`:
 
-1. Unmarshal `GMPPacketData` according to `payload.encoding`.
-2. Validate `GMPPacketData` size constraints.
-3. Derive the GMP account from `(packet.dest_client, packet.sender, packet.salt)`, where `packet.dest_client` is the destination chain's client identifier tracking the source chain.
-4. Execute the payload using the chain’s execution environment, attributing the call to the derived GMP account.
-5. If call succeeds, return an acknowledgement containing the execution result.
+1. Verify `payload.version` is `ics27-2` and the ports are `gmpport`.
+2. Unmarshal `GMPPacketData` according to `payload.encoding`.
+3. Validate `GMPPacketData` size constraints.
+4. Derive the GMP account from `(packet.dest_client, packet.sender, packet.salt)`, where `packet.dest_client` is the destination chain's client identifier tracking the source chain.
+5. Execute the payload using the chain’s execution environment, attributing the call to the derived GMP account.
+6. Return an acknowledgement containing the execution result.
+
+#### `onTimeoutPacket`
+
+If a GMP packet times out on the source chain, no action is required. This is where one may optionally implement sender callback depending on chain-specific semantics, but it is not required by the protocol.
+
+#### `onAcknowledgementPacket`
+
+When an acknowledgement is received on the source chain, no action is required by the protocol. One may optionally implement sender callback depending on chain-specific semantics.
 
 ### Acknowledgements
 
@@ -155,10 +168,6 @@ When a GMP packet is received on `gmpport`:
 ### Middleware Interaction
 
 ICS27-GMP is compatible with ICS-30 middleware. Implementations may expose packet metadata in `memo` for use by callbacks middleware. Source callback registration may be auto-derived from `sender` by GMP implementations.
-
-### Packet Ordering
-
-IBC v2 packet semantics apply; GMP does not require ordered channels and does not require per-account channels.
 
 ## Backwards Compatibility
 
