@@ -39,7 +39,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS-
 
 ### Overview
 
-ICS27-GMP defines a single IBC application module that can act as a sender and/or receiver of general message passing packets. A sender constructs `MsgSendCall`, which produces an IBC v2 packet containing `GMPPacketData`. The destination chain derives a caller account deterministically and executes the payload using its native execution environment. The destination then returns an acknowledgement containing the execution result.
+ICS27-GMP defines a single IBC application module that can act as a sender and/or receiver of general message passing packets. A sender constructs `MsgSendCall`, which produces an IBC v2 packet containing `GMPPacketData`. The destination implementation derives a caller account deterministically and executes the payload using its native execution environment. The destination then returns an acknowledgement containing the execution result.
 
 ### Identifiers
 
@@ -49,6 +49,8 @@ ICS27-GMP defines a single IBC application module that can act as a sender and/o
 ### Data Structures
 
 #### `MsgSendCall`
+
+`MsgSendCall` is the message type used by the sender to initiate a cross-chain call. It can be called by any account on the source chain.
 
 ```proto
 message MsgSendCall {
@@ -67,12 +69,14 @@ message MsgSendCall {
 - `sender`: address on the source chain (signer of the message).
 - `receiver`: destination-specific receiver identifier. This may be an address (EVM), a program ID (Solana), or ignored if the destination interprets payload differently.
 - `salt`: arbitrary bytes used to differentiate accounts for the same sender/client pair.
-- `payload`: opaque call data interpreted by the destination runtime.
+- `payload`: opaque call data interpreted by the destination implementation. (e.g. protobuf-encoded SDK messages, ABI-encoded EVM call data).
 - `timeout_timestamp`: absolute nanoseconds since Unix epoch (IBC v2).
 - `memo`: optional metadata; may include callback instructions for middleware.
-- `encoding`: content type label for serialization (see Encodings).
+- `encoding`: content type label for serialization of the packet data (not payload) (see Encodings).
 
 #### `GMPPacketData`
+
+`GMPPacketData` is the core packet payload sent over IBC. It is constructed from `MsgSendCall` and marshaled according to the requested `encoding`.
 
 ```proto
 message GMPPacketData {
@@ -86,13 +90,13 @@ message GMPPacketData {
 
 #### `Acknowledgement`
 
+`Acknowledgement` is the packet acknowledgement sent by the destination chain after executing the call. The acknowledgement payload is opaque to the protocol; destination runtimes define the encoding of `result`. It allows senders to receive execution results via callbacks if desired.
+
 ```proto
 message Acknowledgement {
   bytes result = 1;
 }
 ```
-
-The acknowledgement payload is opaque to the protocol; destination runtimes define the encoding of `result`.
 
 ### Module State
 
@@ -111,7 +115,7 @@ Implementations may store additional configuration required to instantiate accou
 
 ICS27-GMP supports multiple serialization encodings for `GMPPacketData` and acknowledgements. Payload encoding follows the per-packet `encoding` field defined by IBC v2 (see `spec/IBC_V2/core/ics-004-packet-semantics/PACKET.md`).
 
-- `application/x-protobuf` (default)
+- `application/x-protobuf`
 - `application/json`
 - `application/x-solidity-abi` (for EVM-compatible ABI encoding)
 
@@ -214,9 +218,9 @@ The protocol reserves the `encoding` field for future additions and allows desti
 
 ## Example Implementations
 
-- ibc-go GMP module: https://github.com/cosmos/ibc-go
-- solidity GMP contract: https://github.com/cosmos/solidity-ibc-eureka
-- solana GMP program: https://github.com/cosmos/solidity-ibc-eureka
+- [ibc-go](https://github.com/cosmos/ibc-go)
+- [solidity](https://github.com/cosmos/solidity-ibc-eureka)
+- [solana](https://github.com/cosmos/solidity-ibc-eureka)
 
 ## History
 
