@@ -137,6 +137,30 @@ message AccountIdentifier {
 
 Implementations must produce the same derived account for identical inputs and must reject invalid `client_id` values according to local rules. Because `client_id` is the client identifier on the chain deriving the account.
 
+#### Read-only deterministic address handler
+
+Implementations must expose a read-only handler that returns the GMP account address derived from `(client_id, sender, salt)` and indicates whether that account has already been materialized. The handler must not mutate state and must reuse the same derivation function used by `getOrCreateAccount`.
+
+```typescript
+interface AccountAddressQuery {
+  client_id: Identifier
+  sender: Address
+  salt: bytes
+}
+
+interface AccountAddressResult {
+  account: Address // derived account or contract address
+  exists: boolean  // true if the account is already materialized/deployed
+}
+
+function getAccountAddress(q: AccountAddressQuery): AccountAddressResult
+```
+
+- The handler MUST succeed for any valid `(client_id, sender, salt)` regardless of whether the account has been created on-chain.
+- `exists` reports whether the module has already instantiated or deployed the account.
+- Invalid `client_id` inputs must be rejected using the same validation rules as packet processing.
+- Example implementations expose this via read-only interfaces such as `getGMPAddress` in `solidity-ibc-eureka` or `QueryGMPAccountAddress` in `ibc-go`.
+
 ### Sender State Machine
 
 #### `MsgSendCall`
