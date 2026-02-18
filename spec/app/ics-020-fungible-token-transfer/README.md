@@ -255,7 +255,7 @@ function sendFungibleTokens(
 ): uint64 {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
-    source = denomination.slice(0, len(prefix)) !== prefix
+    source = !denomination.startsWith(prefix)
     if source {
       // determine escrow account
       escrowAccount = channelEscrowAddresses[sourceChannel]
