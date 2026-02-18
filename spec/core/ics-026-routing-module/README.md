@@ -12,7 +12,7 @@ modified: 2019-08-25
 
 ## Synopsis
 
-The routing module is a default implementation of a secondary module which will accept external datagrams and call into the interblockchain communication protocol handler to deal with handshakes and packet relay.
+The routing module is a default implementation of a secondary module which will accept external datagrams and call into the inter-blockchain communication protocol handler to deal with handshakes and packet relay.
 The routing module keeps a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the routing module.
 
 ### Motivation
