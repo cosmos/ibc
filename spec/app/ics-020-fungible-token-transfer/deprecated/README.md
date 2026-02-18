@@ -100,7 +100,7 @@ sequenceDiagram
     Note over chain A,chain C: C is source zone: C -> A
     chain C->>chain C: Lock (escrow) vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
     chain C->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
-    chain A->>chain A: Mint vouchers ("tansfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain A: Mint vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
     Note over chain A,chain C: A is sink zone: A -> C
     chain A->>chain A: Burn vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
     chain A->>chain C: Send transfer packet with vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
@@ -603,7 +603,7 @@ function onAcknowledgePacket(
     } else {
       // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
       // we must revert the changes that came from successfully receiving the tokens on our chain
-      // before propogating the error acknowledgement back to original sender chain
+      // before propagating the error acknowledgement back to original sender chain
       revertInFlightChanges(packet, prevPacket)
       // write error acknowledgement
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
@@ -635,7 +635,7 @@ function onTimeoutPacket(packet: Packet) {
   if prevPacket != nil {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
     // we must revert the changes that came from successfully receiving the tokens on our chain
-    // before propogating the error acknowledgement back to original sender chain
+    // before propagating the error acknowledgement back to original sender chain
     revertInFlightChanges(packet, prevPacket)
     // write error acknowledgement
     FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}

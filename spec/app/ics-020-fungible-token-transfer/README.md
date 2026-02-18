@@ -69,7 +69,7 @@ sequenceDiagram
     Note over chain A,chain C: C is source zone: C -> A
     chain C->>chain C: Lock (escrow) vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
     chain C->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
-    chain A->>chain A: Mint vouchers ("tansfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain A: Mint vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
     Note over chain A,chain C: A is sink zone: A -> C
     chain A->>chain A: Burn vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
     chain A->>chain C: Send transfer packet with vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")

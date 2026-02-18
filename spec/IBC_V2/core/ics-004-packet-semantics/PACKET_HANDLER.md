@@ -26,7 +26,7 @@ interface Payload {
 }
 ```
 
-The packet is never directly serialised and sent to counterparty chains. Instead a standardized non-malleable committment to the packet data is stored under the standardized unique key for the packet as defined in ICS-24. Thus, implementations MAY make individual choices on the exact packet structure and serialization scheme they use internally so long as they respect the standardized commitment defined by the IBC protocol when writing to the provable store.
+The packet is never directly serialised and sent to counterparty chains. Instead a standardized non-malleable commitment to the packet data is stored under the standardized unique key for the packet as defined in ICS-24. Thus, implementations MAY make individual choices on the exact packet structure and serialization scheme they use internally so long as they respect the standardized commitment defined by the IBC protocol when writing to the provable store.
 
 Packet Invariants:
 
@@ -87,7 +87,7 @@ interface Packet {
 }
 ```
 
-- Since the packet is committed to with a hash in-state, implementations must provide the packet fields for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxilliary key if the implementing platform does not have an event system.
+- Since the packet is committed to with a hash in-state, implementations must provide the packet fields for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxiliary key if the implementing platform does not have an event system.
 
 SendPacket Errorconditions:
 
@@ -147,8 +147,8 @@ WriteAcknowledgement Preconditions:
 WriteAcknowledgement Postconditions:
 
 - The acknowledgement is committed and written to the acknowledgement path as specified in ICS24
-- Since the acknowledgement is being hashed, the full acknowledgement fields should be made available for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxilliary key if the implementing platform does not have an event system.
-- Implementors SHOULD also emit the full packet again in `WriteAcknowledgement` since the sender chain is only expected to store the packet commitment and not the full packet; relayers are expected to pass the packet back to the sender chain to process the acknowledgement. Thus, in order to support stateless relayers it is helpful to re-emit the packet fields on `WriteAcknowledgement` so the relayer can reconstruct the packet. 
+- Since the acknowledgement is being hashed, the full acknowledgement fields should be made available for relayers to reconstruct. This can be emitted in an event system or stored in state as the full packet under an auxiliary key if the implementing platform does not have an event system.
+- Implementers SHOULD also emit the full packet again in `WriteAcknowledgement` since the sender chain is only expected to store the packet commitment and not the full packet; relayers are expected to pass the packet back to the sender chain to process the acknowledgement. Thus, in order to support stateless relayers it is helpful to re-emit the packet fields on `WriteAcknowledgement` so the relayer can reconstruct the packet. 
 - If the acknowledgement is successful, then all receiving applications must have executed their recvPacket logic and written state
 - If the acknowledgement is unsuccessful (ie ERROR ACK), any state changes made by the receiving applications MUST all be reverted. This ensure atomic execution of the multi-payload packet.
 
