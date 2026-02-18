@@ -7,7 +7,7 @@ category: IBC/APP
 requires: 25, 26
 kind: instantiation
 version compatibility:
-author: Christopher Goes <cwgoes@interchain.berlin>, Aditya Sripal <aditya@interchain.io>
+author: Christopher Goes <cwgoes@interchain.berlin>, Aditya Sripal <aditya@interchainlabs.io>
 created: 2019-07-15 
 modified: 2024-03-05
 ---
