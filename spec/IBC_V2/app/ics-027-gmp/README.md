@@ -25,7 +25,7 @@ Interchain accounts (ICS-27) enabled cross-chain control of accounts but require
 - **Payload**: Opaque bytes interpreted by the destination chain runtime (e.g. protobuf-encoded SDK messages, ABI-encoded EVM call data).
 - **Encoding**: A content type label describing how `GMPPacketData` and acknowledgements are serialized.
 
-The IBC handler interface & IBC routing module interface are as defined in [ICS-25](../../core/ics-025-handler-interface) and [ICS-26](../../core/ics-026-routing-module), respectively.
+The IBC handler interface & IBC application callback interface are as defined in [ICS-5](../../core/ics-005-port-allocation) and [ICS-26](../../core/ics-026-application-callbacks), respectively.
 
 ### Desired Properties
 
