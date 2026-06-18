@@ -21,7 +21,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 ### IBC v2 Specifications
 
-IBC v2 is the latest iteration of the IBC protocol. It streamlines the integration of IBC by removing the connection and channel handshake layers in favor of direct client-to-client packet flow. For an overview, seethe [IBC v2](spec/IBC_V2/README.md) introduction.
+IBC v2 is the latest iteration of the IBC protocol. It streamlines the integration of IBC by removing the connection and channel handshake layers in favor of direct client-to-client packet flow. For an overview, see the [IBC v2](spec/IBC_V2/README.md) introduction.
 
 #### Core Transport
 
