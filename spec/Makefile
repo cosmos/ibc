@@ -5,6 +5,6 @@ lint: ## Lint specs
 	markdownlint-cli2 "**.md"
 
 lint-fix: ## Lint specs and fix errors
-	markdownlint-cli2-fix "**.md"
+	markdownlint-cli2 "**.md" --fix
 
 .PHONY: help lint lint-fix

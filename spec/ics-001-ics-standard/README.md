@@ -120,7 +120,7 @@ An ICS should include a copyright section waiving rights via [Apache 2.0](https:
 
 ICS specifications must be written in GitHub-flavoured Markdown.
 
-For a GitHub-flavoured Markdown cheat sheet, see [here](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [here](https://github.com/joeyespo/grip).
+For a GitHub-flavoured Markdown cheat sheet, see [adam-p's Markdown cheat sheet](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [grip](https://github.com/joeyespo/grip).
 
 ### Language
 
