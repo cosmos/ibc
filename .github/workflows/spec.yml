@@ -1,0 +1,36 @@
+name: Spec
+
+on:
+  push:
+    paths:
+      - "README.md"
+      - "spec/**"
+      - ".github/workflows/spec.yml"
+      - ".github/workflows/link-check-config.json"
+  pull_request:
+    branches: [main, development]
+    paths:
+      - "README.md"
+      - "spec/**"
+      - ".github/workflows/spec.yml"
+      - ".github/workflows/link-check-config.json"
+
+jobs:
+  markdown-lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: tj-actions/changed-files@v41
+        id: changed-files
+        with:
+          files: "README.md,spec/**/*.md"
+          separator: ","
+      - uses: DavidAnson/markdownlint-cli2-action@v13
+        if: steps.changed-files.outputs.any_changed == 'true'
+        with:
+          config: "spec/.markdownlint.jsonc"
+          globs: ${{ steps.changed-files.outputs.all_changed_files }}
+          separator: ","

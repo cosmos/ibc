@@ -1,6 +1,6 @@
 # IBC
 
-![banner](./assets/interchain-standards.png)
+![banner](./.github/assets/interchain-standards.png)
 
 ## Synopsis
 
@@ -8,7 +8,7 @@ This repository is the canonical location for development and documentation of t
 
 It shall be used to consolidate design rationale, protocol semantics, and encoding descriptions for IBC, including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP).
 
-Contributions are welcome. See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contribution guidelines.
+Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contribution guidelines.
 
 ## What is IBC?
 
@@ -75,3 +75,8 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 The Interchain Standards are also translated into the following languages:
 
 - [Chinese](https://github.com/octopus-network/ibc-spec-cn)
+
+## Archive Papers
+
+- [The Interblockchain Communication Protocol: An Overview, 2022](https://github.com/cosmos/ibc/blob/31f41387942ee71188b6a9799d1a55849e008c97/archive/papers/2020-05/build/paper.pdf)
+- [IBC Protocol Specification, 2017](https://github.com/cosmos/ibc/blob/31f41387942ee71188b6a9799d1a55849e008c97/archive/v0_3_1_IBC.pdf)
