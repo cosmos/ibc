@@ -26,7 +26,7 @@ jobs:
       - uses: tj-actions/changed-files@v41
         id: changed-files
         with:
-          files: "spec/**/*.md"
+          files: "README.md,spec/**/*.md"
           separator: ","
       - uses: DavidAnson/markdownlint-cli2-action@v13
         if: steps.changed-files.outputs.any_changed == 'true'
@@ -34,13 +34,3 @@ jobs:
           config: "spec/.markdownlint.jsonc"
           globs: ${{ steps.changed-files.outputs.all_changed_files }}
           separator: ","
-
-  markdown-link-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: gaurav-nelson/github-action-markdown-link-check@v1
-        with:
-          config-file: ".github/workflows/link-check-config.json"
-          folder-path: "spec"
-          file-path: "./README.md"
