@@ -19,7 +19,7 @@ var (
 	}
 )
 
-func attestorRun(cmd *cobra.Command, args []string) error {
+func attestorRun(_ *cobra.Command, _ []string) error {
 	fmt.Println("Running attestor...")
 
 	return nil

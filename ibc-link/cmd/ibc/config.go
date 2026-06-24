@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cosmos/ibc/ibc-link/config"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+
+	"github.com/cosmos/ibc/ibc-link/config"
 )
 
 // set in init()
@@ -58,7 +59,7 @@ func configNew(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func configValidate(cmd *cobra.Command, _ []string) error {
+func configValidate(_ *cobra.Command, _ []string) error {
 	if flagValidateLive {
 		return errors.New("--live is not implemented")
 	}

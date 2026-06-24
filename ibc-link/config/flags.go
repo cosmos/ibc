@@ -31,6 +31,7 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 	pf.StringVarP(&flags.Config, "config", "", flags.Config, "Config file relative to home")
 }
 
+// ConfigPath returns the absolute path to the config file.
 func (fs *FlagSet) ConfigPath() (string, error) {
 	home, err := expandHome(fs.Home)
 	if err != nil {
@@ -64,5 +65,5 @@ func ensureDirectory(directoryOrFile string) error {
 		return nil
 	}
 
-	return os.MkdirAll(dir, 0755)
+	return os.MkdirAll(dir, 0o755)
 }
