@@ -20,14 +20,12 @@ var (
 )
 
 func relayerRun(_ *cobra.Command, _ []string) error {
-	configPath, err := globalFlags.ConfigPath()
+	cfg, err := resolveConfig()
 	if err != nil {
 		return err
 	}
 
-	// todo resolve config or fail
-
-	fmt.Printf("Running relayer with config: %s\n", configPath)
+	fmt.Printf("Running relayer on addr %q...\n", cfg.GRPC.ListenAddress)
 
 	return nil
 }

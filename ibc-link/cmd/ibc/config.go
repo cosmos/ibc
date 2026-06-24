@@ -84,3 +84,12 @@ func printConfigHome(_ *cobra.Command, _ []string) {
 		fmt.Printf("Using home: %s\n", globalFlags.Home)
 	}
 }
+
+func resolveConfig() (config.Config, error) {
+	configPath, err := globalFlags.ConfigPath()
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "unable to get config path")
+	}
+
+	return config.LoadFromFile(configPath, true)
+}

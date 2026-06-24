@@ -20,7 +20,12 @@ var (
 )
 
 func attestorRun(_ *cobra.Command, _ []string) error {
-	fmt.Println("Running attestor...")
+	cfg, err := resolveConfig()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Running attestor on addr %q...\n", cfg.GRPC.ListenAddress)
 
 	return nil
 }
