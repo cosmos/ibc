@@ -11,4 +11,7 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
+test: ## Run tests
+	go test ./... -v
+
 .PHONY: help build

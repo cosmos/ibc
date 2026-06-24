@@ -29,6 +29,29 @@ func DefaultConfig() Config {
 	}
 }
 
+// LoadFromFile loads Config from file with optional validation.
+// Note: supports ENV variables expansion!
+func LoadFromFile(path string, validate bool) (Config, error) {
+	bz, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+
+	config := DefaultConfig()
+	expanded := os.ExpandEnv(string(bz))
+	if err := yaml.Unmarshal([]byte(expanded), &config); err != nil {
+		return Config{}, err
+	}
+
+	if validate {
+		if err := config.Validate(); err != nil {
+			return Config{}, errors.Wrap(err, "validation failed")
+		}
+	}
+
+	return config, nil
+}
+
 func (c Config) Validate() error {
 	if err := c.GRPC.Validate(); err != nil {
 		return errors.Wrap(err, ".grpc")
