@@ -19,7 +19,7 @@ var (
 	}
 )
 
-func relayerRun(cmd *cobra.Command, args []string) error {
+func relayerRun(_ *cobra.Command, _ []string) error {
 	fmt.Printf("Running relayer with flags: %+v\n", flags)
 
 	return nil

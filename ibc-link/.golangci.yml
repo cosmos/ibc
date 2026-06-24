@@ -47,6 +47,10 @@ linters:
     - staticcheck
     - unconvert
     - unused
+    - revive
+    - errcheck
+    - errorlint
+
   settings:
     dogsled:
       max-blank-identifiers: 3

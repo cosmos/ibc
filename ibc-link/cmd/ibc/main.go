@@ -1,3 +1,4 @@
+// Package main is the entrypoint for the ibc-link binary
 package main
 
 import (
@@ -10,7 +11,7 @@ import (
 
 // todo: commands: config validate, config create
 
-// global flags, updated in setupFlags()
+// global flags, loaded in config.DeclarePersistentFlags()
 var flags = config.DefaultFlagSet()
 
 var rootCmd = &cobra.Command{
