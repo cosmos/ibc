@@ -18,11 +18,9 @@ var flagValidateLive bool
 
 var (
 	cmdConfig = &cobra.Command{
-		Use:   "config",
-		Short: "Config commands",
-		PersistentPreRun: func(_ *cobra.Command, _ []string) {
-			fmt.Printf("Using home: %s\n", globalFlags.Home)
-		},
+		Use:              "config",
+		Short:            "Config commands",
+		PersistentPreRun: printConfigHome,
 	}
 
 	cmdConfigNew = &cobra.Command{
@@ -64,8 +62,25 @@ func configValidate(_ *cobra.Command, _ []string) error {
 		return errors.New("--live is not implemented")
 	}
 
-	// todo resolve config file
-	// todo validate config
+	configPath, err := globalFlags.ConfigPath()
+	if err != nil {
+		return errors.Wrap(err, "unable to get config path")
+	}
+
+	_, err = config.LoadFromFile(configPath, true)
+	if err != nil {
+		return errors.Wrap(err, "config load")
+	}
+
+	if !globalFlags.Quiet {
+		fmt.Printf("Configuration file %q is valid.\n", configPath)
+	}
 
 	return nil
+}
+
+func printConfigHome(_ *cobra.Command, _ []string) {
+	if !globalFlags.Quiet {
+		fmt.Printf("Using home: %s\n", globalFlags.Home)
+	}
 }

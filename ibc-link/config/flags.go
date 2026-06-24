@@ -13,6 +13,7 @@ type FlagSet struct {
 	// Home IBC home directory where files are stored
 	Home   string
 	Config string
+	Quiet  bool
 }
 
 // DefaultFlagSet returns the default flag set.
@@ -20,6 +21,7 @@ func DefaultFlagSet() FlagSet {
 	return FlagSet{
 		Home:   "~/.ibc",
 		Config: "ibc.yml",
+		Quiet:  false,
 	}
 }
 
@@ -29,6 +31,7 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 
 	pf.StringVarP(&flags.Home, "home", "", flags.Home, "IBC home directory")
 	pf.StringVarP(&flags.Config, "config", "", flags.Config, "Config file relative to home")
+	pf.BoolVarP(&flags.Quiet, "quiet", "q", flags.Quiet, "Quiet mode")
 }
 
 // ConfigPath returns the absolute path to the config file.
