@@ -588,7 +588,7 @@ The consensus state can only be updated as allowed by the `updateConsensusState`
 
 ## History
 
-Parts of this document were inspired by the [previous IBC specification](../../../archive).
+Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/ibc/tree/31f41387942ee71188b6a9799d1a55849e008c97/archive).
 
 Mar 29, 2019 - Initial draft version submitted
 
