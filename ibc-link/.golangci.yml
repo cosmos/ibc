@@ -1,0 +1,56 @@
+# https://github.com/golangci/golangci-lint/blob/6b274d25c1e38f136ab75ac9b9e4785fc22f9421/.golangci.reference.yml
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 30m
+  tests: false
+
+issues:
+  max-same-issues: 50
+
+# https://golangci-lint.run/usage/formatters
+formatters:
+  enable: [gci, gofmt, gofumpt, golines]
+  exclusions:
+    generated: lax
+  settings:
+    gci:
+      sections:
+        - "standard"
+        - "prefix(github.com/cosmos/ibc/ibc-link)"
+        - "prefix(github.com/cosmos/ibc/ibc-link/packages/go)"
+        - "default"
+        - "alias"
+        - "blank" # e.g. sql drivers
+    gofmt:
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+    golines:
+      max-len: 120
+
+# https://golangci-lint.run/usage/linters
+linters:
+  enable:
+    # todo: depguard enable eventually
+    - asciicheck
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
+    - goconst
+    - gocritic
+    - misspell
+    - nakedret
+    - nolintlint
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    dogsled:
+      max-blank-identifiers: 3
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax

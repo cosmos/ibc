@@ -3,12 +3,11 @@ package main
 import (
 	"os"
 
-	"github.com/cosmos/ibc/ibc-link/config"
 	"github.com/spf13/cobra"
+
+	"github.com/cosmos/ibc/ibc-link/config"
 )
 
-// flags: logging mode, debug, ...
-// todo: linter
 // todo: commands: config validate, config create
 
 // global flags, updated in setupFlags()

@@ -5,4 +5,10 @@ help: ## List of commands
 build: ## Build the binary
 	go build -o bin/ibc ./cmd/ibc/...
 
+lint: ## Lint the code
+	golangci-lint run
+
+lint-fix: ## Lint the code and fix errors
+	golangci-lint run --fix
+
 .PHONY: help build
