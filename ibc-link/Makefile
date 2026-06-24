@@ -14,4 +14,4 @@ lint-fix: ## Lint the code and fix errors
 test: ## Run tests
 	go test ./... -v
 
-.PHONY: help build
+.PHONY: help build lint lint-fix test
