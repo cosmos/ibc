@@ -20,13 +20,14 @@ var (
 )
 
 func relayerRun(_ *cobra.Command, _ []string) error {
-	configPath, err := flags.ConfigPath()
+	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Running relayer with flags: %+v\n", flags)
-	fmt.Printf("Running relayer with config: %+v\n", configPath)
+	// todo resolve config or fail
+
+	fmt.Printf("Running relayer with config: %s\n", configPath)
 
 	return nil
 }

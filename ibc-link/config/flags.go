@@ -57,3 +57,12 @@ func expandHome(path string) (string, error) {
 
 	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 }
+
+func ensureDirectory(directoryOrFile string) error {
+	dir := filepath.Dir(directoryOrFile)
+	if dir == "." {
+		return nil
+	}
+
+	return os.MkdirAll(dir, 0755)
+}

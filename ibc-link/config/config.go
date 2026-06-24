@@ -2,9 +2,12 @@
 package config
 
 import (
+	"os"
+
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/ibc-link/packages/go/network"
+	"github.com/goccy/go-yaml"
 )
 
 // Config represents a config file
@@ -29,6 +32,23 @@ func DefaultConfig() Config {
 func (c Config) Validate() error {
 	if err := c.GRPC.Validate(); err != nil {
 		return errors.Wrap(err, ".grpc")
+	}
+
+	return nil
+}
+
+func (c Config) StoreToFile(path string) error {
+	if err := ensureDirectory(path); err != nil {
+		return err
+	}
+
+	bz, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(path, bz, 0644); err != nil {
+		return err
 	}
 
 	return nil
