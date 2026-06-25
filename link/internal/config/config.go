@@ -31,15 +31,24 @@ func DefaultConfig() Config {
 
 // LoadFromFile loads Config from file with optional validation.
 // Note: supports ENV variables expansion!
-func LoadFromFile(path string, validate bool) (Config, error) {
+func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, error) {
+	config := DefaultConfig()
+
 	bz, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, err
 	}
 
-	config := DefaultConfig()
+	// substitute ENV variables
 	expanded := os.ExpandEnv(string(bz))
-	if err := yaml.Unmarshal([]byte(expanded), &config); err != nil {
+
+	opts := []yaml.DecodeOption{}
+	if restrictUnknownFields {
+		opts = append(opts, yaml.DisallowUnknownField())
+	}
+
+	err = yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...)
+	if err != nil {
 		return Config{}, err
 	}
 

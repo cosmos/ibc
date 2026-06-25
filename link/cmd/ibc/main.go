@@ -37,7 +37,9 @@ func init() {
 
 	// Config commands
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
-	cmdConfigValidate.Flags().BoolVarP(&flagValidateLive, "live", "", false, "extra validation checks")
+	cmdConfigValidate.Flags().BoolVarP(&flagConfigValidateLive, "live", "", false, "extra validation checks")
+	cmdConfigValidate.Flags().
+		BoolVarP(&flagConfigValidateStrict, "strict", "", false, "fail on unknown fields in the config file")
 
 	// Relayer commands
 	cmdRelayer.AddCommand(cmdRelayerRun)

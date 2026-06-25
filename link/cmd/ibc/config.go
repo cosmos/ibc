@@ -11,10 +11,15 @@ import (
 )
 
 // set in init()
-// if true, perform extra validation checks like connecting to RPC,
-// checking EVM addresses, etc.
-// todo: not implemented!
-var flagValidateLive bool
+var (
+	// if true, perform extra validation checks like connecting to RPC,
+	// checking EVM addresses, etc.
+	// todo: not implemented!
+	flagConfigValidateLive bool
+
+	// if true, fail on unknown fields in the config file
+	flagConfigValidateStrict bool
+)
 
 var (
 	cmdConfig = &cobra.Command{
@@ -58,7 +63,7 @@ func configNew(_ *cobra.Command, _ []string) error {
 }
 
 func configValidate(_ *cobra.Command, _ []string) error {
-	if flagValidateLive {
+	if flagConfigValidateLive {
 		return errors.New("--live is not implemented")
 	}
 
@@ -67,7 +72,7 @@ func configValidate(_ *cobra.Command, _ []string) error {
 		return errors.Wrap(err, "unable to get config path")
 	}
 
-	_, err = config.LoadFromFile(configPath, true)
+	_, err = config.LoadFromFile(configPath, true, flagConfigValidateStrict)
 	if err != nil {
 		return errors.Wrap(err, "config load")
 	}
@@ -91,5 +96,5 @@ func resolveConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrap(err, "unable to get config path")
 	}
 
-	return config.LoadFromFile(configPath, true)
+	return config.LoadFromFile(configPath, true, false)
 }

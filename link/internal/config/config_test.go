@@ -56,7 +56,7 @@ grpc:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true)
+			config, err := LoadFromFile(path, true, true)
 
 			// ASSERT
 			require.NoError(t, err)
@@ -72,7 +72,7 @@ grpc:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true)
+			config, err := LoadFromFile(path, true, true)
 
 			// ASSERT
 			require.NoError(t, err)
@@ -87,7 +87,7 @@ grpc:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true)
+			_, err := LoadFromFile(path, true, true)
 
 			// ASSERT
 			require.Error(t, err)
@@ -101,7 +101,7 @@ grpc:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true)
+			_, err := LoadFromFile(path, true, true)
 
 			// ASSERT
 			require.ErrorContains(t, err, "validation failed")
@@ -113,10 +113,66 @@ grpc:
 			path := filepath.Join(t.TempDir(), "missing.yml")
 
 			// ACT
-			_, err := LoadFromFile(path, true)
+			_, err := LoadFromFile(path, true, true)
 
 			// ASSERT
 			require.Error(t, err)
+		})
+
+		t.Run("unknownFieldsFail", func(t *testing.T) {
+			for _, tt := range []struct {
+				name string
+				body string
+			}{
+				{
+					name: "top level",
+					body: `
+unknown: value
+grpc:
+  listenAddr: 127.0.0.1:9090
+`,
+				},
+				{
+					name: "nested camel case typo",
+					body: `
+grpc:
+  listenAddress: 127.0.0.1:9090
+`,
+				},
+				{
+					name: "nested snake case typo",
+					body: `
+grpc:
+  listen_addr: 127.0.0.1:9090
+`,
+				},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					// ARRANGE
+					path := writeTestConfig(t, tt.body)
+
+					// ACT
+					_, err := LoadFromFile(path, true, true)
+
+					// ASSERT
+					require.ErrorContains(t, err, "unknown field")
+				})
+			}
+		})
+
+		t.Run("unknownFieldsAllowedWhenDisabled", func(t *testing.T) {
+			// ARRANGE
+			path := writeTestConfig(t, `
+grpc:
+  listenAddress: 127.0.0.1:9090
+`)
+
+			// ACT
+			config, err := LoadFromFile(path, true, false)
+
+			// ASSERT
+			require.NoError(t, err)
+			assert.Equal(t, "0.0.0.0:3000", config.GRPC.ListenAddress)
 		})
 	})
 }
