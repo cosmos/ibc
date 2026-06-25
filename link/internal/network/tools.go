@@ -20,7 +20,7 @@ func ValidateListenAddr(raw string) error {
 	}
 
 	if host != "" {
-		if _, err := netip.ParseAddr(host); err != nil {
+		if _, err = netip.ParseAddr(host); err != nil {
 			return fmt.Errorf("host must be a valid IP address: %w", err)
 		}
 	}
