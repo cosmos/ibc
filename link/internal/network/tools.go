@@ -4,7 +4,6 @@ package network
 import (
 	"fmt"
 	"net"
-	"net/netip"
 	"strconv"
 )
 
@@ -14,15 +13,9 @@ func ValidateListenAddr(raw string) error {
 		return fmt.Errorf("empty string provided")
 	}
 
-	host, port, err := net.SplitHostPort(raw)
+	_, port, err := net.SplitHostPort(raw)
 	if err != nil {
 		return fmt.Errorf("expected address in host:port or :port form: %w", err)
-	}
-
-	if host != "" {
-		if _, err = netip.ParseAddr(host); err != nil {
-			return fmt.Errorf("host must be a valid IP address: %w", err)
-		}
 	}
 
 	portNum, err := strconv.Atoi(port)
