@@ -1,4 +1,4 @@
-module github.com/cosmos/ibc/ibc-link
+module github.com/cosmos/ibc/link
 
 go 1.26.4
 

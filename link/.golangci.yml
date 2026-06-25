@@ -18,8 +18,7 @@ formatters:
     gci:
       sections:
         - "standard"
-        - "prefix(github.com/cosmos/ibc/ibc-link)"
-        - "prefix(github.com/cosmos/ibc/ibc-link/packages/go)"
+        - "prefix(github.com/cosmos/ibc/link)"
         - "default"
         - "alias"
         - "blank" # e.g. sql drivers

@@ -1,7 +1,5 @@
 # IBC Link Development Guide for AI Agents
 
-This project is part of the `cosmos/ibc` monorepo and uses `../go.work` to manage local development.
-
 1. Use `make lint-fix` to auto-format and lint code before finishing work.
 2. YAML configuration should only contain `camelCase` keywords; never use `snake_case`.
 3. Global CLI flags such as `--home` or `--config` belong in `config.FlagSet`. Add new global flags there, and don't use a separate variable if it can be global.

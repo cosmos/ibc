@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/ibc-link/internal/config"
+	"github.com/cosmos/ibc/link/internal/config"
 )
 
 // global globalFlags, loaded in config.DeclarePersistentFlags()
