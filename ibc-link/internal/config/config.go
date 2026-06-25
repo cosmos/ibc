@@ -7,7 +7,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/ibc-link/packages/go/network"
+	"github.com/cosmos/ibc/ibc-link/internal/network"
 )
 
 // Config represents a config file
