@@ -1,0 +1,3 @@
+# sample config file
+grpc:
+  listenAddr: 0.0.0.0:3000
