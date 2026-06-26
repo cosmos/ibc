@@ -218,8 +218,28 @@ grpc:
 				wantType: DBTypeSQLite,
 			},
 			{
+				name:     "extensionless sqlite filename",
+				raw:      "my-file",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "sqlite extension",
+				raw:      "file.sqlite",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "parent relative sqlite path",
+				raw:      "../../some/relative/database.db",
+				wantType: DBTypeSQLite,
+			},
+			{
 				name:     "postgres url",
 				raw:      "postgres://user:pass@localhost:5432/ibc",
+				wantType: DBTypePostgres,
+			},
+			{
+				name:     "postgresql url",
+				raw:      "postgresql://user:pass@localhost:5432/ibc",
 				wantType: DBTypePostgres,
 			},
 			{

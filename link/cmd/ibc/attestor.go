@@ -20,7 +20,7 @@ var (
 )
 
 func attestorRun(_ *cobra.Command, _ []string) error {
-	cfg, err := resolveConfig()
+	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
 	}

@@ -93,7 +93,7 @@ func migrateStatus(_ *cobra.Command, _ []string) error {
 // util to quickly resolve config + store.
 // use only for migrations
 func resolveConfigWithStore() (config.Config, store.Store, error) {
-	cfg, err := resolveConfig()
+	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return config.Config{}, nil, err
 	}
@@ -109,7 +109,7 @@ func resolveConfigWithStore() (config.Config, store.Store, error) {
 func printJSON(v any) error {
 	bz, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return nil
+		return err
 	}
 
 	fmt.Println(string(bz))

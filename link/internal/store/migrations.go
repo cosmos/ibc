@@ -77,7 +77,7 @@ func CreateMigration(name, migrationsDir string) (string, error) {
 	return fqn, nil
 }
 
-// non recursive
+// non recursive, counts only .sql files
 func countFilesInDir(dir string) (int, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -86,7 +86,7 @@ func countFilesInDir(dir string) (int, error) {
 
 	var count int
 	for _, file := range files {
-		if !file.IsDir() {
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".sql" {
 			count++
 		}
 	}
@@ -94,13 +94,13 @@ func countFilesInDir(dir string) (int, error) {
 	return count, nil
 }
 
-func migrateDB(db *sql.DB, dbType string, direction migrate.MigrationDirection) (int, error) {
+func migrateDB(db *sql.DB, dbType string, direction migrate.MigrationDirection, num int) (int, error) {
 	src, err := MigrationsSource(dbType)
 	if err != nil {
 		return 0, errors.Wrapf(err, "migrations source")
 	}
 
-	return migrate.Exec(db, migrationDialect(dbType), src, direction)
+	return migrate.ExecMax(db, migrationDialect(dbType), src, direction, num)
 }
 
 func migrationStatus(db *sql.DB, dbType string) ([]MigrationStatus, error) {

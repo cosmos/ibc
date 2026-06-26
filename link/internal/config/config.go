@@ -166,17 +166,13 @@ func DBConfigFromURL(raw string) (DBConfig, error) {
 	}, nil
 }
 
-func isSQLitePath(path string) bool {
-	return stringMatches(path, strings.HasPrefix, ".", "/") ||
-		stringMatches(path, strings.HasSuffix, ".sqlite", ".db")
-}
-
-func stringMatches(input string, matcher func(string, string) bool, patterns ...string) bool {
-	for _, pattern := range patterns {
-		if matcher(input, pattern) {
-			return true
-		}
-	}
-
-	return false
+// isSQLitePath reports whether raw should be treated as a sqlite file path
+// rather than a database connection URL.
+//
+// Anything without a "scheme://" is considered a local file path, e.g.
+// "file.db", "file.sqlite", "my-file", "./my-file", "/abs/path/to/file.db",
+// "../../some/relative/database.db". Connection URLs such as
+// "postgres://user:pass@host/db" return false.
+func isSQLitePath(raw string) bool {
+	return !strings.Contains(raw, "://")
 }

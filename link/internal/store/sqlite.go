@@ -47,23 +47,30 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return nil, errors.New("path is required")
 	}
 
+	logger := slog.With("module", "database")
+
 	if path == SqliteInMemory {
 		db, err := sql.Open("sqlite", path)
 		if err != nil {
 			return nil, errors.Wrapf(err, "open sqlite in memory")
 		}
 
-		return &SqliteDB{db: db}, nil
+		// shared memory database is a single connection
+		db.SetMaxOpenConns(1)
+
+		return &SqliteDB{
+			db:     db,
+			repo:   reposqlite.New(db),
+			logger: logger,
+		}, nil
 	}
 
-	if path != SqliteInMemory {
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return nil, errors.Wrapf(err, "absolute path for %s", path)
-		}
-
-		path = absPath
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "absolute path for %s", path)
 	}
+
+	path = absPath
 
 	connectionString, err := sqliteURL(path, connectionOpts)
 	if err != nil {
@@ -78,7 +85,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 	return &SqliteDB{
 		db:     db,
 		repo:   reposqlite.New(db),
-		logger: slog.With("module", "database"),
+		logger: logger,
 	}, nil
 }
 
@@ -86,12 +93,14 @@ func (db *SqliteDB) Close() error {
 	return db.db.Close()
 }
 
+// MigrateUp migrates ALL available migrations
 func (db *SqliteDB) MigrateUp() (int, error) {
-	return migrateDB(db.db, config.DBTypeSQLite, migrate.Up)
+	return migrateDB(db.db, config.DBTypeSQLite, migrate.Up, 0)
 }
 
+// MigrateDown migrates only ONE migration down
 func (db *SqliteDB) MigrateDown() (int, error) {
-	return migrateDB(db.db, config.DBTypeSQLite, migrate.Down)
+	return migrateDB(db.db, config.DBTypeSQLite, migrate.Down, 1)
 }
 
 func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
