@@ -96,5 +96,18 @@ func resolveConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrap(err, "unable to get config path")
 	}
 
-	return config.LoadFromFile(configPath, true, false)
+	cfg, err := config.LoadFromFile(configPath, true, false)
+	if err != nil {
+		return config.Config{}, err
+	}
+
+	// allow db override
+	if globalFlags.DB != "" {
+		cfg.DB, err = config.DBConfigFromURL(globalFlags.DB)
+		if err != nil {
+			return config.Config{}, errors.Wrap(err, "invalid --db")
+		}
+	}
+
+	return cfg, nil
 }

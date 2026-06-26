@@ -3,6 +3,7 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
@@ -10,10 +11,17 @@ import (
 	"github.com/cosmos/ibc/link/internal/network"
 )
 
+// Database type
+const (
+	DBTypeSQLite   = "sqlite"
+	DBTypePostgres = "postgres"
+)
+
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
 	GRPC GRPCConfig `yaml:"grpc"`
+	DB   DBConfig   `yaml:"db"`
 }
 
 // GRPCConfig config for grpc server for both relayer and attestor
@@ -21,10 +29,20 @@ type GRPCConfig struct {
 	ListenAddress string `yaml:"listenAddr"`
 }
 
+// DBConfig config for database storage.
+type DBConfig struct {
+	Type string `yaml:"type"`
+	URL  string `yaml:"url"`
+}
+
 func DefaultConfig() Config {
 	return Config{
 		GRPC: GRPCConfig{
 			ListenAddress: "0.0.0.0:3000",
+		},
+		DB: DBConfig{
+			Type: DBTypeSQLite,
+			URL:  "ibc.sqlite",
 		},
 	}
 }
@@ -66,6 +84,10 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".grpc")
 	}
 
+	if err := c.DB.Validate(); err != nil {
+		return errors.Wrap(err, ".db")
+	}
+
 	return nil
 }
 
@@ -92,4 +114,52 @@ func (c GRPCConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (c DBConfig) Validate() error {
+	switch c.Type {
+	case DBTypeSQLite, DBTypePostgres:
+	default:
+		return errors.Errorf(".type must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
+	}
+
+	if c.URL == "" {
+		return errors.New(".url must not be empty")
+	}
+
+	return nil
+}
+
+// DBConfigFromURL infers DB type from a CLI database URL override.
+func DBConfigFromURL(raw string) (DBConfig, error) {
+	if raw == "" {
+		return DBConfig{}, errors.New("empty db url")
+	}
+
+	if isSQLitePath(raw) {
+		return DBConfig{
+			Type: DBTypeSQLite,
+			URL:  raw,
+		}, nil
+	}
+
+	return DBConfig{
+		Type: DBTypePostgres,
+		URL:  raw,
+	}, nil
+}
+
+func isSQLitePath(path string) bool {
+	return stringMatches(path, strings.HasPrefix, ".", "/") ||
+		stringMatches(path, strings.HasSuffix, ".sqlite", ".db")
+}
+
+func stringMatches(input string, matcher func(string, string) bool, patterns ...string) bool {
+	for _, pattern := range patterns {
+		if matcher(input, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
