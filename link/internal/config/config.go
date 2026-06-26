@@ -16,12 +16,11 @@ type Config struct {
 	GRPC GRPCConfig `yaml:"grpc"`
 }
 
-// GRPCConfig represents a config for the GRPC server
+// GRPCConfig config for grpc server for both relayer and attestor
 type GRPCConfig struct {
 	ListenAddress string `yaml:"listenAddr"`
 }
 
-// DefaultConfig returns the default Config.
 func DefaultConfig() Config {
 	return Config{
 		GRPC: GRPCConfig{
@@ -62,7 +61,6 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 	return config, nil
 }
 
-// Validate validates the Config.
 func (c Config) Validate() error {
 	if err := c.GRPC.Validate(); err != nil {
 		return errors.Wrap(err, ".grpc")
@@ -71,7 +69,6 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// StoreToFile stores the Config to a file.
 func (c Config) StoreToFile(path string) error {
 	if err := ensureDirectory(path); err != nil {
 		return err
@@ -89,7 +86,6 @@ func (c Config) StoreToFile(path string) error {
 	return nil
 }
 
-// Validate validates the GRPCConfig.
 func (c GRPCConfig) Validate() error {
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
 		return errors.Wrapf(err, ".listenAddr %q", c.ListenAddress)

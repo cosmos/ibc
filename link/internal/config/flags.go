@@ -34,7 +34,6 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 	pf.BoolVarP(&flags.Quiet, "quiet", "q", flags.Quiet, "Quiet mode")
 }
 
-// ConfigPath returns the absolute path to the config file.
 func (fs *FlagSet) ConfigPath() (string, error) {
 	home, err := expandHome(fs.Home)
 	if err != nil {

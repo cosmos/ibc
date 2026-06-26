@@ -59,5 +59,17 @@ linters:
     govet:
       # https://golangci-lint.run/docs/linters/configuration/#govet
       enable: [shadow]
+    revive:
+      # https://golangci-lint.run/docs/linters/configuration/#revive
+      enable-default-rules: true
+      rules:
+        - name: package-comments
+          disabled: true
+          # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#exported
+        - name: exported
+          arguments:
+            # force comments on pubic structs, relax on functions and methods
+            - disable-checks-on-functions
+            - disable-checks-on-methods
   exclusions:
     generated: lax

@@ -1,4 +1,3 @@
-// Package main is the entrypoint for the ibc-link binary
 package main
 
 import (
