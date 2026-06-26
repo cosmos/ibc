@@ -38,7 +38,7 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 }
 
 func (fs *FlagSet) ConfigPath() (string, error) {
-	home, err := expandHome(fs.Home)
+	home, err := ExpandHome(fs.Home)
 	if err != nil {
 		return "", err
 	}
@@ -46,8 +46,8 @@ func (fs *FlagSet) ConfigPath() (string, error) {
 	return filepath.Abs(filepath.Join(home, fs.Config))
 }
 
-// converts path with ~ to absolute path
-func expandHome(path string) (string, error) {
+// ExpandHome converts path with ~ to an absolute path.
+func ExpandHome(path string) (string, error) {
 	if path != "~" && !strings.HasPrefix(path, "~/") {
 		return path, nil
 	}

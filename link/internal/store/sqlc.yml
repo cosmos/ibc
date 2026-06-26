@@ -1,0 +1,20 @@
+# https://docs.sqlc.dev/en/latest/reference/config.html
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "queries"
+    schema: "migrations/sqlite"
+    gen:
+      go:
+        package: "sqlite"
+        out: "repository/sqlite"
+
+  # todo
+  # todo: driver
+  # - engine: "postgres"
+  #   queries: "queries"
+  #   schema: "migrations/postgres"
+  #   gen:
+  #     go:
+  #       package: "postgres"
+  #       out: "repository/postgres"

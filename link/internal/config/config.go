@@ -3,6 +3,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -35,6 +36,7 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
+// DefaultConfig sample config using default values and Sqlite.
 func DefaultConfig() Config {
 	return Config{
 		GRPC: GRPCConfig{
@@ -42,7 +44,7 @@ func DefaultConfig() Config {
 		},
 		DB: DBConfig{
 			Type: DBTypeSQLite,
-			URL:  "ibc.sqlite",
+			URL:  "ibc.db",
 		},
 	}
 }
@@ -128,6 +130,21 @@ func (c DBConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// Label returns a human-readable label for the DB config.
+func (c DBConfig) Label() string {
+	if c.Type != DBTypeSQLite {
+		return c.Type
+	}
+
+	// sqlite case
+	path := c.URL
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+
+	return path
 }
 
 // DBConfigFromURL infers DB type from a CLI database URL override.

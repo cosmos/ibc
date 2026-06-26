@@ -71,5 +71,7 @@ linters:
             # force comments on pubic structs, relax on functions and methods
             - disable-checks-on-functions
             - disable-checks-on-methods
+        - name: blank-imports
+          disabled: true
   exclusions:
     generated: lax

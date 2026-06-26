@@ -90,7 +90,19 @@ func printConfigHome(_ *cobra.Command, _ []string) {
 	}
 }
 
+// resolveConfig fetches config
+// ALSO changes process'es working directory to `--home`
 func resolveConfig() (config.Config, error) {
+	// change process'es working directory to --home
+	home, err := config.ExpandHome(globalFlags.Home)
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "home")
+	}
+
+	if err = os.Chdir(home); err != nil {
+		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
+	}
+
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "unable to get config path")

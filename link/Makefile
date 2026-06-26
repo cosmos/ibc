@@ -11,7 +11,13 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
+codegen: codegen-sql ## Generate code
+# todo: add codegen-proto
+
+codegen-sql: ## Generate Go code based on migrations and queries
+	cd internal/store && sqlc generate
+
 test: ## Run tests
 	go test ./... -v
 
-.PHONY: help build lint lint-fix test
+.PHONY: help build lint lint-fix test codegen codegen-sql
