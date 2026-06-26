@@ -11,6 +11,7 @@ import (
 )
 
 // Config represents a config file
+// Should only contain `camelCase` keywords
 type Config struct {
 	GRPC GRPCConfig `yaml:"grpc"`
 }
