@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/url"
 	"path/filepath"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -99,11 +98,13 @@ func (db *SqliteDB) Close() error {
 
 // MigrateUp migrates ALL available migrations
 func (db *SqliteDB) MigrateUp() (int, error) {
+	db.logger.Debug("Migrating up")
 	return migrateDB(db.db, config.DBTypeSQLite, migrate.Up, 0)
 }
 
 // MigrateDown migrates only ONE migration down
 func (db *SqliteDB) MigrateDown() (int, error) {
+	db.logger.Debug("Migrating down")
 	return migrateDB(db.db, config.DBTypeSQLite, migrate.Down, 1)
 }
 
@@ -112,6 +113,8 @@ func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
 }
 
 func (db *SqliteDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
+	db.logger.Debug("GetRelaySubmission", "chainID", chainID, "txHash", txHash)
+
 	if chainID == "" || txHash == "" {
 		return nil, errors.New("chainID and txHash are required")
 	}
@@ -121,17 +124,17 @@ func (db *SqliteDB) GetRelaySubmission(ctx context.Context, chainID string, txHa
 		return nil, errNormalize(err)
 	}
 
-	// todo: time as timestamp
-
 	return &RelaySubmission{
 		ID:        entry.ID,
 		ChainID:   entry.SourceChainID,
 		TxHash:    entry.SourceTxHash,
-		CreatedAt: time.Now().UTC(), // todo
+		CreatedAt: entry.CreatedAt.UTC(),
 	}, nil
 }
 
 func (db *SqliteDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
+	db.logger.Debug("UpsertRelaySubmission", "chainID", chainID, "txHash", txHash)
+
 	if chainID == "" || txHash == "" {
 		return errors.New("chainID and txHash are required")
 	}

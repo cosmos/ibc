@@ -67,11 +67,13 @@ func (db *PostgresDB) Close() error {
 
 // MigrateUp migrates ALL available migrations
 func (db *PostgresDB) MigrateUp() (int, error) {
+	db.logger.Debug("Migrating up")
 	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Up, 0)
 }
 
 // MigrateDown migrates only ONE migration down
 func (db *PostgresDB) MigrateDown() (int, error) {
+	db.logger.Debug("Migrating down")
 	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
 }
 
@@ -80,6 +82,8 @@ func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
 }
 
 func (db *PostgresDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
+	db.logger.Debug("GetRelaySubmission", "chainID", chainID, "txHash", txHash)
+
 	if chainID == "" || txHash == "" {
 		return nil, errors.New("chainID and txHash are required")
 	}
@@ -98,6 +102,8 @@ func (db *PostgresDB) GetRelaySubmission(ctx context.Context, chainID string, tx
 }
 
 func (db *PostgresDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
+	db.logger.Debug("UpsertRelaySubmission", "chainID", chainID, "txHash", txHash)
+
 	if chainID == "" || txHash == "" {
 		return errors.New("chainID and txHash are required")
 	}

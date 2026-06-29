@@ -146,6 +146,10 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	assert.Equal(t, int64(1), submission.ID)
 	assert.NotEmpty(t, submission.CreatedAt)
 
+	submissionAgain, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
+	require.NoError(t, err)
+	assert.Equal(t, submission.CreatedAt, submissionAgain.CreatedAt)
+
 	// Upsert the submission (noop)
 	err = s.UpsertRelaySubmission(ctx, chainIDEth, txHashEth)
 	require.NoError(t, err)

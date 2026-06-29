@@ -4,9 +4,13 @@
 
 package sqlite
 
+import (
+	"time"
+)
+
 type RelaySubmission struct {
 	ID            int64
 	SourceChainID string
 	SourceTxHash  string
-	CreatedAt     string
+	CreatedAt     time.Time
 }
