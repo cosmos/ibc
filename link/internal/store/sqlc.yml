@@ -8,6 +8,8 @@ sql:
       go:
         package: "sqlite"
         out: "repository/sqlite"
+        # more than two args will be converted to params{}
+        query_parameter_limit: 2
 
   - engine: "postgresql"
     queries: "queries"
@@ -17,3 +19,4 @@ sql:
         package: "postgres"
         out: "repository/postgres"
         sql_package: "pgx/v5"
+        query_parameter_limit: 2

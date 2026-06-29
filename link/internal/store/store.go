@@ -2,26 +2,43 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
+
+	pgx "github.com/jackc/pgx/v5"
 )
 
-// Migrator wraps DB schema migrations
+// Store a unified, database-agnostic API for persistence.
+type Store interface {
+	Repository
+	Migrator
+
+	Close() error
+}
+
+// Repository represents database CRUD operations.
+type Repository interface {
+	GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error)
+	UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error
+}
+
+// Migrator abstracts schema migrations
 type Migrator interface {
 	MigrateUp() (int, error)
 	MigrateDown() (int, error)
 	MigrationStatus() ([]MigrationStatus, error)
 }
 
-// Store a unified, database-agnostic API for persistence.
-type Store interface {
-	Migrator
+// Repository errors
+var (
+	ErrNotFound = errors.New("not found")
+)
 
-	Close() error
-}
-
+// NewStore creates a new Store instance based on the database type.
 func NewStore(ctx context.Context, cfg config.Config) (Store, error) {
 	switch cfg.DB.Type {
 	case config.DBTypeSQLite:
@@ -30,5 +47,25 @@ func NewStore(ctx context.Context, cfg config.Config) (Store, error) {
 		return NewPostgres(ctx, cfg.DB.URL)
 	default:
 		return nil, errors.New("invalid database type")
+	}
+}
+
+// RelaySubmission is an pending relay submission.
+type RelaySubmission struct {
+	ID        int64
+	ChainID   string
+	TxHash    string
+	CreatedAt time.Time
+}
+
+// cast db-specific errors to repository errors
+func errNormalize(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, sql.ErrNoRows), errors.Is(err, pgx.ErrNoRows):
+		return ErrNotFound
+	default:
+		return err
 	}
 }

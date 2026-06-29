@@ -15,13 +15,8 @@ WHERE source_chain_id = ?1
 AND source_tx_hash = ?2
 `
 
-type GetRelaySubmissionParams struct {
-	ChainID string
-	TxHash  string
-}
-
-func (q *Queries) GetRelaySubmission(ctx context.Context, arg GetRelaySubmissionParams) (RelaySubmission, error) {
-	row := q.db.QueryRowContext(ctx, getRelaySubmission, arg.ChainID, arg.TxHash)
+func (q *Queries) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (RelaySubmission, error) {
+	row := q.db.QueryRowContext(ctx, getRelaySubmission, chainID, txHash)
 	var i RelaySubmission
 	err := row.Scan(
 		&i.ID,
@@ -32,18 +27,13 @@ func (q *Queries) GetRelaySubmission(ctx context.Context, arg GetRelaySubmission
 	return i, err
 }
 
-const insertRelaySubmission = `-- name: InsertRelaySubmission :exec
+const upsertRelaySubmission = `-- name: UpsertRelaySubmission :exec
 INSERT INTO relay_submissions (source_chain_id, source_tx_hash)
 VALUES (?1, ?2)
 ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
 `
 
-type InsertRelaySubmissionParams struct {
-	ChainID string
-	TxHash  string
-}
-
-func (q *Queries) InsertRelaySubmission(ctx context.Context, arg InsertRelaySubmissionParams) error {
-	_, err := q.db.ExecContext(ctx, insertRelaySubmission, arg.ChainID, arg.TxHash)
+func (q *Queries) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
+	_, err := q.db.ExecContext(ctx, upsertRelaySubmission, chainID, txHash)
 	return err
 }

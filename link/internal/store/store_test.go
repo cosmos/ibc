@@ -5,130 +5,72 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cosmos/ibc/link/internal/store/repository/postgres"
-	"github.com/cosmos/ibc/link/internal/store/repository/sqlite"
 	"github.com/cosmos/ibc/link/internal/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	chainIDEth = "1"
+	txHashEth  = "0xDEADBEEF"
+)
+
 func TestStore(t *testing.T) {
+
 	t.Run("sqlite", func(t *testing.T) {
-		t.Run("regularFile", func(t *testing.T) {
-			// ARRANGE
-			ctx := context.Background()
-			filename := filepath.Join(t.TempDir(), "ibc.db")
-			t.Logf("filename: %s", filename)
+		// ARRANGE
+		ctx := context.Background()
+		filename := filepath.Join(t.TempDir(), "ibc.db")
+		t.Logf("filename: %s", filename)
 
-			// Given a DB
+		// Given a DB
+		db, err := NewSqlite(filename)
+		require.NoError(t, err)
+
+		// Ensure migrations are applied
+		testMigrationIdempotency(t, db)
+
+		// ACT + ASSERT
+		testRepoReadWrite(t, db)
+
+		// Close DB for a subsequent test
+		require.NoError(t, db.Close())
+
+		t.Run("reopen", func(t *testing.T) {
+			// ARRANGE
+			// Reopen the database file
 			db, err := NewSqlite(filename)
-			require.NoError(t, err)
-
-			// Ensure migrations are applied
-			testMigrationIdempotency(t, db)
-
-			// ACT
-			// Insert a relay submission
-			insertParams := sqlite.InsertRelaySubmissionParams{
-				ChainID: "cosmoshub-4",
-				TxHash:  "ABC123DEF456",
-			}
-			err = db.repo.InsertRelaySubmission(ctx, insertParams)
-
-			// ASSERT
-			require.NoError(t, err)
-
-			// ACT
-			// Get the inserted submission
-			req := sqlite.GetRelaySubmissionParams{
-				ChainID: insertParams.ChainID,
-				TxHash:  insertParams.TxHash,
-			}
-			submission, err := db.repo.GetRelaySubmission(ctx, req)
-
-			// ASSERT
-			require.NoError(t, err)
-			assert.Equal(t, insertParams.ChainID, submission.SourceChainID)
-			assert.Equal(t, insertParams.TxHash, submission.SourceTxHash)
-			assert.NotZero(t, submission.ID)
-			assert.NotEmpty(t, submission.CreatedAt)
-
-			// ACT
-			// Upsert the submission
-			err = db.repo.InsertRelaySubmission(context.Background(), insertParams)
-
-			// ASSERT
-			require.NoError(t, err)
-
-			require.NoError(t, db.Close())
-
-			t.Run("reopen", func(t *testing.T) {
-				// ARRANGE - Reopen the database file
-				db, err := NewSqlite(filename)
-				require.NoError(t, err)
-
-				defer db.Close()
-
-				// Ensure migrations are applied
-				ensureMigrated(t, db)
-
-				// ACT
-				// Get the previously inserted submission
-				getParams := sqlite.GetRelaySubmissionParams{
-					ChainID: "cosmoshub-4",
-					TxHash:  "ABC123DEF456",
-				}
-				submission, err := db.repo.GetRelaySubmission(context.Background(), getParams)
-
-				// ASSERT
-				// Data should persist after reopening
-				require.NoError(t, err)
-				assert.Equal(t, "cosmoshub-4", submission.SourceChainID)
-				assert.Equal(t, "ABC123DEF456", submission.SourceTxHash)
-				assert.NotZero(t, submission.ID)
-			})
-		})
-
-		t.Run("inMemory", func(t *testing.T) {
-			// ARRANGE
-			ctx := context.Background()
-			db, err := NewSqliteInMemory()
 			require.NoError(t, err)
 
 			defer db.Close()
 
-			testMigrationIdempotency(t, db)
+			// Ensure migrations are applied
+			ensureMigrated(t, db)
 
-			// ACT - Insert a relay submission
-			insertParams := sqlite.InsertRelaySubmissionParams{
-				ChainID: "1",
-				TxHash:  "0xDEADBEEF",
-			}
-			err = db.repo.InsertRelaySubmission(ctx, insertParams)
+			// ACT
+			// Get the previously inserted submission
+			entry, err := db.GetRelaySubmission(ctx, chainIDEth, txHashEth)
 
 			// ASSERT
 			require.NoError(t, err)
-
-			// ACT - Get the inserted submission
-			req := sqlite.GetRelaySubmissionParams{
-				ChainID: insertParams.ChainID,
-				TxHash:  insertParams.TxHash,
-			}
-			submission, err := db.repo.GetRelaySubmission(ctx, req)
-
-			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, insertParams.ChainID, submission.SourceChainID)
-			assert.Equal(t, insertParams.TxHash, submission.SourceTxHash)
-			assert.NotZero(t, submission.ID)
-			assert.NotEmpty(t, submission.CreatedAt)
-
-			// ACT - Insert same submission again (upsert behavior)
-			err = db.repo.InsertRelaySubmission(ctx, insertParams)
-
-			// ASSERT
-			require.NoError(t, err)
+			assert.Equal(t, chainIDEth, entry.ChainID)
+			assert.Equal(t, txHashEth, entry.TxHash)
+			assert.NotZero(t, entry.ID)
 		})
+	})
+
+	t.Run("sqliteInMemory", func(t *testing.T) {
+		// ARRANGE
+		db, err := NewSqliteInMemory()
+		require.NoError(t, err)
+
+		defer db.Close()
+
+		testMigrationIdempotency(t, db)
+
+		// ACT + ASSERT
+		testRepoReadWrite(t, db)
 	})
 
 	t.Run("postgres", func(t *testing.T) {
@@ -152,38 +94,8 @@ func TestStore(t *testing.T) {
 		// Ensure migrations are applied
 		testMigrationIdempotency(t, db)
 
-		// ACT
-		// Insert a relay submission
-		insertParams := postgres.InsertRelaySubmissionParams{
-			ChainID: "cosmoshub-4",
-			TxHash:  "ABC123DEF456",
-		}
-		err = db.repo.InsertRelaySubmission(ctx, insertParams)
-
-		// ASSERT
-		require.NoError(t, err)
-
-		// ACT
-		// Get the inserted submission
-		req := postgres.GetRelaySubmissionParams{
-			ChainID: insertParams.ChainID,
-			TxHash:  insertParams.TxHash,
-		}
-		submission, err := db.repo.GetRelaySubmission(ctx, req)
-
-		// ASSERT
-		require.NoError(t, err)
-		assert.Equal(t, insertParams.ChainID, submission.SourceChainID)
-		assert.Equal(t, insertParams.TxHash, submission.SourceTxHash)
-		assert.NotZero(t, submission.ID)
-		assert.NotEmpty(t, submission.CreatedAt)
-
-		// ACT
-		// Upsert the submission
-		err = db.repo.InsertRelaySubmission(ctx, insertParams)
-
-		// ASSERT
-		require.NoError(t, err)
+		// ACT + ASSERT
+		testRepoReadWrite(t, db)
 	})
 }
 
@@ -213,4 +125,28 @@ func ensureMigrated(t *testing.T, m Migrator) {
 	for _, status := range migrationStatuses {
 		require.True(t, status.Applied)
 	}
+}
+
+func testRepoReadWrite(t *testing.T, s Store) {
+	ctx := context.Background()
+
+	// Get a non-existent submission
+	_, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
+	require.ErrorIs(t, err, ErrNotFound)
+
+	// Insert a submission
+	err = s.UpsertRelaySubmission(ctx, chainIDEth, txHashEth)
+	require.NoError(t, err)
+
+	// Get the inserted submission
+	submission, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
+	require.NoError(t, err)
+	assert.Equal(t, chainIDEth, submission.ChainID)
+	assert.Equal(t, txHashEth, submission.TxHash)
+	assert.Equal(t, int64(1), submission.ID)
+	assert.NotEmpty(t, submission.CreatedAt)
+
+	// Upsert the submission (noop)
+	err = s.UpsertRelaySubmission(ctx, chainIDEth, txHashEth)
+	require.NoError(t, err)
 }

@@ -17,8 +17,15 @@ import (
 
 // PostgresDB is a wrapper around the postgres database.
 type PostgresDB struct {
-	pool   *pgxpool.Pool
-	repo   *postgres.Queries
+	// connection pool
+	pool *pgxpool.Pool
+
+	// *sql.DB wrapper for migrations
+	sqlWrapper *sql.DB
+
+	// sqlc repository
+	repo *postgres.Queries
+
 	logger *slog.Logger
 }
 
@@ -45,9 +52,10 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config) (*Postgr
 	}
 
 	return &PostgresDB{
-		pool:   pool,
-		repo:   postgres.New(pool),
-		logger: slog.With("module", "database"),
+		pool:       pool,
+		sqlWrapper: stdlib.OpenDBFromPool(pool),
+		repo:       postgres.New(pool),
+		logger:     slog.With("module", "database"),
 	}, nil
 }
 
@@ -57,19 +65,42 @@ func (db *PostgresDB) Close() error {
 	return nil
 }
 
+// MigrateUp migrates ALL available migrations
 func (db *PostgresDB) MigrateUp() (int, error) {
-	return migrateDB(db.asStandardDB(), config.DBTypePostgres, migrate.Up, 0)
+	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Up, 0)
 }
 
+// MigrateDown migrates only ONE migration down
 func (db *PostgresDB) MigrateDown() (int, error) {
-	return migrateDB(db.asStandardDB(), config.DBTypePostgres, migrate.Down, 1)
+	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
 }
 
 func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
-	return migrationStatus(db.asStandardDB(), config.DBTypePostgres)
+	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
 }
 
-// asStandardDB converts pgxpool.Pool to *sql.DB
-func (db *PostgresDB) asStandardDB() *sql.DB {
-	return stdlib.OpenDBFromPool(db.pool)
+func (db *PostgresDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
+	if chainID == "" || txHash == "" {
+		return nil, errors.New("chainID and txHash are required")
+	}
+
+	entry, err := db.repo.GetRelaySubmission(ctx, chainID, txHash)
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	return &RelaySubmission{
+		ID:        entry.ID,
+		ChainID:   entry.SourceChainID,
+		TxHash:    entry.SourceTxHash,
+		CreatedAt: entry.CreatedAt.Time.UTC(),
+	}, nil
+}
+
+func (db *PostgresDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
+	if chainID == "" || txHash == "" {
+		return errors.New("chainID and txHash are required")
+	}
+
+	return db.repo.UpsertRelaySubmission(ctx, chainID, txHash)
 }

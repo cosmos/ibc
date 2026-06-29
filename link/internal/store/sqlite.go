@@ -1,10 +1,12 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"net/url"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -107,6 +109,34 @@ func (db *SqliteDB) MigrateDown() (int, error) {
 
 func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.db, config.DBTypeSQLite)
+}
+
+func (db *SqliteDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
+	if chainID == "" || txHash == "" {
+		return nil, errors.New("chainID and txHash are required")
+	}
+
+	entry, err := db.repo.GetRelaySubmission(ctx, chainID, txHash)
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	// todo: time as timestamp
+
+	return &RelaySubmission{
+		ID:        entry.ID,
+		ChainID:   entry.SourceChainID,
+		TxHash:    entry.SourceTxHash,
+		CreatedAt: time.Now().UTC(), // todo
+	}, nil
+}
+
+func (db *SqliteDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
+	if chainID == "" || txHash == "" {
+		return errors.New("chainID and txHash are required")
+	}
+
+	return db.repo.UpsertRelaySubmission(ctx, chainID, txHash)
 }
 
 func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
