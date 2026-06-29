@@ -64,7 +64,8 @@ func ExpandHome(path string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 }
 
-func ensureDirectory(directoryOrFile string) error {
+// Given a path to a file or a directory, ensure the directory exists.
+func EnsureDirectory(directoryOrFile string) error {
 	dir := filepath.Dir(directoryOrFile)
 	if dir == "." {
 		return nil

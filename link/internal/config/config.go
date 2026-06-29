@@ -94,7 +94,7 @@ func (c Config) Validate() error {
 }
 
 func (c Config) StoreToFile(path string) error {
-	if err := ensureDirectory(path); err != nil {
+	if err := EnsureDirectory(path); err != nil {
 		return err
 	}
 

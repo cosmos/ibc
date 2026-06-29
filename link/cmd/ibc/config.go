@@ -92,19 +92,26 @@ func printConfigHome(_ *cobra.Command, _ []string) {
 
 // setupHomeWithConfig changes process directory to `--home` and parses the config
 func setupHomeWithConfig() (config.Config, error) {
-	// change process'es working directory to --home
+	// get --home as an absolute path
 	home, err := config.ExpandHome(globalFlags.Home)
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "home")
 	}
 
-	if err = os.Chdir(home); err != nil {
-		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
-	}
-
+	// get absolute config path
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "unable to get config path")
+	}
+
+	// ensure --home exists
+	if err = config.EnsureDirectory(configPath); err != nil {
+		return config.Config{}, errors.Wrapf(err, "unable to create home directory %s", home)
+	}
+
+	// change process'es working directory to --home
+	if err = os.Chdir(home); err != nil {
+		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
 	}
 
 	cfg, err := config.LoadFromFile(configPath, true, false)

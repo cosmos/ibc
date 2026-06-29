@@ -60,11 +60,11 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config) (*Postgr
 }
 
 func (db *PostgresDB) Close() error {
-	db.pool.Close()
-
 	if err := db.sqlWrapper.Close(); err != nil {
 		return errors.Wrap(err, "close sql wrapper")
 	}
+
+	db.pool.Close()
 
 	return nil
 }
