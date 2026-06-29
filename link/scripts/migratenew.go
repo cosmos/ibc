@@ -26,22 +26,22 @@ func main() {
 		config.DBTypePostgres,
 	}
 
-	if err := crateMigrations(name, dbTypes); err != nil {
+	if err := createMigrations(name, dbTypes); err != nil {
 		fmt.Printf("Error creating migrations: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func crateMigrations(name string, engines []string) error {
-	for _, engine := range engines {
-		migrationsDir, err := absMigrationsDir(engine)
+func createMigrations(name string, dialects []string) error {
+	for _, dialect := range dialects {
+		migrationsDir, err := absMigrationsDir(dialect)
 		if err != nil {
-			return fmt.Errorf("unable to get absolute path %s: %w", engine, err)
+			return fmt.Errorf("unable to get absolute path %s: %w", dialect, err)
 		}
 
 		filename, err := store.CreateMigration(name, migrationsDir)
 		if err != nil {
-			return fmt.Errorf("unable to create migration for %s: %w", engine, err)
+			return fmt.Errorf("unable to create migration for %s: %w", dialect, err)
 		}
 
 		fmt.Printf("✔︎ Created %s\n", filename)

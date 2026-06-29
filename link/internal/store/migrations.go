@@ -55,6 +55,7 @@ func CreateMigration(name, migrationsDir string) (string, error) {
 	}
 
 	// will be used to generate migration name
+	// Deleting a migration file with existing number (eg. 011-...) in the database should be avoided!
 	count, err := countFilesInDir(migrationsDir)
 	if err != nil {
 		return "", errors.Wrap(err, "count files")
