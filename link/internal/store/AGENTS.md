@@ -1,6 +1,6 @@
-# Database Development Guide for AI Agents
+# Store guidelines for AI Agents
 
-This project support Sqlite and Postgres, takes their similarities, differences and syntax into account.
+`store.Store` is the single entrypoint for other packages that rely on DB.
 
 ## I. Creating migrations
 
@@ -12,13 +12,14 @@ go run scripts/migratenew.go relay-submissions
 ✔︎ Created link/internal/store/migrations/postgres/001-relay-submissions.sql
 ```
 
+Edit both `migrations/sqlite/*.sql` and `migrations/postgres/*.sql`; keep behavior identical, syntax dialect-specific.
 
 ## II. Query creation, code generation
 
 For types & queries generation, `sqlc` tool is used.
 
-When creating `sqlc` SQL queries in `queries/*`, use "macros" feature to build unified files that can be
-used both for sqlite and postgres. Example:
+When creating `sqlc` SQL queries in `queries/*`, use "macros" to build unified files that 
+can be used both for sqlite and postgres. Example:
 
 ```sql
 -- name: GetAuthorByName :one
@@ -36,9 +37,14 @@ FROM authors
 WHERE lower(name) = ?;
 ```
 
-Generate Go bindings using `make codegen-sql` which outputs code generated files to 
-`repository/postgres` and `repository/sqlite`
+- (re)generate bindings with `make codegen-sql`.
+- Don't edit generated files in `repository/sqlite` or `repository/postgres`.
 
 ### III. Unified repository layer
 
-`TODO`
+After ensuring that the new migration is in place and the sqlc models and queries have been generated:
+
+- Add public persistence methods to `Repository` interface in `store.go`. Use idiomatic Go
+- Implement every method in both `store_sqlite.go` and `store_postgres.go`.
+- Return domain structs from `store.go`, not generated sqlc row types.
+- Implement basic input validation. if method arg is a struct, implement `.Validate() error` for it
