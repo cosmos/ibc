@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cosmos/ibc/link/internal/store/repository/postgres"
 	"github.com/cosmos/ibc/link/internal/store/repository/sqlite"
 	"github.com/cosmos/ibc/link/internal/tests"
 	"github.com/stretchr/testify/assert"
@@ -132,7 +133,57 @@ func TestStore(t *testing.T) {
 
 	t.Run("postgres", func(t *testing.T) {
 		tests.GuardPostgresTests(t)
-		// todo: future work
+
+		// ARRANGE
+		// Create postgres container
+		ctx := context.Background()
+		pg := tests.NewPostgresContainer(t)
+
+		// Create DB
+		const dbName = "ibc-link"
+		pg.CreateDB(dbName)
+
+		// Given a DB
+		db, err := NewPostgres(ctx, pg.URL(dbName))
+		require.NoError(t, err)
+
+		defer db.Close()
+
+		// Ensure migrations are applied
+		testMigrationIdempotency(t, db)
+
+		// ACT
+		// Insert a relay submission
+		insertParams := postgres.InsertRelaySubmissionParams{
+			ChainID: "cosmoshub-4",
+			TxHash:  "ABC123DEF456",
+		}
+		err = db.repo.InsertRelaySubmission(ctx, insertParams)
+
+		// ASSERT
+		require.NoError(t, err)
+
+		// ACT
+		// Get the inserted submission
+		req := postgres.GetRelaySubmissionParams{
+			ChainID: insertParams.ChainID,
+			TxHash:  insertParams.TxHash,
+		}
+		submission, err := db.repo.GetRelaySubmission(ctx, req)
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, insertParams.ChainID, submission.SourceChainID)
+		assert.Equal(t, insertParams.TxHash, submission.SourceTxHash)
+		assert.NotZero(t, submission.ID)
+		assert.NotEmpty(t, submission.CreatedAt)
+
+		// ACT
+		// Upsert the submission
+		err = db.repo.InsertRelaySubmission(ctx, insertParams)
+
+		// ASSERT
+		require.NoError(t, err)
 	})
 }
 
