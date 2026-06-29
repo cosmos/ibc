@@ -9,12 +9,11 @@ sql:
         package: "sqlite"
         out: "repository/sqlite"
 
-  # todo
-  # todo: driver
-  # - engine: "postgres"
-  #   queries: "queries"
-  #   schema: "migrations/postgres"
-  #   gen:
-  #     go:
-  #       package: "postgres"
-  #       out: "repository/postgres"
+  - engine: "postgresql"
+    queries: "queries"
+    schema: "migrations/postgres"
+    gen:
+      go:
+        package: "postgres"
+        out: "repository/postgres"
+        sql_package: "pgx/v5"

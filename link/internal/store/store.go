@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
@@ -20,12 +22,13 @@ type Store interface {
 	Close() error
 }
 
-func NewStore(cfg config.Config) (Store, error) {
-	if cfg.DB.Type != config.DBTypeSQLite {
-		return nil, errors.New("only sqlite is supported")
+func NewStore(ctx context.Context, cfg config.Config) (Store, error) {
+	switch cfg.DB.Type {
+	case config.DBTypeSQLite:
+		return NewSqlite(cfg.DB.URL)
+	case config.DBTypePostgres:
+		return NewPostgres(ctx, cfg.DB.URL)
+	default:
+		return nil, errors.New("invalid database type")
 	}
-
-	// todo postgres
-
-	return NewSqlite(cfg.DB.URL)
 }

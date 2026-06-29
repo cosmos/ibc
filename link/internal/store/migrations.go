@@ -159,3 +159,7 @@ func migrationDialect(dbType string) string {
 
 	return dbType
 }
+
+func init() {
+	migrate.SetTable("migrations")
+}

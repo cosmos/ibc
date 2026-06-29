@@ -27,6 +27,8 @@ type SqliteDB struct {
 	logger *slog.Logger
 }
 
+var _ Store = (*SqliteDB)(nil)
+
 func DefaultSqliteConnOptions() map[string]string {
 	return map[string]string{
 		"journal_mode": "WAL", // Write-Ahead Logging mode

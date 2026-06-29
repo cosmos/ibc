@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -90,15 +91,14 @@ func migrateStatus(_ *cobra.Command, _ []string) error {
 	})
 }
 
-// util to quickly resolve config + store.
-// use only for migrations
+// util to quickly resolve config + store. Use ONLY for migrations.
 func resolveConfigWithStore() (config.Config, store.Store, error) {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return config.Config{}, nil, err
 	}
 
-	db, err := store.NewStore(cfg)
+	db, err := store.NewStore(context.Background(), cfg)
 	if err != nil {
 		return config.Config{}, nil, err
 	}
