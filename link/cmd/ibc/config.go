@@ -63,14 +63,9 @@ func configNew(_ *cobra.Command, _ []string) error {
 }
 
 func configValidate(_ *cobra.Command, _ []string) error {
-	configPath, err := globalFlags.ConfigPath()
+	cfg, err := setupHomeWithConfig()
 	if err != nil {
-		return errors.Wrap(err, "unable to get config path")
-	}
-
-	cfg, err := config.LoadFromFile(configPath, true, flagConfigValidateStrict)
-	if err != nil {
-		return errors.Wrap(err, "config load")
+		return errors.Wrap(err, "setup home with config")
 	}
 
 	if flagConfigValidateLive {

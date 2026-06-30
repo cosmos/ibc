@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"time"
 
 	"github.com/pkg/errors"
@@ -60,9 +61,13 @@ func ValidateConfigLive(cfg config.Config) error {
 	}
 
 	// contains Ping()
-	_, err := NewStore(context.Background(), cfg)
+	store, err := NewStore(context.Background(), cfg)
 	if err != nil {
 		return err
+	}
+
+	if errClose := store.Close(); errClose != nil {
+		slog.Error("Failed to close database", "err", errClose)
 	}
 
 	return nil

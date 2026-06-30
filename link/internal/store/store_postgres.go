@@ -51,6 +51,7 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 	if err != nil {
 		return nil, errors.Wrap(err, "create pool")
 	}
+
 	db := &PostgresDB{
 		pool:       pool,
 		sqlWrapper: stdlib.OpenDBFromPool(pool),
@@ -60,6 +61,10 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 
 	if ping {
 		if err := db.Ping(ctx); err != nil {
+			if errClose := db.Close(); errClose != nil {
+				db.logger.Error("Failed to close database", "err", errClose)
+			}
+
 			return nil, err
 		}
 	}
