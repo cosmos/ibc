@@ -97,6 +97,10 @@ func (db *SqliteDB) Close() error {
 	return db.db.Close()
 }
 
+func (db *SqliteDB) Ping(_ context.Context) error {
+	return db.db.Ping()
+}
+
 // MigrateUp migrates ALL available migrations
 func (db *SqliteDB) MigrateUp() (int, error) {
 	db.logger.Debug("Migrating up")
