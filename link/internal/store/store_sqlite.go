@@ -11,6 +11,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 
+	//nolint:blank-imports // SQL driver
 	_ "modernc.org/sqlite"
 
 	reposqlite "github.com/cosmos/ibc/link/internal/store/repository/sqlite"
