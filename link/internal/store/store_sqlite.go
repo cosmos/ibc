@@ -81,9 +81,14 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return nil, err
 	}
 
+	// sqlite can auto-create db files, but not nested directories.
+	if err = config.EnsureDirectory(path); err != nil {
+		return nil, errors.Wrapf(err, "ensure directory for %s", path)
+	}
+
 	db, err := sql.Open("sqlite", connectionString)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open sqlite database")
+		return nil, errors.Wrapf(err, "open sqlite database %s", connectionString)
 	}
 
 	return &SqliteDB{
