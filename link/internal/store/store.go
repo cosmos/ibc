@@ -35,7 +35,8 @@ type Migrator interface {
 
 // Repository errors
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound       = errors.New("not found")
+	ErrMissingChainTx = errors.New("chainID and txHash are required")
 )
 
 // NewStore creates a new Store instance based on the database type.

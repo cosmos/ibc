@@ -10,8 +10,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/store/repository/postgres"
 
+	repopostgres "github.com/cosmos/ibc/link/internal/store/repository/postgres"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
@@ -23,8 +23,7 @@ type PostgresDB struct {
 	// *sql.DB wrapper for migrations
 	sqlWrapper *sql.DB
 
-	// sqlc repository
-	repo *postgres.Queries
+	*repositoryStore
 
 	logger *slog.Logger
 }
@@ -51,11 +50,14 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config) (*Postgr
 		return nil, errors.Wrap(err, "create pool")
 	}
 
+	logger := slog.With("module", "database")
+	repo := postgresRepository{queries: repopostgres.New(pool)}
+
 	return &PostgresDB{
-		pool:       pool,
-		sqlWrapper: stdlib.OpenDBFromPool(pool),
-		repo:       postgres.New(pool),
-		logger:     slog.With("module", "database"),
+		pool:            pool,
+		sqlWrapper:      stdlib.OpenDBFromPool(pool),
+		repositoryStore: newRepositoryStore(repo, logger),
+		logger:          logger,
 	}, nil
 }
 
@@ -83,34 +85,4 @@ func (db *PostgresDB) MigrateDown() (int, error) {
 
 func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
-}
-
-func (db *PostgresDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
-	db.logger.Debug("GetRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return nil, errors.New("chainID and txHash are required")
-	}
-
-	entry, err := db.repo.GetRelaySubmission(ctx, chainID, txHash)
-	if err != nil {
-		return nil, errNormalize(err)
-	}
-
-	return &RelaySubmission{
-		ID:        entry.ID,
-		ChainID:   entry.SourceChainID,
-		TxHash:    entry.SourceTxHash,
-		CreatedAt: entry.CreatedAt.Time.UTC(),
-	}, nil
-}
-
-func (db *PostgresDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("UpsertRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return errors.New("chainID and txHash are required")
-	}
-
-	return db.repo.UpsertRelaySubmission(ctx, chainID, txHash)
 }

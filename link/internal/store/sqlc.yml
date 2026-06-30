@@ -20,3 +20,6 @@ sql:
         out: "repository/postgres"
         sql_package: "pgx/v5"
         query_parameter_limit: 2
+        overrides:
+          - db_type: "pg_catalog.timestamptz"
+            go_type: "time.Time"

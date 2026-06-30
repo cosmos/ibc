@@ -53,7 +53,6 @@ func TestStore(t *testing.T) {
 
 			// ASSERT
 			require.NoError(t, err)
-			require.NoError(t, err)
 			assert.Equal(t, chainIDEth, entry.ChainID)
 			assert.Equal(t, txHashEth, entry.TxHash)
 			assert.NotZero(t, entry.ID)
@@ -130,8 +129,14 @@ func ensureMigrated(t *testing.T, m Migrator) {
 func testRepoReadWrite(t *testing.T, s Store) {
 	ctx := context.Background()
 
+	_, err := s.GetRelaySubmission(ctx, "", txHashEth)
+	require.ErrorIs(t, err, ErrMissingChainTx)
+
+	err = s.UpsertRelaySubmission(ctx, chainIDEth, "")
+	require.ErrorIs(t, err, ErrMissingChainTx)
+
 	// Get a non-existent submission
-	_, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
+	_, err = s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
 	require.ErrorIs(t, err, ErrNotFound)
 
 	// Insert a submission

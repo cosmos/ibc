@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"database/sql"
 	"log/slog"
 	"net/url"
@@ -23,8 +22,10 @@ const SqliteInMemory = ":memory:"
 
 // SqliteDB is a wrapper around the sqlite database.
 type SqliteDB struct {
-	db     *sql.DB
-	repo   *reposqlite.Queries
+	db *sql.DB
+
+	*repositoryStore
+
 	logger *slog.Logger
 }
 
@@ -61,11 +62,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		// shared memory database is a single connection
 		db.SetMaxOpenConns(1)
 
-		return &SqliteDB{
-			db:     db,
-			repo:   reposqlite.New(db),
-			logger: logger,
-		}, nil
+		return newSqliteDB(db, logger), nil
 	}
 
 	absPath, err := filepath.Abs(path)
@@ -85,11 +82,17 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return nil, errors.Wrapf(err, "open sqlite database")
 	}
 
+	return newSqliteDB(db, logger), nil
+}
+
+func newSqliteDB(db *sql.DB, logger *slog.Logger) *SqliteDB {
+	repo := sqliteRepository{queries: reposqlite.New(db)}
+
 	return &SqliteDB{
-		db:     db,
-		repo:   reposqlite.New(db),
-		logger: logger,
-	}, nil
+		db:              db,
+		repositoryStore: newRepositoryStore(repo, logger),
+		logger:          logger,
+	}
 }
 
 func (db *SqliteDB) Close() error {
@@ -110,36 +113,6 @@ func (db *SqliteDB) MigrateDown() (int, error) {
 
 func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.db, config.DBTypeSQLite)
-}
-
-func (db *SqliteDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
-	db.logger.Debug("GetRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return nil, errors.New("chainID and txHash are required")
-	}
-
-	entry, err := db.repo.GetRelaySubmission(ctx, chainID, txHash)
-	if err != nil {
-		return nil, errNormalize(err)
-	}
-
-	return &RelaySubmission{
-		ID:        entry.ID,
-		ChainID:   entry.SourceChainID,
-		TxHash:    entry.SourceTxHash,
-		CreatedAt: entry.CreatedAt.UTC(),
-	}, nil
-}
-
-func (db *SqliteDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("UpsertRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return errors.New("chainID and txHash are required")
-	}
-
-	return db.repo.UpsertRelaySubmission(ctx, chainID, txHash)
 }
 
 func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
