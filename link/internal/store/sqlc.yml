@@ -10,6 +10,7 @@ sql:
         out: "repository/sqlite"
         # more than two args will be converted to params{}
         query_parameter_limit: 2
+        emit_pointers_for_null_types: true
 
   - engine: "postgresql"
     queries: "queries"
@@ -20,6 +21,7 @@ sql:
         out: "repository/postgres"
         sql_package: "pgx/v5"
         query_parameter_limit: 2
+        emit_pointers_for_null_types: true
         overrides:
           - db_type: "pg_catalog.timestamptz"
             go_type: "time.Time"

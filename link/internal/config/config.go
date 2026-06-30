@@ -2,6 +2,8 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,6 +166,18 @@ func DBConfigFromURL(raw string) (DBConfig, error) {
 		Type: DBTypePostgres,
 		URL:  raw,
 	}, nil
+}
+
+// PrintJSON prints anything as JSON to stdout.
+func PrintJSON(v any) error {
+	bz, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
 }
 
 // isSQLitePath reports whether raw should be treated as a sqlite file path

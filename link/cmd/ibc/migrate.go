@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/spf13/cobra"
 
@@ -49,7 +47,7 @@ func migrateUp(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return printJSON(map[string]any{
+	return config.PrintJSON(map[string]any{
 		"db":      cfg.DB.Label(),
 		"applied": applied,
 	})
@@ -67,7 +65,7 @@ func migrateDown(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return printJSON(map[string]any{
+	return config.PrintJSON(map[string]any{
 		"db":         cfg.DB.Label(),
 		"rolledBack": rolledBack,
 	})
@@ -85,7 +83,7 @@ func migrateStatus(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return printJSON(map[string]any{
+	return config.PrintJSON(map[string]any{
 		"db":         cfg.DB.Label(),
 		"migrations": statuses,
 	})
@@ -104,15 +102,4 @@ func resolveConfigWithStore() (config.Config, store.Store, error) {
 	}
 
 	return cfg, db, nil
-}
-
-func printJSON(v any) error {
-	bz, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(string(bz))
-
-	return nil
 }

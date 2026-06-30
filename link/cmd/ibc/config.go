@@ -8,13 +8,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/store"
 )
 
 // set in init()
 var (
 	// if true, perform extra validation checks like connecting to RPC,
 	// checking EVM addresses, etc.
-	// todo: not implemented!
 	flagConfigValidateLive bool
 
 	// if true, fail on unknown fields in the config file
@@ -63,22 +63,26 @@ func configNew(_ *cobra.Command, _ []string) error {
 }
 
 func configValidate(_ *cobra.Command, _ []string) error {
-	if flagConfigValidateLive {
-		return errors.New("--live is not implemented")
-	}
-
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return errors.Wrap(err, "unable to get config path")
 	}
 
-	_, err = config.LoadFromFile(configPath, true, flagConfigValidateStrict)
+	cfg, err := config.LoadFromFile(configPath, true, flagConfigValidateStrict)
 	if err != nil {
 		return errors.Wrap(err, "config load")
 	}
 
+	if flagConfigValidateLive {
+		if err := store.ValidateConfigLive(cfg); err != nil {
+			return errors.Wrap(err, "config live validation")
+		}
+	}
+
+	// todo: it still logs store's log, we need to add config.logging{} params
+	// to truly suppress logging (in followup PRs)
 	if !globalFlags.Quiet {
-		fmt.Printf("Configuration file %q is valid.\n", configPath)
+		return config.PrintJSON(map[string]any{"status": "valid"})
 	}
 
 	return nil
@@ -92,13 +96,11 @@ func printConfigHome(_ *cobra.Command, _ []string) {
 
 // setupHomeWithConfig changes process directory to `--home` and parses the config
 func setupHomeWithConfig() (config.Config, error) {
-	// get --home as an absolute path
 	home, err := config.ExpandHome(globalFlags.Home)
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "home")
 	}
 
-	// get absolute config path
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "unable to get config path")
@@ -109,7 +111,6 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrapf(err, "unable to create home directory %s", home)
 	}
 
-	// change process'es working directory to --home
 	if err = os.Chdir(home); err != nil {
 		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
 	}

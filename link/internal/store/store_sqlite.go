@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 
+	//nolint:blank-imports // SQL driver
 	_ "modernc.org/sqlite"
 
 	reposqlite "github.com/cosmos/ibc/link/internal/store/repository/sqlite"
@@ -77,9 +79,14 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return nil, err
 	}
 
+	// sqlite can auto-create db files, but not nested directories.
+	if err = config.EnsureDirectory(path); err != nil {
+		return nil, errors.Wrapf(err, "ensure directory for %s", path)
+	}
+
 	db, err := sql.Open("sqlite", connectionString)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open sqlite database")
+		return nil, errors.Wrapf(err, "open sqlite database %s", connectionString)
 	}
 
 	return newSqliteDB(db, logger), nil
@@ -97,6 +104,10 @@ func newSqliteDB(db *sql.DB, logger *slog.Logger) *SqliteDB {
 
 func (db *SqliteDB) Close() error {
 	return db.db.Close()
+}
+
+func (db *SqliteDB) Ping(_ context.Context) error {
+	return db.db.Ping()
 }
 
 // MigrateUp migrates ALL available migrations

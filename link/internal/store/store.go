@@ -17,6 +17,7 @@ type Store interface {
 	Repository
 	Migrator
 
+	Ping(ctx context.Context) error
 	Close() error
 }
 
@@ -49,6 +50,23 @@ func NewStore(ctx context.Context, cfg config.Config) (Store, error) {
 	default:
 		return nil, errors.New("invalid database type")
 	}
+}
+
+// ValidateConfigLive assumes the config.Config is valid,
+// and checks if the database is reachable.
+func ValidateConfigLive(cfg config.Config) error {
+	// noop, don't create an empty sqlite db
+	if cfg.DB.Type == config.DBTypeSQLite {
+		return nil
+	}
+
+	// contains Ping()
+	_, err := NewStore(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // RelaySubmission is an pending relay submission.

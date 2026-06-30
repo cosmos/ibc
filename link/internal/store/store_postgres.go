@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -39,12 +40,12 @@ func NewPostgres(ctx context.Context, url string) (*PostgresDB, error) {
 		return nil, errors.Wrap(err, "parse config")
 	}
 
-	return NewPostgresWithConfig(ctx, poolConfig)
+	return NewPostgresWithConfig(ctx, poolConfig, true)
 }
 
 // NewPostgresWithConfig creates a new PostgresDB instance based on pgxpool.Config
 // Allows to modify the config before creation.
-func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config) (*PostgresDB, error) {
+func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping bool) (*PostgresDB, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, errors.Wrap(err, "create pool")
@@ -53,12 +54,20 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config) (*Postgr
 	logger := slog.With("module", "database")
 	repo := postgresRepository{queries: repopostgres.New(pool)}
 
-	return &PostgresDB{
+	db := &PostgresDB{
 		pool:            pool,
 		sqlWrapper:      stdlib.OpenDBFromPool(pool),
 		repositoryStore: newRepositoryStore(repo, logger),
 		logger:          logger,
-	}, nil
+	}
+
+	if ping {
+		if err := db.Ping(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	return db, nil
 }
 
 func (db *PostgresDB) Close() error {
@@ -67,6 +76,22 @@ func (db *PostgresDB) Close() error {
 	}
 
 	db.pool.Close()
+
+	return nil
+}
+
+func (db *PostgresDB) Ping(ctx context.Context) error {
+	ctxPing, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+
+	if err := db.pool.Ping(ctxPing); err != nil {
+		db.logger.Error("Unable to ping database", "err", err, "elapsed", time.Since(start).String())
+		return errors.Wrap(err, "unable to ping database")
+	}
+
+	db.logger.Info("Ping", "elapsed", time.Since(start).String())
 
 	return nil
 }
