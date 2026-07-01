@@ -173,7 +173,7 @@ func PrintJSON(v any) error {
 }
 
 func dbTypeFromURL(raw string) string {
-	if strings.HasPrefix(raw, "postgres://") {
+	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
 		return DBTypePostgres
 	}
 
