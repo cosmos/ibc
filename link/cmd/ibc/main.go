@@ -32,6 +32,7 @@ func init() {
 		cmdRelayer,
 		cmdAttestor,
 		cmdQuery,
+		cmdMigrate,
 	)
 
 	// Config commands
@@ -48,4 +49,7 @@ func init() {
 
 	// Query commands
 	// todo
+
+	// Migrate commands
+	cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)
 }

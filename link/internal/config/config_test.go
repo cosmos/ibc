@@ -29,6 +29,20 @@ func TestConfig(t *testing.T) {
 				},
 				errContains: "expected address in host:port",
 			},
+			{
+				name: "invalid db type",
+				patch: func(c *Config) {
+					c.DB.Type = "mysql"
+				},
+				errContains: ".type must be one of",
+			},
+			{
+				name: "empty db url",
+				patch: func(c *Config) {
+					c.DB.URL = ""
+				},
+				errContains: ".url must not be empty",
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				config := DefaultConfig()
@@ -53,6 +67,9 @@ func TestConfig(t *testing.T) {
 			path := writeTestConfig(t, `
 grpc:
   listenAddr: 127.0.0.1:9090
+db:
+  type: postgres
+  url: postgres://user:pass@localhost:5432/ibc
 `)
 
 			// ACT
@@ -61,6 +78,8 @@ grpc:
 			// ASSERT
 			require.NoError(t, err)
 			assert.Equal(t, "127.0.0.1:9090", config.GRPC.ListenAddress)
+			assert.Equal(t, DBTypePostgres, config.DB.Type)
+			assert.Equal(t, "postgres://user:pass@localhost:5432/ibc", config.DB.URL)
 		})
 
 		t.Run("envSubstitution", func(t *testing.T) {
@@ -174,6 +193,75 @@ grpc:
 			require.NoError(t, err)
 			assert.Equal(t, "0.0.0.0:3000", config.GRPC.ListenAddress)
 		})
+	})
+
+	t.Run("DBConfigFromURL", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			raw         string
+			wantType    string
+			errContains string
+		}{
+			{
+				name:     "default relative sqlite path",
+				raw:      "ibc.sqlite",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "relative sqlite path",
+				raw:      "./ibc.db",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "absolute sqlite path",
+				raw:      "/var/lib/ibc/ibc.db",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "extensionless sqlite filename",
+				raw:      "my-file",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "sqlite extension",
+				raw:      "file.sqlite",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "parent relative sqlite path",
+				raw:      "../../some/relative/database.db",
+				wantType: DBTypeSQLite,
+			},
+			{
+				name:     "postgres url",
+				raw:      "postgres://user:pass@localhost:5432/ibc",
+				wantType: DBTypePostgres,
+			},
+			{
+				name:     "postgresql url",
+				raw:      "postgresql://user:pass@localhost:5432/ibc",
+				wantType: DBTypePostgres,
+			},
+			{
+				name:        "empty",
+				raw:         "",
+				errContains: "empty db url",
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ACT
+				db, err := DBConfigFromURL(tt.raw)
+
+				// ASSERT
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantType, db.Type)
+			})
+		}
 	})
 }
 

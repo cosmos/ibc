@@ -2,7 +2,11 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
@@ -10,10 +14,19 @@ import (
 	"github.com/cosmos/ibc/link/internal/network"
 )
 
+// Database type
+const (
+	DBTypeSQLite   = "sqlite"
+	DBTypePostgres = "postgres"
+)
+
+const sqliteInMemory = ":memory:"
+
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
 	GRPC GRPCConfig `yaml:"grpc"`
+	DB   DBConfig   `yaml:"db"`
 }
 
 // GRPCConfig config for grpc server for both relayer and attestor
@@ -21,10 +34,21 @@ type GRPCConfig struct {
 	ListenAddress string `yaml:"listenAddr"`
 }
 
+// DBConfig config for database storage.
+type DBConfig struct {
+	Type string `yaml:"type"`
+	URL  string `yaml:"url"`
+}
+
+// DefaultConfig sample config using default values and Sqlite.
 func DefaultConfig() Config {
 	return Config{
 		GRPC: GRPCConfig{
 			ListenAddress: "0.0.0.0:3000",
+		},
+		DB: DBConfig{
+			Type: DBTypeSQLite,
+			URL:  "ibc.db",
 		},
 	}
 }
@@ -66,11 +90,15 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".grpc")
 	}
 
+	if err := c.DB.Validate(); err != nil {
+		return errors.Wrap(err, ".db")
+	}
+
 	return nil
 }
 
 func (c Config) StoreToFile(path string) error {
-	if err := ensureDirectory(path); err != nil {
+	if err := EnsureDirectory(path); err != nil {
 		return err
 	}
 
@@ -92,4 +120,62 @@ func (c GRPCConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (c DBConfig) Validate() error {
+	switch {
+	case c.Type != DBTypeSQLite && c.Type != DBTypePostgres:
+		return errors.Errorf(".type must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
+	case c.Type == DBTypeSQLite && c.URL == sqliteInMemory:
+		return errors.New(".url must not be :memory: for sqlite")
+	case c.URL == "":
+		return errors.New(".url must not be empty")
+	}
+
+	return nil
+}
+
+// Label returns a human-readable label for the DB config.
+func (c DBConfig) Label() string {
+	if c.Type != DBTypeSQLite {
+		return c.Type
+	}
+
+	// sqlite case
+	path := c.URL
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+
+	return path
+}
+
+// DBConfigFromURL infers DB type from a CLI database URL override.
+func DBConfigFromURL(url string) (DBConfig, error) {
+	db := DBConfig{
+		URL:  url,
+		Type: dbTypeFromURL(url),
+	}
+
+	return db, db.Validate()
+}
+
+// PrintJSON prints anything as JSON to stdout.
+func PrintJSON(v any) error {
+	bz, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
+}
+
+func dbTypeFromURL(raw string) string {
+	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
+		return DBTypePostgres
+	}
+
+	return DBTypeSQLite
 }

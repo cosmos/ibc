@@ -13,6 +13,7 @@ type FlagSet struct {
 	// Home IBC home directory where files are stored
 	Home   string
 	Config string
+	DB     string
 	Quiet  bool
 }
 
@@ -21,6 +22,7 @@ func DefaultFlagSet() FlagSet {
 	return FlagSet{
 		Home:   "~/.ibc",
 		Config: "ibc.yml",
+		DB:     "",
 		Quiet:  false,
 	}
 }
@@ -31,11 +33,12 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 
 	pf.StringVarP(&flags.Home, "home", "", flags.Home, "IBC home directory")
 	pf.StringVarP(&flags.Config, "config", "", flags.Config, "Config file relative to home")
+	pf.StringVarP(&flags.DB, "db", "", flags.DB, "Database URL override")
 	pf.BoolVarP(&flags.Quiet, "quiet", "q", flags.Quiet, "Quiet mode")
 }
 
 func (fs *FlagSet) ConfigPath() (string, error) {
-	home, err := expandHome(fs.Home)
+	home, err := ExpandHome(fs.Home)
 	if err != nil {
 		return "", err
 	}
@@ -43,8 +46,8 @@ func (fs *FlagSet) ConfigPath() (string, error) {
 	return filepath.Abs(filepath.Join(home, fs.Config))
 }
 
-// converts path with ~ to absolute path
-func expandHome(path string) (string, error) {
+// ExpandHome converts path with ~ to an absolute path.
+func ExpandHome(path string) (string, error) {
 	if path != "~" && !strings.HasPrefix(path, "~/") {
 		return path, nil
 	}
@@ -61,7 +64,8 @@ func expandHome(path string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 }
 
-func ensureDirectory(directoryOrFile string) error {
+// Given a path to a file or a directory, ensure the directory exists.
+func EnsureDirectory(directoryOrFile string) error {
 	dir := filepath.Dir(directoryOrFile)
 	if dir == "." {
 		return nil

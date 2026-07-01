@@ -8,13 +8,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/store"
 )
 
 // set in init()
 var (
 	// if true, perform extra validation checks like connecting to RPC,
 	// checking EVM addresses, etc.
-	// todo: not implemented!
 	flagConfigValidateLive bool
 
 	// if true, fail on unknown fields in the config file
@@ -63,22 +63,21 @@ func configNew(_ *cobra.Command, _ []string) error {
 }
 
 func configValidate(_ *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return errors.Wrap(err, "setup home with config")
+	}
+
 	if flagConfigValidateLive {
-		return errors.New("--live is not implemented")
+		if err := store.ValidateConfigLive(cfg); err != nil {
+			return errors.Wrap(err, "config live validation")
+		}
 	}
 
-	configPath, err := globalFlags.ConfigPath()
-	if err != nil {
-		return errors.Wrap(err, "unable to get config path")
-	}
-
-	_, err = config.LoadFromFile(configPath, true, flagConfigValidateStrict)
-	if err != nil {
-		return errors.Wrap(err, "config load")
-	}
-
+	// todo: it still logs store's log, we need to add config.logging{} params
+	// to truly suppress logging (in followup PRs)
 	if !globalFlags.Quiet {
-		fmt.Printf("Configuration file %q is valid.\n", configPath)
+		return config.PrintJSON(map[string]any{"status": "valid"})
 	}
 
 	return nil
@@ -90,11 +89,39 @@ func printConfigHome(_ *cobra.Command, _ []string) {
 	}
 }
 
-func resolveConfig() (config.Config, error) {
+// setupHomeWithConfig changes process directory to `--home` and parses the config
+func setupHomeWithConfig() (config.Config, error) {
+	home, err := config.ExpandHome(globalFlags.Home)
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "home")
+	}
+
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "unable to get config path")
 	}
 
-	return config.LoadFromFile(configPath, true, false)
+	// ensure --home exists
+	if err = config.EnsureDirectory(configPath); err != nil {
+		return config.Config{}, errors.Wrapf(err, "unable to create home directory %s", home)
+	}
+
+	if err = os.Chdir(home); err != nil {
+		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
+	}
+
+	cfg, err := config.LoadFromFile(configPath, true, false)
+	if err != nil {
+		return config.Config{}, err
+	}
+
+	// allow db override
+	if globalFlags.DB != "" {
+		cfg.DB, err = config.DBConfigFromURL(globalFlags.DB)
+		if err != nil {
+			return config.Config{}, errors.Wrap(err, "invalid --db")
+		}
+	}
+
+	return cfg, nil
 }
