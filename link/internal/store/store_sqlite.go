@@ -102,8 +102,8 @@ func (db *SqliteDB) Close() error {
 	return db.db.Close()
 }
 
-func (db *SqliteDB) Ping(_ context.Context) error {
-	return db.db.Ping()
+func (db *SqliteDB) Ping(ctx context.Context) error {
+	return db.db.PingContext(ctx)
 }
 
 // MigrateUp migrates ALL available migrations

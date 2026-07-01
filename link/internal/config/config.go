@@ -20,6 +20,8 @@ const (
 	DBTypePostgres = "postgres"
 )
 
+const sqliteInMemory = ":memory:"
+
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
@@ -121,13 +123,12 @@ func (c GRPCConfig) Validate() error {
 }
 
 func (c DBConfig) Validate() error {
-	switch c.Type {
-	case DBTypeSQLite, DBTypePostgres:
-	default:
+	switch {
+	case c.Type != DBTypeSQLite && c.Type != DBTypePostgres:
 		return errors.Errorf(".type must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
-	}
-
-	if c.URL == "" {
+	case c.Type == DBTypeSQLite && c.URL == sqliteInMemory:
+		return errors.New(".url must not be :memory: for sqlite")
+	case c.URL == "":
 		return errors.New(".url must not be empty")
 	}
 
@@ -150,22 +151,13 @@ func (c DBConfig) Label() string {
 }
 
 // DBConfigFromURL infers DB type from a CLI database URL override.
-func DBConfigFromURL(raw string) (DBConfig, error) {
-	if raw == "" {
-		return DBConfig{}, errors.New("empty db url")
+func DBConfigFromURL(url string) (DBConfig, error) {
+	db := DBConfig{
+		URL:  url,
+		Type: dbTypeFromURL(url),
 	}
 
-	if isSQLitePath(raw) {
-		return DBConfig{
-			Type: DBTypeSQLite,
-			URL:  raw,
-		}, nil
-	}
-
-	return DBConfig{
-		Type: DBTypePostgres,
-		URL:  raw,
-	}, nil
+	return db, db.Validate()
 }
 
 // PrintJSON prints anything as JSON to stdout.
@@ -180,13 +172,10 @@ func PrintJSON(v any) error {
 	return nil
 }
 
-// isSQLitePath reports whether raw should be treated as a sqlite file path
-// rather than a database connection URL.
-//
-// Anything without a "scheme://" is considered a local file path, e.g.
-// "file.db", "file.sqlite", "my-file", "./my-file", "/abs/path/to/file.db",
-// "../../some/relative/database.db". Connection URLs such as
-// "postgres://user:pass@host/db" return false.
-func isSQLitePath(raw string) bool {
-	return !strings.Contains(raw, "://")
+func dbTypeFromURL(raw string) string {
+	if strings.HasPrefix(raw, "postgres://") {
+		return DBTypePostgres
+	}
+
+	return DBTypeSQLite
 }
