@@ -43,6 +43,30 @@ func TestConfig(t *testing.T) {
 				},
 				errContains: ".url must not be empty",
 			},
+			{
+				name: "sqlite rejects url scheme",
+				patch: func(c *Config) {
+					c.DB.Type = DBTypeSQLite
+					c.DB.URL = "mysql://user:pass@localhost:3306/ibc"
+				},
+				errContains: `.url for sqlite must be a filesystem path, got scheme "mysql"`,
+			},
+			{
+				name: "sqlite rejects in memory sentinel",
+				patch: func(c *Config) {
+					c.DB.Type = DBTypeSQLite
+					c.DB.URL = ":memory:"
+				},
+				errContains: `.url must be a filesystem path, got ":memory:"`,
+			},
+			{
+				name: "postgres requires url scheme",
+				patch: func(c *Config) {
+					c.DB.Type = DBTypePostgres
+					c.DB.URL = "ibc.db"
+				},
+				errContains: `.url for postgres must use scheme "postgres" or "postgresql", got ""`,
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				config := DefaultConfig()
@@ -241,6 +265,16 @@ grpc:
 				name:     "postgresql url",
 				raw:      "postgresql://user:pass@localhost:5432/ibc",
 				wantType: DBTypePostgres,
+			},
+			{
+				name:        "unsupported url scheme",
+				raw:         "mysql://user:pass@localhost:3306/ibc",
+				errContains: `unsupported db url scheme "mysql"`,
+			},
+			{
+				name:        "sqlite in memory",
+				raw:         ":memory:",
+				errContains: `.url must be a filesystem path, got ":memory:"`,
 			},
 			{
 				name:        "empty",

@@ -9,15 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
 
-	stderrors "errors"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
@@ -116,14 +113,10 @@ func migrateDB(
 	return migrate.ExecMaxContext(ctx, db, migrationDialect(dbType), src, direction, num)
 }
 
-func migrationStatus(ctx context.Context, db *sql.DB, dbType string) ([]MigrationStatus, error) {
+func migrationStatus(db *sql.DB, dbType string) ([]MigrationStatus, error) {
 	src, err := MigrationsSource(dbType)
 	if err != nil {
 		return nil, errors.Wrapf(err, "migrations source")
-	}
-
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, ctxErr
 	}
 
 	// fetch from migrations dir
@@ -132,7 +125,7 @@ func migrationStatus(ctx context.Context, db *sql.DB, dbType string) ([]Migratio
 		return nil, errors.Wrap(err, "find migrations")
 	}
 
-	applied, err := migrationRecords(ctx, db, dbType)
+	applied, err := migrationRecords(db, dbType)
 	if err != nil {
 		return nil, errors.Wrap(err, "get migration records")
 	}
@@ -161,45 +154,18 @@ func migrationStatus(ctx context.Context, db *sql.DB, dbType string) ([]Migratio
 	return results, nil
 }
 
-func migrationRecords(ctx context.Context, db *sql.DB, dbType string) (map[string]time.Time, error) {
-	rows, err := db.QueryContext(ctx, "SELECT id, applied_at FROM "+migrationTable+" ORDER BY id ASC")
+func migrationRecords(db *sql.DB, dbType string) (map[string]time.Time, error) {
+	records, err := migrate.GetMigrationRecords(db, migrationDialect(dbType))
 	if err != nil {
-		if isMissingMigrationTable(err, dbType) {
-			return nil, nil
-		}
-
 		return nil, err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
 
-	records := make(map[string]time.Time)
-	for rows.Next() {
-		var (
-			id        string
-			appliedAt time.Time
-		)
-		if err := rows.Scan(&id, &appliedAt); err != nil {
-			return nil, err
-		}
-
-		records[id] = appliedAt
+	applied := make(map[string]time.Time, len(records))
+	for _, record := range records {
+		applied[record.Id] = record.AppliedAt
 	}
 
-	return records, rows.Err()
-}
-
-func isMissingMigrationTable(err error, dbType string) bool {
-	switch dbType {
-	case config.DBTypePostgres:
-		var pgErr *pgconn.PgError
-		return stderrors.As(err, &pgErr) && pgErr.Code == "42P01"
-	case config.DBTypeSQLite:
-		return strings.Contains(err.Error(), "no such table")
-	default:
-		return false
-	}
+	return applied, nil
 }
 
 func migrationDialect(dbType string) string {

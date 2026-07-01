@@ -23,7 +23,7 @@ const sqliteInMemory = ":memory:"
 type sqliteStore struct {
 	db *sql.DB
 
-	*repositoryStore
+	queries *reposqlite.Queries
 
 	logger *slog.Logger
 }
@@ -86,12 +86,10 @@ func newSQLiteWithOptions(path string, connectionOpts map[string]string) (*sqlit
 }
 
 func newSqliteStore(db *sql.DB, logger *slog.Logger) *sqliteStore {
-	repo := sqliteRepository{queries: reposqlite.New(db)}
-
 	return &sqliteStore{
-		db:              db,
-		repositoryStore: newRepositoryStore(repo, logger),
-		logger:          logger,
+		db:      db,
+		queries: reposqlite.New(db),
+		logger:  logger,
 	}
 }
 
@@ -115,33 +113,39 @@ func (d *sqliteStore) MigrateDown(ctx context.Context) (int, error) {
 	return migrateDB(ctx, d.db, config.DBTypeSQLite, migrate.Down, 1)
 }
 
-func (d *sqliteStore) MigrationStatus(ctx context.Context) ([]MigrationStatus, error) {
-	return migrationStatus(ctx, d.db, config.DBTypeSQLite)
+func (d *sqliteStore) MigrationStatus() ([]MigrationStatus, error) {
+	return migrationStatus(d.db, config.DBTypeSQLite)
 }
 
-func (d *sqliteStore) WithTx(ctx context.Context, fn func(repo Repository) error) error {
-	tx, err := d.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errors.Wrap(err, "begin transaction")
+func (d *sqliteStore) GetRelaySubmission(
+	ctx context.Context,
+	key RelaySubmissionKey,
+) (*RelaySubmission, error) {
+	d.logger.Debug("GetRelaySubmission", "chainID", key.ChainID, "txHash", key.TxHash)
+
+	if err := key.Validate(); err != nil {
+		return nil, err
 	}
 
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	entry, err := d.queries.GetRelaySubmission(ctx, key.ChainID, key.TxHash)
+	if err != nil {
+		return nil, errors.Wrap(errNormalize(err), "get relay submission")
+	}
 
-	repo := newRepositoryStore(sqliteRepository{queries: reposqlite.New(tx)}, d.logger)
-	if err = fn(repo); err != nil {
+	return newRelaySubmission(entry.ID, entry.SourceChainID, entry.SourceTxHash, entry.CreatedAt), nil
+}
+
+func (d *sqliteStore) UpsertRelaySubmission(ctx context.Context, key RelaySubmissionKey) error {
+	d.logger.Debug("UpsertRelaySubmission", "chainID", key.ChainID, "txHash", key.TxHash)
+
+	if err := key.Validate(); err != nil {
 		return err
 	}
 
-	if err = tx.Commit(); err != nil {
-		return errors.Wrap(err, "commit transaction")
+	if err := d.queries.UpsertRelaySubmission(ctx, key.ChainID, key.TxHash); err != nil {
+		return errors.Wrap(err, "upsert relay submission")
 	}
 
-	committed = true
 	return nil
 }
 

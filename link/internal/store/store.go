@@ -13,9 +13,9 @@ import (
 
 // Store a unified, database-agnostic API for persistence.
 type Store interface {
-	Repository
+	GetRelaySubmission(ctx context.Context, key RelaySubmissionKey) (*RelaySubmission, error)
+	UpsertRelaySubmission(ctx context.Context, key RelaySubmissionKey) error
 
-	WithTx(ctx context.Context, fn func(repo Repository) error) error
 	Ping(ctx context.Context) error
 	Close() error
 }
@@ -27,20 +27,14 @@ type Database interface {
 	Migrator
 }
 
-// Repository represents database CRUD operations.
-type Repository interface {
-	GetRelaySubmission(ctx context.Context, key RelaySubmissionKey) (*RelaySubmission, error)
-	UpsertRelaySubmission(ctx context.Context, key RelaySubmissionKey) error
-}
-
 // Migrator abstracts schema migrations
 type Migrator interface {
 	MigrateUp(ctx context.Context) (int, error)
 	MigrateDown(ctx context.Context) (int, error)
-	MigrationStatus(ctx context.Context) ([]MigrationStatus, error)
+	MigrationStatus() ([]MigrationStatus, error)
 }
 
-// Repository errors
+// Store errors
 var (
 	ErrNotFound       = errors.New("not found")
 	ErrMissingChainTx = errors.New("chainID and txHash are required")
@@ -105,5 +99,14 @@ func errNormalize(err error) error {
 		return ErrNotFound
 	default:
 		return err
+	}
+}
+
+func newRelaySubmission(id int64, chainID string, txHash string, createdAt time.Time) *RelaySubmission {
+	return &RelaySubmission{
+		ID:        id,
+		ChainID:   chainID,
+		TxHash:    txHash,
+		CreatedAt: createdAt.UTC(),
 	}
 }

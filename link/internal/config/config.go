@@ -4,9 +4,9 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
@@ -18,6 +18,8 @@ import (
 const (
 	DBTypeSQLite   = "sqlite"
 	DBTypePostgres = "postgres"
+
+	sqliteInMemoryURL = ":memory:"
 )
 
 // Config represents a config file
@@ -122,16 +124,63 @@ func (c GRPCConfig) Validate() error {
 
 func (c DBConfig) Validate() error {
 	switch c.Type {
-	case DBTypeSQLite, DBTypePostgres:
+	case DBTypeSQLite:
+		if err := validateSQLiteURL(c.URL); err != nil {
+			return err
+		}
+	case DBTypePostgres:
+		if err := validatePostgresURL(c.URL); err != nil {
+			return err
+		}
 	default:
 		return errors.Errorf(".type must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
 	}
 
-	if c.URL == "" {
+	return nil
+}
+
+func validateSQLiteURL(raw string) error {
+	if raw == "" {
 		return errors.New(".url must not be empty")
 	}
 
+	if raw == sqliteInMemoryURL {
+		return errors.Errorf(".url must be a filesystem path, got %q", sqliteInMemoryURL)
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return errors.Wrap(err, ".url")
+	}
+
+	if parsed.Scheme != "" {
+		return errors.Errorf(".url for sqlite must be a filesystem path, got scheme %q", parsed.Scheme)
+	}
+
 	return nil
+}
+
+func validatePostgresURL(raw string) error {
+	if raw == "" {
+		return errors.New(".url must not be empty")
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return errors.Wrap(err, ".url")
+	}
+
+	switch parsed.Scheme {
+	case DBTypePostgres, "postgresql":
+		return nil
+	default:
+		return errors.Errorf(
+			".url for postgres must use scheme %q or %q, got %q",
+			DBTypePostgres,
+			"postgresql",
+			parsed.Scheme,
+		)
+	}
 }
 
 // Label returns a human-readable label for the DB config.
@@ -155,17 +204,36 @@ func DBConfigFromURL(raw string) (DBConfig, error) {
 		return DBConfig{}, errors.New("empty db url")
 	}
 
-	if isSQLitePath(raw) {
-		return DBConfig{
-			Type: DBTypeSQLite,
-			URL:  raw,
-		}, nil
+	if raw == sqliteInMemoryURL {
+		return DBConfig{}, validateSQLiteURL(raw)
 	}
 
-	return DBConfig{
-		Type: DBTypePostgres,
-		URL:  raw,
-	}, nil
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return DBConfig{}, errors.Wrap(err, "parse db url")
+	}
+
+	var cfg DBConfig
+	switch parsed.Scheme {
+	case "":
+		cfg = DBConfig{
+			Type: DBTypeSQLite,
+			URL:  raw,
+		}
+	case DBTypePostgres, "postgresql":
+		cfg = DBConfig{
+			Type: DBTypePostgres,
+			URL:  raw,
+		}
+	default:
+		return DBConfig{}, errors.Errorf("unsupported db url scheme %q", parsed.Scheme)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return DBConfig{}, err
+	}
+
+	return cfg, nil
 }
 
 // PrintJSON prints anything as JSON to stdout.
@@ -178,15 +246,4 @@ func PrintJSON(v any) error {
 	fmt.Println(string(bz))
 
 	return nil
-}
-
-// isSQLitePath reports whether raw should be treated as a sqlite file path
-// rather than a database connection URL.
-//
-// Anything without a "scheme://" is considered a local file path, e.g.
-// "file.db", "file.sqlite", "my-file", "./my-file", "/abs/path/to/file.db",
-// "../../some/relative/database.db". Connection URLs such as
-// "postgres://user:pass@host/db" return false.
-func isSQLitePath(raw string) bool {
-	return !strings.Contains(raw, "://")
 }

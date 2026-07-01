@@ -40,12 +40,11 @@ WHERE lower(name) = ?;
 - (re)generate bindings with `make codegen-sql`.
 - Don't edit generated files in `repository/sqlite` or `repository/postgres`.
 
-### III. Unified repository layer
+### III. Store methods
 
 After ensuring that the new migration is in place and the sqlc models and queries have been generated:
 
-- Add public persistence methods to `Repository` interface in `store.go`. Use idiomatic Go
-- Implement shared store behavior and sqlc-to-domain adapters in `store_repository.go`.
-- Keep `store_sqlite.go` and `store_postgres.go` focused on connection setup, migrations, and close behavior.
+- Add public persistence methods to `Store` interface in `store.go`. Use idiomatic Go
+- Implement SQLite and Postgres behavior directly on their concrete stores.
 - Return domain structs from `store.go`, not generated sqlc row types.
 - Implement basic input validation. if method arg is a struct, implement `.Validate() error` for it

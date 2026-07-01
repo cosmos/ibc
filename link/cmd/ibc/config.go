@@ -63,14 +63,9 @@ func configNew(_ *cobra.Command, _ []string) error {
 }
 
 func configValidate(cmd *cobra.Command, _ []string) error {
-	configPath, err := globalFlags.ConfigPath()
+	cfg, err := loadEffectiveConfig(flagConfigValidateStrict)
 	if err != nil {
-		return errors.Wrap(err, "unable to get config path")
-	}
-
-	cfg, err := config.LoadFromFile(configPath, true, flagConfigValidateStrict)
-	if err != nil {
-		return errors.Wrap(err, "config load")
+		return err
 	}
 
 	if flagConfigValidateLive {
@@ -115,9 +110,27 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
 	}
 
-	cfg, err := config.LoadFromFile(configPath, true, false)
+	cfg, err := loadEffectiveConfigFromPath(configPath, false)
 	if err != nil {
 		return config.Config{}, err
+	}
+
+	return cfg, nil
+}
+
+func loadEffectiveConfig(restrictUnknownFields bool) (config.Config, error) {
+	configPath, err := globalFlags.ConfigPath()
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "unable to get config path")
+	}
+
+	return loadEffectiveConfigFromPath(configPath, restrictUnknownFields)
+}
+
+func loadEffectiveConfigFromPath(configPath string, restrictUnknownFields bool) (config.Config, error) {
+	cfg, err := config.LoadFromFile(configPath, false, restrictUnknownFields)
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "config load")
 	}
 
 	// allow db override
@@ -126,6 +139,10 @@ func setupHomeWithConfig() (config.Config, error) {
 		if err != nil {
 			return config.Config{}, errors.Wrap(err, "invalid --db")
 		}
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return config.Config{}, errors.Wrap(err, "config validation")
 	}
 
 	return cfg, nil

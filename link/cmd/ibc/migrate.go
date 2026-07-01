@@ -78,7 +78,7 @@ func migrateStatus(cmd *cobra.Command, _ []string) error {
 	}
 	defer db.Close() //nolint:errcheck
 
-	statuses, err := db.MigrationStatus(cmd.Context())
+	statuses, err := db.MigrationStatus()
 	if err != nil {
 		return err
 	}

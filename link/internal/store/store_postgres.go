@@ -23,7 +23,7 @@ type postgresStore struct {
 	// *sql.DB wrapper for migrations
 	sqlWrapper *sql.DB
 
-	*repositoryStore
+	queries *repopostgres.Queries
 
 	logger *slog.Logger
 }
@@ -36,30 +36,23 @@ func newPostgres(ctx context.Context, url string) (*postgresStore, error) {
 		return nil, pkgerrors.Wrap(err, "parse config")
 	}
 
-	return newPostgresWithConfig(ctx, poolConfig, true)
-}
-
-func newPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping bool) (*postgresStore, error) {
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "create pool")
 	}
 
 	logger := slog.With("module", "database")
-	repo := postgresRepository{queries: repopostgres.New(pool)}
 
 	db := &postgresStore{
-		pool:            pool,
-		sqlWrapper:      stdlib.OpenDBFromPool(pool),
-		repositoryStore: newRepositoryStore(repo, logger),
-		logger:          logger,
+		pool:       pool,
+		sqlWrapper: stdlib.OpenDBFromPool(pool),
+		queries:    repopostgres.New(pool),
+		logger:     logger,
 	}
 
-	if ping {
-		if err := db.Ping(ctx); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
+	if err := db.Ping(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 
 	return db, nil
@@ -100,34 +93,38 @@ func (d *postgresStore) MigrateDown(ctx context.Context) (int, error) {
 	return migrateDB(ctx, d.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
 }
 
-func (d *postgresStore) MigrationStatus(ctx context.Context) ([]MigrationStatus, error) {
-	return migrationStatus(ctx, d.sqlWrapper, config.DBTypePostgres)
+func (d *postgresStore) MigrationStatus() ([]MigrationStatus, error) {
+	return migrationStatus(d.sqlWrapper, config.DBTypePostgres)
 }
 
-func (d *postgresStore) WithTx(ctx context.Context, fn func(repo Repository) error) error {
-	tx, err := d.pool.Begin(ctx)
-	if err != nil {
-		return pkgerrors.Wrap(err, "begin transaction")
+func (d *postgresStore) GetRelaySubmission(
+	ctx context.Context,
+	key RelaySubmissionKey,
+) (*RelaySubmission, error) {
+	d.logger.Debug("GetRelaySubmission", "chainID", key.ChainID, "txHash", key.TxHash)
+
+	if err := key.Validate(); err != nil {
+		return nil, err
 	}
 
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = tx.Rollback(rollbackCtx)
-		}
-	}()
+	entry, err := d.queries.GetRelaySubmission(ctx, key.ChainID, key.TxHash)
+	if err != nil {
+		return nil, pkgerrors.Wrap(errNormalize(err), "get relay submission")
+	}
 
-	repo := newRepositoryStore(postgresRepository{queries: repopostgres.New(tx)}, d.logger)
-	if err = fn(repo); err != nil {
+	return newRelaySubmission(entry.ID, entry.SourceChainID, entry.SourceTxHash, entry.CreatedAt), nil
+}
+
+func (d *postgresStore) UpsertRelaySubmission(ctx context.Context, key RelaySubmissionKey) error {
+	d.logger.Debug("UpsertRelaySubmission", "chainID", key.ChainID, "txHash", key.TxHash)
+
+	if err := key.Validate(); err != nil {
 		return err
 	}
 
-	if err = tx.Commit(ctx); err != nil {
-		return pkgerrors.Wrap(err, "commit transaction")
+	if err := d.queries.UpsertRelaySubmission(ctx, key.ChainID, key.TxHash); err != nil {
+		return pkgerrors.Wrap(err, "upsert relay submission")
 	}
 
-	committed = true
 	return nil
 }
