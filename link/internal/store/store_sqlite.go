@@ -22,8 +22,7 @@ import (
 // Useful for testing and development.
 const SqliteInMemory = ":memory:"
 
-// SqliteDB is a wrapper around the sqlite database.
-type SqliteDB struct {
+type sqliteStore struct {
 	db *sql.DB
 
 	*repositoryStore
@@ -31,7 +30,10 @@ type SqliteDB struct {
 	logger *slog.Logger
 }
 
-var _ Store = (*SqliteDB)(nil)
+var (
+	_ Store            = (*sqliteStore)(nil)
+	_ transactionStore = (*sqliteStore)(nil)
+)
 
 func DefaultSqliteConnOptions() map[string]string {
 	return map[string]string{
@@ -40,15 +42,15 @@ func DefaultSqliteConnOptions() map[string]string {
 	}
 }
 
-func NewSqlite(path string) (*SqliteDB, error) {
+func NewSqlite(path string) (Store, error) {
 	return NewSqliteWithOptions(path, DefaultSqliteConnOptions())
 }
 
-func NewSqliteInMemory() (*SqliteDB, error) {
+func NewSqliteInMemory() (Store, error) {
 	return NewSqliteWithOptions(SqliteInMemory, nil)
 }
 
-func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*SqliteDB, error) {
+func NewSqliteWithOptions(path string, connectionOpts map[string]string) (Store, error) {
 	if path == "" {
 		return nil, errors.New("path is required")
 	}
@@ -64,7 +66,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		// shared memory database is a single connection
 		db.SetMaxOpenConns(1)
 
-		return newSqliteDB(db, logger), nil
+		return newSqliteStore(db, logger), nil
 	}
 
 	absPath, err := filepath.Abs(path)
@@ -89,41 +91,67 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return nil, errors.Wrapf(err, "open sqlite database %s", connectionString)
 	}
 
-	return newSqliteDB(db, logger), nil
+	return newSqliteStore(db, logger), nil
 }
 
-func newSqliteDB(db *sql.DB, logger *slog.Logger) *SqliteDB {
+func newSqliteStore(db *sql.DB, logger *slog.Logger) Store {
 	repo := sqliteRepository{queries: reposqlite.New(db)}
 
-	return &SqliteDB{
+	return &sqliteStore{
 		db:              db,
 		repositoryStore: newRepositoryStore(repo, logger),
 		logger:          logger,
 	}
 }
 
-func (db *SqliteDB) Close() error {
-	return db.db.Close()
+func (d *sqliteStore) Close() error {
+	return d.db.Close()
 }
 
-func (db *SqliteDB) Ping(_ context.Context) error {
-	return db.db.Ping()
+func (d *sqliteStore) Ping(_ context.Context) error {
+	return d.db.Ping()
 }
 
 // MigrateUp migrates ALL available migrations
-func (db *SqliteDB) MigrateUp() (int, error) {
-	db.logger.Debug("Migrating up")
-	return migrateDB(db.db, config.DBTypeSQLite, migrate.Up, 0)
+func (d *sqliteStore) MigrateUp() (int, error) {
+	d.logger.Debug("Migrating up")
+	return migrateDB(d.db, config.DBTypeSQLite, migrate.Up, 0)
 }
 
 // MigrateDown migrates only ONE migration down
-func (db *SqliteDB) MigrateDown() (int, error) {
-	db.logger.Debug("Migrating down")
-	return migrateDB(db.db, config.DBTypeSQLite, migrate.Down, 1)
+func (d *sqliteStore) MigrateDown() (int, error) {
+	d.logger.Debug("Migrating down")
+	return migrateDB(d.db, config.DBTypeSQLite, migrate.Down, 1)
 }
 
-func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
-	return migrationStatus(db.db, config.DBTypeSQLite)
+func (d *sqliteStore) MigrationStatus() ([]MigrationStatus, error) {
+	return migrationStatus(d.db, config.DBTypeSQLite)
+}
+
+func (d *sqliteStore) withTx(ctx context.Context, fn func(repo Repository) error) error {
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Wrap(err, "begin transaction")
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	repo := newRepositoryStore(sqliteRepository{queries: reposqlite.New(tx)}, d.logger)
+	if err = fn(repo); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return errors.Wrap(err, "commit transaction")
+	}
+
+	committed = true
+	return nil
 }
 
 func sqliteURL(path string, connectionOpts map[string]string) (string, error) {

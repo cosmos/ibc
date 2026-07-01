@@ -16,8 +16,7 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-// PostgresDB is a wrapper around the postgres database.
-type PostgresDB struct {
+type postgresStore struct {
 	// connection pool
 	pool *pgxpool.Pool
 
@@ -29,12 +28,15 @@ type PostgresDB struct {
 	logger *slog.Logger
 }
 
-var _ Store = (*PostgresDB)(nil)
+var (
+	_ Store            = (*postgresStore)(nil)
+	_ transactionStore = (*postgresStore)(nil)
+)
 
-// NewPostgres creates a new PostgresDB instance with pgx connection pool.
+// NewPostgres creates a new Store instance with pgx connection pool.
 // Context must be long-lived. URL example:
 // "postgres://username:password@localhost:5432/database_name"
-func NewPostgres(ctx context.Context, url string) (*PostgresDB, error) {
+func NewPostgres(ctx context.Context, url string) (Store, error) {
 	poolConfig, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse config")
@@ -43,9 +45,9 @@ func NewPostgres(ctx context.Context, url string) (*PostgresDB, error) {
 	return NewPostgresWithConfig(ctx, poolConfig, true)
 }
 
-// NewPostgresWithConfig creates a new PostgresDB instance based on pgxpool.Config
+// NewPostgresWithConfig creates a new Store instance based on pgxpool.Config
 // Allows to modify the config before creation.
-func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping bool) (*PostgresDB, error) {
+func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping bool) (Store, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, errors.Wrap(err, "create pool")
@@ -54,7 +56,7 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 	logger := slog.With("module", "database")
 	repo := postgresRepository{queries: repopostgres.New(pool)}
 
-	db := &PostgresDB{
+	db := &postgresStore{
 		pool:            pool,
 		sqlWrapper:      stdlib.OpenDBFromPool(pool),
 		repositoryStore: newRepositoryStore(repo, logger),
@@ -70,44 +72,70 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 	return db, nil
 }
 
-func (db *PostgresDB) Close() error {
-	if err := db.sqlWrapper.Close(); err != nil {
+func (d *postgresStore) Close() error {
+	if err := d.sqlWrapper.Close(); err != nil {
 		return errors.Wrap(err, "close sql wrapper")
 	}
 
-	db.pool.Close()
+	d.pool.Close()
 
 	return nil
 }
 
-func (db *PostgresDB) Ping(ctx context.Context) error {
+func (d *postgresStore) Ping(ctx context.Context) error {
 	ctxPing, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	start := time.Now()
 
-	if err := db.pool.Ping(ctxPing); err != nil {
-		db.logger.Error("Unable to ping database", "err", err, "elapsed", time.Since(start).String())
+	if err := d.pool.Ping(ctxPing); err != nil {
+		d.logger.Error("Unable to ping database", "err", err, "elapsed", time.Since(start).String())
 		return errors.Wrap(err, "unable to ping database")
 	}
 
-	db.logger.Info("Ping", "elapsed", time.Since(start).String())
+	d.logger.Info("Ping", "elapsed", time.Since(start).String())
 
 	return nil
 }
 
 // MigrateUp migrates ALL available migrations
-func (db *PostgresDB) MigrateUp() (int, error) {
-	db.logger.Debug("Migrating up")
-	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Up, 0)
+func (d *postgresStore) MigrateUp() (int, error) {
+	d.logger.Debug("Migrating up")
+	return migrateDB(d.sqlWrapper, config.DBTypePostgres, migrate.Up, 0)
 }
 
 // MigrateDown migrates only ONE migration down
-func (db *PostgresDB) MigrateDown() (int, error) {
-	db.logger.Debug("Migrating down")
-	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
+func (d *postgresStore) MigrateDown() (int, error) {
+	d.logger.Debug("Migrating down")
+	return migrateDB(d.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
 }
 
-func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
-	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
+func (d *postgresStore) MigrationStatus() ([]MigrationStatus, error) {
+	return migrationStatus(d.sqlWrapper, config.DBTypePostgres)
+}
+
+func (d *postgresStore) withTx(ctx context.Context, fn func(repo Repository) error) error {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return errors.Wrap(err, "begin transaction")
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	repo := newRepositoryStore(postgresRepository{queries: repopostgres.New(tx)}, d.logger)
+	if err = fn(repo); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return errors.Wrap(err, "commit transaction")
+	}
+
+	committed = true
+	return nil
 }

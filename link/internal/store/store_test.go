@@ -2,9 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
+	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,6 +34,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testTransactions(t, db)
 
 		// Close DB for a subsequent test
 		require.NoError(t, db.Close())
@@ -70,6 +73,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testTransactions(t, db)
 	})
 
 	t.Run("postgres", func(t *testing.T) {
@@ -95,7 +99,20 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testTransactions(t, db)
 	})
+}
+
+func TestNewStoreCreatesUsableStore(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.DB.URL = filepath.Join(t.TempDir(), "ibc.db")
+
+	db, err := NewStore(context.Background(), cfg)
+	require.NoError(t, err)
+
+	testMigrationIdempotency(t, db)
+
+	require.NoError(t, db.Close())
 }
 
 func testMigrationIdempotency(t *testing.T, m Migrator) {
@@ -158,4 +175,42 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	// Upsert the submission (noop)
 	err = s.UpsertRelaySubmission(ctx, chainIDEth, txHashEth)
 	require.NoError(t, err)
+}
+
+func testTransactions(t *testing.T, s Store) {
+	t.Helper()
+
+	ctx := context.Background()
+	txStore, ok := s.(transactionStore)
+	require.True(t, ok)
+
+	t.Run("transactionCommit", func(t *testing.T) {
+		err := txStore.withTx(ctx, func(repo Repository) error {
+			return repo.UpsertRelaySubmission(ctx, "tx-commit", "0xCOMMIT")
+		})
+		require.NoError(t, err)
+
+		committed, err := s.GetRelaySubmission(ctx, "tx-commit", "0xCOMMIT")
+		require.NoError(t, err)
+		assert.Equal(t, "tx-commit", committed.ChainID)
+		assert.Equal(t, "0xCOMMIT", committed.TxHash)
+	})
+
+	t.Run("transactionRollback", func(t *testing.T) {
+		rollbackErr := errors.New("force rollback")
+		err := txStore.withTx(ctx, func(repo Repository) error {
+			err := repo.UpsertRelaySubmission(ctx, "tx-rollback", "0xROLLBACK")
+			require.NoError(t, err)
+
+			rolledBack, err := repo.GetRelaySubmission(ctx, "tx-rollback", "0xROLLBACK")
+			require.NoError(t, err)
+			assert.Equal(t, "tx-rollback", rolledBack.ChainID)
+
+			return rollbackErr
+		})
+		require.ErrorIs(t, err, rollbackErr)
+
+		_, err = s.GetRelaySubmission(ctx, "tx-rollback", "0xROLLBACK")
+		require.ErrorIs(t, err, ErrNotFound)
+	})
 }
