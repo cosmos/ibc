@@ -18,42 +18,37 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-// SqliteInMemory tells sqlite to use a fully in-memory database
-// Useful for testing and development.
-const SqliteInMemory = ":memory:"
+const sqliteInMemory = ":memory:"
 
-// SqliteDB is a wrapper around the sqlite database.
-type SqliteDB struct {
-	db     *sql.DB
-	repo   *reposqlite.Queries
+type sqliteStore struct {
+	db *sql.DB
+
+	*repositoryStore
+
 	logger *slog.Logger
 }
 
-var _ Store = (*SqliteDB)(nil)
+var _ Database = (*sqliteStore)(nil)
 
-func DefaultSqliteConnOptions() map[string]string {
+func defaultSQLiteConnOptions() map[string]string {
 	return map[string]string{
-		"journal_mode": "WAL", // Write-Ahead Logging mode
-		"mode":         "rwc", // read, write, create file
+		"_pragma": "journal_mode(WAL)", // Write-Ahead Logging mode
+		"mode":    "rwc",               // read, write, create file
 	}
 }
 
-func NewSqlite(path string) (*SqliteDB, error) {
-	return NewSqliteWithOptions(path, DefaultSqliteConnOptions())
+func newSQLite(path string) (*sqliteStore, error) {
+	return newSQLiteWithOptions(path, defaultSQLiteConnOptions())
 }
 
-func NewSqliteInMemory() (*SqliteDB, error) {
-	return NewSqliteWithOptions(SqliteInMemory, nil)
-}
-
-func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*SqliteDB, error) {
+func newSQLiteWithOptions(path string, connectionOpts map[string]string) (*sqliteStore, error) {
 	if path == "" {
 		return nil, errors.New("path is required")
 	}
 
 	logger := slog.With("module", "database")
 
-	if path == SqliteInMemory {
+	if path == sqliteInMemory {
 		db, err := sql.Open("sqlite", path)
 		if err != nil {
 			return nil, errors.Wrapf(err, "open sqlite in memory")
@@ -62,11 +57,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		// shared memory database is a single connection
 		db.SetMaxOpenConns(1)
 
-		return &SqliteDB{
-			db:     db,
-			repo:   reposqlite.New(db),
-			logger: logger,
-		}, nil
+		return newSqliteStore(db, logger), nil
 	}
 
 	absPath, err := filepath.Abs(path)
@@ -91,75 +82,70 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return nil, errors.Wrapf(err, "open sqlite database %s", connectionString)
 	}
 
-	return &SqliteDB{
-		db:     db,
-		repo:   reposqlite.New(db),
-		logger: logger,
-	}, nil
+	return newSqliteStore(db, logger), nil
 }
 
-func (db *SqliteDB) Close() error {
-	return db.db.Close()
+func newSqliteStore(db *sql.DB, logger *slog.Logger) *sqliteStore {
+	repo := sqliteRepository{queries: reposqlite.New(db)}
+
+	return &sqliteStore{
+		db:              db,
+		repositoryStore: newRepositoryStore(repo, logger),
+		logger:          logger,
+	}
 }
 
-func (db *SqliteDB) Ping(ctx context.Context) error {
-	return db.db.PingContext(ctx)
+func (d *sqliteStore) Close() error {
+	return d.db.Close()
+}
+
+func (d *sqliteStore) Ping(ctx context.Context) error {
+	return d.db.PingContext(ctx)
 }
 
 // MigrateUp migrates ALL available migrations
-func (db *SqliteDB) MigrateUp() (int, error) {
-	db.logger.Debug("Migrating up")
-	return migrateDB(db.db, config.DBTypeSQLite, migrate.Up, 0)
+func (d *sqliteStore) MigrateUp(ctx context.Context) (int, error) {
+	d.logger.Debug("Migrating up")
+	return migrateDB(ctx, d.db, config.DBTypeSQLite, migrate.Up, 0)
 }
 
 // MigrateDown migrates only ONE migration down
-func (db *SqliteDB) MigrateDown() (int, error) {
-	db.logger.Debug("Migrating down")
-	return migrateDB(db.db, config.DBTypeSQLite, migrate.Down, 1)
+func (d *sqliteStore) MigrateDown(ctx context.Context) (int, error) {
+	d.logger.Debug("Migrating down")
+	return migrateDB(ctx, d.db, config.DBTypeSQLite, migrate.Down, 1)
 }
 
-func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
-	return migrationStatus(db.db, config.DBTypeSQLite)
+func (d *sqliteStore) MigrationStatus(ctx context.Context) ([]MigrationStatus, error) {
+	return migrationStatus(ctx, d.db, config.DBTypeSQLite)
 }
 
-func (db *SqliteDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
-	db.logger.Debug("GetRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return nil, errors.New("chainID and txHash are required")
-	}
-
-	entry, err := db.repo.GetRelaySubmission(ctx, chainID, txHash)
+func (d *sqliteStore) WithTx(ctx context.Context, fn func(repo Repository) error) error {
+	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, errNormalize(err)
+		return errors.Wrap(err, "begin transaction")
 	}
 
-	return &RelaySubmission{
-		ID:        entry.ID,
-		ChainID:   entry.SourceChainID,
-		TxHash:    entry.SourceTxHash,
-		CreatedAt: entry.CreatedAt.UTC(),
-	}, nil
-}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
-func (db *SqliteDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("UpsertRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return errors.New("chainID and txHash are required")
+	repo := newRepositoryStore(sqliteRepository{queries: reposqlite.New(tx)}, d.logger)
+	if err = fn(repo); err != nil {
+		return err
 	}
 
-	return db.repo.UpsertRelaySubmission(ctx, chainID, txHash)
+	if err = tx.Commit(); err != nil {
+		return errors.Wrap(err, "commit transaction")
+	}
+
+	committed = true
+	return nil
 }
 
 func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", errors.Wrapf(err, "absolute path for %s", path)
-	}
-
-	path = absPath
-
 	u := url.URL{
 		Scheme: "file",
 		Path:   path,

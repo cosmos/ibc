@@ -22,3 +22,6 @@ sql:
         sql_package: "pgx/v5"
         query_parameter_limit: 2
         emit_pointers_for_null_types: true
+        overrides:
+          - db_type: "pg_catalog.timestamptz"
+            go_type: "time.Time"

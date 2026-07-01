@@ -1,5 +1,6 @@
 -- name: GetRelaySubmission :one
-SELECT * FROM relay_submissions
+SELECT id, source_chain_id, source_tx_hash, created_at
+FROM relay_submissions
 WHERE source_chain_id = sqlc.arg(chain_id)
 AND source_tx_hash = sqlc.arg(tx_hash);
 

@@ -8,63 +8,56 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/store/repository/postgres"
 
+	repopostgres "github.com/cosmos/ibc/link/internal/store/repository/postgres"
+	pkgerrors "github.com/pkg/errors"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
-// PostgresDB is a wrapper around the postgres database.
-type PostgresDB struct {
+type postgresStore struct {
 	// connection pool
 	pool *pgxpool.Pool
 
 	// *sql.DB wrapper for migrations
 	sqlWrapper *sql.DB
 
-	// sqlc repository
-	repo *postgres.Queries
+	*repositoryStore
 
 	logger *slog.Logger
 }
 
-var _ Store = (*PostgresDB)(nil)
+var _ Database = (*postgresStore)(nil)
 
-// NewPostgres creates a new PostgresDB instance with pgx connection pool.
-// Context must be long-lived. URL example:
-// "postgres://username:password@localhost:5432/database_name"
-func NewPostgres(ctx context.Context, url string) (*PostgresDB, error) {
+func newPostgres(ctx context.Context, url string) (*postgresStore, error) {
 	poolConfig, err := pgxpool.ParseConfig(url)
 	if err != nil {
-		return nil, errors.Wrap(err, "parse config")
+		return nil, pkgerrors.Wrap(err, "parse config")
 	}
 
-	return NewPostgresWithConfig(ctx, poolConfig, true)
+	return newPostgresWithConfig(ctx, poolConfig, true)
 }
 
-// NewPostgresWithConfig creates a new PostgresDB instance based on pgxpool.Config
-// Allows to modify the config before creation.
-func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping bool) (*PostgresDB, error) {
+func newPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping bool) (*postgresStore, error) {
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
-		return nil, errors.Wrap(err, "create pool")
+		return nil, pkgerrors.Wrap(err, "create pool")
 	}
 
-	db := &PostgresDB{
-		pool:       pool,
-		sqlWrapper: stdlib.OpenDBFromPool(pool),
-		repo:       postgres.New(pool),
-		logger:     slog.With("module", "database"),
+	logger := slog.With("module", "database")
+	repo := postgresRepository{queries: repopostgres.New(pool)}
+
+	db := &postgresStore{
+		pool:            pool,
+		sqlWrapper:      stdlib.OpenDBFromPool(pool),
+		repositoryStore: newRepositoryStore(repo, logger),
+		logger:          logger,
 	}
 
 	if ping {
 		if err := db.Ping(ctx); err != nil {
-			if errClose := db.Close(); errClose != nil {
-				db.logger.Error("Failed to close database", "err", errClose)
-			}
-
+			_ = db.Close()
 			return nil, err
 		}
 	}
@@ -72,74 +65,69 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 	return db, nil
 }
 
-func (db *PostgresDB) Close() error {
-	if err := db.sqlWrapper.Close(); err != nil {
-		return errors.Wrap(err, "close sql wrapper")
-	}
+func (d *postgresStore) Close() error {
+	err := d.sqlWrapper.Close()
+	d.pool.Close()
 
-	db.pool.Close()
-
-	return nil
+	return pkgerrors.Wrap(err, "close sql wrapper")
 }
 
-func (db *PostgresDB) Ping(ctx context.Context) error {
+func (d *postgresStore) Ping(ctx context.Context) error {
 	ctxPing, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	start := time.Now()
 
-	if err := db.pool.Ping(ctxPing); err != nil {
-		db.logger.Error("Unable to ping database", "err", err, "elapsed", time.Since(start).String())
-		return errors.Wrap(err, "unable to ping database")
+	if err := d.pool.Ping(ctxPing); err != nil {
+		d.logger.Error("Unable to ping database", "err", err, "elapsed", time.Since(start).String())
+		return pkgerrors.Wrap(err, "unable to ping database")
 	}
 
-	db.logger.Info("Ping", "elapsed", time.Since(start).String())
+	d.logger.Info("Ping", "elapsed", time.Since(start).String())
 
 	return nil
 }
 
 // MigrateUp migrates ALL available migrations
-func (db *PostgresDB) MigrateUp() (int, error) {
-	db.logger.Debug("Migrating up")
-	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Up, 0)
+func (d *postgresStore) MigrateUp(ctx context.Context) (int, error) {
+	d.logger.Debug("Migrating up")
+	return migrateDB(ctx, d.sqlWrapper, config.DBTypePostgres, migrate.Up, 0)
 }
 
 // MigrateDown migrates only ONE migration down
-func (db *PostgresDB) MigrateDown() (int, error) {
-	db.logger.Debug("Migrating down")
-	return migrateDB(db.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
+func (d *postgresStore) MigrateDown(ctx context.Context) (int, error) {
+	d.logger.Debug("Migrating down")
+	return migrateDB(ctx, d.sqlWrapper, config.DBTypePostgres, migrate.Down, 1)
 }
 
-func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
-	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
+func (d *postgresStore) MigrationStatus(ctx context.Context) ([]MigrationStatus, error) {
+	return migrationStatus(ctx, d.sqlWrapper, config.DBTypePostgres)
 }
 
-func (db *PostgresDB) GetRelaySubmission(ctx context.Context, chainID string, txHash string) (*RelaySubmission, error) {
-	db.logger.Debug("GetRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return nil, errors.New("chainID and txHash are required")
-	}
-
-	entry, err := db.repo.GetRelaySubmission(ctx, chainID, txHash)
+func (d *postgresStore) WithTx(ctx context.Context, fn func(repo Repository) error) error {
+	tx, err := d.pool.Begin(ctx)
 	if err != nil {
-		return nil, errNormalize(err)
+		return pkgerrors.Wrap(err, "begin transaction")
 	}
 
-	return &RelaySubmission{
-		ID:        entry.ID,
-		ChainID:   entry.SourceChainID,
-		TxHash:    entry.SourceTxHash,
-		CreatedAt: entry.CreatedAt.Time.UTC(),
-	}, nil
-}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = tx.Rollback(rollbackCtx)
+		}
+	}()
 
-func (db *PostgresDB) UpsertRelaySubmission(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("UpsertRelaySubmission", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return errors.New("chainID and txHash are required")
+	repo := newRepositoryStore(postgresRepository{queries: repopostgres.New(tx)}, d.logger)
+	if err = fn(repo); err != nil {
+		return err
 	}
 
-	return db.repo.UpsertRelaySubmission(ctx, chainID, txHash)
+	if err = tx.Commit(ctx); err != nil {
+		return pkgerrors.Wrap(err, "commit transaction")
+	}
+
+	committed = true
+	return nil
 }

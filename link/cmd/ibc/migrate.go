@@ -34,15 +34,15 @@ var (
 	}
 )
 
-func migrateUp(_ *cobra.Command, _ []string) error {
-	cfg, db, err := resolveConfigWithStore()
+func migrateUp(cmd *cobra.Command, _ []string) error {
+	cfg, db, err := resolveConfigWithStore(cmd.Context())
 	if err != nil {
 		return err
 	}
 
 	defer db.Close() //nolint:errcheck
 
-	applied, err := db.MigrateUp()
+	applied, err := db.MigrateUp(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -53,14 +53,14 @@ func migrateUp(_ *cobra.Command, _ []string) error {
 	})
 }
 
-func migrateDown(_ *cobra.Command, _ []string) error {
-	cfg, db, err := resolveConfigWithStore()
+func migrateDown(cmd *cobra.Command, _ []string) error {
+	cfg, db, err := resolveConfigWithStore(cmd.Context())
 	if err != nil {
 		return err
 	}
 	defer db.Close() //nolint:errcheck
 
-	rolledBack, err := db.MigrateDown()
+	rolledBack, err := db.MigrateDown(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -71,14 +71,14 @@ func migrateDown(_ *cobra.Command, _ []string) error {
 	})
 }
 
-func migrateStatus(_ *cobra.Command, _ []string) error {
-	cfg, db, err := resolveConfigWithStore()
+func migrateStatus(cmd *cobra.Command, _ []string) error {
+	cfg, db, err := resolveConfigWithStore(cmd.Context())
 	if err != nil {
 		return err
 	}
 	defer db.Close() //nolint:errcheck
 
-	statuses, err := db.MigrationStatus()
+	statuses, err := db.MigrationStatus(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -90,13 +90,13 @@ func migrateStatus(_ *cobra.Command, _ []string) error {
 }
 
 // util to quickly resolve config + store. Use ONLY for migrations.
-func resolveConfigWithStore() (config.Config, store.Store, error) {
+func resolveConfigWithStore(ctx context.Context) (config.Config, store.Database, error) {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return config.Config{}, nil, err
 	}
 
-	db, err := store.NewStore(context.Background(), cfg)
+	db, err := store.NewDatabase(ctx, cfg)
 	if err != nil {
 		return config.Config{}, nil, err
 	}

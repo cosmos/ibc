@@ -118,20 +118,20 @@ actually used in the private store implementation.
 
 Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../client/ics-007-tendermint-client) and may vary for other client types.
 
-| Store          | Path format                                                                    | Value type        | Defined in |
-| -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| provableStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
-| privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
-| privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
-| provableStore  | "channelEnds/ports/{identifier}/channels/{identifier}"                         | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                     | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Store         | Path format                                                                 | Value type     | Defined in                                       |
+| ------------- | --------------------------------------------------------------------------- | -------------- | ------------------------------------------------ |
+| provableStore | "clients/{identifier}/clientState"                                          | ClientState    | [ICS 2](../ics-002-client-semantics)             |
+| provableStore | "clients/{identifier}/consensusStates/{height}"                             | ConsensusState | [ICS 7](../../client/ics-007-tendermint-client)  |
+| privateStore  | "clients/{identifier}/connections"                                          | []Identifier   | [ICS 3](../ics-003-connection-semantics)         |
+| provableStore | "connections/{identifier}"                                                  | ConnectionEnd  | [ICS 3](../ics-003-connection-semantics)         |
+| privateStore  | "ports/{identifier}"                                                        | CapabilityKey  | [ICS 5](../ics-005-port-allocation)              |
+| provableStore | "channelEnds/ports/{identifier}/channels/{identifier}"                      | ChannelEnd     | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                 | uint64         | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                 | uint64         | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                  | uint64         | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}" | bytes          | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes          | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"        | bytes          | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Module layout
 

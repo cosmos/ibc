@@ -45,6 +45,7 @@ WHERE lower(name) = ?;
 After ensuring that the new migration is in place and the sqlc models and queries have been generated:
 
 - Add public persistence methods to `Repository` interface in `store.go`. Use idiomatic Go
-- Implement every method in both `store_sqlite.go` and `store_postgres.go`.
+- Implement shared store behavior and sqlc-to-domain adapters in `store_repository.go`.
+- Keep `store_sqlite.go` and `store_postgres.go` focused on connection setup, migrations, and close behavior.
 - Return domain structs from `store.go`, not generated sqlc row types.
 - Implement basic input validation. if method arg is a struct, implement `.Validate() error` for it
