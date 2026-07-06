@@ -113,13 +113,13 @@ var File_relayer_proto protoreflect.FileDescriptor
 
 const file_relayer_proto_rawDesc = "" +
 	"\n" +
-	"\rrelayer.proto\x12\vibc.relayer\"B\n" +
+	"\rrelayer.proto\x12\x0eibc.v2.relayer\"B\n" +
 	"\fRelayRequest\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
 	"\bchain_id\x18\x02 \x01(\tR\achainId\"\x0f\n" +
-	"\rRelayResponse2U\n" +
-	"\x11RelayerApiService\x12@\n" +
-	"\x05Relay\x12\x19.ibc.relayer.RelayRequest\x1a\x1a.ibc.relayer.RelayResponse\"\x00B3Z1github.com/cosmos/ibc/link/internal/types/relayerb\x06proto3"
+	"\rRelayResponse2[\n" +
+	"\x11RelayerApiService\x12F\n" +
+	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00B6Z4github.com/cosmos/ibc/link/internal/types/v2/relayerb\x06proto3"
 
 var (
 	file_relayer_proto_rawDescOnce sync.Once
@@ -135,12 +135,12 @@ func file_relayer_proto_rawDescGZIP() []byte {
 
 var file_relayer_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_relayer_proto_goTypes = []any{
-	(*RelayRequest)(nil),  // 0: ibc.relayer.RelayRequest
-	(*RelayResponse)(nil), // 1: ibc.relayer.RelayResponse
+	(*RelayRequest)(nil),  // 0: ibc.v2.relayer.RelayRequest
+	(*RelayResponse)(nil), // 1: ibc.v2.relayer.RelayResponse
 }
 var file_relayer_proto_depIdxs = []int32{
-	0, // 0: ibc.relayer.RelayerApiService.Relay:input_type -> ibc.relayer.RelayRequest
-	1, // 1: ibc.relayer.RelayerApiService.Relay:output_type -> ibc.relayer.RelayResponse
+	0, // 0: ibc.v2.relayer.RelayerApiService.Relay:input_type -> ibc.v2.relayer.RelayRequest
+	1, // 1: ibc.v2.relayer.RelayerApiService.Relay:output_type -> ibc.v2.relayer.RelayResponse
 	1, // [1:2] is the sub-list for method output_type
 	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

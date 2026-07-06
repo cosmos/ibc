@@ -1,0 +1,38 @@
+package attestor
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+)
+
+type Service struct {
+	attestors map[string]Attestor
+	logger    *slog.Logger
+}
+
+type Attestor interface {
+	LatestAttestableHeight(ctx context.Context) (uint64, error)
+}
+
+var ErrNotFound = errors.New("attestor not found")
+
+func New() *Service {
+	return &Service{
+		logger: slog.With("service", "attestors"),
+	}
+}
+
+// Add adds an attestor to the service. Not thread-safe.
+func (s *Service) Add(id string, attestor Attestor) {
+	s.attestors[id] = attestor
+}
+
+func (s *Service) LatestAttestableHeight(ctx context.Context, id string) (uint64, error) {
+	attestor, ok := s.attestors[id]
+	if !ok {
+		return 0, ErrNotFound
+	}
+
+	return attestor.LatestAttestableHeight(ctx)
+}

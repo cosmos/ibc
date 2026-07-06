@@ -113,13 +113,13 @@ var File_attestor_proto protoreflect.FileDescriptor
 
 const file_attestor_proto_rawDesc = "" +
 	"\n" +
-	"\x0eattestor.proto\x12\fibc.attestor\";\n" +
+	"\x0eattestor.proto\x12\x0fibc.v2.attestor\";\n" +
 	"\x1dLatestAttestableHeightRequest\x12\x1a\n" +
 	"\battestor\x18\x01 \x01(\tR\battestor\"8\n" +
 	"\x1eLatestAttestableHeightResponse\x12\x16\n" +
-	"\x06height\x18\x01 \x01(\x04R\x06height2\x89\x01\n" +
-	"\x12AttestationService\x12s\n" +
-	"\x16LatestAttestableHeight\x12+.ibc.attestor.LatestAttestableHeightRequest\x1a,.ibc.attestor.LatestAttestableHeightResponseB4Z2github.com/cosmos/ibc/link/internal/types/attestorb\x06proto3"
+	"\x06height\x18\x01 \x01(\x04R\x06height2\x8f\x01\n" +
+	"\x12AttestationService\x12y\n" +
+	"\x16LatestAttestableHeight\x12..ibc.v2.attestor.LatestAttestableHeightRequest\x1a/.ibc.v2.attestor.LatestAttestableHeightResponseB7Z5github.com/cosmos/ibc/link/internal/types/v2/attestorb\x06proto3"
 
 var (
 	file_attestor_proto_rawDescOnce sync.Once
@@ -135,12 +135,12 @@ func file_attestor_proto_rawDescGZIP() []byte {
 
 var file_attestor_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_attestor_proto_goTypes = []any{
-	(*LatestAttestableHeightRequest)(nil),  // 0: ibc.attestor.LatestAttestableHeightRequest
-	(*LatestAttestableHeightResponse)(nil), // 1: ibc.attestor.LatestAttestableHeightResponse
+	(*LatestAttestableHeightRequest)(nil),  // 0: ibc.v2.attestor.LatestAttestableHeightRequest
+	(*LatestAttestableHeightResponse)(nil), // 1: ibc.v2.attestor.LatestAttestableHeightResponse
 }
 var file_attestor_proto_depIdxs = []int32{
-	0, // 0: ibc.attestor.AttestationService.LatestAttestableHeight:input_type -> ibc.attestor.LatestAttestableHeightRequest
-	1, // 1: ibc.attestor.AttestationService.LatestAttestableHeight:output_type -> ibc.attestor.LatestAttestableHeightResponse
+	0, // 0: ibc.v2.attestor.AttestationService.LatestAttestableHeight:input_type -> ibc.v2.attestor.LatestAttestableHeightRequest
+	1, // 1: ibc.v2.attestor.AttestationService.LatestAttestableHeight:output_type -> ibc.v2.attestor.LatestAttestableHeightResponse
 	1, // [1:2] is the sub-list for method output_type
 	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

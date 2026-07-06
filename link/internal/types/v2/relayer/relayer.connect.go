@@ -21,7 +21,7 @@ const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// RelayerApiServiceName is the fully-qualified name of the RelayerApiService service.
-	RelayerApiServiceName = "ibc.relayer.RelayerApiService"
+	RelayerApiServiceName = "ibc.v2.relayer.RelayerApiService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -33,19 +33,19 @@ const (
 // period.
 const (
 	// RelayerApiServiceRelayProcedure is the fully-qualified name of the RelayerApiService's Relay RPC.
-	RelayerApiServiceRelayProcedure = "/ibc.relayer.RelayerApiService/Relay"
+	RelayerApiServiceRelayProcedure = "/ibc.v2.relayer.RelayerApiService/Relay"
 )
 
-// RelayerApiServiceClient is a client for the ibc.relayer.RelayerApiService service.
+// RelayerApiServiceClient is a client for the ibc.v2.relayer.RelayerApiService service.
 type RelayerApiServiceClient interface {
 	// Relay will track the status of a transfer, and submit the transactions
 	// required to complete the transfer via the bridging protocol.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
 }
 
-// NewRelayerApiServiceClient constructs a client for the ibc.relayer.RelayerApiService service. By
-// default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses,
-// and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
+// NewRelayerApiServiceClient constructs a client for the ibc.v2.relayer.RelayerApiService service.
+// By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
+// responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
 // connect.WithGRPC() or connect.WithGRPCWeb() options.
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
@@ -68,12 +68,12 @@ type relayerApiServiceClient struct {
 	relay *connect.Client[RelayRequest, RelayResponse]
 }
 
-// Relay calls ibc.relayer.RelayerApiService.Relay.
+// Relay calls ibc.v2.relayer.RelayerApiService.Relay.
 func (c *relayerApiServiceClient) Relay(ctx context.Context, req *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error) {
 	return c.relay.CallUnary(ctx, req)
 }
 
-// RelayerApiServiceHandler is an implementation of the ibc.relayer.RelayerApiService service.
+// RelayerApiServiceHandler is an implementation of the ibc.v2.relayer.RelayerApiService service.
 type RelayerApiServiceHandler interface {
 	// Relay will track the status of a transfer, and submit the transactions
 	// required to complete the transfer via the bridging protocol.
@@ -93,7 +93,7 @@ func NewRelayerApiServiceHandler(svc RelayerApiServiceHandler, opts ...connect.H
 		connect.WithSchema(relayerApiServiceMethods.ByName("Relay")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/ibc.relayer.RelayerApiService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/ibc.v2.relayer.RelayerApiService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RelayerApiServiceRelayProcedure:
 			relayerApiServiceRelayHandler.ServeHTTP(w, r)
@@ -107,5 +107,5 @@ func NewRelayerApiServiceHandler(svc RelayerApiServiceHandler, opts ...connect.H
 type UnimplementedRelayerApiServiceHandler struct{}
 
 func (UnimplementedRelayerApiServiceHandler) Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.relayer.RelayerApiService.Relay is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.relayer.RelayerApiService.Relay is not implemented"))
 }

@@ -1,8 +1,7 @@
 package main
 
 import (
-	"fmt"
-
+	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +24,17 @@ func attestorRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Printf("Running attestor on addr %q...\n", cfg.GRPC.ListenAddress)
+	app, err := bootstrap.BuildAttestor(cfg)
+	if err != nil {
+		return err
+	}
+
+	if err := app.Server.Start(); err != nil {
+		app.Logger.Error("Failed to start attestor server", "error", err)
+		return err
+	}
+
+	// todo graceful shutdown
 
 	return nil
 }

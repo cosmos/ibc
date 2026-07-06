@@ -21,7 +21,7 @@ const _ = connect.IsAtLeastVersion1_13_0
 
 const (
 	// AttestationServiceName is the fully-qualified name of the AttestationService service.
-	AttestationServiceName = "ibc.attestor.AttestationService"
+	AttestationServiceName = "ibc.v2.attestor.AttestationService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -34,19 +34,19 @@ const (
 const (
 	// AttestationServiceLatestAttestableHeightProcedure is the fully-qualified name of the
 	// AttestationService's LatestAttestableHeight RPC.
-	AttestationServiceLatestAttestableHeightProcedure = "/ibc.attestor.AttestationService/LatestAttestableHeight"
+	AttestationServiceLatestAttestableHeightProcedure = "/ibc.v2.attestor.AttestationService/LatestAttestableHeight"
 )
 
-// AttestationServiceClient is a client for the ibc.attestor.AttestationService service.
+// AttestationServiceClient is a client for the ibc.v2.attestor.AttestationService service.
 type AttestationServiceClient interface {
 	// Returns the latest height the attestor will generate attestations for.
 	LatestAttestableHeight(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error)
 }
 
-// NewAttestationServiceClient constructs a client for the ibc.attestor.AttestationService service.
-// By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
-// responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
-// connect.WithGRPC() or connect.WithGRPCWeb() options.
+// NewAttestationServiceClient constructs a client for the ibc.v2.attestor.AttestationService
+// service. By default, it uses the Connect protocol with the binary Protobuf Codec, asks for
+// gzipped responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply
+// the connect.WithGRPC() or connect.WithGRPCWeb() options.
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
@@ -68,12 +68,12 @@ type attestationServiceClient struct {
 	latestAttestableHeight *connect.Client[LatestAttestableHeightRequest, LatestAttestableHeightResponse]
 }
 
-// LatestAttestableHeight calls ibc.attestor.AttestationService.LatestAttestableHeight.
+// LatestAttestableHeight calls ibc.v2.attestor.AttestationService.LatestAttestableHeight.
 func (c *attestationServiceClient) LatestAttestableHeight(ctx context.Context, req *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error) {
 	return c.latestAttestableHeight.CallUnary(ctx, req)
 }
 
-// AttestationServiceHandler is an implementation of the ibc.attestor.AttestationService service.
+// AttestationServiceHandler is an implementation of the ibc.v2.attestor.AttestationService service.
 type AttestationServiceHandler interface {
 	// Returns the latest height the attestor will generate attestations for.
 	LatestAttestableHeight(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error)
@@ -92,7 +92,7 @@ func NewAttestationServiceHandler(svc AttestationServiceHandler, opts ...connect
 		connect.WithSchema(attestationServiceMethods.ByName("LatestAttestableHeight")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/ibc.attestor.AttestationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/ibc.v2.attestor.AttestationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AttestationServiceLatestAttestableHeightProcedure:
 			attestationServiceLatestAttestableHeightHandler.ServeHTTP(w, r)
@@ -106,5 +106,5 @@ func NewAttestationServiceHandler(svc AttestationServiceHandler, opts ...connect
 type UnimplementedAttestationServiceHandler struct{}
 
 func (UnimplementedAttestationServiceHandler) LatestAttestableHeight(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.attestor.AttestationService.LatestAttestableHeight is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.attestor.AttestationService.LatestAttestableHeight is not implemented"))
 }

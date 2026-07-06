@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package ibc.attestor;
+package ibc.v2.attestor;
 
-// todo: move to `github.com/cosmos/ibc/types/attestor`
-option go_package = "github.com/cosmos/ibc/link/internal/types/attestor";
+// todo: move to `github.com/cosmos/ibc/types/v2/attestor`
+option go_package = "github.com/cosmos/ibc/link/internal/types/v2/attestor";
 
 // Service definition for retrieving attestations.
 service AttestationService {
