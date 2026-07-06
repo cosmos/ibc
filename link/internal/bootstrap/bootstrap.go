@@ -24,8 +24,12 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	relayerHandler := server.NewRelayerHandler(relayerService)
 
 	// Server
-	srv := server.New(cfg.GRPC.ListenAddress)
+	srv := server.New(cfg.GRPC.ListenAddress, true)
 	srv.Register(relayerHandler)
+
+	// FUTURE: if config has .attestor.attestations has length > 0,
+	// then also provision attestor GRPC!
+	// A single grpc port would contain two services: relayer and attestor.
 
 	return &Services{
 		Server: srv,
@@ -42,7 +46,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	attestorHandler := server.NewAttestorHandler(attestorService)
 
 	// Server
-	srv := server.New(cfg.GRPC.ListenAddress)
+	srv := server.New(cfg.GRPC.ListenAddress, true)
 	srv.Register(attestorHandler)
 
 	// todo provision attestors (local/remote)

@@ -15,8 +15,12 @@ type Attestor interface {
 	LatestAttestableHeight(ctx context.Context) (uint64, error)
 }
 
-var ErrNotFound = errors.New("attestor not found")
+// Attestor errors
+var (
+	ErrNotFound = errors.New("attestor not found")
+)
 
+// New Service constructor.
 func New() *Service {
 	return &Service{
 		logger: slog.With("service", "attestors"),

@@ -3,9 +3,10 @@ package main
 import (
 	"log/slog"
 
+	"github.com/spf13/cobra"
+
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
-	"github.com/spf13/cobra"
 )
 
 var (

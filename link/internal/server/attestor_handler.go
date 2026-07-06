@@ -13,18 +13,20 @@ import (
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
 )
 
+// AttestorHandler handles attestor RPC requests.
 type AttestorHandler struct {
 	logger *slog.Logger
 	srv    AttestorService
 }
 
+// AttestorService defines attestor business logic.
 type AttestorService interface {
 	LatestAttestableHeight(ctx context.Context, attestor string) (uint64, error)
 }
 
 var (
 	_ proto.AttestationServiceHandler = (*AttestorHandler)(nil)
-	_ ServerHandler                   = (*AttestorHandler)(nil)
+	_ Handler                         = (*AttestorHandler)(nil)
 )
 
 func NewAttestorHandler(srv AttestorService) *AttestorHandler {
@@ -36,6 +38,10 @@ func NewAttestorHandler(srv AttestorService) *AttestorHandler {
 
 func (h *AttestorHandler) Register(opts ...connect.HandlerOption) (string, http.Handler) {
 	return proto.NewAttestationServiceHandler(h, opts...)
+}
+
+func (h *AttestorHandler) Name() string {
+	return proto.AttestationServiceName
 }
 
 func (h *AttestorHandler) LatestAttestableHeight(

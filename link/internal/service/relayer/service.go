@@ -7,21 +7,24 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Service represents relayer business logic.
 type Service struct {
 	logger *slog.Logger
 }
 
+// New Service constructor.
 func New() *Service {
 	return &Service{
 		logger: slog.With("service", "relayer"),
 	}
 }
 
+// Relay errors
 var (
 	ErrInvalidInput = errors.New("invalid input")
 )
 
-func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
+func (s *Service) Relay(_ context.Context, chainID, txHash string) error {
 	switch {
 	case chainID == "":
 		return errors.Wrap(ErrInvalidInput, "chainID is required")

@@ -1,9 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/spf13/cobra"
+
+	"github.com/cosmos/ibc/link/internal/bootstrap"
+	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
 var (
@@ -25,7 +28,20 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Printf("Running relayer on addr %q...\n", cfg.GRPC.ListenAddress)
+	app, err := bootstrap.BuildRelayer(cfg)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	slog.Info("Starting relayer")
+
+	if err := app.Server.Start(); err != nil {
+		app.Logger.Error("Failed to start relayer server", "error", err)
+		return err
+	}
+
+	graceful.AddCallback(app.Server.Stop)
+
+	// blocking
+	return graceful.WaitShutdown()
 }
