@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package ibc.relayer;
+
+// todo: move to `github.com/cosmos/ibc/types/attestor`
+option go_package = "github.com/cosmos/ibc/link/internal/types/relayer";
+
+service RelayerApiService {
+  // Relay will track the status of a transfer, and submit the transactions
+  // required to complete the transfer via the bridging protocol.
+  rpc Relay(RelayRequest) returns (RelayResponse) {}
+}
+
+message RelayRequest {
+  string tx_hash = 1;
+  string chain_id = 2;
+}
+
+message RelayResponse {}

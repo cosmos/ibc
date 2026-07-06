@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package ibc.attestor;
+
+// todo: move to `github.com/cosmos/ibc/types/attestor`
+option go_package = "github.com/cosmos/ibc/link/internal/types/attestor";
+
+// Service definition for retrieving attestations.
+service AttestationService {
+  // Returns the latest height the attestor will generate attestations for.
+  rpc LatestAttestableHeight(LatestAttestableHeightRequest)
+      returns (LatestAttestableHeightResponse);
+}
+
+message LatestAttestableHeightRequest { string attestor = 1; }
+
+message LatestAttestableHeightResponse { uint64 height = 1; }
