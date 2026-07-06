@@ -61,12 +61,14 @@ func (s *Server) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	s.logger.Info("Shutting down server")
+
 	return s.server.Shutdown(ctx)
 }
 
 func (s *Server) Register(h ServerHandler) {
 	// we might want to pass some global options here later
-	prefix, handler := h.Register(nil)
+	prefix, handler := h.Register()
 	s.logger.Debug("Registered handler", "prefix", prefix)
 
 	s.mux.Handle(prefix, handler)

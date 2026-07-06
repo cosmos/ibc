@@ -1,7 +1,10 @@
 package main
 
 import (
+	"log/slog"
+
 	"github.com/cosmos/ibc/link/internal/bootstrap"
+	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 	"github.com/spf13/cobra"
 )
 
@@ -29,12 +32,15 @@ func attestorRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	slog.Info("Starting attestor")
+
 	if err := app.Server.Start(); err != nil {
 		app.Logger.Error("Failed to start attestor server", "error", err)
 		return err
 	}
 
-	// todo graceful shutdown
+	graceful.AddCallback(app.Server.Stop)
 
-	return nil
+	// blocking
+	return graceful.WaitShutdown()
 }

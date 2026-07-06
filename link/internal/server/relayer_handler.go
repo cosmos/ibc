@@ -27,6 +27,7 @@ var (
 func NewRelayerHandler(srv RelayerService) *RelayerHandler {
 	return &RelayerHandler{
 		logger: slog.With("handler", "relayer"),
+		srv:    srv,
 	}
 }
 
