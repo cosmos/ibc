@@ -6,11 +6,13 @@ import (
 	"log/slog"
 )
 
+// Service manages configured attestors.
 type Service struct {
 	attestors map[string]Attestor
 	logger    *slog.Logger
 }
 
+// Attestor reports attestation state.
 type Attestor interface {
 	LatestAttestableHeight(ctx context.Context) (uint64, error)
 }
