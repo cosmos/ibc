@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/bootstrap"
@@ -22,6 +23,8 @@ var (
 	}
 )
 
+var flagRelayerNoMigrate bool
+
 func relayerRun(_ *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
@@ -31,6 +34,20 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 	app, err := bootstrap.BuildRelayer(cfg)
 	if err != nil {
 		return err
+	}
+
+	if flagRelayerNoMigrate {
+		slog.Info("--no-migrate flag passed, skipping migrations")
+	} else {
+		applied, err := app.Store.MigrateUp()
+		switch {
+		case err != nil:
+			return errors.Wrap(err, "failed to migrate database")
+		case applied == 0:
+			slog.Info("No migrations to apply")
+		case applied > 0:
+			slog.Info("Migrated database", "migrations_applied", applied)
+		}
 	}
 
 	slog.Info("Starting relayer")
