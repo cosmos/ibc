@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+
+	"github.com/cosmos/ibc/link/internal/config"
 )
 
 // Service manages configured attestors.
@@ -15,17 +17,39 @@ type Service struct {
 // Attestor reports attestation state.
 type Attestor interface {
 	LatestAttestableHeight(ctx context.Context) (uint64, error)
+	Name() string
 }
 
 // Attestor errors
 var (
-	ErrNotFound = errors.New("attestor not found")
+	ErrNotFound       = errors.New("attestor not found")
+	ErrNoAttestations = errors.New("no attestations provided")
 )
 
+func NewFromConfig(cfg config.Config) (*Service, error) {
+	if len(cfg.Attestor.Attestations) == 0 {
+		return nil, ErrNoAttestations
+	}
+
+	attestorsSpecs := make([]Attestor, 0, len(cfg.Attestor.Attestations))
+	for _, spec := range cfg.Attestor.Attestations {
+		localAttestor := NewLocal(spec.ChainID, spec.Name)
+		attestorsSpecs = append(attestorsSpecs, localAttestor)
+	}
+
+	return New(attestorsSpecs), nil
+}
+
 // New Service constructor.
-func New() *Service {
+func New(attestors []Attestor) *Service {
+	attestorsMap := make(map[string]Attestor)
+	for _, attestor := range attestors {
+		attestorsMap[attestor.Name()] = attestor
+	}
+
 	return &Service{
-		logger: slog.With("service", "attestors"),
+		logger:    slog.With("service", "attestors"),
+		attestors: attestorsMap,
 	}
 }
 

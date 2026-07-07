@@ -56,7 +56,10 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 
 	// Services
-	attestorService := attestor.New()
+	attestorService, err := attestor.NewFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	// Handlers
 	attestorHandler := server.NewAttestorHandler(attestorService)
@@ -64,8 +67,6 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	// Server
 	srv := server.New(cfg.GRPC.ListenAddress, true)
 	srv.Register(attestorHandler)
-
-	// todo provision attestors (local/remote)
 
 	return &Services{
 		Context: ctx,
