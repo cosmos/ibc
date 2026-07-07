@@ -3,6 +3,7 @@ package attestor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/cosmos/ibc/link/internal/config"
@@ -16,8 +17,21 @@ type Service struct {
 
 // Attestor reports attestation state.
 type Attestor interface {
-	LatestAttestableHeight(ctx context.Context) (uint64, error)
+	// ChainID returns the chain ID.
+	ChainID() string
+
+	// Name is the name of the attestor. It is NOT unique across the service
+	// Imagine there are 5 remote attestors and inside each they announce same `eth-1-attestor` name
 	Name() string
+
+	// Alias is the internal unique name of the attestors within THIS process.
+	// Should be unique.
+	Alias() string
+
+	// IsLocal returns true if the attestor is local.
+	IsLocal() bool
+
+	LatestAttestableHeight(ctx context.Context) (uint64, error)
 }
 
 // Attestor errors
@@ -26,6 +40,8 @@ var (
 	ErrNoAttestations = errors.New("no attestations provided")
 )
 
+// NewFromConfig creates a new attestor service from the configuration.
+// Because config represents our local binary, ALL attestors are local.
 func NewFromConfig(cfg config.Config) (*Service, error) {
 	if len(cfg.Attestor.Attestations) == 0 {
 		return nil, ErrNoAttestations
@@ -37,20 +53,26 @@ func NewFromConfig(cfg config.Config) (*Service, error) {
 		attestorsSpecs = append(attestorsSpecs, localAttestor)
 	}
 
-	return New(attestorsSpecs), nil
+	return New(attestorsSpecs)
 }
 
-// New Service constructor.
-func New(attestors []Attestor) *Service {
-	attestorsMap := make(map[string]Attestor)
+// New Service constructor. Attestors should have unique aliases
+func New(attestors []Attestor) (*Service, error) {
+	set := make(map[string]Attestor)
 	for _, attestor := range attestors {
-		attestorsMap[attestor.Name()] = attestor
+		alias := attestor.Alias()
+
+		if _, alreadyExists := set[alias]; alreadyExists {
+			return nil, fmt.Errorf("attestor with alias %s already exists", alias)
+		}
+
+		set[alias] = attestor
 	}
 
 	return &Service{
 		logger:    slog.With("service", "attestors"),
-		attestors: attestorsMap,
-	}
+		attestors: set,
+	}, nil
 }
 
 // Add adds an attestor to the service. Not thread-safe.

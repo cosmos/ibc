@@ -24,12 +24,16 @@ func NewLocal(chainID, name string) *LocalAttestor {
 	}
 }
 
-func (a *LocalAttestor) Name() string { return a.name }
-
 func (a *LocalAttestor) LatestAttestableHeight(_ context.Context) (uint64, error) {
 	// todo: mocked
 	return uint64(time.Now().Unix()), nil
 }
+
+// name and alias are identical for local attestors
+func (a *LocalAttestor) Name() string    { return a.name }
+func (a *LocalAttestor) Alias() string   { return a.name }
+func (a *LocalAttestor) ChainID() string { return a.chainID }
+func (a *LocalAttestor) IsLocal() bool   { return true }
 
 func attestorFQN(connection, chainID, name string) string {
 	return fmt.Sprintf("%s-%s-%s", chainID, connection, name)
