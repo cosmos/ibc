@@ -33,6 +33,9 @@ var errInternal = connect.NewError(connect.CodeInternal, errors.New("internal se
 
 // New Server constructor.
 func New(addr string, useReflection bool) *Server {
+	// Use h2c so we can serve HTTP/2 without TLS.
+	// https://connectrpc.com/docs/go/deployment/#h2c
+	// todo: revisit in future
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)
