@@ -19,13 +19,13 @@ func TestConfig(t *testing.T) {
 			{
 				name: "valid",
 				patch: func(c *Config) {
-					c.GRPC.ListenAddress = "0.0.0.0:8080"
+					c.Server.ListenAddress = "0.0.0.0:8080"
 				},
 			},
 			{
 				name: "invalid listen address",
 				patch: func(c *Config) {
-					c.GRPC.ListenAddress = "invalid"
+					c.Server.ListenAddress = "invalid"
 				},
 				errContains: "expected address in host:port",
 			},
@@ -65,7 +65,7 @@ func TestConfig(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
-grpc:
+server:
   listenAddr: 127.0.0.1:9090
 db:
   type: postgres
@@ -77,17 +77,17 @@ db:
 
 			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, "127.0.0.1:9090", config.GRPC.ListenAddress)
+			assert.Equal(t, "127.0.0.1:9090", config.Server.ListenAddress)
 			assert.Equal(t, DBTypePostgres, config.DB.Type)
 			assert.Equal(t, "postgres://user:pass@localhost:5432/ibc", config.DB.URL)
 		})
 
 		t.Run("envSubstitution", func(t *testing.T) {
 			// ARRANGE
-			t.Setenv("GRPC_PORT", "9091")
+			t.Setenv("SERVER_PORT", "9091")
 			path := writeTestConfig(t, `
-grpc:
-  listenAddr: 127.0.0.1:${GRPC_PORT}
+server:
+  listenAddr: 127.0.0.1:${SERVER_PORT}
 `)
 
 			// ACT
@@ -95,13 +95,13 @@ grpc:
 
 			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, "127.0.0.1:9091", config.GRPC.ListenAddress)
+			assert.Equal(t, "127.0.0.1:9091", config.Server.ListenAddress)
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
-grpc:
+server:
   listenAddr: [
 `)
 
@@ -115,7 +115,7 @@ grpc:
 		t.Run("validationFails", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
-grpc:
+server:
   listenAddr: invalid
 `)
 
@@ -147,21 +147,21 @@ grpc:
 					name: "top level",
 					body: `
 unknown: value
-grpc:
+server:
   listenAddr: 127.0.0.1:9090
 `,
 				},
 				{
 					name: "nested camel case typo",
 					body: `
-grpc:
+server:
   listenAddress: 127.0.0.1:9090
 `,
 				},
 				{
 					name: "nested snake case typo",
 					body: `
-grpc:
+server:
   listen_addr: 127.0.0.1:9090
 `,
 				},
@@ -182,7 +182,7 @@ grpc:
 		t.Run("unknownFieldsAllowedWhenDisabled", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
-grpc:
+server:
   listenAddress: 127.0.0.1:9090
 `)
 
@@ -191,7 +191,7 @@ grpc:
 
 			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, "0.0.0.0:3000", config.GRPC.ListenAddress)
+			assert.Equal(t, "0.0.0.0:3000", config.Server.ListenAddress)
 		})
 	})
 
@@ -245,7 +245,7 @@ grpc:
 			{
 				name:        "empty",
 				raw:         "",
-				errContains: "empty db url",
+				errContains: ".url must not be empty",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {

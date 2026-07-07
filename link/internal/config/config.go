@@ -25,13 +25,13 @@ const sqliteInMemory = ":memory:"
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
-	GRPC     GRPCConfig     `yaml:"grpc"`
+	Server   ServerConfig   `yaml:"server"`
 	DB       DBConfig       `yaml:"db"`
 	Attestor AttestorConfig `yaml:"attestor"`
 }
 
-// GRPCConfig config for grpc server for both relayer and attestor
-type GRPCConfig struct {
+// ServerConfig config for RPC server for both relayer and attestor
+type ServerConfig struct {
 	ListenAddress string `yaml:"listenAddr"`
 }
 
@@ -62,7 +62,7 @@ type AttestationConfig struct {
 // DefaultConfig sample config using default values and Sqlite.
 func DefaultConfig() Config {
 	return Config{
-		GRPC: GRPCConfig{
+		Server: ServerConfig{
 			ListenAddress: "0.0.0.0:3000",
 		},
 		DB: DBConfig{
@@ -108,8 +108,8 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 }
 
 func (c Config) Validate() error {
-	if err := c.GRPC.Validate(); err != nil {
-		return errors.Wrap(err, ".grpc")
+	if err := c.Server.Validate(); err != nil {
+		return errors.Wrap(err, ".server")
 	}
 
 	if err := c.DB.Validate(); err != nil {
@@ -140,7 +140,7 @@ func (c Config) StoreToFile(path string) error {
 	return nil
 }
 
-func (c GRPCConfig) Validate() error {
+func (c ServerConfig) Validate() error {
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
 		return errors.Wrapf(err, ".listenAddr %q", c.ListenAddress)
 	}

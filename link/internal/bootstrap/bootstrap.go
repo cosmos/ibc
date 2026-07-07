@@ -41,7 +41,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	relayerHandler := server.NewRelayerHandler(relayerService)
 
 	// Server
-	srv := server.New(cfg.GRPC.ListenAddress, true)
+	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(relayerHandler)
 
 	services := &Services{
@@ -82,7 +82,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}
 
 	// Server
-	srv := server.New(cfg.GRPC.ListenAddress, true)
+	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(attestorHandler)
 
 	return &Services{
