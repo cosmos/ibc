@@ -80,8 +80,8 @@ func (s *Service) Add(id string, attestor Attestor) {
 	s.attestors[id] = attestor
 }
 
-func (s *Service) LatestAttestableHeight(ctx context.Context, id string) (uint64, error) {
-	attestor, ok := s.attestors[id]
+func (s *Service) LatestAttestableHeight(ctx context.Context, attestorAlias string) (uint64, error) {
+	attestor, ok := s.attestors[attestorAlias]
 	if !ok {
 		return 0, ErrNotFound
 	}
