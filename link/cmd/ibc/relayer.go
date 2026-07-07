@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log/slog"
-
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -37,26 +35,27 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 	}
 
 	if flagRelayerNoMigrate {
-		slog.Info("--no-migrate flag passed, skipping migrations")
+		app.Logger.Info("--no-migrate flag passed, skipping migrations")
 	} else {
 		applied, err := app.Store.MigrateUp()
 		switch {
 		case err != nil:
 			return errors.Wrap(err, "failed to migrate database")
 		case applied == 0:
-			slog.Info("No migrations to apply")
+			app.Logger.Info("No migrations to apply")
 		case applied > 0:
-			slog.Info("Migrated database", "migrations_applied", applied)
+			app.Logger.Info("Migrated database", "migrations_applied", applied)
 		}
 	}
 
-	slog.Info("Starting relayer")
+	app.Logger.Info("Starting relayer")
 
 	if err := app.Server.Start(); err != nil {
 		app.Logger.Error("Failed to start relayer server", "error", err)
 		return err
 	}
 
+	graceful.AddCallback(app.Store.Close)
 	graceful.AddCallback(app.Server.Stop)
 
 	// blocking

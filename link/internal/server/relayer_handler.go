@@ -6,6 +6,9 @@ import (
 	"net/http"
 
 	"connectrpc.com/connect"
+	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/link/internal/service/relayer"
 
 	proto "github.com/cosmos/ibc/link/internal/types/v2/relayer"
 )
@@ -46,7 +49,10 @@ func (h *RelayerHandler) Relay(
 	req *connect.Request[proto.RelayRequest],
 ) (*connect.Response[proto.RelayResponse], error) {
 	err := h.srv.Relay(ctx, req.Msg.ChainId, req.Msg.TxHash)
-	if err != nil {
+	switch {
+	case errors.Is(err, relayer.ErrInvalidInput):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("Relay", "error", err)
 		return nil, errInternal

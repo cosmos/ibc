@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log/slog"
-
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/bootstrap"
@@ -33,7 +31,7 @@ func attestorRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	slog.Info("Starting attestor")
+	app.Logger.Info("Starting attestor")
 
 	if err := app.Server.Start(); err != nil {
 		app.Logger.Error("Failed to start attestor server", "error", err)
