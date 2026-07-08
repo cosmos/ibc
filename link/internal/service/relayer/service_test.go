@@ -54,8 +54,8 @@ func TestRelay(t *testing.T) {
 		ctx := context.Background()
 		st := NewMockStore(t)
 		client := chains.NewMockClient(t)
-		registry := NewMockChainRegistry(t)
-		service := New(relayerConfig(), st, registry)
+		clientManager := NewMockChainClientManager(t)
+		service := New(relayerConfig(), st, clientManager)
 
 		blockTime := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
 		events := []chains.PacketEvent{
@@ -85,7 +85,7 @@ func TestRelay(t *testing.T) {
 
 		// tx hash is normalized to lowercase before storage
 		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
-		registry.EXPECT().Client(chainIDEth).Return(client, true).Once()
+		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 		st.EXPECT().CreateTransfer(ctx, store.Transfer{
 			SourceChainID:             chainIDEth,
@@ -109,11 +109,11 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		registry := NewMockChainRegistry(t)
-		service := New(relayerConfig(), st, registry)
+		clientManager := NewMockChainClientManager(t)
+		service := New(relayerConfig(), st, clientManager)
 
 		st.EXPECT().UpsertRelayRequest(ctx, "999", txHashLower).Return(nil).Once()
-		registry.EXPECT().Client("999").Return(nil, false).Once()
+		clientManager.EXPECT().GetClient(ctx, "999").Return(nil, errors.New("no configured chain client")).Once()
 
 		// ACT
 		err := service.Relay(ctx, "999", txHashLower)
@@ -128,11 +128,11 @@ func TestRelay(t *testing.T) {
 		ctx := context.Background()
 		st := NewMockStore(t)
 		client := chains.NewMockClient(t)
-		registry := NewMockChainRegistry(t)
-		service := New(relayerConfig(), st, registry)
+		clientManager := NewMockChainClientManager(t)
+		service := New(relayerConfig(), st, clientManager)
 
 		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
-		registry.EXPECT().Client(chainIDEth).Return(client, true).Once()
+		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
 		// ACT
@@ -157,7 +157,7 @@ func TestRelay(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				service := New(config.RelayerConfig{}, NewMockStore(t), NewMockChainRegistry(t))
+				service := New(config.RelayerConfig{}, NewMockStore(t), NewMockChainClientManager(t))
 
 				// ACT
 				err := service.Relay(context.Background(), tt.chainID, tt.txHash)
@@ -172,7 +172,7 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainRegistry(t))
+		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
 		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(errors.New("boom")).Once()
 
@@ -190,7 +190,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st, NewMockChainRegistry(t))
+		service := New(config.RelayerConfig{}, st, NewMockChainClientManager(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(nil, store.ErrNotFound).Once()
 
@@ -205,7 +205,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st, NewMockChainRegistry(t))
+		service := New(config.RelayerConfig{}, st, NewMockChainClientManager(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
 		st.EXPECT().ListTransfersBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
@@ -222,7 +222,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st, NewMockChainRegistry(t))
+		service := New(config.RelayerConfig{}, st, NewMockChainClientManager(t))
 
 		recvTxHash := "0xrecv"
 		transfers := []store.Transfer{

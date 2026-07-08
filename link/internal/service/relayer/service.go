@@ -21,12 +21,12 @@ type Service struct {
 	logger *slog.Logger
 	cfg    config.RelayerConfig
 	store  Store
-	chains ChainRegistry
+	chains ChainClientManager
 }
 
-// ChainRegistry resolves chain clients by chain id.
-type ChainRegistry interface {
-	Client(chainID string) (chains.Client, bool)
+// ChainClientManager resolves chain clients by chain id.
+type ChainClientManager interface {
+	GetClient(ctx context.Context, chainID string) (chains.Client, error)
 }
 
 // Store narrows store.Repository to what the relayer needs.
@@ -72,12 +72,12 @@ type PacketStatus struct {
 }
 
 // New Service constructor.
-func New(cfg config.RelayerConfig, st Store, registry ChainRegistry) *Service {
+func New(cfg config.RelayerConfig, st Store, clientManager ChainClientManager) *Service {
 	return &Service{
 		logger: slog.With("service", "relayer"),
 		cfg:    cfg,
 		store:  st,
-		chains: registry,
+		chains: clientManager,
 	}
 }
 
@@ -94,8 +94,8 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return errors.Wrap(errUpsert, "upserting relay request")
 	}
 
-	client, ok := s.chains.Client(chainID)
-	if !ok {
+	client, err := s.chains.GetClient(ctx, chainID)
+	if err != nil {
 		return errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 	}
 

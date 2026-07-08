@@ -23,7 +23,7 @@ type Services struct {
 
 	Store store.Store
 
-	ChainRegistry *chains.Registry
+	ChainClientManager *chains.ClientManager
 
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
@@ -41,13 +41,13 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Chain clients
-	registry, err := buildChainRegistry(cfg)
+	clientManager, err := newClientManagerFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	// Services
-	relayerService := relayer.New(cfg.Relayer, db, registry)
+	relayerService := relayer.New(cfg.Relayer, db, clientManager)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)
@@ -57,13 +57,13 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv.Register(relayerHandler)
 
 	services := &Services{
-		Context:         ctx,
-		Logger:          logger,
-		Server:          srv,
-		Store:           db,
-		ChainRegistry:   registry,
-		RelayerService:  relayerService,
-		AttestorService: nil,
+		Context:            ctx,
+		Logger:             logger,
+		Server:             srv,
+		Store:              db,
+		ChainClientManager: clientManager,
+		RelayerService:     relayerService,
+		AttestorService:    nil,
 	}
 
 	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.
@@ -108,10 +108,11 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}, nil
 }
 
-// buildChainRegistry creates a chain client for every relayer chain with an
-// EVM block, using the RPC endpoint declared in the top-level chains block.
-func buildChainRegistry(cfg config.Config) (*chains.Registry, error) {
-	registry := chains.NewRegistry()
+// newClientManagerFromConfig creates a chain client for every relayer chain
+// with an EVM block, using the RPC endpoint declared in the top-level chains
+// block, and wraps them in a ClientManager.
+func newClientManagerFromConfig(cfg config.Config) (*chains.ClientManager, error) {
+	clients := make(map[string]chains.Client)
 
 	for _, relayerChain := range cfg.Relayer.Chains {
 		if relayerChain.EVM == nil {
@@ -128,10 +129,10 @@ func buildChainRegistry(cfg config.Config) (*chains.Registry, error) {
 			return nil, errors.Wrapf(err, "creating evm client for chain %q", relayerChain.ChainID)
 		}
 
-		registry.Add(relayerChain.ChainID, client)
+		clients[relayerChain.ChainID] = client
 	}
 
-	return registry, nil
+	return chains.NewClientManager(clients), nil
 }
 
 func buildAttestor(cfg config.Config) (*attestor.Service, *server.AttestorHandler, error) {

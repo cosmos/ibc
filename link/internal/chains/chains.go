@@ -3,7 +3,10 @@ package chains
 
 import (
 	"context"
+	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // Client parses packet details out of transaction event logs.
@@ -48,25 +51,33 @@ type PacketEvent struct {
 	Acks      [][]byte
 }
 
-// Registry resolves chain clients by chain id.
-type Registry struct {
+// ClientManager holds the chain clients for all configured chains.
+// Safe for concurrent use.
+type ClientManager struct {
+	mu      sync.RWMutex
 	clients map[string]Client
 }
 
-// NewRegistry Registry constructor.
-func NewRegistry() *Registry {
-	return &Registry{clients: make(map[string]Client)}
+// NewClientManager ClientManager constructor.
+func NewClientManager(clients map[string]Client) *ClientManager {
+	if clients == nil {
+		clients = make(map[string]Client)
+	}
+
+	return &ClientManager{clients: clients}
 }
 
-// Add registers a client for a chain id.
-func (r *Registry) Add(chainID string, client Client) {
-	r.clients[chainID] = client
-}
+// GetClient returns the chain client for a chain id.
+func (m *ClientManager) GetClient(_ context.Context, chainID string) (Client, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-// Client returns the client for a chain id.
-func (r *Registry) Client(chainID string) (Client, bool) {
-	client, ok := r.clients[chainID]
-	return client, ok
+	client, ok := m.clients[chainID]
+	if !ok {
+		return nil, errors.Errorf("no configured chain client for chain ID %s", chainID)
+	}
+
+	return client, nil
 }
 
 type closer interface {
@@ -74,12 +85,17 @@ type closer interface {
 }
 
 // Close closes all clients that support closing.
-func (r *Registry) Close() error {
-	for _, client := range r.clients {
+func (m *ClientManager) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, client := range m.clients {
 		if c, ok := client.(closer); ok {
 			c.Close()
 		}
 	}
+
+	m.clients = make(map[string]Client)
 
 	return nil
 }
