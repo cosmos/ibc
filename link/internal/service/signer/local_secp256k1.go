@@ -9,6 +9,7 @@ import (
 	kms "github.com/cosmos/kms/signing/file"
 )
 
+// LocalSecp256k1Signer signs with a local secp256k1 key.
 type LocalSecp256k1Signer struct {
 	pk     *secp256k1.PrivateKey
 	signer *kms.Secp256k1Signer

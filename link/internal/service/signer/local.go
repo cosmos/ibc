@@ -10,38 +10,17 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
-// KeyType key type supported by local Signer
-type KeyType string
-
-type Key interface {
-	Type() KeyType
-	IsLocal() bool
-}
-
+// LocalKey is a key stored and used locally.
 type LocalKey interface {
-	Key
+	Signer
 	PubKey() []byte
 	PrivateKey() []byte
 	StoreToFile(path string) error
 }
 
-type keyJSON struct {
+type keyFile struct {
 	Type       KeyType `json:"type"`
 	PrivateKey string  `json:"privateKeyBase64"`
-}
-
-// KeyType enum
-const (
-	KeyEDDSA KeyType = "eddsa"
-	KeyECDSA KeyType = "ecdsa"
-)
-
-func ParseKeyType(raw string) (KeyType, error) {
-	if raw != string(KeyEDDSA) && raw != string(KeyECDSA) {
-		return "", fmt.Errorf("invalid key type: %s", raw)
-	}
-
-	return KeyType(raw), nil
 }
 
 func KeyFilePath(homePath, keyName string) (string, error) {
@@ -78,7 +57,7 @@ func LocalKeyFromFile(path string) (LocalKey, error) {
 }
 
 func storeKeyToFile(path string, keyType KeyType, privateKey []byte) error {
-	data := keyJSON{
+	data := keyFile{
 		Type:       keyType,
 		PrivateKey: base64.StdEncoding.EncodeToString(privateKey),
 	}
@@ -105,7 +84,7 @@ func loadKeyFromFile(path string) (KeyType, []byte, error) {
 		return "", nil, err
 	}
 
-	var key keyJSON
+	var key keyFile
 	if err = json.Unmarshal(data, &key); err != nil {
 		return "", nil, err
 	}

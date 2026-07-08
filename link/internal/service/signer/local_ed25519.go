@@ -9,6 +9,7 @@ import (
 	kms "github.com/cosmos/kms/signing/file"
 )
 
+// LocalEd25519Signer signs with a local Ed25519 key.
 type LocalEd25519Signer struct {
 	pk      crypto.PrivKey
 	backend *kms.Backend
