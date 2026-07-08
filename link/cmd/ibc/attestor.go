@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
+
+	"github.com/cosmos/ibc/link/internal/bootstrap"
+	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
 var (
@@ -25,7 +26,20 @@ func attestorRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Printf("Running attestor on addr %q...\n", cfg.GRPC.ListenAddress)
+	app, err := bootstrap.BuildAttestor(cfg)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	app.Logger.Info("Starting attestor")
+
+	if err := app.Server.Start(); err != nil {
+		app.Logger.Error("Failed to start attestor server", "error", err)
+		return err
+	}
+
+	graceful.AddCallback(app.Server.Stop)
+
+	// blocking
+	return graceful.WaitShutdown()
 }

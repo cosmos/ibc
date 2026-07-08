@@ -1,3 +1,9 @@
 # sample config file
-grpc:
+server:
   listenAddr: 0.0.0.0:3000
+
+db:
+  type: sqlite
+  url: ibc.db
+  # type: postgres
+  # url: postgres://user:password@host:port/dbname
