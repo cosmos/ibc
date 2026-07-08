@@ -60,8 +60,7 @@ type RelayerEVMConfig struct {
 
 // EVMContracts addresses of the IBC contracts on an EVM chain.
 type EVMContracts struct {
-	ICS26Router   string `yaml:"ics26Router"`
-	ICS20Transfer string `yaml:"ics20Transfer,omitempty"`
+	ICS26Router string `yaml:"ics26Router"`
 }
 
 // GasAlertThresholds gas balance thresholds (in the chain's smallest gas token
