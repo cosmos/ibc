@@ -42,12 +42,12 @@ type RelayerConfig struct {
 
 // RelayerChainConfig configures relaying for a single chain.
 type RelayerChainConfig struct {
-	ChainID            string                `yaml:"chainId"`
-	EVM                *RelayerEVMConfig     `yaml:"evm,omitempty"`
-	GasAlertThresholds *GasAlertThresholds   `yaml:"gasAlertThresholds,omitempty"`
-	Clients            []RelayerClientConfig `yaml:"clients"`
-	PacketBatchSize    int                   `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration         `yaml:"packetBatchTimeout"`
+	ChainID            string              `yaml:"chainId"`
+	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
+	GasAlertThresholds *GasAlertThresholds `yaml:"gasAlertThresholds,omitempty"`
+	Clients            []ClientConfig      `yaml:"clients"`
+	PacketBatchSize    int                 `yaml:"packetBatchSize"`
+	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout"`
 }
 
 // RelayerEVMConfig EVM-specific relaying settings for a chain.
@@ -70,8 +70,8 @@ type GasAlertThresholds struct {
 	CriticalThreshold string `yaml:"criticalThreshold"`
 }
 
-// RelayerClientConfig a source client the relayer monitors and relays transfers from.
-type RelayerClientConfig struct {
+// ClientConfig a source client the relayer monitors and relays transfers from.
+type ClientConfig struct {
 	ID                  string             `yaml:"id"`
 	Type                string             `yaml:"type"`
 	AttestorSet         *AttestorSetConfig `yaml:"attestorSet,omitempty"`
@@ -201,7 +201,7 @@ func (c RelayerConfig) Validate() error {
 // validateCounterparty ensures the counterparty side of a client's connection
 // is also configured. Connections are relayed bi-directionally, so the relayer
 // needs the client properties on both chains.
-func (c RelayerConfig) validateCounterparty(chainID string, client RelayerClientConfig) error {
+func (c RelayerConfig) validateCounterparty(chainID string, client ClientConfig) error {
 	counterparty, ok := c.Chain(client.CounterpartyChainID)
 	if !ok {
 		return errors.Errorf(
@@ -295,7 +295,7 @@ func (c GasAlertThresholds) Validate() error {
 	return nil
 }
 
-func (c RelayerClientConfig) Validate() error {
+func (c ClientConfig) Validate() error {
 	switch {
 	case c.ID == "":
 		return errors.New(".id required")
