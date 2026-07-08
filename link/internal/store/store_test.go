@@ -4,19 +4,21 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
-	"github.com/cosmos/ibc/link/internal/tests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/internal/tests"
 )
 
 const (
-	chainIDEth = "1"
-	txHashEth  = "0xDEADBEEF"
+	chainIDEth  = "1"
+	chainIDBase = "8453"
+	txHashEth   = "0xdeadbeef"
 )
 
 func TestStore(t *testing.T) {
-
 	t.Run("sqlite", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
@@ -48,11 +50,10 @@ func TestStore(t *testing.T) {
 			ensureMigrated(t, db)
 
 			// ACT
-			// Get the previously inserted submission
-			entry, err := db.GetRelaySubmission(ctx, chainIDEth, txHashEth)
+			// Get the previously inserted relay request
+			entry, err := db.GetRelayRequest(ctx, chainIDEth, txHashEth)
 
 			// ASSERT
-			require.NoError(t, err)
 			require.NoError(t, err)
 			assert.Equal(t, chainIDEth, entry.ChainID)
 			assert.Equal(t, txHashEth, entry.TxHash)
@@ -102,15 +103,20 @@ func TestStore(t *testing.T) {
 func testMigrationIdempotency(t *testing.T, m Migrator) {
 	t.Helper()
 
-	_, err := m.MigrateUp()
+	applied, err := m.MigrateUp()
 	require.NoError(t, err)
+	require.Equal(t, 2, applied)
 
-	_, err = m.MigrateDown()
-	require.NoError(t, err)
+	// Roll all migrations back one at a time
+	for range applied {
+		_, err = m.MigrateDown()
+		require.NoError(t, err)
+	}
 
 	// Migrate up again to check if it's idempotent
-	_, err = m.MigrateUp()
+	appliedAgain, err := m.MigrateUp()
 	require.NoError(t, err)
+	require.Equal(t, applied, appliedAgain)
 
 	ensureMigrated(t, m)
 }
@@ -130,27 +136,90 @@ func ensureMigrated(t *testing.T, m Migrator) {
 func testRepoReadWrite(t *testing.T, s Store) {
 	ctx := context.Background()
 
-	// Get a non-existent submission
-	_, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
-	require.ErrorIs(t, err, ErrNotFound)
+	t.Run("relayRequests", func(t *testing.T) {
+		// Get a non-existent relay request
+		_, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)
+		require.ErrorIs(t, err, ErrNotFound)
 
-	// Insert a submission
-	err = s.UpsertRelaySubmission(ctx, chainIDEth, txHashEth)
-	require.NoError(t, err)
+		// Insert a relay request
+		err = s.UpsertRelayRequest(ctx, chainIDEth, txHashEth)
+		require.NoError(t, err)
 
-	// Get the inserted submission
-	submission, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
-	require.NoError(t, err)
-	assert.Equal(t, chainIDEth, submission.ChainID)
-	assert.Equal(t, txHashEth, submission.TxHash)
-	assert.Equal(t, int64(1), submission.ID)
-	assert.NotEmpty(t, submission.CreatedAt)
+		// Get the inserted relay request
+		request, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)
+		require.NoError(t, err)
+		assert.Equal(t, chainIDEth, request.ChainID)
+		assert.Equal(t, txHashEth, request.TxHash)
+		assert.Equal(t, int64(1), request.ID)
+		assert.NotEmpty(t, request.CreatedAt)
 
-	submissionAgain, err := s.GetRelaySubmission(ctx, chainIDEth, txHashEth)
-	require.NoError(t, err)
-	assert.Equal(t, submission.CreatedAt, submissionAgain.CreatedAt)
+		// Upsert the relay request (noop)
+		err = s.UpsertRelayRequest(ctx, chainIDEth, txHashEth)
+		require.NoError(t, err)
 
-	// Upsert the submission (noop)
-	err = s.UpsertRelaySubmission(ctx, chainIDEth, txHashEth)
-	require.NoError(t, err)
+		requestAgain, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)
+		require.NoError(t, err)
+		assert.Equal(t, request.CreatedAt, requestAgain.CreatedAt)
+	})
+
+	t.Run("transfers", func(t *testing.T) {
+		transfer := Transfer{
+			SourceChainID:             chainIDEth,
+			DestinationChainID:        chainIDBase,
+			SourceTxHash:              txHashEth,
+			SourceTxTime:              time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC),
+			PacketSequenceNumber:      42,
+			PacketSourceClientID:      "base-0",
+			PacketDestinationClientID: "ethereum-0",
+			PacketTimeoutTimestamp:    time.Date(2026, 7, 8, 13, 0, 0, 0, time.UTC),
+		}
+
+		// No transfers for the source tx yet
+		transfers, err := s.ListTransfersBySourceTx(ctx, chainIDEth, txHashEth)
+		require.NoError(t, err)
+		assert.Empty(t, transfers)
+
+		// Insert a transfer
+		require.NoError(t, s.CreateTransfer(ctx, transfer))
+
+		// Insert the same packet again (noop)
+		require.NoError(t, s.CreateTransfer(ctx, transfer))
+
+		// Insert a second packet from the same tx
+		second := transfer
+		second.PacketSequenceNumber = 43
+		require.NoError(t, s.CreateTransfer(ctx, second))
+
+		// List transfers for the source tx
+		transfers, err = s.ListTransfersBySourceTx(ctx, chainIDEth, txHashEth)
+		require.NoError(t, err)
+		require.Len(t, transfers, 2)
+
+		// Ordered by sequence, defaults applied, round-trips intact
+		first := transfers[0]
+		assert.Equal(t, uint64(42), first.PacketSequenceNumber)
+		assert.Equal(t, uint64(43), transfers[1].PacketSequenceNumber)
+		assert.Equal(t, TransferStatusPending, first.Status)
+		assert.Equal(t, chainIDEth, first.SourceChainID)
+		assert.Equal(t, chainIDBase, first.DestinationChainID)
+		assert.Equal(t, "base-0", first.PacketSourceClientID)
+		assert.Equal(t, "ethereum-0", first.PacketDestinationClientID)
+		assert.Equal(t, transfer.SourceTxTime, first.SourceTxTime)
+		assert.Equal(t, transfer.PacketTimeoutTimestamp, first.PacketTimeoutTimestamp)
+		assert.NotZero(t, first.CreatedAt)
+		assert.NotZero(t, first.UpdatedAt)
+		assert.Nil(t, first.RecvTxHash)
+		assert.Nil(t, first.WriteAckStatus)
+		assert.Nil(t, first.StatusText)
+
+		// Invalid transfer is rejected
+		invalid := transfer
+		invalid.SourceChainID = ""
+		require.ErrorContains(t, s.CreateTransfer(ctx, invalid), "source chain id is required")
+
+		// Unknown tx returns empty list, not an error
+		transfers, err = s.ListTransfersBySourceTx(ctx, chainIDEth, "0xunknown")
+		require.NoError(t, err)
+		assert.Empty(t, transfers)
+	})
 }
