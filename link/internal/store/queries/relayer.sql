@@ -3,7 +3,7 @@ SELECT * FROM ibcv2_relay_requests
 WHERE source_chain_id = sqlc.arg(chain_id)
 AND source_tx_hash = sqlc.arg(tx_hash);
 
--- name: UpsertRelayRequest :exec
+-- name: CreateRelayRequest :exec
 INSERT INTO ibcv2_relay_requests (source_chain_id, source_tx_hash)
 VALUES (sqlc.arg(chain_id), sqlc.arg(tx_hash))
 ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING;

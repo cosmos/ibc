@@ -143,14 +143,14 @@ func (db *SqliteDB) GetRelayRequest(ctx context.Context, chainID string, txHash 
 	}, nil
 }
 
-func (db *SqliteDB) UpsertRelayRequest(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("UpsertRelayRequest", "chainID", chainID, "txHash", txHash)
+func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+	db.logger.Debug("CreateRelayRequest", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
 		return errors.New("chainID and txHash are required")
 	}
 
-	return db.repo.UpsertRelayRequest(ctx, chainID, txHash)
+	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
 // CreateTransfer inserts a transfer. Inserting the same packet twice is a noop.

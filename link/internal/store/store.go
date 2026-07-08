@@ -25,7 +25,7 @@ type Store interface {
 // Repository represents database CRUD operations.
 type Repository interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error)
-	UpsertRelayRequest(ctx context.Context, chainID string, txHash string) error
+	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
 	CreateTransfer(ctx context.Context, transfer Transfer) error
 	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Transfer, error)
 }

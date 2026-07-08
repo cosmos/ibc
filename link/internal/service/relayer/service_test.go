@@ -84,7 +84,7 @@ func TestRelay(t *testing.T) {
 		}
 
 		// tx hash is normalized to lowercase before storage
-		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
+		st.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
 		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 		st.EXPECT().CreateTransfer(ctx, store.Transfer{
@@ -112,7 +112,7 @@ func TestRelay(t *testing.T) {
 		clientManager := NewMockChainClientManager(t)
 		service := New(relayerConfig(), st, clientManager)
 
-		st.EXPECT().UpsertRelayRequest(ctx, "999", txHashLower).Return(nil).Once()
+		st.EXPECT().CreateRelayRequest(ctx, "999", txHashLower).Return(nil).Once()
 		clientManager.EXPECT().GetClient(ctx, "999").Return(nil, errors.New("no configured chain client")).Once()
 
 		// ACT
@@ -131,7 +131,7 @@ func TestRelay(t *testing.T) {
 		clientManager := NewMockChainClientManager(t)
 		service := New(relayerConfig(), st, clientManager)
 
-		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
+		st.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
 		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
@@ -174,13 +174,13 @@ func TestRelay(t *testing.T) {
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
-		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(errors.New("boom")).Once()
+		st.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(errors.New("boom")).Once()
 
 		// ACT
 		err := service.Relay(ctx, chainIDEth, txHashLower)
 
 		// ASSERT
-		require.ErrorContains(t, err, "upserting relay request")
+		require.ErrorContains(t, err, "creating relay request")
 		require.NotErrorIs(t, err, ErrInvalidInput)
 	})
 }

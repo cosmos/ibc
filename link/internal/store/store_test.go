@@ -142,7 +142,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		require.ErrorIs(t, err, ErrNotFound)
 
 		// Insert a relay request
-		err = s.UpsertRelayRequest(ctx, chainIDEth, txHashEth)
+		err = s.CreateRelayRequest(ctx, chainIDEth, txHashEth)
 		require.NoError(t, err)
 
 		// Get the inserted relay request
@@ -153,8 +153,8 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Equal(t, int64(1), request.ID)
 		assert.NotEmpty(t, request.CreatedAt)
 
-		// Upsert the relay request (noop)
-		err = s.UpsertRelayRequest(ctx, chainIDEth, txHashEth)
+		// Create the same relay request again (noop)
+		err = s.CreateRelayRequest(ctx, chainIDEth, txHashEth)
 		require.NoError(t, err)
 
 		requestAgain, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)

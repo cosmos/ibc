@@ -32,7 +32,7 @@ type ChainClientManager interface {
 // Store narrows store.Repository to what the relayer needs.
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
-	UpsertRelayRequest(ctx context.Context, chainID string, txHash string) error
+	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
 	CreateTransfer(ctx context.Context, transfer store.Transfer) error
 	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Transfer, error)
 }
@@ -90,8 +90,8 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return err
 	}
 
-	if errUpsert := s.store.UpsertRelayRequest(ctx, chainID, txHash); errUpsert != nil {
-		return errors.Wrap(errUpsert, "upserting relay request")
+	if errUpsert := s.store.CreateRelayRequest(ctx, chainID, txHash); errUpsert != nil {
+		return errors.Wrap(errUpsert, "creating relay request")
 	}
 
 	client, err := s.chains.GetClient(ctx, chainID)

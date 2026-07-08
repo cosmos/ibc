@@ -133,6 +133,69 @@ func (_m *MockStore) EXPECT() *MockStore_Expecter {
 	return &MockStore_Expecter{mock: &_m.Mock}
 }
 
+// CreateRelayRequest provides a mock function for the type MockStore
+func (_mock *MockStore) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+	ret := _mock.Called(ctx, chainID, txHash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateRelayRequest")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, chainID, txHash)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_CreateRelayRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateRelayRequest'
+type MockStore_CreateRelayRequest_Call struct {
+	*mock.Call
+}
+
+// CreateRelayRequest is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - txHash string
+func (_e *MockStore_Expecter) CreateRelayRequest(ctx any, chainID any, txHash any) *MockStore_CreateRelayRequest_Call {
+	return &MockStore_CreateRelayRequest_Call{Call: _e.mock.On("CreateRelayRequest", ctx, chainID, txHash)}
+}
+
+func (_c *MockStore_CreateRelayRequest_Call) Run(run func(ctx context.Context, chainID string, txHash string)) *MockStore_CreateRelayRequest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateRelayRequest_Call) Return(err error) *MockStore_CreateRelayRequest_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_CreateRelayRequest_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) error) *MockStore_CreateRelayRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateTransfer provides a mock function for the type MockStore
 func (_mock *MockStore) CreateTransfer(ctx context.Context, transfer store.Transfer) error {
 	ret := _mock.Called(ctx, transfer)
@@ -334,69 +397,6 @@ func (_c *MockStore_ListTransfersBySourceTx_Call) Return(transfers []store.Trans
 }
 
 func (_c *MockStore_ListTransfersBySourceTx_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) ([]store.Transfer, error)) *MockStore_ListTransfersBySourceTx_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// UpsertRelayRequest provides a mock function for the type MockStore
-func (_mock *MockStore) UpsertRelayRequest(ctx context.Context, chainID string, txHash string) error {
-	ret := _mock.Called(ctx, chainID, txHash)
-
-	if len(ret) == 0 {
-		panic("no return value specified for UpsertRelayRequest")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = returnFunc(ctx, chainID, txHash)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockStore_UpsertRelayRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpsertRelayRequest'
-type MockStore_UpsertRelayRequest_Call struct {
-	*mock.Call
-}
-
-// UpsertRelayRequest is a helper method to define mock.On call
-//   - ctx context.Context
-//   - chainID string
-//   - txHash string
-func (_e *MockStore_Expecter) UpsertRelayRequest(ctx any, chainID any, txHash any) *MockStore_UpsertRelayRequest_Call {
-	return &MockStore_UpsertRelayRequest_Call{Call: _e.mock.On("UpsertRelayRequest", ctx, chainID, txHash)}
-}
-
-func (_c *MockStore_UpsertRelayRequest_Call) Run(run func(ctx context.Context, chainID string, txHash string)) *MockStore_UpsertRelayRequest_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockStore_UpsertRelayRequest_Call) Return(err error) *MockStore_UpsertRelayRequest_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockStore_UpsertRelayRequest_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) error) *MockStore_UpsertRelayRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }

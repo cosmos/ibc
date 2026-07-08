@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+const createRelayRequest = `-- name: CreateRelayRequest :exec
+INSERT INTO ibcv2_relay_requests (source_chain_id, source_tx_hash)
+VALUES (?1, ?2)
+ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
+`
+
+func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+	_, err := q.db.ExecContext(ctx, createRelayRequest, chainID, txHash)
+	return err
+}
+
 const getRelayRequest = `-- name: GetRelayRequest :one
 SELECT id, source_chain_id, source_tx_hash, created_at FROM ibcv2_relay_requests
 WHERE source_chain_id = ?1
@@ -135,15 +146,4 @@ func (q *Queries) ListTransfersBySourceTx(ctx context.Context, chainID string, t
 		return nil, err
 	}
 	return items, nil
-}
-
-const upsertRelayRequest = `-- name: UpsertRelayRequest :exec
-INSERT INTO ibcv2_relay_requests (source_chain_id, source_tx_hash)
-VALUES (?1, ?2)
-ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
-`
-
-func (q *Queries) UpsertRelayRequest(ctx context.Context, chainID string, txHash string) error {
-	_, err := q.db.ExecContext(ctx, upsertRelayRequest, chainID, txHash)
-	return err
 }
