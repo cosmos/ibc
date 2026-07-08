@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,7 +35,7 @@ type Client struct {
 	routerAddress common.Address
 	eth           ETHClient
 	router        *ics26router.ContractFilterer
-	sendPacketID  common.Hash
+	routerABI     *abi.ABI
 	logger        *slog.Logger
 }
 
@@ -73,7 +74,7 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 		routerAddress: routerAddress,
 		eth:           eth,
 		router:        router,
-		sendPacketID:  routerABI.Events[sendPacketEvent].ID,
+		routerABI:     routerABI,
 		logger:        slog.With("module", "chains", "chainType", "evm", "chainID", chainID),
 	}, nil
 }
@@ -117,7 +118,7 @@ func (c *Client) txPacketEvents(ctx context.Context, txHash common.Hash) ([]chai
 			continue
 		case log.Address != c.routerAddress:
 			continue
-		case log.Topics[0] != c.sendPacketID:
+		case log.Topics[0] != c.routerABI.Events[sendPacketEvent].ID:
 			continue
 		}
 
