@@ -98,12 +98,6 @@ func (c *Client) TxPacketEvents(ctx context.Context, txHashes [][]byte) ([]chain
 	return events, nil
 }
 
-func (c *Client) Close() {
-	if eth, ok := c.eth.(*ethclient.Client); ok {
-		eth.Close()
-	}
-}
-
 func (c *Client) txPacketEvents(ctx context.Context, txHash common.Hash) ([]chains.PacketEvent, error) {
 	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
 	if err != nil {

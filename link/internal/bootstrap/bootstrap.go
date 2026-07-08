@@ -23,8 +23,6 @@ type Services struct {
 
 	Store store.Store
 
-	ChainClientManager *chains.ClientManager
-
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
 }
@@ -57,13 +55,12 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv.Register(relayerHandler)
 
 	services := &Services{
-		Context:            ctx,
-		Logger:             logger,
-		Server:             srv,
-		Store:              db,
-		ChainClientManager: clientManager,
-		RelayerService:     relayerService,
-		AttestorService:    nil,
+		Context:         ctx,
+		Logger:          logger,
+		Server:          srv,
+		Store:           db,
+		RelayerService:  relayerService,
+		AttestorService: nil,
 	}
 
 	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.

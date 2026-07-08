@@ -79,23 +79,3 @@ func (m *ClientManager) GetClient(_ context.Context, chainID string) (Client, er
 
 	return client, nil
 }
-
-type closer interface {
-	Close()
-}
-
-// Close closes all clients that support closing.
-func (m *ClientManager) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for _, client := range m.clients {
-		if c, ok := client.(closer); ok {
-			c.Close()
-		}
-	}
-
-	m.clients = make(map[string]Client)
-
-	return nil
-}

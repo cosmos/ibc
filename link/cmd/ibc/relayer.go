@@ -56,7 +56,6 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 	}
 
 	graceful.AddCallback(app.Store.Close)
-	graceful.AddCallback(app.ChainClientManager.Close)
 	graceful.AddCallback(app.Server.Stop)
 
 	// blocking
