@@ -4,6 +4,10 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/link/internal/chains"
+	"github.com/cosmos/ibc/link/internal/chains/evm"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
@@ -18,6 +22,8 @@ type Services struct {
 	Server  *server.Server
 
 	Store store.Store
+
+	ChainRegistry *chains.Registry
 
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
@@ -34,8 +40,14 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		return nil, err
 	}
 
+	// Chain clients
+	registry, err := buildChainRegistry(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	// Services
-	relayerService := relayer.New(cfg.Relayer, db)
+	relayerService := relayer.New(cfg.Relayer, db, registry)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)
@@ -49,6 +61,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		Logger:          logger,
 		Server:          srv,
 		Store:           db,
+		ChainRegistry:   registry,
 		RelayerService:  relayerService,
 		AttestorService: nil,
 	}
@@ -93,6 +106,32 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 		RelayerService:  nil,
 		AttestorService: attestorService,
 	}, nil
+}
+
+// buildChainRegistry creates a chain client for every relayer chain with an
+// EVM block, using the RPC endpoint declared in the top-level chains block.
+func buildChainRegistry(cfg config.Config) (*chains.Registry, error) {
+	registry := chains.NewRegistry()
+
+	for _, relayerChain := range cfg.Relayer.Chains {
+		if relayerChain.EVM == nil {
+			continue
+		}
+
+		chain, ok := cfg.Chain(relayerChain.ChainID)
+		if !ok {
+			return nil, errors.Errorf("chain %q not declared in top-level chains", relayerChain.ChainID)
+		}
+
+		client, err := evm.New(relayerChain.ChainID, chain.EVM.RPC, relayerChain.EVM.Contracts.ICS26Router)
+		if err != nil {
+			return nil, errors.Wrapf(err, "creating evm client for chain %q", relayerChain.ChainID)
+		}
+
+		registry.Add(relayerChain.ChainID, client)
+	}
+
+	return registry, nil
 }
 
 func buildAttestor(cfg config.Config) (*attestor.Service, *server.AttestorHandler, error) {

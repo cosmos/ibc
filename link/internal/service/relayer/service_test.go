@@ -2,12 +2,15 @@ package relayer
 
 import (
 	"context"
+	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 )
@@ -19,21 +22,125 @@ const (
 	txHashUpper = "0x60016C34C02278856C81A41CE857AC4BB837A2F4A13C95207E08CBC9E8F2B706"
 )
 
+func relayerConfig() config.RelayerConfig {
+	return config.RelayerConfig{
+		Chains: []config.RelayerChainConfig{
+			{
+				ChainID: chainIDEth,
+				Clients: []config.RelayerClientConfig{
+					{
+						ID:                  "base-0",
+						Type:                config.ClientTypeAttestation,
+						CounterpartyChainID: chainIDBase,
+					},
+				},
+			},
+		},
+	}
+}
+
+func txHashBytes(t *testing.T) [][]byte {
+	t.Helper()
+
+	raw, err := hex.DecodeString(txHashLower[2:])
+	require.NoError(t, err)
+
+	return [][]byte{raw}
+}
+
 func TestRelay(t *testing.T) {
-	t.Run("recordsRelayRequest", func(t *testing.T) {
+	t.Run("tracksExtractedPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st)
+		client := chains.NewMockClient(t)
+		registry := NewMockChainRegistry(t)
+		service := New(relayerConfig(), st, registry)
+
+		blockTime := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+		events := []chains.PacketEvent{
+			{
+				Height:    100,
+				BlockTime: blockTime,
+				Kind:      chains.KindSendPacket,
+				Packet: chains.Packet{
+					Sequence:         42,
+					SourceClient:     "base-0",
+					DestClient:       "ethereum-0",
+					TimeoutTimestamp: 1780000000,
+				},
+			},
+			{
+				// packets from unconfigured clients are skipped
+				Height:    100,
+				BlockTime: blockTime,
+				Kind:      chains.KindSendPacket,
+				Packet: chains.Packet{
+					Sequence:     7,
+					SourceClient: "unknown-0",
+					DestClient:   "ethereum-0",
+				},
+			},
+		}
 
 		// tx hash is normalized to lowercase before storage
 		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
+		registry.EXPECT().Client(chainIDEth).Return(client, true).Once()
+		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
+		st.EXPECT().CreateTransfer(ctx, store.Transfer{
+			SourceChainID:             chainIDEth,
+			DestinationChainID:        chainIDBase,
+			SourceTxHash:              txHashLower,
+			SourceTxTime:              blockTime,
+			PacketSequenceNumber:      42,
+			PacketSourceClientID:      "base-0",
+			PacketDestinationClientID: "ethereum-0",
+			PacketTimeoutTimestamp:    time.Unix(1780000000, 0).UTC(),
+		}).Return(nil).Once()
 
 		// ACT
 		err := service.Relay(ctx, chainIDEth, txHashUpper)
 
 		// ASSERT
 		require.NoError(t, err)
+	})
+
+	t.Run("unsupportedChain", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		st := NewMockStore(t)
+		registry := NewMockChainRegistry(t)
+		service := New(relayerConfig(), st, registry)
+
+		st.EXPECT().UpsertRelayRequest(ctx, "999", txHashLower).Return(nil).Once()
+		registry.EXPECT().Client("999").Return(nil, false).Once()
+
+		// ACT
+		err := service.Relay(ctx, "999", txHashLower)
+
+		// ASSERT
+		require.ErrorIs(t, err, ErrInvalidInput)
+		require.ErrorContains(t, err, "unsupported chain")
+	})
+
+	t.Run("extractionError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		st := NewMockStore(t)
+		client := chains.NewMockClient(t)
+		registry := NewMockChainRegistry(t)
+		service := New(relayerConfig(), st, registry)
+
+		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
+		registry.EXPECT().Client(chainIDEth).Return(client, true).Once()
+		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
+
+		// ACT
+		err := service.Relay(ctx, chainIDEth, txHashLower)
+
+		// ASSERT
+		require.ErrorContains(t, err, "extracting packet events")
+		require.NotErrorIs(t, err, ErrInvalidInput)
 	})
 
 	t.Run("validation", func(t *testing.T) {
@@ -50,7 +157,7 @@ func TestRelay(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				service := New(config.RelayerConfig{}, NewMockStore(t))
+				service := New(config.RelayerConfig{}, NewMockStore(t), NewMockChainRegistry(t))
 
 				// ACT
 				err := service.Relay(context.Background(), tt.chainID, tt.txHash)
@@ -65,7 +172,7 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st)
+		service := New(relayerConfig(), st, NewMockChainRegistry(t))
 
 		st.EXPECT().UpsertRelayRequest(ctx, chainIDEth, txHashLower).Return(errors.New("boom")).Once()
 
@@ -83,7 +190,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st)
+		service := New(config.RelayerConfig{}, st, NewMockChainRegistry(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(nil, store.ErrNotFound).Once()
 
@@ -98,7 +205,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st)
+		service := New(config.RelayerConfig{}, st, NewMockChainRegistry(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
 		st.EXPECT().ListTransfersBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
@@ -115,7 +222,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st)
+		service := New(config.RelayerConfig{}, st, NewMockChainRegistry(t))
 
 		recvTxHash := "0xrecv"
 		transfers := []store.Transfer{

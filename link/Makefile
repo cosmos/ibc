@@ -10,7 +10,7 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
-codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
+codegen: codegen-sql codegen-proto codegen-mocks codegen-abi ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
 	cd internal/store && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
@@ -21,7 +21,15 @@ codegen-proto: ## Generate Go proto bindings
 codegen-mocks: ## Generate mocks for the code
 	go run github.com/vektra/mockery/v3@v3.7.1
 
+codegen-abi: ## Generate Go bindings for EVM contract ABIs
+	mkdir -p internal/chains/evm/contracts/ics26_router
+	go tool abigen \
+		--abi internal/chains/evm/abi/ics26_router.json \
+		--pkg ics26_router \
+		--type Contract \
+		--out internal/chains/evm/contracts/ics26_router/ics26_router.go
+
 test: ## Run tests
 	go test ./... -v
 
-.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-mocks
+.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-mocks codegen-abi

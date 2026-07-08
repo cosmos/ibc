@@ -3,12 +3,15 @@ package relayer
 
 import (
 	"context"
+	"encoding/hex"
 	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 )
@@ -18,6 +21,12 @@ type Service struct {
 	logger *slog.Logger
 	cfg    config.RelayerConfig
 	store  Store
+	chains ChainRegistry
+}
+
+// ChainRegistry resolves chain clients by chain id.
+type ChainRegistry interface {
+	Client(chainID string) (chains.Client, bool)
 }
 
 // Store narrows store.Repository to what the relayer needs.
@@ -63,15 +72,17 @@ type PacketStatus struct {
 }
 
 // New Service constructor.
-func New(cfg config.RelayerConfig, st Store) *Service {
+func New(cfg config.RelayerConfig, st Store, registry ChainRegistry) *Service {
 	return &Service{
 		logger: slog.With("service", "relayer"),
 		cfg:    cfg,
 		store:  st,
+		chains: registry,
 	}
 }
 
-// Relay records a request to relay the packets produced by the given transaction.
+// Relay records a request to relay the packets produced by the given transaction
+// and tracks a transfer for every packet it sent.
 // Repeated submissions of the same transaction are a noop.
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	txHash, err := validateRelayArgs(chainID, txHash)
@@ -79,11 +90,63 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return err
 	}
 
-	if err := s.store.UpsertRelayRequest(ctx, chainID, txHash); err != nil {
-		return errors.Wrap(err, "upserting relay request")
+	if errUpsert := s.store.UpsertRelayRequest(ctx, chainID, txHash); errUpsert != nil {
+		return errors.Wrap(errUpsert, "upserting relay request")
 	}
 
-	s.logger.Info("Recorded relay request", "chainID", chainID, "txHash", txHash)
+	client, ok := s.chains.Client(chainID)
+	if !ok {
+		return errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
+	}
+
+	hashBytes, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
+	if err != nil {
+		return errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
+	}
+
+	events, err := client.TxPacketEvents(ctx, [][]byte{hashBytes})
+	if err != nil {
+		return errors.Wrap(err, "extracting packet events")
+	}
+
+	tracked := 0
+
+	for _, event := range events {
+		if event.Kind != chains.KindSendPacket {
+			continue
+		}
+
+		destinationChainID, ok := s.cfg.CounterpartyChainID(chainID, event.Packet.SourceClient)
+		if !ok {
+			s.logger.Warn(
+				"Skipping packet from unconfigured client",
+				"chainID", chainID,
+				"clientID", event.Packet.SourceClient,
+				"sequence", event.Packet.Sequence,
+			)
+
+			continue
+		}
+
+		transfer := store.Transfer{
+			SourceChainID:             chainID,
+			DestinationChainID:        destinationChainID,
+			SourceTxHash:              txHash,
+			SourceTxTime:              event.BlockTime,
+			PacketSequenceNumber:      event.Packet.Sequence,
+			PacketSourceClientID:      event.Packet.SourceClient,
+			PacketDestinationClientID: event.Packet.DestClient,
+			PacketTimeoutTimestamp:    unixTime(event.Packet.TimeoutTimestamp),
+		}
+
+		if err := s.store.CreateTransfer(ctx, transfer); err != nil {
+			return errors.Wrapf(err, "creating transfer for packet %d", event.Packet.Sequence)
+		}
+
+		tracked++
+	}
+
+	s.logger.Info("Recorded relay request", "chainID", chainID, "txHash", txHash, "packets", tracked)
 
 	return nil
 }
@@ -162,4 +225,8 @@ func toTxInfo(txHash *string, chainID string) *TxInfo {
 	}
 
 	return &TxInfo{TxHash: *txHash, ChainID: chainID}
+}
+
+func unixTime(seconds uint64) time.Time {
+	return time.Unix(int64(seconds), 0).UTC() //nolint:gosec // timeout timestamps fit in int64
 }
