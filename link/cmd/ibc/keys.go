@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/hex"
+
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
@@ -31,6 +33,7 @@ var (
 	}
 )
 
+//nolint:goconst // cli usage
 func keysNew(_ *cobra.Command, args []string) error {
 	_, err := setupHomeWithConfig()
 	if err != nil {
@@ -42,13 +45,19 @@ func keysNew(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	key, err := signer.GenerateLocalKey(keyType)
+	if err != nil {
+		return err
+	}
+
 	saveKey := len(args) > 1
 
 	if !saveKey {
+		// for ephemeral keys we print the key to stdout including the private key
 		return config.PrintJSON(map[string]any{
 			"keyType": keyType,
-			"stdout":  true,
-			"pubKey":  "TODO",
+			"pubKey":  toHex(key.PubKey()),
+			"privKey": toHex(key.PrivateKey()),
 		})
 	}
 
@@ -57,11 +66,15 @@ func keysNew(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := key.StoreToFile(keyPath); err != nil {
+		return err
+	}
+
+	// note that we don't print the private key here to avoid leaking it to the user
 	return config.PrintJSON(map[string]any{
-		"keyType": keyType,
-		"stdout":  true,
-		"pubKey":  "TODO",
-		"keyPath": keyPath,
+		"keyType":   keyType,
+		"publicKey": toHex(key.PubKey()),
+		"keyPath":   keyPath,
 	})
 }
 
@@ -76,10 +89,24 @@ func keysShow(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	return config.PrintJSON(map[string]any{
-		"stdout":  true,
-		"pubKey":  "TODO",
-		"keyPath": keyPath,
-		"privKey": "TODO",
-	})
+	key, err := signer.LocalKeyFromFile(keyPath)
+	if err != nil {
+		return err
+	}
+
+	kv := map[string]any{
+		"keyType":   key.Type(),
+		"publicKey": toHex(key.PubKey()),
+		"keyPath":   keyPath,
+	}
+
+	if flagKeysShowPrivate {
+		kv["privateKey"] = toHex(key.PrivateKey())
+	}
+
+	return config.PrintJSON(kv)
+}
+
+func toHex(b []byte) string {
+	return "0x" + hex.EncodeToString(b)
 }
