@@ -3,10 +3,7 @@ package chains
 
 import (
 	"context"
-	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 // Client parses packet details out of transaction event logs.
@@ -49,33 +46,4 @@ type PacketEvent struct {
 	Kind      EventKind
 	Packet    Packet
 	Acks      [][]byte
-}
-
-// ClientManager holds the chain clients for all configured chains.
-// Safe for concurrent use.
-type ClientManager struct {
-	mu      sync.RWMutex
-	clients map[string]Client
-}
-
-// NewClientManager ClientManager constructor.
-func NewClientManager(clients map[string]Client) *ClientManager {
-	if clients == nil {
-		clients = make(map[string]Client)
-	}
-
-	return &ClientManager{clients: clients}
-}
-
-// GetClient returns the chain client for a chain id.
-func (m *ClientManager) GetClient(_ context.Context, chainID string) (Client, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	client, ok := m.clients[chainID]
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for chain ID %s", chainID)
-	}
-
-	return client, nil
 }

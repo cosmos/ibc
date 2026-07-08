@@ -4,10 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/pkg/errors"
-
-	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/chains/evm"
+	"github.com/cosmos/ibc/link/internal/chains/manager"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
@@ -39,7 +36,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Chain clients
-	clientManager, err := newClientManagerFromConfig(cfg)
+	clientManager, err := manager.NewFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -103,33 +100,6 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 		RelayerService:  nil,
 		AttestorService: attestorService,
 	}, nil
-}
-
-// newClientManagerFromConfig creates a chain client for every relayer chain
-// with an EVM block, using the RPC endpoint declared in the top-level chains
-// block, and wraps them in a ClientManager.
-func newClientManagerFromConfig(cfg config.Config) (*chains.ClientManager, error) {
-	clients := make(map[string]chains.Client)
-
-	for _, relayerChain := range cfg.Relayer.Chains {
-		if relayerChain.EVM == nil {
-			continue
-		}
-
-		chain, ok := cfg.Chain(relayerChain.ChainID)
-		if !ok {
-			return nil, errors.Errorf("chain %q not declared in top-level chains", relayerChain.ChainID)
-		}
-
-		client, err := evm.New(relayerChain.ChainID, chain.EVM.RPC, relayerChain.EVM.Contracts.ICS26Router)
-		if err != nil {
-			return nil, errors.Wrapf(err, "creating evm client for chain %q", relayerChain.ChainID)
-		}
-
-		clients[relayerChain.ChainID] = client
-	}
-
-	return chains.NewClientManager(clients), nil
 }
 
 func buildAttestor(cfg config.Config) (*attestor.Service, *server.AttestorHandler, error) {
