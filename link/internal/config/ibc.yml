@@ -7,3 +7,53 @@ db:
   url: ibc.db
   # type: postgres
   # url: postgres://user:password@host:port/dbname
+
+# chains declares how to reach each chain; referenced by other blocks via chainId
+# chains:
+#   - chainId: "1"
+#     evm:
+#       rpc: https://ethereum-rpc.example.com
+#   - chainId: "8453"
+#     evm:
+#       rpc: https://base-rpc.example.com
+
+# relayer:
+#   chains:
+#     - chainId: "1"
+#       evm:
+#         contracts:
+#           ics26Router: "0x..."
+#         # delay between transaction submission attempts
+#         txSubmissionDelay: 2s
+#         gasFeeCapMultiplier: 1.5
+#         gasTipCapMultiplier: 1.5
+#       # gas balance thresholds below which the relayer surfaces low-balance metrics
+#       gasAlertThresholds:
+#         warningThreshold: "500000000"
+#         criticalThreshold: "10000000"
+#       # source clients the relayer monitors and relays transfers from
+#       clients:
+#         - id: "base-0"
+#           type: "attestation"
+#           counterpartyChainId: "8453"
+#           attestorSet:
+#             # relayer considers `latest block - finality offset` to be finalized
+#             counterpartyChainFinalityOffset: 1
+#             threshold: 2
+#             attestors:
+#               - type: remote
+#                 grpc: attestor-alice.example.com:3000
+#                 alias: "attestor-alice-base"
+#               - type: remote
+#                 grpc: attestor-bob.example.com:3000
+#                 alias: "attestor-bob-base"
+#               - type: local
+#                 alias: "attestor-dan-base"
+#           autoRelay:
+#             enabled: true
+#             # number of blocks behind the latest to start relaying transfers from
+#             lookback: 100
+#       # maximum number of packets per relay tx on this chain
+#       packetBatchSize: 20
+#       # maximum time the relayer waits for packets to collect before relay
+#       packetBatchTimeout: 10s

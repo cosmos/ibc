@@ -27,6 +27,8 @@ const sqliteInMemory = ":memory:"
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	DB       DBConfig       `yaml:"db"`
+	Chains   []ChainConfig  `yaml:"chains"`
+	Relayer  RelayerConfig  `yaml:"relayer"`
 	Attestor AttestorConfig `yaml:"attestor"`
 }
 
@@ -68,6 +70,10 @@ func DefaultConfig() Config {
 		DB: DBConfig{
 			Type: DBTypeSQLite,
 			URL:  "ibc.db",
+		},
+		Chains: []ChainConfig{},
+		Relayer: RelayerConfig{
+			Chains: []RelayerChainConfig{},
 		},
 		Attestor: AttestorConfig{
 			Attestations: []AttestationConfig{},
@@ -116,8 +122,49 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".db")
 	}
 
+	chainIDs := make(map[string]struct{})
+	for _, chain := range c.Chains {
+		if err := chain.Validate(); err != nil {
+			return errors.Wrapf(err, ".chains[%s]", chain.ChainID)
+		}
+
+		if _, ok := chainIDs[chain.ChainID]; ok {
+			return errors.Wrapf(errors.Errorf("duplicate chainId: %q", chain.ChainID), ".chains")
+		}
+		chainIDs[chain.ChainID] = struct{}{}
+	}
+
+	if err := c.Relayer.Validate(); err != nil {
+		return errors.Wrap(err, ".relayer")
+	}
+
+	if err := c.validateChainReferences(); err != nil {
+		return errors.Wrap(err, ".relayer")
+	}
+
 	if err := c.Attestor.Validate(); err != nil {
 		return errors.Wrap(err, ".attestor")
+	}
+
+	return nil
+}
+
+// validateChainReferences ensures every chain referenced by the relayer config
+// is declared in the top-level chains block.
+func (c Config) validateChainReferences() error {
+	for _, chain := range c.Relayer.Chains {
+		if _, ok := c.Chain(chain.ChainID); !ok {
+			return errors.Errorf(".chains[%s] chainId not declared in top-level chains", chain.ChainID)
+		}
+
+		for _, client := range chain.Clients {
+			if _, ok := c.Chain(client.CounterpartyChainID); !ok {
+				return errors.Errorf(
+					".chains[%s].clients[%s] counterpartyChainId %q not declared in top-level chains",
+					chain.ChainID, client.ID, client.CounterpartyChainID,
+				)
+			}
+		}
 	}
 
 	return nil
