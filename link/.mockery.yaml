@@ -20,3 +20,11 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       RelayerApiServiceClient:
+  github.com/cosmos/ibc/link/internal/service/relayer:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "store.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Store:
