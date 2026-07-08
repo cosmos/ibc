@@ -25,9 +25,15 @@ type PostgresDB struct {
 	// *sql.DB wrapper for migrations
 	sqlWrapper *sql.DB
 
-	// sqlc repository
-	repo *postgres.Queries
+	// sqlc repository bound to the pool
+	*postgresRepository
 
+	logger *slog.Logger
+}
+
+// postgresRepository implements Repository over a pool- or tx-bound sqlc Queries.
+type postgresRepository struct {
+	repo   *postgres.Queries
 	logger *slog.Logger
 }
 
@@ -53,11 +59,13 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 		return nil, errors.Wrap(err, "create pool")
 	}
 
+	logger := slog.With("module", "database")
+
 	db := &PostgresDB{
-		pool:       pool,
-		sqlWrapper: stdlib.OpenDBFromPool(pool),
-		repo:       postgres.New(pool),
-		logger:     slog.With("module", "database"),
+		pool:               pool,
+		sqlWrapper:         stdlib.OpenDBFromPool(pool),
+		postgresRepository: &postgresRepository{repo: postgres.New(pool), logger: logger},
+		logger:             logger,
 	}
 
 	if ping {
@@ -115,7 +123,31 @@ func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
 }
 
-func (db *PostgresDB) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
+// ExecTx runs fn within a database transaction.
+func (db *PostgresDB) ExecTx(ctx context.Context, fn func(Repository) error) error {
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return errors.Wrap(err, "beginning transaction")
+	}
+
+	txRepo := &postgresRepository{repo: db.repo.WithTx(tx), logger: db.logger}
+
+	if err := fn(txRepo); err != nil {
+		if errRollback := tx.Rollback(ctx); errRollback != nil {
+			return errors.Wrapf(err, "rolling back transaction: %s", errRollback)
+		}
+
+		return err
+	}
+
+	return errors.Wrap(tx.Commit(ctx), "committing transaction")
+}
+
+func (db *postgresRepository) GetRelayRequest(
+	ctx context.Context,
+	chainID string,
+	txHash string,
+) (*RelayRequest, error) {
 	db.logger.Debug("GetRelayRequest", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
@@ -135,7 +167,7 @@ func (db *PostgresDB) GetRelayRequest(ctx context.Context, chainID string, txHas
 	}, nil
 }
 
-func (db *PostgresDB) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+func (db *postgresRepository) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
 	db.logger.Debug("CreateRelayRequest", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
@@ -146,7 +178,7 @@ func (db *PostgresDB) CreateRelayRequest(ctx context.Context, chainID string, tx
 }
 
 // CreateTransfer inserts a transfer. Inserting the same packet twice is a noop.
-func (db *PostgresDB) CreateTransfer(ctx context.Context, transfer Transfer) error {
+func (db *postgresRepository) CreateTransfer(ctx context.Context, transfer Transfer) error {
 	db.logger.Debug(
 		"CreateTransfer",
 		"chainID", transfer.SourceChainID,
@@ -172,7 +204,11 @@ func (db *PostgresDB) CreateTransfer(ctx context.Context, transfer Transfer) err
 	return err
 }
 
-func (db *PostgresDB) ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Transfer, error) {
+func (db *postgresRepository) ListTransfersBySourceTx(
+	ctx context.Context,
+	chainID string,
+	txHash string,
+) ([]Transfer, error) {
 	db.logger.Debug("ListTransfersBySourceTx", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {

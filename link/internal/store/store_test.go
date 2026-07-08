@@ -162,6 +162,59 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Equal(t, request.CreatedAt, requestAgain.CreatedAt)
 	})
 
+	t.Run("execTx", func(t *testing.T) {
+		const txHashAtomic = "0xa70m1c"
+
+		transfer := Transfer{
+			SourceChainID:             chainIDEth,
+			DestinationChainID:        chainIDBase,
+			SourceTxHash:              txHashAtomic,
+			SourceTxTime:              time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC),
+			PacketSequenceNumber:      7,
+			PacketSourceClientID:      "base-0",
+			PacketDestinationClientID: "ethereum-0",
+			PacketTimeoutTimestamp:    time.Date(2026, 7, 8, 13, 0, 0, 0, time.UTC),
+		}
+
+		// A failing fn rolls back every write
+		err := s.ExecTx(ctx, func(repo Repository) error {
+			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
+				return err
+			}
+			if err := repo.CreateTransfer(ctx, transfer); err != nil {
+				return err
+			}
+
+			return assert.AnError
+		})
+		require.ErrorIs(t, err, assert.AnError)
+
+		_, err = s.GetRelayRequest(ctx, chainIDEth, txHashAtomic)
+		require.ErrorIs(t, err, ErrNotFound)
+
+		transfers, err := s.ListTransfersBySourceTx(ctx, chainIDEth, txHashAtomic)
+		require.NoError(t, err)
+		assert.Empty(t, transfers)
+
+		// A successful fn commits every write
+		err = s.ExecTx(ctx, func(repo Repository) error {
+			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
+				return err
+			}
+
+			return repo.CreateTransfer(ctx, transfer)
+		})
+		require.NoError(t, err)
+
+		_, err = s.GetRelayRequest(ctx, chainIDEth, txHashAtomic)
+		require.NoError(t, err)
+
+		transfers, err = s.ListTransfersBySourceTx(ctx, chainIDEth, txHashAtomic)
+		require.NoError(t, err)
+		require.Len(t, transfers, 1)
+		assert.Equal(t, uint64(7), transfers[0].PacketSequenceNumber)
+	})
+
 	t.Run("transfers", func(t *testing.T) {
 		transfer := Transfer{
 			SourceChainID:             chainIDEth,

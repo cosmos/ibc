@@ -25,7 +25,13 @@ const SqliteInMemory = ":memory:"
 
 // SqliteDB is a wrapper around the sqlite database.
 type SqliteDB struct {
-	db     *sql.DB
+	db *sql.DB
+	*sqliteRepository
+	logger *slog.Logger
+}
+
+// sqliteRepository implements Repository over a db- or tx-bound sqlc Queries.
+type sqliteRepository struct {
 	repo   *reposqlite.Queries
 	logger *slog.Logger
 }
@@ -64,9 +70,9 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		db.SetMaxOpenConns(1)
 
 		return &SqliteDB{
-			db:     db,
-			repo:   reposqlite.New(db),
-			logger: logger,
+			db:               db,
+			sqliteRepository: &sqliteRepository{repo: reposqlite.New(db), logger: logger},
+			logger:           logger,
 		}, nil
 	}
 
@@ -93,9 +99,9 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 	}
 
 	return &SqliteDB{
-		db:     db,
-		repo:   reposqlite.New(db),
-		logger: logger,
+		db:               db,
+		sqliteRepository: &sqliteRepository{repo: reposqlite.New(db), logger: logger},
+		logger:           logger,
 	}, nil
 }
 
@@ -123,7 +129,27 @@ func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.db, config.DBTypeSQLite)
 }
 
-func (db *SqliteDB) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
+// ExecTx runs fn within a database transaction.
+func (db *SqliteDB) ExecTx(ctx context.Context, fn func(Repository) error) error {
+	tx, err := db.db.BeginTx(ctx, nil)
+	if err != nil {
+		return errors.Wrap(err, "beginning transaction")
+	}
+
+	txRepo := &sqliteRepository{repo: db.repo.WithTx(tx), logger: db.logger}
+
+	if err := fn(txRepo); err != nil {
+		if errRollback := tx.Rollback(); errRollback != nil {
+			return errors.Wrapf(err, "rolling back transaction: %s", errRollback)
+		}
+
+		return err
+	}
+
+	return errors.Wrap(tx.Commit(), "committing transaction")
+}
+
+func (db *sqliteRepository) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
 	db.logger.Debug("GetRelayRequest", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
@@ -143,7 +169,7 @@ func (db *SqliteDB) GetRelayRequest(ctx context.Context, chainID string, txHash 
 	}, nil
 }
 
-func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+func (db *sqliteRepository) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
 	db.logger.Debug("CreateRelayRequest", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
@@ -154,7 +180,7 @@ func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHa
 }
 
 // CreateTransfer inserts a transfer. Inserting the same packet twice is a noop.
-func (db *SqliteDB) CreateTransfer(ctx context.Context, transfer Transfer) error {
+func (db *sqliteRepository) CreateTransfer(ctx context.Context, transfer Transfer) error {
 	db.logger.Debug(
 		"CreateTransfer",
 		"chainID", transfer.SourceChainID,
@@ -180,7 +206,11 @@ func (db *SqliteDB) CreateTransfer(ctx context.Context, transfer Transfer) error
 	return err
 }
 
-func (db *SqliteDB) ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Transfer, error) {
+func (db *sqliteRepository) ListTransfersBySourceTx(
+	ctx context.Context,
+	chainID string,
+	txHash string,
+) ([]Transfer, error) {
 	db.logger.Debug("ListTransfersBySourceTx", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {

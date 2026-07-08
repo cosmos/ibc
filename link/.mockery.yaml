@@ -29,6 +29,14 @@ packages:
     interfaces:
       Store:
       ChainClientManager:
+  github.com/cosmos/ibc/link/internal/store:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "store.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Repository:
   github.com/cosmos/ibc/link/internal/chains:
     config:
       dir: "{{.InterfaceDir}}"

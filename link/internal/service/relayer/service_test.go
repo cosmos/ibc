@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains"
@@ -49,10 +50,11 @@ func txHashBytes(t *testing.T) [][]byte {
 }
 
 func TestRelay(t *testing.T) {
-	t.Run("tracksExtractedPackets", func(t *testing.T) {
+	t.Run("tracksExtractedPacketsAtomically", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
+		repo := store.NewMockRepository(t)
 		client := chains.NewMockClient(t)
 		clientManager := NewMockChainClientManager(t)
 		service := New(relayerConfig(), st, clientManager)
@@ -83,11 +85,19 @@ func TestRelay(t *testing.T) {
 			},
 		}
 
-		// tx hash is normalized to lowercase before storage
-		st.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
 		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
-		st.EXPECT().CreateTransfer(ctx, store.Transfer{
+
+		// the request and its transfers are recorded within one transaction;
+		// tx hash is normalized to lowercase before storage
+		st.EXPECT().
+			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
+			RunAndReturn(func(ctx context.Context, fn func(store.Repository) error) error {
+				return fn(repo)
+			}).
+			Once()
+		repo.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
+		repo.EXPECT().CreateTransfer(ctx, store.Transfer{
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
 			SourceTxHash:              txHashLower,
@@ -108,11 +118,10 @@ func TestRelay(t *testing.T) {
 	t.Run("unsupportedChain", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		st := NewMockStore(t)
 		clientManager := NewMockChainClientManager(t)
-		service := New(relayerConfig(), st, clientManager)
+		service := New(relayerConfig(), NewMockStore(t), clientManager)
 
-		st.EXPECT().CreateRelayRequest(ctx, "999", txHashLower).Return(nil).Once()
+		// nothing is recorded for an unsupported chain
 		clientManager.EXPECT().GetClient(ctx, "999").Return(nil, errors.New("no configured chain client")).Once()
 
 		// ACT
@@ -126,12 +135,11 @@ func TestRelay(t *testing.T) {
 	t.Run("extractionError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		st := NewMockStore(t)
 		client := chains.NewMockClient(t)
 		clientManager := NewMockChainClientManager(t)
-		service := New(relayerConfig(), st, clientManager)
+		service := New(relayerConfig(), NewMockStore(t), clientManager)
 
-		st.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
+		// nothing is recorded when extraction fails
 		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
@@ -172,15 +180,22 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainClientManager(t))
+		client := chains.NewMockClient(t)
+		clientManager := NewMockChainClientManager(t)
+		service := New(relayerConfig(), st, clientManager)
 
-		st.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(errors.New("boom")).Once()
+		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
+		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, nil).Once()
+		st.EXPECT().
+			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
+			Return(errors.New("boom")).
+			Once()
 
 		// ACT
 		err := service.Relay(ctx, chainIDEth, txHashLower)
 
 		// ASSERT
-		require.ErrorContains(t, err, "creating relay request")
+		require.ErrorContains(t, err, "recording relay request")
 		require.NotErrorIs(t, err, ErrInvalidInput)
 	})
 }

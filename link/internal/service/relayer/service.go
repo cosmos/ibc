@@ -29,12 +29,11 @@ type ChainClientManager interface {
 	GetClient(ctx context.Context, chainID string) (chains.Client, error)
 }
 
-// Store narrows store.Repository to what the relayer needs.
+// Store narrows store.Store to what the relayer needs.
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
-	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
-	CreateTransfer(ctx context.Context, transfer store.Transfer) error
 	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Transfer, error)
+	ExecTx(ctx context.Context, fn func(store.Repository) error) error
 }
 
 // Relay errors
@@ -82,16 +81,12 @@ func New(cfg config.RelayerConfig, st Store, clientManager ChainClientManager) *
 }
 
 // Relay records a request to relay the packets produced by the given transaction
-// and tracks a transfer for every packet it sent.
-// Repeated submissions of the same transaction are a noop.
+// and tracks a transfer for every packet it sent. The request and its transfers
+// are recorded atomically. Repeated submissions of the same transaction are a noop.
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	txHash, err := validateRelayArgs(chainID, txHash)
 	if err != nil {
 		return err
-	}
-
-	if errUpsert := s.store.CreateRelayRequest(ctx, chainID, txHash); errUpsert != nil {
-		return errors.Wrap(errUpsert, "creating relay request")
 	}
 
 	client, err := s.chains.GetClient(ctx, chainID)
@@ -109,7 +104,34 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return errors.Wrap(err, "extracting packet events")
 	}
 
-	tracked := 0
+	transfers := s.transfersFromEvents(chainID, txHash, events)
+
+	err = s.store.ExecTx(ctx, func(repo store.Repository) error {
+		if errCreate := repo.CreateRelayRequest(ctx, chainID, txHash); errCreate != nil {
+			return errors.Wrap(errCreate, "creating relay request")
+		}
+
+		for _, transfer := range transfers {
+			if errCreate := repo.CreateTransfer(ctx, transfer); errCreate != nil {
+				return errors.Wrapf(errCreate, "creating transfer for packet %d", transfer.PacketSequenceNumber)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return errors.Wrap(err, "recording relay request")
+	}
+
+	s.logger.Info("Recorded relay request", "chainID", chainID, "txHash", txHash, "packets", len(transfers))
+
+	return nil
+}
+
+// transfersFromEvents converts send packet events into transfers, skipping
+// packets from clients that are not configured.
+func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.Transfer {
+	var transfers []store.Transfer
 
 	for _, event := range events {
 		if event.Kind != chains.KindSendPacket {
@@ -128,7 +150,7 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 			continue
 		}
 
-		transfer := store.Transfer{
+		transfers = append(transfers, store.Transfer{
 			SourceChainID:             chainID,
 			DestinationChainID:        destinationChainID,
 			SourceTxHash:              txHash,
@@ -137,18 +159,10 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 			PacketSourceClientID:      event.Packet.SourceClient,
 			PacketDestinationClientID: event.Packet.DestClient,
 			PacketTimeoutTimestamp:    unixTime(event.Packet.TimeoutTimestamp),
-		}
-
-		if err := s.store.CreateTransfer(ctx, transfer); err != nil {
-			return errors.Wrapf(err, "creating transfer for packet %d", event.Packet.Sequence)
-		}
-
-		tracked++
+		})
 	}
 
-	s.logger.Info("Recorded relay request", "chainID", chainID, "txHash", txHash, "packets", tracked)
-
-	return nil
+	return transfers
 }
 
 // Status returns the per-packet relay status for a previously relayed transaction.
