@@ -188,7 +188,42 @@ func (c RelayerConfig) Validate() error {
 		}
 	}
 
+	for _, chain := range c.Chains {
+		for _, client := range chain.Clients {
+			if err := c.validateCounterparty(chain.ChainID, client); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
+}
+
+// validateCounterparty ensures the counterparty side of a client's connection
+// is also configured. Connections are relayed bi-directionally, so the relayer
+// needs the client properties on both chains.
+func (c RelayerConfig) validateCounterparty(chainID string, client RelayerClientConfig) error {
+	counterparty, ok := c.Chain(client.CounterpartyChainID)
+	if !ok {
+		return errors.Errorf(
+			".chains[%s].clients[%s] counterparty chain %q must also be configured for bi-directional relaying",
+			chainID, client.ID, client.CounterpartyChainID,
+		)
+	}
+
+	for _, counterpartyClient := range counterparty.Clients {
+		if counterpartyClient.CounterpartyChainID == chainID {
+			return nil
+		}
+	}
+
+	return errors.Errorf(
+		".chains[%s].clients[%s] counterparty chain %q must configure a client with counterpartyChainId %q for bi-directional relaying",
+		chainID,
+		client.ID,
+		client.CounterpartyChainID,
+		chainID,
+	)
 }
 
 func (c RelayerChainConfig) Validate() error {

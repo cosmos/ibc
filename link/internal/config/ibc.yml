@@ -57,3 +57,16 @@ db:
 #       packetBatchSize: 20
 #       # maximum time the relayer waits for packets to collect before relay
 #       packetBatchTimeout: 10s
+#     # connections are relayed bi-directionally: the counterparty chain must
+#     # also configure the client on its side
+#     - chainId: "8453"
+#       evm:
+#         contracts:
+#           ics26Router: "0x..."
+#         txSubmissionDelay: 2s
+#       clients:
+#         - id: "ethereum-0"
+#           type: "attestation"
+#           counterpartyChainId: "1"
+#       packetBatchSize: 20
+#       packetBatchTimeout: 10s

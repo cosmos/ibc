@@ -186,6 +186,20 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `counterpartyChainId "999" not declared`,
 			},
 			{
+				name: "counterparty chain not configured in relayer",
+				patch: func(c *Config) {
+					c.Relayer.Chains = c.Relayer.Chains[:1]
+				},
+				errContains: `counterparty chain "8453" must also be configured for bi-directional relaying`,
+			},
+			{
+				name: "counterparty chain has no client back",
+				patch: func(c *Config) {
+					c.Relayer.Chains[1].Clients = nil
+				},
+				errContains: `counterparty chain "8453" must configure a client with counterpartyChainId "1"`,
+			},
+			{
 				name: "negative batch size",
 				patch: func(c *Config) {
 					c.Relayer.Chains[0].PacketBatchSize = -1

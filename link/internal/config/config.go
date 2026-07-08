@@ -134,11 +134,11 @@ func (c Config) Validate() error {
 		chainIDs[chain.ChainID] = struct{}{}
 	}
 
-	if err := c.Relayer.Validate(); err != nil {
+	if err := c.validateChainReferences(); err != nil {
 		return errors.Wrap(err, ".relayer")
 	}
 
-	if err := c.validateChainReferences(); err != nil {
+	if err := c.Relayer.Validate(); err != nil {
 		return errors.Wrap(err, ".relayer")
 	}
 
