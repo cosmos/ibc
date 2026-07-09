@@ -6,8 +6,8 @@ import (
 
 	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/pkg/errors"
-
-	"github.com/cosmos/ibc/link/internal/pkg/client"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // RemoteSigner wraps KMS remote signer.
@@ -40,7 +40,7 @@ func NewRemote(ctx context.Context, client signerservice.SignerServiceClient, ke
 }
 
 func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string) (*RemoteSigner, error) {
-	grpcClient, err := client.NewGRPCClientFromURL(grpcURL)
+	grpcClient, err := newGRPCClientFromURL(grpcURL)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create grpc client")
 	}
@@ -100,6 +100,11 @@ func keyTypeFromProto(scheme signerservice.SignatureScheme) (KeyType, error) {
 	default:
 		return "", errors.Errorf("unsupported remote key scheme: %s", scheme)
 	}
+}
+
+// todo: revisit security if needed. we can convert `signer.grpc string` to `signer.grpc{<options>}`
+func newGRPCClientFromURL(url string) (*grpc.ClientConn, error) {
+	return grpc.NewClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 }
 
 func bytesToPayload(message []byte) *signerservice.Payload {
