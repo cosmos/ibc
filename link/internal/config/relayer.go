@@ -284,7 +284,7 @@ func (c GasAlertThresholds) Validate() error {
 		".criticalThreshold": c.CriticalThreshold,
 	} {
 		if value == "" {
-			return errors.Errorf("%s required", name)
+			continue
 		}
 
 		amount, ok := new(big.Int).SetString(value, 10)

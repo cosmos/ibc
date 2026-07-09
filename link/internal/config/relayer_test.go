@@ -234,6 +234,12 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".warningThreshold must be a non-negative integer",
 			},
 			{
+				name: "empty gas thresholds are valid",
+				patch: func(c *Config) {
+					c.Relayer.Chains[0].GasAlertThresholds = &GasAlertThresholds{}
+				},
+			},
+			{
 				name: "client missing id",
 				patch: func(c *Config) {
 					c.Relayer.Chains[0].Clients[0].ID = ""
