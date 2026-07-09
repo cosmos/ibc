@@ -132,20 +132,20 @@ func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 	return RelayerChainConfig{}, false
 }
 
-// CounterpartyChainID resolves the destination chain for a source client.
-func (c RelayerConfig) CounterpartyChainID(chainID, clientID string) (string, bool) {
+// Client returns the client config for the given chain and client id.
+func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 	chain, ok := c.Chain(chainID)
 	if !ok {
-		return "", false
+		return ClientConfig{}, false
 	}
 
 	for _, client := range chain.Clients {
 		if client.ID == clientID {
-			return client.CounterpartyChainID, true
+			return client, true
 		}
 	}
 
-	return "", false
+	return ClientConfig{}, false
 }
 
 func (c ChainConfig) Validate() error {

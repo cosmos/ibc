@@ -133,7 +133,7 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 			continue
 		}
 
-		destinationChainID, ok := s.cfg.CounterpartyChainID(chainID, event.Packet.SourceClient)
+		client, ok := s.cfg.Client(chainID, event.Packet.SourceClient)
 		if !ok {
 			s.logger.Warn(
 				"Skipping packet from unconfigured client",
@@ -147,7 +147,7 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 
 		transfers = append(transfers, store.Transfer{
 			SourceChainID:             chainID,
-			DestinationChainID:        destinationChainID,
+			DestinationChainID:        client.CounterpartyChainID,
 			SourceTxHash:              txHash,
 			SourceTxTime:              event.BlockTime,
 			PacketSequenceNumber:      event.Packet.Sequence,

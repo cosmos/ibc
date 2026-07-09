@@ -120,14 +120,14 @@ func TestRelayerConfig(t *testing.T) {
 		_, ok = config.Chain("999")
 		assert.False(t, ok)
 
-		counterparty, ok := config.Relayer.CounterpartyChainID("1", "base-0")
+		client, ok := config.Relayer.Client("1", "base-0")
 		assert.True(t, ok)
-		assert.Equal(t, "8453", counterparty)
+		assert.Equal(t, "8453", client.CounterpartyChainID)
 
-		_, ok = config.Relayer.CounterpartyChainID("1", "unknown-0")
+		_, ok = config.Relayer.Client("1", "unknown-0")
 		assert.False(t, ok)
 
-		_, ok = config.Relayer.CounterpartyChainID("999", "base-0")
+		_, ok = config.Relayer.Client("999", "base-0")
 		assert.False(t, ok)
 	})
 
