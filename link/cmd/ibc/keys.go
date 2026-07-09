@@ -35,6 +35,8 @@ var (
 
 //nolint:goconst // cli usage
 func keysNew(_ *cobra.Command, args []string) error {
+	globalFlags.SkipConfigValidation()
+
 	_, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -79,6 +81,8 @@ func keysNew(_ *cobra.Command, args []string) error {
 }
 
 func keysShow(_ *cobra.Command, args []string) error {
+	globalFlags.SkipConfigValidation()
+
 	_, err := setupHomeWithConfig()
 	if err != nil {
 		return err
