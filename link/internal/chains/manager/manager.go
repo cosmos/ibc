@@ -2,7 +2,6 @@
 package manager
 
 import (
-	"context"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -52,7 +51,7 @@ func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 	return New(clients), nil
 }
 
-func (m *ClientManager) GetClient(_ context.Context, chainID string) (chains.Client, error) {
+func (m *ClientManager) GetClient(chainID string) (chains.Client, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

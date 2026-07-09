@@ -39,8 +39,8 @@ func (_m *MockChainClientManager) EXPECT() *MockChainClientManager_Expecter {
 }
 
 // GetClient provides a mock function for the type MockChainClientManager
-func (_mock *MockChainClientManager) GetClient(ctx context.Context, chainID string) (chains.Client, error) {
-	ret := _mock.Called(ctx, chainID)
+func (_mock *MockChainClientManager) GetClient(chainID string) (chains.Client, error) {
+	ret := _mock.Called(chainID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetClient")
@@ -48,18 +48,18 @@ func (_mock *MockChainClientManager) GetClient(ctx context.Context, chainID stri
 
 	var r0 chains.Client
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (chains.Client, error)); ok {
-		return returnFunc(ctx, chainID)
+	if returnFunc, ok := ret.Get(0).(func(string) (chains.Client, error)); ok {
+		return returnFunc(chainID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) chains.Client); ok {
-		r0 = returnFunc(ctx, chainID)
+	if returnFunc, ok := ret.Get(0).(func(string) chains.Client); ok {
+		r0 = returnFunc(chainID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(chains.Client)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, chainID)
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(chainID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -72,25 +72,19 @@ type MockChainClientManager_GetClient_Call struct {
 }
 
 // GetClient is a helper method to define mock.On call
-//   - ctx context.Context
 //   - chainID string
-func (_e *MockChainClientManager_Expecter) GetClient(ctx any, chainID any) *MockChainClientManager_GetClient_Call {
-	return &MockChainClientManager_GetClient_Call{Call: _e.mock.On("GetClient", ctx, chainID)}
+func (_e *MockChainClientManager_Expecter) GetClient(chainID any) *MockChainClientManager_GetClient_Call {
+	return &MockChainClientManager_GetClient_Call{Call: _e.mock.On("GetClient", chainID)}
 }
 
-func (_c *MockChainClientManager_GetClient_Call) Run(run func(ctx context.Context, chainID string)) *MockChainClientManager_GetClient_Call {
+func (_c *MockChainClientManager_GetClient_Call) Run(run func(chainID string)) *MockChainClientManager_GetClient_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
+		var arg0 string
 		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg0 = args[0].(string)
 		}
 		run(
 			arg0,
-			arg1,
 		)
 	})
 	return _c
@@ -101,7 +95,7 @@ func (_c *MockChainClientManager_GetClient_Call) Return(client chains.Client, er
 	return _c
 }
 
-func (_c *MockChainClientManager_GetClient_Call) RunAndReturn(run func(ctx context.Context, chainID string) (chains.Client, error)) *MockChainClientManager_GetClient_Call {
+func (_c *MockChainClientManager_GetClient_Call) RunAndReturn(run func(chainID string) (chains.Client, error)) *MockChainClientManager_GetClient_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -26,7 +26,7 @@ type Service struct {
 
 // ChainClientManager resolves chain clients by chain id.
 type ChainClientManager interface {
-	GetClient(ctx context.Context, chainID string) (chains.Client, error)
+	GetClient(chainID string) (chains.Client, error)
 }
 
 // Store persistence used by the relayer.
@@ -88,7 +88,7 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return err
 	}
 
-	client, err := s.chains.GetClient(ctx, chainID)
+	client, err := s.chains.GetClient(chainID)
 	if err != nil {
 		return errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 	}

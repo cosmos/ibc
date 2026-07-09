@@ -85,7 +85,7 @@ func TestRelay(t *testing.T) {
 			},
 		}
 
-		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
+		clientManager.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
 		// request and transfers land in one transaction; hash normalized to lowercase
@@ -121,7 +121,7 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), clientManager)
 
 		// nothing is recorded for an unsupported chain
-		clientManager.EXPECT().GetClient(ctx, "999").Return(nil, errors.New("no configured chain client")).Once()
+		clientManager.EXPECT().GetClient("999").Return(nil, errors.New("no configured chain client")).Once()
 
 		// ACT
 		err := service.Relay(ctx, "999", txHashLower)
@@ -139,7 +139,7 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), clientManager)
 
 		// nothing is recorded when extraction fails
-		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
+		clientManager.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
 		// ACT
@@ -183,7 +183,7 @@ func TestRelay(t *testing.T) {
 		clientManager := NewMockChainClientManager(t)
 		service := New(relayerConfig(), st, clientManager)
 
-		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
+		clientManager.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, nil).Once()
 		st.EXPECT().
 			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
