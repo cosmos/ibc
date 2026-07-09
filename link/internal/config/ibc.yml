@@ -1,9 +1,37 @@
 # sample config file
 server:
   listenAddr: 0.0.0.0:3000
+  # listenAddr: 127.0.0.1:${SERVER_PORT}  # supports for env vars expansion
 
 db:
   type: sqlite
   url: ibc.db
   # type: postgres
-  # url: postgres://user:password@host:port/dbname
+  # url: postgres://user:pass@localhost:5432/ibc
+
+# signers define signing backends referenced by attestations
+#
+# NOTE: each signer should have a unique alias
+signers:
+#   - alias: my-local-signer
+#     type: local
+#     file: keys/my-key.json
+#
+#   - alias: my-remote-signer
+#     type: remote
+#     grpc: https://cosmos-kms.example.com
+#     remoteKeyId: key-id # KMS key ID for a remote signer
+
+# This section specifies ATTESTOR process configuration for `ibc attestor run`.
+# Also enables attestor sub-process with grpc server even for relayer (`ibc relayer run`)
+# if attestors list is not empty ("dual" relayer + attestor mode)
+#
+# NOTE: each attestation should have a unique name and reference a unique signer
+attestor:
+#  attestations:
+#     - chainId: chain-a
+#       name: attestation-a
+#       signer: my-local-signer
+#     - chainId: chain-b
+#       name: attestation-b
+#       signer: my-remote-signer
