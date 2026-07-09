@@ -80,8 +80,6 @@ func New(cfg config.RelayerConfig, st Store, clientManager ChainClientManager) *
 	}
 }
 
-// Relay atomically records a relay request and a transfer per packet sent by the tx.
-// Resubmissions are a noop.
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	txHash, err := validateRelayArgs(chainID, txHash)
 	if err != nil {
