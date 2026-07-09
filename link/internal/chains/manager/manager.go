@@ -2,8 +2,6 @@
 package manager
 
 import (
-	"sync"
-
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
@@ -11,9 +9,10 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
-// ClientManager holds the chain clients for all configured chains. Safe for concurrent use.
+// ClientManager holds the chain clients for all configured chains.
+// The clients map is never mutated after construction, so lookups are
+// safe for concurrent use.
 type ClientManager struct {
-	mu      sync.RWMutex
 	clients map[string]chains.Client
 }
 
@@ -52,9 +51,6 @@ func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 }
 
 func (m *ClientManager) GetClient(chainID string) (chains.Client, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	client, ok := m.clients[chainID]
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for chain ID %s", chainID)
