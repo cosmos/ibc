@@ -40,13 +40,13 @@ func relayerConfig() config.RelayerConfig {
 	}
 }
 
-func txHashBytes(t *testing.T) [][]byte {
+func txHashBytes(t *testing.T) []byte {
 	t.Helper()
 
 	raw, err := hex.DecodeString(txHashLower[2:])
 	require.NoError(t, err)
 
-	return [][]byte{raw}
+	return raw
 }
 
 func TestRelay(t *testing.T) {

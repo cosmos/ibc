@@ -9,7 +9,7 @@ import (
 // Client parses packet details out of transaction event logs.
 // There is an implementation per supported chain type.
 type Client interface {
-	TxPacketEvents(ctx context.Context, txHashes [][]byte) ([]PacketEvent, error)
+	TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error)
 }
 
 // EventKind the kind of packet event.

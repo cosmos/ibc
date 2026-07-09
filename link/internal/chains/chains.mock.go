@@ -37,8 +37,8 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 }
 
 // TxPacketEvents provides a mock function for the type MockClient
-func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHashes [][]byte) ([]PacketEvent, error) {
-	ret := _mock.Called(ctx, txHashes)
+func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error) {
+	ret := _mock.Called(ctx, txHash)
 
 	if len(ret) == 0 {
 		panic("no return value specified for TxPacketEvents")
@@ -46,18 +46,18 @@ func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHashes [][]byte) 
 
 	var r0 []PacketEvent
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, [][]byte) ([]PacketEvent, error)); ok {
-		return returnFunc(ctx, txHashes)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) ([]PacketEvent, error)); ok {
+		return returnFunc(ctx, txHash)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, [][]byte) []PacketEvent); ok {
-		r0 = returnFunc(ctx, txHashes)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) []PacketEvent); ok {
+		r0 = returnFunc(ctx, txHash)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]PacketEvent)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, [][]byte) error); ok {
-		r1 = returnFunc(ctx, txHashes)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
+		r1 = returnFunc(ctx, txHash)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -71,20 +71,20 @@ type MockClient_TxPacketEvents_Call struct {
 
 // TxPacketEvents is a helper method to define mock.On call
 //   - ctx context.Context
-//   - txHashes [][]byte
-func (_e *MockClient_Expecter) TxPacketEvents(ctx any, txHashes any) *MockClient_TxPacketEvents_Call {
-	return &MockClient_TxPacketEvents_Call{Call: _e.mock.On("TxPacketEvents", ctx, txHashes)}
+//   - txHash []byte
+func (_e *MockClient_Expecter) TxPacketEvents(ctx any, txHash any) *MockClient_TxPacketEvents_Call {
+	return &MockClient_TxPacketEvents_Call{Call: _e.mock.On("TxPacketEvents", ctx, txHash)}
 }
 
-func (_c *MockClient_TxPacketEvents_Call) Run(run func(ctx context.Context, txHashes [][]byte)) *MockClient_TxPacketEvents_Call {
+func (_c *MockClient_TxPacketEvents_Call) Run(run func(ctx context.Context, txHash []byte)) *MockClient_TxPacketEvents_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 [][]byte
+		var arg1 []byte
 		if args[1] != nil {
-			arg1 = args[1].([][]byte)
+			arg1 = args[1].([]byte)
 		}
 		run(
 			arg0,
@@ -99,7 +99,7 @@ func (_c *MockClient_TxPacketEvents_Call) Return(packetEvents []PacketEvent, err
 	return _c
 }
 
-func (_c *MockClient_TxPacketEvents_Call) RunAndReturn(run func(ctx context.Context, txHashes [][]byte) ([]PacketEvent, error)) *MockClient_TxPacketEvents_Call {
+func (_c *MockClient_TxPacketEvents_Call) RunAndReturn(run func(ctx context.Context, txHash []byte) ([]PacketEvent, error)) *MockClient_TxPacketEvents_Call {
 	_c.Call.Return(run)
 	return _c
 }

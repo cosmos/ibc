@@ -99,7 +99,7 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
 	}
 
-	events, err := client.TxPacketEvents(ctx, [][]byte{hashBytes})
+	events, err := client.TxPacketEvents(ctx, hashBytes)
 	if err != nil {
 		return errors.Wrap(err, "extracting packet events")
 	}

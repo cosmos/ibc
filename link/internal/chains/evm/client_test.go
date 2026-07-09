@@ -88,7 +88,7 @@ func TestTxPacketEvents(t *testing.T) {
 		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(&types.Header{Time: 1752000000}, nil).Once()
 
 		// ACT
-		events, err := client.TxPacketEvents(ctx, [][]byte{txHash.Bytes()})
+		events, err := client.TxPacketEvents(ctx, txHash.Bytes())
 
 		// ASSERT
 		require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestTxPacketEvents(t *testing.T) {
 		// no HeaderByNumber expectation: it must not be called
 
 		// ACT
-		events, err := client.TxPacketEvents(ctx, [][]byte{txHash.Bytes()})
+		events, err := client.TxPacketEvents(ctx, txHash.Bytes())
 
 		// ASSERT
 		require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestTxPacketEvents(t *testing.T) {
 		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, assert.AnError).Once()
 
 		// ACT
-		_, err = client.TxPacketEvents(ctx, [][]byte{txHash.Bytes()})
+		_, err = client.TxPacketEvents(ctx, txHash.Bytes())
 
 		// ASSERT
 		require.ErrorContains(t, err, "getting receipt")
@@ -148,7 +148,7 @@ func TestTxPacketEvents(t *testing.T) {
 		require.NoError(t, err)
 
 		// ACT
-		_, err = client.TxPacketEvents(context.Background(), [][]byte{{0xde, 0xad}})
+		_, err = client.TxPacketEvents(context.Background(), []byte{0xde, 0xad})
 
 		// ASSERT
 		require.ErrorContains(t, err, "invalid tx hash length")

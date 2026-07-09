@@ -69,6 +69,10 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 		return nil, errors.Wrap(err, "getting ics26 router abi")
 	}
 
+	if _, ok := routerABI.Events[sendPacketEvent]; !ok {
+		return nil, errors.Errorf("event %q not found in ics26 router abi", sendPacketEvent)
+	}
+
 	return &Client{
 		chainID:       chainID,
 		routerAddress: routerAddress,
@@ -79,26 +83,13 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 	}, nil
 }
 
-func (c *Client) TxPacketEvents(ctx context.Context, txHashes [][]byte) ([]chains.PacketEvent, error) {
-	var events []chains.PacketEvent
-
-	for _, txHash := range txHashes {
-		if len(txHash) != common.HashLength {
-			return nil, errors.Errorf("invalid tx hash length %d, expected %d", len(txHash), common.HashLength)
-		}
-
-		txEvents, err := c.txPacketEvents(ctx, common.BytesToHash(txHash))
-		if err != nil {
-			return nil, err
-		}
-
-		events = append(events, txEvents...)
+func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains.PacketEvent, error) {
+	if len(rawTxHash) != common.HashLength {
+		return nil, errors.Errorf("invalid tx hash length %d, expected %d", len(rawTxHash), common.HashLength)
 	}
 
-	return events, nil
-}
+	txHash := common.BytesToHash(rawTxHash)
 
-func (c *Client) txPacketEvents(ctx context.Context, txHash common.Hash) ([]chains.PacketEvent, error) {
 	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
