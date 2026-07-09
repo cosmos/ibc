@@ -79,7 +79,7 @@ func TestLocalSecp256k1Signer(t *testing.T) {
 			require.NoError(t, err)
 
 			path := writeFileJSON(t, "secp256k1.json", keyFile{
-				Type:       KeyECDSA,
+				Type:       ECDSA,
 				PrivateKey: base64.StdEncoding.EncodeToString(ed25519Signer.PrivateKey()),
 			})
 
@@ -98,7 +98,7 @@ func TestLocalSecp256k1Signer(t *testing.T) {
 
 		t.Run("bytesMismatch", func(t *testing.T) {
 			path := writeFileJSON(t, "secp256k1.json", keyFile{
-				Type:       KeyECDSA,
+				Type:       ECDSA,
 				PrivateKey: base64.StdEncoding.EncodeToString([]byte("too short")),
 			})
 

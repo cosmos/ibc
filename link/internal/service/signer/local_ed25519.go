@@ -46,7 +46,7 @@ func GenerateLocalEd25519Signer() (*LocalEd25519Signer, error) {
 }
 
 func (s *LocalEd25519Signer) IsLocal() bool { return true }
-func (s *LocalEd25519Signer) Type() KeyType { return KeyEDDSA }
+func (s *LocalEd25519Signer) Type() KeyType { return EDDSA }
 
 func (s *LocalEd25519Signer) PublicKey() []byte {
 	return s.signer.PubKey()

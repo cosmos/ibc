@@ -265,6 +265,121 @@ server:
 	})
 }
 
+func TestSignerConfigValidate(t *testing.T) {
+	keyFile := filepath.Join(t.TempDir(), "key.json")
+	require.NoError(t, os.WriteFile(keyFile, []byte("{}"), 0o644))
+
+	for _, tt := range []struct {
+		name        string
+		signers     Signers
+		errContains string
+	}{
+		{
+			name: "valid local",
+			signers: Signers{{
+				Alias: "local",
+				Type:  signerTypeLocal,
+				File:  keyFile,
+			}},
+		},
+		{
+			name: "valid remote",
+			signers: Signers{{
+				Alias:       "remote",
+				Type:        signerTypeRemote,
+				GRPC:        "https://kms.example.com",
+				RemoteKeyID: "key-1",
+			}},
+		},
+		{
+			name: "alias required",
+			signers: Signers{{
+				Type: signerTypeLocal,
+				File: keyFile,
+			}},
+			errContains: ".alias required",
+		},
+		{
+			name: "type required",
+			signers: Signers{{
+				Alias: "local",
+				File:  keyFile,
+			}},
+			errContains: ".type required",
+		},
+		{
+			name: "invalid type",
+			signers: Signers{{
+				Alias: "local",
+				Type:  "kms",
+			}},
+			errContains: ".type must be one of",
+		},
+		{
+			name: "local file required",
+			signers: Signers{{
+				Alias: "local",
+				Type:  signerTypeLocal,
+			}},
+			errContains: ".file required",
+		},
+		{
+			name: "local file must exist",
+			signers: Signers{{
+				Alias: "local",
+				Type:  signerTypeLocal,
+				File:  filepath.Join(t.TempDir(), "missing.json"),
+			}},
+			errContains: ".file",
+		},
+		{
+			name: "remote grpc required",
+			signers: Signers{{
+				Alias:       "remote",
+				Type:        signerTypeRemote,
+				RemoteKeyID: "key-1",
+			}},
+			errContains: ".grpc required",
+		},
+		{
+			name: "remote key id required",
+			signers: Signers{{
+				Alias: "remote",
+				Type:  signerTypeRemote,
+				GRPC:  "https://kms.example.com",
+			}},
+			errContains: ".remoteKeyId required",
+		},
+		{
+			name: "duplicate alias",
+			signers: Signers{
+				{
+					Alias: "same",
+					Type:  signerTypeLocal,
+					File:  keyFile,
+				},
+				{
+					Alias:       "same",
+					Type:        signerTypeRemote,
+					GRPC:        "https://kms.example.com",
+					RemoteKeyID: "key-1",
+				},
+			},
+			errContains: ".signers duplicate alias",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.signers.Validate()
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
 func writeTestConfig(t *testing.T, content string) string {
 	t.Helper()
 

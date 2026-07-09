@@ -67,7 +67,7 @@ func TestLocalEd25519Signer(t *testing.T) {
 			require.NoError(t, err)
 
 			path := writeFileJSON(t, "ed25519.json", keyFile{
-				Type:       KeyEDDSA,
+				Type:       EDDSA,
 				PrivateKey: base64.StdEncoding.EncodeToString(ecdsaSigner.PrivateKey()),
 			})
 
@@ -86,7 +86,7 @@ func TestLocalEd25519Signer(t *testing.T) {
 
 		t.Run("bytesMismatch", func(t *testing.T) {
 			path := writeFileJSON(t, "ed25519.json", keyFile{
-				Type:       KeyEDDSA,
+				Type:       EDDSA,
 				PrivateKey: base64.StdEncoding.EncodeToString([]byte("too short")),
 			})
 

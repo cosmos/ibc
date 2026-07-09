@@ -31,9 +31,9 @@ func KeyFilePath(homePath, keyName string) (string, error) {
 
 func GenerateLocalKey(keyType KeyType) (LocalKey, error) {
 	switch keyType {
-	case KeyEDDSA:
+	case EDDSA:
 		return GenerateLocalEd25519Signer()
-	case KeyECDSA:
+	case ECDSA:
 		return GenerateLocalSecp256k1Signer()
 	default:
 		return nil, fmt.Errorf("invalid key type: %s", keyType)
@@ -47,9 +47,9 @@ func LocalKeyFromFile(path string) (LocalKey, error) {
 	}
 
 	switch keyType {
-	case KeyEDDSA:
+	case EDDSA:
 		return NewLocalEd25519Signer(privateKey)
-	case KeyECDSA:
+	case ECDSA:
 		return NewLocalSecp256k1Signer(privateKey)
 	default:
 		return nil, fmt.Errorf("invalid key type: %s", keyType)

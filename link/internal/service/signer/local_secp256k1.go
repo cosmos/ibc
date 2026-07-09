@@ -37,7 +37,7 @@ func GenerateLocalSecp256k1Signer() (*LocalSecp256k1Signer, error) {
 	return NewLocalSecp256k1Signer(pk.Serialize())
 }
 
-func (s *LocalSecp256k1Signer) Type() KeyType { return KeyECDSA }
+func (s *LocalSecp256k1Signer) Type() KeyType { return ECDSA }
 func (s *LocalSecp256k1Signer) IsLocal() bool { return true }
 
 func (s *LocalSecp256k1Signer) PublicKey() []byte {

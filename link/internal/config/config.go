@@ -20,6 +20,11 @@ const (
 	DBTypePostgres = "postgres"
 )
 
+const (
+	signerTypeLocal  = "local"
+	signerTypeRemote = "remote"
+)
+
 const sqliteInMemory = ":memory:"
 
 // Config represents a config file
@@ -28,6 +33,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	DB       DBConfig       `yaml:"db"`
 	Attestor AttestorConfig `yaml:"attestor"`
+	Signers  Signers        `yaml:"signers"`
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -44,6 +50,27 @@ type DBConfig struct {
 // AttestorConfig represents the entrypoint for running the process as an attestor
 type AttestorConfig struct {
 	Attestations []AttestationConfig `yaml:"attestations"`
+}
+
+// Signers is the list of configured signer backends.
+type Signers []SignerConfig
+
+// SignerConfig represents a single signer configuration in the config.
+type SignerConfig struct {
+	// Alias unique name for a signer
+	Alias string `yaml:"alias"`
+
+	// Type [local, remote]
+	Type string `yaml:"type"`
+
+	// File key file path for a local signer
+	File string `yaml:"file"`
+
+	// GRPC address for a remote signer
+	GRPC string `yaml:"grpc"`
+
+	// RemoteKeyID KMS key ID for a remote signer
+	RemoteKeyID string `yaml:"remoteKeyId"`
 }
 
 // AttestationConfig represents a single attestation configuration in case when the binary
@@ -72,6 +99,7 @@ func DefaultConfig() Config {
 		Attestor: AttestorConfig{
 			Attestations: []AttestationConfig{},
 		},
+		Signers: Signers{},
 	}
 }
 
@@ -118,6 +146,10 @@ func (c Config) Validate() error {
 
 	if err := c.Attestor.Validate(); err != nil {
 		return errors.Wrap(err, ".attestor")
+	}
+
+	if err := c.Signers.Validate(); err != nil {
+		return errors.Wrap(err, ".signers")
 	}
 
 	return nil
@@ -206,6 +238,54 @@ func (c AttestorConfig) Validate() error {
 	return nil
 }
 
+func (c Signers) Validate() error {
+	set := make(map[string]struct{})
+
+	for i, signer := range c {
+		if err := signer.Validate(); err != nil {
+			return errors.Wrapf(err, ".signers[%d]", i)
+		}
+
+		if _, exists := set[signer.Alias]; exists {
+			return errors.Errorf(".signers duplicate alias: %q", signer.Alias)
+		}
+
+		set[signer.Alias] = struct{}{}
+	}
+
+	return nil
+}
+
+func (c SignerConfig) Validate() error {
+	switch {
+	case c.Alias == "":
+		return errors.New(".alias required")
+	case c.Type == "":
+		return errors.New(".type required")
+	case c.Type != signerTypeLocal && c.Type != signerTypeRemote:
+		return errors.Errorf(".type must be one of [%q, %q], got %q", signerTypeLocal, signerTypeRemote, c.Type)
+	case c.Type == signerTypeLocal && c.File == "":
+		return errors.New(".file required for local signer")
+	case c.Type == signerTypeRemote && c.GRPC == "":
+		return errors.New(".grpc required for remote signer")
+	case c.Type == signerTypeRemote && c.RemoteKeyID == "":
+		return errors.New(".remoteKeyId required for remote signer")
+	}
+
+	if c.Type == signerTypeLocal {
+		path, err := ExpandHome(c.File)
+		if err != nil {
+			return errors.Wrap(err, ".file")
+		}
+
+		if err := fileExists(path); err != nil {
+			return errors.Wrapf(err, ".file %q", path)
+		}
+	}
+
+	return nil
+}
+
 // PrintJSON prints anything as JSON to stdout.
 func PrintJSON(v any) error {
 	bz, err := json.MarshalIndent(v, "", "  ")
@@ -224,4 +304,17 @@ func dbTypeFromURL(raw string) string {
 	}
 
 	return DBTypeSQLite
+}
+
+func fileExists(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		return errors.Errorf("path is a directory")
+	}
+
+	return nil
 }

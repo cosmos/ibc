@@ -8,6 +8,9 @@ import (
 // KeyType key type supported by local Signer
 type KeyType string
 
+// Source signer source supported by the system
+type Source string
+
 // Signer represents signer that can either sign digests or messages.
 type Signer interface {
 	Type() KeyType
@@ -16,14 +19,16 @@ type Signer interface {
 	Sign(ctx context.Context, message []byte) ([]byte, error)
 }
 
-// KeyType enum
+// KeyType & SignerType enums
 const (
-	KeyEDDSA KeyType = "eddsa"
-	KeyECDSA KeyType = "ecdsa"
+	EDDSA  KeyType = "eddsa"
+	ECDSA  KeyType = "ecdsa"
+	Local  Source  = "local"
+	Remote Source  = "remote"
 )
 
 func ParseKeyType(raw string) (KeyType, error) {
-	if raw != string(KeyEDDSA) && raw != string(KeyECDSA) {
+	if raw != string(EDDSA) && raw != string(ECDSA) {
 		return "", fmt.Errorf("invalid key type: %s", raw)
 	}
 
