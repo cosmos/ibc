@@ -12,16 +12,18 @@ import (
 // LocalSecp256k1Signer signs with a local secp256k1 key.
 type LocalSecp256k1Signer struct {
 	pk     *secp256k1.PrivateKey
-	signer *kms.Secp256k1Signer
+	signer *kms.Secp256k1EthSigner
 }
 
 var _ LocalKey = (*LocalSecp256k1Signer)(nil)
 
 func NewLocalSecp256k1Signer(privateKey []byte) (*LocalSecp256k1Signer, error) {
-	var (
-		pk     = secp256k1.PrivKeyFromBytes(privateKey)
-		signer = kms.NewSecp256k1Signer(pk)
-	)
+	pk := secp256k1.PrivKeyFromBytes(privateKey)
+
+	signer, err := kms.NewSecp256k1Eth(privateKey)
+	if err != nil {
+		return nil, err
+	}
 
 	return &LocalSecp256k1Signer{pk: pk, signer: signer}, nil
 }
@@ -38,7 +40,7 @@ func GenerateLocalSecp256k1Signer() (*LocalSecp256k1Signer, error) {
 func (s *LocalSecp256k1Signer) Type() KeyType { return KeyECDSA }
 func (s *LocalSecp256k1Signer) IsLocal() bool { return true }
 
-func (s *LocalSecp256k1Signer) PubKey() []byte {
+func (s *LocalSecp256k1Signer) PublicKey() []byte {
 	return s.signer.PubKey()
 }
 
