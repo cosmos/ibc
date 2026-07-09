@@ -155,6 +155,25 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".signers")
 	}
 
+	return c.crossValidate()
+}
+
+func (c Config) crossValidate() error {
+	signerSet := make(map[string]struct{}, len(c.Signers))
+	for _, signer := range c.Signers {
+		signerSet[signer.Alias] = struct{}{}
+	}
+
+	for i, attestation := range c.Attestor.Attestations {
+		if _, exists := signerSet[attestation.Signer]; !exists {
+			return errors.Errorf(
+				".attestor.attestations[%d].signer references unknown signer: %q",
+				i,
+				attestation.Signer,
+			)
+		}
+	}
+
 	return nil
 }
 

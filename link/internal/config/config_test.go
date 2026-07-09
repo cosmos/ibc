@@ -197,6 +197,11 @@ server:
 		t.Run("attestationSigner", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
+signers:
+  - alias: signer-a
+    type: remote
+    grpc: https://kms.example.com
+    remoteKeyId: key-a
 attestor:
   attestations:
     - chainId: chain-a
@@ -211,6 +216,28 @@ attestor:
 			require.NoError(t, err)
 			require.Len(t, config.Attestor.Attestations, 1)
 			assert.Equal(t, "signer-a", config.Attestor.Attestations[0].Signer)
+		})
+
+		t.Run("unknownAttestationSignerFails", func(t *testing.T) {
+			// ARRANGE
+			path := writeTestConfig(t, `
+signers:
+  - alias: signer-a
+    type: remote
+    grpc: https://kms.example.com
+    remoteKeyId: key-a
+attestor:
+  attestations:
+    - chainId: chain-a
+      name: attestation-a
+      signer: missing-signer
+`)
+
+			// ACT
+			_, err := LoadFromFile(path, true, true)
+
+			// ASSERT
+			require.ErrorContains(t, err, `references unknown signer: "missing-signer"`)
 		})
 	})
 
