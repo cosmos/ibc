@@ -40,7 +40,24 @@ func GenerateLocalKey(keyType KeyType) (LocalKey, error) {
 	}
 }
 
-func LocalKeyFromFile(path string) (LocalKey, error) {
+// LoadKeyFromFile loads a local key from the path with multiple fallbacks
+func LocalKeyFromFile(path ...string) (LocalKey, error) {
+	var (
+		err error
+		key LocalKey
+	)
+
+	for _, tryPath := range path {
+		key, err = localKeyFromFile(tryPath)
+		if err == nil {
+			return key, nil
+		}
+	}
+
+	return nil, err
+}
+
+func localKeyFromFile(path string) (LocalKey, error) {
 	keyType, privateKey, err := loadKeyFromFile(path)
 	if err != nil {
 		return nil, err
