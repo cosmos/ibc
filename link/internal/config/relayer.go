@@ -304,12 +304,12 @@ func (c ClientConfig) Validate() error {
 		return errors.Errorf(".type must be %q, got %q", ClientTypeAttestation, c.Type)
 	case c.CounterpartyChainID == "":
 		return errors.New(".counterpartyChainId required")
+	case c.AttestorSet == nil:
+		return errors.Errorf(".attestorSet required for %s clients", ClientTypeAttestation)
 	}
 
-	if c.AttestorSet != nil {
-		if err := c.AttestorSet.Validate(); err != nil {
-			return errors.Wrap(err, ".attestorSet")
-		}
+	if err := c.AttestorSet.Validate(); err != nil {
+		return errors.Wrap(err, ".attestorSet")
 	}
 
 	return nil

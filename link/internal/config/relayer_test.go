@@ -59,6 +59,11 @@ relayer:
         - id: "ethereum-0"
           type: "attestation"
           counterpartyChainId: "1"
+          attestorSet:
+            threshold: 1
+            attestors:
+              - type: local
+                alias: "attestor-dan-ethereum"
 `
 
 func TestRelayerConfig(t *testing.T) {
@@ -249,6 +254,13 @@ func TestRelayerConfig(t *testing.T) {
 					chain.Clients = append(chain.Clients, chain.Clients[0])
 				},
 				errContains: ".clients duplicate id",
+			},
+			{
+				name: "missing attestor set",
+				patch: func(c *Config) {
+					c.Relayer.Chains[0].Clients[0].AttestorSet = nil
+				},
+				errContains: `.attestorSet required for attestation clients`,
 			},
 			{
 				name: "threshold exceeds attestors",

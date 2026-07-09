@@ -28,6 +28,12 @@ db:
 #         - id: "base-0"
 #           type: "attestation"
 #           counterpartyChainId: "8453"
+#           attestorSet:
+#             threshold: 1
+#             attestors:
+#               - type: remote
+#                 grpc: attestor.example.com:3000
+#                 alias: "attestor-base"
 #     - chainId: "8453"
 #       evm:
 #         contracts:
@@ -36,3 +42,9 @@ db:
 #         - id: "ethereum-0"
 #           type: "attestation"
 #           counterpartyChainId: "1"
+#           attestorSet:
+#             threshold: 1
+#             attestors:
+#               - type: remote
+#                 grpc: attestor.example.com:3000
+#                 alias: "attestor-ethereum"
