@@ -7,20 +7,29 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ChainType the execution environment of a chain.
+type ChainType string
+
 // Chain types
 const (
-	ChainTypeEVM = "evm"
+	ChainTypeEVM ChainType = "evm"
 )
+
+// ClientType the light client type backing a relayer client.
+type ClientType string
 
 // Client types
 const (
-	ClientTypeAttestation = "attestation"
+	ClientTypeAttestation ClientType = "attestation"
 )
 
-// Attestor connection types
+// AttestorType how the process connects to an attestor.
+type AttestorType string
+
+// Attestor types
 const (
-	AttestorTypeRemote = "remote"
-	AttestorTypeLocal  = "local"
+	AttestorTypeRemote AttestorType = "remote"
+	AttestorTypeLocal  AttestorType = "local"
 )
 
 // ChainConfig describes how to reach a chain.
@@ -71,7 +80,7 @@ type GasAlertThresholds struct {
 // ClientConfig a source client the relayer monitors and relays transfers from.
 type ClientConfig struct {
 	ID                  string             `yaml:"id"`
-	Type                string             `yaml:"type"`
+	Type                ClientType         `yaml:"type"`
 	AttestorSet         *AttestorSetConfig `yaml:"attestorSet,omitempty"`
 	CounterpartyChainID string             `yaml:"counterpartyChainId"`
 	AutoRelay           AutoRelayConfig    `yaml:"autoRelay,omitempty"`
@@ -86,9 +95,9 @@ type AttestorSetConfig struct {
 
 // AttestorEntry a single attestor within an attestor set.
 type AttestorEntry struct {
-	Type  string `yaml:"type"`
-	GRPC  string `yaml:"grpc,omitempty"`
-	Alias string `yaml:"alias"`
+	Type  AttestorType `yaml:"type"`
+	GRPC  string       `yaml:"grpc,omitempty"`
+	Alias string       `yaml:"alias"`
 }
 
 // AutoRelayConfig automatic relaying of packets observed on chain.
