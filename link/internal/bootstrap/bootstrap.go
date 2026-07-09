@@ -8,6 +8,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/relayer"
+	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -17,7 +18,8 @@ type Services struct {
 	Logger  *slog.Logger
 	Server  *server.Server
 
-	Store store.Store
+	Store   store.Store
+	Signers *signer.Set
 
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
@@ -30,6 +32,12 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 
 	// Storage
 	db, err := store.NewStore(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Signers
+	signers, err := signerSet(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +57,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		Logger:          logger,
 		Server:          srv,
 		Store:           db,
+		Signers:         signers,
 		RelayerService:  relayerService,
 		AttestorService: nil,
 	}
@@ -81,6 +90,12 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 		return nil, err
 	}
 
+	// Signers
+	signers, err := signerSet(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	// Server
 	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(attestorHandler)
@@ -90,6 +105,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 		Logger:          logger,
 		Server:          srv,
 		Store:           nil, // attestor is stateless
+		Signers:         signers,
 		RelayerService:  nil,
 		AttestorService: attestorService,
 	}, nil
@@ -106,4 +122,19 @@ func buildAttestor(cfg config.Config) (*attestor.Service, *server.AttestorHandle
 	attestorHandler := server.NewAttestorHandler(attestorService)
 
 	return attestorService, attestorHandler, nil
+}
+
+func signerSet(cfg config.Config) (*signer.Set, error) {
+	set := signer.NewSet()
+
+	for _, signerConfig := range cfg.Signers {
+		signer, alias, err := signer.NewSignerFromConfig(signerConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		set.Set(alias, signer)
+	}
+
+	return set, nil
 }
