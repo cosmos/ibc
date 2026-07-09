@@ -7,7 +7,6 @@ import (
 	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/pkg/client"
 )
 
@@ -49,14 +48,6 @@ func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string) (*RemoteSigner
 	signerClient := signerservice.NewSignerServiceClient(grpcClient)
 
 	return NewRemote(ctx, signerClient, keyID)
-}
-
-func NewRemoteFromConfig(ctx context.Context, cfg config.SignerConfig) (*RemoteSigner, error) {
-	if cfg.Type != string(Remote) {
-		return nil, errors.New("config is not remote")
-	}
-
-	return NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
 }
 
 func (r *RemoteSigner) IsLocal() bool { return false }

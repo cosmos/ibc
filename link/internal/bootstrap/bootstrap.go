@@ -37,7 +37,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Signers
-	signers, err := signerSet(cfg)
+	signers, err := signerSet(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	logger := slog.With("module", "bootstrap")
 
 	// Signers
-	signers, err := signerSet(cfg)
+	signers, err := signerSet(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -124,11 +124,11 @@ func buildAttestor(cfg config.Config, signers *signer.Set) (*attestor.Service, *
 	return attestorService, attestorHandler, nil
 }
 
-func signerSet(cfg config.Config) (*signer.Set, error) {
+func signerSet(ctx context.Context, cfg config.Config) (*signer.Set, error) {
 	set := signer.NewSet()
 
 	for _, signerConfig := range cfg.Signers {
-		signer, alias, err := signer.NewSignerFromConfig(signerConfig)
+		signer, alias, err := signer.NewSignerFromConfig(ctx, signerConfig)
 		if err != nil {
 			return nil, err
 		}

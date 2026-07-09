@@ -20,9 +20,10 @@ const (
 	DBTypePostgres = "postgres"
 )
 
+// Signer type. Local represents a private key file. Remote connects to cosmos/KMS.
 const (
-	signerTypeLocal  = "local"
-	signerTypeRemote = "remote"
+	SignerLocal  = "local"
+	SignerRemote = "remote"
 )
 
 const sqliteInMemory = ":memory:"
@@ -282,17 +283,17 @@ func (c SignerConfig) Validate() error {
 		return errors.New(".alias required")
 	case c.Type == "":
 		return errors.New(".type required")
-	case c.Type != signerTypeLocal && c.Type != signerTypeRemote:
-		return errors.Errorf(".type must be one of [%q, %q], got %q", signerTypeLocal, signerTypeRemote, c.Type)
-	case c.Type == signerTypeLocal && c.File == "":
+	case c.Type != SignerLocal && c.Type != SignerRemote:
+		return errors.Errorf(".type must be one of [%q, %q], got %q", SignerLocal, SignerRemote, c.Type)
+	case c.Type == SignerLocal && c.File == "":
 		return errors.New(".file required for local signer")
-	case c.Type == signerTypeRemote && c.GRPC == "":
+	case c.Type == SignerRemote && c.GRPC == "":
 		return errors.New(".grpc required for remote signer")
-	case c.Type == signerTypeRemote && c.RemoteKeyID == "":
+	case c.Type == SignerRemote && c.RemoteKeyID == "":
 		return errors.New(".remoteKeyId required for remote signer")
 	}
 
-	if c.Type == signerTypeLocal {
+	if c.Type == SignerLocal {
 		path, err := ExpandHome(c.File)
 		if err != nil {
 			return errors.Wrap(err, ".file")

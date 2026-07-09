@@ -65,9 +65,9 @@ func TestNewSignerFromConfigExpandsHome(t *testing.T) {
 	path := filepath.Join(home, "keys", "signer.json")
 	require.NoError(t, key.StoreToFile(path))
 
-	loadedSigner, alias, err := NewSignerFromConfig(config.SignerConfig{
+	loadedSigner, alias, err := NewSignerFromConfig(context.Background(), config.SignerConfig{
 		Alias: "local",
-		Type:  string(Local),
+		Type:  config.SignerLocal,
 		File:  "~/keys/signer.json",
 	})
 

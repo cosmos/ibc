@@ -406,7 +406,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			name: "valid local",
 			signers: Signers{{
 				Alias: "local",
-				Type:  signerTypeLocal,
+				Type:  SignerLocal,
 				File:  keyFile,
 			}},
 		},
@@ -414,7 +414,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			name: "valid remote",
 			signers: Signers{{
 				Alias:       "remote",
-				Type:        signerTypeRemote,
+				Type:        SignerRemote,
 				GRPC:        "https://kms.example.com",
 				RemoteKeyID: "key-1",
 			}},
@@ -422,7 +422,7 @@ func TestSignerConfigValidate(t *testing.T) {
 		{
 			name: "alias required",
 			signers: Signers{{
-				Type: signerTypeLocal,
+				Type: SignerLocal,
 				File: keyFile,
 			}},
 			errContains: ".alias required",
@@ -447,7 +447,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			name: "local file required",
 			signers: Signers{{
 				Alias: "local",
-				Type:  signerTypeLocal,
+				Type:  SignerLocal,
 			}},
 			errContains: ".file required",
 		},
@@ -455,7 +455,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			name: "local file must exist",
 			signers: Signers{{
 				Alias: "local",
-				Type:  signerTypeLocal,
+				Type:  SignerLocal,
 				File:  filepath.Join(t.TempDir(), "missing.json"),
 			}},
 			errContains: ".file",
@@ -464,7 +464,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			name: "remote grpc required",
 			signers: Signers{{
 				Alias:       "remote",
-				Type:        signerTypeRemote,
+				Type:        SignerRemote,
 				RemoteKeyID: "key-1",
 			}},
 			errContains: ".grpc required",
@@ -473,7 +473,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			name: "remote key id required",
 			signers: Signers{{
 				Alias: "remote",
-				Type:  signerTypeRemote,
+				Type:  SignerRemote,
 				GRPC:  "https://kms.example.com",
 			}},
 			errContains: ".remoteKeyId required",
@@ -483,12 +483,12 @@ func TestSignerConfigValidate(t *testing.T) {
 			signers: Signers{
 				{
 					Alias: "same",
-					Type:  signerTypeLocal,
+					Type:  SignerLocal,
 					File:  keyFile,
 				},
 				{
 					Alias:       "same",
-					Type:        signerTypeRemote,
+					Type:        SignerRemote,
 					GRPC:        "https://kms.example.com",
 					RemoteKeyID: "key-1",
 				},

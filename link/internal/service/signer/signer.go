@@ -11,9 +11,6 @@ import (
 // KeyType key type supported by local Signer
 type KeyType string
 
-// Source signer source supported by the system
-type Source string
-
 // Signer represents signer that can either sign digests or messages.
 type Signer interface {
 	Type() KeyType
@@ -30,10 +27,8 @@ type Set struct {
 
 // KeyType & SignerType enums
 const (
-	EDDSA  KeyType = "eddsa"
-	ECDSA  KeyType = "ecdsa"
-	Local  Source  = "local"
-	Remote Source  = "remote"
+	EDDSA KeyType = "eddsa"
+	ECDSA KeyType = "ecdsa"
 )
 
 func NewSet() *Set {
@@ -51,9 +46,9 @@ func (s *Set) Get(alias string) (Signer, bool) {
 	return signer, ok
 }
 
-func NewSignerFromConfig(cfg config.SignerConfig) (signer Signer, alias string, err error) {
-	switch Source(cfg.Type) {
-	case Local:
+func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer Signer, alias string, err error) {
+	switch cfg.Type {
+	case config.SignerLocal:
 		path, err := config.ExpandHome(cfg.File)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "expand local signer file")
@@ -62,8 +57,13 @@ func NewSignerFromConfig(cfg config.SignerConfig) (signer Signer, alias string, 
 		s, err := LocalKeyFromFile(path)
 
 		return s, cfg.Alias, err
-	case Remote:
-		return nil, "", errors.New("remote signers are not supported yet")
+	case config.SignerRemote:
+		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
+		if err != nil {
+			return nil, "", errors.Wrap(err, "create remote signer")
+		}
+
+		return s, cfg.Alias, err
 	default:
 		return nil, "", errors.Errorf("invalid signer type: %s", cfg.Type)
 	}
