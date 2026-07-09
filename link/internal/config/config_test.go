@@ -193,6 +193,25 @@ server:
 			require.NoError(t, err)
 			assert.Equal(t, "0.0.0.0:3000", config.Server.ListenAddress)
 		})
+
+		t.Run("attestationSigner", func(t *testing.T) {
+			// ARRANGE
+			path := writeTestConfig(t, `
+attestor:
+  attestations:
+    - chainId: chain-a
+      name: attestation-a
+      signer: signer-a
+`)
+
+			// ACT
+			config, err := LoadFromFile(path, true, true)
+
+			// ASSERT
+			require.NoError(t, err)
+			require.Len(t, config.Attestor.Attestations, 1)
+			assert.Equal(t, "signer-a", config.Attestor.Attestations[0].Signer)
+		})
 	})
 
 	t.Run("DBConfigFromURL", func(t *testing.T) {
@@ -263,6 +282,115 @@ server:
 			})
 		}
 	})
+}
+
+func TestAttestorConfigValidate(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		attestor    AttestorConfig
+		errContains string
+	}{
+		{
+			name:     "empty attestations",
+			attestor: AttestorConfig{},
+		},
+		{
+			name: "valid attestations",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{
+					{
+						ChainID: "chain-a",
+						Name:    "attestation-a",
+						Signer:  "signer-a",
+					},
+					{
+						ChainID: "chain-b",
+						Name:    "attestation-b",
+						Signer:  "signer-b",
+					},
+				},
+			},
+		},
+		{
+			name: "chain id required",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{{
+					Name:   "attestation-a",
+					Signer: "signer-a",
+				}},
+			},
+			errContains: ".attestations[0]: .chainId required",
+		},
+		{
+			name: "name required",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{{
+					ChainID: "chain-a",
+					Signer:  "signer-a",
+				}},
+			},
+			errContains: ".attestations[0]: .name required",
+		},
+		{
+			name: "signer required",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{{
+					ChainID: "chain-a",
+					Name:    "attestation-a",
+				}},
+			},
+			errContains: ".attestations[0]: .signer required",
+		},
+		{
+			name: "duplicate name",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{
+					{
+						ChainID: "chain-a",
+						Name:    "same",
+						Signer:  "signer-a",
+					},
+					{
+						ChainID: "chain-b",
+						Name:    "same",
+						Signer:  "signer-b",
+					},
+				},
+			},
+			errContains: `.attestations[1] duplicate name: "same"`,
+		},
+		{
+			name: "duplicate signer",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{
+					{
+						ChainID: "chain-a",
+						Name:    "attestation-a",
+						Signer:  "same",
+					},
+					{
+						ChainID: "chain-b",
+						Name:    "attestation-b",
+						Signer:  "same",
+					},
+				},
+			},
+			errContains: `.attestations[1] duplicate signer: "same"`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ACT
+			err := tt.attestor.Validate()
+
+			// ASSERT
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestSignerConfigValidate(t *testing.T) {

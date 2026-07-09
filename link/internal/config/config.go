@@ -80,10 +80,13 @@ type AttestationConfig struct {
 	ChainID string `yaml:"chainId"`
 	Name    string `yaml:"name"`
 
+	// Signer reference to .signers section in the config
+	// Should be unique across all attestations!
+	Signer string `yaml:"signer"`
+
 	// todo: future work
 	RouterAddress  string `yaml:"-"`
 	FinalityOffset int64  `yaml:"-"`
-	Signer         string `yaml:"-"`
 }
 
 // DefaultConfig sample config using default values and Sqlite.
@@ -220,19 +223,37 @@ func DBConfigFromURL(url string) (DBConfig, error) {
 
 // Validate validates the attestor config. Allows empty attestations.
 func (c AttestorConfig) Validate() error {
-	set := make(map[string]struct{})
+	nameSet := make(map[string]struct{})
+	signerSet := make(map[string]struct{})
 
-	for _, attestation := range c.Attestations {
-		if attestation.ChainID == "" {
-			return errors.Errorf(".attestations chainId required")
+	for i, attestation := range c.Attestations {
+		if err := attestation.Validate(); err != nil {
+			return errors.Wrapf(err, ".attestations[%d]", i)
 		}
-		if attestation.Name == "" {
-			return errors.Errorf(".attestations name required")
+
+		if _, exists := nameSet[attestation.Name]; exists {
+			return errors.Errorf(".attestations[%d] duplicate name: %q", i, attestation.Name)
 		}
-		if _, ok := set[attestation.Name]; ok {
-			return errors.Errorf(".attestations duplicate name: %q", attestation.Name)
+
+		if _, exists := signerSet[attestation.Signer]; exists {
+			return errors.Errorf(".attestations[%d] duplicate signer: %q", i, attestation.Signer)
 		}
-		set[attestation.Name] = struct{}{}
+
+		nameSet[attestation.Name] = struct{}{}
+		signerSet[attestation.Signer] = struct{}{}
+	}
+
+	return nil
+}
+
+func (c AttestationConfig) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errors.Errorf(".chainId required")
+	case c.Name == "":
+		return errors.Errorf(".name required")
+	case c.Signer == "":
+		return errors.Errorf(".signer required")
 	}
 
 	return nil
