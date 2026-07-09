@@ -1,4 +1,4 @@
-// Package evm implements packet event parsing for EVM chains.
+// Package evm implements the chain client for EVM chains.
 package evm
 
 import (
@@ -29,7 +29,7 @@ type ETHClient interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
-// Client parses packet events from EVM transaction logs.
+// Client implements chains.Client for EVM chains.
 type Client struct {
 	chainID       string
 	routerAddress common.Address

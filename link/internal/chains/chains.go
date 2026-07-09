@@ -1,4 +1,4 @@
-// Package chains defines chain-agnostic packet event parsing.
+// Package chains defines chain-agnostic clients for reading chain state.
 package chains
 
 import (
@@ -6,8 +6,9 @@ import (
 	"time"
 )
 
-// Client parses packet events from transaction logs.
+// Client provides chain-specific operations, implemented per chain type.
 type Client interface {
+	// TxPacketEvents parses packet events from the transaction's logs.
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error)
 }
 
