@@ -13,7 +13,6 @@ import (
 // LocalKey is a key stored and used locally.
 type LocalKey interface {
 	Signer
-	PublicKey() []byte
 	PrivateKey() []byte
 	StoreToFile(path string) error
 }

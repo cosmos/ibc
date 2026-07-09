@@ -19,6 +19,7 @@ type Signer interface {
 	IsLocal() bool
 
 	Sign(ctx context.Context, message []byte) ([]byte, error)
+	PublicKey() []byte
 }
 
 // Set a set of Signer accessible by their alias.
