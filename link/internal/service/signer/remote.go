@@ -3,6 +3,7 @@ package signer
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/pkg/errors"
@@ -82,6 +83,9 @@ func (r *RemoteSigner) Sign(ctx context.Context, message []byte) ([]byte, error)
 
 // fetch key's information from KMS and set fields
 func (r *RemoteSigner) setup(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	resp, err := r.client.GetKey(ctx, &signerservice.GetKeyRequest{Id: r.keyID})
 	switch {
 	case err != nil:
