@@ -47,7 +47,16 @@ func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string) (*RemoteSigner
 
 	signerClient := signerservice.NewSignerServiceClient(grpcClient)
 
-	return NewRemote(ctx, signerClient, keyID)
+	s, err := NewRemote(ctx, signerClient, keyID)
+	if err != nil {
+		if errClose := grpcClient.Close(); errClose != nil {
+			slog.Error("failed to close grpc client", "err", errClose)
+		}
+
+		return nil, err
+	}
+
+	return s, nil
 }
 
 func (r *RemoteSigner) IsLocal() bool { return false }
