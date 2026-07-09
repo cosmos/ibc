@@ -88,8 +88,7 @@ func TestRelay(t *testing.T) {
 		clientManager.EXPECT().GetClient(ctx, chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
-		// the request and its transfers are recorded within one transaction;
-		// tx hash is normalized to lowercase before storage
+		// request and transfers land in one transaction; hash normalized to lowercase
 		st.EXPECT().
 			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
 			RunAndReturn(func(ctx context.Context, fn func(store.Repository) error) error {

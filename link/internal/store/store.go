@@ -18,8 +18,7 @@ type Store interface {
 	Repository
 	Migrator
 
-	// ExecTx runs fn within a database transaction. The Repository passed to
-	// fn is bound to the transaction, which is rolled back if fn returns an error.
+	// ExecTx runs fn in a transaction; fn's Repository is bound to it and rolled back on error.
 	ExecTx(ctx context.Context, fn func(Repository) error) error
 
 	Ping(ctx context.Context) error
@@ -29,8 +28,13 @@ type Store interface {
 // Repository represents database CRUD operations.
 type Repository interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error)
+
+	// CreateRelayRequest records a relay request; duplicates are a noop.
 	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
+
+	// CreateTransfer records a transfer; duplicate packets are a noop.
 	CreateTransfer(ctx context.Context, transfer Transfer) error
+
 	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Transfer, error)
 }
 

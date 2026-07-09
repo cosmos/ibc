@@ -1,4 +1,4 @@
-// Package manager provides chain client lookup across all configured chains.
+// Package manager provides chain client lookup.
 package manager
 
 import (
@@ -12,8 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
-// ClientManager holds the chain clients for all configured chains.
-// Safe for concurrent use.
+// ClientManager holds the chain clients for all configured chains. Safe for concurrent use.
 type ClientManager struct {
 	mu      sync.RWMutex
 	clients map[string]chains.Client
@@ -28,9 +27,7 @@ func New(clients map[string]chains.Client) *ClientManager {
 	return &ClientManager{clients: clients}
 }
 
-// NewFromConfig creates a chain client for every relayer chain with an EVM
-// block, using the RPC endpoint declared in the top-level chains block, and
-// wraps them in a ClientManager.
+// NewFromConfig builds clients for all configured relayer chains.
 func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 	clients := make(map[string]chains.Client)
 
@@ -55,7 +52,6 @@ func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 	return New(clients), nil
 }
 
-// GetClient returns the chain client for a chain id.
 func (m *ClientManager) GetClient(_ context.Context, chainID string) (chains.Client, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

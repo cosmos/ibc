@@ -29,7 +29,7 @@ type ChainClientManager interface {
 	GetClient(ctx context.Context, chainID string) (chains.Client, error)
 }
 
-// Store narrows store.Store to what the relayer needs.
+// Store persistence used by the relayer.
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
 	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Transfer, error)
@@ -80,9 +80,8 @@ func New(cfg config.RelayerConfig, st Store, clientManager ChainClientManager) *
 	}
 }
 
-// Relay records a request to relay the packets produced by the given transaction
-// and tracks a transfer for every packet it sent. The request and its transfers
-// are recorded atomically. Repeated submissions of the same transaction are a noop.
+// Relay atomically records a relay request and a transfer per packet sent by the tx.
+// Resubmissions are a noop.
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	txHash, err := validateRelayArgs(chainID, txHash)
 	if err != nil {
@@ -128,8 +127,6 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	return nil
 }
 
-// transfersFromEvents converts send packet events into transfers, skipping
-// packets from clients that are not configured.
 func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.Transfer {
 	var transfers []store.Transfer
 
@@ -202,8 +199,7 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 
 var txHashPattern = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
 
-// validateRelayArgs validates the chain id and normalizes the tx hash to its
-// canonical lowercase form so lookups are case-insensitive.
+// validateRelayArgs normalizes the tx hash to lowercase so lookups are case-insensitive.
 func validateRelayArgs(chainID, txHash string) (string, error) {
 	txHash = strings.ToLower(txHash)
 

@@ -30,7 +30,6 @@ type SqliteDB struct {
 	logger *slog.Logger
 }
 
-// sqliteRepository implements Repository over a db- or tx-bound sqlc Queries.
 type sqliteRepository struct {
 	repo   *reposqlite.Queries
 	logger *slog.Logger
@@ -129,7 +128,6 @@ func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.db, config.DBTypeSQLite)
 }
 
-// ExecTx runs fn within a database transaction.
 func (db *SqliteDB) ExecTx(ctx context.Context, fn func(Repository) error) error {
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -179,7 +177,6 @@ func (db *sqliteRepository) CreateRelayRequest(ctx context.Context, chainID stri
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-// CreateTransfer inserts a transfer. Inserting the same packet twice is a noop.
 func (db *sqliteRepository) CreateTransfer(ctx context.Context, transfer Transfer) error {
 	db.logger.Debug(
 		"CreateTransfer",

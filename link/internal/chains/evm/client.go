@@ -21,7 +21,7 @@ import (
 
 const sendPacketEvent = "SendPacket"
 
-// ETHClient the narrow go-ethereum surface the client needs.
+// ETHClient go-ethereum methods used by Client.
 type ETHClient interface {
 	bind.ContractFilterer
 
@@ -41,7 +41,7 @@ type Client struct {
 
 var _ chains.Client = (*Client)(nil)
 
-// New Client constructor. Dials the RPC endpoint lazily.
+// New Client constructor.
 func New(chainID, rpcURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := ethclient.Dial(rpcURL)
 	if err != nil {
@@ -119,8 +119,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 		return nil, nil
 	}
 
-	// query the block header only after finding send packets in this tx;
-	// this saves a call for txs without any
+	// fetch the header only when the tx has send packets
 	header, err := c.eth.HeaderByNumber(ctx, receipt.BlockNumber)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting header %s for tx %s on chain %s", receipt.BlockNumber, txHash, c.chainID)

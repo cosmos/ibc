@@ -23,8 +23,7 @@ const (
 	AttestorTypeLocal  = "local"
 )
 
-// ChainConfig describes how to reach a chain. Referenced by other config
-// blocks (relayer, attestor) via chainId.
+// ChainConfig describes how to reach a chain.
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
@@ -63,8 +62,7 @@ type EVMContracts struct {
 	ICS26Router string `yaml:"ics26Router"`
 }
 
-// GasAlertThresholds gas balance thresholds (in the chain's smallest gas token
-// unit) below which the relayer surfaces low-balance metrics.
+// GasAlertThresholds gas balance thresholds that trigger low-balance metrics.
 type GasAlertThresholds struct {
 	WarningThreshold  string `yaml:"warningThreshold"`
 	CriticalThreshold string `yaml:"criticalThreshold"`
@@ -105,7 +103,6 @@ func (c AutoRelayConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-// Chain returns the chain config for the given chain id.
 func (c Config) Chain(chainID string) (ChainConfig, bool) {
 	for _, chain := range c.Chains {
 		if chain.ChainID == chainID {
@@ -116,7 +113,6 @@ func (c Config) Chain(chainID string) (ChainConfig, bool) {
 	return ChainConfig{}, false
 }
 
-// Chain returns the relayer chain config for the given chain id.
 func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 	for _, chain := range c.Chains {
 		if chain.ChainID == chainID {
@@ -127,8 +123,7 @@ func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 	return RelayerChainConfig{}, false
 }
 
-// CounterpartyChainID resolves the destination chain for packets sent from the
-// given source client on the given source chain.
+// CounterpartyChainID resolves the destination chain for a source client.
 func (c RelayerConfig) CounterpartyChainID(chainID, clientID string) (string, bool) {
 	chain, ok := c.Chain(chainID)
 	if !ok {
@@ -144,7 +139,6 @@ func (c RelayerConfig) CounterpartyChainID(chainID, clientID string) (string, bo
 	return "", false
 }
 
-// Validate validates the chains config. Allows empty chains.
 func (c ChainConfig) Validate() error {
 	switch {
 	case c.ChainID == "":
@@ -198,9 +192,7 @@ func (c RelayerConfig) Validate() error {
 	return nil
 }
 
-// validateCounterparty ensures the counterparty side of a client's connection
-// is also configured. Connections are relayed bi-directionally, so the relayer
-// needs the client properties on both chains.
+// validateCounterparty ensures both sides of a connection are configured for bi-directional relaying.
 func (c RelayerConfig) validateCounterparty(chainID string, client ClientConfig) error {
 	counterparty, ok := c.Chain(client.CounterpartyChainID)
 	if !ok {

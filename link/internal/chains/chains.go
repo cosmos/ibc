@@ -6,8 +6,7 @@ import (
 	"time"
 )
 
-// Client parses packet details out of transaction event logs.
-// There is an implementation per supported chain type.
+// Client parses packet events from transaction logs.
 type Client interface {
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error)
 }

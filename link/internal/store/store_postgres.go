@@ -25,13 +25,12 @@ type PostgresDB struct {
 	// *sql.DB wrapper for migrations
 	sqlWrapper *sql.DB
 
-	// sqlc repository bound to the pool
+	// sqlc repository
 	*postgresRepository
 
 	logger *slog.Logger
 }
 
-// postgresRepository implements Repository over a pool- or tx-bound sqlc Queries.
 type postgresRepository struct {
 	repo   *postgres.Queries
 	logger *slog.Logger
@@ -123,7 +122,6 @@ func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
 }
 
-// ExecTx runs fn within a database transaction.
 func (db *PostgresDB) ExecTx(ctx context.Context, fn func(Repository) error) error {
 	tx, err := db.pool.Begin(ctx)
 	if err != nil {
@@ -177,7 +175,6 @@ func (db *postgresRepository) CreateRelayRequest(ctx context.Context, chainID st
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-// CreateTransfer inserts a transfer. Inserting the same packet twice is a noop.
 func (db *postgresRepository) CreateTransfer(ctx context.Context, transfer Transfer) error {
 	db.logger.Debug(
 		"CreateTransfer",
