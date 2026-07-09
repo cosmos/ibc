@@ -225,7 +225,7 @@ func (db *postgresRepository) ListTransfersBySourceTx(
 	return transfers, nil
 }
 
-func transferFromPostgres(row postgres.Ibcv2Transfer) Transfer {
+func transferFromPostgres(row postgres.Transfer) Transfer {
 	return Transfer{
 		ID:        row.ID,
 		CreatedAt: row.CreatedAt.Time.UTC(),
@@ -278,12 +278,12 @@ func pgTimePtr(ts pgtype.Timestamptz) *time.Time {
 	return &t
 }
 
-func pgWriteAckStatusPtr(status postgres.NullIbcv2WriteAckStatus) *WriteAckStatus {
+func pgWriteAckStatusPtr(status postgres.NullWriteAckStatus) *WriteAckStatus {
 	if !status.Valid {
 		return nil
 	}
 
-	s := WriteAckStatus(status.Ibcv2WriteAckStatus)
+	s := WriteAckStatus(status.WriteAckStatus)
 
 	return &s
 }

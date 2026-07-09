@@ -12,7 +12,7 @@ import (
 )
 
 const createRelayRequest = `-- name: CreateRelayRequest :exec
-INSERT INTO ibcv2_relay_requests (source_chain_id, source_tx_hash)
+INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES ($1, $2)
 ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
 `
@@ -23,14 +23,14 @@ func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash
 }
 
 const getRelayRequest = `-- name: GetRelayRequest :one
-SELECT id, source_chain_id, source_tx_hash, created_at FROM ibcv2_relay_requests
+SELECT id, source_chain_id, source_tx_hash, created_at FROM relay_requests
 WHERE source_chain_id = $1
 AND source_tx_hash = $2
 `
 
-func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash string) (Ibcv2RelayRequest, error) {
+func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash string) (RelayRequest, error) {
 	row := q.db.QueryRow(ctx, getRelayRequest, chainID, txHash)
-	var i Ibcv2RelayRequest
+	var i RelayRequest
 	err := row.Scan(
 		&i.ID,
 		&i.SourceChainID,
@@ -41,7 +41,7 @@ func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash st
 }
 
 const insertTransfer = `-- name: InsertTransfer :execrows
-INSERT INTO ibcv2_transfers (
+INSERT INTO transfers (
     source_chain_id,
     destination_chain_id,
     source_tx_hash,
@@ -92,21 +92,21 @@ func (q *Queries) InsertTransfer(ctx context.Context, arg InsertTransferParams) 
 }
 
 const listTransfersBySourceTx = `-- name: ListTransfersBySourceTx :many
-SELECT id, created_at, updated_at, status, status_text, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, source_tx_finalized_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_tx_finalized_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM ibcv2_transfers
+SELECT id, created_at, updated_at, status, status_text, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, source_tx_finalized_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_tx_finalized_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM transfers
 WHERE source_chain_id = $1
 AND source_tx_hash = $2
 ORDER BY packet_sequence_number
 `
 
-func (q *Queries) ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Ibcv2Transfer, error) {
+func (q *Queries) ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Transfer, error) {
 	rows, err := q.db.Query(ctx, listTransfersBySourceTx, chainID, txHash)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Ibcv2Transfer
+	var items []Transfer
 	for rows.Next() {
-		var i Ibcv2Transfer
+		var i Transfer
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,

@@ -227,7 +227,7 @@ func (db *sqliteRepository) ListTransfersBySourceTx(
 	return transfers, nil
 }
 
-func transferFromSqlite(row reposqlite.Ibcv2Transfer) Transfer {
+func transferFromSqlite(row reposqlite.Transfer) Transfer {
 	return Transfer{
 		ID:        row.ID,
 		CreatedAt: row.CreatedAt.UTC(),

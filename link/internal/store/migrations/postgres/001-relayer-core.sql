@@ -3,7 +3,7 @@
 -- replaces the pre-release relay_submissions table
 drop table if exists relay_submissions;
 
-create type ibcv2_relay_status as enum (
+create type relay_status as enum (
     'PENDING',
     'AWAITING_SEND_FINALITY',
     'CHECK_RECV_PACKET_DELIVERY',
@@ -25,13 +25,13 @@ create type ibcv2_relay_status as enum (
     'FAILED'
 );
 
-create type ibcv2_write_ack_status as enum ('SUCCESS', 'ERROR', 'UNKNOWN');
+create type write_ack_status as enum ('SUCCESS', 'ERROR', 'UNKNOWN');
 
-create table if not exists ibcv2_transfers (
+create table if not exists transfers (
     id                           bigserial                PRIMARY KEY,
     created_at                   timestamp with time zone NOT NULL DEFAULT now(),
     updated_at                   timestamp with time zone NOT NULL DEFAULT now(),
-    status                       ibcv2_relay_status       NOT NULL DEFAULT 'PENDING',
+    status                       relay_status             NOT NULL DEFAULT 'PENDING',
     status_text                  text,
     source_chain_id              text                     NOT NULL,
     destination_chain_id         text                     NOT NULL,
@@ -48,7 +48,7 @@ create table if not exists ibcv2_transfers (
     write_ack_tx_hash            text,
     write_ack_tx_time            timestamp with time zone,
     write_ack_tx_finalized_time  timestamp with time zone,
-    write_ack_status             ibcv2_write_ack_status,
+    write_ack_status             write_ack_status,
     ack_tx_hash                  text,
     ack_tx_time                  timestamp with time zone,
     ack_tx_relayer_address       text,
@@ -57,25 +57,25 @@ create table if not exists ibcv2_transfers (
     timeout_tx_relayer_address   text
 );
 
-create unique index if not exists index_ibcv2_transfer_packet
-    on ibcv2_transfers (source_chain_id, packet_sequence_number, packet_source_client_id);
+create unique index if not exists index_transfer_packet
+    on transfers (source_chain_id, packet_sequence_number, packet_source_client_id);
 
-create index if not exists idx_ibcv2_transfers_recv_time_chain_ids
-    on ibcv2_transfers (recv_tx_time, source_chain_id, destination_chain_id)
+create index if not exists idx_transfers_recv_time_chain_ids
+    on transfers (recv_tx_time, source_chain_id, destination_chain_id)
     include (source_tx_time);
 
-create table if not exists ibcv2_relay_requests (
+create table if not exists relay_requests (
     id              bigserial                PRIMARY KEY,
     source_chain_id text                     NOT NULL,
     source_tx_hash  text                     NOT NULL,
     created_at      timestamp with time zone NOT NULL DEFAULT now(),
 
-    constraint ibcv2_relay_requests_source_tx_unique
+    constraint relay_requests_source_tx_unique
         unique (source_chain_id, source_tx_hash)
 );
 
 -- +migrate Down
-drop table if exists ibcv2_relay_requests;
-drop table if exists ibcv2_transfers;
-drop type if exists ibcv2_write_ack_status;
-drop type if exists ibcv2_relay_status;
+drop table if exists relay_requests;
+drop table if exists transfers;
+drop type if exists write_ack_status;
+drop type if exists relay_status;

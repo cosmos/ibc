@@ -11,219 +11,219 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Ibcv2RelayStatus string
+type RelayStatus string
 
 const (
-	Ibcv2RelayStatusPENDING                     Ibcv2RelayStatus = "PENDING"
-	Ibcv2RelayStatusAWAITINGSENDFINALITY        Ibcv2RelayStatus = "AWAITING_SEND_FINALITY"
-	Ibcv2RelayStatusCHECKRECVPACKETDELIVERY     Ibcv2RelayStatus = "CHECK_RECV_PACKET_DELIVERY"
-	Ibcv2RelayStatusGETRECVPACKET               Ibcv2RelayStatus = "GET_RECV_PACKET"
-	Ibcv2RelayStatusDELIVERRECVPACKET           Ibcv2RelayStatus = "DELIVER_RECV_PACKET"
-	Ibcv2RelayStatusWAITFORWRITEACK             Ibcv2RelayStatus = "WAIT_FOR_WRITE_ACK"
-	Ibcv2RelayStatusAWAITINGWRITEACKFINALITY    Ibcv2RelayStatus = "AWAITING_WRITE_ACK_FINALITY"
-	Ibcv2RelayStatusCHECKACKPACKETDELIVERY      Ibcv2RelayStatus = "CHECK_ACK_PACKET_DELIVERY"
-	Ibcv2RelayStatusGETACKPACKET                Ibcv2RelayStatus = "GET_ACK_PACKET"
-	Ibcv2RelayStatusDELIVERACKPACKET            Ibcv2RelayStatus = "DELIVER_ACK_PACKET"
-	Ibcv2RelayStatusAWAITINGTIMEOUTFINALITY     Ibcv2RelayStatus = "AWAITING_TIMEOUT_FINALITY"
-	Ibcv2RelayStatusCHECKTIMEOUTPACKETDELIVERY  Ibcv2RelayStatus = "CHECK_TIMEOUT_PACKET_DELIVERY"
-	Ibcv2RelayStatusGETTIMEOUTPACKET            Ibcv2RelayStatus = "GET_TIMEOUT_PACKET"
-	Ibcv2RelayStatusDELIVERTIMEOUTPACKET        Ibcv2RelayStatus = "DELIVER_TIMEOUT_PACKET"
-	Ibcv2RelayStatusCOMPLETEWITHACK             Ibcv2RelayStatus = "COMPLETE_WITH_ACK"
-	Ibcv2RelayStatusCOMPLETEWITHWRITEACKSUCCESS Ibcv2RelayStatus = "COMPLETE_WITH_WRITE_ACK_SUCCESS"
-	Ibcv2RelayStatusCOMPLETEWITHWRITEACKERROR   Ibcv2RelayStatus = "COMPLETE_WITH_WRITE_ACK_ERROR"
-	Ibcv2RelayStatusCOMPLETEWITHTIMEOUT         Ibcv2RelayStatus = "COMPLETE_WITH_TIMEOUT"
-	Ibcv2RelayStatusFAILED                      Ibcv2RelayStatus = "FAILED"
+	RelayStatusPENDING                     RelayStatus = "PENDING"
+	RelayStatusAWAITINGSENDFINALITY        RelayStatus = "AWAITING_SEND_FINALITY"
+	RelayStatusCHECKRECVPACKETDELIVERY     RelayStatus = "CHECK_RECV_PACKET_DELIVERY"
+	RelayStatusGETRECVPACKET               RelayStatus = "GET_RECV_PACKET"
+	RelayStatusDELIVERRECVPACKET           RelayStatus = "DELIVER_RECV_PACKET"
+	RelayStatusWAITFORWRITEACK             RelayStatus = "WAIT_FOR_WRITE_ACK"
+	RelayStatusAWAITINGWRITEACKFINALITY    RelayStatus = "AWAITING_WRITE_ACK_FINALITY"
+	RelayStatusCHECKACKPACKETDELIVERY      RelayStatus = "CHECK_ACK_PACKET_DELIVERY"
+	RelayStatusGETACKPACKET                RelayStatus = "GET_ACK_PACKET"
+	RelayStatusDELIVERACKPACKET            RelayStatus = "DELIVER_ACK_PACKET"
+	RelayStatusAWAITINGTIMEOUTFINALITY     RelayStatus = "AWAITING_TIMEOUT_FINALITY"
+	RelayStatusCHECKTIMEOUTPACKETDELIVERY  RelayStatus = "CHECK_TIMEOUT_PACKET_DELIVERY"
+	RelayStatusGETTIMEOUTPACKET            RelayStatus = "GET_TIMEOUT_PACKET"
+	RelayStatusDELIVERTIMEOUTPACKET        RelayStatus = "DELIVER_TIMEOUT_PACKET"
+	RelayStatusCOMPLETEWITHACK             RelayStatus = "COMPLETE_WITH_ACK"
+	RelayStatusCOMPLETEWITHWRITEACKSUCCESS RelayStatus = "COMPLETE_WITH_WRITE_ACK_SUCCESS"
+	RelayStatusCOMPLETEWITHWRITEACKERROR   RelayStatus = "COMPLETE_WITH_WRITE_ACK_ERROR"
+	RelayStatusCOMPLETEWITHTIMEOUT         RelayStatus = "COMPLETE_WITH_TIMEOUT"
+	RelayStatusFAILED                      RelayStatus = "FAILED"
 )
 
-func (e *Ibcv2RelayStatus) Scan(src interface{}) error {
+func (e *RelayStatus) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = Ibcv2RelayStatus(s)
+		*e = RelayStatus(s)
 	case string:
-		*e = Ibcv2RelayStatus(s)
+		*e = RelayStatus(s)
 	default:
-		return fmt.Errorf("unsupported scan type for Ibcv2RelayStatus: %T", src)
+		return fmt.Errorf("unsupported scan type for RelayStatus: %T", src)
 	}
 	return nil
 }
 
-type NullIbcv2RelayStatus struct {
-	Ibcv2RelayStatus Ibcv2RelayStatus
-	Valid            bool // Valid is true if Ibcv2RelayStatus is not NULL
+type NullRelayStatus struct {
+	RelayStatus RelayStatus
+	Valid       bool // Valid is true if RelayStatus is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullIbcv2RelayStatus) Scan(value interface{}) error {
+func (ns *NullRelayStatus) Scan(value interface{}) error {
 	if value == nil {
-		ns.Ibcv2RelayStatus, ns.Valid = "", false
+		ns.RelayStatus, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.Ibcv2RelayStatus.Scan(value)
+	return ns.RelayStatus.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullIbcv2RelayStatus) Value() (driver.Value, error) {
+func (ns NullRelayStatus) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.Ibcv2RelayStatus), nil
+	return string(ns.RelayStatus), nil
 }
 
-type Ibcv2RelayerTxSubmissionStatus string
+type RelayerTxSubmissionStatus string
 
 const (
-	Ibcv2RelayerTxSubmissionStatusPENDING   Ibcv2RelayerTxSubmissionStatus = "PENDING"
-	Ibcv2RelayerTxSubmissionStatusCONFIRMED Ibcv2RelayerTxSubmissionStatus = "CONFIRMED"
-	Ibcv2RelayerTxSubmissionStatusFAILED    Ibcv2RelayerTxSubmissionStatus = "FAILED"
+	RelayerTxSubmissionStatusPENDING   RelayerTxSubmissionStatus = "PENDING"
+	RelayerTxSubmissionStatusCONFIRMED RelayerTxSubmissionStatus = "CONFIRMED"
+	RelayerTxSubmissionStatusFAILED    RelayerTxSubmissionStatus = "FAILED"
 )
 
-func (e *Ibcv2RelayerTxSubmissionStatus) Scan(src interface{}) error {
+func (e *RelayerTxSubmissionStatus) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = Ibcv2RelayerTxSubmissionStatus(s)
+		*e = RelayerTxSubmissionStatus(s)
 	case string:
-		*e = Ibcv2RelayerTxSubmissionStatus(s)
+		*e = RelayerTxSubmissionStatus(s)
 	default:
-		return fmt.Errorf("unsupported scan type for Ibcv2RelayerTxSubmissionStatus: %T", src)
+		return fmt.Errorf("unsupported scan type for RelayerTxSubmissionStatus: %T", src)
 	}
 	return nil
 }
 
-type NullIbcv2RelayerTxSubmissionStatus struct {
-	Ibcv2RelayerTxSubmissionStatus Ibcv2RelayerTxSubmissionStatus
-	Valid                          bool // Valid is true if Ibcv2RelayerTxSubmissionStatus is not NULL
+type NullRelayerTxSubmissionStatus struct {
+	RelayerTxSubmissionStatus RelayerTxSubmissionStatus
+	Valid                     bool // Valid is true if RelayerTxSubmissionStatus is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullIbcv2RelayerTxSubmissionStatus) Scan(value interface{}) error {
+func (ns *NullRelayerTxSubmissionStatus) Scan(value interface{}) error {
 	if value == nil {
-		ns.Ibcv2RelayerTxSubmissionStatus, ns.Valid = "", false
+		ns.RelayerTxSubmissionStatus, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.Ibcv2RelayerTxSubmissionStatus.Scan(value)
+	return ns.RelayerTxSubmissionStatus.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullIbcv2RelayerTxSubmissionStatus) Value() (driver.Value, error) {
+func (ns NullRelayerTxSubmissionStatus) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.Ibcv2RelayerTxSubmissionStatus), nil
+	return string(ns.RelayerTxSubmissionStatus), nil
 }
 
-type Ibcv2RelayerTxSubmissionType string
+type RelayerTxSubmissionType string
 
 const (
-	Ibcv2RelayerTxSubmissionTypeRECV    Ibcv2RelayerTxSubmissionType = "RECV"
-	Ibcv2RelayerTxSubmissionTypeACK     Ibcv2RelayerTxSubmissionType = "ACK"
-	Ibcv2RelayerTxSubmissionTypeTIMEOUT Ibcv2RelayerTxSubmissionType = "TIMEOUT"
+	RelayerTxSubmissionTypeRECV    RelayerTxSubmissionType = "RECV"
+	RelayerTxSubmissionTypeACK     RelayerTxSubmissionType = "ACK"
+	RelayerTxSubmissionTypeTIMEOUT RelayerTxSubmissionType = "TIMEOUT"
 )
 
-func (e *Ibcv2RelayerTxSubmissionType) Scan(src interface{}) error {
+func (e *RelayerTxSubmissionType) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = Ibcv2RelayerTxSubmissionType(s)
+		*e = RelayerTxSubmissionType(s)
 	case string:
-		*e = Ibcv2RelayerTxSubmissionType(s)
+		*e = RelayerTxSubmissionType(s)
 	default:
-		return fmt.Errorf("unsupported scan type for Ibcv2RelayerTxSubmissionType: %T", src)
+		return fmt.Errorf("unsupported scan type for RelayerTxSubmissionType: %T", src)
 	}
 	return nil
 }
 
-type NullIbcv2RelayerTxSubmissionType struct {
-	Ibcv2RelayerTxSubmissionType Ibcv2RelayerTxSubmissionType
-	Valid                        bool // Valid is true if Ibcv2RelayerTxSubmissionType is not NULL
+type NullRelayerTxSubmissionType struct {
+	RelayerTxSubmissionType RelayerTxSubmissionType
+	Valid                   bool // Valid is true if RelayerTxSubmissionType is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullIbcv2RelayerTxSubmissionType) Scan(value interface{}) error {
+func (ns *NullRelayerTxSubmissionType) Scan(value interface{}) error {
 	if value == nil {
-		ns.Ibcv2RelayerTxSubmissionType, ns.Valid = "", false
+		ns.RelayerTxSubmissionType, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.Ibcv2RelayerTxSubmissionType.Scan(value)
+	return ns.RelayerTxSubmissionType.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullIbcv2RelayerTxSubmissionType) Value() (driver.Value, error) {
+func (ns NullRelayerTxSubmissionType) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.Ibcv2RelayerTxSubmissionType), nil
+	return string(ns.RelayerTxSubmissionType), nil
 }
 
-type Ibcv2WriteAckStatus string
+type WriteAckStatus string
 
 const (
-	Ibcv2WriteAckStatusSUCCESS Ibcv2WriteAckStatus = "SUCCESS"
-	Ibcv2WriteAckStatusERROR   Ibcv2WriteAckStatus = "ERROR"
-	Ibcv2WriteAckStatusUNKNOWN Ibcv2WriteAckStatus = "UNKNOWN"
+	WriteAckStatusSUCCESS WriteAckStatus = "SUCCESS"
+	WriteAckStatusERROR   WriteAckStatus = "ERROR"
+	WriteAckStatusUNKNOWN WriteAckStatus = "UNKNOWN"
 )
 
-func (e *Ibcv2WriteAckStatus) Scan(src interface{}) error {
+func (e *WriteAckStatus) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = Ibcv2WriteAckStatus(s)
+		*e = WriteAckStatus(s)
 	case string:
-		*e = Ibcv2WriteAckStatus(s)
+		*e = WriteAckStatus(s)
 	default:
-		return fmt.Errorf("unsupported scan type for Ibcv2WriteAckStatus: %T", src)
+		return fmt.Errorf("unsupported scan type for WriteAckStatus: %T", src)
 	}
 	return nil
 }
 
-type NullIbcv2WriteAckStatus struct {
-	Ibcv2WriteAckStatus Ibcv2WriteAckStatus
-	Valid               bool // Valid is true if Ibcv2WriteAckStatus is not NULL
+type NullWriteAckStatus struct {
+	WriteAckStatus WriteAckStatus
+	Valid          bool // Valid is true if WriteAckStatus is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullIbcv2WriteAckStatus) Scan(value interface{}) error {
+func (ns *NullWriteAckStatus) Scan(value interface{}) error {
 	if value == nil {
-		ns.Ibcv2WriteAckStatus, ns.Valid = "", false
+		ns.WriteAckStatus, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.Ibcv2WriteAckStatus.Scan(value)
+	return ns.WriteAckStatus.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullIbcv2WriteAckStatus) Value() (driver.Value, error) {
+func (ns NullWriteAckStatus) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.Ibcv2WriteAckStatus), nil
+	return string(ns.WriteAckStatus), nil
 }
 
-type Ibcv2RelayRequest struct {
+type RelayRequest struct {
 	ID            int64
 	SourceChainID string
 	SourceTxHash  string
 	CreatedAt     pgtype.Timestamptz
 }
 
-type Ibcv2RelayerTxSubmission struct {
+type RelayerTxSubmission struct {
 	ID             int64
 	TxHash         string
 	ChainID        string
-	TxType         Ibcv2RelayerTxSubmissionType
+	TxType         RelayerTxSubmissionType
 	RelayerAddress string
 	SubmittedAt    pgtype.Timestamptz
 	ResolvedAt     pgtype.Timestamptz
 	GasCostAmount  pgtype.Numeric
-	Status         Ibcv2RelayerTxSubmissionStatus
+	Status         RelayerTxSubmissionStatus
 	ExecutionError *string
 }
 
-type Ibcv2Transfer struct {
+type Transfer struct {
 	ID                        int64
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
-	Status                    Ibcv2RelayStatus
+	Status                    RelayStatus
 	StatusText                *string
 	SourceChainID             string
 	DestinationChainID        string
@@ -240,7 +240,7 @@ type Ibcv2Transfer struct {
 	WriteAckTxHash            *string
 	WriteAckTxTime            pgtype.Timestamptz
 	WriteAckTxFinalizedTime   pgtype.Timestamptz
-	WriteAckStatus            NullIbcv2WriteAckStatus
+	WriteAckStatus            NullWriteAckStatus
 	AckTxHash                 *string
 	AckTxTime                 pgtype.Timestamptz
 	AckTxRelayerAddress       *string
@@ -249,7 +249,7 @@ type Ibcv2Transfer struct {
 	TimeoutTxRelayerAddress   *string
 }
 
-type Ibcv2TransferTxSubmission struct {
+type TransferTxSubmission struct {
 	TransferID   int64
 	SubmissionID int64
 }

@@ -1,6 +1,6 @@
 -- +migrate Up
 
-create table if not exists ibcv2_relayer_tx_submissions (
+create table if not exists relayer_tx_submissions (
     id              integer   primary key,
     tx_hash         text      not null,
     chain_id        text      not null,
@@ -12,17 +12,17 @@ create table if not exists ibcv2_relayer_tx_submissions (
     status          text      not null default 'PENDING' check (status in ('PENDING', 'CONFIRMED', 'FAILED')),
     execution_error text,
 
-    constraint ibcv2_relayer_tx_submissions_tx_unique
+    constraint relayer_tx_submissions_tx_unique
         unique (chain_id, tx_hash)
 );
 
-create table if not exists ibcv2_transfer_tx_submissions (
-    transfer_id   integer not null references ibcv2_transfers (id),
-    submission_id integer not null references ibcv2_relayer_tx_submissions (id),
+create table if not exists transfer_tx_submissions (
+    transfer_id   integer not null references transfers (id),
+    submission_id integer not null references relayer_tx_submissions (id),
 
     primary key (transfer_id, submission_id)
 );
 
 -- +migrate Down
-drop table if exists ibcv2_transfer_tx_submissions;
-drop table if exists ibcv2_relayer_tx_submissions;
+drop table if exists transfer_tx_submissions;
+drop table if exists relayer_tx_submissions;

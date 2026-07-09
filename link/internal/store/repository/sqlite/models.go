@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-type Ibcv2RelayRequest struct {
+type RelayRequest struct {
 	ID            int64
 	SourceChainID string
 	SourceTxHash  string
 	CreatedAt     time.Time
 }
 
-type Ibcv2RelayerTxSubmission struct {
+type RelayerTxSubmission struct {
 	ID             int64
 	TxHash         string
 	ChainID        string
@@ -28,7 +28,7 @@ type Ibcv2RelayerTxSubmission struct {
 	ExecutionError *string
 }
 
-type Ibcv2Transfer struct {
+type Transfer struct {
 	ID                        int64
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
@@ -58,7 +58,7 @@ type Ibcv2Transfer struct {
 	TimeoutTxRelayerAddress   *string
 }
 
-type Ibcv2TransferTxSubmission struct {
+type TransferTxSubmission struct {
 	TransferID   int64
 	SubmissionID int64
 }

@@ -3,7 +3,7 @@
 -- replaces the pre-release relay_submissions table
 drop table if exists relay_submissions;
 
-create table if not exists ibcv2_transfers (
+create table if not exists transfers (
     id                           integer   primary key,
     created_at                   timestamp not null default current_timestamp,
     updated_at                   timestamp not null default current_timestamp,
@@ -53,22 +53,22 @@ create table if not exists ibcv2_transfers (
     timeout_tx_relayer_address   text
 );
 
-create unique index if not exists index_ibcv2_transfer_packet
-    on ibcv2_transfers (source_chain_id, packet_sequence_number, packet_source_client_id);
+create unique index if not exists index_transfer_packet
+    on transfers (source_chain_id, packet_sequence_number, packet_source_client_id);
 
-create index if not exists idx_ibcv2_transfers_recv_time_chain_ids
-    on ibcv2_transfers (recv_tx_time, source_chain_id, destination_chain_id);
+create index if not exists idx_transfers_recv_time_chain_ids
+    on transfers (recv_tx_time, source_chain_id, destination_chain_id);
 
-create table if not exists ibcv2_relay_requests (
+create table if not exists relay_requests (
     id              integer   primary key,
     source_chain_id text      not null,
     source_tx_hash  text      not null,
     created_at      timestamp not null default current_timestamp,
 
-    constraint ibcv2_relay_requests_source_tx_unique
+    constraint relay_requests_source_tx_unique
         unique (source_chain_id, source_tx_hash)
 );
 
 -- +migrate Down
-drop table if exists ibcv2_relay_requests;
-drop table if exists ibcv2_transfers;
+drop table if exists relay_requests;
+drop table if exists transfers;
