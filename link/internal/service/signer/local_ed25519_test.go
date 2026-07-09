@@ -50,6 +50,9 @@ func TestLocalEd25519Signer(t *testing.T) {
 
 			// ASSERT
 			require.NoError(t, err)
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 
 			// ACT
 			importedKey, err := LocalKeyFromFile(path)

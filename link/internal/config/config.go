@@ -73,8 +73,7 @@ type SignerConfig struct {
 	RemoteKeyID string `yaml:"remoteKeyId"`
 }
 
-// AttestationConfig represents a single attestation configuration in case when the binary
-// runs attestors. Signer is a reference to .singers section in the config (future)
+// AttestationConfig represents a single attestation configuration when the binary runs attestors.
 // Name should be unique within the config.
 type AttestationConfig struct {
 	ChainID string `yaml:"chainId"`

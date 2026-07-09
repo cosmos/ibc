@@ -3,9 +3,10 @@ package signer
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
 )
@@ -23,7 +24,7 @@ type keyFile struct {
 }
 
 func KeyFilePath(homePath, keyName string) (string, error) {
-	filename := fmt.Sprintf("%s.json", keyName)
+	filename := keyName + ".json"
 	path := filepath.Join(homePath, "/keys", filepath.Clean(filename))
 	return config.ExpandHome(path)
 }
@@ -35,7 +36,7 @@ func GenerateLocalKey(keyType KeyType) (LocalKey, error) {
 	case ECDSA:
 		return GenerateLocalSecp256k1Signer()
 	default:
-		return nil, fmt.Errorf("invalid key type: %s", keyType)
+		return nil, errors.Errorf("invalid key type: %s", keyType)
 	}
 }
 
@@ -51,7 +52,7 @@ func LocalKeyFromFile(path string) (LocalKey, error) {
 	case ECDSA:
 		return NewLocalSecp256k1Signer(privateKey)
 	default:
-		return nil, fmt.Errorf("invalid key type: %s", keyType)
+		return nil, errors.Errorf("invalid key type: %s", keyType)
 	}
 }
 
@@ -66,15 +67,25 @@ func storeKeyToFile(path string, keyType KeyType, privateKey []byte) error {
 		return err
 	}
 
-	if err := config.EnsureDirectory(path); err != nil {
+	if dirErr := config.EnsureDirectory(path); dirErr != nil {
+		return dirErr
+	}
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return errors.Errorf("file %s already exists", path)
+		}
+
 		return err
 	}
 
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("file %s already exists", path)
+	if _, err = file.Write(bz); err != nil {
+		_ = file.Close()
+		return err
 	}
 
-	return os.WriteFile(path, bz, 0o644)
+	return file.Close()
 }
 
 func loadKeyFromFile(path string) (KeyType, []byte, error) {

@@ -55,9 +55,9 @@ func keysNew(_ *cobra.Command, args []string) error {
 	if !saveKey {
 		// for ephemeral keys we print the key to stdout including the private key
 		return config.PrintJSON(map[string]any{
-			"keyType": keyType,
-			"pubKey":  toHex(key.PublicKey()),
-			"privKey": toHex(key.PrivateKey()),
+			"keyType":    keyType,
+			"publicKey":  toHex(key.PublicKey()),
+			"privateKey": toHex(key.PrivateKey()),
 		})
 	}
 
@@ -73,8 +73,8 @@ func keysNew(_ *cobra.Command, args []string) error {
 	// note that we don't print the private key here to avoid leaking it to the user
 	return config.PrintJSON(map[string]any{
 		"keyType":   keyType,
-		"publicKey": toHex(key.PublicKey()),
 		"keyPath":   keyPath,
+		"publicKey": toHex(key.PublicKey()),
 	})
 }
 
@@ -95,9 +95,9 @@ func keysShow(_ *cobra.Command, args []string) error {
 	}
 
 	kv := map[string]any{
+		"keyPath":   keyPath,
 		"keyType":   key.Type(),
 		"publicKey": toHex(key.PublicKey()),
-		"keyPath":   keyPath,
 	}
 
 	if flagKeysShowPrivate {

@@ -2,10 +2,13 @@ package signer
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/internal/config"
 )
 
 func TestSignerSet(t *testing.T) {
@@ -50,4 +53,25 @@ func TestSignerSet(t *testing.T) {
 		require.Nil(t, missingSigner)
 		require.False(t, missingFound)
 	})
+}
+
+func TestNewSignerFromConfigExpandsHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	key, err := GenerateLocalEd25519Signer()
+	require.NoError(t, err)
+
+	path := filepath.Join(home, "keys", "signer.json")
+	require.NoError(t, key.StoreToFile(path))
+
+	loadedSigner, alias, err := NewSignerFromConfig(config.SignerConfig{
+		Alias: "local",
+		Type:  string(Local),
+		File:  "~/keys/signer.json",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "local", alias)
+	require.Equal(t, key.PublicKey(), loadedSigner.PublicKey())
 }

@@ -30,7 +30,7 @@ func NewRemote(ctx context.Context, client signerservice.SignerServiceClient, ke
 		keyID:   keyID,
 		key:     nil,
 		keyType: "",
-		logger:  slog.With("module", "signer", "remote", "key_id", keyID),
+		logger:  slog.With("module", "signer", "source", "remote", "key_id", keyID),
 	}
 
 	if err := s.setup(ctx); err != nil {

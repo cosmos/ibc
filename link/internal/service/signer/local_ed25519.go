@@ -56,7 +56,7 @@ func (s *LocalEd25519Signer) PrivateKey() []byte {
 	return s.pk.Bytes()
 }
 
-// Sign signs EDDSA message or digest (based on the message length)
+// Sign signs the provided message with Ed25519
 func (s *LocalEd25519Signer) Sign(ctx context.Context, message []byte) ([]byte, error) {
 	return s.signer.Sign(ctx, message)
 }

@@ -2,7 +2,8 @@ package signer
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
 )
@@ -50,22 +51,27 @@ func (s *Set) Get(alias string) (Signer, bool) {
 	return signer, ok
 }
 
-func NewSignerFromConfig(config config.SignerConfig) (signer Signer, alias string, err error) {
-	switch Source(config.Type) {
+func NewSignerFromConfig(cfg config.SignerConfig) (signer Signer, alias string, err error) {
+	switch Source(cfg.Type) {
 	case Local:
-		s, err := LocalKeyFromFile(config.File)
+		path, err := config.ExpandHome(cfg.File)
+		if err != nil {
+			return nil, "", errors.Wrap(err, "expand local signer file")
+		}
 
-		return s, config.Alias, err
+		s, err := LocalKeyFromFile(path)
+
+		return s, cfg.Alias, err
 	case Remote:
-		return nil, "", fmt.Errorf("remote signers are not supported yet")
+		return nil, "", errors.New("remote signers are not supported yet")
 	default:
-		return nil, "", fmt.Errorf("invalid signer type: %s", config.Type)
+		return nil, "", errors.Errorf("invalid signer type: %s", cfg.Type)
 	}
 }
 
 func ParseKeyType(raw string) (KeyType, error) {
 	if raw != string(EDDSA) && raw != string(ECDSA) {
-		return "", fmt.Errorf("invalid key type: %s", raw)
+		return "", errors.Errorf("invalid key type: %s", raw)
 	}
 
 	return KeyType(raw), nil
