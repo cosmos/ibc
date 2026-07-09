@@ -112,7 +112,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 			return nil, errors.Wrapf(errParse, "parsing send packet event from tx %s on chain %s", txHash, c.chainID)
 		}
 
-		packets = append(packets, packetFromContract(sendPacket.Packet))
+		packets = append(packets, toPacket(sendPacket.Packet))
 	}
 
 	if len(packets) == 0 {
@@ -138,7 +138,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 	return events, nil
 }
 
-func packetFromContract(packet ics26router.IICS26RouterMsgsPacket) chains.Packet {
+func toPacket(packet ics26router.IICS26RouterMsgsPacket) chains.Packet {
 	payloads := make([]chains.Payload, len(packet.Payloads))
 	for i, payload := range packet.Payloads {
 		payloads[i] = chains.Payload{
