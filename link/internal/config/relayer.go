@@ -26,9 +26,10 @@ const (
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	Chains  []RelayerChainConfig `yaml:"chains"`
-	Clients []ClientConfig       `yaml:"clients"`
-	Routes  []RouteConfig        `yaml:"routesToRelay"`
+	Chains       []RelayerChainConfig `yaml:"chains"`
+	Clients      []ClientConfig       `yaml:"clients"`
+	AttestorSets []AttestorSetConfig  `yaml:"attestorSets"`
+	Routes       []RouteConfig        `yaml:"routesToRelay"`
 }
 
 // RelayerChainConfig relaying settings for one chain.
@@ -70,15 +71,16 @@ type GasAlertThresholds struct {
 
 // ClientConfig a light client on a chain.
 type ClientConfig struct {
-	ClientID            string             `yaml:"clientId"`
-	ChainID             string             `yaml:"chainId"`
-	CounterpartyChainID string             `yaml:"counterpartyChainId"`
-	Type                ClientType         `yaml:"type"`
-	AttestorSet         *AttestorSetConfig `yaml:"attestorSet,omitempty"`
+	ClientID            string     `yaml:"clientId"`
+	ChainID             string     `yaml:"chainId"`
+	CounterpartyChainID string     `yaml:"counterpartyChainId"`
+	Type                ClientType `yaml:"type"`
 }
 
 // AttestorSetConfig the attestor set backing a client.
 type AttestorSetConfig struct {
+	ChainID                         string          `yaml:"chainId"`
+	ClientID                        string          `yaml:"clientId"`
 	CounterpartyChainFinalityOffset uint64          `yaml:"counterpartyChainFinalityOffset"`
 	Threshold                       int             `yaml:"threshold"`
 	Attestors                       []AttestorEntry `yaml:"attestors"`
@@ -140,6 +142,10 @@ func (c RelayerConfig) Validate() error {
 		return err
 	}
 
+	if err := c.validateAttestorSets(); err != nil {
+		return err
+	}
+
 	return c.validateRoutes()
 }
 
@@ -162,7 +168,6 @@ func (c RelayerConfig) validateChains() error {
 
 func (c RelayerConfig) validateClients() error {
 	clients := make(map[string]struct{})
-	aliases := make(map[string]struct{})
 
 	for _, client := range c.Clients {
 		if err := client.Validate(); err != nil {
@@ -178,18 +183,53 @@ func (c RelayerConfig) validateClients() error {
 			return errors.Errorf(".clients duplicate client %q on chain %q", client.ClientID, client.ChainID)
 		}
 		clients[key] = struct{}{}
+	}
 
-		for _, attestor := range client.AttestorSet.Attestors {
+	for _, client := range c.Clients {
+		if err := c.validateCounterparty(client); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c RelayerConfig) validateAttestorSets() error {
+	sets := make(map[string]struct{})
+	aliases := make(map[string]struct{})
+
+	for i, set := range c.AttestorSets {
+		if err := set.Validate(); err != nil {
+			return errors.Wrapf(err, ".attestorSets[%d]", i)
+		}
+
+		if _, ok := c.Client(set.ChainID, set.ClientID); !ok {
+			return errors.Errorf(
+				".attestorSets[%d] references unknown client %q on chain %q",
+				i, set.ClientID, set.ChainID,
+			)
+		}
+
+		key := set.ChainID + "/" + set.ClientID
+		if _, ok := sets[key]; ok {
+			return errors.Errorf(".attestorSets duplicate set for client %q on chain %q", set.ClientID, set.ChainID)
+		}
+		sets[key] = struct{}{}
+
+		for _, attestor := range set.Attestors {
 			if _, ok := aliases[attestor.Alias]; ok {
-				return errors.Errorf(".clients[%s] duplicate attestor alias: %q", client.ClientID, attestor.Alias)
+				return errors.Errorf(".attestorSets[%d] duplicate attestor alias: %q", i, attestor.Alias)
 			}
 			aliases[attestor.Alias] = struct{}{}
 		}
 	}
 
 	for _, client := range c.Clients {
-		if err := c.validateCounterparty(client); err != nil {
-			return err
+		if _, ok := sets[client.ChainID+"/"+client.ClientID]; !ok {
+			return errors.Errorf(
+				".clients[%s] has no attestor set configured in .attestorSets",
+				client.ClientID,
+			)
 		}
 	}
 
@@ -317,12 +357,6 @@ func (c ClientConfig) Validate() error {
 		return errors.Errorf(".type must be %q, got %q", ClientTypeAttestation, c.Type)
 	case c.CounterpartyChainID == "":
 		return errors.New(".counterpartyChainId required")
-	case c.AttestorSet == nil:
-		return errors.Errorf(".attestorSet required for %s clients", ClientTypeAttestation)
-	}
-
-	if err := c.AttestorSet.Validate(); err != nil {
-		return errors.Wrap(err, ".attestorSet")
 	}
 
 	return nil
@@ -330,6 +364,10 @@ func (c ClientConfig) Validate() error {
 
 func (c AttestorSetConfig) Validate() error {
 	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case c.ClientID == "":
+		return errors.New(".clientId required")
 	case c.Threshold < 1:
 		return errors.New(".threshold must be at least 1")
 	case c.Threshold > len(c.Attestors):
