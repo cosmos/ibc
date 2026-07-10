@@ -318,10 +318,6 @@ func (c GasAlertThresholds) Validate() error {
 		".warningThreshold":  c.WarningThreshold,
 		".criticalThreshold": c.CriticalThreshold,
 	} {
-		if value == "" {
-			continue
-		}
-
 		amount, ok := new(big.Int).SetString(value, 10)
 		if !ok || amount.Sign() < 0 {
 			return errors.Errorf("%s must be a non-negative integer, got %q", name, value)
