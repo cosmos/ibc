@@ -1,8 +1,5 @@
 -- +migrate Up
 
--- replaces the pre-release relay_submissions table
-drop table if exists relay_submissions;
-
 create type relay_status as enum (
     'PENDING',
     'AWAITING_SEND_FINALITY',

@@ -1,8 +1,5 @@
 -- +migrate Up
 
--- replaces the pre-release relay_submissions table
-drop table if exists relay_submissions;
-
 create table if not exists transfers (
     id                           integer   primary key,
     created_at                   timestamp not null default current_timestamp,
