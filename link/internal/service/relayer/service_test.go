@@ -23,24 +23,30 @@ const (
 	txHashUpper = "0x60016C34C02278856C81A41CE857AC4BB837A2F4A13C95207E08CBC9E8F2B706"
 )
 
-func relayerConfig() config.RelayerConfig {
-	return config.RelayerConfig{
-		Chains: []config.RelayerChainConfig{
+func relayerConfig() config.Config {
+	return config.Config{
+		Chains: []config.ChainConfig{
 			{
 				ChainID: chainIDEth,
-				EVM: &config.RelayerEVMConfig{
+				EVM: &config.EVMChainConfig{
+					RPC: "https://ethereum-rpc.example.com",
 					Contracts: config.EVMContracts{
 						ICS26Router: "0x0000000000000000000000000000000000000000",
 					},
 				},
 			},
 		},
-		Clients: []config.ClientConfig{
-			{
-				ClientID:            "base-0",
-				ChainID:             chainIDEth,
-				CounterpartyChainID: chainIDBase,
-				Type:                config.ClientTypeAttestation,
+		Relayer: config.RelayerConfig{
+			Chains: []config.RelayerChainConfig{
+				{ChainID: chainIDEth},
+			},
+			Clients: []config.ClientConfig{
+				{
+					ClientID:            "base-0",
+					ChainID:             chainIDEth,
+					CounterpartyChainID: chainIDBase,
+					Type:                config.ClientTypeAttestation,
+				},
 			},
 		},
 	}

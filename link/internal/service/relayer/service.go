@@ -19,7 +19,7 @@ import (
 // Service represents relayer business logic.
 type Service struct {
 	logger *slog.Logger
-	cfg    config.RelayerConfig
+	cfg    config.Config
 	store  Store
 	chains ChainClientManager
 }
@@ -71,7 +71,7 @@ type PacketStatus struct {
 }
 
 // New Service constructor.
-func New(cfg config.RelayerConfig, st Store, clientManager ChainClientManager) *Service {
+func New(cfg config.Config, st Store, clientManager ChainClientManager) *Service {
 	return &Service{
 		logger: slog.With("service", "relayer"),
 		cfg:    cfg,
@@ -133,7 +133,7 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 			continue
 		}
 
-		client, ok := s.cfg.Client(chainID, event.Packet.SourceClient)
+		client, ok := s.cfg.Relayer.Client(chainID, event.Packet.SourceClient)
 		if !ok {
 			s.logger.Warn(
 				"Skipping packet from unconfigured client",
@@ -202,6 +202,10 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 		return "", errors.Wrap(ErrInvalidInput, "chainID is required")
 	case txHash == "":
 		return "", errors.Wrap(ErrInvalidInput, "txHash is required")
+	}
+
+	if _, ok := s.cfg.Relayer.Chain(chainID); !ok {
+		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 	}
 
 	chain, ok := s.cfg.Chain(chainID)

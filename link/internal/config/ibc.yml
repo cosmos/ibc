@@ -14,21 +14,19 @@ chains:
   - chainId: "1"
     evm:
       rpc: https://ethereum-rpc.example.com
+      contracts:
+        ics26Router: "0x0000000000000000000000000000000000000000"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
+      contracts:
+        ics26Router: "0x0000000000000000000000000000000000000000"
 
 relayer:
   # chain specific relay configuration
   chains:
     - chainId: "1"
-      evm:
-        contracts:
-          ics26Router: "0x0000000000000000000000000000000000000000"
     - chainId: "8453"
-      evm:
-        contracts:
-          ics26Router: "0x0000000000000000000000000000000000000000"
 
   # attestors the relayer queries for their associated client
   attestors:

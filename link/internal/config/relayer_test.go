@@ -18,15 +18,17 @@ chains:
   - chainId: "1"
     evm:
       rpc: https://ethereum-rpc.example.com
+      contracts:
+        ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
+      contracts:
+        ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 relayer:
   chains:
     - chainId: "1"
       evm:
-        contracts:
-          ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
         txSubmissionDelay: 2s
         gasFeeCapMultiplier: 1.5
         gasTipCapMultiplier: 1.5
@@ -36,9 +38,6 @@ relayer:
       packetBatchSize: 20
       packetBatchTimeout: 10s
     - chainId: "8453"
-      evm:
-        contracts:
-          ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
   attestors:
     - name: "attestor-alice-base"
       type: remote
@@ -94,7 +93,7 @@ func TestRelayerConfig(t *testing.T) {
 
 		require.Len(t, config.Relayer.Chains, 2)
 		chain := config.Relayer.Chains[0]
-		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", chain.EVM.Contracts.ICS26Router)
+		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.Contracts.ICS26Router)
 		assert.Equal(t, 2*time.Second, chain.EVM.TxSubmissionDelay)
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
 		assert.Equal(t, "500000000", chain.GasAlertThresholds.WarningThreshold)
@@ -240,9 +239,9 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "missing router contract",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].EVM.Contracts.ICS26Router = ""
+					c.Chains[0].EVM.Contracts.ICS26Router = ""
 				},
-				errContains: ".contracts.ics26Router required",
+				errContains: ".evm.contracts.ics26Router required",
 			},
 			{
 				name: "zero gas multiplier",

@@ -41,26 +41,11 @@ type RelayerChainConfig struct {
 	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout"`
 }
 
-// Type returns the chain type implied by the configured settings.
-func (c RelayerChainConfig) Type() ChainType {
-	if c.EVM != nil {
-		return ChainTypeEVM
-	}
-
-	return ""
-}
-
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
-	Contracts           EVMContracts  `yaml:"contracts"`
 	TxSubmissionDelay   time.Duration `yaml:"txSubmissionDelay"`
 	GasFeeCapMultiplier *float64      `yaml:"gasFeeCapMultiplier,omitempty"`
 	GasTipCapMultiplier *float64      `yaml:"gasTipCapMultiplier,omitempty"`
-}
-
-// EVMContracts IBC contract addresses.
-type EVMContracts struct {
-	ICS26Router string `yaml:"ics26Router"`
 }
 
 // GasAlertThresholds gas balances that trigger low-balance metrics.
@@ -332,8 +317,6 @@ func (c RelayerChainConfig) Validate() error {
 
 func (c RelayerEVMConfig) Validate() error {
 	switch {
-	case c.Contracts.ICS26Router == "":
-		return errors.New(".contracts.ics26Router required")
 	case c.TxSubmissionDelay < 0:
 		return errors.New(".txSubmissionDelay must not be negative")
 	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:

@@ -50,7 +50,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Services
-	relayerService := relayer.New(cfg.Relayer, db, clientManager)
+	relayerService := relayer.New(cfg, db, clientManager)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)

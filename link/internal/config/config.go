@@ -105,9 +105,24 @@ type ChainConfig struct {
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
 }
 
-// EVMChainConfig EVM connection details.
+// Type returns the chain type implied by the configured settings.
+func (c ChainConfig) Type() ChainType {
+	if c.EVM != nil {
+		return ChainTypeEVM
+	}
+
+	return ""
+}
+
+// EVMChainConfig EVM connection and contract details.
 type EVMChainConfig struct {
-	RPC string `yaml:"rpc"`
+	RPC       string       `yaml:"rpc"`
+	Contracts EVMContracts `yaml:"contracts"`
+}
+
+// EVMContracts IBC contract addresses.
+type EVMContracts struct {
+	ICS26Router string `yaml:"ics26Router"`
 }
 
 // DefaultConfig sample config using default values and Sqlite.
@@ -261,6 +276,8 @@ func (c ChainConfig) Validate() error {
 		return errors.Errorf(".evm required for chain %q (only %s chains are supported)", c.ChainID, ChainTypeEVM)
 	case c.EVM.RPC == "":
 		return errors.Errorf(".evm.rpc required for chain %q", c.ChainID)
+	case c.EVM.Contracts.ICS26Router == "":
+		return errors.Errorf(".evm.contracts.ics26Router required for chain %q", c.ChainID)
 	}
 
 	return nil
