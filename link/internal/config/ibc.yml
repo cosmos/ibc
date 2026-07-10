@@ -51,6 +51,7 @@ relayer:
       counterpartyClientId: "ethereum-0"
       type: "attestation"
       attestorSet:
+        counterpartyChainFinalityOffset: 1
         threshold: 1
     - alias: "base-to-eth"
       clientId: "ethereum-0"
@@ -59,6 +60,7 @@ relayer:
       counterpartyClientId: "base-0"
       type: "attestation"
       attestorSet:
+        counterpartyChainFinalityOffset: 1
         threshold: 1
 
   # packets sent from the source client are relayed through the entire packet
