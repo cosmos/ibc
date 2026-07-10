@@ -9,7 +9,8 @@ db:
   # type: postgres
   # url: postgres://user:password@host:port/dbname
 
-# chains declares how to reach each chain; referenced by other blocks via chainId
+# chains declares each chain's type, connection details, and core IBC
+# contracts; referenced by other blocks via chainId
 chains:
   - chainId: "1"
     type: evm

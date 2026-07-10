@@ -99,7 +99,7 @@ const (
 	ChainTypeEVM ChainType = "evm"
 )
 
-// ChainConfig describes how to reach a chain.
+// ChainConfig a chain's type, connection details, and core IBC contracts.
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
 	Type    ChainType       `yaml:"type"`
