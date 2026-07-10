@@ -193,6 +193,52 @@ server:
 			require.NoError(t, err)
 			assert.Equal(t, "0.0.0.0:3000", config.Server.ListenAddress)
 		})
+
+		t.Run("attestationSigner", func(t *testing.T) {
+			// ARRANGE
+			path := writeTestConfig(t, `
+signers:
+  - alias: signer-a
+    type: remote
+    grpc: https://kms.example.com
+    remoteKeyId: key-a
+attestor:
+  attestations:
+    - chainId: chain-a
+      name: attestation-a
+      signer: signer-a
+`)
+
+			// ACT
+			config, err := LoadFromFile(path, true, true)
+
+			// ASSERT
+			require.NoError(t, err)
+			require.Len(t, config.Attestor.Attestations, 1)
+			assert.Equal(t, "signer-a", config.Attestor.Attestations[0].Signer)
+		})
+
+		t.Run("unknownAttestationSignerFails", func(t *testing.T) {
+			// ARRANGE
+			path := writeTestConfig(t, `
+signers:
+  - alias: signer-a
+    type: remote
+    grpc: https://kms.example.com
+    remoteKeyId: key-a
+attestor:
+  attestations:
+    - chainId: chain-a
+      name: attestation-a
+      signer: missing-signer
+`)
+
+			// ACT
+			_, err := LoadFromFile(path, true, true)
+
+			// ASSERT
+			require.ErrorContains(t, err, `references unknown signer: "missing-signer"`)
+		})
 	})
 
 	t.Run("DBConfigFromURL", func(t *testing.T) {
@@ -263,6 +309,230 @@ server:
 			})
 		}
 	})
+}
+
+func TestAttestorConfigValidate(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		attestor    AttestorConfig
+		errContains string
+	}{
+		{
+			name:     "empty attestations",
+			attestor: AttestorConfig{},
+		},
+		{
+			name: "valid attestations",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{
+					{
+						ChainID: "chain-a",
+						Name:    "attestation-a",
+						Signer:  "signer-a",
+					},
+					{
+						ChainID: "chain-b",
+						Name:    "attestation-b",
+						Signer:  "signer-b",
+					},
+				},
+			},
+		},
+		{
+			name: "chain id required",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{{
+					Name:   "attestation-a",
+					Signer: "signer-a",
+				}},
+			},
+			errContains: ".attestations[0]: .chainId required",
+		},
+		{
+			name: "name required",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{{
+					ChainID: "chain-a",
+					Signer:  "signer-a",
+				}},
+			},
+			errContains: ".attestations[0]: .name required",
+		},
+		{
+			name: "signer required",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{{
+					ChainID: "chain-a",
+					Name:    "attestation-a",
+				}},
+			},
+			errContains: ".attestations[0]: .signer required",
+		},
+		{
+			name: "duplicate name",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{
+					{
+						ChainID: "chain-a",
+						Name:    "same",
+						Signer:  "signer-a",
+					},
+					{
+						ChainID: "chain-b",
+						Name:    "same",
+						Signer:  "signer-b",
+					},
+				},
+			},
+			errContains: `.attestations[1] duplicate name: "same"`,
+		},
+		{
+			name: "duplicate signer",
+			attestor: AttestorConfig{
+				Attestations: []AttestationConfig{
+					{
+						ChainID: "chain-a",
+						Name:    "attestation-a",
+						Signer:  "same",
+					},
+					{
+						ChainID: "chain-b",
+						Name:    "attestation-b",
+						Signer:  "same",
+					},
+				},
+			},
+			errContains: `.attestations[1] duplicate signer: "same"`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ACT
+			err := tt.attestor.Validate()
+
+			// ASSERT
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestSignerConfigValidate(t *testing.T) {
+	keyFile := filepath.Join(t.TempDir(), "key.json")
+	require.NoError(t, os.WriteFile(keyFile, []byte("{}"), 0o644))
+
+	for _, tt := range []struct {
+		name        string
+		signers     Signers
+		errContains string
+	}{
+		{
+			name: "valid local",
+			signers: Signers{{
+				Alias: "local",
+				Type:  SignerLocal,
+				File:  keyFile,
+			}},
+		},
+		{
+			name: "valid remote",
+			signers: Signers{{
+				Alias:       "remote",
+				Type:        SignerRemote,
+				GRPC:        "https://kms.example.com",
+				RemoteKeyID: "key-1",
+			}},
+		},
+		{
+			name: "alias required",
+			signers: Signers{{
+				Type: SignerLocal,
+				File: keyFile,
+			}},
+			errContains: ".alias required",
+		},
+		{
+			name: "type required",
+			signers: Signers{{
+				Alias: "local",
+				File:  keyFile,
+			}},
+			errContains: ".type required",
+		},
+		{
+			name: "invalid type",
+			signers: Signers{{
+				Alias: "local",
+				Type:  "kms",
+			}},
+			errContains: ".type must be one of",
+		},
+		{
+			name: "local file required",
+			signers: Signers{{
+				Alias: "local",
+				Type:  SignerLocal,
+			}},
+			errContains: ".file required",
+		},
+		{
+			name: "local file must exist",
+			signers: Signers{{
+				Alias: "local",
+				Type:  SignerLocal,
+				File:  filepath.Join(t.TempDir(), "missing.json"),
+			}},
+			errContains: ".file",
+		},
+		{
+			name: "remote grpc required",
+			signers: Signers{{
+				Alias:       "remote",
+				Type:        SignerRemote,
+				RemoteKeyID: "key-1",
+			}},
+			errContains: ".grpc required",
+		},
+		{
+			name: "remote key id required",
+			signers: Signers{{
+				Alias: "remote",
+				Type:  SignerRemote,
+				GRPC:  "https://kms.example.com",
+			}},
+			errContains: ".remoteKeyId required",
+		},
+		{
+			name: "duplicate alias",
+			signers: Signers{
+				{
+					Alias: "same",
+					Type:  SignerLocal,
+					File:  keyFile,
+				},
+				{
+					Alias:       "same",
+					Type:        SignerRemote,
+					GRPC:        "https://kms.example.com",
+					RemoteKeyID: "key-1",
+				},
+			},
+			errContains: ".signers duplicate alias",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.signers.Validate()
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
 }
 
 func writeTestConfig(t *testing.T, content string) string {

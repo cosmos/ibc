@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/service/signer"
 )
 
 // Service manages configured attestors.
@@ -42,15 +43,33 @@ var (
 
 // NewFromConfig creates a new attestor service from the configuration.
 // Because config represents our local binary, ALL attestors are local.
-func NewFromConfig(cfg config.Config) (*Service, error) {
+func NewFromConfig(cfg config.Config, signers *signer.Set) (*Service, error) {
 	if len(cfg.Attestor.Attestations) == 0 {
 		return nil, ErrNoAttestations
 	}
 
 	attestorsSpecs := make([]Attestor, 0, len(cfg.Attestor.Attestations))
+
+	add := func(spec config.AttestationConfig) error {
+		s, ok := signers.Get(spec.Signer)
+		if !ok {
+			return fmt.Errorf("unknown signer %s", spec.Signer)
+		}
+
+		a, err := NewLocal(spec.ChainID, spec.Name, s)
+		if err != nil {
+			return err
+		}
+
+		attestorsSpecs = append(attestorsSpecs, a)
+
+		return nil
+	}
+
 	for _, spec := range cfg.Attestor.Attestations {
-		localAttestor := NewLocal(spec.ChainID, spec.Name)
-		attestorsSpecs = append(attestorsSpecs, localAttestor)
+		if err := add(spec); err != nil {
+			return nil, fmt.Errorf("attestor %s: %w", spec.Name, err)
+		}
 	}
 
 	return New(attestorsSpecs)

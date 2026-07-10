@@ -33,6 +33,7 @@ func init() {
 		cmdAttestor,
 		cmdQuery,
 		cmdMigrate,
+		cmdKeys,
 	)
 
 	// Config commands
@@ -40,6 +41,10 @@ func init() {
 	cmdConfigValidate.Flags().BoolVarP(&flagConfigValidateLive, "live", "", false, "extra validation checks")
 	cmdConfigValidate.Flags().
 		BoolVarP(&flagConfigValidateStrict, "strict", "", false, "fail on unknown fields in the config file")
+
+	// Keys commands
+	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow)
+	cmdKeysShow.Flags().BoolVarP(&flagKeysShowPrivate, "private", "", false, "show private key")
 
 	// Relayer commands
 	cmdRelayer.AddCommand(cmdRelayerRun)

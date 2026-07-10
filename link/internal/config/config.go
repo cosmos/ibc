@@ -20,6 +20,12 @@ const (
 	DBTypePostgres = "postgres"
 )
 
+// Signer type. Local represents a private key file. Remote connects to cosmos/KMS.
+const (
+	SignerLocal  = "local"
+	SignerRemote = "remote"
+)
+
 const sqliteInMemory = ":memory:"
 
 // Config represents a config file
@@ -30,6 +36,7 @@ type Config struct {
 	Chains   []ChainConfig  `yaml:"chains"`
 	Relayer  RelayerConfig  `yaml:"relayer"`
 	Attestor AttestorConfig `yaml:"attestor"`
+	Signers  Signers        `yaml:"signers"`
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -48,37 +55,40 @@ type AttestorConfig struct {
 	Attestations []AttestationConfig `yaml:"attestations"`
 }
 
-// AttestationConfig represents a single attestation configuration in case when the binary
-// runs attestors. Signer is a reference to .singers section in the config (future)
+// Signers is the list of configured signer backends.
+type Signers []SignerConfig
+
+// SignerConfig represents a single signer configuration in the config.
+type SignerConfig struct {
+	// Alias unique name for a signer
+	Alias string `yaml:"alias"`
+
+	// Type [local, remote]
+	Type string `yaml:"type"`
+
+	// File key file path for a local signer
+	File string `yaml:"file"`
+
+	// GRPC address for a remote signer
+	GRPC string `yaml:"grpc"`
+
+	// RemoteKeyID KMS key ID for a remote signer
+	RemoteKeyID string `yaml:"remoteKeyId"`
+}
+
+// AttestationConfig represents a single attestation configuration when the binary runs attestors.
 // Name should be unique within the config.
 type AttestationConfig struct {
 	ChainID string `yaml:"chainId"`
 	Name    string `yaml:"name"`
 
+	// Signer reference to .signers section in the config
+	// Should be unique across all attestations!
+	Signer string `yaml:"signer"`
+
 	// todo: future work
 	RouterAddress  string `yaml:"-"`
 	FinalityOffset int64  `yaml:"-"`
-	Signer         string `yaml:"-"`
-}
-
-// Validate validates the attestor config. Allows empty attestations.
-func (c AttestorConfig) Validate() error {
-	set := make(map[string]struct{})
-
-	for _, attestation := range c.Attestations {
-		if attestation.ChainID == "" {
-			return errors.Errorf(".attestations chainId required")
-		}
-		if attestation.Name == "" {
-			return errors.Errorf(".attestations name required")
-		}
-		if _, ok := set[attestation.Name]; ok {
-			return errors.Errorf(".attestations duplicate name: %q", attestation.Name)
-		}
-		set[attestation.Name] = struct{}{}
-	}
-
-	return nil
 }
 
 // ChainType the execution environment of a chain.
@@ -117,6 +127,7 @@ func DefaultConfig() Config {
 		Attestor: AttestorConfig{
 			Attestations: []AttestationConfig{},
 		},
+		Signers: Signers{},
 	}
 }
 
@@ -183,6 +194,29 @@ func (c Config) Validate() error {
 
 	if err := c.Attestor.Validate(); err != nil {
 		return errors.Wrap(err, ".attestor")
+	}
+
+	if err := c.Signers.Validate(); err != nil {
+		return errors.Wrap(err, ".signers")
+	}
+
+	return c.crossValidate()
+}
+
+func (c Config) crossValidate() error {
+	signerSet := make(map[string]struct{}, len(c.Signers))
+	for _, signer := range c.Signers {
+		signerSet[signer.Alias] = struct{}{}
+	}
+
+	for i, attestation := range c.Attestor.Attestations {
+		if _, exists := signerSet[attestation.Signer]; !exists {
+			return errors.Errorf(
+				".attestor.attestations[%d].signer references unknown signer: %q",
+				i,
+				attestation.Signer,
+			)
+		}
 	}
 
 	return nil
@@ -295,6 +329,119 @@ func DBConfigFromURL(url string) (DBConfig, error) {
 	return db, db.Validate()
 }
 
+// Validate validates the attestor config. Allows empty attestations.
+func (c AttestorConfig) Validate() error {
+	nameSet := make(map[string]struct{})
+	signerSet := make(map[string]struct{})
+
+	for i, attestation := range c.Attestations {
+		if err := attestation.Validate(); err != nil {
+			return errors.Wrapf(err, ".attestations[%d]", i)
+		}
+
+		if _, exists := nameSet[attestation.Name]; exists {
+			return errors.Errorf(".attestations[%d] duplicate name: %q", i, attestation.Name)
+		}
+
+		if _, exists := signerSet[attestation.Signer]; exists {
+			return errors.Errorf(".attestations[%d] duplicate signer: %q", i, attestation.Signer)
+		}
+
+		nameSet[attestation.Name] = struct{}{}
+		signerSet[attestation.Signer] = struct{}{}
+	}
+
+	return nil
+}
+
+func (c AttestationConfig) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errors.Errorf(".chainId required")
+	case c.Name == "":
+		return errors.Errorf(".name required")
+	case c.Signer == "":
+		return errors.Errorf(".signer required")
+	}
+
+	return nil
+}
+
+func (c Signers) Validate() error {
+	set := make(map[string]struct{})
+
+	for i, signer := range c {
+		if err := signer.Validate(); err != nil {
+			return errors.Wrapf(err, ".signers[%d]", i)
+		}
+
+		if _, exists := set[signer.Alias]; exists {
+			return errors.Errorf(".signers duplicate alias: %q", signer.Alias)
+		}
+
+		set[signer.Alias] = struct{}{}
+	}
+
+	return nil
+}
+
+func (c SignerConfig) Validate() error {
+	switch {
+	case c.Alias == "":
+		return errors.New(".alias required")
+	case c.Type == "":
+		return errors.New(".type required")
+	case c.Type != SignerLocal && c.Type != SignerRemote:
+		return errors.Errorf(".type must be one of [%q, %q], got %q", SignerLocal, SignerRemote, c.Type)
+	case c.Type == SignerLocal && c.File == "":
+		return errors.New(".file required for local signer")
+	case c.Type == SignerRemote && c.GRPC == "":
+		return errors.New(".grpc required for remote signer")
+	case c.Type == SignerRemote && c.RemoteKeyID == "":
+		return errors.New(".remoteKeyId required for remote signer")
+	}
+
+	if c.Type == SignerLocal {
+		path, err := ExpandHome(c.File)
+		if err != nil {
+			return errors.Wrap(err, ".file")
+		}
+
+		fallbacks := KeyFileFallbacks(path)
+
+		if err := fileExistsInAny(fallbacks...); err != nil {
+			return errors.Wrapf(err, ".file %s", path)
+		}
+	}
+
+	return nil
+}
+
+func KeyFileFallbacks(keyPath string) []string {
+	fallbacks := []string{keyPath}
+
+	// absolute path, no fallbacks needed
+	if filepath.IsAbs(keyPath) {
+		return fallbacks
+	}
+
+	// forgot to add .json extension
+	if !strings.HasSuffix(keyPath, ".json") {
+		keyPath = fmt.Sprintf("%s.json", keyPath)
+
+		fallbacks = append(fallbacks, keyPath)
+	}
+
+	// forgot to add keys/ directory
+	if !strings.Contains(keyPath, "keys/") {
+		keyPath = filepath.Join("keys", keyPath)
+
+		fallbacks = append(fallbacks, keyPath)
+	}
+
+	return fallbacks
+}
+
 // PrintJSON prints anything as JSON to stdout.
 func PrintJSON(v any) error {
 	bz, err := json.MarshalIndent(v, "", "  ")
@@ -313,4 +460,27 @@ func dbTypeFromURL(raw string) string {
 	}
 
 	return DBTypeSQLite
+}
+
+func fileExistsInAny(path ...string) error {
+	for _, p := range path {
+		if err := fileExists(p); err == nil {
+			return nil
+		}
+	}
+
+	return errors.New("file not found")
+}
+
+func fileExists(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		return errors.Errorf("path is a directory")
+	}
+
+	return nil
 }

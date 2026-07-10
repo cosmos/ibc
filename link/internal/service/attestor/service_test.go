@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/cosmos/ibc/link/internal/service/signer"
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,11 +14,14 @@ import (
 )
 
 func TestService(t *testing.T) {
+	sampleSigner, err := signer.GenerateLocalSecp256k1Signer()
+	require.NoError(t, err)
+
 	t.Run("duplicateAliases", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			NewLocal("1", "alice"),
-			NewLocal("2", "alice"),
+			must(NewLocal("1", "alice", sampleSigner)),
+			must(NewLocal("2", "alice", sampleSigner)),
 		}
 
 		// ACT
@@ -32,9 +36,9 @@ func TestService(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		service, err := New([]Attestor{
-			NewLocal("1", "alice"),
-			NewLocal("2", "bob"),
-			NewLocal("3", "carol"),
+			must(NewLocal("1", "alice", sampleSigner)),
+			must(NewLocal("2", "bob", sampleSigner)),
+			must(NewLocal("3", "carol", sampleSigner)),
 		})
 		require.NoError(t, err)
 
@@ -130,7 +134,7 @@ func TestService(t *testing.T) {
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
 			NewRemote("solana", "carol", "solana-carol", client),
-			NewLocal("ethereum", "dave"),
+			must(NewLocal("ethereum", "dave", sampleSigner)),
 		})
 		require.NoError(t, err)
 		start := uint64(time.Now().Unix())
@@ -165,4 +169,11 @@ func latestAttestableHeightRequest(attestor string) any {
 	}
 
 	return mock.MatchedBy(matcher)
+}
+
+func must[T any](value T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return value
 }
