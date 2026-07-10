@@ -34,24 +34,24 @@ relayer:
     - alias: "attestor-base"
       type: remote
       grpc: attestor.example.com:3000
-      chainId: "1"
-      clientId: "base-0"
+      client: "eth-to-base"
     - alias: "attestor-ethereum"
       type: remote
       grpc: attestor.example.com:3000
-      chainId: "8453"
-      clientId: "ethereum-0"
+      client: "base-to-eth"
 
   # light client information; connections are relayed bi-directionally, so
   # both chains configure a client
   clients:
-    - clientId: "base-0"
+    - alias: "eth-to-base"
+      clientId: "base-0"
       chainId: "1"
       counterpartyChainId: "8453"
       type: "attestation"
       attestorSet:
         threshold: 1
-    - clientId: "ethereum-0"
+    - alias: "base-to-eth"
+      clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
       type: "attestation"
@@ -61,7 +61,5 @@ relayer:
   # packets sent from the source client are relayed through the entire packet
   # lifecycle: recv, ack, timeout
   routesToRelay:
-    - sourceChainId: "1"
-      sourceClientId: "base-0"
-    - sourceChainId: "8453"
-      sourceClientId: "ethereum-0"
+    - sourceClient: "eth-to-base"
+    - sourceClient: "base-to-eth"

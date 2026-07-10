@@ -71,6 +71,8 @@ type GasAlertThresholds struct {
 
 // ClientConfig a light client on a chain.
 type ClientConfig struct {
+	// Alias unique config-level handle referenced by attestors and routes.
+	Alias               string             `yaml:"alias"`
 	ClientID            string             `yaml:"clientId"`
 	ChainID             string             `yaml:"chainId"`
 	CounterpartyChainID string             `yaml:"counterpartyChainId"`
@@ -87,19 +89,17 @@ type AttestorSetConfig struct {
 
 // AttestorEntry an attestor the relayer queries for the associated client.
 type AttestorEntry struct {
-	Alias    string       `yaml:"alias"`
-	Type     AttestorType `yaml:"type"`
-	GRPC     string       `yaml:"grpc,omitempty"`
-	ChainID  string       `yaml:"chainId"`
-	ClientID string       `yaml:"clientId"`
+	Alias  string       `yaml:"alias"`
+	Type   AttestorType `yaml:"type"`
+	GRPC   string       `yaml:"grpc,omitempty"`
+	Client string       `yaml:"client"`
 }
 
 // RouteConfig packets sent from the source client are relayed through the
 // entire packet lifecycle: recv, ack, timeout.
 type RouteConfig struct {
-	SourceChainID  string          `yaml:"sourceChainId"`
-	SourceClientID string          `yaml:"sourceClientId"`
-	AutoRelay      AutoRelayConfig `yaml:"autoRelay,omitempty"`
+	SourceClient string          `yaml:"sourceClient"`
+	AutoRelay    AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -124,16 +124,27 @@ func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 }
 
 // ClientAttestors returns the attestors associated with a client.
-func (c RelayerConfig) ClientAttestors(chainID, clientID string) []AttestorEntry {
+func (c RelayerConfig) ClientAttestors(clientAlias string) []AttestorEntry {
 	var attestors []AttestorEntry
 
 	for _, attestor := range c.Attestors {
-		if attestor.ChainID == chainID && attestor.ClientID == clientID {
+		if attestor.Client == clientAlias {
 			attestors = append(attestors, attestor)
 		}
 	}
 
 	return attestors
+}
+
+// ClientByAlias returns the client config for the given alias.
+func (c RelayerConfig) ClientByAlias(alias string) (ClientConfig, bool) {
+	for _, client := range c.Clients {
+		if client.Alias == alias {
+			return client, true
+		}
+	}
+
+	return ClientConfig{}, false
 }
 
 func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
@@ -188,11 +199,8 @@ func (c RelayerConfig) validateAttestors() error {
 			return errors.Wrapf(err, ".attestors[%d]", i)
 		}
 
-		if _, ok := c.Client(attestor.ChainID, attestor.ClientID); !ok {
-			return errors.Errorf(
-				".attestors[%s] references unknown client %q on chain %q",
-				attestor.Alias, attestor.ClientID, attestor.ChainID,
-			)
+		if _, ok := c.ClientByAlias(attestor.Client); !ok {
+			return errors.Errorf(".attestors[%s] references unknown client %q", attestor.Alias, attestor.Client)
 		}
 
 		if _, ok := aliases[attestor.Alias]; ok {
@@ -202,11 +210,11 @@ func (c RelayerConfig) validateAttestors() error {
 	}
 
 	for _, client := range c.Clients {
-		count := len(c.ClientAttestors(client.ChainID, client.ClientID))
+		count := len(c.ClientAttestors(client.Alias))
 		if client.AttestorSet.Threshold > count {
 			return errors.Errorf(
 				".clients[%s].attestorSet threshold %d exceeds number of attestors %d",
-				client.ClientID, client.AttestorSet.Threshold, count,
+				client.Alias, client.AttestorSet.Threshold, count,
 			)
 		}
 	}
@@ -216,15 +224,21 @@ func (c RelayerConfig) validateAttestors() error {
 
 func (c RelayerConfig) validateClients() error {
 	clients := make(map[string]struct{})
+	aliases := make(map[string]struct{})
 
 	for _, client := range c.Clients {
 		if err := client.Validate(); err != nil {
-			return errors.Wrapf(err, ".clients[%s]", client.ClientID)
+			return errors.Wrapf(err, ".clients[%s]", client.Alias)
 		}
 
 		if _, ok := c.Chain(client.ChainID); !ok {
-			return errors.Errorf(".clients[%s] chainId %q not configured in .chains", client.ClientID, client.ChainID)
+			return errors.Errorf(".clients[%s] chainId %q not configured in .chains", client.Alias, client.ChainID)
 		}
+
+		if _, ok := aliases[client.Alias]; ok {
+			return errors.Errorf(".clients duplicate alias: %q", client.Alias)
+		}
+		aliases[client.Alias] = struct{}{}
 
 		key := client.ChainID + "/" + client.ClientID
 		if _, ok := clients[key]; ok {
@@ -260,7 +274,7 @@ func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
 
 	return errors.Errorf(
 		".clients[%s] counterparty chain %q must configure a client with counterpartyChainId %q for bi-directional relaying",
-		client.ClientID,
+		client.Alias,
 		client.CounterpartyChainID,
 		client.ChainID,
 	)
@@ -274,22 +288,14 @@ func (c RelayerConfig) validateRoutes() error {
 			return errors.Wrapf(err, ".routesToRelay[%d]", i)
 		}
 
-		if _, ok := c.Client(route.SourceChainID, route.SourceClientID); !ok {
-			return errors.Errorf(
-				".routesToRelay[%d] references unknown client %q on chain %q",
-				i, route.SourceClientID, route.SourceChainID,
-			)
+		if _, ok := c.ClientByAlias(route.SourceClient); !ok {
+			return errors.Errorf(".routesToRelay[%d] references unknown client %q", i, route.SourceClient)
 		}
 
-		key := route.SourceChainID + "/" + route.SourceClientID
-		if _, ok := routes[key]; ok {
-			return errors.Errorf(
-				".routesToRelay duplicate route for client %q on chain %q",
-				route.SourceClientID,
-				route.SourceChainID,
-			)
+		if _, ok := routes[route.SourceClient]; ok {
+			return errors.Errorf(".routesToRelay duplicate route for client %q", route.SourceClient)
 		}
-		routes[key] = struct{}{}
+		routes[route.SourceClient] = struct{}{}
 	}
 
 	return nil
@@ -355,6 +361,8 @@ func (c GasAlertThresholds) Validate() error {
 
 func (c ClientConfig) Validate() error {
 	switch {
+	case c.Alias == "":
+		return errors.New(".alias required")
 	case c.ClientID == "":
 		return errors.New(".clientId required")
 	case c.ChainID == "":
@@ -386,10 +394,8 @@ func (c AttestorEntry) Validate() error {
 	switch {
 	case c.Alias == "":
 		return errors.New(".alias required")
-	case c.ChainID == "":
-		return errors.New(".chainId required")
-	case c.ClientID == "":
-		return errors.New(".clientId required")
+	case c.Client == "":
+		return errors.New(".client required")
 	case c.Type != AttestorTypeRemote && c.Type != AttestorTypeLocal:
 		return errors.Errorf(".type must be one of [%q, %q], got %q", AttestorTypeRemote, AttestorTypeLocal, c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":
@@ -400,11 +406,8 @@ func (c AttestorEntry) Validate() error {
 }
 
 func (c RouteConfig) Validate() error {
-	switch {
-	case c.SourceChainID == "":
-		return errors.New(".sourceChainId required")
-	case c.SourceClientID == "":
-		return errors.New(".sourceClientId required")
+	if c.SourceClient == "" {
+		return errors.New(".sourceClient required")
 	}
 
 	return nil

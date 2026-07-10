@@ -43,43 +43,39 @@ relayer:
     - alias: "attestor-alice-base"
       type: remote
       grpc: attestor-alice.example.com:3000
-      chainId: "1"
-      clientId: "base-0"
+      client: "eth-to-base"
     - alias: "attestor-bob-base"
       type: remote
       grpc: attestor-bob.example.com:3000
-      chainId: "1"
-      clientId: "base-0"
+      client: "eth-to-base"
     - alias: "attestor-dan-base"
       type: local
-      chainId: "1"
-      clientId: "base-0"
+      client: "eth-to-base"
     - alias: "attestor-dan-ethereum"
       type: local
-      chainId: "8453"
-      clientId: "ethereum-0"
+      client: "base-to-eth"
   clients:
-    - clientId: "base-0"
+    - alias: "eth-to-base"
+      clientId: "base-0"
       chainId: "1"
       counterpartyChainId: "8453"
       type: "attestation"
       attestorSet:
         counterpartyChainFinalityOffset: 1
         threshold: 2
-    - clientId: "ethereum-0"
+    - alias: "base-to-eth"
+      clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
       type: "attestation"
       attestorSet:
         threshold: 1
   routesToRelay:
-    - sourceChainId: "1"
-      sourceClientId: "base-0"
+    - sourceClient: "eth-to-base"
       autoRelay:
         enabled: false
         lookback: 100
-    - sourceChainId: "8453"
-      sourceClientId: "ethereum-0"
+    - sourceClient: "base-to-eth"
 `
 
 func TestRelayerConfig(t *testing.T) {
@@ -107,6 +103,7 @@ func TestRelayerConfig(t *testing.T) {
 
 		require.Len(t, config.Relayer.Clients, 2)
 		client := config.Relayer.Clients[0]
+		assert.Equal(t, "eth-to-base", client.Alias)
 		assert.Equal(t, "base-0", client.ClientID)
 		assert.Equal(t, "1", client.ChainID)
 		assert.Equal(t, "8453", client.CounterpartyChainID)
@@ -115,17 +112,16 @@ func TestRelayerConfig(t *testing.T) {
 		require.Len(t, config.Relayer.Attestors, 4)
 		assert.Equal(t, AttestorTypeRemote, config.Relayer.Attestors[0].Type)
 		assert.Equal(t, "attestor-alice-base", config.Relayer.Attestors[0].Alias)
-		assert.Equal(t, "base-0", config.Relayer.Attestors[0].ClientID)
+		assert.Equal(t, "eth-to-base", config.Relayer.Attestors[0].Client)
 
 		require.NotNil(t, client.AttestorSet)
 		assert.Equal(t, uint64(1), client.AttestorSet.CounterpartyChainFinalityOffset)
 		assert.Equal(t, 2, client.AttestorSet.Threshold)
-		assert.Len(t, config.Relayer.ClientAttestors("1", "base-0"), 3)
+		assert.Len(t, config.Relayer.ClientAttestors("eth-to-base"), 3)
 
 		require.Len(t, config.Relayer.Routes, 2)
 		route := config.Relayer.Routes[0]
-		assert.Equal(t, "1", route.SourceChainID)
-		assert.Equal(t, "base-0", route.SourceClientID)
+		assert.Equal(t, "eth-to-base", route.SourceClient)
 		assert.False(t, route.AutoRelay.IsEnabled())
 		assert.Equal(t, uint64(100), route.AutoRelay.Lookback)
 
@@ -224,7 +220,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Chains = c.Relayer.Chains[:1]
 				},
-				errContains: `.clients[ethereum-0] chainId "8453" not configured in .chains`,
+				errContains: `.clients[base-to-eth] chainId "8453" not configured in .chains`,
 			},
 			{
 				name: "counterparty chain has no client back",
@@ -293,7 +289,9 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "duplicate client",
 				patch: func(c *Config) {
-					c.Relayer.Clients = append(c.Relayer.Clients, c.Relayer.Clients[0])
+					duplicate := c.Relayer.Clients[0]
+					duplicate.Alias = "eth-to-base-2"
+					c.Relayer.Clients = append(c.Relayer.Clients, duplicate)
 				},
 				errContains: `.clients duplicate client "base-0" on chain "1"`,
 			},
@@ -307,16 +305,30 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "attestor references unknown client",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[0].ClientID = "unknown-0"
+					c.Relayer.Attestors[0].Client = "unknown"
 				},
-				errContains: `references unknown client "unknown-0"`,
+				errContains: `references unknown client "unknown"`,
 			},
 			{
-				name: "attestor missing clientId",
+				name: "attestor missing client",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[0].ClientID = ""
+					c.Relayer.Attestors[0].Client = ""
 				},
-				errContains: ".clientId required",
+				errContains: ".client required",
+			},
+			{
+				name: "client missing alias",
+				patch: func(c *Config) {
+					c.Relayer.Clients[0].Alias = ""
+				},
+				errContains: ".alias required",
+			},
+			{
+				name: "duplicate client alias",
+				patch: func(c *Config) {
+					c.Relayer.Clients[1].Alias = "eth-to-base"
+				},
+				errContains: `.clients duplicate alias`,
 			},
 			{
 				name: "threshold exceeds attestors",
@@ -361,18 +373,18 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".attestors duplicate alias",
 			},
 			{
-				name: "route missing sourceClientId",
+				name: "route missing sourceClient",
 				patch: func(c *Config) {
-					c.Relayer.Routes[0].SourceClientID = ""
+					c.Relayer.Routes[0].SourceClient = ""
 				},
-				errContains: ".sourceClientId required",
+				errContains: ".sourceClient required",
 			},
 			{
 				name: "route references unknown client",
 				patch: func(c *Config) {
-					c.Relayer.Routes[0].SourceClientID = "unknown-0"
+					c.Relayer.Routes[0].SourceClient = "unknown"
 				},
-				errContains: `references unknown client "unknown-0"`,
+				errContains: `references unknown client "unknown"`,
 			},
 			{
 				name: "duplicate route",
