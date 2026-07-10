@@ -16,7 +16,6 @@ type ClientManager struct {
 	clients map[string]chains.Client
 }
 
-// New ClientManager constructor.
 func New(clients map[string]chains.Client) *ClientManager {
 	if clients == nil {
 		clients = make(map[string]chains.Client)
@@ -25,7 +24,6 @@ func New(clients map[string]chains.Client) *ClientManager {
 	return &ClientManager{clients: clients}
 }
 
-// NewFromConfig builds clients for all configured relayer chains.
 func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 	clients := make(map[string]chains.Client)
 

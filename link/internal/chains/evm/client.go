@@ -41,7 +41,6 @@ type Client struct {
 
 var _ chains.Client = (*Client)(nil)
 
-// New Client constructor.
 func New(chainID, rpcURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := ethclient.Dial(rpcURL)
 	if err != nil {
@@ -51,7 +50,6 @@ func New(chainID, rpcURL, ics26RouterAddress string) (*Client, error) {
 	return NewWithClient(chainID, eth, ics26RouterAddress)
 }
 
-// NewWithClient Client constructor with an injected eth client.
 func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*Client, error) {
 	if !common.IsHexAddress(ics26RouterAddress) {
 		return nil, errors.Errorf("invalid ics26 router address %q for chain %s", ics26RouterAddress, chainID)
