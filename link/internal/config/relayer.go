@@ -32,7 +32,7 @@ type RelayerConfig struct {
 	Routes    []RouteConfig        `yaml:"routesToRelay"`
 }
 
-// RelayerChainConfig optional relay settings for one chain.
+// RelayerChainConfig relay settings for one chain.
 type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
