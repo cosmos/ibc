@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [link, link/harness]
+        module: [link, link/e2e, link/harness]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [link, link/harness]
+        module: [link, link/e2e, link/harness]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
