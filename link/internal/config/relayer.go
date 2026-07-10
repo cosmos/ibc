@@ -78,19 +78,20 @@ type ClientConfig struct {
 	AttestorSet         *AttestorSetConfig `yaml:"attestorSet,omitempty"`
 }
 
-// AttestorSetConfig the attestor set backing a client, referencing attestors
-// from the top-level attestors block by alias.
+// AttestorSetConfig attestation policy for a client. The set's attestors are
+// the entries in the top-level attestors block associated with the client.
 type AttestorSetConfig struct {
-	CounterpartyChainFinalityOffset uint64   `yaml:"counterpartyChainFinalityOffset"`
-	Threshold                       int      `yaml:"threshold"`
-	Attestors                       []string `yaml:"attestors"`
+	CounterpartyChainFinalityOffset uint64 `yaml:"counterpartyChainFinalityOffset"`
+	Threshold                       int    `yaml:"threshold"`
 }
 
-// AttestorEntry an attestor the relayer can query for attestations.
+// AttestorEntry an attestor the relayer queries for the associated client.
 type AttestorEntry struct {
-	Alias string       `yaml:"alias"`
-	Type  AttestorType `yaml:"type"`
-	GRPC  string       `yaml:"grpc,omitempty"`
+	Alias    string       `yaml:"alias"`
+	Type     AttestorType `yaml:"type"`
+	GRPC     string       `yaml:"grpc,omitempty"`
+	ChainID  string       `yaml:"chainId"`
+	ClientID string       `yaml:"clientId"`
 }
 
 // RouteConfig packets sent from the source client are relayed through the
@@ -122,15 +123,17 @@ func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 	return RelayerChainConfig{}, false
 }
 
-// Attestor returns the attestor entry for the given alias.
-func (c RelayerConfig) Attestor(alias string) (AttestorEntry, bool) {
+// ClientAttestors returns the attestors associated with a client.
+func (c RelayerConfig) ClientAttestors(chainID, clientID string) []AttestorEntry {
+	var attestors []AttestorEntry
+
 	for _, attestor := range c.Attestors {
-		if attestor.Alias == alias {
-			return attestor, true
+		if attestor.ChainID == chainID && attestor.ClientID == clientID {
+			attestors = append(attestors, attestor)
 		}
 	}
 
-	return AttestorEntry{}, false
+	return attestors
 }
 
 func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
@@ -149,11 +152,11 @@ func (c RelayerConfig) Validate() error {
 		return err
 	}
 
-	if err := c.validateAttestors(); err != nil {
+	if err := c.validateClients(); err != nil {
 		return err
 	}
 
-	if err := c.validateClients(); err != nil {
+	if err := c.validateAttestors(); err != nil {
 		return err
 	}
 
@@ -185,10 +188,27 @@ func (c RelayerConfig) validateAttestors() error {
 			return errors.Wrapf(err, ".attestors[%d]", i)
 		}
 
+		if _, ok := c.Client(attestor.ChainID, attestor.ClientID); !ok {
+			return errors.Errorf(
+				".attestors[%s] references unknown client %q on chain %q",
+				attestor.Alias, attestor.ClientID, attestor.ChainID,
+			)
+		}
+
 		if _, ok := aliases[attestor.Alias]; ok {
 			return errors.Errorf(".attestors duplicate alias: %q", attestor.Alias)
 		}
 		aliases[attestor.Alias] = struct{}{}
+	}
+
+	for _, client := range c.Clients {
+		count := len(c.ClientAttestors(client.ChainID, client.ClientID))
+		if client.AttestorSet.Threshold > count {
+			return errors.Errorf(
+				".clients[%s].attestorSet threshold %d exceeds number of attestors %d",
+				client.ClientID, client.AttestorSet.Threshold, count,
+			)
+		}
 	}
 
 	return nil
@@ -211,12 +231,6 @@ func (c RelayerConfig) validateClients() error {
 			return errors.Errorf(".clients duplicate client %q on chain %q", client.ClientID, client.ChainID)
 		}
 		clients[key] = struct{}{}
-
-		for _, alias := range client.AttestorSet.Attestors {
-			if _, ok := c.Attestor(alias); !ok {
-				return errors.Errorf(".clients[%s].attestorSet references unknown attestor %q", client.ClientID, alias)
-			}
-		}
 	}
 
 	for _, client := range c.Clients {
@@ -361,23 +375,8 @@ func (c ClientConfig) Validate() error {
 }
 
 func (c AttestorSetConfig) Validate() error {
-	switch {
-	case c.Threshold < 1:
+	if c.Threshold < 1 {
 		return errors.New(".threshold must be at least 1")
-	case c.Threshold > len(c.Attestors):
-		return errors.Errorf(".threshold %d exceeds number of attestors %d", c.Threshold, len(c.Attestors))
-	}
-
-	seen := make(map[string]struct{})
-	for _, alias := range c.Attestors {
-		if alias == "" {
-			return errors.New(".attestors aliases must not be empty")
-		}
-
-		if _, ok := seen[alias]; ok {
-			return errors.Errorf(".attestors duplicate reference: %q", alias)
-		}
-		seen[alias] = struct{}{}
 	}
 
 	return nil
@@ -387,6 +386,10 @@ func (c AttestorEntry) Validate() error {
 	switch {
 	case c.Alias == "":
 		return errors.New(".alias required")
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case c.ClientID == "":
+		return errors.New(".clientId required")
 	case c.Type != AttestorTypeRemote && c.Type != AttestorTypeLocal:
 		return errors.Errorf(".type must be one of [%q, %q], got %q", AttestorTypeRemote, AttestorTypeLocal, c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":

@@ -43,13 +43,21 @@ relayer:
     - alias: "attestor-alice-base"
       type: remote
       grpc: attestor-alice.example.com:3000
+      chainId: "1"
+      clientId: "base-0"
     - alias: "attestor-bob-base"
       type: remote
       grpc: attestor-bob.example.com:3000
+      chainId: "1"
+      clientId: "base-0"
     - alias: "attestor-dan-base"
       type: local
+      chainId: "1"
+      clientId: "base-0"
     - alias: "attestor-dan-ethereum"
       type: local
+      chainId: "8453"
+      clientId: "ethereum-0"
   clients:
     - clientId: "base-0"
       chainId: "1"
@@ -58,14 +66,12 @@ relayer:
       attestorSet:
         counterpartyChainFinalityOffset: 1
         threshold: 2
-        attestors: ["attestor-alice-base", "attestor-bob-base", "attestor-dan-base"]
     - clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
       type: "attestation"
       attestorSet:
         threshold: 1
-        attestors: ["attestor-dan-ethereum"]
   routesToRelay:
     - sourceChainId: "1"
       sourceClientId: "base-0"
@@ -109,11 +115,12 @@ func TestRelayerConfig(t *testing.T) {
 		require.Len(t, config.Relayer.Attestors, 4)
 		assert.Equal(t, AttestorTypeRemote, config.Relayer.Attestors[0].Type)
 		assert.Equal(t, "attestor-alice-base", config.Relayer.Attestors[0].Alias)
+		assert.Equal(t, "base-0", config.Relayer.Attestors[0].ClientID)
 
 		require.NotNil(t, client.AttestorSet)
 		assert.Equal(t, uint64(1), client.AttestorSet.CounterpartyChainFinalityOffset)
 		assert.Equal(t, 2, client.AttestorSet.Threshold)
-		assert.Equal(t, []string{"attestor-alice-base", "attestor-bob-base", "attestor-dan-base"}, client.AttestorSet.Attestors)
+		assert.Len(t, config.Relayer.ClientAttestors("1", "base-0"), 3)
 
 		require.Len(t, config.Relayer.Routes, 2)
 		route := config.Relayer.Routes[0]
@@ -298,31 +305,25 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `.attestorSet required for attestation clients`,
 			},
 			{
-				name: "set references unknown attestor",
+				name: "attestor references unknown client",
 				patch: func(c *Config) {
-					c.Relayer.Clients[0].AttestorSet.Attestors[0] = "unknown-attestor"
+					c.Relayer.Attestors[0].ClientID = "unknown-0"
 				},
-				errContains: `.attestorSet references unknown attestor "unknown-attestor"`,
+				errContains: `references unknown client "unknown-0"`,
 			},
 			{
-				name: "set references attestor twice",
+				name: "attestor missing clientId",
 				patch: func(c *Config) {
-					c.Relayer.Clients[0].AttestorSet.Attestors[1] = "attestor-alice-base"
+					c.Relayer.Attestors[0].ClientID = ""
 				},
-				errContains: `.attestors duplicate reference: "attestor-alice-base"`,
-			},
-			{
-				name: "attestor shared across clients is valid",
-				patch: func(c *Config) {
-					c.Relayer.Clients[1].AttestorSet.Attestors = []string{"attestor-dan-base"}
-				},
+				errContains: ".clientId required",
 			},
 			{
 				name: "threshold exceeds attestors",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].AttestorSet.Threshold = 4
 				},
-				errContains: `.threshold 4 exceeds number of attestors 3`,
+				errContains: `threshold 4 exceeds number of attestors 3`,
 			},
 			{
 				name: "zero threshold",

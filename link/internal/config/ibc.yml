@@ -29,14 +29,18 @@ relayer:
         contracts:
           ics26Router: "0x0000000000000000000000000000000000000000"
 
-  # attestors the relayer can query, referenced by alias
+  # attestors the relayer queries for their associated client
   attestors:
     - alias: "attestor-base"
       type: remote
       grpc: attestor.example.com:3000
+      chainId: "1"
+      clientId: "base-0"
     - alias: "attestor-ethereum"
       type: remote
       grpc: attestor.example.com:3000
+      chainId: "8453"
+      clientId: "ethereum-0"
 
   # light client information; connections are relayed bi-directionally, so
   # both chains configure a client
@@ -47,14 +51,12 @@ relayer:
       type: "attestation"
       attestorSet:
         threshold: 1
-        attestors: ["attestor-base"]
     - clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
       type: "attestation"
       attestorSet:
         threshold: 1
-        attestors: ["attestor-ethereum"]
 
   # packets sent from the source client are relayed through the entire packet
   # lifecycle: recv, ack, timeout
