@@ -26,7 +26,9 @@ const (
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	Chains []RelayerChainConfig `yaml:"chains"`
+	Chains  []RelayerChainConfig `yaml:"chains"`
+	Clients []ClientConfig       `yaml:"clients"`
+	Routes  []RouteConfig        `yaml:"routesToRelay"`
 }
 
 // RelayerChainConfig relaying settings for one chain.
@@ -34,7 +36,6 @@ type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
 	GasAlertThresholds *GasAlertThresholds `yaml:"gasAlertThresholds,omitempty"`
-	Clients            []ClientConfig      `yaml:"clients"`
 	PacketBatchSize    int                 `yaml:"packetBatchSize"`
 	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout"`
 }
@@ -67,13 +68,13 @@ type GasAlertThresholds struct {
 	CriticalThreshold string `yaml:"criticalThreshold"`
 }
 
-// ClientConfig a source client to relay transfers from.
+// ClientConfig a light client on a chain.
 type ClientConfig struct {
-	ID                  string             `yaml:"id"`
+	ClientID            string             `yaml:"clientId"`
+	ChainID             string             `yaml:"chainId"`
+	CounterpartyChainID string             `yaml:"counterpartyChainId"`
 	Type                ClientType         `yaml:"type"`
 	AttestorSet         *AttestorSetConfig `yaml:"attestorSet,omitempty"`
-	CounterpartyChainID string             `yaml:"counterpartyChainId"`
-	AutoRelay           AutoRelayConfig    `yaml:"autoRelay,omitempty"`
 }
 
 // AttestorSetConfig the attestor set backing a client.
@@ -88,6 +89,14 @@ type AttestorEntry struct {
 	Type  AttestorType `yaml:"type"`
 	GRPC  string       `yaml:"grpc,omitempty"`
 	Alias string       `yaml:"alias"`
+}
+
+// RouteConfig packets sent from the source client are relayed through the
+// entire packet lifecycle: recv, ack, timeout.
+type RouteConfig struct {
+	SourceChainID  string          `yaml:"sourceChainId"`
+	SourceClientID string          `yaml:"sourceClientId"`
+	AutoRelay      AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -112,13 +121,8 @@ func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 }
 
 func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
-	chain, ok := c.Chain(chainID)
-	if !ok {
-		return ClientConfig{}, false
-	}
-
-	for _, client := range chain.Clients {
-		if client.ID == clientID {
+	for _, client := range c.Clients {
+		if client.ChainID == chainID && client.ClientID == clientID {
 			return client, true
 		}
 	}
@@ -126,9 +130,21 @@ func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 	return ClientConfig{}, false
 }
 
+// Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
+	if err := c.validateChains(); err != nil {
+		return err
+	}
+
+	if err := c.validateClients(); err != nil {
+		return err
+	}
+
+	return c.validateRoutes()
+}
+
+func (c RelayerConfig) validateChains() error {
 	chainIDs := make(map[string]struct{})
-	aliases := make(map[string]struct{})
 
 	for _, chain := range c.Chains {
 		if err := chain.Validate(); err != nil {
@@ -139,26 +155,41 @@ func (c RelayerConfig) Validate() error {
 			return errors.Errorf(".chains duplicate chainId: %q", chain.ChainID)
 		}
 		chainIDs[chain.ChainID] = struct{}{}
+	}
 
-		for _, client := range chain.Clients {
-			if client.AttestorSet == nil {
-				continue
-			}
+	return nil
+}
 
-			for _, attestor := range client.AttestorSet.Attestors {
-				if _, ok := aliases[attestor.Alias]; ok {
-					return errors.Errorf(".chains[%s] duplicate attestor alias: %q", chain.ChainID, attestor.Alias)
-				}
-				aliases[attestor.Alias] = struct{}{}
+func (c RelayerConfig) validateClients() error {
+	clients := make(map[string]struct{})
+	aliases := make(map[string]struct{})
+
+	for _, client := range c.Clients {
+		if err := client.Validate(); err != nil {
+			return errors.Wrapf(err, ".clients[%s]", client.ClientID)
+		}
+
+		if _, ok := c.Chain(client.ChainID); !ok {
+			return errors.Errorf(".clients[%s] chainId %q not configured in .chains", client.ClientID, client.ChainID)
+		}
+
+		key := client.ChainID + "/" + client.ClientID
+		if _, ok := clients[key]; ok {
+			return errors.Errorf(".clients duplicate client %q on chain %q", client.ClientID, client.ChainID)
+		}
+		clients[key] = struct{}{}
+
+		for _, attestor := range client.AttestorSet.Attestors {
+			if _, ok := aliases[attestor.Alias]; ok {
+				return errors.Errorf(".clients[%s] duplicate attestor alias: %q", client.ClientID, attestor.Alias)
 			}
+			aliases[attestor.Alias] = struct{}{}
 		}
 	}
 
-	for _, chain := range c.Chains {
-		for _, client := range chain.Clients {
-			if err := c.validateCounterparty(chain.ChainID, client); err != nil {
-				return err
-			}
+	for _, client := range c.Clients {
+		if err := c.validateCounterparty(client); err != nil {
+			return err
 		}
 	}
 
@@ -166,28 +197,56 @@ func (c RelayerConfig) Validate() error {
 }
 
 // validateCounterparty ensures both sides of a connection are configured for bi-directional relaying.
-func (c RelayerConfig) validateCounterparty(chainID string, client ClientConfig) error {
-	counterparty, ok := c.Chain(client.CounterpartyChainID)
-	if !ok {
+func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
+	if _, ok := c.Chain(client.CounterpartyChainID); !ok {
 		return errors.Errorf(
-			".chains[%s].clients[%s] counterparty chain %q must also be configured for bi-directional relaying",
-			chainID, client.ID, client.CounterpartyChainID,
+			".clients[%s] counterparty chain %q must also be configured for bi-directional relaying",
+			client.ClientID, client.CounterpartyChainID,
 		)
 	}
 
-	for _, counterpartyClient := range counterparty.Clients {
-		if counterpartyClient.CounterpartyChainID == chainID {
+	for _, counterpartyClient := range c.Clients {
+		if counterpartyClient.ChainID == client.CounterpartyChainID &&
+			counterpartyClient.CounterpartyChainID == client.ChainID {
 			return nil
 		}
 	}
 
 	return errors.Errorf(
-		".chains[%s].clients[%s] counterparty chain %q must configure a client with counterpartyChainId %q for bi-directional relaying",
-		chainID,
-		client.ID,
+		".clients[%s] counterparty chain %q must configure a client with counterpartyChainId %q for bi-directional relaying",
+		client.ClientID,
 		client.CounterpartyChainID,
-		chainID,
+		client.ChainID,
 	)
+}
+
+func (c RelayerConfig) validateRoutes() error {
+	routes := make(map[string]struct{})
+
+	for i, route := range c.Routes {
+		if err := route.Validate(); err != nil {
+			return errors.Wrapf(err, ".routesToRelay[%d]", i)
+		}
+
+		if _, ok := c.Client(route.SourceChainID, route.SourceClientID); !ok {
+			return errors.Errorf(
+				".routesToRelay[%d] references unknown client %q on chain %q",
+				i, route.SourceClientID, route.SourceChainID,
+			)
+		}
+
+		key := route.SourceChainID + "/" + route.SourceClientID
+		if _, ok := routes[key]; ok {
+			return errors.Errorf(
+				".routesToRelay duplicate route for client %q on chain %q",
+				route.SourceClientID,
+				route.SourceChainID,
+			)
+		}
+		routes[key] = struct{}{}
+	}
+
+	return nil
 }
 
 func (c RelayerChainConfig) Validate() error {
@@ -210,18 +269,6 @@ func (c RelayerChainConfig) Validate() error {
 		if err := c.GasAlertThresholds.Validate(); err != nil {
 			return errors.Wrap(err, ".gasAlertThresholds")
 		}
-	}
-
-	clientIDs := make(map[string]struct{})
-	for _, client := range c.Clients {
-		if err := client.Validate(); err != nil {
-			return errors.Wrapf(err, ".clients[%s]", client.ID)
-		}
-
-		if _, ok := clientIDs[client.ID]; ok {
-			return errors.Errorf(".clients duplicate id: %q", client.ID)
-		}
-		clientIDs[client.ID] = struct{}{}
 	}
 
 	return nil
@@ -262,8 +309,10 @@ func (c GasAlertThresholds) Validate() error {
 
 func (c ClientConfig) Validate() error {
 	switch {
-	case c.ID == "":
-		return errors.New(".id required")
+	case c.ClientID == "":
+		return errors.New(".clientId required")
+	case c.ChainID == "":
+		return errors.New(".chainId required")
 	case c.Type != ClientTypeAttestation:
 		return errors.Errorf(".type must be %q, got %q", ClientTypeAttestation, c.Type)
 	case c.CounterpartyChainID == "":
@@ -304,6 +353,17 @@ func (c AttestorEntry) Validate() error {
 		return errors.Errorf(".type must be one of [%q, %q], got %q", AttestorTypeRemote, AttestorTypeLocal, c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":
 		return errors.New(".grpc required for remote attestors")
+	}
+
+	return nil
+}
+
+func (c RouteConfig) Validate() error {
+	switch {
+	case c.SourceChainID == "":
+		return errors.New(".sourceChainId required")
+	case c.SourceClientID == "":
+		return errors.New(".sourceClientId required")
 	}
 
 	return nil

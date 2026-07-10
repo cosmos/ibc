@@ -33,13 +33,14 @@ func relayerConfig() config.RelayerConfig {
 						ICS26Router: "0x0000000000000000000000000000000000000000",
 					},
 				},
-				Clients: []config.ClientConfig{
-					{
-						ID:                  "base-0",
-						Type:                config.ClientTypeAttestation,
-						CounterpartyChainID: chainIDBase,
-					},
-				},
+			},
+		},
+		Clients: []config.ClientConfig{
+			{
+				ClientID:            "base-0",
+				ChainID:             chainIDEth,
+				CounterpartyChainID: chainIDBase,
+				Type:                config.ClientTypeAttestation,
 			},
 		},
 	}

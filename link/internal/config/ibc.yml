@@ -18,34 +18,45 @@ chains:
       rpc: https://base-rpc.example.com
 
 relayer:
+  # chain specific relay configuration
   chains:
     - chainId: "1"
       evm:
         contracts:
           ics26Router: "0x0000000000000000000000000000000000000000"
-      clients:
-        - id: "base-0"
-          type: "attestation"
-          counterpartyChainId: "8453"
-          attestorSet:
-            threshold: 1
-            attestors:
-              - type: remote
-                grpc: attestor.example.com:3000
-                alias: "attestor-base"
-    # connections are relayed bi-directionally: the counterparty chain also
-    # configures a client
     - chainId: "8453"
       evm:
         contracts:
           ics26Router: "0x0000000000000000000000000000000000000000"
-      clients:
-        - id: "ethereum-0"
-          type: "attestation"
-          counterpartyChainId: "1"
-          attestorSet:
-            threshold: 1
-            attestors:
-              - type: remote
-                grpc: attestor.example.com:3000
-                alias: "attestor-ethereum"
+
+  # light client information; connections are relayed bi-directionally, so
+  # both chains configure a client
+  clients:
+    - clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      type: "attestation"
+      attestorSet:
+        threshold: 1
+        attestors:
+          - type: remote
+            grpc: attestor.example.com:3000
+            alias: "attestor-base"
+    - clientId: "ethereum-0"
+      chainId: "8453"
+      counterpartyChainId: "1"
+      type: "attestation"
+      attestorSet:
+        threshold: 1
+        attestors:
+          - type: remote
+            grpc: attestor.example.com:3000
+            alias: "attestor-ethereum"
+
+  # packets sent from the source client are relayed through the entire packet
+  # lifecycle: recv, ack, timeout
+  routesToRelay:
+    - sourceChainId: "1"
+      sourceClientId: "base-0"
+    - sourceChainId: "8453"
+      sourceClientId: "ethereum-0"

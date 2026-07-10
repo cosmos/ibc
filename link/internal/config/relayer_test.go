@@ -33,37 +33,46 @@ relayer:
       gasAlertThresholds:
         warningThreshold: "500000000"
         criticalThreshold: "10000000"
-      clients:
-        - id: "base-0"
-          type: "attestation"
-          counterpartyChainId: "8453"
-          attestorSet:
-            counterpartyChainFinalityOffset: 1
-            threshold: 2
-            attestors:
-              - type: remote
-                grpc: attestor-alice.example.com:3000
-                alias: "attestor-alice-base"
-              - type: remote
-                grpc: attestor-bob.example.com:3000
-                alias: "attestor-bob-base"
-              - type: local
-                alias: "attestor-dan-base"
-          autoRelay:
-            enabled: false
-            lookback: 100
       packetBatchSize: 20
       packetBatchTimeout: 10s
     - chainId: "8453"
-      clients:
-        - id: "ethereum-0"
-          type: "attestation"
-          counterpartyChainId: "1"
-          attestorSet:
-            threshold: 1
-            attestors:
-              - type: local
-                alias: "attestor-dan-ethereum"
+      evm:
+        contracts:
+          ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+  clients:
+    - clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 2
+        attestors:
+          - type: remote
+            grpc: attestor-alice.example.com:3000
+            alias: "attestor-alice-base"
+          - type: remote
+            grpc: attestor-bob.example.com:3000
+            alias: "attestor-bob-base"
+          - type: local
+            alias: "attestor-dan-base"
+    - clientId: "ethereum-0"
+      chainId: "8453"
+      counterpartyChainId: "1"
+      type: "attestation"
+      attestorSet:
+        threshold: 1
+        attestors:
+          - type: local
+            alias: "attestor-dan-ethereum"
+  routesToRelay:
+    - sourceChainId: "1"
+      sourceClientId: "base-0"
+      autoRelay:
+        enabled: false
+        lookback: 100
+    - sourceChainId: "8453"
+      sourceClientId: "ethereum-0"
 `
 
 func TestRelayerConfig(t *testing.T) {
@@ -89,13 +98,12 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, 20, chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, chain.PacketBatchTimeout)
 
-		require.Len(t, chain.Clients, 1)
-		client := chain.Clients[0]
-		assert.Equal(t, "base-0", client.ID)
-		assert.Equal(t, ClientTypeAttestation, client.Type)
+		require.Len(t, config.Relayer.Clients, 2)
+		client := config.Relayer.Clients[0]
+		assert.Equal(t, "base-0", client.ClientID)
+		assert.Equal(t, "1", client.ChainID)
 		assert.Equal(t, "8453", client.CounterpartyChainID)
-		assert.False(t, client.AutoRelay.IsEnabled())
-		assert.Equal(t, uint64(100), client.AutoRelay.Lookback)
+		assert.Equal(t, ClientTypeAttestation, client.Type)
 
 		require.NotNil(t, client.AttestorSet)
 		assert.Equal(t, uint64(1), client.AttestorSet.CounterpartyChainFinalityOffset)
@@ -103,8 +111,15 @@ func TestRelayerConfig(t *testing.T) {
 		require.Len(t, client.AttestorSet.Attestors, 3)
 		assert.Equal(t, AttestorTypeLocal, client.AttestorSet.Attestors[2].Type)
 
+		require.Len(t, config.Relayer.Routes, 2)
+		route := config.Relayer.Routes[0]
+		assert.Equal(t, "1", route.SourceChainID)
+		assert.Equal(t, "base-0", route.SourceClientID)
+		assert.False(t, route.AutoRelay.IsEnabled())
+		assert.Equal(t, uint64(100), route.AutoRelay.Lookback)
+
 		// autoRelay omitted -> enabled by default
-		assert.True(t, config.Relayer.Chains[1].Clients[0].AutoRelay.IsEnabled())
+		assert.True(t, config.Relayer.Routes[1].AutoRelay.IsEnabled())
 	})
 
 	t.Run("Helpers", func(t *testing.T) {
@@ -138,8 +153,11 @@ func TestRelayerConfig(t *testing.T) {
 			errContains string
 		}{
 			{
-				name:  "empty blocks are valid",
-				patch: func(c *Config) { c.Chains = nil; c.Relayer.Chains = nil },
+				name: "empty blocks are valid",
+				patch: func(c *Config) {
+					c.Chains = nil
+					c.Relayer = RelayerConfig{}
+				},
 			},
 			{
 				name: "chain missing chainId",
@@ -186,21 +204,22 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "counterparty chain not declared",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].CounterpartyChainID = "999"
+					c.Relayer.Clients[0].CounterpartyChainID = "999"
 				},
 				errContains: `counterpartyChainId "999" not declared`,
 			},
 			{
-				name: "counterparty chain not configured in relayer",
+				name: "client chain not configured in relayer",
 				patch: func(c *Config) {
 					c.Relayer.Chains = c.Relayer.Chains[:1]
 				},
-				errContains: `counterparty chain "8453" must also be configured for bi-directional relaying`,
+				errContains: `.clients[ethereum-0] chainId "8453" not configured in .chains`,
 			},
 			{
 				name: "counterparty chain has no client back",
 				patch: func(c *Config) {
-					c.Relayer.Chains[1].Clients = nil
+					c.Relayer.Clients = c.Relayer.Clients[:1]
+					c.Relayer.Routes = c.Relayer.Routes[:1]
 				},
 				errContains: `counterparty chain "8453" must configure a client with counterpartyChainId "1"`,
 			},
@@ -240,80 +259,107 @@ func TestRelayerConfig(t *testing.T) {
 				},
 			},
 			{
-				name: "client missing id",
+				name: "client missing clientId",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].ID = ""
+					c.Relayer.Clients[0].ClientID = ""
 				},
-				errContains: ".id required",
+				errContains: ".clientId required",
+			},
+			{
+				name: "client missing chainId",
+				patch: func(c *Config) {
+					c.Relayer.Clients[0].ChainID = ""
+				},
+				errContains: ".chainId required",
 			},
 			{
 				name: "unsupported client type",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].Type = "tendermint"
+					c.Relayer.Clients[0].Type = "tendermint"
 				},
 				errContains: `.type must be "attestation"`,
 			},
 			{
-				name: "duplicate client id",
+				name: "duplicate client",
 				patch: func(c *Config) {
-					chain := &c.Relayer.Chains[0]
-					chain.Clients = append(chain.Clients, chain.Clients[0])
+					duplicate := c.Relayer.Clients[0]
+					duplicate.AttestorSet = &AttestorSetConfig{
+						Threshold: 1,
+						Attestors: []AttestorEntry{{Type: AttestorTypeLocal, Alias: "attestor-dup"}},
+					}
+					c.Relayer.Clients = append(c.Relayer.Clients, duplicate)
 				},
-				errContains: ".clients duplicate id",
+				errContains: `.clients duplicate client "base-0" on chain "1"`,
 			},
 			{
 				name: "missing attestor set",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].AttestorSet = nil
+					c.Relayer.Clients[0].AttestorSet = nil
 				},
 				errContains: `.attestorSet required for attestation clients`,
 			},
 			{
 				name: "threshold exceeds attestors",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].AttestorSet.Threshold = 4
+					c.Relayer.Clients[0].AttestorSet.Threshold = 4
 				},
-				errContains: ".threshold 4 exceeds number of attestors 3",
+				errContains: `.threshold 4 exceeds number of attestors 3`,
 			},
 			{
 				name: "zero threshold",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].AttestorSet.Threshold = 0
+					c.Relayer.Clients[0].AttestorSet.Threshold = 0
 				},
 				errContains: ".threshold must be at least 1",
 			},
 			{
 				name: "remote attestor missing grpc",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].AttestorSet.Attestors[0].GRPC = ""
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].GRPC = ""
 				},
 				errContains: ".grpc required for remote attestors",
 			},
 			{
 				name: "invalid attestor type",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].AttestorSet.Attestors[0].Type = "hybrid"
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].Type = "hybrid"
 				},
 				errContains: `.type must be one of ["remote", "local"]`,
 			},
 			{
 				name: "attestor missing alias",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].Clients[0].AttestorSet.Attestors[0].Alias = ""
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].Alias = ""
 				},
 				errContains: ".alias required",
 			},
 			{
-				name: "duplicate attestor alias across chains",
+				name: "duplicate attestor alias across clients",
 				patch: func(c *Config) {
-					c.Relayer.Chains[1].Clients[0].AttestorSet = &AttestorSetConfig{
-						Threshold: 1,
-						Attestors: []AttestorEntry{
-							{Type: AttestorTypeLocal, Alias: "attestor-alice-base"},
-						},
-					}
+					c.Relayer.Clients[1].AttestorSet.Attestors[0].Alias = "attestor-alice-base"
 				},
 				errContains: "duplicate attestor alias",
+			},
+			{
+				name: "route missing sourceClientId",
+				patch: func(c *Config) {
+					c.Relayer.Routes[0].SourceClientID = ""
+				},
+				errContains: ".sourceClientId required",
+			},
+			{
+				name: "route references unknown client",
+				patch: func(c *Config) {
+					c.Relayer.Routes[0].SourceClientID = "unknown-0"
+				},
+				errContains: `references unknown client "unknown-0"`,
+			},
+			{
+				name: "duplicate route",
+				patch: func(c *Config) {
+					c.Relayer.Routes = append(c.Relayer.Routes, c.Relayer.Routes[0])
+				},
+				errContains: ".routesToRelay duplicate route",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {

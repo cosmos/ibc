@@ -188,20 +188,21 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// validateChainReferences ensures relayer chains are declared in the top-level chains block.
+// validateChainReferences ensures chains referenced by the relayer config are
+// declared in the top-level chains block.
 func (c Config) validateChainReferences() error {
 	for _, chain := range c.Relayer.Chains {
 		if _, ok := c.Chain(chain.ChainID); !ok {
 			return errors.Errorf(".chains[%s] chainId not declared in top-level chains", chain.ChainID)
 		}
+	}
 
-		for _, client := range chain.Clients {
-			if _, ok := c.Chain(client.CounterpartyChainID); !ok {
-				return errors.Errorf(
-					".chains[%s].clients[%s] counterpartyChainId %q not declared in top-level chains",
-					chain.ChainID, client.ID, client.CounterpartyChainID,
-				)
-			}
+	for _, client := range c.Relayer.Clients {
+		if _, ok := c.Chain(client.CounterpartyChainID); !ok {
+			return errors.Errorf(
+				".clients[%s] counterpartyChainId %q not declared in top-level chains",
+				client.ClientID, client.CounterpartyChainID,
+			)
 		}
 	}
 
