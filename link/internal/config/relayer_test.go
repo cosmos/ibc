@@ -196,7 +196,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Chains[0].Type = "cosmos"
 				},
-				errContains: `.type must be "evm"`,
+				errContains: `unknown chain type: "cosmos"`,
 			},
 			{
 				name: "chain missing evm",
@@ -323,7 +323,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].Type = "tendermint"
 				},
-				errContains: `.type must be "attestation"`,
+				errContains: `unknown client type: "tendermint"`,
 			},
 			{
 				name: "duplicate client",
@@ -395,7 +395,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Attestors[0].Type = "hybrid"
 				},
-				errContains: `.type must be one of ["remote", "local"]`,
+				errContains: `unknown attestor type: "hybrid"`,
 			},
 			{
 				name: "attestor missing name",

@@ -343,7 +343,7 @@ func (c ClientConfig) Validate() error {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
 	case c.Type != ClientTypeAttestation:
-		return errors.Errorf(".type must be %q, got %q", ClientTypeAttestation, c.Type)
+		return errors.Errorf(".type unknown client type: %q", c.Type)
 	case c.CounterpartyChainID == "":
 		return errors.New(".counterpartyChainId required")
 	case c.CounterpartyClientID == "":
@@ -378,7 +378,7 @@ func (c AttestorEntry) Validate() error {
 	case c.Client == "":
 		return errors.New(".client required")
 	case c.Type != AttestorTypeRemote && c.Type != AttestorTypeLocal:
-		return errors.Errorf(".type must be one of [%q, %q], got %q", AttestorTypeRemote, AttestorTypeLocal, c.Type)
+		return errors.Errorf(".type unknown attestor type: %q", c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":
 		return errors.New(".grpc required for remote attestors")
 	}

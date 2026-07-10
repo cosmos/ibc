@@ -267,7 +267,7 @@ func (c ChainConfig) Validate() error {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
 	case c.Type != ChainTypeEVM:
-		return errors.Errorf(".type must be %q, got %q", ChainTypeEVM, c.Type)
+		return errors.Errorf(".type unknown chain type: %q", c.Type)
 	case c.RPC == "":
 		return errors.New(".rpc required")
 	}
