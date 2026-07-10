@@ -234,7 +234,14 @@ func (c Config) validateChainReferences() error {
 	}
 
 	for _, client := range c.Relayer.Clients {
-		if _, ok := c.Chain(client.CounterpartyChainID); !ok {
+		if _, ok := c.Chain(client.ChainID); client.ChainID != "" && !ok {
+			return errors.Errorf(
+				".clients[%s] chainId %q not declared in top-level chains",
+				client.ClientID, client.ChainID,
+			)
+		}
+
+		if _, ok := c.Chain(client.CounterpartyChainID); client.CounterpartyChainID != "" && !ok {
 			return errors.Errorf(
 				".clients[%s] counterpartyChainId %q not declared in top-level chains",
 				client.ClientID, client.CounterpartyChainID,

@@ -234,6 +234,13 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: "not declared in top-level chains",
 			},
 			{
+				name: "client chain not declared",
+				patch: func(c *Config) {
+					c.Relayer.Clients[0].ChainID = "999"
+				},
+				errContains: `.clients[base-0] chainId "999" not declared`,
+			},
+			{
 				name: "counterparty chain not declared",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].CounterpartyChainID = "999"
