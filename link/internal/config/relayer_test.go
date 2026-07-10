@@ -121,11 +121,11 @@ func TestRelayerConfig(t *testing.T) {
 		require.Len(t, config.Relayer.Routes, 2)
 		route := config.Relayer.Routes[0]
 		assert.Equal(t, "eth-to-base", route.SourceClient)
-		assert.False(t, route.AutoRelay.IsEnabled())
+		assert.False(t, *route.AutoRelay.Enabled)
 		assert.Equal(t, uint64(100), route.AutoRelay.Lookback)
 
-		// autoRelay omitted -> enabled by default
-		assert.True(t, config.Relayer.Routes[1].AutoRelay.IsEnabled())
+		// autoRelay omitted -> unset
+		assert.Nil(t, config.Relayer.Routes[1].AutoRelay.Enabled)
 	})
 
 	t.Run("Helpers", func(t *testing.T) {

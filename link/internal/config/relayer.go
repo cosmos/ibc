@@ -88,15 +88,11 @@ type RouteConfig struct {
 	AutoRelay    AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
-// AutoRelayConfig automatic relaying settings.
+// AutoRelayConfig automatic relaying settings. All fields are optional; the
+// relayer applies defaults for unset fields at startup.
 type AutoRelayConfig struct {
-	// Enabled defaults to true when omitted.
 	Enabled  *bool  `yaml:"enabled,omitempty"`
 	Lookback uint64 `yaml:"lookback,omitempty"`
-}
-
-func (c AutoRelayConfig) IsEnabled() bool {
-	return c.Enabled == nil || *c.Enabled
 }
 
 // ClientAttestors returns the attestors associated with a client.
