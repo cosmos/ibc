@@ -366,11 +366,17 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".name required",
 			},
 			{
-				name: "duplicate attestor name",
+				name: "duplicate attestor name routed to a different grpc endpoint",
 				patch: func(c *Config) {
 					c.Relayer.Attestors[1].Name = "attestor-alice-base"
 				},
-				errContains: ".attestors duplicate name",
+			},
+			{
+				name: "duplicate attestor entry",
+				patch: func(c *Config) {
+					c.Relayer.Attestors[1] = c.Relayer.Attestors[0]
+				},
+				errContains: ".attestors duplicate entry",
 			},
 			{
 				name: "route missing sourceClient",

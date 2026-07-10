@@ -192,7 +192,7 @@ func (c RelayerConfig) validateChains() error {
 }
 
 func (c RelayerConfig) validateAttestors() error {
-	names := make(map[string]struct{})
+	seen := make(map[AttestorEntry]struct{})
 
 	for i, attestor := range c.Attestors {
 		if err := attestor.Validate(); err != nil {
@@ -203,10 +203,10 @@ func (c RelayerConfig) validateAttestors() error {
 			return errors.Errorf(".attestors[%s] references unknown client %q", attestor.Name, attestor.Client)
 		}
 
-		if _, ok := names[attestor.Name]; ok {
-			return errors.Errorf(".attestors duplicate name: %q", attestor.Name)
+		if _, ok := seen[attestor]; ok {
+			return errors.Errorf(".attestors duplicate entry: name %q client %q", attestor.Name, attestor.Client)
 		}
-		names[attestor.Name] = struct{}{}
+		seen[attestor] = struct{}{}
 	}
 
 	for _, client := range c.Clients {
