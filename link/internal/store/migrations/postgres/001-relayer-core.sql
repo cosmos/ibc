@@ -57,10 +57,6 @@ create table if not exists transfers (
 create unique index if not exists index_transfer_packet
     on transfers (source_chain_id, packet_sequence_number, packet_source_client_id);
 
-create index if not exists idx_transfers_recv_time_chain_ids
-    on transfers (recv_tx_time, source_chain_id, destination_chain_id)
-    include (source_tx_time);
-
 create table if not exists relay_requests (
     id              bigserial                PRIMARY KEY,
     source_chain_id text                     NOT NULL,
