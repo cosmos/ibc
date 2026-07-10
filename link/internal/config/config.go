@@ -43,6 +43,63 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
+// AttestorConfig represents the entrypoint for running the process as an attestor
+type AttestorConfig struct {
+	Attestations []AttestationConfig `yaml:"attestations"`
+}
+
+// AttestationConfig represents a single attestation configuration in case when the binary
+// runs attestors. Signer is a reference to .singers section in the config (future)
+// Name should be unique within the config.
+type AttestationConfig struct {
+	ChainID string `yaml:"chainId"`
+	Name    string `yaml:"name"`
+
+	// todo: future work
+	RouterAddress  string `yaml:"-"`
+	FinalityOffset int64  `yaml:"-"`
+	Signer         string `yaml:"-"`
+}
+
+// Validate validates the attestor config. Allows empty attestations.
+func (c AttestorConfig) Validate() error {
+	set := make(map[string]struct{})
+
+	for _, attestation := range c.Attestations {
+		if attestation.ChainID == "" {
+			return errors.Errorf(".attestations chainId required")
+		}
+		if attestation.Name == "" {
+			return errors.Errorf(".attestations name required")
+		}
+		if _, ok := set[attestation.Name]; ok {
+			return errors.Errorf(".attestations duplicate name: %q", attestation.Name)
+		}
+		set[attestation.Name] = struct{}{}
+	}
+
+	return nil
+}
+
+// ChainType the execution environment of a chain.
+type ChainType string
+
+// Chain types
+const (
+	ChainTypeEVM ChainType = "evm"
+)
+
+// ChainConfig describes how to reach a chain.
+type ChainConfig struct {
+	ChainID string          `yaml:"chainId"`
+	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+}
+
+// EVMChainConfig connection details for an EVM chain.
+type EVMChainConfig struct {
+	RPC string `yaml:"rpc"`
+}
+
 // DefaultConfig sample config using default values and Sqlite.
 func DefaultConfig() Config {
 	return Config{
@@ -147,6 +204,29 @@ func (c Config) validateChainReferences() error {
 				)
 			}
 		}
+	}
+
+	return nil
+}
+
+func (c Config) Chain(chainID string) (ChainConfig, bool) {
+	for _, chain := range c.Chains {
+		if chain.ChainID == chainID {
+			return chain, true
+		}
+	}
+
+	return ChainConfig{}, false
+}
+
+func (c ChainConfig) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case c.EVM == nil:
+		return errors.Errorf(".evm required for chain %q (only %s chains are supported)", c.ChainID, ChainTypeEVM)
+	case c.EVM.RPC == "":
+		return errors.Errorf(".evm.rpc required for chain %q", c.ChainID)
 	}
 
 	return nil

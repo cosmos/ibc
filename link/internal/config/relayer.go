@@ -7,14 +7,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ChainType the execution environment of a chain.
-type ChainType string
-
-// Chain types
-const (
-	ChainTypeEVM ChainType = "evm"
-)
-
 // ClientType the light client type backing a relayer client.
 type ClientType string
 
@@ -31,17 +23,6 @@ const (
 	AttestorTypeRemote AttestorType = "remote"
 	AttestorTypeLocal  AttestorType = "local"
 )
-
-// ChainConfig describes how to reach a chain.
-type ChainConfig struct {
-	ChainID string          `yaml:"chainId"`
-	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
-}
-
-// EVMChainConfig connection details for an EVM chain.
-type EVMChainConfig struct {
-	RPC string `yaml:"rpc"`
-}
 
 // RelayerConfig represents the entrypoint for running the process as a relayer.
 type RelayerConfig struct {
@@ -112,16 +93,6 @@ func (c AutoRelayConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-func (c Config) Chain(chainID string) (ChainConfig, bool) {
-	for _, chain := range c.Chains {
-		if chain.ChainID == chainID {
-			return chain, true
-		}
-	}
-
-	return ChainConfig{}, false
-}
-
 func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 	for _, chain := range c.Chains {
 		if chain.ChainID == chainID {
@@ -146,19 +117,6 @@ func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 	}
 
 	return ClientConfig{}, false
-}
-
-func (c ChainConfig) Validate() error {
-	switch {
-	case c.ChainID == "":
-		return errors.New(".chainId required")
-	case c.EVM == nil:
-		return errors.Errorf(".evm required for chain %q (only %s chains are supported)", c.ChainID, ChainTypeEVM)
-	case c.EVM.RPC == "":
-		return errors.Errorf(".evm.rpc required for chain %q", c.ChainID)
-	}
-
-	return nil
 }
 
 // Validate validates the relayer config. Allows an empty chain list.
