@@ -28,6 +28,7 @@ var (
 	cmdKeysShow = &cobra.Command{
 		Use:   "show [name]",
 		Short: "Show key details",
+		Long:  "Show key details from <ibc-home>/keys/<name>; optionally print the private key",
 		Args:  cobra.ExactArgs(1),
 		RunE:  keysShow,
 	}
