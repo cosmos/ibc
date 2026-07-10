@@ -33,12 +33,20 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [link, link/e2e, link/harness]
+        include:
+          - module: link
+            packages: ./...
+          - module: link/e2e
+            # Only the stub's pure-Go tests: the suite packages need Docker lanes
+            # and built SUT binaries (make test-e2e), which CI does not provide here.
+            packages: ./stub/...
+          - module: link/harness
+            packages: ./...
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache-dependency-path: ${{ matrix.module }}/go.sum
-      - run: go test ./...
+      - run: go test ${{ matrix.packages }}
         working-directory: ${{ matrix.module }}
