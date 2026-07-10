@@ -25,22 +25,17 @@ func New(clients map[string]chains.Client) *ClientManager {
 func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 	clients := make(map[string]chains.Client)
 
-	for _, relayerChain := range cfg.Relayer.Chains {
-		chain, ok := cfg.Chain(relayerChain.ChainID)
-		if !ok {
-			return nil, errors.Errorf("chain %q not declared in top-level chains", relayerChain.ChainID)
-		}
-
+	for _, chain := range cfg.Chains {
 		if chain.EVM == nil {
 			continue
 		}
 
 		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.Contracts.ICS26Router)
 		if err != nil {
-			return nil, errors.Wrapf(err, "creating evm client for chain %q", relayerChain.ChainID)
+			return nil, errors.Wrapf(err, "creating evm client for chain %q", chain.ChainID)
 		}
 
-		clients[relayerChain.ChainID] = client
+		clients[chain.ChainID] = client
 	}
 
 	return New(clients), nil

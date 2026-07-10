@@ -32,7 +32,18 @@ type RelayerConfig struct {
 	Routes    []RouteConfig        `yaml:"routesToRelay"`
 }
 
-// RelayerChainConfig relaying settings for one chain.
+// Defaults applied when a chain has no overrides entry or omits a setting.
+const (
+	DefaultTxSubmissionDelay   = 2 * time.Second
+	DefaultGasFeeCapMultiplier = 1.5
+	DefaultGasTipCapMultiplier = 1.5
+	DefaultPacketBatchSize     = 20
+	DefaultPacketBatchTimeout  = 10 * time.Second
+)
+
+// RelayerChainConfig optional overrides of the default relay settings for one
+// chain. Read settings through the getters, which fall back to the defaults
+// and are valid on the zero value.
 type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
@@ -98,14 +109,56 @@ func (c AutoRelayConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
+// Chain returns the relay settings for a chain; chains without an overrides
+// entry get the zero value, whose getters return the defaults.
+func (c RelayerConfig) Chain(chainID string) RelayerChainConfig {
 	for _, chain := range c.Chains {
 		if chain.ChainID == chainID {
-			return chain, true
+			return chain
 		}
 	}
 
-	return RelayerChainConfig{}, false
+	return RelayerChainConfig{}
+}
+
+func (c RelayerChainConfig) GetTxSubmissionDelay() time.Duration {
+	if c.EVM != nil && c.EVM.TxSubmissionDelay > 0 {
+		return c.EVM.TxSubmissionDelay
+	}
+
+	return DefaultTxSubmissionDelay
+}
+
+func (c RelayerChainConfig) GetGasFeeCapMultiplier() float64 {
+	if c.EVM != nil && c.EVM.GasFeeCapMultiplier != nil {
+		return *c.EVM.GasFeeCapMultiplier
+	}
+
+	return DefaultGasFeeCapMultiplier
+}
+
+func (c RelayerChainConfig) GetGasTipCapMultiplier() float64 {
+	if c.EVM != nil && c.EVM.GasTipCapMultiplier != nil {
+		return *c.EVM.GasTipCapMultiplier
+	}
+
+	return DefaultGasTipCapMultiplier
+}
+
+func (c RelayerChainConfig) GetPacketBatchSize() int {
+	if c.PacketBatchSize > 0 {
+		return c.PacketBatchSize
+	}
+
+	return DefaultPacketBatchSize
+}
+
+func (c RelayerChainConfig) GetPacketBatchTimeout() time.Duration {
+	if c.PacketBatchTimeout > 0 {
+		return c.PacketBatchTimeout
+	}
+
+	return DefaultPacketBatchTimeout
 }
 
 // ClientAttestors returns the attestors associated with a client.
@@ -220,10 +273,6 @@ func (c RelayerConfig) validateClients() error {
 			return errors.Wrapf(err, ".clients[%s]", client.Alias)
 		}
 
-		if _, ok := c.Chain(client.ChainID); !ok {
-			return errors.Errorf(".clients[%s] chainId %q not configured in .chains", client.Alias, client.ChainID)
-		}
-
 		if _, ok := aliases[client.Alias]; ok {
 			return errors.Errorf(".clients duplicate alias: %q", client.Alias)
 		}
@@ -247,13 +296,6 @@ func (c RelayerConfig) validateClients() error {
 
 // validateCounterparty ensures both sides of a connection are configured for bi-directional relaying.
 func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
-	if _, ok := c.Chain(client.CounterpartyChainID); !ok {
-		return errors.Errorf(
-			".clients[%s] counterparty chain %q must also be configured for bi-directional relaying",
-			client.ClientID, client.CounterpartyChainID,
-		)
-	}
-
 	for _, counterpartyClient := range c.Clients {
 		if counterpartyClient.ChainID == client.CounterpartyChainID &&
 			counterpartyClient.CounterpartyChainID == client.ChainID {

@@ -204,10 +204,6 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 		return "", errors.Wrap(ErrInvalidInput, "txHash is required")
 	}
 
-	if _, ok := s.cfg.Relayer.Chain(chainID); !ok {
-		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
-	}
-
 	chain, ok := s.cfg.Chain(chainID)
 	if !ok {
 		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)

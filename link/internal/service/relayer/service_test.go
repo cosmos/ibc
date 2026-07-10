@@ -37,9 +37,6 @@ func relayerConfig() config.Config {
 			},
 		},
 		Relayer: config.RelayerConfig{
-			Chains: []config.RelayerChainConfig{
-				{ChainID: chainIDEth},
-			},
 			Clients: []config.ClientConfig{
 				{
 					ClientID:            "base-0",

@@ -23,10 +23,12 @@ chains:
         ics26Router: "0x0000000000000000000000000000000000000000"
 
 relayer:
-  # chain specific relay configuration
+  # optional per-chain overrides of the default relay settings
   chains:
     - chainId: "1"
-    - chainId: "8453"
+      evm:
+        txSubmissionDelay: 5s
+      packetBatchSize: 50
 
   # attestors the relayer queries for their associated client
   attestors:

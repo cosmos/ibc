@@ -128,6 +128,30 @@ func TestRelayerConfig(t *testing.T) {
 		assert.True(t, config.Relayer.Routes[1].AutoRelay.IsEnabled())
 	})
 
+	t.Run("Defaults", func(t *testing.T) {
+		var chain RelayerChainConfig
+		assert.Equal(t, 2*time.Second, chain.GetTxSubmissionDelay())
+		assert.Equal(t, 1.5, chain.GetGasFeeCapMultiplier())
+		assert.Equal(t, 1.5, chain.GetGasTipCapMultiplier())
+		assert.Equal(t, 20, chain.GetPacketBatchSize())
+		assert.Equal(t, 10*time.Second, chain.GetPacketBatchTimeout())
+
+		feeCap := 2.0
+		chain = RelayerChainConfig{
+			EVM: &RelayerEVMConfig{
+				TxSubmissionDelay:   5 * time.Second,
+				GasFeeCapMultiplier: &feeCap,
+			},
+			PacketBatchSize:    50,
+			PacketBatchTimeout: time.Minute,
+		}
+		assert.Equal(t, 5*time.Second, chain.GetTxSubmissionDelay())
+		assert.Equal(t, 2.0, chain.GetGasFeeCapMultiplier())
+		assert.Equal(t, 1.5, chain.GetGasTipCapMultiplier())
+		assert.Equal(t, 50, chain.GetPacketBatchSize())
+		assert.Equal(t, time.Minute, chain.GetPacketBatchTimeout())
+	})
+
 	t.Run("Helpers", func(t *testing.T) {
 		// ARRANGE
 		path := writeTestConfig(t, fullRelayerConfig)
@@ -140,6 +164,9 @@ func TestRelayerConfig(t *testing.T) {
 
 		_, ok = config.Chain("999")
 		assert.False(t, ok)
+
+		assert.Equal(t, 20, config.Relayer.Chain("1").GetPacketBatchSize())
+		assert.Equal(t, 20, config.Relayer.Chain("999").GetPacketBatchSize())
 
 		client, ok := config.Relayer.Client("1", "base-0")
 		assert.True(t, ok)
@@ -213,13 +240,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Clients[0].CounterpartyChainID = "999"
 				},
 				errContains: `counterpartyChainId "999" not declared`,
-			},
-			{
-				name: "client chain not configured in relayer",
-				patch: func(c *Config) {
-					c.Relayer.Chains = c.Relayer.Chains[:1]
-				},
-				errContains: `.clients[base-to-eth] chainId "8453" not configured in .chains`,
 			},
 			{
 				name: "counterparty chain has no client back",
