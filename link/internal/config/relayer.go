@@ -32,8 +32,7 @@ type RelayerConfig struct {
 	Routes    []RouteConfig        `yaml:"routesToRelay"`
 }
 
-// RelayerChainConfig optional relay settings for one chain. All fields are
-// optional; the relayer applies defaults for unset fields at startup.
+// RelayerChainConfig optional relay settings for one chain.
 type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
@@ -88,8 +87,7 @@ type RouteConfig struct {
 	AutoRelay    AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
-// AutoRelayConfig automatic relaying settings. All fields are optional; the
-// relayer applies defaults for unset fields at startup.
+// AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	Enabled  *bool  `yaml:"enabled,omitempty"`
 	Lookback uint64 `yaml:"lookback,omitempty"`
