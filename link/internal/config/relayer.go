@@ -89,7 +89,9 @@ type RouteConfig struct {
 
 // AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
-	Enabled  *bool  `yaml:"enabled,omitempty"`
+	Enabled *bool `yaml:"enabled,omitempty"`
+	// Lookback the number of blocks the relayer looks back from the latest
+	// block to check for packets to relay.
 	Lookback uint64 `yaml:"lookback,omitempty"`
 }
 
