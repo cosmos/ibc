@@ -57,19 +57,16 @@ type GasAlertThresholds struct {
 // ClientConfig a light client on a chain.
 type ClientConfig struct {
 	// Alias unique config-level handle referenced by attestors and routes.
-	Alias               string `yaml:"alias"`
-	ClientID            string `yaml:"clientId"`
-	ChainID             string `yaml:"chainId"`
-	CounterpartyChainID string `yaml:"counterpartyChainId"`
-	// CounterpartyClientID identifies the counterparty client since multiple
-	// clients can be configured for the same chain pair.
+	Alias                string             `yaml:"alias"`
+	ClientID             string             `yaml:"clientId"`
+	ChainID              string             `yaml:"chainId"`
+	CounterpartyChainID  string             `yaml:"counterpartyChainId"`
 	CounterpartyClientID string             `yaml:"counterpartyClientId"`
 	Type                 ClientType         `yaml:"type"`
 	AttestorSet          *AttestorSetConfig `yaml:"attestorSet,omitempty"`
 }
 
-// AttestorSetConfig attestation policy for a client. The set's attestors are
-// the entries in the top-level attestors block associated with the client.
+// AttestorSetConfig attestation policy for a client.
 type AttestorSetConfig struct {
 	CounterpartyChainFinalityOffset uint64 `yaml:"counterpartyChainFinalityOffset"`
 	Threshold                       int    `yaml:"threshold"`
