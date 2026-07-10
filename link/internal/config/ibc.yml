@@ -12,15 +12,15 @@ db:
 # chains declares how to reach each chain; referenced by other blocks via chainId
 chains:
   - chainId: "1"
+    type: evm
+    rpc: https://ethereum-rpc.example.com
     evm:
-      rpc: https://ethereum-rpc.example.com
-      contracts:
-        ics26Router: "0x0000000000000000000000000000000000000000"
+      ics26Router: "0x0000000000000000000000000000000000000000"
   - chainId: "8453"
+    type: evm
+    rpc: https://base-rpc.example.com
     evm:
-      rpc: https://base-rpc.example.com
-      contracts:
-        ics26Router: "0x0000000000000000000000000000000000000000"
+      ics26Router: "0x0000000000000000000000000000000000000000"
 
 relayer:
   # optional per-chain overrides of the default relay settings

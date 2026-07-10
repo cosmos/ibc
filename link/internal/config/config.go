@@ -102,26 +102,13 @@ const (
 // ChainConfig describes how to reach a chain.
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
+	Type    ChainType       `yaml:"type"`
+	RPC     string          `yaml:"rpc"`
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
 }
 
-// Type returns the chain type implied by the configured settings.
-func (c ChainConfig) Type() ChainType {
-	if c.EVM != nil {
-		return ChainTypeEVM
-	}
-
-	return ""
-}
-
-// EVMChainConfig EVM connection and contract details.
+// EVMChainConfig EVM-specific chain details.
 type EVMChainConfig struct {
-	RPC       string       `yaml:"rpc"`
-	Contracts EVMContracts `yaml:"contracts"`
-}
-
-// EVMContracts IBC contract addresses.
-type EVMContracts struct {
 	ICS26Router string `yaml:"ics26Router"`
 }
 
@@ -272,12 +259,19 @@ func (c ChainConfig) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
-	case c.EVM == nil:
-		return errors.Errorf(".evm required for chain %q (only %s chains are supported)", c.ChainID, ChainTypeEVM)
-	case c.EVM.RPC == "":
-		return errors.Errorf(".evm.rpc required for chain %q", c.ChainID)
-	case c.EVM.Contracts.ICS26Router == "":
-		return errors.Errorf(".evm.contracts.ics26Router required for chain %q", c.ChainID)
+	case c.Type != ChainTypeEVM:
+		return errors.Errorf(".type must be %q, got %q", ChainTypeEVM, c.Type)
+	case c.RPC == "":
+		return errors.New(".rpc required")
+	}
+
+	if c.Type == ChainTypeEVM {
+		switch {
+		case c.EVM == nil:
+			return errors.Errorf(".evm required for %s chains", ChainTypeEVM)
+		case c.EVM.ICS26Router == "":
+			return errors.New(".evm.ics26Router required")
+		}
 	}
 
 	return nil

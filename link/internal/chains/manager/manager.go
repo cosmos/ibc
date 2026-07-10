@@ -26,11 +26,11 @@ func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 	clients := make(map[string]chains.Client)
 
 	for _, chain := range cfg.Chains {
-		if chain.EVM == nil {
+		if chain.Type != config.ChainTypeEVM {
 			continue
 		}
 
-		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.Contracts.ICS26Router)
+		client, err := evm.New(chain.ChainID, chain.RPC, chain.EVM.ICS26Router)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating evm client for chain %q", chain.ChainID)
 		}
