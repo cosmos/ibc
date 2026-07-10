@@ -39,35 +39,33 @@ relayer:
       evm:
         contracts:
           ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+  attestors:
+    - alias: "attestor-alice-base"
+      type: remote
+      grpc: attestor-alice.example.com:3000
+    - alias: "attestor-bob-base"
+      type: remote
+      grpc: attestor-bob.example.com:3000
+    - alias: "attestor-dan-base"
+      type: local
+    - alias: "attestor-dan-ethereum"
+      type: local
   clients:
     - clientId: "base-0"
       chainId: "1"
       counterpartyChainId: "8453"
       type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 2
+        attestors: ["attestor-alice-base", "attestor-bob-base", "attestor-dan-base"]
     - clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
       type: "attestation"
-  attestorSets:
-    - clientId: "base-0"
-      chainId: "1"
-      counterpartyChainFinalityOffset: 1
-      threshold: 2
-      attestors:
-        - type: remote
-          grpc: attestor-alice.example.com:3000
-          alias: "attestor-alice-base"
-        - type: remote
-          grpc: attestor-bob.example.com:3000
-          alias: "attestor-bob-base"
-        - type: local
-          alias: "attestor-dan-base"
-    - clientId: "ethereum-0"
-      chainId: "8453"
-      threshold: 1
-      attestors:
-        - type: local
-          alias: "attestor-dan-ethereum"
+      attestorSet:
+        threshold: 1
+        attestors: ["attestor-dan-ethereum"]
   routesToRelay:
     - sourceChainId: "1"
       sourceClientId: "base-0"
@@ -108,14 +106,14 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "8453", client.CounterpartyChainID)
 		assert.Equal(t, ClientTypeAttestation, client.Type)
 
-		require.Len(t, config.Relayer.AttestorSets, 2)
-		set := config.Relayer.AttestorSets[0]
-		assert.Equal(t, "base-0", set.ClientID)
-		assert.Equal(t, "1", set.ChainID)
-		assert.Equal(t, uint64(1), set.CounterpartyChainFinalityOffset)
-		assert.Equal(t, 2, set.Threshold)
-		require.Len(t, set.Attestors, 3)
-		assert.Equal(t, AttestorTypeLocal, set.Attestors[2].Type)
+		require.Len(t, config.Relayer.Attestors, 4)
+		assert.Equal(t, AttestorTypeRemote, config.Relayer.Attestors[0].Type)
+		assert.Equal(t, "attestor-alice-base", config.Relayer.Attestors[0].Alias)
+
+		require.NotNil(t, client.AttestorSet)
+		assert.Equal(t, uint64(1), client.AttestorSet.CounterpartyChainFinalityOffset)
+		assert.Equal(t, 2, client.AttestorSet.Threshold)
+		assert.Equal(t, []string{"attestor-alice-base", "attestor-bob-base", "attestor-dan-base"}, client.AttestorSet.Attestors)
 
 		require.Len(t, config.Relayer.Routes, 2)
 		route := config.Relayer.Routes[0]
@@ -225,7 +223,6 @@ func TestRelayerConfig(t *testing.T) {
 				name: "counterparty chain has no client back",
 				patch: func(c *Config) {
 					c.Relayer.Clients = c.Relayer.Clients[:1]
-					c.Relayer.AttestorSets = c.Relayer.AttestorSets[:1]
 					c.Relayer.Routes = c.Relayer.Routes[:1]
 				},
 				errContains: `counterparty chain "8453" must configure a client with counterpartyChainId "1"`,
@@ -296,68 +293,71 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "client without attestor set",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets = c.Relayer.AttestorSets[1:]
+					c.Relayer.Clients[0].AttestorSet = nil
 				},
-				errContains: `.clients[base-0] has no attestor set configured in .attestorSets`,
+				errContains: `.attestorSet required for attestation clients`,
 			},
 			{
-				name: "attestor set references unknown client",
+				name: "set references unknown attestor",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[0].ClientID = "unknown-0"
+					c.Relayer.Clients[0].AttestorSet.Attestors[0] = "unknown-attestor"
 				},
-				errContains: `references unknown client "unknown-0"`,
+				errContains: `.attestorSet references unknown attestor "unknown-attestor"`,
 			},
 			{
-				name: "duplicate attestor set for client",
+				name: "set references attestor twice",
 				patch: func(c *Config) {
-					duplicate := c.Relayer.AttestorSets[0]
-					duplicate.Attestors = []AttestorEntry{{Type: AttestorTypeLocal, Alias: "attestor-dup"}}
-					duplicate.Threshold = 1
-					c.Relayer.AttestorSets = append(c.Relayer.AttestorSets, duplicate)
+					c.Relayer.Clients[0].AttestorSet.Attestors[1] = "attestor-alice-base"
 				},
-				errContains: `.attestorSets duplicate set for client "base-0" on chain "1"`,
+				errContains: `.attestors duplicate reference: "attestor-alice-base"`,
+			},
+			{
+				name: "attestor shared across clients is valid",
+				patch: func(c *Config) {
+					c.Relayer.Clients[1].AttestorSet.Attestors = []string{"attestor-dan-base"}
+				},
 			},
 			{
 				name: "threshold exceeds attestors",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[0].Threshold = 4
+					c.Relayer.Clients[0].AttestorSet.Threshold = 4
 				},
 				errContains: `.threshold 4 exceeds number of attestors 3`,
 			},
 			{
 				name: "zero threshold",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[0].Threshold = 0
+					c.Relayer.Clients[0].AttestorSet.Threshold = 0
 				},
 				errContains: ".threshold must be at least 1",
 			},
 			{
 				name: "remote attestor missing grpc",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[0].Attestors[0].GRPC = ""
+					c.Relayer.Attestors[0].GRPC = ""
 				},
 				errContains: ".grpc required for remote attestors",
 			},
 			{
 				name: "invalid attestor type",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[0].Attestors[0].Type = "hybrid"
+					c.Relayer.Attestors[0].Type = "hybrid"
 				},
 				errContains: `.type must be one of ["remote", "local"]`,
 			},
 			{
 				name: "attestor missing alias",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[0].Attestors[0].Alias = ""
+					c.Relayer.Attestors[0].Alias = ""
 				},
 				errContains: ".alias required",
 			},
 			{
-				name: "duplicate attestor alias across sets",
+				name: "duplicate attestor alias",
 				patch: func(c *Config) {
-					c.Relayer.AttestorSets[1].Attestors[0].Alias = "attestor-alice-base"
+					c.Relayer.Attestors[1].Alias = "attestor-alice-base"
 				},
-				errContains: "duplicate attestor alias",
+				errContains: ".attestors duplicate alias",
 			},
 			{
 				name: "route missing sourceClientId",
