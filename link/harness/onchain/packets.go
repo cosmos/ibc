@@ -124,8 +124,10 @@ func (tr *GMPTracker) VerifyComplete(ctx context.Context) error {
 // effect (seq, success=false) — the relayer did deliver but target execution failed, so ibc link returns
 // an error acknowledgement rather than a success. Read via the harness's own Reader, not the stub. It
 // asserts the delivery failed at the target, proving the error-ack outcome on-chain independent of the
-// stub. The error-ack leg is GMP-only (IFT's receiveTransfer always succeeds), which the type states: only
-// a GMPTracker has it.
+// stub. The target is deliberately NOT asserted here: an error ack moves nothing, so some families (cosmos)
+// have no delivery effect to read the target back from — the target is proven on the success path
+// (VerifyComplete) instead. The error-ack leg is GMP-only (IFT's receiveTransfer always succeeds), which
+// the type states: only a GMPTracker has it.
 func (tr *GMPTracker) VerifyErrorAck(ctx context.Context) error {
 	packet := tr.packet()
 	rdr, err := tr.reader(packet.Destination)
@@ -136,10 +138,6 @@ func (tr *GMPTracker) VerifyErrorAck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("onchain: destination GMP Received for packet %s (seq %d) not observed on chain %s: %w",
 			tr.action.ID(), packet.Sequence, packet.Destination, err)
-	}
-	if recv.Target != tr.gmp.Target {
-		return fmt.Errorf("onchain: GMP Received target for packet %s: got %s, want %s",
-			tr.action.ID(), recv.Target, tr.gmp.Target)
 	}
 	if recv.Success {
 		return fmt.Errorf(

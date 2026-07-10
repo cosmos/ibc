@@ -12,6 +12,16 @@ func TestRedactURLs(t *testing.T) {
 			want: `dial error: Post "https://node.example:8545": EOF`,
 		},
 		{
+			name: "tcp userinfo",
+			in:   "rpc client: tcp://user:s3cret@node:26657 unreachable",
+			want: "rpc client: tcp://node:26657 unreachable",
+		},
+		{
+			name: "bare grpc userinfo",
+			in:   "grpc dial user:s3cret@host:9090 failed",
+			want: "grpc dial host:9090 failed",
+		},
+		{
 			name: "no credential untouched",
 			in:   "connect to https://node.example:8545 refused",
 			want: "connect to https://node.example:8545 refused",

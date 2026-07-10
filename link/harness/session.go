@@ -13,7 +13,8 @@ import (
 // relayer flow (session.IFT, session.GMP, session.Chain handles; verification happens through the typed
 // outcomes those return). It is a driver over the harness's world, not a resource owner: the daemon
 // lives on the Harness's process ledger, and teardown is Harness.Shutdown. Like the rest of the harness
-// surface, a Session is single-threaded by test convention.
+// surface, a Session is single-threaded by test convention — submissions are serial (concurrent cosmos
+// submissions would collide on the signer's account sequence).
 type Session struct {
 	h          *Harness
 	deployment *wire.Deployment

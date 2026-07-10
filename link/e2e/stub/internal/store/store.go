@@ -314,7 +314,7 @@ func (s *Store) Packets(ctx context.Context, packetFilter string) ([]Packet, err
 }
 
 // PacketsBySourceTx returns packets discovered from sourceTxHash. Hash comparison is case-insensitive
-// so hash formatting differences do not affect lookup.
+// because EVM renders hashes with a 0x prefix while CometBFT uses uppercase hex.
 func (s *Store) PacketsBySourceTx(ctx context.Context, sourceTxHash string) ([]Packet, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT packet_id, route_id, app_type, sequence, state, source_tx_hash, recv_tx_hash, reason,

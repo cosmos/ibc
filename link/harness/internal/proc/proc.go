@@ -1,6 +1,6 @@
 // Package proc supervises generic local subprocesses: start with combined-output capture, wait for
 // a semantic readiness condition (never a fixed sleep), and stop with SIGTERM/SIGKILL escalation.
-// It knows nothing about chains. The stop/reap state
+// It knows nothing about chains — the sandboxd launcher builds on top of it. The stop/reap state
 // machine itself lives in Handle, which ibclink's relayer daemon shares.
 package proc
 

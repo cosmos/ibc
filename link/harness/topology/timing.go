@@ -42,6 +42,13 @@ type TimingProfile struct {
 // seals at and the cadence the waits assume cannot drift apart.
 const besuQBFTBlockPeriod = 2 * time.Second
 
+// sandboxBlockPeriod is the block cadence the harness budgets its waits for on a managed sandboxd chain.
+// The node's CometBFT is configured with timeout_commit 500ms, and a live node was observed producing
+// blocks at ~650ms; 1s is a deliberately conservative round-up so a slightly slower block never masks as a
+// stall. The harness does not set this cadence (CometBFT's consensus timer does), so unlike the
+// anvil-interval lane it is only a wait-budget input, never a "--block-time".
+const sandboxBlockPeriod = 1 * time.Second
+
 // DefaultTiming is the profile used when a ChainSpec leaves Timing at its zero value. Anvil (un-timed)
 // mines on demand, so it takes the instant profile that reproduces the harness's original hard-coded
 // budgets. Besu produces blocks on a fixed QBFT period, so it takes a block-derived
@@ -52,6 +59,8 @@ func DefaultTiming(launcher string) TimingProfile {
 	switch launcher {
 	case LauncherBesu:
 		return blockTiming(besuQBFTBlockPeriod)
+	case LauncherSandbox:
+		return blockTiming(sandboxBlockPeriod)
 	default:
 		return instantTiming()
 	}

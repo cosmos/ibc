@@ -3,8 +3,8 @@ package fixturekeys
 import "hash/fnv"
 
 // RouteScopedSeq maps a route's raw source sequence to a destination-unique sequence. Source sequences are
-// assigned per source fixture (each EVM MockIFT/MockGMP has its own counter), so two routes into one
-// destination whose sequence spaces both start at 1 would
+// assigned per source fixture (each EVM MockIFT/MockGMP has its own counter; a cosmos source's counter is
+// per client / store), so two routes into one destination whose sequence spaces both start at 1 would
 // otherwise collide on a shared destination mock fixture or light client — cross-matching
 // one route's delivery with another's. The relayer performs every destination-side effect (and its
 // idempotency check) under this value, and the harness readers await it; source-side effects (escrow,

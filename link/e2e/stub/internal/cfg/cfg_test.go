@@ -51,6 +51,55 @@ relayer:
 	require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_RPC is not set")
 }
 
+func TestLoadExpandsCosmosGRPCReference(t *testing.T) {
+	t.Setenv("IBC_LINK_TEST_GRPC", "localhost:9090")
+	path := writeConfig(t, `
+chains:
+  - id: chain-b
+    type: cosmos
+    provider: sandbox
+    cosmosChainId: sandbox-cosmos-1
+    grpcUrl: ${IBC_LINK_TEST_GRPC}
+    signerKey: signer
+    faucetKey: faucet
+    rpc:
+      url: http://localhost:26657
+db:
+  type: sqlite
+  url: ibc.db
+relayer:
+  routes: []
+`)
+
+	c, err := Load(path)
+	require.NoError(t, err)
+	require.Equal(t, "localhost:9090", c.Chains[0].GRPCURL)
+}
+
+func TestLoadRejectsMissingCosmosGRPCReference(t *testing.T) {
+	path := writeConfig(t, `
+chains:
+  - id: chain-b
+    type: cosmos
+    provider: sandbox
+    cosmosChainId: sandbox-cosmos-1
+    grpcUrl: ${IBC_LINK_TEST_MISSING_GRPC}
+    signerKey: signer
+    faucetKey: faucet
+    rpc:
+      url: http://localhost:26657
+db:
+  type: sqlite
+  url: ibc.db
+relayer:
+  routes: []
+`)
+
+	_, err := Load(path)
+	require.ErrorContains(t, err, "expand chains[0].grpcUrl")
+	require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_GRPC is not set")
+}
+
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "ibc.yaml")

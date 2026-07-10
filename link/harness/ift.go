@@ -23,7 +23,9 @@ type IFT struct {
 	Route    string
 	Amount   *big.Int
 	Receiver string
-	Timeout  time.Duration
+	// Timeout requests the EVM-to-EVM fixture's source refund deadline. Cross-family routes reject it;
+	// their native IBC packets still carry chain-assigned transport deadlines internally.
+	Timeout time.Duration
 }
 
 // IFTPlan captures pre-submit baselines. Use when submission must happen after setup steps.
@@ -63,6 +65,9 @@ func (r *Session) PrepareIFT(ctx context.Context, in IFT) (*IFTPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	if timeoutErr := validateIFTTimeoutRoute(route, in.Timeout); timeoutErr != nil {
+		return nil, timeoutErr
+	}
 	// Resolve the receiver. Empty defaults to a fresh auto-funded account on the destination; anything
 	// else is caller input. Either way it is canonicalized through the destination Reader (the family's
 	// string->address choke point), so the frozen string — what the submission carries and the terminal
@@ -85,7 +90,9 @@ func (r *Session) PrepareIFT(ctx context.Context, in IFT) (*IFTPlan, error) {
 	}
 
 	// Resolve the IFT source holder — the account the source transfer debits — from that chain's deployment
-	// fixture. The harness reads the same holder's balance to baseline and assert the source debit.
+	// fixture, in one family-agnostic code path: deploy emits fixturekeys.IFTFaucet per chain in its own
+	// native form (EVM: the dev faucet 0x hex; cosmos: the user/faucet bech32), and the harness reads the
+	// same holder's balance to baseline and assert the source debit. No family switch, no EVM assumption.
 	srcHolder, err := r.iftSourceHolder(route.Source)
 	if err != nil {
 		return nil, err
@@ -181,19 +188,18 @@ func (r *Session) submitter(chainID string) (chain.AppSubmitter, error) {
 }
 
 // resolveTimeout turns a caller's relative IFT timeout into an absolute unix-second deadline read from the
-// destination chain's clock, matching IBC v2 receive-time semantics. 0 (the happy path) stays 0. The
-// destination chain must expose an EVM client so the harness can read its clock.
+// destination chain's clock, matching IBC v2 receive-time semantics. 0 stays 0 on every route. A requested
+// timeout is supported only on the EVM-to-EVM fixture path, where both delivery and source refund exist.
 func (r *Session) resolveTimeout(ctx context.Context, route wire.Route, timeout time.Duration) (uint64, error) {
 	if timeout <= 0 {
 		return 0, nil
 	}
+	if err := validateIFTTimeoutRoute(route, timeout); err != nil {
+		return 0, err
+	}
 	ec, err := r.h.chains.EVM(route.Destination)
 	if err != nil {
-		return 0, fmt.Errorf(
-			"harness: route %q IFT timeout requires an EVM destination (the timeout/refund leg is out of scope for non-EVM chains): %w",
-			route.ID,
-			err,
-		)
+		return 0, fmt.Errorf("harness: route %q timeout destination %s: %w", route.ID, route.Destination, err)
 	}
 	hdr, err := ec.Client().HeaderByNumber(ctx, nil)
 	if err != nil {
@@ -205,9 +211,23 @@ func (r *Session) resolveTimeout(ctx context.Context, route wire.Route, timeout 
 	return hdr.Time + secs, nil
 }
 
-// defaultIFTReceiver mints a fresh default IFT receiver on the destination chain by resolving its
-// ReceiverProvider capability. A destination that advertises no ReceiverProvider fails with
-// ErrCapabilityMissing.
+func validateIFTTimeoutRoute(route wire.Route, timeout time.Duration) error {
+	if timeout <= 0 || route.Type == wire.RouteEVMToEVMAttested {
+		return nil
+	}
+	return fmt.Errorf(
+		"harness: route %q IFT timeout is supported only for %s routes (got %s)",
+		route.ID,
+		wire.RouteEVMToEVMAttested,
+		route.Type,
+	)
+}
+
+// defaultIFTReceiver mints a fresh default IFT receiver on the destination chain, family-agnostically: it
+// resolves the destination chain's ReceiverProvider capability and asks it for a native address. An EVM
+// chain returns a freshly funded hex account; a cosmos chain returns a fresh `cosmos1...` string. A
+// destination that advertises no ReceiverProvider fails with ErrCapabilityMissing, not a silent EVM
+// assumption.
 func (r *Session) defaultIFTReceiver(ctx context.Context, destChainID string) (string, error) {
 	rp, err := chainCapability[chain.ReceiverProvider](r.h.chains, destChainID, "ReceiverProvider")
 	if err != nil {
@@ -217,7 +237,9 @@ func (r *Session) defaultIFTReceiver(ctx context.Context, destChainID string) (s
 }
 
 // iftSourceHolder resolves the IFT source holder — the account the source transfer debits on chainID — from
-// that chain's deployment fixture (fixturekeys.IFTFaucet).
+// that chain's deployment fixture (fixturekeys.IFTFaucet), in the chain family's own native address form.
+// It is family-agnostic: deploy emits the holder per chain (EVM hex or cosmos bech32), so the harness
+// resolves it identically for either source family, with no evm import.
 func (r *Session) iftSourceHolder(chainID string) (string, error) {
 	return r.fixture(chainID, fixturekeys.IFTFaucet)
 }

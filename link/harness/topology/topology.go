@@ -67,7 +67,9 @@ func (t Topology) Validate() error {
 		if _, dup := families[id]; dup {
 			return fmt.Errorf("topology %s: duplicate chain id %s", t.Name, id)
 		}
-		if spec.Chain.Type != wire.ChainTypeEVM {
+		switch spec.Chain.Type {
+		case wire.ChainTypeEVM, wire.ChainTypeCosmos:
+		default:
 			return fmt.Errorf("topology %s: chain %s has unknown family %q", t.Name, id, spec.Chain.Type)
 		}
 		families[id] = spec.Chain.Type
@@ -176,8 +178,8 @@ type Provision struct {
 type ProvisionMode string
 
 const (
-	// ProvisionManaged means the harness launches and owns the node's lifecycle (Anvil/Besu containers
-	// or in-process fixtures) — it can pause mining, stop/restart the node, and collect
+	// ProvisionManaged means the harness launches and owns the node's lifecycle (Anvil/Besu containers,
+	// sandboxd processes, or in-process fixtures) — it can pause mining, stop/restart the node, and collect
 	// its logs.
 	ProvisionManaged ProvisionMode = "managed"
 
@@ -192,4 +194,8 @@ const (
 	LauncherAnvil = "anvil"
 	// LauncherBesu is the managed Besu launcher key startChain reads from Provision.Launcher.
 	LauncherBesu = "besu"
+	// LauncherSandbox launches a managed sandboxd node (a real Cosmos SDK + cosmos/evm chain), presented
+	// to the harness as either family (see provision's dispatch on the wire chain type). Its string
+	// coincides with wire.ProviderSandbox, but this is the harness's launch key, not relayer metadata.
+	LauncherSandbox = "sandbox"
 )

@@ -40,6 +40,12 @@ func TestValidate(t *testing.T) {
 			Provision: Provision{Mode: ProvisionManaged, Launcher: LauncherAnvil},
 		}
 	}
+	cosmos := func(id string) ChainSpec {
+		return ChainSpec{
+			Chain:     wire.Chain{ID: id, Type: wire.ChainTypeCosmos, Provider: wire.ProviderSandbox},
+			Provision: Provision{Mode: ProvisionManaged, Launcher: LauncherSandbox},
+		}
+	}
 	topo := func(chains []ChainSpec, routes ...wire.Route) Topology {
 		return Topology{
 			Name:   "validate-under-test",
@@ -62,6 +68,14 @@ func TestValidate(t *testing.T) {
 				[]ChainSpec{evm("a", 31637), evm("b", 31638), evm("c", 31639)},
 				route("b-to-a", "b", "a", wire.RouteEVMToEVMAttested),
 				route("c-to-a", "c", "a", wire.RouteEVMToEVMAttested),
+			),
+		},
+		{
+			name: "valid evm-cosmos both directions",
+			topo: topo(
+				[]ChainSpec{evm("a", 31337), cosmos("b")},
+				route("a-to-b", "a", "b", wire.RouteEVMToCosmosAttested),
+				route("b-to-a", "b", "a", wire.RouteCosmosToEVMAttested),
 			),
 		},
 		{
@@ -118,6 +132,22 @@ func TestValidate(t *testing.T) {
 				route("r", "a", "ghost", wire.RouteEVMToEVMAttested),
 			),
 			wantErr: `unknown destination chain "ghost"`,
+		},
+		{
+			name: "route type contradicts endpoint families",
+			topo: topo(
+				[]ChainSpec{evm("a", 31337), cosmos("b")},
+				route("r", "a", "b", wire.RouteEVMToEVMAttested),
+			),
+			wantErr: `needs "evmToCosmosAttested"`,
+		},
+		{
+			name: "no route type for cosmos to cosmos",
+			topo: topo(
+				[]ChainSpec{cosmos("a"), cosmos("b")},
+				route("r", "a", "b", wire.RouteEVMToEVMAttested),
+			),
+			wantErr: "no route type relays cosmos -> cosmos",
 		},
 	}
 	for _, tc := range cases {

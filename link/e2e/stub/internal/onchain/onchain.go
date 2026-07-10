@@ -323,11 +323,6 @@ func NewMockIFT(addr common.Address, client *ethclient.Client) *MockIFT {
 	return &MockIFT{newBoundFixture(addr, client, mockIFTABI)}
 }
 
-// Mint mints amount to `to` (the fixture's test-setup helper; no access control by design).
-func (m *MockIFT) Mint(opts *bind.TransactOpts, to common.Address, amount *big.Int) (*types.Transaction, error) {
-	return m.bound.Transact(opts, "mint", to, amount)
-}
-
 // ReceiveTransfer mints amount to receiver on the destination — the relayer's real on-chain effect.
 func (m *MockIFT) ReceiveTransfer(
 	opts *bind.TransactOpts,
@@ -476,6 +471,80 @@ func (m *MockGMP) Deliver(
 }
 
 // DeliverIFT executes canonical iftMint calldata with source-client context available to the target.
+func (m *MockGMP) DeliverIFT(
+	opts *bind.TransactOpts,
+	seq *big.Int,
+	clientID string,
+	target common.Address,
+	payload []byte,
+) (*types.Transaction, error) {
+	return m.bound.Transact(opts, "deliverIFT", seq, clientID, target, payload)
+}
+
+// ScanIFTReceivedFrom returns GMP deliveries to ift in [fromBlock, head], correlated with the canonical
+// mint event from the same transaction. The outer GMP sequence is the destination packet identity.
+func (m *MockGMP) ScanIFTReceivedFrom(
+	ctx context.Context,
+	ift common.Address,
+	clientID string,
+	fromBlock uint64,
+) (map[uint64]ReceivedResult, uint64, error) {
+	gmpLogs, next, err := m.scanEvent(ctx, "GMPReceived", fromBlock)
+	if err != nil {
+		return nil, fromBlock, err
+	}
+	if next == fromBlock {
+		return nil, next, nil
+	}
+	mintLogs, err := m.client.FilterLogs(ctx, ethereum.FilterQuery{
+		FromBlock: new(big.Int).SetUint64(fromBlock),
+		ToBlock:   new(big.Int).SetUint64(next - 1),
+		Addresses: []common.Address{ift},
+		Topics:    [][]common.Hash{{mockIFTABI.Events["IFTMintReceived"].ID}},
+	})
+	if err != nil {
+		return nil, fromBlock, fmt.Errorf("filter IFTMintReceived: %w", err)
+	}
+	mintTxs := make(map[common.Hash]struct{}, len(mintLogs))
+	for _, lg := range mintLogs {
+		var mint struct {
+			ClientID string `abi:"clientId"`
+			Amount   *big.Int
+		}
+		if err := mockIFTABI.UnpackIntoInterface(&mint, "IFTMintReceived", lg.Data); err != nil {
+			return nil, fromBlock, fmt.Errorf("decode IFTMintReceived: %w", err)
+		}
+		if mint.ClientID == clientID {
+			mintTxs[lg.TxHash] = struct{}{}
+		}
+	}
+
+	out := make(map[uint64]ReceivedResult, len(gmpLogs))
+	for _, lg := range gmpLogs {
+		ev, derr := m.decodeReceived(lg.Data)
+		if derr != nil {
+			return nil, fromBlock, derr
+		}
+		if ev.Target != ift {
+			continue
+		}
+		if ev.Success {
+			if _, ok := mintTxs[lg.TxHash]; !ok {
+				return nil, fromBlock, fmt.Errorf(
+					"successful GMP delivery %s emitted no matching IFTMintReceived",
+					lg.TxHash.Hex(),
+				)
+			}
+		}
+		out[ev.Seq.Uint64()] = ReceivedResult{TxHash: lg.TxHash, Success: ev.Success}
+	}
+	return out, next, nil
+}
+
+// ScanReceivedFrom returns the GMPReceived events in [fromBlock, head] decoded by (sequence, success),
+// plus the next cursor. It backs the relayer's delivery idempotency check — a second deliver would
+// replay target.call (e.g. increment the Counter twice) — and carries the inner-call success bit so a
+// restart can tell a real delivery from an error-ack.
 func (m *MockGMP) ScanReceivedFrom(
 	ctx context.Context,
 	fromBlock uint64,

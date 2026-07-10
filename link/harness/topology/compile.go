@@ -14,7 +14,13 @@ type RuntimeBindings struct {
 	// ChainRPC maps a wire.Chain.ID to its host-reachable RPC URL for the MANAGED chains. For a local
 	// Anvil subprocess this is 127.0.0.1:<dynamic port>, only known after the node started — hence
 	// runtime, not static. External chains are not bound here: their RPC is the static Provision.RPCURL.
+	// For a cosmos chain this carries the CometBFT RPC (the ibc link config's rpc.url for that chain).
 	ChainRPC map[string]string
+
+	// ChainGRPC maps a wire.Chain.ID to its host-reachable cosmos gRPC dial target, for managed cosmos
+	// chains only — the second runtime endpoint a cosmos chain binds at provisioning alongside its CometBFT
+	// RPC (dynamic port, known only after the node started). Absent for EVM chains.
+	ChainGRPC map[string]string
 
 	// DBPath is the resolved relayer DB location (e.g. a file under the run's temp dir for sqlite).
 	DBPath string
@@ -28,6 +34,9 @@ var (
 	// ErrExternalRPCRequired is an external chain whose Provision carries no static RPC URL. Unlike a
 	// managed chain, nothing runtime-fills it, so an empty URL is a topology authoring error.
 	ErrExternalRPCRequired = errors.New("external chain requires a static RPC URL")
+	// ErrMissingGRPC is a managed cosmos chain with no runtime gRPC binding (the harness failed to record
+	// the launched node's gRPC target). A cosmos chain needs both its CometBFT RPC and its gRPC endpoint.
+	ErrMissingGRPC = errors.New("no runtime gRPC binding for cosmos chain")
 )
 
 // Compile projects the topology's chains into an ibc link wire config and fills the runtime-only fields.
@@ -47,6 +56,15 @@ func Compile(t Topology, rb RuntimeBindings) (wire.ConfigYAML, error) {
 				return wire.ConfigYAML{}, fmt.Errorf("compile topology %q: %w: %s", t.Name, ErrMissingRPC, c.ID)
 			}
 			c.RPC = wire.RPC{URL: url}
+			// A managed cosmos chain also binds its gRPC endpoint at runtime (its CometBFT RPC is the rpc.url
+			// above; gRPC is the second surface the stub's bank/auth queries need).
+			if c.Type == wire.ChainTypeCosmos {
+				grpcURL, ok := rb.ChainGRPC[c.ID]
+				if !ok || grpcURL == "" {
+					return wire.ConfigYAML{}, fmt.Errorf("compile topology %q: %w: %s", t.Name, ErrMissingGRPC, c.ID)
+				}
+				c.GRPCURL = grpcURL
+			}
 		case ProvisionExternal:
 			if spec.Provision.RPCURL == "" {
 				return wire.ConfigYAML{}, fmt.Errorf(

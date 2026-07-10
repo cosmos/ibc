@@ -1,3 +1,4 @@
 bin/
+.deps/
 node_modules/
 harness/eureka/cache/

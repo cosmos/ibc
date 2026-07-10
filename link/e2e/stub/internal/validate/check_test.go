@@ -55,6 +55,7 @@ func TestCheck_Providers(t *testing.T) {
 		{name: "empty", provider: "", wantValid: false},
 		{name: "anvil", provider: wire.ProviderAnvil, wantValid: true},
 		{name: "besu", provider: wire.ProviderBesu, wantValid: true},
+		{name: "sandbox", provider: wire.ProviderSandbox, wantValid: true},
 		{name: "unknown", provider: "reth", wantValid: false},
 	}
 
@@ -80,6 +81,54 @@ func pathsOf(errs []wire.ValidationError) []string {
 		out[i] = e.Path
 	}
 	return out
+}
+
+// TestCheck_OneCosmosToEvmRoutePerSource covers the singleton rule: discovery correlates a cosmos-source
+// GMP packet to its route by the chain-level attestations client, so a second cosmosToEvm route from one
+// source is structurally invalid.
+func TestCheck_OneCosmosToEvmRoutePerSource(t *testing.T) {
+	c := goodConfig()
+	c.Chains[1] = wire.Chain{
+		ID:            "cosmos-1",
+		Type:          wire.ChainTypeCosmos,
+		Provider:      wire.ProviderSandbox,
+		CosmosChainID: "sandbox-1",
+		GRPCURL:       "127.0.0.1:9090",
+		SignerKey:     relayerKeyHex,
+		FaucetKey:     relayerKeyHex,
+		RPC:           wire.RPC{URL: "http://127.0.0.1:26657"},
+	}
+	c.Relayer.Routes = []wire.Route{
+		{ID: "c-to-a", Source: "cosmos-1", Destination: "31337", Type: wire.RouteCosmosToEVMAttested},
+	}
+	require.Empty(t, Check(c), "one cosmosToEvm route per source is valid")
+
+	c.Relayer.Routes = append(c.Relayer.Routes, wire.Route{
+		ID: "c-to-a-2", Source: "cosmos-1", Destination: "31337", Type: wire.RouteCosmosToEVMAttested,
+	})
+	require.Contains(t, pathsOf(Check(c)), "relayer.routes[1].source")
+}
+
+func TestCheck_OneEVMCounterpartyPerCosmosChain(t *testing.T) {
+	c := goodConfig()
+	c.Chains = append(c.Chains, wire.Chain{
+		ID:            "cosmos-1",
+		Type:          wire.ChainTypeCosmos,
+		Provider:      wire.ProviderSandbox,
+		CosmosChainID: "sandbox-1",
+		GRPCURL:       "127.0.0.1:9090",
+		SignerKey:     relayerKeyHex,
+		FaucetKey:     relayerKeyHex,
+		RPC:           wire.RPC{URL: "http://127.0.0.1:26657"},
+	})
+	c.Relayer.Routes = []wire.Route{
+		{ID: "a-to-c", Source: "31337", Destination: "cosmos-1", Type: wire.RouteEVMToCosmosAttested},
+		{ID: "c-to-a", Source: "cosmos-1", Destination: "31337", Type: wire.RouteCosmosToEVMAttested},
+	}
+	require.Empty(t, Check(c), "both directions may share one native Cosmos bridge")
+
+	c.Relayer.Routes[1].Destination = "31338"
+	require.Contains(t, pathsOf(Check(c)), "relayer.routes[1].destination")
 }
 
 func TestCheck_Invalid(t *testing.T) {

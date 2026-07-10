@@ -23,6 +23,13 @@ type FaultInjector interface {
 	StartNode(ctx context.Context) error
 }
 
+// GRPCProvider exposes a chain's gRPC query endpoint (host:port dial target) — a second read surface
+// alongside RPCURL. Cosmos chains advertise it so the compiled ibc link config can carry the endpoint
+// the stub's bank/auth queries need; families without one simply don't implement it.
+type GRPCProvider interface {
+	GRPCURL() string
+}
+
 // ReceiverProvider mints a fresh destination address in the chain's native form, ready to receive an
 // asset transfer. What "ready" takes is family-owned: an implementation performs whatever preparation
 // its family requires before the address can receive (for example, funding the fresh account where a

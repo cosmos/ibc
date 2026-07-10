@@ -11,17 +11,26 @@ package provision
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/cosmos/ibc/link/harness/chain"
+	"github.com/cosmos/ibc/link/harness/chain/cosmos"
 	"github.com/cosmos/ibc/link/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/link/harness/chain/evm/besu"
 	"github.com/cosmos/ibc/link/harness/chain/evm/external"
+	"github.com/cosmos/ibc/link/harness/chain/evm/sandbox"
+	"github.com/cosmos/ibc/link/harness/chain/sandboxd"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 	"github.com/cosmos/ibc/link/harness/topology"
 )
+
+// sandboxdVersionTimeout bounds the best-effort `sandboxd version --long` probe (it loads a large
+// binary's build info), so version reporting never hangs a run.
+const sandboxdVersionTimeout = 10 * time.Second
 
 // Provisioned is one running (or dialed) chain: the handle the rest of the harness drives, the resolved
 // timing profile every wait observing it budgets from, and the lifecycle hooks the owner calls at
@@ -163,20 +172,82 @@ func startManagedChain(
 			Stop:        bc.Stop,
 			CollectLogs: bc.CollectLogs,
 		}, nil
+	case topology.LauncherSandbox:
+		// One launcher (sandboxd), two facets. The same binary is presented to the harness as either an EVM
+		// chain (driven over eth JSON-RPC) or a cosmos chain (driven over CometBFT RPC + bank/auth gRPC),
+		// selected by the relayer-facing chain type on the wire entry — so dispatch keys off c.Type here, not
+		// a second launcher. The timing default is shared (DefaultTiming(LauncherSandbox)): one node, one
+		// block cadence, regardless of which surface a facet drives.
+		switch c.Type {
+		case wire.ChainTypeEVM:
+			sc, err := sandbox.Start(ctx, sandbox.Spec{
+				ID:            c.ID,
+				ChainID:       c.ChainID,
+				WorkDir:       filepath.Join(workDir, "sandboxd-"+c.ID),
+				LogPath:       filepath.Join(workDir, "sandboxd-"+c.ID+".log"),
+				RelayerKeyHex: c.EVMSignerKey,
+			})
+			if err != nil {
+				return Provisioned{}, err
+			}
+			return Provisioned{
+				Chain:       sc,
+				Profile:     prof,
+				Stop:        sc.Stop,
+				CollectLogs: readNodeLog(sc.LogPath(), c.ID),
+			}, nil
+		case wire.ChainTypeCosmos:
+			cc, err := cosmos.StartCosmos(ctx, cosmos.Spec{
+				ID:            c.ID,
+				CosmosChainID: c.CosmosChainID,
+				SignerKeyHex:  c.SignerKey,
+				FaucetKeyHex:  c.FaucetKey,
+				WorkDir:       filepath.Join(workDir, "sandboxd-cosmos-"+c.ID),
+				LogPath:       filepath.Join(workDir, "sandboxd-cosmos-"+c.ID+".log"),
+			})
+			if err != nil {
+				return Provisioned{}, err
+			}
+			return Provisioned{
+				Chain:       cc,
+				Profile:     prof,
+				Stop:        cc.Stop,
+				CollectLogs: readNodeLog(cc.LogPath(), c.ID),
+			}, nil
+		default:
+			return Provisioned{}, fmt.Errorf("sandbox launcher does not serve chain type %q (chain %s)", c.Type, c.ID)
+		}
 	default:
 		return Provisioned{}, fmt.Errorf("managed launcher %q is unsupported", launcher)
 	}
 }
 
+// readNodeLog is the CollectLogs closure shared by the subprocess launchers (sandboxd EVM/cosmos):
+// it reads the node's combined-output log file keyed by chain id, or nothing if the file is unreadable.
+func readNodeLog(logPath, chainID string) func(context.Context) map[string]string {
+	return func(context.Context) map[string]string {
+		if data, err := os.ReadFile(logPath); err == nil {
+			return map[string]string{chainID: string(data)}
+		}
+		return nil
+	}
+}
+
 // Versions reports the versions/images of the launchers the topology's managed chains use, keyed the way
-// the diagnostics bundle names tools. Only launchers in use are probed.
-func Versions(topo topology.Topology) map[string]string {
+// the diagnostics bundle names tools. Only launchers in use are probed (the sandboxd probe execs the
+// binary, so it is time-bounded).
+func Versions(ctx context.Context, topo topology.Topology) map[string]string {
 	out := map[string]string{}
 	if usesLauncher(topo, topology.LauncherAnvil) {
 		out["anvil-image"] = anvil.DockerImage()
 	}
 	if usesLauncher(topo, topology.LauncherBesu) {
 		out["besu-image"] = besu.DockerImage()
+	}
+	if usesLauncher(topo, topology.LauncherSandbox) {
+		sctx, cancel := context.WithTimeout(ctx, sandboxdVersionTimeout)
+		out["sandboxd"] = sandboxd.Version(sctx)
+		cancel()
 	}
 	return out
 }

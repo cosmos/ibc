@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/cosmos/ibc/link/e2e/stub/internal/cfg"
+	"github.com/cosmos/ibc/link/e2e/stub/internal/cosmos"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/exitcode"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
@@ -110,6 +111,12 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 		dep.Chains[r.id] = r.deployment
 		dep.TxHashes = append(dep.TxHashes, r.hashes...)
 	}
+	bridgeTxs, registerErr := registerCosmosIFTBridges(cmd.Context(), c, dep)
+	if registerErr != nil {
+		return exitcode.New(wire.ExitDeployFailure, registerErr)
+	}
+	dep.TxHashes = append(dep.TxHashes, bridgeTxs...)
+
 	// Persist the deployment so the relay daemon can resolve fixture addresses
 	// without re-deploying. It happens before emitting the metadata so a persistence failure surfaces as
 	// a failed deploy rather than reported-but-not-saved.
@@ -120,11 +127,170 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 	return config.PrintJSON(dep)
 }
 
-// deployChain bounds and deploys one EVM chain.
+// deployChain dispatches on the chain family. The seam a non-EVM family reuses is exactly this: it emits
+// the same wire.ChainDeployment (fixtures-by-name + client id) that the harness readers read, without the
+// harness caring how the fixtures came to exist.
 func deployChain(ctx context.Context, ch wire.Chain) (wire.ChainDeployment, []string, error) {
 	ctx, cancel := context.WithTimeout(ctx, perChainTimeout)
 	defer cancel()
-	return deployEVMChain(ctx, ch)
+
+	switch ch.Type {
+	case wire.ChainTypeCosmos:
+		return deployCosmosChain(ctx, ch)
+	default:
+		return deployEVMChain(ctx, ch)
+	}
+}
+
+// deployCosmosChain creates the native tokenfactory IFT denom, funds its user, and configures the IBC v2
+// plumbing shared by IFT and GMP. The GMP counter remains a bank-balance fixture funded by the relayer;
+// IFT itself is handled by the chain's native module and has no mock escrow fixture.
+func deployCosmosChain(ctx context.Context, ch wire.Chain) (wire.ChainDeployment, []string, error) {
+	client, err := cosmos.Connect(ctx, ch.RPC.URL, ch.GRPCURL, ch.CosmosChainID, ch.SignerKey)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+	defer client.Close() //nolint:errcheck
+	relayer := client.SignerAddress()
+	// The relayer also funds GMP increments (one <GMPDenom> relayer->target per increment), so it must hold the
+	// counter denom too — checked here so a missing genesis mint fails loudly at deploy, not mid-delivery.
+	if fundedErr := requireFunded(ctx, client, "relayer", relayer, cosmos.GMPDenom); fundedErr != nil {
+		return wire.ChainDeployment{}, nil, fundedErr
+	}
+	// The faucet is the native IFT source holder. Deploy creates a tokenfactory denom and mints its initial
+	// supply there; the IFT module burns from it when the harness submits MsgIFTTransfer.
+	faucet, err := cosmos.AccountAddressFromKeyHex(ch.FaucetKey)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+	iftDenom, denomTx, err := client.CreateIFTDenom(ctx, faucet)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+	// The keyless GMP counter target (deterministic, receives-only): its balance of the GMP denom is the
+	// count. It needs no genesis funding — a bank send creates it on first receipt — so it is not balance-
+	// checked here (it legitimately holds nothing until the first increment).
+	counterTarget, err := cosmos.GMPCounterTarget()
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+
+	// GMP to a cosmos destination is delivered for real over IBC v2 into the chain's native 27-gmp module,
+	// proven by the chain's `attestations` light client — so deploy stands that plumbing up:
+	//   (a) create the attestations client (sole attestor = the stub's test EOA, 1-of-1) and parse its id from
+	//       the create_client event (deterministic "attestations-0", but read rather than assumed);
+	//   (b) register the fabricated EVM-side counterparty on it (routing metadata the recv path checks);
+	//   (c) derive the ICS-27 executor account (module-derived from the client id + fixed GMP sender + empty
+	//       salt) and fund it with the GMP counter denom so an increment's inner MsgSend has coins.
+	clientID, createTx, err := client.CreateAttestationsClient(ctx)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+	registerTx, err := client.RegisterCounterparty(ctx, clientID)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+	ics27, err := cosmos.ICS27Account(clientID)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+	fundTx, err := client.FundICS27(ctx, ics27)
+	if err != nil {
+		return wire.ChainDeployment{}, nil, err
+	}
+
+	cd := wire.ChainDeployment{
+		Fixtures: map[string]string{
+			fixturekeys.IFTDenom:           iftDenom,
+			fixturekeys.IFTFaucet:          faucet,
+			fixturekeys.Counter:            counterTarget,
+			fixturekeys.GMPDenom:           cosmos.GMPDenom,
+			fixturekeys.AttestationsClient: clientID,
+			fixturekeys.ICS27Account:       ics27,
+		},
+		ClientID: clientID,
+	}
+	return cd, []string{denomTx, createTx, registerTx, fundTx}, nil
+}
+
+// registerCosmosIFTBridges runs after every chain deployment is assembled, because the native Cosmos
+// bridge registration needs the deployed EVM IFT address.
+func registerCosmosIFTBridges(
+	ctx context.Context,
+	c *wire.ConfigYAML,
+	dep wire.Deployment,
+) ([]string, error) {
+	seen := make(map[string]struct{})
+	var hashes []string
+	for _, route := range c.Relayer.Routes {
+		var cosmosID, evmID string
+		switch route.Type {
+		case wire.RouteCosmosToEVMAttested:
+			cosmosID, evmID = route.Source, route.Destination
+		case wire.RouteEVMToCosmosAttested:
+			cosmosID, evmID = route.Destination, route.Source
+		default:
+			continue
+		}
+		key := cosmosID + "|" + evmID
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		chain, ok := c.Chain(cosmosID)
+		if !ok {
+			return nil, fmt.Errorf("register IFT bridge: unknown cosmos chain %s", cosmosID)
+		}
+		cosmosDep, ok := dep.Chain(cosmosID)
+		if !ok {
+			return nil, fmt.Errorf("register IFT bridge: no deployment for cosmos chain %s", cosmosID)
+		}
+		evmDep, ok := dep.Chain(evmID)
+		if !ok {
+			return nil, fmt.Errorf("register IFT bridge: no deployment for EVM chain %s", evmID)
+		}
+		denom, err := cosmosDep.Fixture(fixturekeys.IFTDenom)
+		if err != nil {
+			return nil, err
+		}
+		clientID, err := cosmosDep.Fixture(fixturekeys.AttestationsClient)
+		if err != nil {
+			return nil, err
+		}
+		counterpartyIFT, err := evmDep.Fixture(fixturekeys.MockIFT)
+		if err != nil {
+			return nil, err
+		}
+		client, err := cosmos.Connect(ctx, chain.RPC.URL, chain.GRPCURL, chain.CosmosChainID, chain.SignerKey)
+		if err != nil {
+			return nil, err
+		}
+		hash, registerErr := client.RegisterIFTBridge(ctx, denom, clientID, counterpartyIFT)
+		closeErr := client.Close()
+		if registerErr != nil {
+			return nil, registerErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		hashes = append(hashes, hash)
+	}
+	return hashes, nil
+}
+
+// requireFunded is the deploy-time honest check that a Cosmos account actually holds a
+// fixture denom: a bank-balance read that fails loudly when genesis funding is missing, rather than
+// letting a later transfer fail cryptically with insufficient funds. role names the account in the error.
+func requireFunded(ctx context.Context, client *cosmos.Client, role, addr, denom string) error {
+	bal, err := client.Balance(ctx, addr, denom)
+	if err != nil {
+		return err
+	}
+	if bal.Sign() <= 0 {
+		return fmt.Errorf("cosmos %s %s holds no %s (genesis funding missing?)", role, addr, denom)
+	}
+	return nil
 }
 
 // deployEVMChain dials one EVM chain and atomically creates all fixtures plus the faucet's initial MockIFT

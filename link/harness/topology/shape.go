@@ -25,11 +25,18 @@ const (
 // a constructor only once more than one call site needs it.
 type Shape struct {
 	name string
-	// families is each slot's chain family, in ChainA, ChainB order.
+	// families is each slot's chain family (wire.ChainTypeEVM/ChainTypeCosmos), in ChainA, ChainB order.
 	families [2]string
 }
 
 // TwoEVM is ChainA(EVM) <-> ChainB(EVM): two directed evmToEvmAttested routes.
 func TwoEVM() Shape {
 	return Shape{name: "two-evm", families: [2]string{wire.ChainTypeEVM, wire.ChainTypeEVM}}
+}
+
+// EVMCosmos is ChainA(EVM) <-> ChainB(Cosmos): an evmToCosmosAttested route a->b and a
+// cosmosToEvmAttested route b->a — the chain-family seam, both directions, through the same
+// two-chain/two-route arrangement as TwoEVM.
+func EVMCosmos() Shape {
+	return Shape{name: "evm-cosmos", families: [2]string{wire.ChainTypeEVM, wire.ChainTypeCosmos}}
 }

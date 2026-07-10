@@ -73,6 +73,32 @@ func TestLookupReceivedCachesOnlyPendingKeys(t *testing.T) {
 	}
 }
 
+func TestLookupReceivedCursorsAreAppScoped(t *testing.T) {
+	addr := common.HexToAddress("0x1234")
+	ift := receivedKey{destination: "dst", appType: wire.AppTypeIFT, seq: 11}
+	gmp := receivedKey{destination: "dst", appType: wire.AppTypeGMP, seq: 12}
+	r := &relayer{
+		recvCursor: map[string]uint64{},
+		recvSeen:   map[receivedKey]onchain.ReceivedResult{},
+		recvActive: map[receivedKey]struct{}{ift: {}, gmp: {}},
+	}
+
+	for _, key := range []receivedKey{ift, gmp} {
+		if _, _, err := r.lookupReceived(t.Context(), key, addr,
+			func(_ context.Context, from uint64) (map[uint64]onchain.ReceivedResult, uint64, error) {
+				if from != 0 {
+					t.Fatalf("%s scan started at %d after another app advanced the shared fixture", key.appType, from)
+				}
+				return nil, 20, nil
+			}); err != nil {
+			t.Fatalf("lookup %s: %v", key.appType, err)
+		}
+	}
+	if len(r.recvCursor) != 2 {
+		t.Fatalf("receive cursors = %v, want one per app", r.recvCursor)
+	}
+}
+
 func TestFinishTerminalEvictsOnlyAfterPersistence(t *testing.T) {
 	key := receivedKey{destination: "dst", appType: wire.AppTypeGMP, seq: 9}
 	r := &relayer{

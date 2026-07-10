@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/harness/chain"
+	"github.com/cosmos/ibc/link/harness/chain/cosmos"
 	"github.com/cosmos/ibc/link/harness/chain/evm"
 	"github.com/cosmos/ibc/link/harness/diag"
 	"github.com/cosmos/ibc/link/harness/ibclink"
@@ -19,6 +20,7 @@ import (
 	"github.com/cosmos/ibc/link/harness/onchain"
 	"github.com/cosmos/ibc/link/harness/topology"
 
+	cosmosreader "github.com/cosmos/ibc/link/harness/chain/cosmos/reader"
 	evmreader "github.com/cosmos/ibc/link/harness/chain/evm/reader"
 	evmsubmit "github.com/cosmos/ibc/link/harness/chain/evm/submit"
 )
@@ -127,6 +129,12 @@ func (h *Harness) buildReaders(dep *wire.Deployment) (map[string]onchain.Reader,
 				return nil, fmt.Errorf("harness: chain %q reports EVM family but exposes no EVM client", id)
 			}
 			out[id] = evmreader.New(ec, id, cd, budget)
+		case chain.FamilyCosmos:
+			cc, ok := cosmos.FromChain(p.Chain)
+			if !ok {
+				return nil, fmt.Errorf("harness: chain %q reports cosmos family but exposes no cosmos client", id)
+			}
+			out[id] = cosmosreader.New(cc, id, cd, budget)
 		default:
 			return nil, fmt.Errorf("harness: chain %q family %q has no on-chain reader", id, p.Chain.Family())
 		}
@@ -157,6 +165,16 @@ func (h *Harness) buildSubmitters(dep *wire.Deployment) (map[string]chain.AppSub
 				return nil, fmt.Errorf("harness: chain %q reports EVM family but exposes no EVM client", id)
 			}
 			s, err := evmsubmit.New(ec, cd)
+			if err != nil {
+				return nil, err
+			}
+			out[id] = s
+		case chain.FamilyCosmos:
+			cc, ok := cosmos.FromChain(p.Chain)
+			if !ok {
+				return nil, fmt.Errorf("harness: chain %q reports cosmos family but exposes no cosmos client", id)
+			}
+			s, err := cosmos.NewSubmitter(cc, cd, h.readerBudget(id))
 			if err != nil {
 				return nil, err
 			}

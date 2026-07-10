@@ -7,9 +7,10 @@ binary (`../cmd/ibc`) does not implement yet.
 - Run everything from `link/`: `make test-e2e` for the smoke suite,
   `make test-e2e E2E_PKGS=./negative` for negative cases, or
   `make test-e2e E2E_PKGS=./ibclink E2E_FLAGS='-run TestIFTTransfer -count=1'` for one loop.
-  Lanes: `E2E_LANE=anvil|anvil-interval|besu`.
+  Lanes: `E2E_LANE=anvil|anvil-interval|besu|sandbox`.
 - Tests assert via the harness surface (`run.IFT(...)`, `out.VerifyComplete`,
-  `out.VerifyPendingStable`), never via `wire` directly.
+  `out.VerifyPendingStable`), never via `wire` directly. The `cosmos` package contains no EVM
+  imports — that separation is the point.
 - **The stub is a swap ledger entry, not a product.** The routing table in
   `../harness/ibclink/runner.go` says which commands the real binary already serves. When real
   functionality lands in `../cmd/ibc` / `../internal`, flip the entry, delete the stub piece it

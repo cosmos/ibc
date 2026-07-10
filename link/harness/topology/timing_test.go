@@ -11,6 +11,7 @@ func TestDefaultTimingPerLauncher(t *testing.T) {
 	require.Equal(t, instantTiming(), DefaultTiming(LauncherAnvil))
 	require.Equal(t, instantTiming(), DefaultTiming(""), "unknown/external launchers default to instant")
 	require.Equal(t, blockTiming(besuQBFTBlockPeriod), DefaultTiming(LauncherBesu))
+	require.Equal(t, blockTiming(sandboxBlockPeriod), DefaultTiming(LauncherSandbox))
 }
 
 func TestResolvedTimingZeroTakesLauncherDefault(t *testing.T) {

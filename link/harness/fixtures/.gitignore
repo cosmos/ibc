@@ -3,3 +3,4 @@
 # runtime (decision D6). Everything below is reproducible from `make fixtures`.
 /cache/
 /out/build-info/
+/out/MockIFTAdapter.t.sol/

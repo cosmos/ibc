@@ -56,7 +56,8 @@ type Reader interface {
 	// reader rather than as a package-level helper in the harness's family-agnostic gmp.go.
 	GMPDefaultPayload() []byte
 
-	// CanonicalAddr validates s as a family-native address string and returns its canonical form. It is how the harness
+	// CanonicalAddr validates s as a family-native address string and returns its canonical form (EVM:
+	// EIP-55 checksummed hex; cosmos: validated bech32, re-encoded). It is how the family-agnostic harness
 	// surface compares two address strings for equality — canonical forms compare byte-for-byte — without
 	// carrying a family switch of its own. A malformed address is an error, never a silent coercion.
 	CanonicalAddr(s string) (string, error)

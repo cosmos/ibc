@@ -16,36 +16,72 @@ type ConfigYAML struct {
 // Chain is one chain entry. Chains carry only chain-level connectivity; routes reference them by id.
 type Chain struct {
 	ID       string `yaml:"id"`                // logical id, e.g. "chain-a"
-	Type     string `yaml:"type"`              // chain family: "evm"
+	Type     string `yaml:"type"`              // chain family: "evm" (or "cosmos"/"solana")
 	Provider string `yaml:"provider"`          // mirrors the eng-doc chains.provider field (e.g. "anvil")
 	ChainID  uint64 `yaml:"chainId,omitempty"` // EVM numeric chain id
 	// EVMSignerKey is the hex secp256k1 key the relayer signs this EVM chain's destination-side effects
-	// (and source-side refunds) with. The harness genesis-funds it on managed Besu chains; Anvil
-	// pre-funds it as a dev account. Test-only, carried in the clear.
+	// (and source-side refunds) with — the EVM analog of the cosmos SignerKey below. It is EVM-only
+	// (omitted for cosmos chains) and the account the harness genesis-funds on managed besu/sandbox chains
+	// (anvil pre-funds it as a dev account). Test-only, carried in the clear like SignerKey.
 	EVMSignerKey string `yaml:"evmSignerKey,omitempty"`
-	RPC          RPC    `yaml:"rpc"`
+	// Cosmos-family fields, populated only when Type == "cosmos" (omitted for EVM chains). A cosmos
+	// chain's RPC.URL carries the CometBFT RPC; these carry the rest of its per-chain connectivity and the
+	// relayer's signing credential for it.
+	CosmosChainID string `yaml:"cosmosChainId,omitempty"` // CometBFT chain-id string, distinct from the EVM numeric ChainID
+	GRPCURL       string `yaml:"grpcUrl,omitempty"`       // Cosmos gRPC dial target (host:port), alongside the CometBFT RPC in RPC.URL
+	SignerKey     string `yaml:"signerKey,omitempty"`     // hex secp256k1 relayer/admin signing key for this chain (test-only, in the clear)
+	// FaucetKey is the hex secp256k1 key of the cosmos user whose native IFT tokens are burned on transfer.
+	// It is cosmos-only and distinct from the relayer/admin SignerKey. Test-only, in the clear like SignerKey.
+	FaucetKey string `yaml:"faucetKey,omitempty"`
+	RPC       RPC    `yaml:"rpc"`
 }
 
 const (
 	// ChainTypeEVM is the config token for EVM-family chains.
 	ChainTypeEVM = "evm"
+	// ChainTypeCosmos is a real Cosmos SDK chain family: the same sandboxd node driven through its cosmos
+	// surfaces (CometBFT RPC + bank module + bech32 accounts), not its cosmos/evm JSON-RPC. It is a genuine
+	// second-family target (distinct address form, distinct signing, distinct delivery). Native IFT and GMP
+	// both run over IBC v2/ICS-27; the GMP test target is represented by a bank balance.
+	ChainTypeCosmos = "cosmos"
+
 	// ProviderAnvil is the config token for a managed Anvil EVM chain.
 	ProviderAnvil = "anvil"
 	// ProviderBesu is the config token for a managed Besu EVM chain.
 	ProviderBesu = "besu"
+	// ProviderSandbox is a managed sandboxd node (a real Cosmos SDK + cosmos/evm chain). It is EVM-family
+	// (it speaks eth JSON-RPC), so it is an accepted provider for an "evm" chain alongside anvil and besu.
+	ProviderSandbox = "sandbox"
 
 	// RouteEVMToEVMAttested is an EVM-source -> EVM-destination attested route.
 	RouteEVMToEVMAttested = "evmToEvmAttested"
+	// RouteEVMToCosmosAttested is an evm-source -> cosmos-destination route: the EVM source burns/sends via
+	// MockIFT/MockGMP, and the cosmos destination receives through native ICS-27-GMP (IFT: MsgIFTMint; GMP:
+	// the counter-as-balance executor). IFT and GMP are both in scope; user-requested IFT timeout/refund is
+	// EVM-to-EVM only (GMP has no timeout leg anywhere).
+	RouteEVMToCosmosAttested = "evmToCosmosAttested"
+	// RouteCosmosToEVMAttested is a cosmos-source -> evm-destination route. The cosmos source
+	// burns/sends via native IFT over ICS-27-GMP, and the EVM destination executes the canonical IFT mint
+	// payload through the mock GMP adapter. It is the first non-EVM source family. IFT and GMP are both in
+	// scope; user-requested IFT timeout/refund is EVM-to-EVM only, and GMP has no timeout leg.
+	RouteCosmosToEVMAttested = "cosmosToEvmAttested"
 )
 
 // RouteTypeFor derives the route type a source->destination chain-type pair requires — the single
 // source keeping route types and chain families correlated: harness topology construction and
 // validation bind through it, and the SUT's config validation checks declared types against it.
+// ok is false for a pair no route type relays (cosmos->cosmos).
 func RouteTypeFor(srcType, dstType string) (routeType string, ok bool) {
-	if srcType == ChainTypeEVM && dstType == ChainTypeEVM {
+	switch {
+	case srcType == ChainTypeEVM && dstType == ChainTypeEVM:
 		return RouteEVMToEVMAttested, true
+	case srcType == ChainTypeEVM && dstType == ChainTypeCosmos:
+		return RouteEVMToCosmosAttested, true
+	case srcType == ChainTypeCosmos && dstType == ChainTypeEVM:
+		return RouteCosmosToEVMAttested, true
+	default:
+		return "", false
 	}
-	return "", false
 }
 
 // RPC is a chain's RPC endpoint. The URL is a plain string so the on-disk contract can carry an

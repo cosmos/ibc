@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"github.com/cosmos/ibc/link/e2e/stub/internal/cosmos"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
 	"github.com/cosmos/ibc/link/harness/fixturekeys"
@@ -16,6 +17,9 @@ import (
 )
 
 // discoverSources scans every configured source chain and inserts newly observed packets.
+//
+// Cosmos scans currently re-page matching history; idempotent inserts make restart and overlap safe.
+//
 // Startup guarantees a deployment entry and a live connection for every configured chain, and deploy
 // emits every fixture or fails wholesale — so a miss below is a broken invariant (config/DB skew) and
 // returns loudly rather than leaving the relayer silently idle.
@@ -27,8 +31,15 @@ func (r *relayer) discoverSources(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("discover source %s: no deployment for chain", ch.ID))
 			continue
 		}
-		if err := r.discoverEVMSource(ctx, ch.ID, dep); err != nil {
-			errs = append(errs, fmt.Errorf("discover evm source %s: %w", ch.ID, err))
+		switch ch.Type {
+		case wire.ChainTypeCosmos:
+			if err := r.discoverCosmosSource(ctx, ch.ID, dep); err != nil {
+				errs = append(errs, fmt.Errorf("discover cosmos source %s: %w", ch.ID, err))
+			}
+		default:
+			if err := r.discoverEVMSource(ctx, ch.ID, dep); err != nil {
+				errs = append(errs, fmt.Errorf("discover evm source %s: %w", ch.ID, err))
+			}
 		}
 	}
 	return errors.Join(errs...)
@@ -36,12 +47,16 @@ func (r *relayer) discoverSources(ctx context.Context) error {
 
 // discoverSourceTx resolves packets from one committed transaction without touching periodic scan cursors.
 func (r *relayer) discoverSourceTx(ctx context.Context, chainID, txHash string) error {
-	if _, ok := r.cfg.Chain(chainID); !ok {
+	chain, ok := r.cfg.Chain(chainID)
+	if !ok {
 		return fmt.Errorf("unknown source chain %q", chainID)
 	}
 	dep, ok := r.dep.Chain(chainID)
 	if !ok {
 		return fmt.Errorf("discover source %s: no deployment for chain", chainID)
+	}
+	if chain.Type == wire.ChainTypeCosmos {
+		return r.discoverCosmosSourceTx(ctx, chainID, txHash, dep)
 	}
 	return r.discoverEVMSourceTx(ctx, chainID, txHash, dep)
 }
@@ -97,6 +112,48 @@ func (r *relayer) discoverEVMSourceTx(
 	return nil
 }
 
+func (r *relayer) discoverCosmosSourceTx(
+	ctx context.Context,
+	chainID string,
+	txHash string,
+	dep wire.ChainDeployment,
+) error {
+	client, ok := r.cosmos[chainID]
+	if !ok {
+		return fmt.Errorf("chain %s is not connected", chainID)
+	}
+	route, hasGMPRoute := r.cosmosSourceGMPRoute(chainID)
+	var sourceClient string
+	if hasGMPRoute {
+		var err error
+		sourceClient, err = dep.Fixture(fixturekeys.AttestationsClient)
+		if err != nil {
+			return err
+		}
+	}
+	denom, err := dep.Fixture(fixturekeys.IFTDenom)
+	if err != nil {
+		return err
+	}
+	ifts, gmps, err := client.DiscoverSentTx(ctx, txHash, sourceClient, denom)
+	if err != nil {
+		return err
+	}
+	for _, event := range ifts {
+		if err := r.insertCosmosIFT(ctx, route, event); err != nil {
+			return err
+		}
+	}
+	if hasGMPRoute {
+		for _, event := range gmps {
+			if err := r.insertCosmosGMP(ctx, route, event); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // discoverEVMSource scans a chain's MockIFT/MockGMP fixtures for IFTSent/GMPSent from a per-fixture cursor
 // (mirroring the destination-side recvCursor scan) and inserts a pending row for each event whose routeId
 // names a configured route sourced here. The source fixture is shared across every route that leaves this
@@ -145,6 +202,45 @@ func (r *relayer) discoverEVMSource(ctx context.Context, chainID string, dep wir
 	return nil
 }
 
+// discoverCosmosSource discovers native IFT and GMP packets from their canonical module events.
+func (r *relayer) discoverCosmosSource(ctx context.Context, chainID string, dep wire.ChainDeployment) error {
+	cc, ok := r.cosmos[chainID]
+	if !ok {
+		return fmt.Errorf("chain %s is not connected", chainID)
+	}
+	route, ok := r.cosmosSourceGMPRoute(chainID)
+	if !ok {
+		return nil
+	}
+	sourceClient, err := dep.Fixture(fixturekeys.AttestationsClient)
+	if err != nil {
+		return err
+	}
+	denom, err := dep.Fixture(fixturekeys.IFTDenom)
+	if err != nil {
+		return err
+	}
+	discovered, err := cc.DiscoverIFTSent(ctx, sourceClient, denom)
+	if err != nil {
+		return err
+	}
+	for _, d := range discovered {
+		if insertErr := r.insertCosmosIFT(ctx, route, d); insertErr != nil {
+			return insertErr
+		}
+	}
+	discoveredGMP, err := cc.DiscoverGMPSent(ctx, sourceClient)
+	if err != nil {
+		return err
+	}
+	for _, d := range discoveredGMP {
+		if insertErr := r.insertCosmosGMP(ctx, route, d); insertErr != nil {
+			return insertErr
+		}
+	}
+	return nil
+}
+
 func (r *relayer) insertEVMIFT(ctx context.Context, chainID string, event onchain.IFTSent) error {
 	route, ok := r.routeByID(event.RouteID)
 	if !ok || route.Source != chainID {
@@ -178,10 +274,50 @@ func (r *relayer) insertEVMGMP(ctx context.Context, chainID string, event onchai
 	})
 }
 
+func (r *relayer) insertCosmosIFT(ctx context.Context, route wire.Route, event cosmos.DiscoveredIFT) error {
+	if event.ClientID == "" {
+		return nil
+	}
+	return r.store.InsertPending(ctx, store.Packet{
+		PacketID:     wire.PacketID(route.ID, wire.AppTypeIFT, event.Seq),
+		RouteID:      route.ID,
+		AppType:      wire.AppTypeIFT,
+		Sequence:     event.Seq,
+		SourceTxHash: event.TxHash,
+		Receiver:     event.Receiver,
+		Amount:       event.Amount.String(),
+		Target:       event.Target,
+		Payload:      hexutil.Encode(event.Payload),
+	})
+}
+
+func (r *relayer) insertCosmosGMP(ctx context.Context, route wire.Route, event cosmos.DiscoveredGMP) error {
+	return r.store.InsertPending(ctx, store.Packet{
+		PacketID:     wire.PacketID(route.ID, wire.AppTypeGMP, event.Seq),
+		RouteID:      route.ID,
+		AppType:      wire.AppTypeGMP,
+		Sequence:     event.Seq,
+		SourceTxHash: event.TxHash,
+		Target:       event.Target,
+		Payload:      hexutil.Encode(event.Payload),
+	})
+}
+
 // cursorKey keys every per-fixture block-scan cursor (sent and received) by (chain id, fixture
 // address). The chain id is required because deterministic CREATE addresses make every chain's
 // MockIFT/MockGMP share one address — an address-only key would let one chain's cursor skip past
 // another chain's blocks.
 func cursorKey(chainID string, addr common.Address) string {
 	return chainID + "|" + addr.Hex()
+}
+
+// cosmosSourceGMPRoute returns the cosmosToEvm route sourced at chainID (the one whose source client the GMP
+// send_packet scan reads). config validate rejects a second such route per source, so first-match is exact.
+func (r *relayer) cosmosSourceGMPRoute(chainID string) (wire.Route, bool) {
+	for _, route := range r.cfg.Relayer.Routes {
+		if route.Source == chainID && route.Type == wire.RouteCosmosToEVMAttested {
+			return route, true
+		}
+	}
+	return wire.Route{}, false
 }

@@ -10,12 +10,13 @@ import (
 
 // Lane binds a Shape to concrete infrastructure: the per-slot provider/launcher assignment, timing
 // profile, and chain ids. One exported Lane exists per E2E_LANE value — the runner picks the lane,
-// the test picks the shape.
+// the test picks the shape. A lane is not a family→provider map: the sandbox lane is deliberately
+// heterogeneous (anvil on one slot, sandboxd on the other), so each lane assigns providers per slot.
 type Lane func(Shape) Topology
 
 // Reserved chain-id ranges. Each lane spaces its EVM chain ids from its own base (+1 per additional
-// EVM slot) so worlds from different lanes never share a chain id. An ad-hoc composed topology must pick
-// its ids outside these ranges — Validate
+// EVM slot) so worlds from different lanes never share a chain id; the sandbox chain's id is fixed
+// by the node itself. An ad-hoc composed topology must pick its ids outside these ranges — Validate
 // only checks uniqueness within one topology, not across coexisting worlds (cross_route_test.go uses
 // 31637–31639; external_test.go pairs anvil's default 31337 with 31347).
 const (
@@ -25,6 +26,17 @@ const (
 	anvilIntervalChainIDBase = 31437
 	// besuChainIDBase is the Besu QBFT lane's base.
 	besuChainIDBase = 32337
+	// sandboxEVMChainID is the managed sandboxd chain's numeric EVM id (the reference localnet's
+	// default). It is deliberately far from the Anvil ids so the sandbox lane's two chains never
+	// collide and the config's per-chain chain-id check is exercised against a genuinely different node.
+	sandboxEVMChainID = 19460
+
+	// sandboxCosmosChainID is the CometBFT chain-id string of a managed cosmos sandbox chain. It is what
+	// the node is `init`ed with AND what the stub signs its SignDoc with, so it is the single source both
+	// derive from (set on the wire.Chain, projected into the ibc link config by Compile, and passed to
+	// the node launcher by provisioning).
+	sandboxCosmosChainID = "sandbox-cosmos-1"
+
 	// anvilIntervalBlockTime is the block cadence of the interval-mining anvil lane. It is the single
 	// source of both the node's --block-time (via the resolved TimingProfile.BlockInterval) and every
 	// wait budget the lane derives (via blockTiming), so the chain mines and the harness waits at one
@@ -62,12 +74,34 @@ func Besu(s Shape) Topology {
 	})
 }
 
-// bindEVMSlots binds every slot of the shape through evmSpec; nth spaces the lane's chain ids.
+// Sandbox is the real-node lane: ChainA stays an instant Anvil and ChainB is a managed sandboxd
+// node (a real Cosmos SDK + cosmos/evm chain), presented as whatever family the shape gives the
+// slot — eth JSON-RPC for an EVM slot, CometBFT RPC + bank + gRPC for a cosmos one. It proves the
+// harness relays across a genuinely different node (real consensus) while the ibc link config still
+// describes ordinary chains; sandboxd is neither a BlockController nor a FaultInjector, so
+// block-control tests skip here.
+func Sandbox(s Shape) Topology {
+	last := sandboxCosmosSpec(ChainB)
+	if s.families[1] == wire.ChainTypeEVM {
+		last = sandboxEVMSpec(ChainB)
+	}
+	return bind(s, "sandbox", []ChainSpec{anvilSpec(ChainA, anvilChainIDBase), last})
+}
+
+// bindEVMSlots binds every slot of the shape for one lane: the nth EVM slot (slot order) through
+// evmSpec — nth spaces the lane's chain ids — and every cosmos slot to managed sandboxd, the only
+// cosmos provider. A cosmos slot's Timing stays zero so it resolves to DefaultTiming(LauncherSandbox).
 func bindEVMSlots(s Shape, lane string, evmSpec func(id string, nth uint64) ChainSpec) Topology {
 	ids := [2]string{ChainA, ChainB}
 	specs := make([]ChainSpec, 0, len(s.families))
-	for i := range s.families {
-		specs = append(specs, evmSpec(ids[i], uint64(i)))
+	nth := uint64(0)
+	for i, family := range s.families {
+		if family == wire.ChainTypeCosmos {
+			specs = append(specs, sandboxCosmosSpec(ids[i]))
+			continue
+		}
+		specs = append(specs, evmSpec(ids[i], nth))
+		nth++
 	}
 	return bind(s, lane, specs)
 }
@@ -77,7 +111,7 @@ func bindEVMSlots(s Shape, lane string, evmSpec func(id string, nth uint64) Chai
 // artifacts and logs stay greppable per cell; derivations append their own suffixes (+manual).
 func bind(s Shape, lane string, specs []ChainSpec) Topology {
 	if s.name == "" {
-		panic("topology: zero Shape — construct one with TwoEVM")
+		panic("topology: zero Shape — construct one with TwoEVM or EVMCosmos")
 	}
 	return Topology{
 		Name:   s.name + "-" + lane,
@@ -125,5 +159,39 @@ func besuSpec(id string, chainID uint64) ChainSpec {
 			EVMSignerKey: testkeys.RelayerPrivateKeyHex,
 		},
 		Provision: Provision{Mode: ProvisionManaged, Launcher: LauncherBesu},
+	}
+}
+
+// sandboxEVMSpec is one managed sandboxd slot presented as EVM (eth JSON-RPC): the ibc link config
+// sees an ordinary EVM chain; only Provision and the node behind it differ.
+func sandboxEVMSpec(id string) ChainSpec {
+	return ChainSpec{
+		Chain: wire.Chain{
+			ID:           id,
+			Type:         wire.ChainTypeEVM,
+			Provider:     wire.ProviderSandbox,
+			ChainID:      sandboxEVMChainID,
+			EVMSignerKey: testkeys.RelayerPrivateKeyHex,
+		},
+		Provision: Provision{Mode: ProvisionManaged, Launcher: LauncherSandbox},
+	}
+}
+
+// sandboxCosmosSpec is one managed sandboxd slot presented as a cosmos chain (CometBFT RPC + bank +
+// bech32 accounts). A cosmos chain carries no numeric EVM ChainID — its identity is the cosmos
+// chain-id string. SignerKey is the relayer/admin signing credential; FaucetKey is the user/faucet
+// account a Cosmos-source transfer burns from; the gRPC URL is left blank and
+// bound at compile from the runtime bindings.
+func sandboxCosmosSpec(id string) ChainSpec {
+	return ChainSpec{
+		Chain: wire.Chain{
+			ID:            id,
+			Type:          wire.ChainTypeCosmos,
+			Provider:      wire.ProviderSandbox,
+			CosmosChainID: sandboxCosmosChainID,
+			SignerKey:     testkeys.CosmosSignerPrivateKeyHex,
+			FaucetKey:     testkeys.CosmosFaucetPrivateKeyHex,
+		},
+		Provision: Provision{Mode: ProvisionManaged, Launcher: LauncherSandbox},
 	}
 }

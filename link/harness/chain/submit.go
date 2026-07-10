@@ -14,8 +14,8 @@ type AppSubmitter interface {
 	SubmitGMP(ctx context.Context, in GMPSubmission) (AppSubmitResult, error)
 }
 
-// IFTSubmission is an IFT escrow request. Receiver is the destination account string carried verbatim
-// into the source action.
+// IFTSubmission is a family-agnostic IFT escrow request. Receiver is the destination-native account
+// string (ICS20 form: an EVM 0x hex or a cosmos1 bech32), carried verbatim into the source action.
 type IFTSubmission struct {
 	RouteID          string
 	Receiver         string

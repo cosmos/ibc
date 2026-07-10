@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/harness"
+	"github.com/cosmos/ibc/link/harness/chain/sandboxd"
 	"github.com/cosmos/ibc/link/harness/topology"
 )
 
@@ -21,12 +22,13 @@ const (
 	laneAnvil         = "anvil"
 	laneAnvilInterval = "anvil-interval"
 	laneBesu          = "besu"
+	laneSandbox       = "sandbox"
 )
 
 var laneFlag = flag.String(
 	"e2e.lane",
 	"",
-	"e2e lane to run: anvil, anvil-interval, or besu; overrides E2E_LANE",
+	"e2e lane to run: anvil, anvil-interval, besu, or sandbox; overrides E2E_LANE",
 )
 
 // SelectedLane resolves the runner's lane choice (E2E_LANE / -e2e.lane, defaulting to instant Anvil)
@@ -39,6 +41,9 @@ func SelectedLane(t testing.TB) topology.Lane {
 	case laneBesu:
 		requireDocker(t)
 		return topology.Besu
+	case laneSandbox:
+		RequireSandboxd(t)
+		return topology.Sandbox
 	case laneAnvilInterval:
 		return topology.AnvilInterval
 	default:
@@ -70,11 +75,11 @@ func selectedLaneName(t testing.TB) string {
 	t.Helper()
 	name := normalizeLaneName(rawLaneName())
 	switch name {
-	case laneAnvil, laneAnvilInterval, laneBesu:
+	case laneAnvil, laneAnvilInterval, laneBesu, laneSandbox:
 		return name
 	default:
 		t.Fatalf(
-			"unknown e2e lane %q; set %s or -e2e.lane to anvil, anvil-interval, or besu",
+			"unknown e2e lane %q; set %s or -e2e.lane to anvil, anvil-interval, besu, or sandbox",
 			rawLaneName(),
 			laneEnv,
 		)
@@ -104,6 +109,21 @@ func requireDocker(t testing.TB) {
 	}
 	if err := exec.Command("docker", "info").Run(); err != nil {
 		t.Fatalf("docker is not running or not reachable for the besu e2e lane: %v", err)
+	}
+}
+
+// RequireSandboxd fatals when the sandboxd binary is missing — the sandbox analog of requireDocker. The
+// binary is a large, separately-built dependency (not committed), so a truthful "run `make bin/sandboxd`"
+// message beats a cryptic launch failure deep in harness.Start. It is exported so a test whose topology
+// pins a managed sandboxd chain (e.g. the evm->cosmos IFT test, which runs in the anvil lane but needs
+// the sandboxd node for its cosmos slot) can guard on the binary directly. The smoke suite's make
+// target builds sandboxd as a prerequisite (like build-stub), so this is a defensive guard for a
+// direct `go test`, not the normal path.
+func RequireSandboxd(t testing.TB) {
+	t.Helper()
+	bin := sandboxd.ResolvedBin()
+	if info, err := os.Stat(bin); err != nil || info.IsDir() {
+		t.Fatalf("sandboxd binary not found at %s: run `make bin/sandboxd` (or set SANDBOXD_BIN)", bin)
 	}
 }
 

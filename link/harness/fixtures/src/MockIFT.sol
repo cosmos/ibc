@@ -23,6 +23,9 @@ contract MockIFT {
     uint256 public totalSupply;
     /// @notice Monotonic transfer sequence; first sendTransfer is 1.
     uint256 public seq;
+    /// @notice Transitional ICS27-GMP executor allowed to call iftMint.
+    address private immutable gmpExecutor;
+
     /// @notice Per-sequence source-side escrow recorded by sendTransfer, settled by refund.
     struct Escrow {
         address sender; // who to refund
@@ -36,10 +39,16 @@ contract MockIFT {
     // routeId is the mock stand-in for IBC v2's source client id (which maps 1:1 to a relayer route);
     // real IFT carries no route in the packet, but the relayer discovers a mock packet by scanning this
     // event and must recover which route emitted it. receiver is a string (matching ICS20 packet data),
-    // so the event carries its destination in the ICS20-shaped string form.
+    // so a source escrow can name a non-EVM destination account with no address placeholder.
     event IFTSent(uint256 seq, string routeId, string receiver, uint256 amount, uint256 timeoutTimestamp);
     event IFTReceived(uint256 seq, address receiver, uint256 amount);
+    event IFTMintReceived(string clientId, address indexed receiver, uint256 amount);
     event IFTRefunded(uint256 seq, address sender, uint256 amount);
+
+    constructor(address executor) {
+        require(executor != address(0), "zero GMP executor");
+        gmpExecutor = executor;
+    }
 
     /// @notice Test-setup helper: mint freely. No access control — this is a test-only fixture.
     function mint(address to, uint256 amount) external {
@@ -49,8 +58,9 @@ contract MockIFT {
 
     /// @notice Source side: escrow `amount` from the caller against sequence s and emit IFTSent for the
     /// relayer to discover. routeId names the emitting route (the mock stand-in for the source client id);
-    /// receiver is the ICS20-shaped destination account string. The escrow keys on the caller/sequence,
-    /// never the receiver. timeoutTimestamp (0 = none) is the deadline
+    /// receiver is the ICS20-shaped destination account string (an EVM 0x hex or a cosmos1 bech32). The
+    /// escrow keys on the caller/sequence, never the receiver, so a non-EVM receiver string is carried
+    /// verbatim in the event without affecting the debit. timeoutTimestamp (0 = none) is the deadline
     /// after which refund(s) releases the escrow.
     function sendTransfer(string calldata routeId, string calldata receiver, uint256 amount, uint256 timeoutTimestamp)
         external
@@ -66,11 +76,25 @@ contract MockIFT {
     }
 
     /// @notice Destination side: mint `amount` to `receiver` and emit IFTReceived. `s` is the source
-    /// sequence being completed (lets the harness correlate send→receive).
+    /// sequence being completed (lets the harness correlate send→receive). This legacy path is used only
+    /// for mock EVM-source routes; Cosmos destinations mint through their native IFT module.
     function receiveTransfer(uint256 s, address receiver, uint256 amount) external {
         balanceOf[receiver] += amount;
         totalSupply += amount; // mint on the destination side
         emit IFTReceived(s, receiver, amount);
+    }
+
+    /// @notice Destination side for native IFT packets. The calldata and event match IIFT.iftMint;
+    /// packet identity remains the enclosing GMPReceived event emitted by the configured executor.
+    function iftMint(address receiver, uint256 amount) external {
+        require(msg.sender == gmpExecutor, "unauthorized GMP executor");
+        (bool ok, bytes memory result) = msg.sender.staticcall(abi.encodeWithSignature("deliveryClientId()"));
+        require(ok, "invalid GMP context");
+        string memory clientId = abi.decode(result, (string));
+        require(bytes(clientId).length != 0, "missing GMP context");
+        balanceOf[receiver] += amount;
+        totalSupply += amount;
+        emit IFTMintReceived(clientId, receiver, amount);
     }
 
     /// @notice Source side: release the escrow for sequence s back to its original sender after the relayer

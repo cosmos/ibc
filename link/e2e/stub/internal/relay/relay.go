@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/cosmos/ibc/link/e2e/stub/internal/cfg"
+	"github.com/cosmos/ibc/link/e2e/stub/internal/cosmos"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/exitcode"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/jsonout"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
@@ -100,11 +101,12 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 		return exitcode.New(wire.ExitInternal, err)
 	}
 
-	conns, err := dialChains(ctx, c, stderr)
+	conns, cosmosConns, err := dialChains(ctx, c, stderr)
 	if err != nil {
 		return err // already an *exitcode.Error with the right class
 	}
 	defer closeConns(conns)
+	defer closeCosmosConns(cosmosConns)
 
 	// The relayer state is built before the HTTP server so the /relay handler can trigger an on-demand
 	// source discovery of the named tx (a manual relay must not depend on a periodic tick having run).
@@ -112,6 +114,7 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 		cfg:        c,
 		dep:        dep,
 		conns:      conns,
+		cosmos:     cosmosConns,
 		store:      st,
 		log:        stderr,
 		recvCursor: map[string]uint64{},
@@ -133,9 +136,11 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 		}
 	}()
 
-	connectedIDs := make([]string, 0, len(conns))
+	connectedIDs := make([]string, 0, len(conns)+len(cosmosConns))
 	for _, ch := range c.Chains { // config order, for deterministic output
 		if _, ok := conns[ch.ID]; ok {
+			connectedIDs = append(connectedIDs, ch.ID)
+		} else if _, ok := cosmosConns[ch.ID]; ok {
 			connectedIDs = append(connectedIDs, ch.ID)
 		}
 	}
@@ -179,56 +184,88 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 	return nil // SIGTERM -> exit 0
 }
 
-// dialChains connects to every configured EVM chain and probes its chain id. Chains are connected
-// CONCURRENTLY (each bounded by its own
+// dialChains connects to every configured chain, dispatching on family: an EVM chain is dialed and its
+// chain id probed (a liveness check + the value signing needs); a cosmos chain is "connected" once its
+// CometBFT /status answers. Chains are connected CONCURRENTLY (each bounded by its own
 // startupDialTimeout), so total startup is ~one dial budget regardless of chain count — keeping it well
 // inside the harness's fixed readiness wait. A failure to reach any chain means the daemon can't become
 // ready, so it returns an ExitRPCUnreachable error with the offending endpoint redacted (the first failure
-// wins; errgroup cancels the rest). It returns connections keyed by chain id.
+// wins; errgroup cancels the rest). It returns the EVM and cosmos conns separately, keyed by chain id.
 func dialChains(
 	ctx context.Context,
 	c *wire.ConfigYAML,
 	stderr io.Writer,
-) (map[string]*chainConn, error) {
+) (map[string]*chainConn, map[string]*cosmos.Client, error) {
 	var (
-		mu    sync.Mutex
-		conns = make(map[string]*chainConn, len(c.Chains))
+		mu          sync.Mutex
+		conns       = make(map[string]*chainConn, len(c.Chains))
+		cosmosConns = make(map[string]*cosmos.Client, len(c.Chains))
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	for _, ch := range c.Chains {
 		g.Go(func() error {
 			dialCtx, cancel := context.WithTimeout(gctx, startupDialTimeout)
 			defer cancel()
-			// The relayer signs this EVM chain's effects from its config-declared EVMSignerKey; a
-			// missing/invalid key is a config fault (the daemon could never deliver), not an unreachable RPC.
-			signerKey, keyErr := onchain.ParseKey(ch.EVMSignerKey)
-			if keyErr != nil {
-				return exitcode.New(wire.ExitConfigInvalid, fmt.Errorf("chain %s: %w", ch.ID, keyErr))
+			switch ch.Type {
+			case wire.ChainTypeCosmos:
+				// A cosmos chain is "connected" once its CometBFT /status answers (the cosmos analog of an
+				// eth chain-id probe). The client derives its escrow signer from the config's signer key.
+				client, err := cosmos.Connect(dialCtx, ch.RPC.URL, ch.GRPCURL, ch.CosmosChainID, ch.SignerKey)
+				if err != nil {
+					return exitcode.New(
+						wire.ExitRPCUnreachable,
+						fmt.Errorf("connect chain %s: %s", ch.ID, rpcsafe.RedactURLs(err.Error())),
+					)
+				}
+				mu.Lock()
+				cosmosConns[ch.ID] = client
+				mu.Unlock()
+				_, _ = fmt.Fprintf(stderr, "ibc relayer: connected cosmos chain %s (%s)\n", ch.ID, ch.CosmosChainID)
+				return nil
+			default:
+				// The relayer signs this EVM chain's effects from its config-declared EVMSignerKey; a
+				// missing/invalid key is a config fault (the daemon could never deliver), not an unreachable RPC.
+				signerKey, keyErr := onchain.ParseKey(ch.EVMSignerKey)
+				if keyErr != nil {
+					return exitcode.New(
+						wire.ExitConfigInvalid,
+						fmt.Errorf("chain %s: %w", ch.ID, keyErr),
+					)
+				}
+				conn, err := onchain.Connect(dialCtx, ch.RPC.URL)
+				if err != nil {
+					return exitcode.New(
+						wire.ExitRPCUnreachable,
+						fmt.Errorf("connect chain %s: %s", ch.ID, rpcsafe.RedactURLs(err.Error())),
+					)
+				}
+				mu.Lock()
+				conns[ch.ID] = &chainConn{id: ch.ID, client: conn.Client, chainID: conn.ChainID, signerKey: signerKey}
+				mu.Unlock()
+				_, _ = fmt.Fprintf(stderr, "ibc relayer: connected chain %s (id %s)\n", ch.ID, conn.ChainID)
+				return nil
 			}
-			conn, err := onchain.Connect(dialCtx, ch.RPC.URL)
-			if err != nil {
-				return exitcode.New(
-					wire.ExitRPCUnreachable,
-					fmt.Errorf("connect chain %s: %s", ch.ID, rpcsafe.RedactURLs(err.Error())),
-				)
-			}
-			mu.Lock()
-			conns[ch.ID] = &chainConn{id: ch.ID, client: conn.Client, chainID: conn.ChainID, signerKey: signerKey}
-			mu.Unlock()
-			_, _ = fmt.Fprintf(stderr, "ibc relayer: connected chain %s (id %s)\n", ch.ID, conn.ChainID)
-			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
 		// g.Wait joined all goroutines, so both maps are safe to range without the lock.
 		closeConns(conns)
-		return nil, err
+		closeCosmosConns(cosmosConns)
+		return nil, nil, err
 	}
-	return conns, nil
+	return conns, cosmosConns, nil
 }
 
 func closeConns(conns map[string]*chainConn) {
 	for _, c := range conns {
 		c.client.Close()
+	}
+}
+
+// closeCosmosConns releases each cosmos chain's gRPC conn (the daemon holds one per cosmos chain for its
+// lifetime; the CometBFT RPC client needs no close). Symmetric with closeConns for the EVM conns.
+func closeCosmosConns(conns map[string]*cosmos.Client) {
+	for _, c := range conns {
+		_ = c.Close()
 	}
 }

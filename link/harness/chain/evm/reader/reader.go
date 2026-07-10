@@ -1,6 +1,6 @@
 // Package reader is the EVM family's onchain.Reader: fixture-log scanning, event ABI decode, and
 // bound-contract reads over one EVM chain's client. It lives beside — not inside — the evm client core so
-// the provider subpackages (anvil, besu, external) that import evm for client/account primitives
+// the provider subpackages (anvil, besu, external, sandbox) that import evm for client/account primitives
 // never pull the reader's fixture and ibc link wire machinery into a node launcher.
 package reader
 
@@ -42,20 +42,90 @@ func New(c *evm.EVMClient, chainID string, dep wire.ChainDeployment, budget onch
 // Budget returns the timing this reader was built with (see Reader.Budget).
 func (r *evmReader) Budget() onchain.Budget { return r.budget }
 
-// AwaitIFTReceived waits for the MockIFT destination mint carrying the route-scoped sequence for
-// (routeID, seq) — the value the relayer minted under, so two routes to one receiver do not cross-match.
+// AwaitIFTReceived correlates the real-shaped IFTMintReceived effect with the enclosing, route-scoped
+// GMPReceived packet identity. The mint event carries the destination deployment's local client ID.
 func (r *evmReader) AwaitIFTReceived(ctx context.Context, routeID string, seq uint64) (onchain.IFTReceived, error) {
-	addr, err := r.fixtureAddr(fixturekeys.MockIFT)
+	if r.dep.ClientID == "" {
+		return onchain.IFTReceived{}, fmt.Errorf("onchain: chain %s deployment has no IBC client id", r.chainID)
+	}
+	iftAddr, err := r.fixtureAddr(fixturekeys.MockIFT)
 	if err != nil {
 		return onchain.IFTReceived{}, err
 	}
+	gmpAddr, err := r.fixtureAddr(fixturekeys.MockGMP)
+	if err != nil {
+		return onchain.IFTReceived{}, err
+	}
+	gmpQuery := ethereum.FilterQuery{
+		FromBlock: big.NewInt(0),
+		Addresses: []common.Address{gmpAddr},
+		Topics:    [][]common.Hash{{mockGMPABI.Events[eventGMPReceived].ID}},
+	}
+	mintQuery := ethereum.FilterQuery{
+		FromBlock: big.NewInt(0),
+		Addresses: []common.Address{iftAddr},
+		Topics:    [][]common.Hash{{mockIFTABI.Events[eventIFTMintReceived].ID}},
+	}
+	legacyQuery := ethereum.FilterQuery{
+		FromBlock: big.NewInt(0),
+		Addresses: []common.Address{iftAddr},
+		Topics:    [][]common.Hash{{mockIFTABI.Events[eventIFTReceived].ID}},
+	}
+	destinationClientID := r.dep.ClientID
 	scoped := fixturekeys.RouteScopedSeq(routeID, seq)
-	ev, err := waitForReceived(ctx, r.client, r.budget, addr, mockIFTABI.Events[eventIFTReceived].ID, scoped,
-		decodeIFTReceived, func(e iftReceivedLog) uint64 { return e.Seq.Uint64() })
-	if err != nil {
-		return onchain.IFTReceived{}, err
-	}
-	return onchain.IFTReceived{Receiver: ev.Receiver.Hex(), Amount: ev.Amount}, nil
+	desc := fmt.Sprintf("IFT mint for client %s, GMP event(seq=%d) on %s", destinationClientID, seq, gmpAddr.Hex())
+	return onchain.Await(ctx, r.budget.Completion, r.budget.Poll, desc,
+		func(ctx context.Context) (onchain.IFTReceived, bool, error) {
+			gmpLogs, err := r.client.Logs(ctx, gmpQuery)
+			if err != nil {
+				return onchain.IFTReceived{}, false, err
+			}
+			mintLogs, err := r.client.Logs(ctx, mintQuery)
+			if err != nil {
+				return onchain.IFTReceived{}, false, err
+			}
+			mints := make(map[common.Hash]iftMintReceivedLog, len(mintLogs))
+			for _, lg := range mintLogs {
+				ev, derr := decodeIFTMintReceived(lg)
+				if derr != nil {
+					return onchain.IFTReceived{}, true, derr
+				}
+				mints[lg.TxHash] = ev
+			}
+			for _, lg := range gmpLogs {
+				gmp, derr := decodeGMPReceived(lg.Data)
+				if derr != nil {
+					return onchain.IFTReceived{}, true, derr
+				}
+				if gmp.Seq.Uint64() != scoped || gmp.Target != iftAddr || !gmp.Success {
+					continue
+				}
+				mint, ok := mints[lg.TxHash]
+				if !ok {
+					return onchain.IFTReceived{}, true, fmt.Errorf(
+						"GMP delivery %s emitted no IFTMintReceived", lg.TxHash.Hex())
+				}
+				if mint.ClientID != destinationClientID {
+					continue
+				}
+				return onchain.IFTReceived{Receiver: mint.Receiver.Hex(), Amount: mint.Amount}, true, nil
+			}
+
+			legacyLogs, err := r.client.Logs(ctx, legacyQuery)
+			if err != nil {
+				return onchain.IFTReceived{}, false, err
+			}
+			for _, lg := range legacyLogs {
+				ev, derr := decodeIFTReceived(lg.Data)
+				if derr != nil {
+					return onchain.IFTReceived{}, true, derr
+				}
+				if ev.Seq.Uint64() == scoped {
+					return onchain.IFTReceived{Receiver: ev.Receiver.Hex(), Amount: ev.Amount}, true, nil
+				}
+			}
+			return onchain.IFTReceived{}, false, nil
+		})
 }
 
 // AwaitIFTRefunded waits for the MockIFT source escrow refund carrying seq.

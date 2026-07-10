@@ -12,7 +12,7 @@ contract FixtureDeployer {
 
     constructor(uint256 initialIFTSupply) {
         MockGMP mockGMP = new MockGMP();
-        MockIFT mockIFT = new MockIFT();
+        MockIFT mockIFT = new MockIFT(address(mockGMP));
         Counter counter = new Counter();
         mockIFT.mint(msg.sender, initialIFTSupply);
         emit FixturesDeployed(address(mockGMP), address(mockIFT), address(counter));

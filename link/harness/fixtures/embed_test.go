@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,8 +34,8 @@ func TestExpectedFixtureSurface(t *testing.T) {
 		methods []string
 	}{
 		{Counter, []string{"count", "increment"}},
-		{MockGMP, []string{"send", "deliver"}},
-		{MockIFT, []string{"balanceOf", "mint", "sendTransfer", "receiveTransfer"}},
+		{MockGMP, []string{"send", "deliver", "deliverIFT", "deliveryClientId"}},
+		{MockIFT, []string{"balanceOf", "mint", "sendTransfer", "receiveTransfer", "iftMint"}},
 	}
 	for _, tc := range cases {
 		parsed, err := tc.c.ParsedABI()
@@ -54,7 +55,10 @@ func TestExpectedFixtureSurface(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, ift.Events, "IFTSent")
 	assert.Contains(t, ift.Events, "IFTReceived")
-	assert.Empty(t, ift.Constructor.Inputs)
+	assert.Contains(t, ift.Events, "IFTMintReceived")
+	assert.Equal(t, "0a7244e7", hex.EncodeToString(ift.Methods["iftMint"].ID))
+	assert.True(t, ift.Events["IFTMintReceived"].Inputs[1].Indexed)
+	assert.Equal(t, "address", ift.Constructor.Inputs[0].Type.String())
 
 	deployer, err := FixtureDeployer.ParsedABI()
 	require.NoError(t, err)

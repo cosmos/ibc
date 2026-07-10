@@ -69,7 +69,7 @@ func NewConnectedClient(ctx context.Context, c *ethclient.Client) (*EVMClient, e
 
 // NewVerifiedClient wraps an already-dialed ethclient as an EVMClient bound to the dev faucet and verifies
 // the node reports wantChainID, closing the client on any failure. label names the chain in errors. It is
-// the connect-then-verify step the Anvil and external providers run after dialing; Besu verifies
+// the connect-then-verify step the anvil, external, and sandbox providers run after dialing; Besu verifies
 // the chain id inside its own readiness wait and uses NewConnectedClient directly.
 func NewVerifiedClient(
 	ctx context.Context,

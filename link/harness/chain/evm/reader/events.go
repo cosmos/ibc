@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/link/harness/fixtures"
 )
@@ -12,6 +13,8 @@ import (
 // eventIFTReceived is the MockIFT event the relayer emits on the destination when it mints to the
 // receiver — the on-chain effect the correlator keys its terminal assertion off.
 const eventIFTReceived = "IFTReceived"
+
+const eventIFTMintReceived = "IFTMintReceived"
 
 // mockIFTABI is the parsed MockIFT fixture ABI (decoded from the embedded artifact). It is the same
 // fixture the stub deploys/relays, but reached through the shared fixtures package — not the stub's
@@ -33,6 +36,24 @@ func decodeIFTReceived(data []byte) (iftReceivedLog, error) {
 	if err := mockIFTABI.UnpackIntoInterface(&ev, eventIFTReceived, data); err != nil {
 		return iftReceivedLog{}, fmt.Errorf("decode IFTReceived: %w", err)
 	}
+	return ev, nil
+}
+
+type iftMintReceivedLog struct {
+	ClientID string `abi:"clientId"`
+	Receiver common.Address
+	Amount   *big.Int
+}
+
+func decodeIFTMintReceived(lg types.Log) (iftMintReceivedLog, error) {
+	if len(lg.Topics) != 2 || lg.Topics[0] != mockIFTABI.Events[eventIFTMintReceived].ID {
+		return iftMintReceivedLog{}, fmt.Errorf("decode IFTMintReceived: invalid topics")
+	}
+	var ev iftMintReceivedLog
+	if err := mockIFTABI.UnpackIntoInterface(&ev, eventIFTMintReceived, lg.Data); err != nil {
+		return iftMintReceivedLog{}, fmt.Errorf("decode IFTMintReceived: %w", err)
+	}
+	ev.Receiver = common.BytesToAddress(lg.Topics[1].Bytes())
 	return ev, nil
 }
 

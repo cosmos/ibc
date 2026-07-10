@@ -17,12 +17,15 @@ func TestLaneGrid(t *testing.T) {
 		"anvil":          Anvil,
 		"anvil-interval": AnvilInterval,
 		"besu":           Besu,
+		"sandbox":        Sandbox,
 	}
 	shapes := map[string]Shape{
-		"two-evm": TwoEVM(),
+		"two-evm":    TwoEVM(),
+		"evm-cosmos": EVMCosmos(),
 	}
 	routeTypes := map[string][2]string{
-		"two-evm": {wire.RouteEVMToEVMAttested, wire.RouteEVMToEVMAttested},
+		"two-evm":    {wire.RouteEVMToEVMAttested, wire.RouteEVMToEVMAttested},
+		"evm-cosmos": {wire.RouteEVMToCosmosAttested, wire.RouteCosmosToEVMAttested},
 	}
 
 	for laneName, lane := range lanes {
@@ -54,7 +57,7 @@ func TestLaneGrid(t *testing.T) {
 
 // Every lane must funnel the zero Shape into bind's guard — a lane bypassing bind would lose it.
 func TestLane_ZeroShapePanics(t *testing.T) {
-	for _, lane := range []Lane{Anvil, AnvilInterval, Besu} {
+	for _, lane := range []Lane{Anvil, AnvilInterval, Besu, Sandbox} {
 		require.Panics(t, func() { lane(Shape{}) })
 	}
 }
@@ -88,4 +91,26 @@ func TestLaneSlotBindings(t *testing.T) {
 		}
 	})
 
+	t.Run("sandbox lane is heterogeneous: anvil slot A, EVM-presented sandboxd slot B", func(t *testing.T) {
+		topo := Sandbox(TwoEVM())
+		require.Equal(t, LauncherAnvil, launcher(topo, 0))
+		require.Equal(t, LauncherSandbox, launcher(topo, 1))
+		b := topo.Chains[1].Chain
+		require.Equal(t, wire.ChainTypeEVM, b.Type)
+		require.Equal(t, wire.ProviderSandbox, b.Provider)
+		require.Equal(t, uint64(19460), b.ChainID)
+		require.Empty(t, b.CosmosChainID)
+	})
+
+	t.Run("cosmos slots bind to sandboxd in every lane", func(t *testing.T) {
+		for _, lane := range []Lane{Anvil, AnvilInterval, Besu, Sandbox} {
+			topo := lane(EVMCosmos())
+			b := topo.Chains[1]
+			require.Equal(t, LauncherSandbox, b.Provision.Launcher, "lane %s", topo.Name)
+			require.Equal(t, wire.ChainTypeCosmos, b.Chain.Type)
+			require.Equal(t, "sandbox-cosmos-1", b.Chain.CosmosChainID)
+			require.Zero(t, b.Chain.ChainID, "a cosmos slot carries no numeric EVM chain id")
+			require.Zero(t, b.Timing, "cosmos slots resolve timing from the sandbox launcher default")
+		}
+	})
 }

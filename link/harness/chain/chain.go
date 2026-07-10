@@ -10,6 +10,10 @@ type Family string
 const (
 	// FamilyEVM identifies an EVM-family chain.
 	FamilyEVM Family = "evm"
+	// FamilyCosmos is a real Cosmos SDK family: the sandboxd node driven through its CometBFT RPC + bank
+	// module + bech32 accounts (harness/chain/cosmos) — a genuine second-family target with its own address
+	// form, signing, and delivery.
+	FamilyCosmos Family = "cosmos"
 )
 
 // Chain is the family-neutral chain surface every provisioned chain implements. This package carries

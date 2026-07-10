@@ -31,8 +31,9 @@ daemon → re-await readiness. Only providers that advertise `Snapshotter` could
 entrypoint would need to fail loudly, not silently fall back to fresh-per-test, when asked to share an
 env whose chains can't reset.
 
-Besu has no snapshot API, and an out-of-band external chain should never be reset. Both would need to
-stay fresh-per-test even after Anvil gained the capability.
+Not every family can cheaply support this: besu has no snapshot API, sandboxd (a real CometBFT node)
+has no snapshot/revert analogue, and an out-of-band external chain should never be reset at all. Any of
+those would need to stay fresh-per-test even after anvil gained the capability.
 
 ## Open risks
 

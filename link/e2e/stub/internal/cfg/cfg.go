@@ -59,7 +59,7 @@ func setupError(err error) error {
 }
 
 // Load reads the config file at path, unmarshals it into wire.ConfigYAML, and resolves the environment
-// references carried by EVM RPC URLs. The returned config is resolved in memory; the file is never
+// references carried by chain endpoints. The returned config is resolved in memory; the file is never
 // rewritten.
 func Load(path string) (*wire.ConfigYAML, error) {
 	data, err := os.ReadFile(path)
@@ -74,6 +74,12 @@ func Load(path string) (*wire.ConfigYAML, error) {
 		c.Chains[i].RPC.URL, err = config.ExpandEnvRefs(c.Chains[i].RPC.URL)
 		if err != nil {
 			return nil, fmt.Errorf("expand chains[%d].rpc.url: %w", i, err)
+		}
+		if c.Chains[i].Type == wire.ChainTypeCosmos {
+			c.Chains[i].GRPCURL, err = config.ExpandEnvRefs(c.Chains[i].GRPCURL)
+			if err != nil {
+				return nil, fmt.Errorf("expand chains[%d].grpcUrl: %w", i, err)
+			}
 		}
 	}
 	return c, nil

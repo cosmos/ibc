@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cosmos/ibc/link/harness/chain"
 	"github.com/cosmos/ibc/link/harness/diag"
 	"github.com/cosmos/ibc/link/harness/ibclink"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
@@ -60,7 +61,7 @@ func Start(ctx context.Context, cfg StartConfig) (*Harness, error) {
 		chains:  chains,
 		link:    link.runner,
 		linkLog: link.logPath,
-		bundle:  newBundle(topo, link.config),
+		bundle:  newBundle(ctx, topo, link.config),
 		ws:      ws,
 	}, nil
 }
@@ -156,15 +157,21 @@ type linkDriver struct {
 // ibc link binary is not exec'd until a command runs.
 func newIBCLink(topo topology.Topology, chains *Chains, dir string) (linkDriver, error) {
 	rb := topology.RuntimeBindings{
-		ChainRPC: make(map[string]string, len(topo.Chains)),
-		DBPath:   filepath.Join(dir, "relayer.db"),
+		ChainRPC:  make(map[string]string, len(topo.Chains)),
+		ChainGRPC: make(map[string]string, len(topo.Chains)),
+		DBPath:    filepath.Join(dir, "relayer.db"),
 	}
 	// Every chain reports its host-reachable RPC — managed nodes their dynamic 127.0.0.1 port, external
 	// nodes their static URL — so the compiled config points ibc link at the same endpoints the
-	// harness drives. Compile ignores the binding for an external chain and keeps its Provision.RPCURL.
+	// harness drives. Compile ignores the binding for an external chain and keeps its Provision.RPCURL. A
+	// cosmos chain additionally reports its gRPC dial target (the second endpoint the stub's bank/auth
+	// queries need); only cosmos chains advertise chain.GRPCProvider, so the gRPC map stays cosmos-only.
 	for _, p := range chains.list {
 		id := p.Chain.ID()
 		rb.ChainRPC[id] = p.Chain.RPCURL()
+		if gp, ok := chain.As[chain.GRPCProvider](p.Chain); ok {
+			rb.ChainGRPC[id] = gp.GRPCURL()
+		}
 	}
 
 	compiled, err := topology.Compile(topo, rb)
@@ -194,13 +201,13 @@ func newIBCLink(topo topology.Topology, chains *Chains, dir string) (linkDriver,
 // newBundle seeds the diagnostics bundle with everything known statically at startup: the topology
 // summary, tool/image versions (probed via provision for the providers in use), and the compiled config
 // ibc link consumes.
-func newBundle(topo topology.Topology, configYAML []byte) *diag.Bundle {
+func newBundle(ctx context.Context, topo topology.Topology, configYAML []byte) *diag.Bundle {
 	b := diag.NewBundle()
 	b.SetTopology(topologySummary(topo))
 	b.SetVersion("go-ethereum", diag.GoEthereumVersion())
 	b.SetVersion("ibc-link-bin", ibclink.ResolvedRealBin())
 	b.SetVersion("ibc-link-stub-bin", ibclink.ResolvedStubBin())
-	for tool, version := range provision.Versions(topo) {
+	for tool, version := range provision.Versions(ctx, topo) {
 		b.SetVersion(tool, version)
 	}
 	b.SetConfig(string(configYAML))
