@@ -8,6 +8,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/relayer"
+	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -17,7 +18,8 @@ type Services struct {
 	Logger  *slog.Logger
 	Server  *server.Server
 
-	Store store.Store
+	Store   store.Store
+	Signers *signer.Set
 
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
@@ -30,6 +32,12 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 
 	// Storage
 	db, err := store.NewStore(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Signers
+	signers, err := signerSet(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +57,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		Logger:          logger,
 		Server:          srv,
 		Store:           db,
+		Signers:         signers,
 		RelayerService:  relayerService,
 		AttestorService: nil,
 	}
@@ -59,7 +68,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	if len(cfg.Attestor.Attestations) > 0 {
 		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
 
-		attestorService, attestorHandler, err := buildAttestor(cfg)
+		attestorService, attestorHandler, err := buildAttestor(cfg, signers)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +85,13 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
 
-	attestorService, attestorHandler, err := buildAttestor(cfg)
+	// Signers
+	signers, err := signerSet(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	attestorService, attestorHandler, err := buildAttestor(cfg, signers)
 	if err != nil {
 		return nil, err
 	}
@@ -90,14 +105,15 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 		Logger:          logger,
 		Server:          srv,
 		Store:           nil, // attestor is stateless
+		Signers:         signers,
 		RelayerService:  nil,
 		AttestorService: attestorService,
 	}, nil
 }
 
-func buildAttestor(cfg config.Config) (*attestor.Service, *server.AttestorHandler, error) {
+func buildAttestor(cfg config.Config, signers *signer.Set) (*attestor.Service, *server.AttestorHandler, error) {
 	// Services
-	attestorService, err := attestor.NewFromConfig(cfg)
+	attestorService, err := attestor.NewFromConfig(cfg, signers)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,4 +122,19 @@ func buildAttestor(cfg config.Config) (*attestor.Service, *server.AttestorHandle
 	attestorHandler := server.NewAttestorHandler(attestorService)
 
 	return attestorService, attestorHandler, nil
+}
+
+func signerSet(ctx context.Context, cfg config.Config) (*signer.Set, error) {
+	set := signer.NewSet()
+
+	for _, signerConfig := range cfg.Signers {
+		signer, alias, err := signer.NewSignerFromConfig(ctx, signerConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		set.Set(alias, signer)
+	}
+
+	return set, nil
 }

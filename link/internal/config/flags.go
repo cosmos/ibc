@@ -15,6 +15,8 @@ type FlagSet struct {
 	Config string
 	DB     string
 	Quiet  bool
+
+	skipConfigValidation bool
 }
 
 // DefaultFlagSet returns the default flag set.
@@ -24,6 +26,8 @@ func DefaultFlagSet() FlagSet {
 		Config: "ibc.yml",
 		DB:     "",
 		Quiet:  false,
+
+		skipConfigValidation: false,
 	}
 }
 
@@ -44,6 +48,14 @@ func (fs *FlagSet) ConfigPath() (string, error) {
 	}
 
 	return filepath.Abs(filepath.Join(home, fs.Config))
+}
+
+func (fs *FlagSet) ValidateConfig() bool {
+	return !fs.skipConfigValidation
+}
+
+func (fs *FlagSet) SkipConfigValidation() {
+	fs.skipConfigValidation = true
 }
 
 // ExpandHome converts path with ~ to an absolute path.
