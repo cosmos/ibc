@@ -89,7 +89,7 @@ type AttestorSetConfig struct {
 
 // AttestorEntry an attestor the relayer queries for the associated client.
 type AttestorEntry struct {
-	Alias  string       `yaml:"alias"`
+	Name   string       `yaml:"name"`
 	Type   AttestorType `yaml:"type"`
 	GRPC   string       `yaml:"grpc,omitempty"`
 	Client string       `yaml:"client"`
@@ -192,7 +192,7 @@ func (c RelayerConfig) validateChains() error {
 }
 
 func (c RelayerConfig) validateAttestors() error {
-	aliases := make(map[string]struct{})
+	names := make(map[string]struct{})
 
 	for i, attestor := range c.Attestors {
 		if err := attestor.Validate(); err != nil {
@@ -200,13 +200,13 @@ func (c RelayerConfig) validateAttestors() error {
 		}
 
 		if _, ok := c.ClientByAlias(attestor.Client); !ok {
-			return errors.Errorf(".attestors[%s] references unknown client %q", attestor.Alias, attestor.Client)
+			return errors.Errorf(".attestors[%s] references unknown client %q", attestor.Name, attestor.Client)
 		}
 
-		if _, ok := aliases[attestor.Alias]; ok {
-			return errors.Errorf(".attestors duplicate alias: %q", attestor.Alias)
+		if _, ok := names[attestor.Name]; ok {
+			return errors.Errorf(".attestors duplicate name: %q", attestor.Name)
 		}
-		aliases[attestor.Alias] = struct{}{}
+		names[attestor.Name] = struct{}{}
 	}
 
 	for _, client := range c.Clients {
@@ -400,8 +400,8 @@ func (c AttestorSetConfig) Validate() error {
 
 func (c AttestorEntry) Validate() error {
 	switch {
-	case c.Alias == "":
-		return errors.New(".alias required")
+	case c.Name == "":
+		return errors.New(".name required")
 	case c.Client == "":
 		return errors.New(".client required")
 	case c.Type != AttestorTypeRemote && c.Type != AttestorTypeLocal:

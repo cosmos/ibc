@@ -40,18 +40,18 @@ relayer:
         contracts:
           ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
   attestors:
-    - alias: "attestor-alice-base"
+    - name: "attestor-alice-base"
       type: remote
       grpc: attestor-alice.example.com:3000
       client: "eth-to-base"
-    - alias: "attestor-bob-base"
+    - name: "attestor-bob-base"
       type: remote
       grpc: attestor-bob.example.com:3000
       client: "eth-to-base"
-    - alias: "attestor-dan-base"
+    - name: "attestor-dan-base"
       type: local
       client: "eth-to-base"
-    - alias: "attestor-dan-ethereum"
+    - name: "attestor-dan-ethereum"
       type: local
       client: "base-to-eth"
   clients:
@@ -111,7 +111,7 @@ func TestRelayerConfig(t *testing.T) {
 
 		require.Len(t, config.Relayer.Attestors, 4)
 		assert.Equal(t, AttestorTypeRemote, config.Relayer.Attestors[0].Type)
-		assert.Equal(t, "attestor-alice-base", config.Relayer.Attestors[0].Alias)
+		assert.Equal(t, "attestor-alice-base", config.Relayer.Attestors[0].Name)
 		assert.Equal(t, "eth-to-base", config.Relayer.Attestors[0].Client)
 
 		require.NotNil(t, client.AttestorSet)
@@ -359,18 +359,18 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `.type must be one of ["remote", "local"]`,
 			},
 			{
-				name: "attestor missing alias",
+				name: "attestor missing name",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[0].Alias = ""
+					c.Relayer.Attestors[0].Name = ""
 				},
-				errContains: ".alias required",
+				errContains: ".name required",
 			},
 			{
-				name: "duplicate attestor alias",
+				name: "duplicate attestor name",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[1].Alias = "attestor-alice-base"
+					c.Relayer.Attestors[1].Name = "attestor-alice-base"
 				},
-				errContains: ".attestors duplicate alias",
+				errContains: ".attestors duplicate name",
 			},
 			{
 				name: "route missing sourceClient",

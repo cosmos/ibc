@@ -32,11 +32,11 @@ relayer:
 
   # attestors the relayer queries for their associated client
   attestors:
-    - alias: "attestor-base"
+    - name: "attestor-base"
       type: remote
       grpc: attestor.example.com:3000
       client: "eth-to-base"
-    - alias: "attestor-ethereum"
+    - name: "attestor-ethereum"
       type: remote
       grpc: attestor.example.com:3000
       client: "base-to-eth"
