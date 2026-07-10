@@ -27,7 +27,6 @@ const SqliteInMemory = ":memory:"
 type SqliteDB struct {
 	db *sql.DB
 	*sqliteRepository
-	logger *slog.Logger
 }
 
 type sqliteRepository struct {
@@ -71,7 +70,6 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 		return &SqliteDB{
 			db:               db,
 			sqliteRepository: &sqliteRepository{repo: reposqlite.New(db), logger: logger},
-			logger:           logger,
 		}, nil
 	}
 
@@ -100,7 +98,6 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 	return &SqliteDB{
 		db:               db,
 		sqliteRepository: &sqliteRepository{repo: reposqlite.New(db), logger: logger},
-		logger:           logger,
 	}, nil
 }
 

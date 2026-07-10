@@ -27,8 +27,6 @@ type PostgresDB struct {
 
 	// sqlc repository
 	*postgresRepository
-
-	logger *slog.Logger
 }
 
 type postgresRepository struct {
@@ -64,7 +62,6 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 		pool:               pool,
 		sqlWrapper:         stdlib.OpenDBFromPool(pool),
 		postgresRepository: &postgresRepository{repo: postgres.New(pool), logger: logger},
-		logger:             logger,
 	}
 
 	if ping {
