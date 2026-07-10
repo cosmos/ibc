@@ -245,7 +245,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].CounterpartyChainID = "999"
 				},
-				errContains: `counterpartyChainId "999" not declared`,
+				errContains: `counterparty client "ethereum-0" on chain "999" must also be configured`,
 			},
 			{
 				name: "client missing counterpartyClientId",

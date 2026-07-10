@@ -228,7 +228,7 @@ func (c Config) crossValidate() error {
 // declared in the top-level chains block.
 func (c Config) validateChainReferences() error {
 	for _, chain := range c.Relayer.Chains {
-		if _, ok := c.Chain(chain.ChainID); !ok {
+		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
 			return errors.Errorf(".chains[%s] chainId not declared in top-level chains", chain.ChainID)
 		}
 	}
@@ -238,13 +238,6 @@ func (c Config) validateChainReferences() error {
 			return errors.Errorf(
 				".clients[%s] chainId %q not declared in top-level chains",
 				client.ClientID, client.ChainID,
-			)
-		}
-
-		if _, ok := c.Chain(client.CounterpartyChainID); client.CounterpartyChainID != "" && !ok {
-			return errors.Errorf(
-				".clients[%s] counterpartyChainId %q not declared in top-level chains",
-				client.ClientID, client.CounterpartyChainID,
 			)
 		}
 	}
