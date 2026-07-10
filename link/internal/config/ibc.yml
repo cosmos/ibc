@@ -1,4 +1,4 @@
-# sample config file; replace the example chain and relayer values before use
+# sample config file
 server:
   listenAddr: 0.0.0.0:3000
   # listenAddr: 127.0.0.1:${SERVER_PORT}  # supports for env vars expansion
