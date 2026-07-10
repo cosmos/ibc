@@ -99,18 +99,6 @@ func (c AutoRelayConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-// Chain returns the relay settings for a chain; chains without an entry get
-// the zero value.
-func (c RelayerConfig) Chain(chainID string) RelayerChainConfig {
-	for _, chain := range c.Chains {
-		if chain.ChainID == chainID {
-			return chain
-		}
-	}
-
-	return RelayerChainConfig{}
-}
-
 // ClientAttestors returns the attestors associated with a client.
 func (c RelayerConfig) ClientAttestors(clientAlias string) []AttestorEntry {
 	var attestors []AttestorEntry

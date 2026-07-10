@@ -141,8 +141,6 @@ func TestRelayerConfig(t *testing.T) {
 		_, ok = config.Chain("999")
 		assert.False(t, ok)
 
-		assert.Equal(t, "1", config.Relayer.Chain("1").ChainID)
-		assert.Zero(t, config.Relayer.Chain("999"))
 
 		client, ok := config.Relayer.Client("1", "base-0")
 		assert.True(t, ok)
