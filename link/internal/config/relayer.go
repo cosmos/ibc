@@ -210,6 +210,10 @@ func (c RelayerConfig) validateAttestors() error {
 	}
 
 	for _, client := range c.Clients {
+		if client.Type != ClientTypeAttestation {
+			continue
+		}
+
 		count := len(c.ClientAttestors(client.Alias))
 		if client.AttestorSet.Threshold > count {
 			return errors.Errorf(
@@ -371,12 +375,16 @@ func (c ClientConfig) Validate() error {
 		return errors.Errorf(".type must be %q, got %q", ClientTypeAttestation, c.Type)
 	case c.CounterpartyChainID == "":
 		return errors.New(".counterpartyChainId required")
-	case c.AttestorSet == nil:
-		return errors.Errorf(".attestorSet required for %s clients", ClientTypeAttestation)
 	}
 
-	if err := c.AttestorSet.Validate(); err != nil {
-		return errors.Wrap(err, ".attestorSet")
+	if c.Type == ClientTypeAttestation {
+		if c.AttestorSet == nil {
+			return errors.Errorf(".attestorSet required for %s clients", ClientTypeAttestation)
+		}
+
+		if err := c.AttestorSet.Validate(); err != nil {
+			return errors.Wrap(err, ".attestorSet")
+		}
 	}
 
 	return nil
