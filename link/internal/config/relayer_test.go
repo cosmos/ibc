@@ -29,12 +29,12 @@ relayer:
   chains:
     - chainId: "1"
       evm:
-        txSubmissionDelay: 2s
         gasFeeCapMultiplier: 1.5
         gasTipCapMultiplier: 1.5
       gasAlertThresholds:
         warningThreshold: "500000000"
         criticalThreshold: "10000000"
+      txSubmissionDelay: 2s
       packetBatchSize: 20
       packetBatchTimeout: 10s
     - chainId: "8453"
@@ -97,11 +97,11 @@ func TestRelayerConfig(t *testing.T) {
 		require.Len(t, config.Relayer.Chains, 2)
 		chain := config.Relayer.Chains[0]
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
-		assert.Equal(t, 2*time.Second, chain.EVM.TxSubmissionDelay)
+		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
 		assert.Equal(t, "500000000", chain.GasAlertThresholds.WarningThreshold)
-		assert.Equal(t, 20, chain.PacketBatchSize)
-		assert.Equal(t, 10*time.Second, chain.PacketBatchTimeout)
+		assert.Equal(t, 20, *chain.PacketBatchSize)
+		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
 
 		require.Len(t, config.Relayer.Clients, 2)
 		client := config.Relayer.Clients[0]
@@ -270,11 +270,20 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `counterparty client "base-to-eth" does not reference it back`,
 			},
 			{
-				name: "negative batch size",
+				name: "non-positive batch size",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].PacketBatchSize = -1
+					size := 0
+					c.Relayer.Chains[0].PacketBatchSize = &size
 				},
-				errContains: ".packetBatchSize must not be negative",
+				errContains: ".packetBatchSize must be positive",
+			},
+			{
+				name: "negative tx submission delay",
+				patch: func(c *Config) {
+					delay := -time.Second
+					c.Relayer.Chains[0].TxSubmissionDelay = &delay
+				},
+				errContains: ".txSubmissionDelay must not be negative",
 			},
 			{
 				name: "missing router contract",

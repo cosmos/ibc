@@ -27,8 +27,7 @@ relayer:
   # optional per-chain overrides of the default relay settings
   chains:
     - chainId: "1"
-      evm:
-        txSubmissionDelay: 5s
+      txSubmissionDelay: 5s
       packetBatchSize: 50
 
   # attestors the relayer queries for their associated client

@@ -37,15 +37,15 @@ type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
 	GasAlertThresholds *GasAlertThresholds `yaml:"gasAlertThresholds,omitempty"`
-	PacketBatchSize    int                 `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout"`
+	TxSubmissionDelay  *time.Duration      `yaml:"txSubmissionDelay,omitempty"`
+	PacketBatchSize    *int                `yaml:"packetBatchSize,omitempty"`
+	PacketBatchTimeout *time.Duration      `yaml:"packetBatchTimeout,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
-	TxSubmissionDelay   time.Duration `yaml:"txSubmissionDelay"`
-	GasFeeCapMultiplier *float64      `yaml:"gasFeeCapMultiplier,omitempty"`
-	GasTipCapMultiplier *float64      `yaml:"gasTipCapMultiplier,omitempty"`
+	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
+	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
 }
 
 // GasAlertThresholds gas balances that trigger low-balance metrics.
@@ -282,10 +282,12 @@ func (c RelayerChainConfig) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
-	case c.PacketBatchSize < 0:
-		return errors.New(".packetBatchSize must not be negative")
-	case c.PacketBatchTimeout < 0:
-		return errors.New(".packetBatchTimeout must not be negative")
+	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
+		return errors.New(".txSubmissionDelay must not be negative")
+	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
+		return errors.New(".packetBatchSize must be positive")
+	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
+		return errors.New(".packetBatchTimeout must be positive")
 	}
 
 	if c.EVM != nil {
@@ -305,8 +307,6 @@ func (c RelayerChainConfig) Validate() error {
 
 func (c RelayerEVMConfig) Validate() error {
 	switch {
-	case c.TxSubmissionDelay < 0:
-		return errors.New(".txSubmissionDelay must not be negative")
 	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
 		return errors.New(".gasFeeCapMultiplier must be positive")
 	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
