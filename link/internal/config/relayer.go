@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ClientType the light client type backing a relayer client.
+// ClientType the light client type.
 type ClientType string
 
 // Client types
@@ -15,7 +15,7 @@ const (
 	ClientTypeAttestation ClientType = "attestation"
 )
 
-// AttestorType how the process connects to an attestor.
+// AttestorType how an attestor is reached.
 type AttestorType string
 
 // Attestor types
@@ -24,12 +24,12 @@ const (
 	AttestorTypeLocal  AttestorType = "local"
 )
 
-// RelayerConfig represents the entrypoint for running the process as a relayer.
+// RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
 	Chains []RelayerChainConfig `yaml:"chains"`
 }
 
-// RelayerChainConfig configures relaying for a single chain.
+// RelayerChainConfig relaying settings for one chain.
 type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
@@ -39,7 +39,7 @@ type RelayerChainConfig struct {
 	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout"`
 }
 
-// RelayerEVMConfig EVM-specific relaying settings for a chain.
+// RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
 	Contracts           EVMContracts  `yaml:"contracts"`
 	TxSubmissionDelay   time.Duration `yaml:"txSubmissionDelay"`
@@ -47,18 +47,18 @@ type RelayerEVMConfig struct {
 	GasTipCapMultiplier *float64      `yaml:"gasTipCapMultiplier,omitempty"`
 }
 
-// EVMContracts addresses of the IBC contracts on an EVM chain.
+// EVMContracts IBC contract addresses.
 type EVMContracts struct {
 	ICS26Router string `yaml:"ics26Router"`
 }
 
-// GasAlertThresholds gas balance thresholds that trigger low-balance metrics.
+// GasAlertThresholds gas balances that trigger low-balance metrics.
 type GasAlertThresholds struct {
 	WarningThreshold  string `yaml:"warningThreshold"`
 	CriticalThreshold string `yaml:"criticalThreshold"`
 }
 
-// ClientConfig a source client the relayer monitors and relays transfers from.
+// ClientConfig a source client to relay transfers from.
 type ClientConfig struct {
 	ID                  string             `yaml:"id"`
 	Type                ClientType         `yaml:"type"`
@@ -67,28 +67,27 @@ type ClientConfig struct {
 	AutoRelay           AutoRelayConfig    `yaml:"autoRelay,omitempty"`
 }
 
-// AttestorSetConfig the attestor set backing an attestation client.
+// AttestorSetConfig the attestor set backing a client.
 type AttestorSetConfig struct {
 	CounterpartyChainFinalityOffset uint64          `yaml:"counterpartyChainFinalityOffset"`
 	Threshold                       int             `yaml:"threshold"`
 	Attestors                       []AttestorEntry `yaml:"attestors"`
 }
 
-// AttestorEntry a single attestor within an attestor set.
+// AttestorEntry an attestor in the set.
 type AttestorEntry struct {
 	Type  AttestorType `yaml:"type"`
 	GRPC  string       `yaml:"grpc,omitempty"`
 	Alias string       `yaml:"alias"`
 }
 
-// AutoRelayConfig automatic relaying of packets observed on chain.
+// AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	// Enabled defaults to true when omitted.
 	Enabled  *bool  `yaml:"enabled,omitempty"`
 	Lookback uint64 `yaml:"lookback,omitempty"`
 }
 
-// IsEnabled reports whether auto-relay is enabled (default true).
 func (c AutoRelayConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
@@ -103,7 +102,6 @@ func (c RelayerConfig) Chain(chainID string) (RelayerChainConfig, bool) {
 	return RelayerChainConfig{}, false
 }
 
-// Client returns the client config for the given chain and client id.
 func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 	chain, ok := c.Chain(chainID)
 	if !ok {
@@ -119,7 +117,6 @@ func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 	return ClientConfig{}, false
 }
 
-// Validate validates the relayer config. Allows an empty chain list.
 func (c RelayerConfig) Validate() error {
 	chainIDs := make(map[string]struct{})
 	aliases := make(map[string]struct{})
