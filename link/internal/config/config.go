@@ -33,6 +33,8 @@ const sqliteInMemory = ":memory:"
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	DB       DBConfig       `yaml:"db"`
+	Chains   []ChainConfig  `yaml:"chains"`
+	Relayer  RelayerConfig  `yaml:"relayer"`
 	Attestor AttestorConfig `yaml:"attestor"`
 	Signers  Signers        `yaml:"signers"`
 }
@@ -89,6 +91,27 @@ type AttestationConfig struct {
 	FinalityOffset int64  `yaml:"-"`
 }
 
+// ChainType the execution environment of a chain.
+type ChainType string
+
+// Chain types
+const (
+	ChainTypeEVM ChainType = "evm"
+)
+
+// ChainConfig chain information shared by the attestor and relayer.
+type ChainConfig struct {
+	ChainID string          `yaml:"chainId"`
+	Type    ChainType       `yaml:"type"`
+	RPC     string          `yaml:"rpc"`
+	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+}
+
+// EVMChainConfig EVM-specific chain details.
+type EVMChainConfig struct {
+	ICS26Router string `yaml:"ics26Router"`
+}
+
 // DefaultConfig sample config using default values and Sqlite.
 func DefaultConfig() Config {
 	return Config{
@@ -98,6 +121,10 @@ func DefaultConfig() Config {
 		DB: DBConfig{
 			Type: DBTypeSQLite,
 			URL:  "ibc.db",
+		},
+		Chains: []ChainConfig{},
+		Relayer: RelayerConfig{
+			Chains: []RelayerChainConfig{},
 		},
 		Attestor: AttestorConfig{
 			Attestations: []AttestationConfig{},
@@ -147,6 +174,26 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".db")
 	}
 
+	chainIDs := make(map[string]struct{})
+	for _, chain := range c.Chains {
+		if err := chain.Validate(); err != nil {
+			return errors.Wrapf(err, ".chains[%s]", chain.ChainID)
+		}
+
+		if _, ok := chainIDs[chain.ChainID]; ok {
+			return errors.Wrapf(errors.Errorf("duplicate chainId: %q", chain.ChainID), ".chains")
+		}
+		chainIDs[chain.ChainID] = struct{}{}
+	}
+
+	if err := c.validateChainReferences(); err != nil {
+		return errors.Wrap(err, ".relayer")
+	}
+
+	if err := c.Relayer.Validate(); err != nil {
+		return errors.Wrap(err, ".relayer")
+	}
+
 	if err := c.Attestor.Validate(); err != nil {
 		return errors.Wrap(err, ".attestor")
 	}
@@ -171,6 +218,59 @@ func (c Config) crossValidate() error {
 				i,
 				attestation.Signer,
 			)
+		}
+	}
+
+	return nil
+}
+
+// validateChainReferences ensures chains referenced by the relayer config are
+// declared in the top-level chains block.
+func (c Config) validateChainReferences() error {
+	for _, chain := range c.Relayer.Chains {
+		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
+			return errors.Errorf(".chains[%s] chainId not declared in top-level chains", chain.ChainID)
+		}
+	}
+
+	for _, client := range c.Relayer.Clients {
+		if _, ok := c.Chain(client.ChainID); client.ChainID != "" && !ok {
+			return errors.Errorf(
+				".clients[%s] chainId %q not declared in top-level chains",
+				client.ClientID, client.ChainID,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (c Config) Chain(chainID string) (ChainConfig, bool) {
+	for _, chain := range c.Chains {
+		if chain.ChainID == chainID {
+			return chain, true
+		}
+	}
+
+	return ChainConfig{}, false
+}
+
+func (c ChainConfig) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case c.Type != ChainTypeEVM:
+		return errors.Errorf(".type unknown chain type: %q", c.Type)
+	case c.RPC == "":
+		return errors.New(".rpc required")
+	}
+
+	if c.Type == ChainTypeEVM {
+		switch {
+		case c.EVM == nil:
+			return errors.Errorf(".evm required for %s chains", ChainTypeEVM)
+		case c.EVM.ICS26Router == "":
+			return errors.New(".evm.ics26Router required")
 		}
 	}
 
