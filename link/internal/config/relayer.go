@@ -32,18 +32,8 @@ type RelayerConfig struct {
 	Routes    []RouteConfig        `yaml:"routesToRelay"`
 }
 
-// Defaults applied when a chain has no overrides entry or omits a setting.
-const (
-	DefaultTxSubmissionDelay   = 2 * time.Second
-	DefaultGasFeeCapMultiplier = 1.5
-	DefaultGasTipCapMultiplier = 1.5
-	DefaultPacketBatchSize     = 20
-	DefaultPacketBatchTimeout  = 10 * time.Second
-)
-
-// RelayerChainConfig optional overrides of the default relay settings for one
-// chain. Read settings through the getters, which fall back to the defaults
-// and are valid on the zero value.
+// RelayerChainConfig optional relay settings for one chain. All fields are
+// optional; the relayer applies defaults for unset fields at startup.
 type RelayerChainConfig struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
@@ -109,8 +99,8 @@ func (c AutoRelayConfig) IsEnabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-// Chain returns the relay settings for a chain; chains without an overrides
-// entry get the zero value, whose getters return the defaults.
+// Chain returns the relay settings for a chain; chains without an entry get
+// the zero value.
 func (c RelayerConfig) Chain(chainID string) RelayerChainConfig {
 	for _, chain := range c.Chains {
 		if chain.ChainID == chainID {
@@ -119,46 +109,6 @@ func (c RelayerConfig) Chain(chainID string) RelayerChainConfig {
 	}
 
 	return RelayerChainConfig{}
-}
-
-func (c RelayerChainConfig) GetTxSubmissionDelay() time.Duration {
-	if c.EVM != nil && c.EVM.TxSubmissionDelay > 0 {
-		return c.EVM.TxSubmissionDelay
-	}
-
-	return DefaultTxSubmissionDelay
-}
-
-func (c RelayerChainConfig) GetGasFeeCapMultiplier() float64 {
-	if c.EVM != nil && c.EVM.GasFeeCapMultiplier != nil {
-		return *c.EVM.GasFeeCapMultiplier
-	}
-
-	return DefaultGasFeeCapMultiplier
-}
-
-func (c RelayerChainConfig) GetGasTipCapMultiplier() float64 {
-	if c.EVM != nil && c.EVM.GasTipCapMultiplier != nil {
-		return *c.EVM.GasTipCapMultiplier
-	}
-
-	return DefaultGasTipCapMultiplier
-}
-
-func (c RelayerChainConfig) GetPacketBatchSize() int {
-	if c.PacketBatchSize > 0 {
-		return c.PacketBatchSize
-	}
-
-	return DefaultPacketBatchSize
-}
-
-func (c RelayerChainConfig) GetPacketBatchTimeout() time.Duration {
-	if c.PacketBatchTimeout > 0 {
-		return c.PacketBatchTimeout
-	}
-
-	return DefaultPacketBatchTimeout
 }
 
 // ClientAttestors returns the attestors associated with a client.
