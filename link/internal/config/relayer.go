@@ -72,7 +72,7 @@ type AttestorSetConfig struct {
 	Threshold                       int    `yaml:"threshold"`
 }
 
-// AttestorEntry an attestor the relayer queries for the associated client.
+// AttestorEntry an attestor the relayer queries for packet and state attestations.
 type AttestorEntry struct {
 	Name   string       `yaml:"name"`
 	Type   AttestorType `yaml:"type"`
