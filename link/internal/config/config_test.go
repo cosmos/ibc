@@ -63,7 +63,6 @@ func TestConfig(t *testing.T) {
 
 	t.Run("LoadFromFile", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			// ARRANGE
 			path := writeTestConfig(t, `
 server:
   listenAddr: 127.0.0.1:9090
@@ -72,10 +71,8 @@ db:
   url: postgres://user:pass@localhost:5432/ibc
 `)
 
-			// ACT
 			config, err := LoadFromFile(path, true, true)
 
-			// ASSERT
 			require.NoError(t, err)
 			assert.Equal(t, "127.0.0.1:9090", config.Server.ListenAddress)
 			assert.Equal(t, DBTypePostgres, config.DB.Type)
@@ -83,58 +80,73 @@ db:
 		})
 
 		t.Run("envSubstitution", func(t *testing.T) {
-			// ARRANGE
+			t.Setenv("DATABASE_NAME", "ibc-test")
+			path := writeTestConfig(t, `
+db:
+  type: postgres
+  url: postgres://localhost/${DATABASE_NAME}
+`)
+
+			config, err := LoadFromFile(path, true, true)
+
+			require.NoError(t, err)
+			assert.Equal(t, "postgres://localhost/ibc-test", config.DB.URL)
+		})
+
+		t.Run("expansionIsTyped", func(t *testing.T) {
 			t.Setenv("SERVER_PORT", "9091")
 			path := writeTestConfig(t, `
 server:
   listenAddr: 127.0.0.1:${SERVER_PORT}
 `)
 
-			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFromFile(path, false, true)
 
-			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, "127.0.0.1:9091", config.Server.ListenAddress)
+			assert.Equal(t, "127.0.0.1:${SERVER_PORT}", config.Server.ListenAddress)
+		})
+
+		t.Run("missingEnvFails", func(t *testing.T) {
+			path := writeTestConfig(t, `
+db:
+  type: postgres
+  url: postgres://localhost/${IBC_LINK_TEST_MISSING_DATABASE}
+`)
+
+			_, err := LoadFromFile(path, true, true)
+
+			require.ErrorContains(t, err, "expand .db.url")
+			require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_DATABASE is not set")
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
-			// ARRANGE
 			path := writeTestConfig(t, `
 server:
   listenAddr: [
 `)
 
-			// ACT
 			_, err := LoadFromFile(path, true, true)
 
-			// ASSERT
 			require.Error(t, err)
 		})
 
 		t.Run("validationFails", func(t *testing.T) {
-			// ARRANGE
 			path := writeTestConfig(t, `
 server:
   listenAddr: invalid
 `)
 
-			// ACT
 			_, err := LoadFromFile(path, true, true)
 
-			// ASSERT
 			require.ErrorContains(t, err, "validation failed")
 			require.ErrorContains(t, err, "expected address in host:port")
 		})
 
 		t.Run("fileNotFound", func(t *testing.T) {
-			// ARRANGE
 			path := filepath.Join(t.TempDir(), "missing.yml")
 
-			// ACT
 			_, err := LoadFromFile(path, true, true)
 
-			// ASSERT
 			require.Error(t, err)
 		})
 
@@ -167,29 +179,23 @@ server:
 				},
 			} {
 				t.Run(tt.name, func(t *testing.T) {
-					// ARRANGE
 					path := writeTestConfig(t, tt.body)
 
-					// ACT
 					_, err := LoadFromFile(path, true, true)
 
-					// ASSERT
 					require.ErrorContains(t, err, "unknown field")
 				})
 			}
 		})
 
 		t.Run("unknownFieldsAllowedWhenDisabled", func(t *testing.T) {
-			// ARRANGE
 			path := writeTestConfig(t, `
 server:
   listenAddress: 127.0.0.1:9090
 `)
 
-			// ACT
 			config, err := LoadFromFile(path, true, false)
 
-			// ASSERT
 			require.NoError(t, err)
 			assert.Equal(t, "0.0.0.0:3000", config.Server.ListenAddress)
 		})
@@ -249,10 +255,8 @@ server:
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
-				// ACT
 				db, err := DBConfigFromURL(tt.raw)
 
-				// ASSERT
 				if tt.errContains != "" {
 					require.ErrorContains(t, err, tt.errContains)
 					return
