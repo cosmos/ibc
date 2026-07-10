@@ -1,6 +1,6 @@
-# IBC
+# IBC Interchain Standards
 
-![banner](./.github/assets/interchain-standards.png)
+![banner](./.github/assets/cosmos-ibc-github.svg)
 
 ## Synopsis
 
@@ -19,13 +19,37 @@ For a high-level explanation of what IBC is and how it works, please read [this 
 
 All standards at or past the "Draft" stage are listed here in order of their ICS numbers, sorted by category.
 
-### Meta
+### IBC v2 Specifications
+
+IBC v2 is the latest iteration of the IBC protocol. It streamlines the integration of IBC by removing the connection and channel handshake layers in favor of direct client-to-client packet flow. For an overview, see the [IBC v2](spec/IBC_V2/README.md) introduction.
+
+#### Core Transport
+
+| Interchain Standard Number | Standard Title | Stage | Implementations | Maintainer |
+| -------------------------- | -------------- | ----- | --------------- | ---------- |
+| [2](spec/IBC_V2/core/ics-002-client-semantics/README.md) | Client Semantics | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [4](spec/IBC_V2/core/ics-004-packet-semantics/PACKET_HANDLER.md) | Packet Semantics | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [5](spec/IBC_V2/core/ics-005-port-allocation/README.md) | Port Allocation | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [24](spec/IBC_V2/core/ics-024-host-requirements/README.md) | Host Requirements | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [26](spec/IBC_V2/core/ics-026-application-callbacks/README.md) | IBC Application Callbacks | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+
+#### App
+
+| Interchain Standard Number | Version | Standard Title | Stage | Implementations | Maintainer |
+| -------------------------- | ------- | -------------- | ----- | --------------- | ---------- |
+| [27](spec/IBC_V2/app/ics-027-gmp/README.md) | v2 | General Message Passing | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+
+### IBC v1 Specifications
+
+IBC v1 is the original version of the protocol. It establishes cross-chain communication through connection and channel handshakes before applications can exchange packets.
+
+#### Meta
 
 | Interchain Standard Number               | Standard Title             | Stage | Maintainer    |
 | ---------------------------------------- | -------------------------- | ----- | ------------- |
 | [1](spec/ics-001-ics-standard/README.md) | ICS Specification Standard | N/A   | Protocol team |
 
-### Core Transport 
+#### Core Transport
 
 | Interchain Standard Number                                    | Standard Title             | Stage     | Implementations | Maintainer    |
 | ------------------------------------------------------------- | -------------------------- | --------- | --------------- | ------------- |
@@ -39,7 +63,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [26](spec/core/ics-026-routing-module/README.md)              | Routing Module             | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
 | [33](spec/core/ics-033-multi-hop/README.md)                   | Multi-hop Messaging        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
 
-### Light Clients
+#### Light Clients
 
 | Interchain Standard Number                                      | Standard Title             | Stage | Implementations | Maintainer    |
 | --------------------------------------------------------------- | -------------------------- | ----- | --------------- | ------------- |
@@ -49,13 +73,13 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [9](spec/client/ics-009-loopback-cilent/README.md)       | Loopback Client            | Draft | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/09-localhost) | Protocol team |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft | | [Octopus Network](https://oct.network) |
 
-### Relayer
+#### Relayer
 
 | Interchain Standard Number                                       | Standard Title             | Stage | Implementations | Maintainer    |
 | ---------------------------------------------------------------- | -------------------------- | ----- | --------------- | ------------- |
 | [18](spec/relayer/ics-018-relayer-algorithms/README.md)          | Relayer Algorithms         | Finalized | [go-relayer](https://github.com/cosmos/relayer), [rust-relayer](https://github.com/informalsystems/hermes), [ts-relayer](https://github.com/confio/ts-relayer) | Protocol team |
 
-### App
+#### App
 
 | Interchain Standard Number                               | Version | Standard Title          | Stage     | Implementations                                                                                                           | Maintainer         |
 | -------------------------------------------------------- | ------- | ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ |
