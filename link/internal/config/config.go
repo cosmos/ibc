@@ -106,8 +106,8 @@ func DefaultConfig() Config {
 	}
 }
 
-// LoadFromFile loads Config from file with optional validation.
-// Note: supports ENV variables expansion!
+// LoadFromFile loads Config from file with optional validation. Database URLs may carry explicit
+// ${NAME} environment references; other dollar-sign forms are literals.
 func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, error) {
 	config := DefaultConfig()
 
@@ -116,17 +116,18 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 		return Config{}, err
 	}
 
-	// substitute ENV variables
-	expanded := os.ExpandEnv(string(bz))
-
 	opts := []yaml.DecodeOption{}
 	if restrictUnknownFields {
 		opts = append(opts, yaml.DisallowUnknownField())
 	}
 
-	err = yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...)
+	err = yaml.UnmarshalWithOptions(bz, &config, opts...)
 	if err != nil {
 		return Config{}, err
+	}
+	config.DB.URL, err = ExpandEnvRefs(config.DB.URL)
+	if err != nil {
+		return Config{}, fmt.Errorf("expand .db.url: %w", err)
 	}
 
 	if validate {

@@ -83,19 +83,43 @@ db:
 		})
 
 		t.Run("envSubstitution", func(t *testing.T) {
-			// ARRANGE
+			t.Setenv("DATABASE_NAME", "ibc-test")
+			path := writeTestConfig(t, `
+db:
+  type: postgres
+  url: postgres://localhost/${DATABASE_NAME}
+`)
+
+			config, err := LoadFromFile(path, true, true)
+
+			require.NoError(t, err)
+			assert.Equal(t, "postgres://localhost/ibc-test", config.DB.URL)
+		})
+
+		t.Run("expansionIsTyped", func(t *testing.T) {
 			t.Setenv("SERVER_PORT", "9091")
 			path := writeTestConfig(t, `
 server:
   listenAddr: 127.0.0.1:${SERVER_PORT}
 `)
 
-			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFromFile(path, false, true)
 
-			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, "127.0.0.1:9091", config.Server.ListenAddress)
+			assert.Equal(t, "127.0.0.1:${SERVER_PORT}", config.Server.ListenAddress)
+		})
+
+		t.Run("missingEnvFails", func(t *testing.T) {
+			path := writeTestConfig(t, `
+db:
+  type: postgres
+  url: postgres://localhost/${IBC_LINK_TEST_MISSING_DATABASE}
+`)
+
+			_, err := LoadFromFile(path, true, true)
+
+			require.ErrorContains(t, err, "expand .db.url")
+			require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_DATABASE is not set")
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
