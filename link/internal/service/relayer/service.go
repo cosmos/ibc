@@ -42,7 +42,7 @@ var (
 	ErrNotFound     = errors.New("not found")
 )
 
-// TransferState coarse-grained relay state exposed via the API.
+// TransferState coarse-grained relay state.
 type TransferState int
 
 // Transfer states
@@ -53,13 +53,13 @@ const (
 	StateFailed
 )
 
-// TxInfo identifies a transaction on a chain.
+// TxInfo a transaction on a chain.
 type TxInfo struct {
 	TxHash  string
 	ChainID string
 }
 
-// PacketStatus the relay status of a single packet.
+// PacketStatus the relay status of a packet.
 type PacketStatus struct {
 	State          TransferState
 	SequenceNumber uint64
@@ -160,7 +160,6 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 	return transfers
 }
 
-// Status returns the per-packet relay status for a previously relayed transaction.
 func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketStatus, error) {
 	txHash, err := validateRelayArgs(chainID, txHash)
 	if err != nil {

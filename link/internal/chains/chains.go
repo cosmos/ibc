@@ -8,7 +8,6 @@ import (
 
 // Client provides chain-specific operations, implemented per chain type.
 type Client interface {
-	// TxPacketEvents parses packet events from the transaction's logs.
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error)
 }
 
@@ -21,7 +20,7 @@ const (
 	KindWriteAck
 )
 
-// Payload a single packet payload.
+// Payload a packet payload.
 type Payload struct {
 	SourcePort string
 	DestPort   string
@@ -39,7 +38,7 @@ type Packet struct {
 	Payloads         []Payload
 }
 
-// PacketEvent a packet event observed on chain.
+// PacketEvent a packet event.
 type PacketEvent struct {
 	Height    uint64
 	BlockTime time.Time

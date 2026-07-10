@@ -83,7 +83,7 @@ func ValidateConfigLive(cfg config.Config) error {
 	return nil
 }
 
-// RelayRequest is a request to relay the packets produced by a transaction.
+// RelayRequest a request to relay a transaction's packets.
 type RelayRequest struct {
 	ID        int64
 	ChainID   string
@@ -117,7 +117,7 @@ const (
 	TransferStatusFailed                      TransferStatus = "FAILED"
 )
 
-// WriteAckStatus the on-chain execution result carried by a write acknowledgement.
+// WriteAckStatus the execution result carried by a write ack.
 type WriteAckStatus string
 
 // Write ack statuses

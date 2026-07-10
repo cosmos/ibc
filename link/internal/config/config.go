@@ -95,7 +95,7 @@ type ChainConfig struct {
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
 }
 
-// EVMChainConfig connection details for an EVM chain.
+// EVMChainConfig EVM connection details.
 type EVMChainConfig struct {
 	RPC string `yaml:"rpc"`
 }
@@ -188,8 +188,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// validateChainReferences ensures every chain referenced by the relayer config
-// is declared in the top-level chains block.
+// validateChainReferences ensures relayer chains are declared in the top-level chains block.
 func (c Config) validateChainReferences() error {
 	for _, chain := range c.Relayer.Chains {
 		if _, ok := c.Chain(chain.ChainID); !ok {
