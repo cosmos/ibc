@@ -10,8 +10,6 @@ import (
 )
 
 // ClientManager holds the chain clients for all configured chains.
-// The clients map is never mutated after construction, so lookups are
-// safe for concurrent use.
 type ClientManager struct {
 	clients map[string]chains.Client
 }
