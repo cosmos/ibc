@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding/hex"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
@@ -81,7 +81,7 @@ func New(cfg config.RelayerConfig, st Store, clientManager ChainClientManager) *
 }
 
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
-	txHash, err := validateRelayArgs(chainID, txHash)
+	txHash, err := s.validateRelayArgs(chainID, txHash)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 }
 
 func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketStatus, error) {
-	txHash, err := validateRelayArgs(chainID, txHash)
+	txHash, err := s.validateRelayArgs(chainID, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -194,22 +194,32 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 	return statuses, nil
 }
 
-var txHashPattern = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
-
-// validateRelayArgs normalizes the tx hash to lowercase so lookups are case-insensitive.
-func validateRelayArgs(chainID, txHash string) (string, error) {
-	txHash = strings.ToLower(txHash)
-
+// validateRelayArgs validates the tx hash for the chain's type and returns
+// its canonical lowercase form so lookups are case-insensitive.
+func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 	switch {
 	case chainID == "":
 		return "", errors.Wrap(ErrInvalidInput, "chainID is required")
 	case txHash == "":
 		return "", errors.Wrap(ErrInvalidInput, "txHash is required")
-	case !txHashPattern.MatchString(txHash):
-		return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a 0x-prefixed 32-byte hex string", txHash)
 	}
 
-	return txHash, nil
+	chain, ok := s.cfg.Chain(chainID)
+	if !ok {
+		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
+	}
+
+	switch chain.Type() {
+	case config.ChainTypeEVM:
+		var hash common.Hash
+		if err := hash.UnmarshalText([]byte(txHash)); err != nil {
+			return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
+		}
+
+		return hash.Hex(), nil
+	default:
+		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain type for chain %q", chainID)
+	}
 }
 
 func mapTransferState(status store.TransferStatus) TransferState {

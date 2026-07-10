@@ -28,6 +28,11 @@ func relayerConfig() config.RelayerConfig {
 		Chains: []config.RelayerChainConfig{
 			{
 				ChainID: chainIDEth,
+				EVM: &config.RelayerEVMConfig{
+					Contracts: config.EVMContracts{
+						ICS26Router: "0x0000000000000000000000000000000000000000",
+					},
+				},
 				Clients: []config.ClientConfig{
 					{
 						ID:                  "base-0",
@@ -116,15 +121,10 @@ func TestRelay(t *testing.T) {
 
 	t.Run("unsupportedChain", func(t *testing.T) {
 		// ARRANGE
-		ctx := context.Background()
-		clientManager := NewMockChainClientManager(t)
-		service := New(relayerConfig(), NewMockStore(t), clientManager)
-
-		// nothing is recorded for an unsupported chain
-		clientManager.EXPECT().GetClient("999").Return(nil, errors.New("no configured chain client")).Once()
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClientManager(t))
 
 		// ACT
-		err := service.Relay(ctx, "999", txHashLower)
+		err := service.Relay(context.Background(), "999", txHashLower)
 
 		// ASSERT
 		require.ErrorIs(t, err, ErrInvalidInput)
@@ -164,7 +164,7 @@ func TestRelay(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				service := New(config.RelayerConfig{}, NewMockStore(t), NewMockChainClientManager(t))
+				service := New(relayerConfig(), NewMockStore(t), NewMockChainClientManager(t))
 
 				// ACT
 				err := service.Relay(context.Background(), tt.chainID, tt.txHash)
@@ -204,7 +204,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st, NewMockChainClientManager(t))
+		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(nil, store.ErrNotFound).Once()
 
@@ -219,7 +219,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st, NewMockChainClientManager(t))
+		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
 		st.EXPECT().ListTransfersBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
@@ -236,7 +236,7 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(config.RelayerConfig{}, st, NewMockChainClientManager(t))
+		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
 		recvTxHash := "0xrecv"
 		transfers := []store.Transfer{

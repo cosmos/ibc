@@ -39,6 +39,15 @@ type RelayerChainConfig struct {
 	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout"`
 }
 
+// Type returns the chain type implied by the configured settings.
+func (c RelayerChainConfig) Type() ChainType {
+	if c.EVM != nil {
+		return ChainTypeEVM
+	}
+
+	return ""
+}
+
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
 	Contracts           EVMContracts  `yaml:"contracts"`
