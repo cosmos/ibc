@@ -48,6 +48,7 @@ relayer:
       clientId: "base-0"
       chainId: "1"
       counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
       type: "attestation"
       attestorSet:
         threshold: 1
@@ -55,6 +56,7 @@ relayer:
       clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
+      counterpartyClientId: "base-0"
       type: "attestation"
       attestorSet:
         threshold: 1

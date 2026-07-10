@@ -58,6 +58,7 @@ relayer:
       clientId: "base-0"
       chainId: "1"
       counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
       type: "attestation"
       attestorSet:
         counterpartyChainFinalityOffset: 1
@@ -66,6 +67,7 @@ relayer:
       clientId: "ethereum-0"
       chainId: "8453"
       counterpartyChainId: "1"
+      counterpartyClientId: "base-0"
       type: "attestation"
       attestorSet:
         threshold: 1
@@ -107,6 +109,7 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "base-0", client.ClientID)
 		assert.Equal(t, "1", client.ChainID)
 		assert.Equal(t, "8453", client.CounterpartyChainID)
+		assert.Equal(t, "ethereum-0", client.CounterpartyClientID)
 		assert.Equal(t, ClientTypeAttestation, client.Type)
 
 		require.Len(t, config.Relayer.Attestors, 4)
@@ -238,12 +241,26 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `counterpartyChainId "999" not declared`,
 			},
 			{
-				name: "counterparty chain has no client back",
+				name: "client missing counterpartyClientId",
+				patch: func(c *Config) {
+					c.Relayer.Clients[0].CounterpartyClientID = ""
+				},
+				errContains: ".counterpartyClientId required",
+			},
+			{
+				name: "counterparty client not configured",
 				patch: func(c *Config) {
 					c.Relayer.Clients = c.Relayer.Clients[:1]
 					c.Relayer.Routes = c.Relayer.Routes[:1]
 				},
-				errContains: `counterparty chain "8453" must configure a client with counterpartyChainId "1"`,
+				errContains: `counterparty client "ethereum-0" on chain "8453" must also be configured`,
+			},
+			{
+				name: "counterparty client does not reference back",
+				patch: func(c *Config) {
+					c.Relayer.Clients[1].CounterpartyClientID = "other-0"
+				},
+				errContains: `counterparty client "base-to-eth" does not reference it back`,
 			},
 			{
 				name: "negative batch size",

@@ -57,12 +57,15 @@ type GasAlertThresholds struct {
 // ClientConfig a light client on a chain.
 type ClientConfig struct {
 	// Alias unique config-level handle referenced by attestors and routes.
-	Alias               string             `yaml:"alias"`
-	ClientID            string             `yaml:"clientId"`
-	ChainID             string             `yaml:"chainId"`
-	CounterpartyChainID string             `yaml:"counterpartyChainId"`
-	Type                ClientType         `yaml:"type"`
-	AttestorSet         *AttestorSetConfig `yaml:"attestorSet,omitempty"`
+	Alias               string `yaml:"alias"`
+	ClientID            string `yaml:"clientId"`
+	ChainID             string `yaml:"chainId"`
+	CounterpartyChainID string `yaml:"counterpartyChainId"`
+	// CounterpartyClientID identifies the counterparty client since multiple
+	// clients can be configured for the same chain pair.
+	CounterpartyClientID string             `yaml:"counterpartyClientId"`
+	Type                 ClientType         `yaml:"type"`
+	AttestorSet          *AttestorSetConfig `yaml:"attestorSet,omitempty"`
 }
 
 // AttestorSetConfig attestation policy for a client. The set's attestors are
@@ -236,19 +239,22 @@ func (c RelayerConfig) validateClients() error {
 
 // validateCounterparty ensures both sides of a connection are configured for bi-directional relaying.
 func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
-	for _, counterpartyClient := range c.Clients {
-		if counterpartyClient.ChainID == client.CounterpartyChainID &&
-			counterpartyClient.CounterpartyChainID == client.ChainID {
-			return nil
-		}
+	counterparty, ok := c.Client(client.CounterpartyChainID, client.CounterpartyClientID)
+	if !ok {
+		return errors.Errorf(
+			".clients[%s] counterparty client %q on chain %q must also be configured for bi-directional relaying",
+			client.Alias, client.CounterpartyClientID, client.CounterpartyChainID,
+		)
 	}
 
-	return errors.Errorf(
-		".clients[%s] counterparty chain %q must configure a client with counterpartyChainId %q for bi-directional relaying",
-		client.Alias,
-		client.CounterpartyChainID,
-		client.ChainID,
-	)
+	if counterparty.CounterpartyChainID != client.ChainID || counterparty.CounterpartyClientID != client.ClientID {
+		return errors.Errorf(
+			".clients[%s] counterparty client %q does not reference it back",
+			client.Alias, counterparty.Alias,
+		)
+	}
+
+	return nil
 }
 
 func (c RelayerConfig) validateRoutes() error {
@@ -340,6 +346,8 @@ func (c ClientConfig) Validate() error {
 		return errors.Errorf(".type must be %q, got %q", ClientTypeAttestation, c.Type)
 	case c.CounterpartyChainID == "":
 		return errors.New(".counterpartyChainId required")
+	case c.CounterpartyClientID == "":
+		return errors.New(".counterpartyClientId required")
 	}
 
 	if c.Type == ClientTypeAttestation {
