@@ -171,8 +171,16 @@ func (c RelayerConfig) validateAttestors() error {
 			return errors.Wrapf(err, ".attestors[%d]", i)
 		}
 
-		if _, ok := c.ClientByAlias(attestor.Client); !ok {
+		client, ok := c.ClientByAlias(attestor.Client)
+		if !ok {
 			return errors.Errorf(".attestors[%s] references unknown client %q", attestor.Name, attestor.Client)
+		}
+
+		if client.Type != ClientTypeAttestation {
+			return errors.Errorf(
+				".attestors[%s] client %q must have type %q",
+				attestor.Name, attestor.Client, ClientTypeAttestation,
+			)
 		}
 
 		if _, ok := seen[attestor]; ok {

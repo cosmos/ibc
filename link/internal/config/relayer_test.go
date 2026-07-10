@@ -129,6 +129,20 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Nil(t, config.Relayer.Routes[1].AutoRelay.Enabled)
 	})
 
+	t.Run("AttestorRequiresAttestationClient", func(t *testing.T) {
+		cfg := RelayerConfig{
+			Clients: []ClientConfig{
+				{Alias: "eth-to-base", Type: "zk"},
+			},
+			Attestors: []AttestorEntry{
+				{Name: "attestor-1", Type: AttestorTypeLocal, Client: "eth-to-base"},
+			},
+		}
+
+		err := cfg.validateAttestors()
+		require.ErrorContains(t, err, `client "eth-to-base" must have type "attestation"`)
+	})
+
 	t.Run("Helpers", func(t *testing.T) {
 		// ARRANGE
 		path := writeTestConfig(t, fullRelayerConfig)
