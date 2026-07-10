@@ -24,13 +24,14 @@ chains:
       ics26Router: "0x0000000000000000000000000000000000000000"
 
 relayer:
-  # optional per-chain overrides of the default relay settings
+  # relay specific chain settings
   chains:
     - chainId: "1"
       txSubmissionDelay: 5s
       packetBatchSize: 50
 
-  # attestors the relayer queries for their associated client
+  # attestors the relayer queries for packet and state attestations; they
+  # point to a configured client
   attestors:
     - name: "attestor-base"
       type: remote
@@ -41,8 +42,7 @@ relayer:
       grpc: attestor.example.com:3000
       client: "base-to-eth"
 
-  # light client information; connections are relayed bi-directionally, so
-  # both chains configure a client
+  # a client and its counterparty both need to be configured
   clients:
     - alias: "eth-to-base"
       clientId: "base-0"
