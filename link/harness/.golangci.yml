@@ -1,0 +1,68 @@
+# Lint config for the e2e harness module. Mirrors link/.golangci.yml except that revive's
+# exported rule is off: the harness is test infrastructure consumed only by link/e2e, so
+# exported identifiers carry no doc-comment mandate.
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 30m
+  tests: false
+
+issues:
+  max-same-issues: 50
+
+formatters:
+  enable: [gci, gofmt, gofumpt, golines]
+  exclusions:
+    generated: lax
+  settings:
+    gci:
+      sections:
+        - "standard"
+        - "prefix(github.com/cosmos/ibc/link)"
+        - "default"
+        - "alias"
+        - "blank" # e.g. sql drivers
+    gofmt:
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+    golines:
+      max-len: 120
+
+linters:
+  enable:
+    - asciicheck
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
+    - goconst
+    - govet
+    - gocritic
+    - misspell
+    - nakedret
+    - nolintlint
+    - staticcheck
+    - unconvert
+    - unused
+    - revive
+    - errcheck
+    - errorlint
+
+  settings:
+    dogsled:
+      max-blank-identifiers: 3
+    misspell:
+      locale: US
+    govet:
+      enable: [shadow]
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: lax

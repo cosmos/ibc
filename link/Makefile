@@ -10,6 +10,12 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
+lint-e2e: ## Lint the e2e modules
+	cd harness && golangci-lint run
+
+lint-fix-e2e: ## Lint the e2e modules and fix errors
+	cd harness && golangci-lint run --fix
+
 codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
@@ -24,4 +30,4 @@ codegen-mocks: ## Generate mocks for the code
 test: ## Run tests
 	go test ./... -v
 
-.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-mocks
+.PHONY: help build lint lint-fix lint-e2e lint-fix-e2e test codegen codegen-sql codegen-proto codegen-mocks

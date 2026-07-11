@@ -1,0 +1,14 @@
+# TEST-ONLY FIXTURE foundry project for the IBC Link e2e harness (decision D6).
+# The contracts under src/ are trivial mocks, NOT the real Eureka stack. They are built
+# once with `make fixtures` (forge 1.7.1) and their artifacts are go:embed-ed by ../fixtures/embed.go,
+# so no forge invocation is needed at test runtime.
+[profile.default]
+src = "src"
+out = "out"
+libs = []
+# No external libraries: the fixtures are deliberately self-contained (no OpenZeppelin) so the
+# embedded artifacts stay tiny and reproducible.
+optimizer = true
+optimizer_runs = 200
+# Pin the language version for reproducible bytecode. The pragmas in src/ allow this exact version.
+solc_version = "0.8.28"

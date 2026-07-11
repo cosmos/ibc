@@ -1,0 +1,24 @@
+chains:
+    - id: chain-a
+      type: evm
+      provider: anvil
+      chainId: 31337
+      evmSignerKey: 59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+      rpc:
+        url: http://127.0.0.1:8545
+    - id: chain-b
+      type: evm
+      provider: anvil
+      chainId: 31338
+      evmSignerKey: 59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+      rpc:
+        url: http://127.0.0.1:8546
+db:
+    type: sqlite
+    url: /run/ibc-link/relayer.db
+relayer:
+    routes:
+        - id: route-a-to-b
+          source: chain-a
+          destination: chain-b
+          type: evmToEvmAttested

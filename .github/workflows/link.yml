@@ -1,0 +1,44 @@
+name: Link
+
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - "link/**"
+      - ".github/workflows/link.yml"
+  pull_request:
+    branches: [main, development]
+    paths:
+      - "link/**"
+      - ".github/workflows/link.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [link, link/harness]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          working-directory: ${{ matrix.module }}
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [link, link/harness]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - run: go test ./...
+        working-directory: ${{ matrix.module }}
