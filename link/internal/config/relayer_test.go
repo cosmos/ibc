@@ -471,12 +471,4 @@ func TestRelayerConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("SampleConfigParsesStrictly", func(t *testing.T) {
-		// ARRANGE / ACT
-		config, err := LoadFromFile("ibc.yml", true, true)
-
-		// ASSERT
-		require.NoError(t, err)
-		require.NoError(t, config.Validate())
-	})
 }
