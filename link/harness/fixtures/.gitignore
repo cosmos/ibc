@@ -1,0 +1,5 @@
+# Regenerable forge build noise. The compiled artifact JSONs under out/<Name>.sol/ are
+# intentionally NOT ignored: they are committed and go:embed-ed so no forge run is needed at test
+# runtime (decision D6). Everything below is reproducible from `make fixtures`.
+/cache/
+/out/build-info/
