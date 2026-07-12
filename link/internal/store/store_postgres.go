@@ -183,7 +183,7 @@ func (db *PostgresDB) CreatePacket(ctx context.Context, packet Packet) error {
 		return errors.Wrap(err, "invalid packet")
 	}
 
-	_, err := db.repo.InsertPacket(ctx, postgres.InsertPacketParams{
+	_, err := db.repo.CreatePacket(ctx, postgres.CreatePacketParams{
 		SourceChainID:             packet.SourceChainID,
 		DestinationChainID:        packet.DestinationChainID,
 		SourceTxHash:              packet.SourceTxHash,

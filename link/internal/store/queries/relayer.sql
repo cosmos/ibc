@@ -8,7 +8,7 @@ INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES (sqlc.arg(chain_id), sqlc.arg(tx_hash))
 ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING;
 
--- name: InsertPacket :execrows
+-- name: CreatePacket :execrows
 INSERT INTO packets (
     source_chain_id,
     destination_chain_id,

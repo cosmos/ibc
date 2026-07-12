@@ -11,6 +11,57 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createPacket = `-- name: CreatePacket :execrows
+INSERT INTO packets (
+    source_chain_id,
+    destination_chain_id,
+    source_tx_hash,
+    source_tx_time,
+    packet_sequence_number,
+    packet_source_client_id,
+    packet_destination_client_id,
+    packet_timeout_timestamp
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8
+)
+ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO NOTHING
+`
+
+type CreatePacketParams struct {
+	SourceChainID             string
+	DestinationChainID        string
+	SourceTxHash              string
+	SourceTxTime              pgtype.Timestamptz
+	PacketSequenceNumber      int64
+	PacketSourceClientID      string
+	PacketDestinationClientID string
+	PacketTimeoutTimestamp    pgtype.Timestamptz
+}
+
+func (q *Queries) CreatePacket(ctx context.Context, arg CreatePacketParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createPacket,
+		arg.SourceChainID,
+		arg.DestinationChainID,
+		arg.SourceTxHash,
+		arg.SourceTxTime,
+		arg.PacketSequenceNumber,
+		arg.PacketSourceClientID,
+		arg.PacketDestinationClientID,
+		arg.PacketTimeoutTimestamp,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createRelayRequest = `-- name: CreateRelayRequest :exec
 INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES ($1, $2)
@@ -38,57 +89,6 @@ func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash st
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const insertPacket = `-- name: InsertPacket :execrows
-INSERT INTO packets (
-    source_chain_id,
-    destination_chain_id,
-    source_tx_hash,
-    source_tx_time,
-    packet_sequence_number,
-    packet_source_client_id,
-    packet_destination_client_id,
-    packet_timeout_timestamp
-) VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8
-)
-ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO NOTHING
-`
-
-type InsertPacketParams struct {
-	SourceChainID             string
-	DestinationChainID        string
-	SourceTxHash              string
-	SourceTxTime              pgtype.Timestamptz
-	PacketSequenceNumber      int64
-	PacketSourceClientID      string
-	PacketDestinationClientID string
-	PacketTimeoutTimestamp    pgtype.Timestamptz
-}
-
-func (q *Queries) InsertPacket(ctx context.Context, arg InsertPacketParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertPacket,
-		arg.SourceChainID,
-		arg.DestinationChainID,
-		arg.SourceTxHash,
-		arg.SourceTxTime,
-		arg.PacketSequenceNumber,
-		arg.PacketSourceClientID,
-		arg.PacketDestinationClientID,
-		arg.PacketTimeoutTimestamp,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const listPacketsBySourceTx = `-- name: ListPacketsBySourceTx :many
