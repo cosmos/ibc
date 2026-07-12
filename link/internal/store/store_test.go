@@ -105,7 +105,7 @@ func testMigrationIdempotency(t *testing.T, m Migrator) {
 
 	applied, err := m.MigrateUp()
 	require.NoError(t, err)
-	require.Equal(t, 2, applied)
+	require.Equal(t, 1, applied)
 
 	// Roll all migrations back one at a time
 	for range applied {
