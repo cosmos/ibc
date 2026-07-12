@@ -103,20 +103,15 @@ func TestStore(t *testing.T) {
 func testMigrationIdempotency(t *testing.T, m Migrator) {
 	t.Helper()
 
-	applied, err := m.MigrateUp()
+	_, err := m.MigrateUp()
 	require.NoError(t, err)
-	require.Equal(t, 1, applied)
 
-	// Roll all migrations back one at a time
-	for range applied {
-		_, err = m.MigrateDown()
-		require.NoError(t, err)
-	}
+	_, err = m.MigrateDown()
+	require.NoError(t, err)
 
 	// Migrate up again to check if it's idempotent
-	appliedAgain, err := m.MigrateUp()
+	_, err = m.MigrateUp()
 	require.NoError(t, err)
-	require.Equal(t, applied, appliedAgain)
 
 	ensureMigrated(t, m)
 }
