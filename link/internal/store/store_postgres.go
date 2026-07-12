@@ -231,11 +231,10 @@ func packetFromPostgres(row postgres.Packet) Packet {
 		Status:     RelayStatus(row.Status),
 		StatusText: row.StatusText,
 
-		SourceChainID:         row.SourceChainID,
-		DestinationChainID:    row.DestinationChainID,
-		SourceTxHash:          row.SourceTxHash,
-		SourceTxTime:          row.SourceTxTime.Time.UTC(),
-		SourceTxFinalizedTime: pgTimePtr(row.SourceTxFinalizedTime),
+		SourceChainID:      row.SourceChainID,
+		DestinationChainID: row.DestinationChainID,
+		SourceTxHash:       row.SourceTxHash,
+		SourceTxTime:       row.SourceTxTime.Time.UTC(),
 
 		PacketSequenceNumber:      uint64(row.PacketSequenceNumber), //nolint:gosec // sequences fit in int64
 		PacketSourceClientID:      row.PacketSourceClientID,
@@ -246,10 +245,9 @@ func packetFromPostgres(row postgres.Packet) Packet {
 		RecvTxTime:           pgTimePtr(row.RecvTxTime),
 		RecvTxRelayerAddress: row.RecvTxRelayerAddress,
 
-		WriteAckTxHash:          row.WriteAckTxHash,
-		WriteAckTxTime:          pgTimePtr(row.WriteAckTxTime),
-		WriteAckTxFinalizedTime: pgTimePtr(row.WriteAckTxFinalizedTime),
-		WriteAckStatus:          writeAckStatusPtr(row.WriteAckStatus),
+		WriteAckTxHash: row.WriteAckTxHash,
+		WriteAckTxTime: pgTimePtr(row.WriteAckTxTime),
+		WriteAckStatus: writeAckStatusPtr(row.WriteAckStatus),
 
 		AckTxHash:           row.AckTxHash,
 		AckTxTime:           pgTimePtr(row.AckTxTime),

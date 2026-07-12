@@ -233,11 +233,10 @@ func packetFromSqlite(row reposqlite.Packet) Packet {
 		Status:     RelayStatus(row.Status),
 		StatusText: row.StatusText,
 
-		SourceChainID:         row.SourceChainID,
-		DestinationChainID:    row.DestinationChainID,
-		SourceTxHash:          row.SourceTxHash,
-		SourceTxTime:          row.SourceTxTime.UTC(),
-		SourceTxFinalizedTime: utcTimePtr(row.SourceTxFinalizedTime),
+		SourceChainID:      row.SourceChainID,
+		DestinationChainID: row.DestinationChainID,
+		SourceTxHash:       row.SourceTxHash,
+		SourceTxTime:       row.SourceTxTime.UTC(),
 
 		PacketSequenceNumber:      uint64(row.PacketSequenceNumber), //nolint:gosec // sequences fit in int64
 		PacketSourceClientID:      row.PacketSourceClientID,
@@ -248,10 +247,9 @@ func packetFromSqlite(row reposqlite.Packet) Packet {
 		RecvTxTime:           utcTimePtr(row.RecvTxTime),
 		RecvTxRelayerAddress: row.RecvTxRelayerAddress,
 
-		WriteAckTxHash:          row.WriteAckTxHash,
-		WriteAckTxTime:          utcTimePtr(row.WriteAckTxTime),
-		WriteAckTxFinalizedTime: utcTimePtr(row.WriteAckTxFinalizedTime),
-		WriteAckStatus:          writeAckStatusPtr(row.WriteAckStatus),
+		WriteAckTxHash: row.WriteAckTxHash,
+		WriteAckTxTime: utcTimePtr(row.WriteAckTxTime),
+		WriteAckStatus: writeAckStatusPtr(row.WriteAckStatus),
 
 		AckTxHash:           row.AckTxHash,
 		AckTxTime:           utcTimePtr(row.AckTxTime),

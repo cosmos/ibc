@@ -18,7 +18,6 @@ type Packet struct {
 	DestinationChainID        string
 	SourceTxHash              string
 	SourceTxTime              pgtype.Timestamptz
-	SourceTxFinalizedTime     pgtype.Timestamptz
 	PacketSequenceNumber      int64
 	PacketSourceClientID      string
 	PacketDestinationClientID string
@@ -28,7 +27,6 @@ type Packet struct {
 	RecvTxRelayerAddress      *string
 	WriteAckTxHash            *string
 	WriteAckTxTime            pgtype.Timestamptz
-	WriteAckTxFinalizedTime   pgtype.Timestamptz
 	WriteAckStatus            *string
 	AckTxHash                 *string
 	AckTxTime                 pgtype.Timestamptz

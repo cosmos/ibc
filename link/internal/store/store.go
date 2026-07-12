@@ -136,11 +136,10 @@ type Packet struct {
 	Status     RelayStatus
 	StatusText *string
 
-	SourceChainID         string
-	DestinationChainID    string
-	SourceTxHash          string
-	SourceTxTime          time.Time
-	SourceTxFinalizedTime *time.Time
+	SourceChainID      string
+	DestinationChainID string
+	SourceTxHash       string
+	SourceTxTime       time.Time
 
 	PacketSequenceNumber      uint64
 	PacketSourceClientID      string
@@ -151,10 +150,9 @@ type Packet struct {
 	RecvTxTime           *time.Time
 	RecvTxRelayerAddress *string
 
-	WriteAckTxHash          *string
-	WriteAckTxTime          *time.Time
-	WriteAckTxFinalizedTime *time.Time
-	WriteAckStatus          *WriteAckStatus
+	WriteAckTxHash *string
+	WriteAckTxTime *time.Time
+	WriteAckStatus *WriteAckStatus
 
 	AckTxHash           *string
 	AckTxTime           *time.Time
