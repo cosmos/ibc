@@ -13,7 +13,7 @@ lint-fix: ## Lint the code and fix errors
 codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
-	cd internal/store && sqlc generate
+	cd internal/store && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
 
 codegen-proto: ## Generate Go proto bindings
 	cd ../proto && buf generate
