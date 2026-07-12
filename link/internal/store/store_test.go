@@ -165,7 +165,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	t.Run("execTx", func(t *testing.T) {
 		const txHashAtomic = "0xa70m1c"
 
-		transfer := Transfer{
+		packet := Packet{
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
 			SourceTxHash:              txHashAtomic,
@@ -181,7 +181,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
 				return err
 			}
-			if err := repo.CreateTransfer(ctx, transfer); err != nil {
+			if err := repo.CreatePacket(ctx, packet); err != nil {
 				return err
 			}
 
@@ -192,9 +192,9 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		_, err = s.GetRelayRequest(ctx, chainIDEth, txHashAtomic)
 		require.ErrorIs(t, err, ErrNotFound)
 
-		transfers, err := s.ListTransfersBySourceTx(ctx, chainIDEth, txHashAtomic)
+		packets, err := s.ListPacketsBySourceTx(ctx, chainIDEth, txHashAtomic)
 		require.NoError(t, err)
-		assert.Empty(t, transfers)
+		assert.Empty(t, packets)
 
 		// A successful fn commits every write
 		err = s.ExecTx(ctx, func(repo Repository) error {
@@ -202,21 +202,21 @@ func testRepoReadWrite(t *testing.T, s Store) {
 				return err
 			}
 
-			return repo.CreateTransfer(ctx, transfer)
+			return repo.CreatePacket(ctx, packet)
 		})
 		require.NoError(t, err)
 
 		_, err = s.GetRelayRequest(ctx, chainIDEth, txHashAtomic)
 		require.NoError(t, err)
 
-		transfers, err = s.ListTransfersBySourceTx(ctx, chainIDEth, txHashAtomic)
+		packets, err = s.ListPacketsBySourceTx(ctx, chainIDEth, txHashAtomic)
 		require.NoError(t, err)
-		require.Len(t, transfers, 1)
-		assert.Equal(t, uint64(7), transfers[0].PacketSequenceNumber)
+		require.Len(t, packets, 1)
+		assert.Equal(t, uint64(7), packets[0].PacketSequenceNumber)
 	})
 
-	t.Run("transfers", func(t *testing.T) {
-		transfer := Transfer{
+	t.Run("packets", func(t *testing.T) {
+		packet := Packet{
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
 			SourceTxHash:              txHashEth,
@@ -227,52 +227,52 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			PacketTimeoutTimestamp:    time.Date(2026, 7, 8, 13, 0, 0, 0, time.UTC),
 		}
 
-		// No transfers for the source tx yet
-		transfers, err := s.ListTransfersBySourceTx(ctx, chainIDEth, txHashEth)
+		// No packets for the source tx yet
+		packets, err := s.ListPacketsBySourceTx(ctx, chainIDEth, txHashEth)
 		require.NoError(t, err)
-		assert.Empty(t, transfers)
+		assert.Empty(t, packets)
 
-		// Insert a transfer
-		require.NoError(t, s.CreateTransfer(ctx, transfer))
+		// Insert a packet
+		require.NoError(t, s.CreatePacket(ctx, packet))
 
 		// Insert the same packet again (noop)
-		require.NoError(t, s.CreateTransfer(ctx, transfer))
+		require.NoError(t, s.CreatePacket(ctx, packet))
 
 		// Insert a second packet from the same tx
-		second := transfer
+		second := packet
 		second.PacketSequenceNumber = 43
-		require.NoError(t, s.CreateTransfer(ctx, second))
+		require.NoError(t, s.CreatePacket(ctx, second))
 
-		// List transfers for the source tx
-		transfers, err = s.ListTransfersBySourceTx(ctx, chainIDEth, txHashEth)
+		// List packets for the source tx
+		packets, err = s.ListPacketsBySourceTx(ctx, chainIDEth, txHashEth)
 		require.NoError(t, err)
-		require.Len(t, transfers, 2)
+		require.Len(t, packets, 2)
 
 		// Ordered by sequence, defaults applied, round-trips intact
-		first := transfers[0]
+		first := packets[0]
 		assert.Equal(t, uint64(42), first.PacketSequenceNumber)
-		assert.Equal(t, uint64(43), transfers[1].PacketSequenceNumber)
-		assert.Equal(t, TransferStatusPending, first.Status)
+		assert.Equal(t, uint64(43), packets[1].PacketSequenceNumber)
+		assert.Equal(t, RelayStatusPending, first.Status)
 		assert.Equal(t, chainIDEth, first.SourceChainID)
 		assert.Equal(t, chainIDBase, first.DestinationChainID)
 		assert.Equal(t, "base-0", first.PacketSourceClientID)
 		assert.Equal(t, "ethereum-0", first.PacketDestinationClientID)
-		assert.Equal(t, transfer.SourceTxTime, first.SourceTxTime)
-		assert.Equal(t, transfer.PacketTimeoutTimestamp, first.PacketTimeoutTimestamp)
+		assert.Equal(t, packet.SourceTxTime, first.SourceTxTime)
+		assert.Equal(t, packet.PacketTimeoutTimestamp, first.PacketTimeoutTimestamp)
 		assert.NotZero(t, first.CreatedAt)
 		assert.NotZero(t, first.UpdatedAt)
 		assert.Nil(t, first.RecvTxHash)
 		assert.Nil(t, first.WriteAckStatus)
 		assert.Nil(t, first.StatusText)
 
-		// Invalid transfer is rejected
-		invalid := transfer
+		// Invalid packet is rejected
+		invalid := packet
 		invalid.SourceChainID = ""
-		require.ErrorContains(t, s.CreateTransfer(ctx, invalid), "source chain id is required")
+		require.ErrorContains(t, s.CreatePacket(ctx, invalid), "source chain id is required")
 
 		// Unknown tx returns empty list, not an error
-		transfers, err = s.ListTransfersBySourceTx(ctx, chainIDEth, "0xunknown")
+		packets, err = s.ListPacketsBySourceTx(ctx, chainIDEth, "0xunknown")
 		require.NoError(t, err)
-		assert.Empty(t, transfers)
+		assert.Empty(t, packets)
 	})
 }

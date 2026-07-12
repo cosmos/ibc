@@ -32,7 +32,7 @@ type ChainClientManager interface {
 // Store persistence used by the relayer.
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
-	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Transfer, error)
+	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
 	ExecTx(ctx context.Context, fn func(store.Repository) error) error
 }
 
@@ -42,12 +42,12 @@ var (
 	ErrNotFound     = errors.New("not found")
 )
 
-// TransferState coarse-grained relay state.
-type TransferState int
+// PacketState coarse-grained relay state.
+type PacketState int
 
-// Transfer states
+// Packet states
 const (
-	StateUnknown TransferState = iota
+	StateUnknown PacketState = iota
 	StatePending
 	StateComplete
 	StateFailed
@@ -61,7 +61,7 @@ type TxInfo struct {
 
 // PacketStatus the relay status of a packet.
 type PacketStatus struct {
-	State          TransferState
+	State          PacketState
 	SequenceNumber uint64
 	SourceClientID string
 	SendTx         TxInfo
@@ -101,16 +101,16 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return errors.Wrap(err, "extracting packet events")
 	}
 
-	transfers := s.transfersFromEvents(chainID, txHash, events)
+	packets := s.packetsFromEvents(chainID, txHash, events)
 
 	err = s.store.ExecTx(ctx, func(repo store.Repository) error {
 		if errCreate := repo.CreateRelayRequest(ctx, chainID, txHash); errCreate != nil {
 			return errors.Wrap(errCreate, "creating relay request")
 		}
 
-		for _, transfer := range transfers {
-			if errCreate := repo.CreateTransfer(ctx, transfer); errCreate != nil {
-				return errors.Wrapf(errCreate, "creating transfer for packet %d", transfer.PacketSequenceNumber)
+		for _, packet := range packets {
+			if errCreate := repo.CreatePacket(ctx, packet); errCreate != nil {
+				return errors.Wrapf(errCreate, "creating packet for packet %d", packet.PacketSequenceNumber)
 			}
 		}
 
@@ -120,13 +120,13 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return errors.Wrap(err, "recording relay request")
 	}
 
-	s.logger.Info("Recorded relay request", "chainID", chainID, "txHash", txHash, "packets", len(transfers))
+	s.logger.Info("Recorded relay request", "chainID", chainID, "txHash", txHash, "packets", len(packets))
 
 	return nil
 }
 
-func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.Transfer {
-	var transfers []store.Transfer
+func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.Packet {
+	var packets []store.Packet
 
 	for _, event := range events {
 		if event.Kind != chains.KindSendPacket {
@@ -145,7 +145,7 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 			continue
 		}
 
-		transfers = append(transfers, store.Transfer{
+		packets = append(packets, store.Packet{
 			SourceChainID:             chainID,
 			DestinationChainID:        client.CounterpartyChainID,
 			SourceTxHash:              txHash,
@@ -157,7 +157,7 @@ func (s *Service) transfersFromEvents(chainID, txHash string, events []chains.Pa
 		})
 	}
 
-	return transfers
+	return packets
 }
 
 func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketStatus, error) {
@@ -173,21 +173,21 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 		return nil, errors.Wrap(errGet, "getting relay request")
 	}
 
-	transfers, err := s.store.ListTransfersBySourceTx(ctx, chainID, txHash)
+	packets, err := s.store.ListPacketsBySourceTx(ctx, chainID, txHash)
 	if err != nil {
-		return nil, errors.Wrap(err, "listing transfers")
+		return nil, errors.Wrap(err, "listing packets")
 	}
 
-	statuses := make([]PacketStatus, len(transfers))
-	for i, transfer := range transfers {
+	statuses := make([]PacketStatus, len(packets))
+	for i, packet := range packets {
 		statuses[i] = PacketStatus{
-			State:          mapTransferState(transfer.Status),
-			SequenceNumber: transfer.PacketSequenceNumber,
-			SourceClientID: transfer.PacketSourceClientID,
-			SendTx:         TxInfo{TxHash: transfer.SourceTxHash, ChainID: transfer.SourceChainID},
-			RecvTx:         toTxInfo(transfer.RecvTxHash, transfer.DestinationChainID),
-			AckTx:          toTxInfo(transfer.AckTxHash, transfer.SourceChainID),
-			TimeoutTx:      toTxInfo(transfer.TimeoutTxHash, transfer.SourceChainID),
+			State:          mapPacketState(packet.Status),
+			SequenceNumber: packet.PacketSequenceNumber,
+			SourceClientID: packet.PacketSourceClientID,
+			SendTx:         TxInfo{TxHash: packet.SourceTxHash, ChainID: packet.SourceChainID},
+			RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
+			AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
+			TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
 		}
 	}
 
@@ -222,14 +222,14 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 	}
 }
 
-func mapTransferState(status store.TransferStatus) TransferState {
+func mapPacketState(status store.RelayStatus) PacketState {
 	switch status {
-	case store.TransferStatusCompleteWithAck,
-		store.TransferStatusCompleteWithTimeout,
-		store.TransferStatusCompleteWithWriteAckSuccess,
-		store.TransferStatusCompleteWithWriteAckError:
+	case store.RelayStatusCompleteWithAck,
+		store.RelayStatusCompleteWithTimeout,
+		store.RelayStatusCompleteWithWriteAckSuccess,
+		store.RelayStatusCompleteWithWriteAckError:
 		return StateComplete
-	case store.TransferStatusFailed:
+	case store.RelayStatusFailed:
 		return StateFailed
 	default:
 		return StatePending

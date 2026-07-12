@@ -32,10 +32,10 @@ type Repository interface {
 	// CreateRelayRequest records a relay request; duplicates are a noop.
 	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
 
-	// CreateTransfer records a transfer; duplicate packets are a noop.
-	CreateTransfer(ctx context.Context, transfer Transfer) error
+	// CreatePacket records a packet; duplicate packets are a noop.
+	CreatePacket(ctx context.Context, packet Packet) error
 
-	ListTransfersBySourceTx(ctx context.Context, chainID string, txHash string) ([]Transfer, error)
+	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 }
 
 // Migrator abstracts schema migrations
@@ -91,30 +91,30 @@ type RelayRequest struct {
 	CreatedAt time.Time
 }
 
-// TransferStatus the relay state of a transfer.
-type TransferStatus string
+// RelayStatus the relay state of a packet.
+type RelayStatus string
 
-// Transfer statuses
+// Packet statuses
 const (
-	TransferStatusPending                     TransferStatus = "PENDING"
-	TransferStatusAwaitingSendFinality        TransferStatus = "AWAITING_SEND_FINALITY"
-	TransferStatusCheckRecvPacketDelivery     TransferStatus = "CHECK_RECV_PACKET_DELIVERY"
-	TransferStatusGetRecvPacket               TransferStatus = "GET_RECV_PACKET"
-	TransferStatusDeliverRecvPacket           TransferStatus = "DELIVER_RECV_PACKET"
-	TransferStatusWaitForWriteAck             TransferStatus = "WAIT_FOR_WRITE_ACK"
-	TransferStatusAwaitingWriteAckFinality    TransferStatus = "AWAITING_WRITE_ACK_FINALITY"
-	TransferStatusCheckAckPacketDelivery      TransferStatus = "CHECK_ACK_PACKET_DELIVERY"
-	TransferStatusGetAckPacket                TransferStatus = "GET_ACK_PACKET"
-	TransferStatusDeliverAckPacket            TransferStatus = "DELIVER_ACK_PACKET"
-	TransferStatusAwaitingTimeoutFinality     TransferStatus = "AWAITING_TIMEOUT_FINALITY"
-	TransferStatusCheckTimeoutPacketDelivery  TransferStatus = "CHECK_TIMEOUT_PACKET_DELIVERY"
-	TransferStatusGetTimeoutPacket            TransferStatus = "GET_TIMEOUT_PACKET"
-	TransferStatusDeliverTimeoutPacket        TransferStatus = "DELIVER_TIMEOUT_PACKET"
-	TransferStatusCompleteWithAck             TransferStatus = "COMPLETE_WITH_ACK"
-	TransferStatusCompleteWithWriteAckSuccess TransferStatus = "COMPLETE_WITH_WRITE_ACK_SUCCESS"
-	TransferStatusCompleteWithWriteAckError   TransferStatus = "COMPLETE_WITH_WRITE_ACK_ERROR"
-	TransferStatusCompleteWithTimeout         TransferStatus = "COMPLETE_WITH_TIMEOUT"
-	TransferStatusFailed                      TransferStatus = "FAILED"
+	RelayStatusPending                     RelayStatus = "PENDING"
+	RelayStatusAwaitingSendFinality        RelayStatus = "AWAITING_SEND_FINALITY"
+	RelayStatusCheckRecvPacketDelivery     RelayStatus = "CHECK_RECV_PACKET_DELIVERY"
+	RelayStatusGetRecvPacket               RelayStatus = "GET_RECV_PACKET"
+	RelayStatusDeliverRecvPacket           RelayStatus = "DELIVER_RECV_PACKET"
+	RelayStatusWaitForWriteAck             RelayStatus = "WAIT_FOR_WRITE_ACK"
+	RelayStatusAwaitingWriteAckFinality    RelayStatus = "AWAITING_WRITE_ACK_FINALITY"
+	RelayStatusCheckAckPacketDelivery      RelayStatus = "CHECK_ACK_PACKET_DELIVERY"
+	RelayStatusGetAckPacket                RelayStatus = "GET_ACK_PACKET"
+	RelayStatusDeliverAckPacket            RelayStatus = "DELIVER_ACK_PACKET"
+	RelayStatusAwaitingTimeoutFinality     RelayStatus = "AWAITING_TIMEOUT_FINALITY"
+	RelayStatusCheckTimeoutPacketDelivery  RelayStatus = "CHECK_TIMEOUT_PACKET_DELIVERY"
+	RelayStatusGetTimeoutPacket            RelayStatus = "GET_TIMEOUT_PACKET"
+	RelayStatusDeliverTimeoutPacket        RelayStatus = "DELIVER_TIMEOUT_PACKET"
+	RelayStatusCompleteWithAck             RelayStatus = "COMPLETE_WITH_ACK"
+	RelayStatusCompleteWithWriteAckSuccess RelayStatus = "COMPLETE_WITH_WRITE_ACK_SUCCESS"
+	RelayStatusCompleteWithWriteAckError   RelayStatus = "COMPLETE_WITH_WRITE_ACK_ERROR"
+	RelayStatusCompleteWithTimeout         RelayStatus = "COMPLETE_WITH_TIMEOUT"
+	RelayStatusFailed                      RelayStatus = "FAILED"
 )
 
 // WriteAckStatus the execution result carried by a write ack.
@@ -127,13 +127,13 @@ const (
 	WriteAckStatusUnknown WriteAckStatus = "UNKNOWN"
 )
 
-// Transfer a packet tracked through its relay lifecycle.
-type Transfer struct {
+// Packet a packet tracked through its relay lifecycle.
+type Packet struct {
 	ID        int64
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Status     TransferStatus
+	Status     RelayStatus
 	StatusText *string
 
 	SourceChainID         string
@@ -165,7 +165,7 @@ type Transfer struct {
 	TimeoutTxRelayerAddress *string
 }
 
-func (t Transfer) Validate() error {
+func (t Packet) Validate() error {
 	switch {
 	case t.SourceChainID == "":
 		return errors.New("source chain id is required")

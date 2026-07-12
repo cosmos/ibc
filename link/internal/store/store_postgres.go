@@ -171,38 +171,38 @@ func (db *PostgresDB) CreateRelayRequest(ctx context.Context, chainID string, tx
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-func (db *PostgresDB) CreateTransfer(ctx context.Context, transfer Transfer) error {
+func (db *PostgresDB) CreatePacket(ctx context.Context, packet Packet) error {
 	db.logger.Debug(
-		"CreateTransfer",
-		"chainID", transfer.SourceChainID,
-		"clientID", transfer.PacketSourceClientID,
-		"sequence", transfer.PacketSequenceNumber,
+		"CreatePacket",
+		"chainID", packet.SourceChainID,
+		"clientID", packet.PacketSourceClientID,
+		"sequence", packet.PacketSequenceNumber,
 	)
 
-	if err := transfer.Validate(); err != nil {
-		return errors.Wrap(err, "invalid transfer")
+	if err := packet.Validate(); err != nil {
+		return errors.Wrap(err, "invalid packet")
 	}
 
 	_, err := db.repo.InsertPacket(ctx, postgres.InsertPacketParams{
-		SourceChainID:             transfer.SourceChainID,
-		DestinationChainID:        transfer.DestinationChainID,
-		SourceTxHash:              transfer.SourceTxHash,
-		SourceTxTime:              pgTimestamp(transfer.SourceTxTime),
-		PacketSequenceNumber:      int64(transfer.PacketSequenceNumber),
-		PacketSourceClientID:      transfer.PacketSourceClientID,
-		PacketDestinationClientID: transfer.PacketDestinationClientID,
-		PacketTimeoutTimestamp:    pgTimestamp(transfer.PacketTimeoutTimestamp),
+		SourceChainID:             packet.SourceChainID,
+		DestinationChainID:        packet.DestinationChainID,
+		SourceTxHash:              packet.SourceTxHash,
+		SourceTxTime:              pgTimestamp(packet.SourceTxTime),
+		PacketSequenceNumber:      int64(packet.PacketSequenceNumber),
+		PacketSourceClientID:      packet.PacketSourceClientID,
+		PacketDestinationClientID: packet.PacketDestinationClientID,
+		PacketTimeoutTimestamp:    pgTimestamp(packet.PacketTimeoutTimestamp),
 	})
 
 	return err
 }
 
-func (db *PostgresDB) ListTransfersBySourceTx(
+func (db *PostgresDB) ListPacketsBySourceTx(
 	ctx context.Context,
 	chainID string,
 	txHash string,
-) ([]Transfer, error) {
-	db.logger.Debug("ListTransfersBySourceTx", "chainID", chainID, "txHash", txHash)
+) ([]Packet, error) {
+	db.logger.Debug("ListPacketsBySourceTx", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
 		return nil, errors.New("chainID and txHash are required")
@@ -213,21 +213,21 @@ func (db *PostgresDB) ListTransfersBySourceTx(
 		return nil, errNormalize(err)
 	}
 
-	transfers := make([]Transfer, len(rows))
+	packets := make([]Packet, len(rows))
 	for i, row := range rows {
-		transfers[i] = transferFromPostgres(row)
+		packets[i] = packetFromPostgres(row)
 	}
 
-	return transfers, nil
+	return packets, nil
 }
 
-func transferFromPostgres(row postgres.Packet) Transfer {
-	return Transfer{
+func packetFromPostgres(row postgres.Packet) Packet {
+	return Packet{
 		ID:        row.ID,
 		CreatedAt: row.CreatedAt.Time.UTC(),
 		UpdatedAt: row.UpdatedAt.Time.UTC(),
 
-		Status:     TransferStatus(row.Status),
+		Status:     RelayStatus(row.Status),
 		StatusText: row.StatusText,
 
 		SourceChainID:         row.SourceChainID,

@@ -81,7 +81,7 @@ func (h *RelayerHandler) Status(
 	packetStatuses := make([]*proto.PacketStatus, len(statuses))
 	for i, status := range statuses {
 		packetStatuses[i] = &proto.PacketStatus{
-			State:          transferStateToProto(status.State),
+			State:          packetStateToProto(status.State),
 			SequenceNumber: status.SequenceNumber,
 			SourceClientId: status.SourceClientID,
 			SendTx:         txInfoToProto(&status.SendTx),
@@ -94,7 +94,7 @@ func (h *RelayerHandler) Status(
 	return connect.NewResponse(&proto.StatusResponse{PacketStatuses: packetStatuses}), nil
 }
 
-func transferStateToProto(state relayer.TransferState) proto.TransferState {
+func packetStateToProto(state relayer.PacketState) proto.TransferState {
 	switch state {
 	case relayer.StatePending:
 		return proto.TransferState_TRANSFER_STATE_PENDING

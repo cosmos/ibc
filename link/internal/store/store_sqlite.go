@@ -173,38 +173,38 @@ func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHa
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-func (db *SqliteDB) CreateTransfer(ctx context.Context, transfer Transfer) error {
+func (db *SqliteDB) CreatePacket(ctx context.Context, packet Packet) error {
 	db.logger.Debug(
-		"CreateTransfer",
-		"chainID", transfer.SourceChainID,
-		"clientID", transfer.PacketSourceClientID,
-		"sequence", transfer.PacketSequenceNumber,
+		"CreatePacket",
+		"chainID", packet.SourceChainID,
+		"clientID", packet.PacketSourceClientID,
+		"sequence", packet.PacketSequenceNumber,
 	)
 
-	if err := transfer.Validate(); err != nil {
-		return errors.Wrap(err, "invalid transfer")
+	if err := packet.Validate(); err != nil {
+		return errors.Wrap(err, "invalid packet")
 	}
 
 	_, err := db.repo.InsertPacket(ctx, reposqlite.InsertPacketParams{
-		SourceChainID:             transfer.SourceChainID,
-		DestinationChainID:        transfer.DestinationChainID,
-		SourceTxHash:              transfer.SourceTxHash,
-		SourceTxTime:              transfer.SourceTxTime.UTC(),
-		PacketSequenceNumber:      int64(transfer.PacketSequenceNumber),
-		PacketSourceClientID:      transfer.PacketSourceClientID,
-		PacketDestinationClientID: transfer.PacketDestinationClientID,
-		PacketTimeoutTimestamp:    transfer.PacketTimeoutTimestamp.UTC(),
+		SourceChainID:             packet.SourceChainID,
+		DestinationChainID:        packet.DestinationChainID,
+		SourceTxHash:              packet.SourceTxHash,
+		SourceTxTime:              packet.SourceTxTime.UTC(),
+		PacketSequenceNumber:      int64(packet.PacketSequenceNumber),
+		PacketSourceClientID:      packet.PacketSourceClientID,
+		PacketDestinationClientID: packet.PacketDestinationClientID,
+		PacketTimeoutTimestamp:    packet.PacketTimeoutTimestamp.UTC(),
 	})
 
 	return err
 }
 
-func (db *SqliteDB) ListTransfersBySourceTx(
+func (db *SqliteDB) ListPacketsBySourceTx(
 	ctx context.Context,
 	chainID string,
 	txHash string,
-) ([]Transfer, error) {
-	db.logger.Debug("ListTransfersBySourceTx", "chainID", chainID, "txHash", txHash)
+) ([]Packet, error) {
+	db.logger.Debug("ListPacketsBySourceTx", "chainID", chainID, "txHash", txHash)
 
 	if chainID == "" || txHash == "" {
 		return nil, errors.New("chainID and txHash are required")
@@ -215,21 +215,21 @@ func (db *SqliteDB) ListTransfersBySourceTx(
 		return nil, errNormalize(err)
 	}
 
-	transfers := make([]Transfer, len(rows))
+	packets := make([]Packet, len(rows))
 	for i, row := range rows {
-		transfers[i] = transferFromSqlite(row)
+		packets[i] = packetFromSqlite(row)
 	}
 
-	return transfers, nil
+	return packets, nil
 }
 
-func transferFromSqlite(row reposqlite.Packet) Transfer {
-	return Transfer{
+func packetFromSqlite(row reposqlite.Packet) Packet {
+	return Packet{
 		ID:        row.ID,
 		CreatedAt: row.CreatedAt.UTC(),
 		UpdatedAt: row.UpdatedAt.UTC(),
 
-		Status:     TransferStatus(row.Status),
+		Status:     RelayStatus(row.Status),
 		StatusText: row.StatusText,
 
 		SourceChainID:         row.SourceChainID,

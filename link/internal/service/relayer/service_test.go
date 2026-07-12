@@ -96,7 +96,7 @@ func TestRelay(t *testing.T) {
 		clientManager.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
-		// request and transfers land in one transaction; hash normalized to lowercase
+		// request and packets land in one transaction; hash normalized to lowercase
 		st.EXPECT().
 			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
 			RunAndReturn(func(ctx context.Context, fn func(store.Repository) error) error {
@@ -104,7 +104,7 @@ func TestRelay(t *testing.T) {
 			}).
 			Once()
 		repo.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
-		repo.EXPECT().CreateTransfer(ctx, store.Transfer{
+		repo.EXPECT().CreatePacket(ctx, store.Packet{
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
 			SourceTxHash:              txHashLower,
@@ -218,14 +218,14 @@ func TestStatus(t *testing.T) {
 		require.ErrorIs(t, err, ErrNotFound)
 	})
 
-	t.Run("submittedWithoutTransfers", func(t *testing.T) {
+	t.Run("submittedWithoutPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
-		st.EXPECT().ListTransfersBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
+		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
 
 		// ACT
 		statuses, err := service.Status(ctx, chainIDEth, txHashLower)
@@ -235,16 +235,16 @@ func TestStatus(t *testing.T) {
 		assert.Empty(t, statuses)
 	})
 
-	t.Run("mapsTransfers", func(t *testing.T) {
+	t.Run("mapsPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClientManager(t))
 
 		recvTxHash := "0xrecv"
-		transfers := []store.Transfer{
+		packets := []store.Packet{
 			{
-				Status:               store.TransferStatusDeliverRecvPacket,
+				Status:               store.RelayStatusDeliverRecvPacket,
 				PacketSequenceNumber: 42,
 				PacketSourceClientID: "base-0",
 				SourceChainID:        chainIDEth,
@@ -253,7 +253,7 @@ func TestStatus(t *testing.T) {
 				RecvTxHash:           &recvTxHash,
 			},
 			{
-				Status:               store.TransferStatusCompleteWithAck,
+				Status:               store.RelayStatusCompleteWithAck,
 				PacketSequenceNumber: 43,
 				PacketSourceClientID: "base-0",
 				SourceChainID:        chainIDEth,
@@ -263,7 +263,7 @@ func TestStatus(t *testing.T) {
 		}
 
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
-		st.EXPECT().ListTransfersBySourceTx(ctx, chainIDEth, txHashLower).Return(transfers, nil).Once()
+		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(packets, nil).Once()
 
 		// ACT
 		statuses, err := service.Status(ctx, chainIDEth, txHashUpper)
@@ -287,36 +287,36 @@ func TestStatus(t *testing.T) {
 	})
 }
 
-func TestMapTransferState(t *testing.T) {
-	pending := []store.TransferStatus{
-		store.TransferStatusPending,
-		store.TransferStatusAwaitingSendFinality,
-		store.TransferStatusCheckRecvPacketDelivery,
-		store.TransferStatusGetRecvPacket,
-		store.TransferStatusDeliverRecvPacket,
-		store.TransferStatusWaitForWriteAck,
-		store.TransferStatusAwaitingWriteAckFinality,
-		store.TransferStatusCheckAckPacketDelivery,
-		store.TransferStatusGetAckPacket,
-		store.TransferStatusDeliverAckPacket,
-		store.TransferStatusAwaitingTimeoutFinality,
-		store.TransferStatusCheckTimeoutPacketDelivery,
-		store.TransferStatusGetTimeoutPacket,
-		store.TransferStatusDeliverTimeoutPacket,
+func TestMapPacketState(t *testing.T) {
+	pending := []store.RelayStatus{
+		store.RelayStatusPending,
+		store.RelayStatusAwaitingSendFinality,
+		store.RelayStatusCheckRecvPacketDelivery,
+		store.RelayStatusGetRecvPacket,
+		store.RelayStatusDeliverRecvPacket,
+		store.RelayStatusWaitForWriteAck,
+		store.RelayStatusAwaitingWriteAckFinality,
+		store.RelayStatusCheckAckPacketDelivery,
+		store.RelayStatusGetAckPacket,
+		store.RelayStatusDeliverAckPacket,
+		store.RelayStatusAwaitingTimeoutFinality,
+		store.RelayStatusCheckTimeoutPacketDelivery,
+		store.RelayStatusGetTimeoutPacket,
+		store.RelayStatusDeliverTimeoutPacket,
 	}
 	for _, status := range pending {
-		assert.Equal(t, StatePending, mapTransferState(status), string(status))
+		assert.Equal(t, StatePending, mapPacketState(status), string(status))
 	}
 
-	complete := []store.TransferStatus{
-		store.TransferStatusCompleteWithAck,
-		store.TransferStatusCompleteWithWriteAckSuccess,
-		store.TransferStatusCompleteWithWriteAckError,
-		store.TransferStatusCompleteWithTimeout,
+	complete := []store.RelayStatus{
+		store.RelayStatusCompleteWithAck,
+		store.RelayStatusCompleteWithWriteAckSuccess,
+		store.RelayStatusCompleteWithWriteAckError,
+		store.RelayStatusCompleteWithTimeout,
 	}
 	for _, status := range complete {
-		assert.Equal(t, StateComplete, mapTransferState(status), string(status))
+		assert.Equal(t, StateComplete, mapPacketState(status), string(status))
 	}
 
-	assert.Equal(t, StateFailed, mapTransferState(store.TransferStatusFailed))
+	assert.Equal(t, StateFailed, mapPacketState(store.RelayStatusFailed))
 }
