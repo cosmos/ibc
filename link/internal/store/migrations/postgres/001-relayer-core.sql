@@ -1,34 +1,10 @@
 -- +migrate Up
 
-create type relay_status as enum (
-    'PENDING',
-    'AWAITING_SEND_FINALITY',
-    'CHECK_RECV_PACKET_DELIVERY',
-    'GET_RECV_PACKET',
-    'DELIVER_RECV_PACKET',
-    'WAIT_FOR_WRITE_ACK',
-    'AWAITING_WRITE_ACK_FINALITY',
-    'CHECK_ACK_PACKET_DELIVERY',
-    'GET_ACK_PACKET',
-    'DELIVER_ACK_PACKET',
-    'AWAITING_TIMEOUT_FINALITY',
-    'CHECK_TIMEOUT_PACKET_DELIVERY',
-    'GET_TIMEOUT_PACKET',
-    'DELIVER_TIMEOUT_PACKET',
-    'COMPLETE_WITH_ACK',
-    'COMPLETE_WITH_WRITE_ACK_SUCCESS',
-    'COMPLETE_WITH_WRITE_ACK_ERROR',
-    'COMPLETE_WITH_TIMEOUT',
-    'FAILED'
-);
-
-create type write_ack_status as enum ('SUCCESS', 'ERROR', 'UNKNOWN');
-
 create table if not exists transfers (
     id                           bigserial                PRIMARY KEY,
     created_at                   timestamp with time zone NOT NULL DEFAULT now(),
     updated_at                   timestamp with time zone NOT NULL DEFAULT now(),
-    status                       relay_status             NOT NULL DEFAULT 'PENDING',
+    status                       text                     NOT NULL DEFAULT 'PENDING',
     status_text                  text,
     source_chain_id              text                     NOT NULL,
     destination_chain_id         text                     NOT NULL,
@@ -45,7 +21,7 @@ create table if not exists transfers (
     write_ack_tx_hash            text,
     write_ack_tx_time            timestamp with time zone,
     write_ack_tx_finalized_time  timestamp with time zone,
-    write_ack_status             write_ack_status,
+    write_ack_status             text,
     ack_tx_hash                  text,
     ack_tx_time                  timestamp with time zone,
     ack_tx_relayer_address       text,
@@ -70,5 +46,3 @@ create table if not exists relay_requests (
 -- +migrate Down
 drop table if exists relay_requests;
 drop table if exists transfers;
-drop type if exists write_ack_status;
-drop type if exists relay_status;

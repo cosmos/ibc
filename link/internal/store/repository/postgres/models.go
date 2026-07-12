@@ -5,199 +5,8 @@
 package postgres
 
 import (
-	"database/sql/driver"
-	"fmt"
-
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-type RelayStatus string
-
-const (
-	RelayStatusPENDING                     RelayStatus = "PENDING"
-	RelayStatusAWAITINGSENDFINALITY        RelayStatus = "AWAITING_SEND_FINALITY"
-	RelayStatusCHECKRECVPACKETDELIVERY     RelayStatus = "CHECK_RECV_PACKET_DELIVERY"
-	RelayStatusGETRECVPACKET               RelayStatus = "GET_RECV_PACKET"
-	RelayStatusDELIVERRECVPACKET           RelayStatus = "DELIVER_RECV_PACKET"
-	RelayStatusWAITFORWRITEACK             RelayStatus = "WAIT_FOR_WRITE_ACK"
-	RelayStatusAWAITINGWRITEACKFINALITY    RelayStatus = "AWAITING_WRITE_ACK_FINALITY"
-	RelayStatusCHECKACKPACKETDELIVERY      RelayStatus = "CHECK_ACK_PACKET_DELIVERY"
-	RelayStatusGETACKPACKET                RelayStatus = "GET_ACK_PACKET"
-	RelayStatusDELIVERACKPACKET            RelayStatus = "DELIVER_ACK_PACKET"
-	RelayStatusAWAITINGTIMEOUTFINALITY     RelayStatus = "AWAITING_TIMEOUT_FINALITY"
-	RelayStatusCHECKTIMEOUTPACKETDELIVERY  RelayStatus = "CHECK_TIMEOUT_PACKET_DELIVERY"
-	RelayStatusGETTIMEOUTPACKET            RelayStatus = "GET_TIMEOUT_PACKET"
-	RelayStatusDELIVERTIMEOUTPACKET        RelayStatus = "DELIVER_TIMEOUT_PACKET"
-	RelayStatusCOMPLETEWITHACK             RelayStatus = "COMPLETE_WITH_ACK"
-	RelayStatusCOMPLETEWITHWRITEACKSUCCESS RelayStatus = "COMPLETE_WITH_WRITE_ACK_SUCCESS"
-	RelayStatusCOMPLETEWITHWRITEACKERROR   RelayStatus = "COMPLETE_WITH_WRITE_ACK_ERROR"
-	RelayStatusCOMPLETEWITHTIMEOUT         RelayStatus = "COMPLETE_WITH_TIMEOUT"
-	RelayStatusFAILED                      RelayStatus = "FAILED"
-)
-
-func (e *RelayStatus) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = RelayStatus(s)
-	case string:
-		*e = RelayStatus(s)
-	default:
-		return fmt.Errorf("unsupported scan type for RelayStatus: %T", src)
-	}
-	return nil
-}
-
-type NullRelayStatus struct {
-	RelayStatus RelayStatus
-	Valid       bool // Valid is true if RelayStatus is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullRelayStatus) Scan(value interface{}) error {
-	if value == nil {
-		ns.RelayStatus, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.RelayStatus.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullRelayStatus) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.RelayStatus), nil
-}
-
-type RelayerTxSubmissionStatus string
-
-const (
-	RelayerTxSubmissionStatusPENDING   RelayerTxSubmissionStatus = "PENDING"
-	RelayerTxSubmissionStatusCONFIRMED RelayerTxSubmissionStatus = "CONFIRMED"
-	RelayerTxSubmissionStatusFAILED    RelayerTxSubmissionStatus = "FAILED"
-)
-
-func (e *RelayerTxSubmissionStatus) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = RelayerTxSubmissionStatus(s)
-	case string:
-		*e = RelayerTxSubmissionStatus(s)
-	default:
-		return fmt.Errorf("unsupported scan type for RelayerTxSubmissionStatus: %T", src)
-	}
-	return nil
-}
-
-type NullRelayerTxSubmissionStatus struct {
-	RelayerTxSubmissionStatus RelayerTxSubmissionStatus
-	Valid                     bool // Valid is true if RelayerTxSubmissionStatus is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullRelayerTxSubmissionStatus) Scan(value interface{}) error {
-	if value == nil {
-		ns.RelayerTxSubmissionStatus, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.RelayerTxSubmissionStatus.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullRelayerTxSubmissionStatus) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.RelayerTxSubmissionStatus), nil
-}
-
-type RelayerTxSubmissionType string
-
-const (
-	RelayerTxSubmissionTypeRECV    RelayerTxSubmissionType = "RECV"
-	RelayerTxSubmissionTypeACK     RelayerTxSubmissionType = "ACK"
-	RelayerTxSubmissionTypeTIMEOUT RelayerTxSubmissionType = "TIMEOUT"
-)
-
-func (e *RelayerTxSubmissionType) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = RelayerTxSubmissionType(s)
-	case string:
-		*e = RelayerTxSubmissionType(s)
-	default:
-		return fmt.Errorf("unsupported scan type for RelayerTxSubmissionType: %T", src)
-	}
-	return nil
-}
-
-type NullRelayerTxSubmissionType struct {
-	RelayerTxSubmissionType RelayerTxSubmissionType
-	Valid                   bool // Valid is true if RelayerTxSubmissionType is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullRelayerTxSubmissionType) Scan(value interface{}) error {
-	if value == nil {
-		ns.RelayerTxSubmissionType, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.RelayerTxSubmissionType.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullRelayerTxSubmissionType) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.RelayerTxSubmissionType), nil
-}
-
-type WriteAckStatus string
-
-const (
-	WriteAckStatusSUCCESS WriteAckStatus = "SUCCESS"
-	WriteAckStatusERROR   WriteAckStatus = "ERROR"
-	WriteAckStatusUNKNOWN WriteAckStatus = "UNKNOWN"
-)
-
-func (e *WriteAckStatus) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = WriteAckStatus(s)
-	case string:
-		*e = WriteAckStatus(s)
-	default:
-		return fmt.Errorf("unsupported scan type for WriteAckStatus: %T", src)
-	}
-	return nil
-}
-
-type NullWriteAckStatus struct {
-	WriteAckStatus WriteAckStatus
-	Valid          bool // Valid is true if WriteAckStatus is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullWriteAckStatus) Scan(value interface{}) error {
-	if value == nil {
-		ns.WriteAckStatus, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.WriteAckStatus.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullWriteAckStatus) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.WriteAckStatus), nil
-}
 
 type RelayRequest struct {
 	ID            int64
@@ -210,12 +19,12 @@ type RelayerTxSubmission struct {
 	ID             int64
 	TxHash         string
 	ChainID        string
-	TxType         RelayerTxSubmissionType
+	TxType         string
 	RelayerAddress string
 	SubmittedAt    pgtype.Timestamptz
 	ResolvedAt     pgtype.Timestamptz
 	GasCostAmount  pgtype.Numeric
-	Status         RelayerTxSubmissionStatus
+	Status         string
 	ExecutionError *string
 }
 
@@ -223,7 +32,7 @@ type Transfer struct {
 	ID                        int64
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
-	Status                    RelayStatus
+	Status                    string
 	StatusText                *string
 	SourceChainID             string
 	DestinationChainID        string
@@ -240,7 +49,7 @@ type Transfer struct {
 	WriteAckTxHash            *string
 	WriteAckTxTime            pgtype.Timestamptz
 	WriteAckTxFinalizedTime   pgtype.Timestamptz
-	WriteAckStatus            NullWriteAckStatus
+	WriteAckStatus            *string
 	AckTxHash                 *string
 	AckTxTime                 pgtype.Timestamptz
 	AckTxRelayerAddress       *string

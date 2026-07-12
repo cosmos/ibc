@@ -248,7 +248,7 @@ func transferFromPostgres(row postgres.Transfer) Transfer {
 		WriteAckTxHash:          row.WriteAckTxHash,
 		WriteAckTxTime:          pgTimePtr(row.WriteAckTxTime),
 		WriteAckTxFinalizedTime: pgTimePtr(row.WriteAckTxFinalizedTime),
-		WriteAckStatus:          pgWriteAckStatusPtr(row.WriteAckStatus),
+		WriteAckStatus:          writeAckStatusPtr(row.WriteAckStatus),
 
 		AckTxHash:           row.AckTxHash,
 		AckTxTime:           pgTimePtr(row.AckTxTime),
@@ -272,14 +272,4 @@ func pgTimePtr(ts pgtype.Timestamptz) *time.Time {
 	t := ts.Time.UTC()
 
 	return &t
-}
-
-func pgWriteAckStatusPtr(status postgres.NullWriteAckStatus) *WriteAckStatus {
-	if !status.Valid {
-		return nil
-	}
-
-	s := WriteAckStatus(status.WriteAckStatus)
-
-	return &s
 }
