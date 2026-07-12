@@ -183,7 +183,7 @@ func (db *PostgresDB) CreateTransfer(ctx context.Context, transfer Transfer) err
 		return errors.Wrap(err, "invalid transfer")
 	}
 
-	_, err := db.repo.InsertTransfer(ctx, postgres.InsertTransferParams{
+	_, err := db.repo.InsertPacket(ctx, postgres.InsertPacketParams{
 		SourceChainID:             transfer.SourceChainID,
 		DestinationChainID:        transfer.DestinationChainID,
 		SourceTxHash:              transfer.SourceTxHash,
@@ -208,7 +208,7 @@ func (db *PostgresDB) ListTransfersBySourceTx(
 		return nil, errors.New("chainID and txHash are required")
 	}
 
-	rows, err := db.repo.ListTransfersBySourceTx(ctx, chainID, txHash)
+	rows, err := db.repo.ListPacketsBySourceTx(ctx, chainID, txHash)
 	if err != nil {
 		return nil, errNormalize(err)
 	}
@@ -221,7 +221,7 @@ func (db *PostgresDB) ListTransfersBySourceTx(
 	return transfers, nil
 }
 
-func transferFromPostgres(row postgres.Transfer) Transfer {
+func transferFromPostgres(row postgres.Packet) Transfer {
 	return Transfer{
 		ID:        row.ID,
 		CreatedAt: row.CreatedAt.Time.UTC(),

@@ -8,27 +8,7 @@ import (
 	"time"
 )
 
-type RelayRequest struct {
-	ID            int64
-	SourceChainID string
-	SourceTxHash  string
-	CreatedAt     time.Time
-}
-
-type RelayerTxSubmission struct {
-	ID             int64
-	TxHash         string
-	ChainID        string
-	TxType         string
-	RelayerAddress string
-	SubmittedAt    time.Time
-	ResolvedAt     *time.Time
-	GasCostAmount  *string
-	Status         string
-	ExecutionError *string
-}
-
-type Transfer struct {
+type Packet struct {
 	ID                        int64
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
@@ -58,7 +38,27 @@ type Transfer struct {
 	TimeoutTxRelayerAddress   *string
 }
 
-type TransferTxSubmission struct {
-	TransferID   int64
+type PacketTxSubmission struct {
+	PacketID     int64
 	SubmissionID int64
+}
+
+type RelayRequest struct {
+	ID            int64
+	SourceChainID string
+	SourceTxHash  string
+	CreatedAt     time.Time
+}
+
+type RelayerTxSubmission struct {
+	ID             int64
+	TxHash         string
+	ChainID        string
+	TxType         string
+	RelayerAddress string
+	SubmittedAt    time.Time
+	ResolvedAt     *time.Time
+	GasCostAmount  *string
+	Status         string
+	ExecutionError *string
 }

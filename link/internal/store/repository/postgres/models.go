@@ -8,27 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type RelayRequest struct {
-	ID            int64
-	SourceChainID string
-	SourceTxHash  string
-	CreatedAt     pgtype.Timestamptz
-}
-
-type RelayerTxSubmission struct {
-	ID             int64
-	TxHash         string
-	ChainID        string
-	TxType         string
-	RelayerAddress string
-	SubmittedAt    pgtype.Timestamptz
-	ResolvedAt     pgtype.Timestamptz
-	GasCostAmount  pgtype.Numeric
-	Status         string
-	ExecutionError *string
-}
-
-type Transfer struct {
+type Packet struct {
 	ID                        int64
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
@@ -58,7 +38,27 @@ type Transfer struct {
 	TimeoutTxRelayerAddress   *string
 }
 
-type TransferTxSubmission struct {
-	TransferID   int64
+type PacketTxSubmission struct {
+	PacketID     int64
 	SubmissionID int64
+}
+
+type RelayRequest struct {
+	ID            int64
+	SourceChainID string
+	SourceTxHash  string
+	CreatedAt     pgtype.Timestamptz
+}
+
+type RelayerTxSubmission struct {
+	ID             int64
+	TxHash         string
+	ChainID        string
+	TxType         string
+	RelayerAddress string
+	SubmittedAt    pgtype.Timestamptz
+	ResolvedAt     pgtype.Timestamptz
+	GasCostAmount  pgtype.Numeric
+	Status         string
+	ExecutionError *string
 }

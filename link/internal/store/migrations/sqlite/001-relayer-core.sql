@@ -1,6 +1,6 @@
 -- +migrate Up
 
-create table if not exists transfers (
+create table if not exists packets (
     id                           integer   primary key,
     created_at                   timestamp not null default current_timestamp,
     updated_at                   timestamp not null default current_timestamp,
@@ -30,8 +30,8 @@ create table if not exists transfers (
     timeout_tx_relayer_address   text
 );
 
-create unique index if not exists index_transfer_packet
-    on transfers (source_chain_id, packet_sequence_number, packet_source_client_id);
+create unique index if not exists index_packet
+    on packets (source_chain_id, packet_sequence_number, packet_source_client_id);
 
 create table if not exists relay_requests (
     id              integer   primary key,
@@ -45,4 +45,4 @@ create table if not exists relay_requests (
 
 -- +migrate Down
 drop table if exists relay_requests;
-drop table if exists transfers;
+drop table if exists packets;

@@ -8,8 +8,8 @@ INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES (sqlc.arg(chain_id), sqlc.arg(tx_hash))
 ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING;
 
--- name: InsertTransfer :execrows
-INSERT INTO transfers (
+-- name: InsertPacket :execrows
+INSERT INTO packets (
     source_chain_id,
     destination_chain_id,
     source_tx_hash,
@@ -30,8 +30,8 @@ INSERT INTO transfers (
 )
 ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO NOTHING;
 
--- name: ListTransfersBySourceTx :many
-SELECT * FROM transfers
+-- name: ListPacketsBySourceTx :many
+SELECT * FROM packets
 WHERE source_chain_id = sqlc.arg(chain_id)
 AND source_tx_hash = sqlc.arg(tx_hash)
 ORDER BY packet_sequence_number;

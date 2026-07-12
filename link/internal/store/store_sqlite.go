@@ -185,7 +185,7 @@ func (db *SqliteDB) CreateTransfer(ctx context.Context, transfer Transfer) error
 		return errors.Wrap(err, "invalid transfer")
 	}
 
-	_, err := db.repo.InsertTransfer(ctx, reposqlite.InsertTransferParams{
+	_, err := db.repo.InsertPacket(ctx, reposqlite.InsertPacketParams{
 		SourceChainID:             transfer.SourceChainID,
 		DestinationChainID:        transfer.DestinationChainID,
 		SourceTxHash:              transfer.SourceTxHash,
@@ -210,7 +210,7 @@ func (db *SqliteDB) ListTransfersBySourceTx(
 		return nil, errors.New("chainID and txHash are required")
 	}
 
-	rows, err := db.repo.ListTransfersBySourceTx(ctx, chainID, txHash)
+	rows, err := db.repo.ListPacketsBySourceTx(ctx, chainID, txHash)
 	if err != nil {
 		return nil, errNormalize(err)
 	}
@@ -223,7 +223,7 @@ func (db *SqliteDB) ListTransfersBySourceTx(
 	return transfers, nil
 }
 
-func transferFromSqlite(row reposqlite.Transfer) Transfer {
+func transferFromSqlite(row reposqlite.Packet) Transfer {
 	return Transfer{
 		ID:        row.ID,
 		CreatedAt: row.CreatedAt.UTC(),
