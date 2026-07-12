@@ -10,6 +10,7 @@ ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING;
 
 -- name: CreatePacket :execrows
 INSERT INTO packets (
+    status,
     source_chain_id,
     destination_chain_id,
     source_tx_hash,
@@ -19,6 +20,7 @@ INSERT INTO packets (
     packet_destination_client_id,
     packet_timeout_timestamp
 ) VALUES (
+    sqlc.arg(status),
     sqlc.arg(source_chain_id),
     sqlc.arg(destination_chain_id),
     sqlc.arg(source_tx_hash),

@@ -184,6 +184,7 @@ func (db *PostgresDB) CreatePacket(ctx context.Context, packet Packet) error {
 	}
 
 	_, err := db.repo.CreatePacket(ctx, postgres.CreatePacketParams{
+		Status:                    string(packet.Status),
 		SourceChainID:             packet.SourceChainID,
 		DestinationChainID:        packet.DestinationChainID,
 		SourceTxHash:              packet.SourceTxHash,

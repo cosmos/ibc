@@ -4,7 +4,7 @@ create table if not exists packets (
     id                           bigserial                PRIMARY KEY,
     created_at                   timestamp with time zone NOT NULL DEFAULT now(),
     updated_at                   timestamp with time zone NOT NULL DEFAULT now(),
-    status                       text                     NOT NULL DEFAULT 'PENDING',
+    status                       text                     NOT NULL,
     status_text                  text,
     source_chain_id              text                     NOT NULL,
     destination_chain_id         text                     NOT NULL,
@@ -52,7 +52,7 @@ create table if not exists relayer_tx_submissions (
     submitted_at    timestamp with time zone           NOT NULL DEFAULT now(),
     resolved_at     timestamp with time zone,
     gas_cost_amount numeric,
-    status          text                               NOT NULL DEFAULT 'PENDING',
+    status          text                               NOT NULL,
     execution_error text,
 
     constraint relayer_tx_submissions_tx_unique

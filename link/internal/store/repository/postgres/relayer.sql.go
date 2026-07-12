@@ -13,6 +13,7 @@ import (
 
 const createPacket = `-- name: CreatePacket :execrows
 INSERT INTO packets (
+    status,
     source_chain_id,
     destination_chain_id,
     source_tx_hash,
@@ -29,12 +30,14 @@ INSERT INTO packets (
     $5,
     $6,
     $7,
-    $8
+    $8,
+    $9
 )
 ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO NOTHING
 `
 
 type CreatePacketParams struct {
+	Status                    string
 	SourceChainID             string
 	DestinationChainID        string
 	SourceTxHash              string
@@ -47,6 +50,7 @@ type CreatePacketParams struct {
 
 func (q *Queries) CreatePacket(ctx context.Context, arg CreatePacketParams) (int64, error) {
 	result, err := q.db.Exec(ctx, createPacket,
+		arg.Status,
 		arg.SourceChainID,
 		arg.DestinationChainID,
 		arg.SourceTxHash,

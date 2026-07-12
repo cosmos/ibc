@@ -186,6 +186,7 @@ func (db *SqliteDB) CreatePacket(ctx context.Context, packet Packet) error {
 	}
 
 	_, err := db.repo.CreatePacket(ctx, reposqlite.CreatePacketParams{
+		Status:                    string(packet.Status),
 		SourceChainID:             packet.SourceChainID,
 		DestinationChainID:        packet.DestinationChainID,
 		SourceTxHash:              packet.SourceTxHash,

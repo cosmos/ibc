@@ -4,7 +4,7 @@ create table if not exists packets (
     id                           integer   primary key,
     created_at                   timestamp not null default current_timestamp,
     updated_at                   timestamp not null default current_timestamp,
-    status                       text      not null default 'PENDING',
+    status                       text      not null,
     status_text                  text,
     source_chain_id              text      not null,
     destination_chain_id         text      not null,

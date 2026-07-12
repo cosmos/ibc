@@ -167,6 +167,8 @@ type Packet struct {
 
 func (t Packet) Validate() error {
 	switch {
+	case t.Status == "":
+		return errors.New("status is required")
 	case t.SourceChainID == "":
 		return errors.New("source chain id is required")
 	case t.DestinationChainID == "":

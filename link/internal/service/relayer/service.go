@@ -146,6 +146,7 @@ func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.Pack
 		}
 
 		packets = append(packets, store.Packet{
+			Status:                    store.RelayStatusPending,
 			SourceChainID:             chainID,
 			DestinationChainID:        client.CounterpartyChainID,
 			SourceTxHash:              txHash,
