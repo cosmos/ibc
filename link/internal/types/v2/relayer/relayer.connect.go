@@ -45,9 +45,7 @@ type RelayerApiServiceClient interface {
 	// required to complete the transfer via the bridging protocol.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
 	// Status returns per-packet transfer status for a transaction previously
-	// submitted via Relay. Returns NOT_FOUND if the transaction was never
-	// submitted; returns an empty packet_statuses list if it was submitted but
-	// no packets have been extracted from it.
+	// submitted via Relay.
 	Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)
 }
 
@@ -99,9 +97,7 @@ type RelayerApiServiceHandler interface {
 	// required to complete the transfer via the bridging protocol.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
 	// Status returns per-packet transfer status for a transaction previously
-	// submitted via Relay. Returns NOT_FOUND if the transaction was never
-	// submitted; returns an empty packet_statuses list if it was submitted but
-	// no packets have been extracted from it.
+	// submitted via Relay.
 	Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)
 }
 
