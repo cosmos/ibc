@@ -195,8 +195,8 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 	return statuses, nil
 }
 
-// validateRelayArgs validates the tx hash for the chain's type and returns
-// its canonical lowercase form so lookups are case-insensitive.
+// validateRelayArgs validates the tx hash for the chain's type and applies
+// consistent casing so lookups are case-insensitive.
 func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 	switch {
 	case chainID == "":
