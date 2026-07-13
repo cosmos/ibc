@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -8,79 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const fullRelayerConfig = `
-server:
-  listenAddr: 0.0.0.0:3000
-db:
-  type: sqlite
-  url: ibc.db
-chains:
-  - chainId: "1"
-    evm:
-      rpc: https://ethereum-rpc.example.com
-      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
-  - chainId: "8453"
-    evm:
-      rpc: https://base-rpc.example.com
-      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
-relayer:
-  chainOverrides:
-    - chainId: "1"
-      evm:
-        gasFeeCapMultiplier: 1.5
-        gasTipCapMultiplier: 1.5
-      gasAlertThresholds:
-        warningThreshold: "500000000"
-        criticalThreshold: "10000000"
-      txSubmissionDelay: 2s
-      packetBatchSize: 20
-      packetBatchTimeout: 10s
-    - chainId: "8453"
-  attestors:
-    - name: "attestor-alice-base"
-      type: remote
-      grpc: attestor-alice.example.com:3000
-      client: "eth-to-base"
-    - name: "attestor-bob-base"
-      type: remote
-      grpc: attestor-bob.example.com:3000
-      client: "eth-to-base"
-    - name: "attestor-dan-base"
-      type: local
-      client: "eth-to-base"
-    - name: "attestor-dan-ethereum"
-      type: local
-      client: "base-to-eth"
-  clients:
-    - alias: "eth-to-base"
-      clientId: "base-0"
-      chainId: "1"
-      counterpartyChainId: "8453"
-      counterpartyClientId: "ethereum-0"
-      type: "attestation"
-      attestorSet:
-        counterpartyChainFinalityOffset: 1
-        threshold: 2
-    - alias: "base-to-eth"
-      clientId: "ethereum-0"
-      chainId: "8453"
-      counterpartyChainId: "1"
-      counterpartyClientId: "base-0"
-      type: "attestation"
-      attestorSet:
-        threshold: 1
-  routesToRelay:
-    - sourceClient: "eth-to-base"
-      autoRelay:
-        enabled: false
-        lookback: 100
-    - sourceClient: "base-to-eth"
-`
-
 func TestRelayerConfig(t *testing.T) {
 	t.Run("LoadFullShape", func(t *testing.T) {
 		// ARRANGE
-		path := writeTestConfig(t, fullRelayerConfig)
+		path := filepath.Join("testdata", "sample.yml")
 
 		// ACT
 		config, err := LoadFromFile(path, true, true)
@@ -97,7 +29,6 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
-		assert.Equal(t, "500000000", chain.GasAlertThresholds.WarningThreshold)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
 
@@ -146,7 +77,7 @@ func TestRelayerConfig(t *testing.T) {
 
 	t.Run("Helpers", func(t *testing.T) {
 		// ARRANGE
-		path := writeTestConfig(t, fullRelayerConfig)
+		path := filepath.Join("testdata", "sample.yml")
 		config, err := LoadFromFile(path, true, true)
 		require.NoError(t, err)
 
@@ -285,20 +216,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".gasFeeCapMultiplier must be positive",
 			},
 			{
-				name: "non-numeric gas threshold",
-				patch: func(c *Config) {
-					c.Relayer.ChainOverrides[0].GasAlertThresholds.WarningThreshold = "lots"
-				},
-				errContains: ".warningThreshold must be a non-negative integer",
-			},
-			{
-				name: "empty gas threshold",
-				patch: func(c *Config) {
-					c.Relayer.ChainOverrides[0].GasAlertThresholds.CriticalThreshold = ""
-				},
-				errContains: ".criticalThreshold must be a non-negative integer",
-			},
-			{
 				name: "client missing clientId",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].ClientID = ""
@@ -435,7 +352,7 @@ func TestRelayerConfig(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				path := writeTestConfig(t, fullRelayerConfig)
+				path := filepath.Join("testdata", "sample.yml")
 				config, err := LoadFromFile(path, true, true)
 				require.NoError(t, err)
 

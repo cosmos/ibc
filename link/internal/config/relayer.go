@@ -1,7 +1,6 @@
 package config
 
 import (
-	"math/big"
 	"time"
 
 	"github.com/pkg/errors"
@@ -34,24 +33,17 @@ type RelayerConfig struct {
 
 // ChainOverride relay settings for one chain.
 type ChainOverride struct {
-	ChainID            string              `yaml:"chainId"`
-	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
-	GasAlertThresholds *GasAlertThresholds `yaml:"gasAlertThresholds,omitempty"`
-	TxSubmissionDelay  *time.Duration      `yaml:"txSubmissionDelay,omitempty"`
-	PacketBatchSize    *int                `yaml:"packetBatchSize,omitempty"`
-	PacketBatchTimeout *time.Duration      `yaml:"packetBatchTimeout,omitempty"`
+	ChainID            string            `yaml:"chainId"`
+	EVM                *RelayerEVMConfig `yaml:"evm,omitempty"`
+	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
+	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
+	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
 	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
 	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
-}
-
-// GasAlertThresholds gas balances that trigger low-balance metrics.
-type GasAlertThresholds struct {
-	WarningThreshold  string `yaml:"warningThreshold"`
-	CriticalThreshold string `yaml:"criticalThreshold"`
 }
 
 // ClientConfig a light client on a chain.
@@ -295,12 +287,6 @@ func (c ChainOverride) Validate() error {
 		}
 	}
 
-	if c.GasAlertThresholds != nil {
-		if err := c.GasAlertThresholds.Validate(); err != nil {
-			return errors.Wrap(err, ".gasAlertThresholds")
-		}
-	}
-
 	return nil
 }
 
@@ -310,20 +296,6 @@ func (c RelayerEVMConfig) Validate() error {
 		return errors.New(".gasFeeCapMultiplier must be positive")
 	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
 		return errors.New(".gasTipCapMultiplier must be positive")
-	}
-
-	return nil
-}
-
-func (c GasAlertThresholds) Validate() error {
-	for name, value := range map[string]string{
-		".warningThreshold":  c.WarningThreshold,
-		".criticalThreshold": c.CriticalThreshold,
-	} {
-		amount, ok := new(big.Int).SetString(value, 10)
-		if !ok || amount.Sign() < 0 {
-			return errors.Errorf("%s must be a non-negative integer, got %q", name, value)
-		}
 	}
 
 	return nil
