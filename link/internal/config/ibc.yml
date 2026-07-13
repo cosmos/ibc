@@ -23,7 +23,7 @@ chains:
 
 relayer:
   # relay specific chain settings
-  chains:
+  chainOverrides:
     - chainId: "1"
       txSubmissionDelay: 5s
       packetBatchSize: 50

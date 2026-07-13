@@ -24,7 +24,7 @@ chains:
       rpc: https://base-rpc.example.com
       ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 relayer:
-  chains:
+  chainOverrides:
     - chainId: "1"
       evm:
         gasFeeCapMultiplier: 1.5
@@ -92,8 +92,8 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "https://ethereum-rpc.example.com", config.Chains[0].EVM.RPC)
 		assert.Equal(t, ChainTypeEVM, config.Chains[0].Type())
 
-		require.Len(t, config.Relayer.Chains, 2)
-		chain := config.Relayer.Chains[0]
+		require.Len(t, config.Relayer.ChainOverrides, 2)
+		chain := config.Relayer.ChainOverrides[0]
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
@@ -157,7 +157,6 @@ func TestRelayerConfig(t *testing.T) {
 		_, ok = config.Chain("999")
 		assert.False(t, ok)
 
-
 		client, ok := config.Relayer.Client("1", "base-0")
 		assert.True(t, ok)
 		assert.Equal(t, "8453", client.CounterpartyChainID)
@@ -206,14 +205,14 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "duplicate relayer chainId",
 				patch: func(c *Config) {
-					c.Relayer.Chains[1].ChainID = "1"
+					c.Relayer.ChainOverrides[1].ChainID = "1"
 				},
 				errContains: "duplicate chainId",
 			},
 			{
 				name: "relayer chain not declared",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].ChainID = "43"
+					c.Relayer.ChainOverrides[0].ChainID = "43"
 				},
 				errContains: "not declared in top-level chains",
 			},
@@ -258,7 +257,7 @@ func TestRelayerConfig(t *testing.T) {
 				name: "non-positive batch size",
 				patch: func(c *Config) {
 					size := 0
-					c.Relayer.Chains[0].PacketBatchSize = &size
+					c.Relayer.ChainOverrides[0].PacketBatchSize = &size
 				},
 				errContains: ".packetBatchSize must be positive",
 			},
@@ -266,7 +265,7 @@ func TestRelayerConfig(t *testing.T) {
 				name: "negative tx submission delay",
 				patch: func(c *Config) {
 					delay := -time.Second
-					c.Relayer.Chains[0].TxSubmissionDelay = &delay
+					c.Relayer.ChainOverrides[0].TxSubmissionDelay = &delay
 				},
 				errContains: ".txSubmissionDelay must not be negative",
 			},
@@ -281,21 +280,21 @@ func TestRelayerConfig(t *testing.T) {
 				name: "zero gas multiplier",
 				patch: func(c *Config) {
 					zero := 0.0
-					c.Relayer.Chains[0].EVM.GasFeeCapMultiplier = &zero
+					c.Relayer.ChainOverrides[0].EVM.GasFeeCapMultiplier = &zero
 				},
 				errContains: ".gasFeeCapMultiplier must be positive",
 			},
 			{
 				name: "non-numeric gas threshold",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].GasAlertThresholds.WarningThreshold = "lots"
+					c.Relayer.ChainOverrides[0].GasAlertThresholds.WarningThreshold = "lots"
 				},
 				errContains: ".warningThreshold must be a non-negative integer",
 			},
 			{
 				name: "empty gas threshold",
 				patch: func(c *Config) {
-					c.Relayer.Chains[0].GasAlertThresholds.CriticalThreshold = ""
+					c.Relayer.ChainOverrides[0].GasAlertThresholds.CriticalThreshold = ""
 				},
 				errContains: ".criticalThreshold must be a non-negative integer",
 			},
