@@ -25,14 +25,14 @@ const (
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	ChainOverrides []ChainOverride `yaml:"chainOverrides"`
-	Clients        []ClientConfig  `yaml:"clients"`
-	Attestors      []AttestorEntry `yaml:"attestors"`
-	Routes         []RouteConfig   `yaml:"routesToRelay"`
+	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
+	Clients        []ClientConfig         `yaml:"clients"`
+	Attestors      []AttestorEntry        `yaml:"attestors"`
+	Routes         []RouteConfig          `yaml:"routesToRelay"`
 }
 
-// ChainOverride relay settings for one chain.
-type ChainOverride struct {
+// RelayerChainOverride relay settings for one chain.
+type RelayerChainOverride struct {
 	ChainID            string            `yaml:"chainId"`
 	EVM                *RelayerEVMConfig `yaml:"evm,omitempty"`
 	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
@@ -269,7 +269,7 @@ func (c RelayerConfig) validateRoutes() error {
 	return nil
 }
 
-func (c ChainOverride) Validate() error {
+func (c RelayerChainOverride) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
