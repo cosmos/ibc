@@ -169,28 +169,28 @@ func (db *PostgresDB) CreateRelayRequest(ctx context.Context, chainID string, tx
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-func (db *PostgresDB) CreatePacket(ctx context.Context, packet Packet) error {
+func (db *PostgresDB) CreatePacket(ctx context.Context, input CreatePacket) error {
 	db.logger.Debug(
 		"CreatePacket",
-		"chainID", packet.SourceChainID,
-		"clientID", packet.PacketSourceClientID,
-		"sequence", packet.PacketSequenceNumber,
+		"chainID", input.SourceChainID,
+		"clientID", input.PacketSourceClientID,
+		"sequence", input.PacketSequenceNumber,
 	)
 
-	if err := packet.Validate(); err != nil {
+	if err := input.Validate(); err != nil {
 		return errors.Wrap(err, "invalid packet")
 	}
 
 	_, err := db.repo.CreatePacket(ctx, postgres.CreatePacketParams{
-		Status:                    string(packet.Status),
-		SourceChainID:             packet.SourceChainID,
-		DestinationChainID:        packet.DestinationChainID,
-		SourceTxHash:              packet.SourceTxHash,
-		SourceTxTime:              pgTimestamp(packet.SourceTxTime),
-		PacketSequenceNumber:      int64(packet.PacketSequenceNumber),
-		PacketSourceClientID:      packet.PacketSourceClientID,
-		PacketDestinationClientID: packet.PacketDestinationClientID,
-		PacketTimeoutTimestamp:    pgTimestamp(packet.PacketTimeoutTimestamp),
+		Status:                    string(input.Status),
+		SourceChainID:             input.SourceChainID,
+		DestinationChainID:        input.DestinationChainID,
+		SourceTxHash:              input.SourceTxHash,
+		SourceTxTime:              pgTimestamp(input.SourceTxTime),
+		PacketSequenceNumber:      int64(input.PacketSequenceNumber),
+		PacketSourceClientID:      input.PacketSourceClientID,
+		PacketDestinationClientID: input.PacketDestinationClientID,
+		PacketTimeoutTimestamp:    pgTimestamp(input.PacketTimeoutTimestamp),
 	})
 
 	return err

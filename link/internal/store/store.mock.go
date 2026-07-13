@@ -37,16 +37,16 @@ func (_m *MockRepository) EXPECT() *MockRepository_Expecter {
 }
 
 // CreatePacket provides a mock function for the type MockRepository
-func (_mock *MockRepository) CreatePacket(ctx context.Context, packet Packet) error {
-	ret := _mock.Called(ctx, packet)
+func (_mock *MockRepository) CreatePacket(ctx context.Context, input CreatePacket) error {
+	ret := _mock.Called(ctx, input)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreatePacket")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, Packet) error); ok {
-		r0 = returnFunc(ctx, packet)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, CreatePacket) error); ok {
+		r0 = returnFunc(ctx, input)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -60,20 +60,20 @@ type MockRepository_CreatePacket_Call struct {
 
 // CreatePacket is a helper method to define mock.On call
 //   - ctx context.Context
-//   - packet Packet
-func (_e *MockRepository_Expecter) CreatePacket(ctx any, packet any) *MockRepository_CreatePacket_Call {
-	return &MockRepository_CreatePacket_Call{Call: _e.mock.On("CreatePacket", ctx, packet)}
+//   - input CreatePacket
+func (_e *MockRepository_Expecter) CreatePacket(ctx any, input any) *MockRepository_CreatePacket_Call {
+	return &MockRepository_CreatePacket_Call{Call: _e.mock.On("CreatePacket", ctx, input)}
 }
 
-func (_c *MockRepository_CreatePacket_Call) Run(run func(ctx context.Context, packet Packet)) *MockRepository_CreatePacket_Call {
+func (_c *MockRepository_CreatePacket_Call) Run(run func(ctx context.Context, input CreatePacket)) *MockRepository_CreatePacket_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 Packet
+		var arg1 CreatePacket
 		if args[1] != nil {
-			arg1 = args[1].(Packet)
+			arg1 = args[1].(CreatePacket)
 		}
 		run(
 			arg0,
@@ -88,7 +88,7 @@ func (_c *MockRepository_CreatePacket_Call) Return(err error) *MockRepository_Cr
 	return _c
 }
 
-func (_c *MockRepository_CreatePacket_Call) RunAndReturn(run func(ctx context.Context, packet Packet) error) *MockRepository_CreatePacket_Call {
+func (_c *MockRepository_CreatePacket_Call) RunAndReturn(run func(ctx context.Context, input CreatePacket) error) *MockRepository_CreatePacket_Call {
 	_c.Call.Return(run)
 	return _c
 }

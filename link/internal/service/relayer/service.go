@@ -125,8 +125,8 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	return nil
 }
 
-func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.Packet {
-	var packets []store.Packet
+func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.CreatePacket {
+	var packets []store.CreatePacket
 
 	for _, event := range events {
 		if event.Kind != chains.KindSendPacket {
@@ -145,7 +145,7 @@ func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.Pack
 			continue
 		}
 
-		packets = append(packets, store.Packet{
+		packets = append(packets, store.CreatePacket{
 			Status:                    store.RelayStatusPending,
 			SourceChainID:             chainID,
 			DestinationChainID:        client.CounterpartyChainID,

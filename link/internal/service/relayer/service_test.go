@@ -103,7 +103,7 @@ func TestRelay(t *testing.T) {
 			}).
 			Once()
 		repo.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
-		repo.EXPECT().CreatePacket(ctx, store.Packet{
+		repo.EXPECT().CreatePacket(ctx, store.CreatePacket{
 			Status:                    store.RelayStatusPending,
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,

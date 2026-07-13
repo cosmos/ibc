@@ -165,7 +165,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	t.Run("execTx", func(t *testing.T) {
 		const txHashAtomic = "0xa70m1c"
 
-		packet := Packet{
+		packet := CreatePacket{
 			Status:                    RelayStatusPending,
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
@@ -217,7 +217,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	})
 
 	t.Run("packets", func(t *testing.T) {
-		packet := Packet{
+		packet := CreatePacket{
 			Status:                    RelayStatusPending,
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
