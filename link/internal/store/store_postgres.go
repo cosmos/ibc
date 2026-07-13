@@ -53,13 +53,11 @@ func NewPostgresWithConfig(ctx context.Context, config *pgxpool.Config, ping boo
 		return nil, errors.Wrap(err, "create pool")
 	}
 
-	logger := slog.With("module", "database")
-
 	db := &PostgresDB{
 		pool:       pool,
 		sqlWrapper: stdlib.OpenDBFromPool(pool),
 		repo:       postgres.New(pool),
-		logger:     logger,
+		logger:     slog.With("module", "database"),
 	}
 
 	if ping {
