@@ -27,7 +27,7 @@ func NewFromConfig(cfg config.Config) (*ClientManager, error) {
 
 	for _, chain := range cfg.Chains {
 		if chain.Type() != config.ChainTypeEVM {
-			continue
+			return nil, errors.Errorf("unsupported chain type for chain %q", chain.ChainID)
 		}
 
 		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.ICS26Router)
