@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -124,6 +125,27 @@ func TestTxPacketEvents(t *testing.T) {
 		// ASSERT
 		require.NoError(t, err)
 		assert.Empty(t, events)
+	})
+
+	t.Run("headerError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		eth := NewMockETHClient(t)
+		client, err := NewWithClient(chainIDEth, eth, routerAddress)
+		require.NoError(t, err)
+
+		receipt := &types.Receipt{
+			BlockNumber: big.NewInt(100),
+			Logs:        []*types.Log{sendPacketLog(t, common.HexToAddress(routerAddress), testPacket())},
+		}
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receipt, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(nil, errors.New("rpc down")).Once()
+
+		// ACT
+		_, err = client.TxPacketEvents(ctx, txHash.Bytes())
+
+		// ASSERT
+		require.ErrorContains(t, err, "getting header")
 	})
 
 	t.Run("receiptError", func(t *testing.T) {

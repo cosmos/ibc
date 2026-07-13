@@ -136,6 +136,24 @@ func TestRelay(t *testing.T) {
 		require.ErrorContains(t, err, "unsupported chain")
 	})
 
+	t.Run("chainClientError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		clientManager := NewMockChainClientManager(t)
+		service := New(relayerConfig(), NewMockStore(t), clientManager)
+
+		// config knows the chain but the manager has no client for it
+		clientManager.EXPECT().GetClient(chainIDEth).Return(nil, errors.New("no client")).Once()
+
+		// ACT
+		err := service.Relay(ctx, chainIDEth, txHashLower)
+
+		// ASSERT
+		// a missing client is a server-side inconsistency, not a caller error
+		require.ErrorContains(t, err, "getting chain client")
+		require.NotErrorIs(t, err, ErrInvalidInput)
+	})
+
 	t.Run("extractionError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()

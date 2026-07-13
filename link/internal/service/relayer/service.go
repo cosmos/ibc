@@ -88,7 +88,7 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 
 	client, err := s.chains.GetClient(chainID)
 	if err != nil {
-		return errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
+		return errors.Wrapf(err, "getting chain client for %q", chainID)
 	}
 
 	hashBytes, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
