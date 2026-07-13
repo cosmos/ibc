@@ -1,0 +1,63 @@
+server:
+  listenAddr: 0.0.0.0:3000
+db:
+  type: sqlite
+  url: ibc.db
+chains:
+  - chainId: "1"
+    evm:
+      rpc: https://ethereum-rpc.example.com
+      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+  - chainId: "8453"
+    evm:
+      rpc: https://base-rpc.example.com
+      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+relayer:
+  chainOverrides:
+    - chainId: "1"
+      evm:
+        gasFeeCapMultiplier: 1.5
+        gasTipCapMultiplier: 1.5
+      txSubmissionDelay: 2s
+      packetBatchSize: 20
+      packetBatchTimeout: 10s
+    - chainId: "8453"
+  attestors:
+    - name: "attestor-alice-base"
+      type: remote
+      grpc: attestor-alice.example.com:3000
+      client: "eth-to-base"
+    - name: "attestor-bob-base"
+      type: remote
+      grpc: attestor-bob.example.com:3000
+      client: "eth-to-base"
+    - name: "attestor-dan-base"
+      type: local
+      client: "eth-to-base"
+    - name: "attestor-dan-ethereum"
+      type: local
+      client: "base-to-eth"
+  clients:
+    - alias: "eth-to-base"
+      clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 2
+    - alias: "base-to-eth"
+      clientId: "ethereum-0"
+      chainId: "8453"
+      counterpartyChainId: "1"
+      counterpartyClientId: "base-0"
+      type: "attestation"
+      attestorSet:
+        threshold: 1
+  routesToRelay:
+    - sourceClient: "eth-to-base"
+      autoRelay:
+        enabled: false
+        lookback: 100
+    - sourceClient: "base-to-eth"
