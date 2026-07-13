@@ -102,13 +102,21 @@ const (
 // ChainConfig chain information shared by the attestor and relayer.
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
-	Type    ChainType       `yaml:"type"`
-	RPC     string          `yaml:"rpc"`
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+}
+
+// Type returns the chain type implied by the configured settings.
+func (c ChainConfig) Type() ChainType {
+	if c.EVM != nil {
+		return ChainTypeEVM
+	}
+
+	return ""
 }
 
 // EVMChainConfig EVM-specific chain details.
 type EVMChainConfig struct {
+	RPC         string `yaml:"rpc"`
 	ICS26Router string `yaml:"ics26Router"`
 }
 
@@ -259,19 +267,12 @@ func (c ChainConfig) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
-	case c.Type != ChainTypeEVM:
-		return errors.Errorf(".type unknown chain type: %q", c.Type)
-	case c.RPC == "":
-		return errors.New(".rpc required")
-	}
-
-	if c.Type == ChainTypeEVM {
-		switch {
-		case c.EVM == nil:
-			return errors.Errorf(".evm required for %s chains", ChainTypeEVM)
-		case c.EVM.ICS26Router == "":
-			return errors.New(".evm.ics26Router required")
-		}
+	case c.Type() != ChainTypeEVM:
+		return errors.Errorf("unknown chain type (only %s chains are supported)", ChainTypeEVM)
+	case c.EVM.RPC == "":
+		return errors.New(".evm.rpc required")
+	case c.EVM.ICS26Router == "":
+		return errors.New(".evm.ics26Router required")
 	}
 
 	return nil

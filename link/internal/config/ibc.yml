@@ -13,14 +13,12 @@ db:
 # referenced by other blocks via chainId
 chains:
   - chainId: "1"
-    type: evm
-    rpc: https://ethereum-rpc.example.com
     evm:
+      rpc: https://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000000"
   - chainId: "8453"
-    type: evm
-    rpc: https://base-rpc.example.com
     evm:
+      rpc: https://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000000"
 
 relayer:
