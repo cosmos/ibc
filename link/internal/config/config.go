@@ -132,7 +132,7 @@ func DefaultConfig() Config {
 		},
 		Chains: []ChainConfig{},
 		Relayer: RelayerConfig{
-			ChainOverrides: []ChainOverride{},
+			ChainOverrides: []RelayerChainOverride{},
 		},
 		Attestor: AttestorConfig{
 			Attestations: []AttestationConfig{},
