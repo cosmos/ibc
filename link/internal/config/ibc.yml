@@ -7,7 +7,61 @@ db:
   type: sqlite
   url: ibc.db
   # type: postgres
-  # url: postgres://user:pass@localhost:5432/ibc
+  # url: postgres://user:password@host:port/dbname
+
+# chains declares chain information shared by the attestor and relayer;
+# referenced by other blocks via chainId
+chains:
+  - chainId: "1"
+    evm:
+      rpc: https://ethereum-rpc.example.com
+      ics26Router: "0x0000000000000000000000000000000000000000"
+  - chainId: "8453"
+    evm:
+      rpc: https://base-rpc.example.com
+      ics26Router: "0x0000000000000000000000000000000000000000"
+
+relayer:
+  # relay specific chain settings
+  chainOverrides:
+    - chainId: "1"
+      txSubmissionDelay: 5s
+      packetBatchSize: 50
+
+  # a client and its counterparty both need to be configured
+  clients:
+    - alias: "eth-to-base"
+      clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 1
+        attestors:
+          - name: "attestor-base"
+            type: remote
+            grpc: attestor.example.com:3000
+    - alias: "base-to-eth"
+      clientId: "ethereum-0"
+      chainId: "8453"
+      counterpartyChainId: "1"
+      counterpartyClientId: "base-0"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 1
+        attestors:
+          - name: "attestor-ethereum"
+            type: remote
+            grpc: attestor.example.com:3000
+
+  # packets sent from the source client are relayed through the entire packet
+  # lifecycle: recv, ack, timeout
+  routesToRelay:
+    - sourceClient: "eth-to-base"
+    - sourceClient: "base-to-eth"
 
 # signers define signing backends referenced by attestations
 #
