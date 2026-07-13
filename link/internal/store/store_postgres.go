@@ -226,8 +226,7 @@ func packetFromPostgres(row postgres.Packet) Packet {
 		CreatedAt: row.CreatedAt.Time.UTC(),
 		UpdatedAt: row.UpdatedAt.Time.UTC(),
 
-		Status:     RelayStatus(row.Status),
-		StatusText: row.StatusText,
+		Status: RelayStatus(row.Status),
 
 		SourceChainID:      row.SourceChainID,
 		DestinationChainID: row.DestinationChainID,

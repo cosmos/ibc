@@ -13,7 +13,6 @@ type Packet struct {
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
 	Status                    string
-	StatusText                *string
 	SourceChainID             string
 	DestinationChainID        string
 	SourceTxHash              string

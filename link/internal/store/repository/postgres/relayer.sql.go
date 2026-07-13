@@ -96,7 +96,7 @@ func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash st
 }
 
 const listPacketsBySourceTx = `-- name: ListPacketsBySourceTx :many
-SELECT id, created_at, updated_at, status, status_text, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
+SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE source_chain_id = $1
 AND source_tx_hash = $2
 ORDER BY packet_sequence_number
@@ -116,7 +116,6 @@ func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txH
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Status,
-			&i.StatusText,
 			&i.SourceChainID,
 			&i.DestinationChainID,
 			&i.SourceTxHash,

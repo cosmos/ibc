@@ -230,8 +230,7 @@ func packetFromSqlite(row reposqlite.Packet) Packet {
 		CreatedAt: row.CreatedAt.UTC(),
 		UpdatedAt: row.UpdatedAt.UTC(),
 
-		Status:     RelayStatus(row.Status),
-		StatusText: row.StatusText,
+		Status: RelayStatus(row.Status),
 
 		SourceChainID:      row.SourceChainID,
 		DestinationChainID: row.DestinationChainID,
