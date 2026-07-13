@@ -29,7 +29,7 @@ type ChainClientManager interface {
 	GetClient(chainID string) (chains.Client, error)
 }
 
-// Store persistence used by the relayer gRPC handlers.
+// Store queries used by the relayer gRPC handlers.
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
