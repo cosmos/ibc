@@ -115,6 +115,8 @@ func TestRelay(t *testing.T) {
 			PacketTimeoutTimestamp:    time.Unix(1780000000, 0).UTC(),
 		}).Return(nil).Once()
 
+		// we do not expect CreatePacket to be called for "unknown-0"
+
 		// ACT
 		err := service.Relay(ctx, chainIDEth, txHashUpper)
 
