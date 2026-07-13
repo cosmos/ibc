@@ -210,7 +210,7 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 	}
 
-	switch chain.Type {
+	switch chain.Type() {
 	case config.ChainTypeEVM:
 		var hash common.Hash
 		if err := hash.UnmarshalText([]byte(txHash)); err != nil {

@@ -28,9 +28,8 @@ func relayerConfig() config.Config {
 		Chains: []config.ChainConfig{
 			{
 				ChainID: chainIDEth,
-				Type:    config.ChainTypeEVM,
-				RPC:     "https://ethereum-rpc.example.com",
 				EVM: &config.EVMChainConfig{
+					RPC:         "https://ethereum-rpc.example.com",
 					ICS26Router: "0x0000000000000000000000000000000000000000",
 				},
 			},

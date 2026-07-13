@@ -16,14 +16,12 @@ db:
   url: ibc.db
 chains:
   - chainId: "1"
-    type: evm
-    rpc: https://ethereum-rpc.example.com
     evm:
+      rpc: https://ethereum-rpc.example.com
       ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
   - chainId: "8453"
-    type: evm
-    rpc: https://base-rpc.example.com
     evm:
+      rpc: https://base-rpc.example.com
       ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 relayer:
   chains:
@@ -91,8 +89,8 @@ func TestRelayerConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, config.Chains, 2)
-		assert.Equal(t, "https://ethereum-rpc.example.com", config.Chains[0].RPC)
-		assert.Equal(t, ChainTypeEVM, config.Chains[0].Type)
+		assert.Equal(t, "https://ethereum-rpc.example.com", config.Chains[0].EVM.RPC)
+		assert.Equal(t, ChainTypeEVM, config.Chains[0].Type())
 
 		require.Len(t, config.Relayer.Chains, 2)
 		chain := config.Relayer.Chains[0]
@@ -192,25 +190,18 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".chainId required",
 			},
 			{
-				name: "chain invalid type",
-				patch: func(c *Config) {
-					c.Chains[0].Type = "cosmos"
-				},
-				errContains: `unknown chain type: "cosmos"`,
-			},
-			{
 				name: "chain missing evm",
 				patch: func(c *Config) {
 					c.Chains[0].EVM = nil
 				},
-				errContains: ".evm required",
+				errContains: "unknown chain type",
 			},
 			{
 				name: "chain missing rpc",
 				patch: func(c *Config) {
-					c.Chains[0].RPC = ""
+					c.Chains[0].EVM.RPC = ""
 				},
-				errContains: ".rpc required",
+				errContains: ".evm.rpc required",
 			},
 			{
 				name: "duplicate top-level chainId",
@@ -237,6 +228,7 @@ func TestRelayerConfig(t *testing.T) {
 				name: "client chain not declared",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].ChainID = "999"
+					c.Relayer.Clients[1].CounterpartyChainID = "999"
 				},
 				errContains: `.clients[base-0] chainId "999" not declared`,
 			},
