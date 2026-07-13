@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Client provides chain-specific operations, implemented per chain type.
+// Client provides chain state queries.
 type Client interface {
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error)
 }
