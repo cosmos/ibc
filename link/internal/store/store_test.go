@@ -32,6 +32,11 @@ func TestStore(t *testing.T) {
 		// Ensure migrations are applied
 		testMigrationIdempotency(t, db)
 
+		// Ensure foreign keys are enforced
+		var foreignKeys int64
+		require.NoError(t, db.db.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys))
+		require.EqualValues(t, 1, foreignKeys)
+
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
 

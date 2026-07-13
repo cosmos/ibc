@@ -175,6 +175,8 @@ func (t Packet) Validate() error {
 		return errors.New("source tx hash is required")
 	case t.SourceTxTime.IsZero():
 		return errors.New("source tx time is required")
+	case t.PacketSequenceNumber == 0:
+		return errors.New("packet sequence number is required")
 	case t.PacketSourceClientID == "":
 		return errors.New("packet source client id is required")
 	case t.PacketDestinationClientID == "":

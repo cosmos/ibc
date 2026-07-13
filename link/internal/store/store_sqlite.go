@@ -55,7 +55,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 	logger := slog.With("module", "database")
 
 	if path == SqliteInMemory {
-		db, err := sql.Open("sqlite", path)
+		db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
 		if err != nil {
 			return nil, errors.Wrapf(err, "open sqlite in memory")
 		}
@@ -295,6 +295,10 @@ func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
 	}
 
 	query := u.Query()
+
+	// sqlite does not enforce foreign keys unless enabled per connection
+	query.Set("_pragma", "foreign_keys(1)")
+
 	for k, v := range connectionOpts {
 		query.Set(k, v)
 	}
