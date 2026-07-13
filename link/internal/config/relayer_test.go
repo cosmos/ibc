@@ -29,9 +29,6 @@ relayer:
       evm:
         gasFeeCapMultiplier: 1.5
         gasTipCapMultiplier: 1.5
-      gasAlertThresholds:
-        warningThreshold: "500000000"
-        criticalThreshold: "10000000"
       txSubmissionDelay: 2s
       packetBatchSize: 20
       packetBatchTimeout: 10s
@@ -97,7 +94,6 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
-		assert.Equal(t, "500000000", chain.GasAlertThresholds.WarningThreshold)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
 
@@ -283,20 +279,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.ChainOverrides[0].EVM.GasFeeCapMultiplier = &zero
 				},
 				errContains: ".gasFeeCapMultiplier must be positive",
-			},
-			{
-				name: "non-numeric gas threshold",
-				patch: func(c *Config) {
-					c.Relayer.ChainOverrides[0].GasAlertThresholds.WarningThreshold = "lots"
-				},
-				errContains: ".warningThreshold must be a non-negative integer",
-			},
-			{
-				name: "empty gas threshold",
-				patch: func(c *Config) {
-					c.Relayer.ChainOverrides[0].GasAlertThresholds.CriticalThreshold = ""
-				},
-				errContains: ".criticalThreshold must be a non-negative integer",
 			},
 			{
 				name: "client missing clientId",
