@@ -26,14 +26,14 @@ const (
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	Chains    []RelayerChainConfig `yaml:"chains"`
-	Clients   []ClientConfig       `yaml:"clients"`
-	Attestors []AttestorEntry      `yaml:"attestors"`
-	Routes    []RouteConfig        `yaml:"routesToRelay"`
+	ChainOverrides []ChainOverride `yaml:"chainOverrides"`
+	Clients        []ClientConfig  `yaml:"clients"`
+	Attestors      []AttestorEntry `yaml:"attestors"`
+	Routes         []RouteConfig   `yaml:"routesToRelay"`
 }
 
-// RelayerChainConfig relay settings for one chain.
-type RelayerChainConfig struct {
+// ChainOverride relay settings for one chain.
+type ChainOverride struct {
 	ChainID            string              `yaml:"chainId"`
 	EVM                *RelayerEVMConfig   `yaml:"evm,omitempty"`
 	GasAlertThresholds *GasAlertThresholds `yaml:"gasAlertThresholds,omitempty"`
@@ -131,7 +131,7 @@ func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
-	if err := c.validateChains(); err != nil {
+	if err := c.validateChainOverrides(); err != nil {
 		return err
 	}
 
@@ -146,16 +146,16 @@ func (c RelayerConfig) Validate() error {
 	return c.validateRoutes()
 }
 
-func (c RelayerConfig) validateChains() error {
+func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
 
-	for _, chain := range c.Chains {
+	for _, chain := range c.ChainOverrides {
 		if err := chain.Validate(); err != nil {
-			return errors.Wrapf(err, ".chains[%s]", chain.ChainID)
+			return errors.Wrapf(err, ".chainOverrides[%s]", chain.ChainID)
 		}
 
 		if _, ok := chainIDs[chain.ChainID]; ok {
-			return errors.Errorf(".chains duplicate chainId: %q", chain.ChainID)
+			return errors.Errorf(".chainOverrides duplicate chainId: %q", chain.ChainID)
 		}
 		chainIDs[chain.ChainID] = struct{}{}
 	}
@@ -277,7 +277,7 @@ func (c RelayerConfig) validateRoutes() error {
 	return nil
 }
 
-func (c RelayerChainConfig) Validate() error {
+func (c ChainOverride) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errors.New(".chainId required")
