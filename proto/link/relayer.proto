@@ -11,9 +11,7 @@ service RelayerApiService {
   rpc Relay(RelayRequest) returns (RelayResponse) {}
 
   // Status returns per-packet transfer status for a transaction previously
-  // submitted via Relay. Returns NOT_FOUND if the transaction was never
-  // submitted; returns an empty packet_statuses list if it was submitted but
-  // no packets have been extracted from it.
+  // submitted via Relay.
   rpc Status(StatusRequest) returns (StatusResponse) {}
 }
 
