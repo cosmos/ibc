@@ -260,15 +260,17 @@ func (c Config) Chain(chainID string) (ChainConfig, bool) {
 }
 
 func (c ChainConfig) Validate() error {
-	switch {
-	case c.ChainID == "":
+	if c.ChainID == "" {
 		return errors.New(".chainId required")
-	case c.Type() != ChainTypeEVM:
-		return errors.Errorf("unknown chain type (only %s chains are supported)", ChainTypeEVM)
-	case c.EVM.RPC == "":
-		return errors.New(".evm.rpc required")
-	case c.EVM.ICS26Router == "":
-		return errors.New(".evm.ics26Router required")
+	}
+
+	if c.Type() == ChainTypeEVM {
+		switch {
+		case c.EVM.RPC == "":
+			return errors.New(".evm.rpc required")
+		case c.EVM.ICS26Router == "":
+			return errors.New(".evm.ics26Router required")
+		}
 	}
 
 	return nil
