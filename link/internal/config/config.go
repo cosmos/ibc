@@ -194,10 +194,6 @@ func (c Config) Validate() error {
 		chainIDs[chain.ChainID] = struct{}{}
 	}
 
-	if err := c.validateChainReferences(); err != nil {
-		return errors.Wrap(err, ".relayer")
-	}
-
 	if err := c.Relayer.Validate(); err != nil {
 		return errors.Wrap(err, ".relayer")
 	}
@@ -229,7 +225,7 @@ func (c Config) crossValidate() error {
 		}
 	}
 
-	return nil
+	return c.validateChainReferences()
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are
