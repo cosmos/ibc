@@ -81,8 +81,6 @@ func New(cfg config.Config, st Store, clientManager ChainClientManager) *Service
 }
 
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
-	s.logger.Info("Relay called", "chainID", chainID, "txHash", txHash)
-
 	txHash, err := s.validateRelayArgs(chainID, txHash)
 	if err != nil {
 		return err
@@ -164,8 +162,6 @@ func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.Pack
 }
 
 func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketStatus, error) {
-	s.logger.Info("Status called", "chainID", chainID, "txHash", txHash)
-
 	txHash, err := s.validateRelayArgs(chainID, txHash)
 	if err != nil {
 		return nil, err
