@@ -107,7 +107,7 @@ func TestTxPacketEvents(t *testing.T) {
 		assert.Equal(t, []byte{0xde, 0xad, 0xbe, 0xef}, event.Packet.Payloads[0].Value)
 	})
 
-	t.Run("noSendPacketsSkipsHeaderLookup", func(t *testing.T) {
+	t.Run("noSendPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		eth := NewMockETHClient(t)
