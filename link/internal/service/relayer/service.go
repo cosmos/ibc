@@ -42,7 +42,7 @@ var (
 	ErrNotFound     = errors.New("not found")
 )
 
-// PacketState coarse-grained relay state.
+// PacketState relay state.
 type PacketState int
 
 // Packet states
