@@ -132,7 +132,7 @@ func DefaultConfig() Config {
 		},
 		Chains: []ChainConfig{},
 		Relayer: RelayerConfig{
-			Chains: []RelayerChainConfig{},
+			ChainOverrides: []RelayerChainOverride{},
 		},
 		Attestor: AttestorConfig{
 			Attestations: []AttestationConfig{},
@@ -231,9 +231,9 @@ func (c Config) crossValidate() error {
 // validateChainReferences ensures chains referenced by the relayer config are
 // declared in the top-level chains block.
 func (c Config) validateChainReferences() error {
-	for _, chain := range c.Relayer.Chains {
+	for _, chain := range c.Relayer.ChainOverrides {
 		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
-			return errors.Errorf(".chains[%s] chainId not declared in top-level chains", chain.ChainID)
+			return errors.Errorf(".chainOverrides[%s] chainId not declared in top-level chains", chain.ChainID)
 		}
 	}
 
