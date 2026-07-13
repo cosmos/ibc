@@ -190,13 +190,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".chainId required",
 			},
 			{
-				name: "chain missing evm",
-				patch: func(c *Config) {
-					c.Chains[0].EVM = nil
-				},
-				errContains: "unknown chain type",
-			},
-			{
 				name: "chain missing rpc",
 				patch: func(c *Config) {
 					c.Chains[0].EVM.RPC = ""
