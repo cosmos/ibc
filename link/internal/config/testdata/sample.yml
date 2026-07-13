@@ -22,21 +22,6 @@ relayer:
       packetBatchSize: 20
       packetBatchTimeout: 10s
     - chainId: "8453"
-  attestors:
-    - name: "attestor-alice-base"
-      type: remote
-      grpc: attestor-alice.example.com:3000
-      client: "eth-to-base"
-    - name: "attestor-bob-base"
-      type: remote
-      grpc: attestor-bob.example.com:3000
-      client: "eth-to-base"
-    - name: "attestor-dan-base"
-      type: local
-      client: "eth-to-base"
-    - name: "attestor-dan-ethereum"
-      type: local
-      client: "base-to-eth"
   clients:
     - alias: "eth-to-base"
       clientId: "base-0"
@@ -47,6 +32,15 @@ relayer:
       attestorSet:
         counterpartyChainFinalityOffset: 1
         threshold: 2
+        attestors:
+          - name: "attestor-alice-base"
+            type: remote
+            grpc: attestor-alice.example.com:3000
+          - name: "attestor-bob-base"
+            type: remote
+            grpc: attestor-bob.example.com:3000
+          - name: "attestor-dan-base"
+            type: local
     - alias: "base-to-eth"
       clientId: "ethereum-0"
       chainId: "8453"
@@ -55,6 +49,9 @@ relayer:
       type: "attestation"
       attestorSet:
         threshold: 1
+        attestors:
+          - name: "attestor-dan-ethereum"
+            type: local
   routesToRelay:
     - sourceClient: "eth-to-base"
       autoRelay:

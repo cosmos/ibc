@@ -41,15 +41,14 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "ethereum-0", client.CounterpartyClientID)
 		assert.Equal(t, ClientTypeAttestation, client.Type)
 
-		require.Len(t, config.Relayer.Attestors, 4)
-		assert.Equal(t, AttestorTypeRemote, config.Relayer.Attestors[0].Type)
-		assert.Equal(t, "attestor-alice-base", config.Relayer.Attestors[0].Name)
-		assert.Equal(t, "eth-to-base", config.Relayer.Attestors[0].Client)
+		attestors := client.AttestorSet.Attestors
+		require.Len(t, attestors, 3)
+		assert.Equal(t, AttestorTypeRemote, attestors[0].Type)
+		assert.Equal(t, "attestor-alice-base", attestors[0].Name)
 
 		require.NotNil(t, client.AttestorSet)
 		assert.Equal(t, uint64(1), client.AttestorSet.CounterpartyChainFinalityOffset)
 		assert.Equal(t, 2, client.AttestorSet.Threshold)
-		assert.Len(t, config.Relayer.ClientAttestors("eth-to-base"), 3)
 
 		require.Len(t, config.Relayer.Routes, 2)
 		route := config.Relayer.Routes[0]
@@ -59,20 +58,6 @@ func TestRelayerConfig(t *testing.T) {
 
 		// autoRelay omitted -> unset
 		assert.Nil(t, config.Relayer.Routes[1].AutoRelay.Enabled)
-	})
-
-	t.Run("AttestorRequiresAttestationClient", func(t *testing.T) {
-		cfg := RelayerConfig{
-			Clients: []ClientConfig{
-				{Alias: "eth-to-base", Type: "zk"},
-			},
-			Attestors: []AttestorEntry{
-				{Name: "attestor-1", Type: AttestorTypeLocal, Client: "eth-to-base"},
-			},
-		}
-
-		err := cfg.validateAttestors()
-		require.ErrorContains(t, err, `client "eth-to-base" must have type "attestation"`)
 	})
 
 	t.Run("Helpers", func(t *testing.T) {
@@ -253,20 +238,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `.attestorSet required for attestation clients`,
 			},
 			{
-				name: "attestor references unknown client",
-				patch: func(c *Config) {
-					c.Relayer.Attestors[0].Client = "unknown"
-				},
-				errContains: `references unknown client "unknown"`,
-			},
-			{
-				name: "attestor missing client",
-				patch: func(c *Config) {
-					c.Relayer.Attestors[0].Client = ""
-				},
-				errContains: ".client required",
-			},
-			{
 				name: "client missing alias",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].Alias = ""
@@ -297,34 +268,34 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "remote attestor missing grpc",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[0].GRPC = ""
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].GRPC = ""
 				},
 				errContains: ".grpc required for remote attestors",
 			},
 			{
 				name: "invalid attestor type",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[0].Type = "hybrid"
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].Type = "hybrid"
 				},
 				errContains: `unknown attestor type: "hybrid"`,
 			},
 			{
 				name: "attestor missing name",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[0].Name = ""
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].Name = ""
 				},
 				errContains: ".name required",
 			},
 			{
 				name: "duplicate attestor name routed to a different grpc endpoint",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[1].Name = "attestor-alice-base"
+					c.Relayer.Clients[0].AttestorSet.Attestors[1].Name = "attestor-alice-base"
 				},
 			},
 			{
 				name: "duplicate attestor entry",
 				patch: func(c *Config) {
-					c.Relayer.Attestors[1] = c.Relayer.Attestors[0]
+					c.Relayer.Clients[0].AttestorSet.Attestors[1] = c.Relayer.Clients[0].AttestorSet.Attestors[0]
 				},
 				errContains: ".attestors duplicate entry",
 			},
