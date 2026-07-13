@@ -33,7 +33,7 @@ type Repository interface {
 	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
 
 	// CreatePacket records a packet; duplicate packets are a noop.
-	CreatePacket(ctx context.Context, packet Packet) error
+	CreatePacket(ctx context.Context, input CreatePacket) error
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 }
@@ -163,7 +163,21 @@ type Packet struct {
 	TimeoutTxRelayerAddress *string
 }
 
-func (t Packet) Validate() error {
+// CreatePacket the fields callers provide when recording a packet; the
+// remaining Packet fields are database-assigned or set later in the lifecycle.
+type CreatePacket struct {
+	Status                    RelayStatus
+	SourceChainID             string
+	DestinationChainID        string
+	SourceTxHash              string
+	SourceTxTime              time.Time
+	PacketSequenceNumber      uint64
+	PacketSourceClientID      string
+	PacketDestinationClientID string
+	PacketTimeoutTimestamp    time.Time
+}
+
+func (t CreatePacket) Validate() error {
 	switch {
 	case t.Status == "":
 		return errors.New("status is required")

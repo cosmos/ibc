@@ -173,28 +173,28 @@ func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHa
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-func (db *SqliteDB) CreatePacket(ctx context.Context, packet Packet) error {
+func (db *SqliteDB) CreatePacket(ctx context.Context, input CreatePacket) error {
 	db.logger.Debug(
 		"CreatePacket",
-		"chainID", packet.SourceChainID,
-		"clientID", packet.PacketSourceClientID,
-		"sequence", packet.PacketSequenceNumber,
+		"chainID", input.SourceChainID,
+		"clientID", input.PacketSourceClientID,
+		"sequence", input.PacketSequenceNumber,
 	)
 
-	if err := packet.Validate(); err != nil {
+	if err := input.Validate(); err != nil {
 		return errors.Wrap(err, "invalid packet")
 	}
 
 	_, err := db.repo.CreatePacket(ctx, reposqlite.CreatePacketParams{
-		Status:                    string(packet.Status),
-		SourceChainID:             packet.SourceChainID,
-		DestinationChainID:        packet.DestinationChainID,
-		SourceTxHash:              packet.SourceTxHash,
-		SourceTxTime:              packet.SourceTxTime.UTC(),
-		PacketSequenceNumber:      int64(packet.PacketSequenceNumber),
-		PacketSourceClientID:      packet.PacketSourceClientID,
-		PacketDestinationClientID: packet.PacketDestinationClientID,
-		PacketTimeoutTimestamp:    packet.PacketTimeoutTimestamp.UTC(),
+		Status:                    string(input.Status),
+		SourceChainID:             input.SourceChainID,
+		DestinationChainID:        input.DestinationChainID,
+		SourceTxHash:              input.SourceTxHash,
+		SourceTxTime:              input.SourceTxTime.UTC(),
+		PacketSequenceNumber:      int64(input.PacketSequenceNumber),
+		PacketSourceClientID:      input.PacketSourceClientID,
+		PacketDestinationClientID: input.PacketDestinationClientID,
+		PacketTimeoutTimestamp:    input.PacketTimeoutTimestamp.UTC(),
 	})
 
 	return err
