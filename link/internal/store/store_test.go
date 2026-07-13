@@ -265,7 +265,6 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.NotZero(t, first.UpdatedAt)
 		assert.Nil(t, first.RecvTxHash)
 		assert.Nil(t, first.WriteAckStatus)
-		assert.Nil(t, first.StatusText)
 
 		// Invalid packet is rejected
 		invalid := packet

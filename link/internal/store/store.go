@@ -133,8 +133,7 @@ type Packet struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	Status     RelayStatus
-	StatusText *string
+	Status RelayStatus
 
 	SourceChainID      string
 	DestinationChainID string

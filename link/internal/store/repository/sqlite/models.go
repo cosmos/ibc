@@ -13,7 +13,6 @@ type Packet struct {
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 	Status                    string
-	StatusText                *string
 	SourceChainID             string
 	DestinationChainID        string
 	SourceTxHash              string

@@ -5,7 +5,6 @@ create table if not exists packets (
     created_at                   timestamp with time zone NOT NULL DEFAULT now(),
     updated_at                   timestamp with time zone NOT NULL DEFAULT now(),
     status                       text                     NOT NULL,
-    status_text                  text,
     source_chain_id              text                     NOT NULL,
     destination_chain_id         text                     NOT NULL,
     source_tx_hash               text                     NOT NULL,
