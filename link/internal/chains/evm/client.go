@@ -117,7 +117,6 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 		return nil, nil
 	}
 
-	// fetch the header only when the tx has send packets
 	header, err := c.eth.HeaderByNumber(ctx, receipt.BlockNumber)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting header %s for tx %s on chain %s", receipt.BlockNumber, txHash, c.chainID)
