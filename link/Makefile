@@ -24,12 +24,12 @@ codegen-mocks: ## Generate mocks for the code
 # todo: replace the copied ABI files and this target with the contracts' own build
 # outputs and go-abigen bindings once they are migrated from solidity-ibc-eureka
 codegen-abi: ## Generate Go bindings for EVM contract ABIs
-	mkdir -p internal/chains/evm/contracts/ics26_router
+	mkdir -p internal/chains/evm/contracts/ics26router
 	go tool abigen \
 		--abi internal/chains/evm/abi/ics26_router.json \
-		--pkg ics26_router \
+		--pkg ics26router \
 		--type Contract \
-		--out internal/chains/evm/contracts/ics26_router/ics26_router.go
+		--out internal/chains/evm/contracts/ics26router/ics26router.go
 
 test: ## Run tests
 	go test ./... -v
