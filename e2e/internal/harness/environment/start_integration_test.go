@@ -469,7 +469,6 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 	assertRPCUnavailable(t, managedRPC)
 	_, err = outOfBand.Height(t.Context())
 	require.NoError(t, err, "closing the Environment must leave the attached Chain running")
-
 }
 
 func TestStartManagedBesu(t *testing.T) {

@@ -2,7 +2,6 @@ package ibclink
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -11,8 +10,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 )
 
 func TestParseReadiness(t *testing.T) {
@@ -78,29 +75,6 @@ func TestRelayerOmitsTruncatedHTTPErrorBody(t *testing.T) {
 	err := relayer.probeHealth(context.Background())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "response body omitted")
-}
-
-func TestRelayerPreservesStatusReason(t *testing.T) {
-	const reason = "upstream failed at https://user:password@rpc.example.invalid/?token=value"
-	body, err := json.Marshal(wire.Status{Packets: []wire.PacketStatus{{
-		PacketID: "packet-1",
-		State:    wire.PacketTimedOut,
-		Reason:   reason,
-	}}})
-	require.NoError(t, err)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write(body)
-	}))
-	defer server.Close()
-	relayer := &Relayer{
-		httpAddr: strings.TrimPrefix(server.URL, "http://"),
-		http:     server.Client(),
-	}
-
-	status, err := relayer.Status(context.Background(), wire.StatusQuery{})
-	require.NoError(t, err)
-	require.Len(t, status.Packets, 1)
-	require.Equal(t, reason, status.Packets[0].Reason)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

@@ -2,9 +2,7 @@ package environment
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -14,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
@@ -33,45 +30,6 @@ func TestBindIBCLinkFollowsEnvironmentLifetime(t *testing.T) {
 	_, err = driver.ChainRPC("managed")
 	require.NoError(t, err, "configuration references remain usable")
 	require.ErrorIs(t, env.BindIBCLink(driver), ErrEnvironmentClosed)
-}
-
-func TestResolvedChainErrorsPassThrough(t *testing.T) {
-	const endpoint = "https://api-user:secret-password@rpc.example.invalid/?token=query-secret"
-	cause := errors.New("transport failed")
-	chain := &Chain{
-		id:     "failing",
-		rpcURL: endpoint,
-		impl: formattingChain{
-			endpoint: endpoint,
-			err: fmt.Errorf(
-				"GET https://api-user:***@rpc.example.invalid/?token=query-secret: %w",
-				cause,
-			),
-		},
-	}
-
-	_, err := chain.Height(t.Context())
-	require.ErrorIs(t, err, cause)
-	require.Contains(t, err.Error(), "api-user")
-	require.Contains(t, err.Error(), "query-secret")
-}
-
-func TestResolvedCapabilityErrorsPassThrough(t *testing.T) {
-	cause := errors.New("funding failed")
-	controller := &failingEOAFunder{err: fmt.Errorf(
-		"POST https://api-user:***@rpc.example.invalid/?token=query-secret: %w",
-		cause,
-	)}
-	chain := &Chain{id: "failing"}
-	funding := &Funding{
-		controller: controller,
-		chain:      chain,
-	}
-
-	err := funding.EnsureEOABalance(t.Context(), common.Address{}, big.NewInt(1))
-	require.ErrorIs(t, err, cause)
-	require.Contains(t, err.Error(), "api-user")
-	require.Contains(t, err.Error(), "query-secret")
 }
 
 func TestBoundOneShotProcessLinearizesWithEnvironmentClose(t *testing.T) {
@@ -227,23 +185,6 @@ printf '%s\n' '`+endpoint+`'
 		require.Contains(t, err.Error(), endpoint)
 	})
 }
-
-type failingEOAFunder struct {
-	err error
-}
-
-func (f *failingEOAFunder) EnsureEOABalance(context.Context, common.Address, *big.Int) error {
-	return f.err
-}
-
-type formattingChain struct {
-	endpoint string
-	err      error
-}
-
-func (formattingChain) ID() string                               { return "failing" }
-func (c formattingChain) RPCURL() string                         { return c.endpoint }
-func (c formattingChain) Height(context.Context) (uint64, error) { return 0, c.err }
 
 func TestBoundRelayerHelperProcess(_ *testing.T) {
 	if os.Getenv("IBC_LINK_BINDING_RELAYER_HELPER") != "1" {

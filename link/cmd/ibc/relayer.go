@@ -50,10 +50,12 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 
 	app.Logger.Info("Starting relayer")
 
-	if err := app.Server.Start(); err != nil {
-		app.Logger.Error("Failed to start relayer server", "error", err)
-		return err
+	address, startErr := app.Server.Start()
+	if startErr != nil {
+		app.Logger.Error("Failed to start relayer server", "error", startErr)
+		return startErr
 	}
+	app.Logger.Info("Relayer server ready", "address", address.String())
 
 	graceful.AddCallback(app.Store.Close)
 	graceful.AddCallback(app.Server.Stop)

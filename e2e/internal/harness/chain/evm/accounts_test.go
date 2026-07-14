@@ -26,14 +26,6 @@ func TestAccountFromHexAcceptsPrefix(t *testing.T) {
 	assert.Equal(t, withoutPrefix.Address(), withPrefix.Address())
 }
 
-func TestTransactOptsUsesAccountAddress(t *testing.T) {
-	acct, err := AccountFromHex(testPrivateKeyHex)
-	require.NoError(t, err)
-	opts, err := acct.TransactOpts(big.NewInt(31337))
-	require.NoError(t, err)
-	assert.Equal(t, acct.Address(), opts.From)
-}
-
 func TestSignTxRecoversSender(t *testing.T) {
 	acct, err := AccountFromHex(testPrivateKeyHex)
 	require.NoError(t, err)

@@ -172,9 +172,19 @@ func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {
 	startErr := errors.New("readiness failed")
 
 	_, err := acquireAttestors(
-		t.Context(), spec, instances, clients, mixedProtocolRuntime(),
+		t.Context(),
+		spec,
+		instances,
+		clients,
+		mixedProtocolRuntime(),
 		workspace{privateDir: t.TempDir(), diagnosticsDir: t.TempDir()},
-		drivers{acquireAttestor: func(context.Context, AttestorSpec, attestorDependencies, Runtime, workspace) (attestorAcquisition, error) {
+		drivers{acquireAttestor: func(
+			context.Context,
+			AttestorSpec,
+			attestorDependencies,
+			Runtime,
+			workspace,
+		) (attestorAcquisition, error) {
 			return attestorAcquisition{
 				description: "stop partial Attestor",
 				release: func(context.Context) error {
@@ -188,17 +198,6 @@ func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {
 	require.ErrorIs(t, err, startErr)
 	require.Empty(t, effects.cleanup(t.Context()))
 	require.EqualValues(t, 1, releases.Load())
-}
-
-func TestProtocolDeclarationsUseCanonicalIdentityOrder(t *testing.T) {
-	instances := sortedIBCInstanceSpecs([]IBCInstanceSpec{ExistingIBCInstance{ID: "z"}, ExistingIBCInstance{ID: "a"}})
-	require.Equal(t, []IBCInstanceID{"a", "z"}, []IBCInstanceID{instances[0].ibcInstanceID(), instances[1].ibcInstanceID()})
-
-	connections := sortedConnectionSpecs([]ConnectionSpec{{ID: "z"}, {ID: "a"}})
-	require.Equal(t, []ConnectionID{"a", "z"}, []ConnectionID{connections[0].ID, connections[1].ID})
-
-	attestors := sortedAttestorSpecs([]AttestorSpec{{ID: "z"}, {ID: "a"}})
-	require.Equal(t, []AttestorID{"a", "z"}, []AttestorID{attestors[0].ID, attestors[1].ID})
 }
 
 func mixedProtocolSpec() Spec {
@@ -233,7 +232,11 @@ func mixedProtocolRuntime() Runtime {
 	}
 }
 
-func resolvedMixedConnection(id ConnectionID, instances map[IBCInstanceID]*IBCInstance, attestor EVMAddress) *Connection {
+func resolvedMixedConnection(
+	id ConnectionID,
+	instances map[IBCInstanceID]*IBCInstance,
+	attestor EVMAddress,
+) *Connection {
 	a := &IBCClient{
 		id: "client-a", instance: instances["ibc-a"], locator: "client-a-onchain",
 		lightClient: "0x2000000000000000000000000000000000000002", counterparty: "existing-client-b",

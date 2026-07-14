@@ -16,9 +16,6 @@ func newStartError(
 	diagnosticsDir string,
 	cleanupFailures ...error,
 ) *StartError {
-	if cause == nil {
-		panic("environment: StartError requires a cause")
-	}
 	return &StartError{
 		cause:          cause,
 		cleanup:        errors.Join(cleanupFailures...),

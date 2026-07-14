@@ -27,8 +27,8 @@ type (
 	IBCClientLocator   string
 )
 
-// Spec is the desired IBC resource graph. Collection order has no lifecycle
-// meaning; typed references determine dependencies.
+// Spec is the desired IBC resource graph. Typed references determine dependency
+// order; protocol declarations retain authored order while Chains start concurrently.
 type Spec struct {
 	Chains       []ChainSpec
 	IBCInstances []IBCInstanceSpec

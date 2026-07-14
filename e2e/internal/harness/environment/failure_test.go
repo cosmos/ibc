@@ -27,7 +27,3 @@ func TestStartErrorWithoutCleanup(t *testing.T) {
 	require.NoError(t, err.CleanupError())
 	require.Empty(t, err.DiagnosticsDir())
 }
-
-func TestStartErrorRequiresCause(t *testing.T) {
-	require.Panics(t, func() { newStartError(nil, "") })
-}

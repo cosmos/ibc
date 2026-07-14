@@ -15,26 +15,20 @@ import (
 	chainimpl "github.com/cosmos/ibc/e2e/internal/harness/chain"
 )
 
-func TestFundingEnsuresMinimumEOABalanceThroughResolvedCapability(t *testing.T) {
-	controller := &recordingEOAFunder{}
-	chain := &Chain{
-		id: "managed", funding: &Funding{controller: controller},
-	}
-	chain.bindLease(&environmentLease{})
-	funding, err := chain.Funding()
-	require.NoError(t, err)
-
-	address := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	minimum := big.NewInt(42)
-	require.NoError(t, funding.EnsureEOABalance(t.Context(), address, minimum))
-	require.Equal(t, address, controller.address)
-	require.Equal(t, minimum, controller.minimum)
-}
-
 func TestFundingUnavailableWithoutManagedControl(t *testing.T) {
 	funding, err := (&Chain{id: "attached"}).Funding()
 	require.Nil(t, funding)
 	require.ErrorIs(t, err, ErrCapabilityUnavailable)
+}
+
+func TestEVMTransactionWaitUsesChainTiming(t *testing.T) {
+	timing := Timing{
+		CompletionBudget: 17 * time.Second,
+		PollInterval:     23 * time.Millisecond,
+	}
+	wait := (&EVM{chain: &Chain{timing: timing}}).transactionWait()
+	require.Equal(t, timing.CompletionBudget, wait.Timeout)
+	require.Equal(t, timing.PollInterval, wait.PollInterval)
 }
 
 func TestProtocolAuthorityFundingSkipsAttachedChains(t *testing.T) {

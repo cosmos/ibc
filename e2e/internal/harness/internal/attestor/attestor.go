@@ -7,17 +7,19 @@
 package attestor
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -28,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/ports"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
 
 	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
@@ -58,6 +59,11 @@ type Spec struct {
 	PrivateKeyHex string
 }
 
+type readinessResult struct {
+	address string
+	err     error
+}
+
 // Process is a running IBC Link attestor whose public height endpoint has been
 // successfully probed. It owns the subprocess group, but the caller owns the
 // containing workspace and decides when its files are removed.
@@ -67,6 +73,7 @@ type Process struct {
 	name          string
 	client        attestorv2.AttestationServiceClient
 	out           *logWriter
+	readiness     <-chan readinessResult
 	handle        *proc.Handle
 }
 
@@ -82,14 +89,7 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 		return nil, fmt.Errorf("start IBC Link attestor: absolute binary path: %w", err)
 	}
 
-	port, err := ports.FreePort()
-	if err != nil {
-		return nil, fmt.Errorf("start IBC Link attestor: allocate listen port: %w", err)
-	}
-	listenAddress := "127.0.0.1:" + strconv.Itoa(port)
-	endpoint := "http://" + listenAddress
-
-	paths, err := prepareWorkspace(spec, key, listenAddress)
+	paths, err := prepareWorkspace(spec, key, "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
@@ -106,25 +106,35 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 		"--config", configFilename,
 	)
 	cmd.Dir = paths.dir
-	cmd.Stdout = out
 	cmd.Stderr = out
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		out.close()
+		return nil, fmt.Errorf("start IBC Link attestor: capture stdout: %w", err)
+	}
 	if err := cmd.Start(); err != nil {
+		_ = stdout.Close()
 		out.close()
 		return nil, fmt.Errorf("start IBC Link attestor binary %q: %w", binaryPath, err)
 	}
+	readiness := make(chan readinessResult, 1)
+	stdoutDone := make(chan struct{})
+	go func() {
+		defer close(stdoutDone)
+		observeReadiness(stdout, out, readiness)
+	}()
 
 	p := &Process{
 		signerAddress: crypto.PubkeyToAddress(key.PublicKey),
-		endpoint:      endpoint,
 		name:          spec.Name,
-		client: attestorv2.NewAttestationServiceClient(
-			&http.Client{Timeout: probeRequestTimeout},
-			endpoint,
-		),
-		out: out,
+		out:           out,
+		readiness:     readiness,
 	}
-	p.handle = proc.Reap(cmd, proc.Hooks{AfterWait: out.close})
+	p.handle = proc.Reap(cmd, proc.Hooks{
+		BeforeWait: func() { <-stdoutDone },
+		AfterWait:  out.close,
+	})
 
 	if err := p.awaitReady(ctx); err != nil {
 		if cleanupErr := p.killAfterFailedStart(); cleanupErr != nil {
@@ -159,6 +169,15 @@ func (p *Process) Stop(ctx context.Context) error {
 func (p *Process) awaitReady(ctx context.Context) error {
 	startupCtx, cancel := context.WithTimeout(ctx, defaultStartupTimeout)
 	defer cancel()
+	address, err := p.awaitAddress(startupCtx)
+	if err != nil {
+		return err
+	}
+	p.endpoint = "http://" + address
+	p.client = attestorv2.NewAttestationServiceClient(
+		&http.Client{Timeout: probeRequestTimeout},
+		p.endpoint,
+	)
 
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
@@ -174,15 +193,7 @@ func (p *Process) awaitReady(ctx context.Context) error {
 
 		select {
 		case <-p.handle.Done():
-			processErr := p.handle.Err()
-			if processErr == nil {
-				processErr = errors.New("process exited successfully")
-			}
-			return fmt.Errorf(
-				"IBC Link attestor exited before readiness: %w; logs: %s",
-				processErr,
-				p.logTail(),
-			)
+			return p.readinessExitError()
 		case <-startupCtx.Done():
 			return fmt.Errorf(
 				"IBC Link attestor was not ready at %s: %w (last probe: %s); logs: %s",
@@ -194,6 +205,54 @@ func (p *Process) awaitReady(ctx context.Context) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+func (p *Process) awaitAddress(ctx context.Context) (string, error) {
+	select {
+	case result := <-p.readiness:
+		if result.err != nil {
+			if errors.Is(result.err, io.EOF) {
+				return "", fmt.Errorf(
+					"IBC Link attestor exited before readiness: %w; logs: %s",
+					result.err,
+					p.logTail(),
+				)
+			}
+			return "", fmt.Errorf(
+				"IBC Link attestor readiness failed: %w; logs: %s",
+				result.err,
+				p.logTail(),
+			)
+		}
+		parsed, err := netip.ParseAddrPort(result.address)
+		if err != nil || !parsed.Addr().IsLoopback() || parsed.Port() == 0 {
+			return "", fmt.Errorf(
+				"IBC Link attestor announced invalid readiness address %q",
+				result.address,
+			)
+		}
+		return result.address, nil
+	case <-p.handle.Done():
+		return "", p.readinessExitError()
+	case <-ctx.Done():
+		return "", fmt.Errorf(
+			"IBC Link attestor did not announce readiness: %w; logs: %s",
+			ctx.Err(),
+			p.logTail(),
+		)
+	}
+}
+
+func (p *Process) readinessExitError() error {
+	processErr := p.handle.Err()
+	if processErr == nil {
+		processErr = errors.New("process exited successfully")
+	}
+	return fmt.Errorf(
+		"IBC Link attestor exited before readiness: %w; logs: %s",
+		processErr,
+		p.logTail(),
+	)
 }
 
 func (p *Process) killAfterFailedStart() error {
@@ -317,6 +376,31 @@ func (w *logWriter) Write(data []byte) (int, error) {
 		return 0, os.ErrClosed
 	}
 	return w.file.Write(data)
+}
+
+func observeReadiness(stdout io.Reader, logs io.Writer, ready chan<- readinessResult) {
+	reader := bufio.NewReaderSize(stdout, startupLogTailBytes)
+	line, tooLong, err := reader.ReadLine()
+	_, _ = logs.Write(line)
+	if !tooLong {
+		_, _ = logs.Write([]byte{'\n'})
+	}
+	switch {
+	case err != nil:
+		ready <- readinessResult{err: fmt.Errorf("read readiness line: %w", err)}
+	case tooLong:
+		ready <- readinessResult{err: fmt.Errorf("readiness line exceeds %d bytes", startupLogTailBytes)}
+	default:
+		var readiness attestorv2.ProcessReadiness
+		if err := json.Unmarshal(line, &readiness); err != nil {
+			ready <- readinessResult{err: fmt.Errorf("decode readiness: %w", err)}
+		} else if readiness.Event != attestorv2.ProcessReadinessEvent {
+			ready <- readinessResult{err: fmt.Errorf("unexpected readiness event %q", readiness.Event)}
+		} else {
+			ready <- readinessResult{address: readiness.HTTP}
+		}
+	}
+	_, _ = io.Copy(logs, reader)
 }
 
 func (w *logWriter) appendTail(data []byte) {

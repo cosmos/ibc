@@ -1,14 +1,12 @@
 package environment
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"path/filepath"
-	"slices"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,7 +39,7 @@ func acquireIBCInstances(
 	d drivers,
 ) (map[IBCInstanceID]*IBCInstance, error) {
 	instances := make(map[IBCInstanceID]*IBCInstance, len(declarations))
-	for _, declaration := range sortedIBCInstanceSpecs(declarations) {
+	for _, declaration := range declarations {
 		id := declaration.ibcInstanceID()
 		instance, err := d.acquireIBCInstance(
 			ctx,
@@ -81,9 +79,6 @@ func acquireConnections(
 			declaration,
 		)
 	}
-	for client, declarations := range attestorSpecsByClient {
-		attestorSpecsByClient[client] = sortedAttestorSpecs(declarations)
-	}
 	dependencies := connectionDependencies{
 		instances: instances, attestorSpecs: attestorSpecsByClient,
 	}
@@ -95,7 +90,7 @@ func acquireConnections(
 		dependencies = prepared
 	}
 
-	for _, declaration := range sortedConnectionSpecs(spec.Connections) {
+	for _, declaration := range spec.Connections {
 		connection, err := d.acquireConnection(ctx, declaration, dependencies, runtime)
 		if err != nil {
 			return nil, nil, fmt.Errorf("start IBC Connection %q failed: %w", declaration.ID, err)
@@ -144,7 +139,7 @@ func acquireAttestors(
 	effects *effectJournal,
 ) (map[AttestorID]*Attestor, error) {
 	attestors := make(map[AttestorID]*Attestor, len(spec.Attestors))
-	for _, declaration := range sortedAttestorSpecs(spec.Attestors) {
+	for _, declaration := range spec.Attestors {
 		observed, err := observedInstanceForClient(spec.Connections, declaration.Client, instances)
 		if err != nil {
 			return nil, err
@@ -162,7 +157,10 @@ func acquireAttestors(
 			return nil, fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
 		}
 		if acquisition.attestor == nil || acquisition.release == nil {
-			return nil, fmt.Errorf("environment: Attestor %q adapter returned an incomplete acquisition", declaration.ID)
+			return nil, fmt.Errorf(
+				"environment: Attestor %q adapter returned an incomplete acquisition",
+				declaration.ID,
+			)
 		}
 		effects.append(cleanupEffect{
 			description: acquisition.description,
@@ -248,7 +246,7 @@ func prepareConnections(
 	dependencies.existingClients = make(map[ClientID]*IBCClient)
 	dependencies.preparedClients = make(map[ClientID]*solidityibc.PreparedClient)
 
-	for _, connection := range sortedConnectionSpecs(spec.Connections) {
+	for _, connection := range spec.Connections {
 		ends := []struct {
 			label        string
 			declaration  ClientSpec
@@ -324,7 +322,7 @@ func prepareConnections(
 	}
 
 	seen := make(map[EVMAddress]ClientID)
-	for _, connection := range sortedConnectionSpecs(spec.Connections) {
+	for _, connection := range spec.Connections {
 		for _, declaration := range []ClientSpec{connection.A, connection.B} {
 			identity := clientIdentity(declaration)
 			resolved := dependencies.existingClients[identity.ID]
@@ -581,26 +579,4 @@ func requireDeclaredAttestors(
 		}
 	}
 	return nil
-}
-
-func sortedAttestorSpecs(in []AttestorSpec) []AttestorSpec {
-	out := slices.Clone(in)
-	slices.SortFunc(out, func(a, b AttestorSpec) int { return cmp.Compare(string(a.ID), string(b.ID)) })
-	return out
-}
-
-func sortedIBCInstanceSpecs(in []IBCInstanceSpec) []IBCInstanceSpec {
-	out := slices.Clone(in)
-	slices.SortFunc(out, func(a, b IBCInstanceSpec) int {
-		return cmp.Compare(string(a.ibcInstanceID()), string(b.ibcInstanceID()))
-	})
-	return out
-}
-
-func sortedConnectionSpecs(in []ConnectionSpec) []ConnectionSpec {
-	out := slices.Clone(in)
-	slices.SortFunc(out, func(a, b ConnectionSpec) int {
-		return cmp.Compare(string(a.ID), string(b.ID))
-	})
-	return out
 }

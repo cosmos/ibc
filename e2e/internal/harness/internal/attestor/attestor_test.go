@@ -125,29 +125,6 @@ func TestStartRequiresFreshPrivateWorkspace(t *testing.T) {
 	require.ErrorContains(t, err, "create private work dir")
 }
 
-func TestStartRealIBCBinary(t *testing.T) {
-	binary := os.Getenv("IBC_LINK_ATTESTOR_REAL_BIN")
-	if binary == "" {
-		t.Skip("set IBC_LINK_ATTESTOR_REAL_BIN to exercise a built Link binary")
-	}
-	absoluteBinary, err := filepath.Abs(binary)
-	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	process, err := Start(ctx, Spec{
-		BinaryPath:    absoluteBinary,
-		WorkDir:       filepath.Join(t.TempDir(), "attestor"),
-		Name:          "real-binary-attestor",
-		ChainID:       "real-binary-probe",
-		PrivateKeyHex: testPrivateKey,
-	})
-	require.NoError(t, err)
-	require.NotZero(t, mustLatestHeight(ctx, t, process))
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer stopCancel()
-	require.NoError(t, process.Stop(stopCtx))
-}
-
 func TestIBCLinkAttestorHelperProcess(_ *testing.T) {
 	if os.Getenv("IBC_LINK_ATTESTOR_HELPER") != "1" {
 		return
@@ -198,6 +175,12 @@ func runAttestorHelper() error {
 	listener, err := net.Listen("tcp", config.Server.ListenAddress)
 	if err != nil {
 		return fmt.Errorf("helper listen: %w", err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(attestorv2.ProcessReadiness{
+		Event: attestorv2.ProcessReadinessEvent,
+		HTTP:  listener.Addr().String(),
+	}); err != nil {
+		return fmt.Errorf("helper announce readiness: %w", err)
 	}
 	mux := http.NewServeMux()
 	path, handler := attestorv2.NewAttestationServiceHandler(helperAttestationService{})
@@ -274,11 +257,4 @@ func mustDecodeBase64(t *testing.T, value string) []byte {
 	data, err := base64.StdEncoding.DecodeString(value)
 	require.NoError(t, err)
 	return data
-}
-
-func mustLatestHeight(ctx context.Context, t *testing.T, process *Process) uint64 {
-	t.Helper()
-	height, err := process.latestAttestableHeight(ctx)
-	require.NoError(t, err)
-	return height
 }

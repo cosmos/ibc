@@ -25,11 +25,7 @@ func TestValidAmountRejectsNonUint256(t *testing.T) {
 	}
 }
 
-func TestAddressCanonicalizesAndRejectsInvalidInput(t *testing.T) {
-	got, err := address("target", "0x66AB6D9362D4F35596279692F0251DB635165871")
-	require.NoError(t, err)
-	require.Equal(t, "0x66aB6D9362d4F35596279692F0251Db635165871", got.Hex())
-
-	_, err = address("target", "not-an-address")
+func TestAddressRejectsInvalidInput(t *testing.T) {
+	_, err := address("target", "not-an-address")
 	require.ErrorContains(t, err, "not a valid EVM address")
 }

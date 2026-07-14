@@ -40,6 +40,10 @@ func TestValidateListenAddr(t *testing.T) {
 				name: "host delegated to network stack",
 				raw:  "my_service:3000",
 			},
+			{
+				name: "ephemeral port",
+				raw:  "localhost:0",
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
@@ -76,14 +80,9 @@ func TestValidateListenAddr(t *testing.T) {
 				errContains: "port must be numeric",
 			},
 			{
-				name:        "port zero",
-				raw:         "localhost:0",
-				errContains: "port must be between 1 and 65535",
-			},
-			{
 				name:        "port out of range",
 				raw:         "localhost:65536",
-				errContains: "port must be between 1 and 65535",
+				errContains: "port must be between 0 and 65535",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
