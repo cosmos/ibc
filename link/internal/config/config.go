@@ -225,7 +225,44 @@ func (c Config) crossValidate() error {
 		}
 	}
 
-	return c.validateChainReferences()
+	if err := c.validateChainReferences(); err != nil {
+		return err
+	}
+
+	if err := c.validateRelayerSigners(signerSet); err != nil {
+		return errors.Wrap(err, ".relayer.signers")
+	}
+
+	return nil
+}
+
+// validateRelayerSigners ensures relayer signer entries resolve and that every
+// chain relay transactions are submitted to has a signer.
+func (c Config) validateRelayerSigners(signerSet map[string]struct{}) error {
+	for chainID, alias := range c.Relayer.Signers {
+		if _, ok := c.Chain(chainID); !ok {
+			return errors.Errorf("chainId %q not declared in top-level chains", chainID)
+		}
+
+		if _, exists := signerSet[alias]; !exists {
+			return errors.Errorf("references unknown signer %q for chain %q", alias, chainID)
+		}
+	}
+
+	for _, route := range c.Relayer.Routes {
+		client, ok := c.Relayer.ClientByAlias(route.SourceClient)
+		if !ok {
+			continue // reported by route validation
+		}
+
+		for _, chainID := range []string{client.ChainID, client.CounterpartyChainID} {
+			if _, ok := c.Relayer.Signers[chainID]; !ok {
+				return errors.Errorf("missing signer for chain %q relayed by route %q", chainID, route.SourceClient)
+			}
+		}
+	}
+
+	return nil
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are

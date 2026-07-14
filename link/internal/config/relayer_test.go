@@ -300,6 +300,27 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".attestors duplicate entry",
 			},
 			{
+				name: "relayer signer for undeclared chain",
+				patch: func(c *Config) {
+					c.Relayer.Signers["999"] = "relayer-key"
+				},
+				errContains: `.relayer.signers: chainId "999" not declared`,
+			},
+			{
+				name: "relayer signer with unknown alias",
+				patch: func(c *Config) {
+					c.Relayer.Signers["1"] = "ghost"
+				},
+				errContains: `references unknown signer "ghost"`,
+			},
+			{
+				name: "route chain missing signer",
+				patch: func(c *Config) {
+					delete(c.Relayer.Signers, "8453")
+				},
+				errContains: `missing signer for chain "8453"`,
+			},
+			{
 				name: "route missing sourceClient",
 				patch: func(c *Config) {
 					c.Relayer.Routes[0].SourceClient = ""

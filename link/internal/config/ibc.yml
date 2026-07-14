@@ -63,18 +63,22 @@ relayer:
     - sourceClient: "eth-to-base"
     - sourceClient: "base-to-eth"
 
-# signers define signing backends referenced by attestations
+  # signer aliases used to submit relay transactions per chain
+  signers:
+    "1": "relayer-key"
+    "8453": "relayer-key"
+
+# signers define signing backends referenced by attestations and the relayer
 #
 # NOTE: each signer should have a unique alias
 signers:
+  - alias: "relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "relayer-key-id"
 #   - alias: my-local-signer
 #     type: local
 #     file: keys/my-key.json
-#
-#   - alias: my-remote-signer
-#     type: remote
-#     grpc: https://cosmos-kms.example.com
-#     remoteKeyId: key-id # KMS key ID for a remote signer
 
 # This section specifies ATTESTOR process configuration for `ibc attestor run`.
 # Also enables attestor sub-process with grpc server even for relayer (`ibc relayer run`)

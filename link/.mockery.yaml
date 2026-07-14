@@ -45,6 +45,22 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Client:
+  github.com/cosmos/ibc/link/internal/txmgr:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "txmgr.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Submitter:
+  github.com/cosmos/ibc/link/internal/txmgr/evm:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "evm.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      ETHClient:
   github.com/cosmos/ibc/link/internal/chains/evm:
     config:
       dir: "{{.InterfaceDir}}"

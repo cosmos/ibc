@@ -1,0 +1,307 @@
+// Package evm submits transactions to EVM chains.
+package evm
+
+import (
+	"context"
+	"log/slog"
+	"math/big"
+	"sync"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/service/signer"
+	"github.com/cosmos/ibc/link/internal/txmgr"
+
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	ethereum "github.com/ethereum/go-ethereum"
+)
+
+// DefaultTxSubmissionDelay the minimum delay between submissions on one chain
+// when no override is configured.
+const DefaultTxSubmissionDelay = 2 * time.Second
+
+// ETHClient go-ethereum methods used by the EVM submitter.
+type ETHClient interface {
+	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)
+	EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error)
+	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
+	SendTransaction(ctx context.Context, tx *types.Transaction) error
+	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+}
+
+// EVM submits transactions to EVM chains.
+type EVM struct {
+	chains map[string]*evmChain
+}
+
+var _ txmgr.Submitter = (*EVM)(nil)
+
+type evmChain struct {
+	chainID   string
+	eth       ETHClient
+	signer    signer.Signer
+	address   common.Address
+	ethSigner types.Signer
+
+	delay      time.Duration
+	feeCapMult *float64
+	tipCapMult *float64
+
+	// submissions are serialized and rate limited per chain
+	mu             sync.Mutex
+	lastSubmission time.Time
+
+	logger *slog.Logger
+}
+
+// ChainOptions per-chain submission settings.
+type ChainOptions struct {
+	TxSubmissionDelay   time.Duration
+	GasFeeCapMultiplier *float64
+	GasTipCapMultiplier *float64
+}
+
+// NewFromConfig builds a submitter for every chain with a relayer signer.
+func NewFromConfig(cfg config.Config, signers *signer.Set) (*EVM, error) {
+	evmChains := make(map[string]*evmChain, len(cfg.Relayer.Signers))
+
+	for chainID, alias := range cfg.Relayer.Signers {
+		chain, ok := cfg.Chain(chainID)
+		if !ok || chain.Type() != config.ChainTypeEVM {
+			return nil, errors.Errorf("chain %q is not a configured evm chain", chainID)
+		}
+
+		eth, err := ethclient.Dial(chain.EVM.RPC)
+		if err != nil {
+			return nil, errors.Wrapf(err, "dialing rpc for chain %q", chainID)
+		}
+
+		chainSigner, ok := signers.Get(alias)
+		if !ok {
+			return nil, errors.Errorf("unknown signer %q for chain %q", alias, chainID)
+		}
+
+		opts := ChainOptions{TxSubmissionDelay: DefaultTxSubmissionDelay}
+		if override := cfg.Relayer.ChainOverride(chainID); override != nil {
+			if override.TxSubmissionDelay != nil {
+				opts.TxSubmissionDelay = *override.TxSubmissionDelay
+			}
+			if override.EVM != nil {
+				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
+				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
+			}
+		}
+
+		submitterChain, err := newEVMChain(chainID, eth, chainSigner, opts)
+		if err != nil {
+			return nil, errors.Wrapf(err, "creating submitter for chain %q", chainID)
+		}
+
+		evmChains[chainID] = submitterChain
+	}
+
+	return &EVM{chains: evmChains}, nil
+}
+
+// NewWithChain builds a submitter for a single chain; used in tests.
+func NewWithChain(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*EVM, error) {
+	chain, err := newEVMChain(chainID, eth, chainSigner, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EVM{chains: map[string]*evmChain{chainID: chain}}, nil
+}
+
+func newEVMChain(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*evmChain, error) {
+	chainIDInt, ok := new(big.Int).SetString(chainID, 10)
+	if !ok {
+		return nil, errors.Errorf("invalid evm chain id %q", chainID)
+	}
+
+	if chainSigner.Type() != signer.ECDSA {
+		return nil, errors.Errorf("signer for chain %q must be %s, got %s", chainID, signer.ECDSA, chainSigner.Type())
+	}
+
+	pub, err := crypto.DecompressPubkey(chainSigner.PublicKey())
+	if err != nil {
+		return nil, errors.Wrapf(err, "decompressing signer public key for chain %q", chainID)
+	}
+
+	delay := opts.TxSubmissionDelay
+	if delay == 0 {
+		delay = DefaultTxSubmissionDelay
+	}
+
+	return &evmChain{
+		chainID:    chainID,
+		eth:        eth,
+		signer:     chainSigner,
+		address:    crypto.PubkeyToAddress(*pub),
+		ethSigner:  types.LatestSignerForChainID(chainIDInt),
+		delay:      delay,
+		feeCapMult: opts.GasFeeCapMultiplier,
+		tipCapMult: opts.GasTipCapMultiplier,
+		logger:     slog.With("module", "txmgr", "chainID", chainID),
+	}, nil
+}
+
+func (e *EVM) Submit(ctx context.Context, chainID string, intent txmgr.TxIntent) (*txmgr.Submission, error) {
+	chain, ok := e.chains[chainID]
+	if !ok {
+		return nil, errors.Errorf("no submitter configured for chain %q", chainID)
+	}
+
+	return chain.submit(ctx, intent)
+}
+
+func (e *EVM) ShouldRetry(
+	ctx context.Context,
+	chainID string,
+	txHash string,
+	expiry time.Duration,
+	sentAt time.Time,
+) (bool, error) {
+	chain, ok := e.chains[chainID]
+	if !ok {
+		return false, errors.Errorf("no submitter configured for chain %q", chainID)
+	}
+
+	return chain.shouldRetry(ctx, txHash, expiry, sentAt)
+}
+
+func (c *evmChain) submit(ctx context.Context, intent txmgr.TxIntent) (*txmgr.Submission, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if wait := c.delay - time.Since(c.lastSubmission); wait > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+
+	tx, err := c.newTx(ctx, intent)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating tx")
+	}
+
+	signature, err := c.signer.Sign(ctx, c.ethSigner.Hash(tx).Bytes())
+	if err != nil {
+		return nil, errors.Wrapf(err, "signing tx with address %s", c.address)
+	}
+
+	signedTx, err := tx.WithSignature(c.ethSigner, signature)
+	if err != nil {
+		return nil, errors.Wrap(err, "attaching signature")
+	}
+
+	if err := c.eth.SendTransaction(ctx, signedTx); err != nil {
+		return nil, errors.Wrapf(err, "sending tx %s", signedTx.Hash())
+	}
+
+	c.lastSubmission = time.Now()
+	c.logger.Info("Submitted tx", "txHash", signedTx.Hash(), "to", intent.To)
+
+	return &txmgr.Submission{
+		TxHash:         signedTx.Hash().String(),
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: c.address.String(),
+	}, nil
+}
+
+func (c *evmChain) newTx(ctx context.Context, intent txmgr.TxIntent) (*types.Transaction, error) {
+	if !common.IsHexAddress(intent.To) {
+		return nil, errors.Errorf("invalid to address %q", intent.To)
+	}
+
+	to := common.HexToAddress(intent.To)
+
+	head, err := c.eth.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "getting latest header")
+	}
+
+	gasTipCap, err := c.eth.SuggestGasTipCap(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "getting suggested gas tip cap")
+	}
+
+	gasFeeCap := new(big.Int).Add(gasTipCap, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
+
+	code, err := c.eth.PendingCodeAt(ctx, to)
+	if err != nil {
+		return nil, errors.Wrapf(err, "getting code at %s", to)
+	}
+
+	if len(code) == 0 {
+		return nil, errors.Errorf("no contract code at %s", to)
+	}
+
+	gasLimit, err := c.eth.EstimateGas(ctx, ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data})
+	if err != nil {
+		return nil, errors.Wrap(err, "estimating gas")
+	}
+
+	nonce, err := c.eth.PendingNonceAt(ctx, c.address)
+	if err != nil {
+		return nil, errors.Wrapf(err, "getting pending nonce for %s", c.address)
+	}
+
+	return types.NewTx(&types.DynamicFeeTx{
+		To:        &to,
+		Nonce:     nonce,
+		GasFeeCap: applyMultiplier(gasFeeCap, c.feeCapMult),
+		GasTipCap: applyMultiplier(gasTipCap, c.tipCapMult),
+		Gas:       gasLimit,
+		Data:      intent.Data,
+	}), nil
+}
+
+func (c *evmChain) shouldRetry(
+	ctx context.Context,
+	txHash string,
+	expiry time.Duration,
+	sentAt time.Time,
+) (bool, error) {
+	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
+	switch {
+	case errors.Is(err, ethereum.NotFound):
+		latest, errHeader := c.eth.HeaderByNumber(ctx, nil)
+		if errHeader != nil {
+			return false, errors.Wrap(errHeader, "getting latest header")
+		}
+
+		expiresAt := sentAt.UTC().Add(expiry)
+		if expiresAt.Before(time.Unix(int64(latest.Time), 0)) {
+			return true, nil
+		}
+
+		return false, v2.ErrTxNotFound
+	case err != nil:
+		return false, errors.Wrapf(err, "getting receipt for tx %s", txHash)
+	case receipt.Status != types.ReceiptStatusSuccessful:
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func applyMultiplier(value *big.Int, multiplier *float64) *big.Int {
+	if multiplier == nil {
+		return value
+	}
+
+	adjusted, _ := new(big.Float).Mul(new(big.Float).SetInt(value), big.NewFloat(*multiplier)).Int(nil)
+
+	return adjusted
+}

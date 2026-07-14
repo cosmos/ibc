@@ -28,6 +28,19 @@ type RelayerConfig struct {
 	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
 	Clients        []ClientConfig         `yaml:"clients"`
 	Routes         []RouteConfig          `yaml:"routesToRelay"`
+	// Signers the signer alias used to submit relay transactions per chain id.
+	Signers map[string]string `yaml:"signers,omitempty"`
+}
+
+// ChainOverride returns the relay settings override for a chain, or nil.
+func (c RelayerConfig) ChainOverride(chainID string) *RelayerChainOverride {
+	for i := range c.ChainOverrides {
+		if c.ChainOverrides[i].ChainID == chainID {
+			return &c.ChainOverrides[i]
+		}
+	}
+
+	return nil
 }
 
 // RelayerChainOverride relay settings for one chain.
