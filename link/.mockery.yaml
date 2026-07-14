@@ -45,6 +45,15 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Client:
+  github.com/cosmos/ibc/link/internal/types/proofapi:
+    config:
+      include-auto-generated: true
+      dir: "{{.InterfaceDir}}"
+      filename: "proofapi.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      ProofApiServiceClient:
   github.com/cosmos/ibc/link/internal/txmgr:
     config:
       dir: "{{.InterfaceDir}}"
