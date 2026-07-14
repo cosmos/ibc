@@ -263,8 +263,6 @@ func newProcessBindingTestEnvironment(t *testing.T) *Environment {
 		acquireChain: func(context.Context, ChainSpec, Runtime, workspace) (chainAcquisition, error) {
 			return fakeAcquisition(
 				"managed",
-				OwnershipOwnedEphemeral,
-				CleanupActionStop,
 				func(context.Context) error { return nil },
 			), nil
 		},

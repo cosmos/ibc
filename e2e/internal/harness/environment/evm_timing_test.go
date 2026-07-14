@@ -118,10 +118,9 @@ func resolvedEVMForTimingTest(t *testing.T, timing Timing, service *timedEthServ
 	})
 
 	chain := &Chain{
-		id:        "timed-chain",
-		timing:    timing,
-		impl:      &timingEVMAdapter{Identity: chainevm.NewIdentity("timed-chain", "in-process"), client: client},
-		ownership: OwnershipBorrowed,
+		id:     "timed-chain",
+		timing: timing,
+		impl:   &timingEVMAdapter{Identity: chainevm.NewIdentity("timed-chain", "in-process"), client: client},
 	}
 	evmAccess, err := chain.EVM()
 	require.NoError(t, err)

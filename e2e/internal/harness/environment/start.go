@@ -21,10 +21,9 @@ const (
 	besuBlockPeriod = 2 * time.Second
 )
 
-// Start realizes every supported declaration atomically. Submitted protocol
-// transactions are returned as typed evidence if a later stage fails;
-// external durable state is retained, host-scoped state is released with its
-// managed Chain, and owned processes are stopped before Start returns.
+// Start realizes every supported declaration and attempts to stop acquired local
+// resources before returning an error. On-chain transactions mined before a
+// later failure remain on their host chains.
 func Start(ctx context.Context, spec Spec, runtime Runtime) (*Environment, error) {
 	return start(ctx, spec, runtime, productionDrivers())
 }
@@ -32,45 +31,22 @@ func Start(ctx context.Context, spec Spec, runtime Runtime) (*Environment, error
 type drivers struct {
 	validatePrerequisites func(Spec, Runtime) error
 	acquireChain          func(context.Context, ChainSpec, Runtime, workspace) (chainAcquisition, error)
-	acquireIBCInstance    func(context.Context, IBCInstanceSpec, *Chain, Runtime) (instanceAcquisition, error)
-	prepareConnections    func(context.Context, Spec, connectionDependencies, Runtime) (connectionDependencies, []FailureRecord, error)
-	acquireConnection     func(context.Context, ConnectionSpec, connectionDependencies, Runtime) (connectionAcquisition, error)
+	acquireIBCInstance    func(context.Context, IBCInstanceSpec, *Chain, Runtime) (*IBCInstance, error)
+	prepareConnections    func(context.Context, Spec, connectionDependencies, Runtime) (connectionDependencies, error)
+	acquireConnection     func(context.Context, ConnectionSpec, connectionDependencies, Runtime) (*Connection, error)
 	acquireAttestor       func(context.Context, AttestorSpec, attestorDependencies, Runtime, workspace) (attestorAcquisition, error)
 }
 
 type chainAcquisition struct {
-	chain     *Chain
-	ownership Ownership
-	action    CleanupAction
-	release   func(context.Context) error
-}
-
-type instanceAcquisition struct {
-	instance  *IBCInstance
-	ownership Ownership
-	receipt   *IBCInstanceReceipt
-}
-
-type connectionAcquisition struct {
-	connection *Connection
-	ownership  Ownership
-	receipt    *IBCConnectionReceipt
-	a          clientAcquisition
-	b          clientAcquisition
-}
-
-type clientAcquisition struct {
-	client    *IBCClient
-	ownership Ownership
-	receipt   *IBCClientReceipt
-	attempted bool
+	chain       *Chain
+	description string
+	release     func(context.Context) error
 }
 
 type attestorAcquisition struct {
-	attestor  *Attestor
-	ownership Ownership
-	action    CleanupAction
-	release   func(context.Context) error
+	attestor    *Attestor
+	description string
+	release     func(context.Context) error
 }
 
 func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environment, error) {
@@ -92,38 +68,30 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 	if err != nil {
 		return nil, err
 	}
-	resources := newJournal()
 	effects := &effectJournal{}
-	protocolReceipts := newProtocolReceiptJournal()
 
-	chains, failures, startErr := acquireChains(ctx, spec.Chains, runtime, ws, d, resources, effects)
+	chains, startErr := acquireChains(ctx, spec.Chains, runtime, ws, d, effects)
 	if startErr != nil {
-		return nil, abortStart(ctx, startErr, failures, ws, resources, effects, protocolReceipts)
+		return nil, abortStart(ctx, startErr, ws, effects)
 	}
 	lease := &environmentLease{}
 	for _, chain := range chains {
 		chain.bindLease(lease)
 	}
 
-	instances, failures, startErr := acquireIBCInstances(
-		ctx, spec.IBCInstances, chains, runtime, d, resources, protocolReceipts,
-	)
+	instances, startErr := acquireIBCInstances(ctx, spec.IBCInstances, chains, runtime, d)
 	if startErr != nil {
-		return nil, abortStart(ctx, startErr, failures, ws, resources, effects, protocolReceipts)
+		return nil, abortStart(ctx, startErr, ws, effects)
 	}
 
-	connections, clients, failures, startErr := acquireConnections(
-		ctx, spec, instances, runtime, d, resources, protocolReceipts,
-	)
+	connections, clients, startErr := acquireConnections(ctx, spec, instances, runtime, d)
 	if startErr != nil {
-		return nil, abortStart(ctx, startErr, failures, ws, resources, effects, protocolReceipts)
+		return nil, abortStart(ctx, startErr, ws, effects)
 	}
 
-	attestors, failures, startErr := acquireAttestors(
-		ctx, spec, instances, clients, runtime, ws, d, resources, effects,
-	)
+	attestors, startErr := acquireAttestors(ctx, spec, instances, clients, runtime, ws, d, effects)
 	if startErr != nil {
-		return nil, abortStart(ctx, startErr, failures, ws, resources, effects, protocolReceipts)
+		return nil, abortStart(ctx, startErr, ws, effects)
 	}
 
 	return &Environment{
@@ -132,7 +100,6 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		connections: connections,
 		clients:     clients,
 		attestors:   attestors,
-		journal:     resources,
 		effects:     effects,
 		ws:          ws,
 		lease:       lease,
@@ -142,17 +109,14 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 func abortStart(
 	ctx context.Context,
 	cause error,
-	failures []FailureRecord,
 	ws workspace,
-	resources *journal,
 	effects *effectJournal,
-	protocolReceipts *protocolReceiptJournal,
 ) error {
 	// Adapters provide bounded Stop operations. Let them complete after startup
-	// cancellation so the returned manifest is final. Runtime-private files are
+	// cancellation. Runtime-private files are
 	// always removed; only the separately rooted diagnostics directory may be
 	// retained when cleanup fails.
-	cleanupErrs := effects.cleanup(context.WithoutCancel(ctx), resources)
+	cleanupErrs := effects.cleanup(context.WithoutCancel(ctx))
 	if removeErr := ws.removePrivate(); removeErr != nil {
 		cleanupErrs = append(
 			cleanupErrs,
@@ -171,14 +135,7 @@ func abortStart(
 	if len(cleanupErrs) != 0 {
 		diagnosticsDir = ws.diagnosticsDir
 	}
-	return newStartErrorWithProtocol(
-		cause,
-		resources.snapshot(),
-		failures,
-		diagnosticsDir,
-		protocolReceipts.snapshot(),
-		cleanupErrs...,
-	)
+	return newStartError(cause, diagnosticsDir, cleanupErrs...)
 }
 
 func validateRuntime(spec Spec, runtime Runtime) error {
@@ -254,7 +211,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 		id     AttestorID
 		client ClientID
 	}
-	// Eureka v3 attestations do not yet include domain separation. Reusing one
+	// Solidity IBC v3 attestations do not yet include domain separation. Reusing one
 	// signer across Clients would allow the same signed bytes to be replayed in
 	// another Client context, so signer isolation is a graph-wide invariant.
 	attestorAddresses := make(map[string]attestorUse, len(spec.Attestors))
@@ -281,9 +238,8 @@ func acquireChains(
 	runtime Runtime,
 	ws workspace,
 	d drivers,
-	resources *journal,
 	effects *effectJournal,
-) (map[ChainID]*Chain, []FailureRecord, error) {
+) (map[ChainID]*Chain, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -301,47 +257,23 @@ func acquireChains(
 				return
 			}
 
-			key := resourceKey{kind: ResourceKindChain, id: string(declaration.chainID())}
-			if err := resources.recordAcquired(key.kind, key.id, acquisition.ownership); err != nil {
-				_ = acquisition.release(context.WithoutCancel(ctx))
-				errs[i] = err
-				cancel()
-				return
-			}
-			// Ledger the effect before any post-acquisition state transition.
 			effects.append(cleanupEffect{
-				key:       key,
-				ownership: acquisition.ownership,
-				action:    acquisition.action,
-				release:   acquisition.release,
+				description: acquisition.description,
+				release:     acquisition.release,
 			})
-			if err := resources.setResourceState(key.kind, key.id, ResourceStateReady); err != nil {
-				errs[i] = err
-				cancel()
-				return
-			}
 			acquired[i] = acquisition
 		}()
 	}
 	wg.Wait()
 
 	if err := errors.Join(errs...); err != nil {
-		failures := make([]FailureRecord, 0)
-		for i, declarationErr := range errs {
-			if declarationErr == nil {
-				continue
-			}
-			failures = append(failures, FailureRecord{
-				Kind: ResourceKindChain, ID: string(declarations[i].chainID()),
-			})
-		}
-		return nil, failures, err
+		return nil, err
 	}
 	chains := make(map[ChainID]*Chain, len(acquired))
 	for _, acquisition := range acquired {
 		chains[acquisition.chain.ID()] = acquisition.chain
 	}
-	return chains, nil, nil
+	return chains, nil
 }
 
 func productionDrivers() drivers {
@@ -413,7 +345,6 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
 		timing:     timing,
-		ownership:  OwnershipOwnedEphemeral,
 		impl:       adapter,
 	}
 	if capabilities.miningControl {
@@ -424,10 +355,9 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 	}
 	resolved.funding = &Funding{controller: adapter}
 	return chainAcquisition{
-		chain:     resolved,
-		ownership: OwnershipOwnedEphemeral,
-		action:    CleanupActionStop,
-		release:   func(context.Context) error { return adapter.Stop() },
+		chain:       resolved,
+		description: fmt.Sprintf("stop Chain %q", spec.ID),
+		release:     func(context.Context) error { return adapter.Stop() },
 	}, nil
 }
 
@@ -448,13 +378,11 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 			evmChainID: spec.EVMChainID,
 			rpcURL:     adapter.RPCURL(),
 			timing:     blockTiming(besuBlockPeriod),
-			ownership:  OwnershipOwnedEphemeral,
 			impl:       adapter,
 			funding:    &Funding{controller: adapter},
 		},
-		ownership: OwnershipOwnedEphemeral,
-		action:    CleanupActionStop,
-		release:   func(context.Context) error { return adapter.Stop() },
+		description: fmt.Sprintf("stop Chain %q", spec.ID),
+		release:     func(context.Context) error { return adapter.Stop() },
 	}, nil
 }
 
@@ -474,11 +402,9 @@ func attachEVM(ctx context.Context, spec AttachedEVM, runtime Runtime) (chainAcq
 			evmChainID: spec.EVMChainID,
 			rpcURL:     adapter.RPCURL(),
 			timing:     spec.Timing,
-			ownership:  OwnershipBorrowed,
 			impl:       adapter,
 		},
-		ownership: OwnershipBorrowed,
-		action:    CleanupActionCloseLocalHandle,
+		description: fmt.Sprintf("close local handle for Chain %q", spec.ID),
 		release: func(context.Context) error {
 			adapter.Close()
 			return nil

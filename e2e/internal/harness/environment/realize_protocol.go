@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"path/filepath"
@@ -17,7 +16,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/eureka"
+	"github.com/cosmos/ibc/e2e/internal/harness/internal/solidityibc"
 
 	managedattestor "github.com/cosmos/ibc/e2e/internal/harness/internal/attestor"
 )
@@ -26,7 +25,7 @@ type connectionDependencies struct {
 	instances       map[IBCInstanceID]*IBCInstance
 	attestorSpecs   map[ClientID][]AttestorSpec
 	existingClients map[ClientID]*IBCClient
-	preparedClients map[ClientID]*eureka.PreparedClient
+	preparedClients map[ClientID]*solidityibc.PreparedClient
 }
 
 type attestorDependencies struct {
@@ -40,58 +39,25 @@ func acquireIBCInstances(
 	chains map[ChainID]*Chain,
 	runtime Runtime,
 	d drivers,
-	resources *journal,
-	receipts *protocolReceiptJournal,
-) (map[IBCInstanceID]*IBCInstance, []FailureRecord, error) {
+) (map[IBCInstanceID]*IBCInstance, error) {
 	instances := make(map[IBCInstanceID]*IBCInstance, len(declarations))
 	for _, declaration := range sortedIBCInstanceSpecs(declarations) {
 		id := declaration.ibcInstanceID()
-		acquisition, err := d.acquireIBCInstance(
+		instance, err := d.acquireIBCInstance(
 			ctx,
 			declaration,
 			chains[declaration.ibcInstanceChain()],
 			runtime,
 		)
-		if acquisition.receipt != nil && instanceReceiptHasAnyOutput(*acquisition.receipt) {
-			receipts.recordInstance(*acquisition.receipt)
-		}
 		if err != nil {
-			if acquisition.receipt != nil && instanceReceiptHasTransactionEvidence(*acquisition.receipt) {
-				_ = resources.recordAcquired(
-					ResourceKindIBCInstance,
-					string(id),
-					acquisition.ownership,
-					hostDependencies(acquisition.ownership, declaration.ibcInstanceChain())...,
-				)
-				_ = resources.setResourceState(ResourceKindIBCInstance, string(id), ResourceStateFailed)
-			}
-			return nil, []FailureRecord{{
-				Kind: ResourceKindIBCInstance, ID: string(id),
-			}}, fmt.Errorf("start IBC Instance %q failed: %w", id, err)
+			return nil, fmt.Errorf("start IBC Instance %q failed: %w", id, err)
 		}
-		if acquisition.instance == nil {
-			return nil, []FailureRecord{{
-				Kind: ResourceKindIBCInstance, ID: string(id),
-			}}, fmt.Errorf("environment: IBC Instance %q adapter returned no resolved value", id)
+		if instance == nil {
+			return nil, fmt.Errorf("environment: IBC Instance %q adapter returned no resolved value", id)
 		}
-		if err := resources.recordAcquired(
-			ResourceKindIBCInstance,
-			string(id),
-			acquisition.ownership,
-			hostDependencies(acquisition.ownership, declaration.ibcInstanceChain())...,
-		); err != nil {
-			return nil, []FailureRecord{{
-				Kind: ResourceKindIBCInstance, ID: string(id),
-			}}, err
-		}
-		if err := resources.setResourceState(ResourceKindIBCInstance, string(id), ResourceStateReady); err != nil {
-			return nil, []FailureRecord{{
-				Kind: ResourceKindIBCInstance, ID: string(id),
-			}}, err
-		}
-		instances[id] = acquisition.instance
+		instances[id] = instance
 	}
-	return instances, nil, nil
+	return instances, nil
 }
 
 func acquireConnections(
@@ -100,12 +66,9 @@ func acquireConnections(
 	instances map[IBCInstanceID]*IBCInstance,
 	runtime Runtime,
 	d drivers,
-	resources *journal,
-	receipts *protocolReceiptJournal,
 ) (
 	map[ConnectionID]*Connection,
 	map[ClientID]*IBCClient,
-	[]FailureRecord,
 	error,
 ) {
 	connections := make(map[ConnectionID]*Connection, len(spec.Connections))
@@ -125,78 +88,32 @@ func acquireConnections(
 		instances: instances, attestorSpecs: attestorSpecsByClient,
 	}
 	if d.prepareConnections != nil {
-		prepared, failures, err := d.prepareConnections(ctx, spec, dependencies, runtime)
-		recordPreparedExistingClients(spec, prepared, receipts)
+		prepared, err := d.prepareConnections(ctx, spec, dependencies, runtime)
 		if err != nil {
-			return nil, nil, failures, fmt.Errorf("prepare IBC Connections failed: %w", err)
+			return nil, nil, fmt.Errorf("prepare IBC Connections failed: %w", err)
 		}
 		dependencies = prepared
 	}
 
 	for _, declaration := range sortedConnectionSpecs(spec.Connections) {
-		acquisition, err := d.acquireConnection(ctx, declaration, dependencies, runtime)
-		if acquisition.receipt != nil {
-			if acquisition.receipt.A != nil {
-				receipts.recordConnectionEnd(declaration.ID, "A", *acquisition.receipt.A)
-			}
-			if acquisition.receipt.B != nil {
-				receipts.recordConnectionEnd(declaration.ID, "B", *acquisition.receipt.B)
-			}
-		}
-		if err == nil {
-			if acquisition.connection == nil || acquisition.connection.a == nil || acquisition.connection.b == nil {
-				return nil, nil, []FailureRecord{{
-					Kind: ResourceKindIBCConnection, ID: string(declaration.ID),
-				}}, fmt.Errorf("environment: IBC Connection %q adapter returned an incomplete resolved value", declaration.ID)
-			}
-			err = recordResolvedAttestorUse(attestorUse, acquisition.connection.a, acquisition.connection.b)
-		}
-		clientFailures, clientRecordCount, clientRecordErr := recordClientAcquisitions(
-			resources,
-			acquisition,
-			instances,
-		)
-		if clientRecordErr != nil {
-			return nil, nil, clientFailures, clientRecordErr
-		}
+		connection, err := d.acquireConnection(ctx, declaration, dependencies, runtime)
 		if err != nil {
-			if clientRecordCount != 0 {
-				_ = resources.recordAcquired(
-					ResourceKindIBCConnection,
-					string(declaration.ID),
-					acquisition.ownership,
-					connectionHostDependencies(declaration, instances, acquisition.ownership)...,
-				)
-				_ = resources.setResourceState(ResourceKindIBCConnection, string(declaration.ID), ResourceStateFailed)
-			}
-			return nil, nil, []FailureRecord{{
-				Kind: ResourceKindIBCConnection, ID: string(declaration.ID),
-			}}, fmt.Errorf("start IBC Connection %q failed: %w", declaration.ID, err)
+			return nil, nil, fmt.Errorf("start IBC Connection %q failed: %w", declaration.ID, err)
 		}
-		if err := resources.recordAcquired(
-			ResourceKindIBCConnection,
-			string(declaration.ID),
-			acquisition.ownership,
-			connectionHostDependencies(declaration, instances, acquisition.ownership)...,
-		); err != nil {
-			return nil, nil, []FailureRecord{{
-				Kind: ResourceKindIBCConnection, ID: string(declaration.ID),
-			}}, err
+		if connection == nil || connection.a == nil || connection.b == nil {
+			return nil, nil, fmt.Errorf(
+				"environment: IBC Connection %q adapter returned an incomplete resolved value",
+				declaration.ID,
+			)
 		}
-		if err := resources.setResourceState(
-			ResourceKindIBCConnection,
-			string(declaration.ID),
-			ResourceStateReady,
-		); err != nil {
-			return nil, nil, []FailureRecord{{
-				Kind: ResourceKindIBCConnection, ID: string(declaration.ID),
-			}}, err
+		if err := recordResolvedAttestorUse(attestorUse, connection.a, connection.b); err != nil {
+			return nil, nil, err
 		}
-		connections[declaration.ID] = acquisition.connection
-		clients[acquisition.connection.a.id] = acquisition.connection.a
-		clients[acquisition.connection.b.id] = acquisition.connection.b
+		connections[declaration.ID] = connection
+		clients[connection.a.id] = connection.a
+		clients[connection.b.id] = connection.b
 	}
-	return connections, clients, nil, nil
+	return connections, clients, nil
 }
 
 func recordResolvedAttestorUse(seen map[EVMAddress]ClientID, clients ...*IBCClient) error {
@@ -216,69 +133,6 @@ func recordResolvedAttestorUse(seen map[EVMAddress]ClientID, clients ...*IBCClie
 	return nil
 }
 
-func recordClientAcquisitions(
-	resources *journal,
-	acquisition connectionAcquisition,
-	instances map[IBCInstanceID]*IBCInstance,
-) ([]FailureRecord, int, error) {
-	recorded := 0
-	for _, client := range []clientAcquisition{acquisition.a, acquisition.b} {
-		if !client.attempted || client.receipt == nil {
-			continue
-		}
-		state := ResourceStateFailed
-		if client.client != nil {
-			state = ResourceStateReady
-		} else if !clientReceiptHasTransactionEvidence(client.receipt) {
-			continue
-		}
-		id := client.receipt.ID
-		if err := resources.recordAcquired(
-			ResourceKindIBCClient,
-			string(id),
-			client.ownership,
-			clientHostDependencies(client, instances)...,
-		); err != nil {
-			failure := FailureRecord{Kind: ResourceKindIBCClient, ID: string(id)}
-			return []FailureRecord{failure}, recorded, err
-		}
-		if err := resources.setResourceState(ResourceKindIBCClient, string(id), state); err != nil {
-			failure := FailureRecord{Kind: ResourceKindIBCClient, ID: string(id)}
-			return []FailureRecord{failure}, recorded, err
-		}
-		recorded++
-	}
-	return nil, recorded, nil
-}
-
-func recordPreparedExistingClients(
-	spec Spec,
-	dependencies connectionDependencies,
-	receipts *protocolReceiptJournal,
-) {
-	for _, connection := range sortedConnectionSpecs(spec.Connections) {
-		for _, end := range []struct {
-			label       string
-			declaration ClientSpec
-		}{
-			{label: "A", declaration: connection.A},
-			{label: "B", declaration: connection.B},
-		} {
-			identity := clientIdentity(end.declaration)
-			resolved := dependencies.existingClients[identity.ID]
-			if resolved == nil {
-				continue
-			}
-			receipts.recordConnectionEnd(connection.ID, end.label, IBCClientReceipt{
-				ID:                 identity.ID,
-				IBCInstance:        identity.IBCInstance,
-				Locator:            resolved.locator,
-				LightClientAddress: resolved.lightClient,
-			})
-		}
-	}
-}
-
 func acquireAttestors(
 	ctx context.Context,
 	spec Spec,
@@ -287,64 +141,36 @@ func acquireAttestors(
 	runtime Runtime,
 	ws workspace,
 	d drivers,
-	resources *journal,
 	effects *effectJournal,
-) (map[AttestorID]*Attestor, []FailureRecord, error) {
+) (map[AttestorID]*Attestor, error) {
 	attestors := make(map[AttestorID]*Attestor, len(spec.Attestors))
 	for _, declaration := range sortedAttestorSpecs(spec.Attestors) {
 		observed, err := observedInstanceForClient(spec.Connections, declaration.Client, instances)
 		if err != nil {
-			return nil, []FailureRecord{{
-				Kind: ResourceKindAttestor, ID: string(declaration.ID),
-			}}, err
+			return nil, err
 		}
 		acquisition, err := d.acquireAttestor(ctx, declaration, attestorDependencies{
 			client: clients[declaration.Client], observed: observed,
 		}, runtime, ws)
 		if err != nil {
 			if acquisition.release != nil {
-				key := resourceKey{kind: ResourceKindAttestor, id: string(declaration.ID)}
-				if recordErr := resources.recordAcquired(key.kind, key.id, acquisition.ownership); recordErr != nil {
-					_ = acquisition.release(context.WithoutCancel(ctx))
-					return nil, []FailureRecord{{
-						Kind: key.kind, ID: key.id,
-					}}, errors.Join(err, recordErr)
-				}
 				effects.append(cleanupEffect{
-					key:       key,
-					ownership: acquisition.ownership,
-					action:    acquisition.action,
-					release:   acquisition.release,
+					description: acquisition.description,
+					release:     acquisition.release,
 				})
-				_ = resources.setResourceState(key.kind, key.id, ResourceStateFailed)
 			}
-			return nil, []FailureRecord{{
-				Kind: ResourceKindAttestor, ID: string(declaration.ID),
-			}}, fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
+			return nil, fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
 		}
 		if acquisition.attestor == nil || acquisition.release == nil {
-			return nil, []FailureRecord{{
-				Kind: ResourceKindAttestor, ID: string(declaration.ID),
-			}}, fmt.Errorf("environment: Attestor %q adapter returned an incomplete acquisition", declaration.ID)
-		}
-		key := resourceKey{kind: ResourceKindAttestor, id: string(declaration.ID)}
-		if err := resources.recordAcquired(key.kind, key.id, acquisition.ownership); err != nil {
-			_ = acquisition.release(context.WithoutCancel(ctx))
-			return nil, []FailureRecord{{
-				Kind: key.kind, ID: key.id,
-			}}, err
+			return nil, fmt.Errorf("environment: Attestor %q adapter returned an incomplete acquisition", declaration.ID)
 		}
 		effects.append(cleanupEffect{
-			key: key, ownership: acquisition.ownership, action: acquisition.action, release: acquisition.release,
+			description: acquisition.description,
+			release:     acquisition.release,
 		})
-		if err := resources.setResourceState(key.kind, key.id, ResourceStateReady); err != nil {
-			return nil, []FailureRecord{{
-				Kind: key.kind, ID: key.id,
-			}}, err
-		}
 		attestors[declaration.ID] = acquisition.attestor
 	}
-	return attestors, nil, nil
+	return attestors, nil
 }
 
 func observedInstanceForClient(
@@ -370,55 +196,46 @@ func acquireIBCInstance(
 	declaration IBCInstanceSpec,
 	chain *Chain,
 	runtime Runtime,
-) (instanceAcquisition, error) {
-	setup, err := eurekaSetup(ctx, chain)
+) (*IBCInstance, error) {
+	setup, err := solidityIBCSetup(ctx, chain)
 	if err != nil {
-		return instanceAcquisition{}, err
+		return nil, err
 	}
 	switch instance := declaration.(type) {
 	case NewIBCInstance:
 		authority, err := runtime.evmAccount(instance.Authority)
 		if err != nil {
-			return instanceAcquisition{}, err
+			return nil, err
 		}
 		if fundingErr := ensureProtocolAuthorityFunded(ctx, chain, authority); fundingErr != nil {
-			return instanceAcquisition{}, fmt.Errorf("fund IBC Instance %q authority: %w", instance.ID, fundingErr)
+			return nil, fmt.Errorf("fund IBC Instance %q authority: %w", instance.ID, fundingErr)
 		}
-		resolved, evidence, err := setup.DeployInstance(ctx, authority)
-		receipt := translateInstanceReceipts(instance, evidence)
-		acquisition := instanceAcquisition{
-			ownership: protocolCreationOwnership(chain),
-			receipt:   &receipt,
-		}
+		resolved, err := setup.DeployInstance(ctx, authority)
 		if err != nil {
-			return acquisition, err
+			return nil, err
 		}
-		acquisition.instance = &IBCInstance{
+		return &IBCInstance{
 			id:            instance.ID,
 			chain:         chain,
 			locator:       IBCInstanceLocator(resolved.Router.Hex()),
 			accessManager: EVMAddress(resolved.AccessManager.Hex()),
-		}
-		return acquisition, nil
+		}, nil
 	case ExistingIBCInstance:
 		if !common.IsHexAddress(string(instance.Locator)) {
-			return instanceAcquisition{}, fmt.Errorf("IBC Instance locator %q is not an EVM address", instance.Locator)
+			return nil, fmt.Errorf("IBC Instance locator %q is not an EVM address", instance.Locator)
 		}
 		resolved, err := setup.AttachInstance(ctx, common.HexToAddress(string(instance.Locator)))
 		if err != nil {
-			return instanceAcquisition{}, err
+			return nil, err
 		}
-		return instanceAcquisition{
-			instance: &IBCInstance{
-				id:            instance.ID,
-				chain:         chain,
-				locator:       IBCInstanceLocator(resolved.Router.Hex()),
-				accessManager: EVMAddress(resolved.AccessManager.Hex()),
-			},
-			ownership: OwnershipBorrowed,
+		return &IBCInstance{
+			id:            instance.ID,
+			chain:         chain,
+			locator:       IBCInstanceLocator(resolved.Router.Hex()),
+			accessManager: EVMAddress(resolved.AccessManager.Hex()),
 		}, nil
 	default:
-		return instanceAcquisition{}, fmt.Errorf("unsupported IBC Instance declaration %T", declaration)
+		return nil, fmt.Errorf("unsupported IBC Instance declaration %T", declaration)
 	}
 }
 
@@ -427,9 +244,9 @@ func prepareConnections(
 	spec Spec,
 	dependencies connectionDependencies,
 	runtime Runtime,
-) (connectionDependencies, []FailureRecord, error) {
+) (connectionDependencies, error) {
 	dependencies.existingClients = make(map[ClientID]*IBCClient)
-	dependencies.preparedClients = make(map[ClientID]*eureka.PreparedClient)
+	dependencies.preparedClients = make(map[ClientID]*solidityibc.PreparedClient)
 
 	for _, connection := range sortedConnectionSpecs(spec.Connections) {
 		ends := []struct {
@@ -446,12 +263,9 @@ func prepareConnections(
 		}
 		for _, end := range ends {
 			identity := clientIdentity(end.declaration)
-			failure := []FailureRecord{{
-				Kind: ResourceKindIBCClient, ID: string(identity.ID),
-			}}
 			switch client := end.declaration.(type) {
 			case ExistingClient:
-				resolved, _, err := acquireIBCClient(
+				resolved, err := acquireIBCClient(
 					ctx,
 					end.label,
 					client,
@@ -460,7 +274,7 @@ func prepareConnections(
 					runtime,
 				)
 				if err != nil {
-					return dependencies, failure, fmt.Errorf(
+					return dependencies, fmt.Errorf(
 						"prepare existing IBC Client %q: %w",
 						identity.ID,
 						err,
@@ -469,15 +283,15 @@ func prepareConnections(
 				dependencies.existingClients[identity.ID] = resolved
 			case NewClient:
 				instance := dependencies.instances[identity.IBCInstance]
-				setup, err := eurekaSetup(ctx, instance.chain)
+				setup, err := solidityIBCSetup(ctx, instance.chain)
 				if err != nil {
-					return dependencies, failure, err
+					return dependencies, err
 				}
 				authority, _ := runtime.evmAccount(client.Authority)
 				counterparty := clientIdentity(end.counterparty)
 				header, err := evmHeader(ctx, dependencies.instances[counterparty.IBCInstance].chain)
 				if err != nil {
-					return dependencies, failure, fmt.Errorf(
+					return dependencies, fmt.Errorf(
 						"prepare IBC Client %q counterparty header: %w",
 						identity.ID,
 						err,
@@ -492,7 +306,7 @@ func prepareConnections(
 					ctx,
 					authority,
 					common.HexToAddress(string(instance.locator)),
-					eureka.AttestationClientConfig{
+					solidityibc.AttestationClientConfig{
 						ID:                    string(locators[end.label]),
 						CounterpartyClientID:  string(locators[counterpartyEnd(end.label)]),
 						Attestors:             attestors,
@@ -502,7 +316,7 @@ func prepareConnections(
 					},
 				)
 				if err != nil {
-					return dependencies, failure, fmt.Errorf("prepare IBC Client %q: %w", identity.ID, err)
+					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", identity.ID, err)
 				}
 				dependencies.preparedClients[identity.ID] = prepared
 			}
@@ -522,13 +336,11 @@ func prepareConnections(
 				}
 			}
 			if err := recordResolvedAttestorUse(seen, resolved); err != nil {
-				return dependencies, []FailureRecord{{
-					Kind: ResourceKindIBCClient, ID: string(identity.ID),
-				}}, err
+				return dependencies, err
 			}
 		}
 	}
-	return dependencies, nil, nil
+	return dependencies, nil
 }
 
 func acquireConnection(
@@ -536,46 +348,28 @@ func acquireConnection(
 	declaration ConnectionSpec,
 	dependencies connectionDependencies,
 	runtime Runtime,
-) (connectionAcquisition, error) {
-	receipt := IBCConnectionReceipt{ID: declaration.ID}
-	aOwnership := clientOwnership(declaration.A, dependencies.instances)
-	bOwnership := clientOwnership(declaration.B, dependencies.instances)
-	acquisition := connectionAcquisition{
-		ownership: connectionOwnership(aOwnership, bOwnership),
-		receipt:   &receipt,
-		a:         clientAcquisition{ownership: aOwnership},
-		b:         clientAcquisition{ownership: bOwnership},
-	}
+) (*Connection, error) {
 	locators := map[string]IBCClientLocator{
 		"A": clientLocator(declaration.ID, "A", declaration.A),
 		"B": clientLocator(declaration.ID, "B", declaration.B),
 	}
 
-	a, aReceipt, err := acquireIBCClient(
+	a, err := acquireIBCClient(
 		ctx, "A", declaration.A, locators, dependencies, runtime,
 	)
-	receipt.A = aReceipt
-	acquisition.a.client = a
-	acquisition.a.receipt = aReceipt
-	acquisition.a.attempted = true
 	if err != nil {
-		return acquisition, err
+		return nil, err
 	}
-	b, bReceipt, err := acquireIBCClient(
+	b, err := acquireIBCClient(
 		ctx, "B", declaration.B, locators, dependencies, runtime,
 	)
-	receipt.B = bReceipt
-	acquisition.b.client = b
-	acquisition.b.receipt = bReceipt
-	acquisition.b.attempted = true
 	if err != nil {
-		return acquisition, err
+		return nil, err
 	}
 	if a.counterparty != b.locator || b.counterparty != a.locator {
-		return acquisition, fmt.Errorf("resolved IBC Clients are not reciprocal")
+		return nil, fmt.Errorf("resolved IBC Clients are not reciprocal")
 	}
-	acquisition.connection = &Connection{id: declaration.ID, a: a, b: b}
-	return acquisition, nil
+	return &Connection{id: declaration.ID, a: a, b: b}, nil
 }
 
 func acquireIBCClient(
@@ -585,29 +379,24 @@ func acquireIBCClient(
 	locators map[string]IBCClientLocator,
 	dependencies connectionDependencies,
 	runtime Runtime,
-) (*IBCClient, *IBCClientReceipt, error) {
+) (*IBCClient, error) {
 	identity := clientIdentity(declaration)
 	instance := dependencies.instances[identity.IBCInstance]
-	locator := locators[end]
 	counterpartyEnd := counterpartyEnd(end)
 	counterpartyLocator := locators[counterpartyEnd]
-	receipt := &IBCClientReceipt{
-		ID: identity.ID, IBCInstance: identity.IBCInstance, Locator: locator,
-	}
 	if resolved := dependencies.existingClients[identity.ID]; resolved != nil {
-		receipt.LightClientAddress = resolved.lightClient
-		return resolved, receipt, nil
+		return resolved, nil
 	}
 
 	var (
-		resolved eureka.Client
+		resolved solidityibc.Client
 		err      error
 	)
 	switch client := declaration.(type) {
 	case ExistingClient:
-		setup, setupErr := eurekaSetup(ctx, instance.chain)
+		setup, setupErr := solidityIBCSetup(ctx, instance.chain)
 		if setupErr != nil {
-			return nil, receipt, setupErr
+			return nil, setupErr
 		}
 		resolved, err = setup.AttachClient(
 			ctx,
@@ -616,40 +405,34 @@ func acquireIBCClient(
 			string(counterpartyLocator),
 		)
 		if err != nil {
-			return nil, receipt, err
+			return nil, err
 		}
-		receipt.LightClientAddress = EVMAddress(resolved.Address.Hex())
 		if attestorErr := requireDeclaredAttestors(
 			identity.ID,
 			resolved.Attestors,
 			dependencies.attestorSpecs[identity.ID],
 			runtime,
 		); attestorErr != nil {
-			return nil, receipt, attestorErr
+			return nil, attestorErr
 		}
 	case NewClient:
 		prepared := dependencies.preparedClients[identity.ID]
 		if prepared == nil {
-			return nil, receipt, fmt.Errorf("IBC Client %q was not prepared", identity.ID)
+			return nil, fmt.Errorf("IBC Client %q was not prepared", identity.ID)
 		}
 		authority, err := runtime.evmAccount(client.Authority)
 		if err != nil {
-			return nil, receipt, err
+			return nil, err
 		}
 		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, authority); fundingErr != nil {
-			return nil, receipt, fmt.Errorf("fund IBC Client %q authority: %w", identity.ID, fundingErr)
+			return nil, fmt.Errorf("fund IBC Client %q authority: %w", identity.ID, fundingErr)
 		}
-		var evidence eureka.ClientReceipts
-		resolved, evidence, err = prepared.Deploy(ctx)
-		translateClientReceipts(receipt, evidence)
-		if resolved.Address != (common.Address{}) {
-			receipt.LightClientAddress = EVMAddress(resolved.Address.Hex())
-		}
+		resolved, err = prepared.Deploy(ctx)
 		if err != nil {
-			return nil, receipt, err
+			return nil, err
 		}
 	default:
-		return nil, receipt, fmt.Errorf("unsupported IBC Client declaration %T", declaration)
+		return nil, fmt.Errorf("unsupported IBC Client declaration %T", declaration)
 	}
 
 	attestors := make([]EVMAddress, len(resolved.Attestors))
@@ -664,14 +447,14 @@ func acquireIBCClient(
 		counterparty:          IBCClientLocator(resolved.CounterpartyClientID),
 		attestors:             attestors,
 		minRequiredSignatures: resolved.MinRequiredSignatures,
-	}, receipt, nil
+	}, nil
 }
 
 func ensureProtocolAuthorityFunded(ctx context.Context, chain *Chain, authority evm.Account) error {
 	if chain == nil {
 		return fmt.Errorf("missing resolved Chain")
 	}
-	if chain.ownership == OwnershipBorrowed {
+	if chain.funding == nil {
 		return nil
 	}
 	funding, err := chain.Funding()
@@ -712,18 +495,16 @@ func acquireAttestor(
 	if err != nil {
 		if process != nil {
 			return attestorAcquisition{
-				ownership: OwnershipOwnedEphemeral,
-				action:    CleanupActionStop,
-				release:   process.Stop,
+				description: fmt.Sprintf("stop Attestor %q", declaration.ID),
+				release:     process.Stop,
 			}, err
 		}
 		return attestorAcquisition{}, err
 	}
 	if process.SignerAddress() != authority.Address() {
 		return attestorAcquisition{
-			ownership: OwnershipOwnedEphemeral,
-			action:    CleanupActionStop,
-			release:   process.Stop,
+			description: fmt.Sprintf("stop Attestor %q", declaration.ID),
+			release:     process.Stop,
 		}, fmt.Errorf("Attestor signer address does not match its runtime authority")
 	}
 	return attestorAcquisition{
@@ -733,20 +514,19 @@ func acquireAttestor(
 			observed: dependencies.observed,
 			signer:   EVMAddress(process.SignerAddress().Hex()),
 		},
-		ownership: OwnershipOwnedEphemeral,
-		action:    CleanupActionStop,
-		release:   process.Stop,
+		description: fmt.Sprintf("stop Attestor %q", declaration.ID),
+		release:     process.Stop,
 	}, nil
 }
 
-func eurekaSetup(ctx context.Context, chain *Chain) (*eureka.Setup, error) {
+func solidityIBCSetup(ctx context.Context, chain *Chain) (*solidityibc.Setup, error) {
 	if chain == nil {
 		return nil, fmt.Errorf("missing resolved Chain")
 	}
-	var setup *eureka.Setup
+	var setup *solidityibc.Setup
 	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
 		var setupErr error
-		setup, setupErr = eureka.NewSetup(ctx, client.Client())
+		setup, setupErr = solidityibc.NewSetup(ctx, client.Client())
 		return setupErr
 	})
 	if !ok {
@@ -779,70 +559,6 @@ func clientLocator(connectionID ConnectionID, end string, declaration ClientSpec
 	return IBCClientLocator("link-" + hex.EncodeToString(hash[:]))
 }
 
-func protocolCreationOwnership(chain *Chain) Ownership {
-	if chain != nil && chain.ownership == OwnershipOwnedEphemeral {
-		return OwnershipOwnedHostScoped
-	}
-	return OwnershipOwnedDurable
-}
-
-func clientOwnership(declaration ClientSpec, instances map[IBCInstanceID]*IBCInstance) Ownership {
-	if _, existing := declaration.(ExistingClient); existing {
-		return OwnershipBorrowed
-	}
-	identity := clientIdentity(declaration)
-	return protocolCreationOwnership(instances[identity.IBCInstance].chain)
-}
-
-func connectionOwnership(a, b Ownership) Ownership {
-	if a == OwnershipOwnedHostScoped || b == OwnershipOwnedHostScoped {
-		return OwnershipOwnedHostScoped
-	}
-	if a == OwnershipOwnedDurable || b == OwnershipOwnedDurable {
-		return OwnershipOwnedDurable
-	}
-	return OwnershipBorrowed
-}
-
-func hostDependencies(ownership Ownership, hosts ...ChainID) []ChainID {
-	if ownership != OwnershipOwnedHostScoped {
-		return nil
-	}
-	return hosts
-}
-
-func clientHostDependencies(
-	client clientAcquisition,
-	instances map[IBCInstanceID]*IBCInstance,
-) []ChainID {
-	if client.ownership != OwnershipOwnedHostScoped || client.receipt == nil {
-		return nil
-	}
-	instance := instances[client.receipt.IBCInstance]
-	if instance == nil || instance.chain == nil {
-		return nil
-	}
-	return []ChainID{instance.chain.id}
-}
-
-func connectionHostDependencies(
-	declaration ConnectionSpec,
-	instances map[IBCInstanceID]*IBCInstance,
-	ownership Ownership,
-) []ChainID {
-	if ownership != OwnershipOwnedHostScoped {
-		return nil
-	}
-	hosts := make([]ChainID, 0, 2)
-	for _, client := range []ClientSpec{declaration.A, declaration.B} {
-		instance := instances[clientIdentity(client).IBCInstance]
-		if instance != nil && instance.chain != nil && instance.chain.ownership == OwnershipOwnedEphemeral {
-			hosts = append(hosts, instance.chain.id)
-		}
-	}
-	return hosts
-}
-
 func requireDeclaredAttestors(
 	clientID ClientID,
 	onChain []common.Address,
@@ -865,72 +581,6 @@ func requireDeclaredAttestors(
 		}
 	}
 	return nil
-}
-
-func translateInstanceReceipts(
-	declaration NewIBCInstance,
-	in eureka.InstanceReceipts,
-) IBCInstanceReceipt {
-	return IBCInstanceReceipt{
-		ID:                   declaration.ID,
-		Chain:                declaration.Chain,
-		AccessManager:        translateTransactionEvidence(in.AccessManager),
-		RouterImplementation: translateTransactionEvidence(in.RouterImplementation),
-		RouterProxy:          translateTransactionEvidence(in.RouterProxy),
-	}
-}
-
-func translateClientReceipts(out *IBCClientReceipt, in eureka.ClientReceipts) {
-	out.LightClientDeployment = translateTransactionEvidence(in.LightClient)
-	out.Registration = translateTransactionEvidence(in.Registration)
-	if in.LightClient != nil {
-		address := in.LightClient.ContractAddress
-		if address == (common.Address{}) {
-			address = in.LightClient.PredictedContractAddress
-		}
-		if address != (common.Address{}) {
-			out.LightClientAddress = EVMAddress(address.Hex())
-		}
-	}
-}
-
-func translateTransactionEvidence(in *eureka.TransactionEvidence) *EVMTransactionEvidence {
-	if in == nil {
-		return nil
-	}
-	out := &EVMTransactionEvidence{
-		Hash:        in.Hash.Hex(),
-		Submission:  EVMSubmissionStatus(in.Submission),
-		Mined:       in.Mined,
-		BlockNumber: in.BlockNumber,
-		Status:      in.Status,
-	}
-	if in.PredictedContractAddress != (common.Address{}) {
-		out.PredictedContractAddress = EVMAddress(in.PredictedContractAddress.Hex())
-	}
-	if in.ContractAddress != (common.Address{}) {
-		out.ContractAddress = EVMAddress(in.ContractAddress.Hex())
-	}
-	return out
-}
-
-func instanceReceiptHasTransactionEvidence(receipt IBCInstanceReceipt) bool {
-	return hasTransactionHash(receipt.AccessManager) ||
-		hasTransactionHash(receipt.RouterImplementation) ||
-		hasTransactionHash(receipt.RouterProxy)
-}
-
-func instanceReceiptHasAnyOutput(receipt IBCInstanceReceipt) bool {
-	return receipt.AccessManager != nil || receipt.RouterImplementation != nil || receipt.RouterProxy != nil
-}
-
-func clientReceiptHasTransactionEvidence(client *IBCClientReceipt) bool {
-	return client != nil &&
-		(hasTransactionHash(client.LightClientDeployment) || hasTransactionHash(client.Registration))
-}
-
-func hasTransactionHash(evidence *EVMTransactionEvidence) bool {
-	return evidence != nil && evidence.Hash != ""
 }
 
 func sortedAttestorSpecs(in []AttestorSpec) []AttestorSpec {

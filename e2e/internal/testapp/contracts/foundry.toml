@@ -1,5 +1,5 @@
 # Test-only contracts for the IBC Link e2e harness. These are small mocks, not
-# the real Eureka protocol stack. Their committed artifacts are embedded so
+# the real Solidity IBC protocol stack. Their committed artifacts are embedded so
 # tests do not need Forge at runtime.
 [profile.default]
 src = "src"

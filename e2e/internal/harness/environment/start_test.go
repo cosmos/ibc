@@ -150,8 +150,6 @@ func TestStartFailureIsAtomicAndCleansAcquiredEffects(t *testing.T) {
 				close(firstAcquired)
 				return fakeAcquisition(
 					"first",
-					OwnershipOwnedEphemeral,
-					CleanupActionStop,
 					func(context.Context) error {
 						releases.Add(1)
 						return nil
@@ -170,18 +168,7 @@ func TestStartFailureIsAtomicAndCleansAcquiredEffects(t *testing.T) {
 	require.ErrorAs(t, err, &startErr)
 	require.ErrorIs(t, err, primary)
 	require.Contains(t, err.Error(), "endpoint detail")
-	require.Equal(t, []FailureRecord{{
-		Kind: ResourceKindChain, ID: "second",
-	}}, startErr.Failures())
 	require.EqualValues(t, 1, releases.Load())
-
-	manifest := startErr.Manifest()
-	require.Equal(t, []ResourceRecord{{
-		Kind: ResourceKindChain, ID: "first", Ownership: OwnershipOwnedEphemeral, State: ResourceStateReleased,
-	}}, manifest.Resources())
-	require.Equal(t, []CleanupRecord{{
-		Kind: ResourceKindChain, ID: "first", Action: CleanupActionStop, Outcome: CleanupOutcomeSucceeded,
-	}}, manifest.CleanupEffects())
 }
 
 func TestStartFailureReportsCleanupFailure(t *testing.T) {
@@ -228,8 +215,6 @@ func TestStartFailureReportsCleanupFailure(t *testing.T) {
 				}
 				return fakeAcquisition(
 					"first",
-					OwnershipOwnedEphemeral,
-					CleanupActionStop,
 					func(context.Context) error {
 						return releaseErr
 					},
@@ -255,8 +240,6 @@ func TestStartFailureReportsCleanupFailure(t *testing.T) {
 	require.NoError(t, readErr)
 	require.Len(t, entries, 1)
 	require.Equal(t, "safe.log", entries[0].Name())
-	require.Equal(t, ResourceStateReleaseFailed, startErr.Manifest().Resources()[0].State)
-	require.Equal(t, CleanupOutcomeFailed, startErr.Manifest().CleanupEffects()[0].Outcome)
 }
 
 func TestEnvironmentCloseSeparatesBorrowedResourceFromOwnedHandle(t *testing.T) {
@@ -275,8 +258,6 @@ func TestEnvironmentCloseSeparatesBorrowedResourceFromOwnedHandle(t *testing.T) 
 			if declaration.chainID() == "managed" {
 				return fakeAcquisition(
 					"managed",
-					OwnershipOwnedEphemeral,
-					CleanupActionStop,
 					func(context.Context) error {
 						managedReleases.Add(1)
 						return nil
@@ -285,8 +266,6 @@ func TestEnvironmentCloseSeparatesBorrowedResourceFromOwnedHandle(t *testing.T) 
 			}
 			return fakeAcquisition(
 				"attached",
-				OwnershipBorrowed,
-				CleanupActionCloseLocalHandle,
 				func(context.Context) error {
 					attachedReleases.Add(1)
 					return nil
@@ -303,12 +282,6 @@ func TestEnvironmentCloseSeparatesBorrowedResourceFromOwnedHandle(t *testing.T) 
 	require.NoError(t, env.Close(t.Context()))
 	require.EqualValues(t, 1, managedReleases.Load())
 	require.EqualValues(t, 1, attachedReleases.Load())
-
-	resources := env.Manifest().Resources()
-	require.Equal(t, ResourceStateRetained, resourceByID(t, resources, "attached").State)
-	require.Equal(t, OwnershipBorrowed, resourceByID(t, resources, "attached").Ownership)
-	require.Equal(t, ResourceStateReleased, resourceByID(t, resources, "managed").State)
-	require.Equal(t, OwnershipOwnedEphemeral, resourceByID(t, resources, "managed").Ownership)
 }
 
 func TestEnvironmentCloseRetriesOnlyFailedEffects(t *testing.T) {
@@ -319,8 +292,6 @@ func TestEnvironmentCloseRetriesOnlyFailedEffects(t *testing.T) {
 		acquireChain: func(context.Context, ChainSpec, Runtime, workspace) (chainAcquisition, error) {
 			acquisition := fakeAcquisition(
 				"managed",
-				OwnershipOwnedEphemeral,
-				CleanupActionStop,
 				func(context.Context) error {
 					if calls.Add(1) == 1 {
 						return releaseErr
@@ -342,15 +313,9 @@ func TestEnvironmentCloseRetriesOnlyFailedEffects(t *testing.T) {
 	require.ErrorIs(t, evmAccess.WaitNextPendingTx(t.Context()), ErrEnvironmentClosed)
 	_, err = chain.Height(t.Context())
 	require.ErrorIs(t, err, ErrEnvironmentClosed)
-	require.Equal(t, ResourceStateReleaseFailed, env.Manifest().Resources()[0].State)
 	require.NoError(t, env.Close(t.Context()))
-	require.Equal(t, ResourceStateReleased, env.Manifest().Resources()[0].State)
 	require.NoError(t, env.Close(t.Context()))
 	require.EqualValues(t, 2, calls.Load(), "successful cleanup is not repeated")
-	require.Equal(t, []CleanupOutcome{CleanupOutcomeFailed, CleanupOutcomeSucceeded}, []CleanupOutcome{
-		env.Manifest().CleanupEffects()[0].Outcome,
-		env.Manifest().CleanupEffects()[1].Outcome,
-	})
 }
 
 func TestStartAcquiresIndependentChainsConcurrently(t *testing.T) {
@@ -369,8 +334,6 @@ func TestStartAcquiresIndependentChainsConcurrently(t *testing.T) {
 				<-release
 				return fakeAcquisition(
 					declaration.chainID(),
-					OwnershipOwnedEphemeral,
-					CleanupActionStop,
 					func(context.Context) error {
 						return nil
 					},
@@ -416,8 +379,6 @@ func TestStartSnapshotsRuntimeBindingsBeforeAcquisition(t *testing.T) {
 				seen <- snapshot.Endpoints["rpc"].RPCURL
 				return fakeAcquisition(
 					"attached",
-					OwnershipBorrowed,
-					CleanupActionCloseLocalHandle,
 					func(context.Context) error {
 						return nil
 					},
@@ -439,8 +400,6 @@ func TestStartSnapshotsRuntimeBindingsBeforeAcquisition(t *testing.T) {
 
 func fakeAcquisition(
 	id ChainID,
-	ownership Ownership,
-	action CleanupAction,
 	release func(context.Context) error,
 ) chainAcquisition {
 	impl := fakeRuntimeChain{id: string(id)}
@@ -450,12 +409,10 @@ func fakeAcquisition(
 			evmChainID: 1,
 			rpcURL:     "http://rpc.example.invalid",
 			timing:     instantTiming(),
-			ownership:  ownership,
 			impl:       impl,
 		},
-		ownership: ownership,
-		action:    action,
-		release:   release,
+		description: "release Chain " + string(id),
+		release:     release,
 	}
 }
 
@@ -476,15 +433,4 @@ func testTiming() Timing {
 		BlockInterval: time.Second, CompletionBudget: 20 * time.Second,
 		SettleWindow: 2 * time.Second, PollInterval: 100 * time.Millisecond,
 	}
-}
-
-func resourceByID(t *testing.T, records []ResourceRecord, id string) ResourceRecord {
-	t.Helper()
-	for _, record := range records {
-		if record.ID == id {
-			return record
-		}
-	}
-	t.Fatalf("resource %q not found in %+v", id, records)
-	return ResourceRecord{}
 }

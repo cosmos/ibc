@@ -41,7 +41,7 @@ func TestProtocolAuthorityFundingSkipsAttachedChains(t *testing.T) {
 	authority, err := evm.AccountFromHex(testPrimaryPrivateKeyHex)
 	require.NoError(t, err)
 	require.NoError(t, ensureProtocolAuthorityFunded(t.Context(), &Chain{
-		id: "attached", ownership: OwnershipBorrowed,
+		id: "attached",
 	}, authority))
 }
 
@@ -50,7 +50,7 @@ func TestProtocolAuthorityFundingUsesManagedCapability(t *testing.T) {
 	require.NoError(t, err)
 	controller := &recordingEOAFunder{}
 	chain := &Chain{
-		id: "managed", ownership: OwnershipOwnedEphemeral,
+		id:      "managed",
 		funding: &Funding{controller: controller},
 	}
 	chain.bindLease(&environmentLease{})

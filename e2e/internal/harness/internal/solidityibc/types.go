@@ -1,5 +1,5 @@
-// Package eureka realizes the concrete Solidity IBC Eureka EVM protocol state.
-package eureka
+// Package solidityibc realizes the concrete Solidity IBC EVM protocol state.
+package solidityibc
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Instance is one initialized ICS26 router installation. The router address is
@@ -29,7 +28,7 @@ type Client struct {
 
 // AttestationClientConfig contains the immutable constructor inputs for an
 // attestation light client. A zero RoleManager intentionally permits anyone to
-// submit proofs, matching Eureka's constructor semantics.
+// submit proofs, matching Solidity IBC's constructor semantics.
 type AttestationClientConfig struct {
 	ID                    string
 	CounterpartyClientID  string
@@ -47,7 +46,7 @@ func (c AttestationClientConfig) snapshot() AttestationClientConfig {
 
 func (c AttestationClientConfig) validate() error {
 	if !validCustomClientID(c.ID) {
-		return fmt.Errorf("client id %q is not a valid Eureka custom client identifier", c.ID)
+		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", c.ID)
 	}
 	if c.CounterpartyClientID == "" {
 		return fmt.Errorf("client %q has an empty counterparty client id", c.ID)
@@ -82,65 +81,7 @@ func (c AttestationClientConfig) validate() error {
 	return nil
 }
 
-type TransactionSubmission string
-
-const (
-	TransactionSubmissionAccepted  TransactionSubmission = "accepted"
-	TransactionSubmissionAmbiguous TransactionSubmission = "ambiguous"
-)
-
-// TransactionEvidence is the non-secret setup transaction evidence available
-// so far. Hash is recorded before broadcast. Submission distinguishes an RPC-
-// accepted transaction from one whose broadcast result was ambiguous, while
-// Mined reports whether a receipt was observed.
-type TransactionEvidence struct {
-	Hash                     common.Hash
-	Submission               TransactionSubmission
-	Mined                    bool
-	BlockNumber              uint64
-	Status                   uint64
-	PredictedContractAddress common.Address
-	ContractAddress          common.Address
-}
-
-func minedTransactionEvidence(receipt *types.Receipt) TransactionEvidence {
-	var blockNumber uint64
-	if receipt.BlockNumber != nil {
-		blockNumber = receipt.BlockNumber.Uint64()
-	}
-	return TransactionEvidence{
-		Hash:            receipt.TxHash,
-		Submission:      TransactionSubmissionAccepted,
-		Mined:           true,
-		BlockNumber:     blockNumber,
-		Status:          receipt.Status,
-		ContractAddress: receipt.ContractAddress,
-	}
-}
-
-func signedTransactionEvidence(tx *types.Transaction, status TransactionSubmission) *TransactionEvidence {
-	if tx == nil {
-		return nil
-	}
-	return &TransactionEvidence{Hash: tx.Hash(), Submission: status}
-}
-
-// InstanceReceipts is populated after each transaction is signed. Callers get
-// the known prefix even when broadcast is ambiguous or a later stage fails.
-type InstanceReceipts struct {
-	AccessManager        *TransactionEvidence
-	RouterImplementation *TransactionEvidence
-	RouterProxy          *TransactionEvidence
-}
-
-// ClientReceipts preserves light-client and registration transaction evidence
-// independently when broadcast, mining, or a later stage fails.
-type ClientReceipts struct {
-	LightClient  *TransactionEvidence
-	Registration *TransactionEvidence
-}
-
-// validCustomClientID mirrors Eureka v3's IBCIdentifiers validation. The
+// validCustomClientID mirrors Solidity IBC v3's IBCIdentifiers validation. The
 // access-controlled addClient overload rejects generated "client-" identifiers
 // and accepts only these explicit custom identifiers.
 func validCustomClientID(id string) bool {

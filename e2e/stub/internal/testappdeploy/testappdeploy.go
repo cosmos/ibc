@@ -1,5 +1,5 @@
 // Package testappdeploy implements `ibc test-apps deploy` for the synthetic
-// e2e applications. It does not deploy the real Eureka protocol stack.
+// e2e applications. It does not deploy the real Solidity IBC protocol stack.
 package testappdeploy
 
 import (

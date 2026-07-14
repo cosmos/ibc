@@ -23,7 +23,7 @@ import (
 // This deterministic identity is not one of Anvil's provider-default funded accounts.
 const testDeployerPrivateKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
-func TestStartRealizesEurekaConnectionAndAttestors(t *testing.T) {
+func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
 	requireDocker(t)
 	requireIBCLinkBinary(t)
 
@@ -121,30 +121,10 @@ func TestStartRealizesEurekaConnectionAndAttestors(t *testing.T) {
 	require.EqualValues(t, 1, connection.A().MinRequiredSignatures())
 	require.EqualValues(t, 1, connection.B().MinRequiredSignatures())
 
-	beforeClose := resourcesByID(env.Manifest())
-	require.Equal(t, environment.OwnershipOwnedHostScoped, beforeClose[string(instanceA)].Ownership)
-	require.Equal(t, environment.ResourceStateReady, beforeClose[string(instanceA)].State)
-	require.Equal(t, environment.OwnershipOwnedHostScoped, beforeClose[string(connectionID)].Ownership)
-	require.Equal(t, environment.ResourceStateReady, beforeClose[string(connectionID)].State)
-	require.Equal(t, environment.OwnershipOwnedHostScoped, beforeClose[string(clientA)].Ownership)
-	require.Equal(t, environment.ResourceStateReady, beforeClose[string(clientA)].State)
-	require.Equal(t, environment.OwnershipOwnedHostScoped, beforeClose[string(clientB)].Ownership)
-	require.Equal(t, environment.ResourceStateReady, beforeClose[string(clientB)].State)
-	require.Equal(t, environment.OwnershipOwnedEphemeral, beforeClose[string(attestorA)].Ownership)
-	require.Equal(t, environment.ResourceStateReady, beforeClose[string(attestorA)].State)
-
 	require.NoError(t, env.Close(t.Context()))
-	afterClose := resourcesByID(env.Manifest())
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(instanceA)].State)
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(instanceB)].State)
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(clientA)].State)
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(clientB)].State)
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(connectionID)].State)
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(attestorA)].State)
-	require.Equal(t, environment.ResourceStateReleased, afterClose[string(attestorB)].State)
 }
 
-func TestStartAttachesExistingEurekaResources(t *testing.T) {
+func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 	requireDocker(t)
 	requireIBCLinkBinary(t)
 
@@ -261,31 +241,7 @@ func TestStartAttachesExistingEurekaResources(t *testing.T) {
 	require.Equal(t, createdConnection.B().Locator(), attachedConnection.A().CounterpartyLocator())
 	require.Equal(t, createdConnection.A().Locator(), attachedConnection.B().CounterpartyLocator())
 
-	beforeClose := resourcesByID(attached.Manifest())
-	for _, id := range []string{
-		"chain-a",
-		"chain-b",
-		"attached-ibc-a",
-		"attached-ibc-b",
-		"attached-client-a",
-		"attached-client-b",
-		"attached-connection",
-	} {
-		require.Equal(t, environment.OwnershipBorrowed, beforeClose[id].Ownership, id)
-		require.Equal(t, environment.ResourceStateReady, beforeClose[id].State, id)
-	}
-	for _, id := range []string{"attached-attestor-a", "attached-attestor-b"} {
-		require.Equal(t, environment.OwnershipOwnedEphemeral, beforeClose[id].Ownership, id)
-		require.Equal(t, environment.ResourceStateReady, beforeClose[id].State, id)
-	}
 	require.NoError(t, attached.Close(t.Context()))
-	for _, record := range attached.Manifest().Resources() {
-		state := environment.ResourceStateRetained
-		if record.Kind == environment.ResourceKindAttestor {
-			state = environment.ResourceStateReleased
-		}
-		require.Equal(t, state, record.State, record.ID)
-	}
 
 	// Reuse the original A end against a fresh B router. Keeping the authored
 	// Connection, Client, and Instance identities stable reproduces the exact
@@ -328,12 +284,7 @@ func TestStartAttachesExistingEurekaResources(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, createdConnection.A().Locator(), mixedConnection.A().Locator())
 	require.Equal(t, createdConnection.B().Locator(), mixedConnection.B().Locator())
-	mixedResources := resourcesByID(mixed.Manifest())
-	require.Equal(t, environment.OwnershipBorrowed, mixedResources["created-client-a"].Ownership)
-	require.Equal(t, environment.OwnershipOwnedDurable, mixedResources["created-client-b"].Ownership)
-	require.Equal(t, environment.OwnershipOwnedDurable, mixedResources["created-connection"].Ownership)
 	require.NoError(t, mixed.Close(t.Context()))
-	require.Equal(t, environment.ResourceStateRetained, resourcesByID(mixed.Manifest())["created-connection"].State)
 
 	_, err = chainA.Height(t.Context())
 	require.NoError(t, err, "closing both Environments must leave the attached Chain running")
@@ -341,7 +292,7 @@ func TestStartAttachesExistingEurekaResources(t *testing.T) {
 	require.NoError(t, err, "closing both Environments must leave the attached Chain running")
 }
 
-func TestStartRealizesEurekaConnectionAcrossAnvilAndBesu(t *testing.T) {
+func TestStartRealizesSolidityIBCConnectionAcrossAnvilAndBesu(t *testing.T) {
 	requireDocker(t)
 	requireIBCLinkBinary(t)
 
@@ -499,25 +450,9 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 	_, err = attachedEVM.HeaderByNumber(t.Context(), nil)
 	require.NoError(t, err)
 
-	beforeClose := resourcesByID(env.Manifest())
-	require.Equal(t, environment.ResourceRecord{
-		Kind:      environment.ResourceKindChain,
-		ID:        string(managedID),
-		Ownership: environment.OwnershipOwnedEphemeral,
-		State:     environment.ResourceStateReady,
-	}, beforeClose[string(managedID)])
-	require.Equal(t, environment.ResourceRecord{
-		Kind:      environment.ResourceKindChain,
-		ID:        string(attachedID),
-		Ownership: environment.OwnershipBorrowed,
-		State:     environment.ResourceStateReady,
-	}, beforeClose[string(attachedID)])
-
 	managedRPC := managed.RPCURL()
 	require.NoError(t, env.Close(t.Context()))
-	afterFirstClose := env.Manifest()
 	require.NoError(t, env.Close(t.Context()), "Close is idempotent")
-	require.Equal(t, afterFirstClose, env.Manifest(), "a repeated Close does not duplicate cleanup records")
 
 	_, err = attachedEVM.HeaderByNumber(t.Context(), nil)
 	require.ErrorIs(t, err, environment.ErrEnvironmentClosed)
@@ -535,21 +470,6 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 	_, err = outOfBand.Height(t.Context())
 	require.NoError(t, err, "closing the Environment must leave the attached Chain running")
 
-	finalResources := resourcesByID(env.Manifest())
-	require.Equal(t, environment.ResourceStateReleased, finalResources[string(managedID)].State)
-	require.Equal(t, environment.ResourceStateRetained, finalResources[string(attachedID)].State)
-	require.Contains(t, env.Manifest().CleanupEffects(), environment.CleanupRecord{
-		Kind:    environment.ResourceKindChain,
-		ID:      string(managedID),
-		Action:  environment.CleanupActionStop,
-		Outcome: environment.CleanupOutcomeSucceeded,
-	})
-	require.Contains(t, env.Manifest().CleanupEffects(), environment.CleanupRecord{
-		Kind:    environment.ResourceKindChain,
-		ID:      string(attachedID),
-		Action:  environment.CleanupActionCloseLocalHandle,
-		Outcome: environment.CleanupOutcomeSucceeded,
-	})
 }
 
 func TestStartManagedBesu(t *testing.T) {
@@ -593,7 +513,6 @@ func TestStartManagedBesu(t *testing.T) {
 	rpcURL := chain.RPCURL()
 	require.NoError(t, env.Close(t.Context()))
 	assertRPCUnavailable(t, rpcURL)
-	require.Equal(t, environment.ResourceStateReleased, env.Manifest().Resources()[0].State)
 }
 
 func requireDocker(t *testing.T) {
@@ -675,14 +594,6 @@ func attachedTiming() environment.Timing {
 		SettleWindow:     time.Second,
 		PollInterval:     100 * time.Millisecond,
 	}
-}
-
-func resourcesByID(manifest environment.Manifest) map[string]environment.ResourceRecord {
-	resources := make(map[string]environment.ResourceRecord)
-	for _, record := range manifest.Resources() {
-		resources[record.ID] = record
-	}
-	return resources
 }
 
 func assertRPCUnavailable(t *testing.T, rpcURL string) {

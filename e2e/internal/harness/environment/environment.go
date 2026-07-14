@@ -17,7 +17,6 @@ type Environment struct {
 	clients     map[ClientID]*IBCClient
 	attestors   map[AttestorID]*Attestor
 
-	journal *journal
 	effects *effectJournal
 	ws      workspace
 
@@ -78,10 +77,6 @@ func (e *Environment) Attestor(id AttestorID) (*Attestor, error) {
 	return attestor, nil
 }
 
-func (e *Environment) Manifest() Manifest {
-	return e.journal.snapshot()
-}
-
 // Close releases acquired effects in reverse acquisition order, then removes
 // the private workspace. Successful effects are never repeated. If cleanup
 // fails or ctx expires, a later call retries only unfinished effects.
@@ -97,7 +92,7 @@ func (e *Environment) Close(ctx context.Context) error {
 		}
 	}
 
-	cleanupErrs := e.effects.cleanup(ctx, e.journal)
+	cleanupErrs := e.effects.cleanup(ctx)
 	if len(cleanupErrs) != 0 {
 		return errors.Join(cleanupErrs...)
 	}
@@ -109,16 +104,12 @@ func (e *Environment) Close(ctx context.Context) error {
 }
 
 type cleanupEffect struct {
-	key       resourceKey
-	ownership Ownership
-	action    CleanupAction
-	release   func(context.Context) error
-	done      bool
+	description string
+	release     func(context.Context) error
+	done        bool
 }
 
-// effectJournal tracks actual acquired effects, not desired declarations. An
-// attached Chain therefore records a local client-close effect while its
-// logical resource remains borrowed.
+// effectJournal tracks acquired cleanup work in reverse-release order.
 type effectJournal struct {
 	mu      sync.Mutex
 	effects []cleanupEffect
@@ -130,89 +121,21 @@ func (j *effectJournal) append(effect cleanupEffect) {
 	j.effects = append(j.effects, effect)
 }
 
-func (j *effectJournal) cleanup(ctx context.Context, resources *journal) []error {
+func (j *effectJournal) cleanup(ctx context.Context) []error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
 	failures := make([]error, 0)
-	hasEffect := make(map[resourceKey]struct{}, len(j.effects))
 	for i := len(j.effects) - 1; i >= 0; i-- {
 		effect := &j.effects[i]
-		hasEffect[effect.key] = struct{}{}
 		if effect.done {
 			continue
 		}
-		err := effect.release(ctx)
-		outcome := CleanupOutcomeSucceeded
-		if err != nil {
-			outcome = CleanupOutcomeFailed
-			failures = append(failures, &cleanupFailure{
-				kind: effect.key.kind, id: effect.key.id, action: effect.action, cause: err,
-			})
+		if err := effect.release(ctx); err != nil {
+			failures = append(failures, fmt.Errorf("environment cleanup %s failed: %w", effect.description, err))
+			continue
 		}
-		resources.recordCleanup(effect.key.kind, effect.key.id, effect.action, outcome)
-		if err == nil {
-			effect.done = true
-		}
-
-		state := ResourceStateRetained
-		if effect.ownership == OwnershipOwnedEphemeral {
-			state = ResourceStateReleased
-			if err != nil {
-				state = ResourceStateReleaseFailed
-			}
-		}
-		_ = resources.setResourceState(effect.key.kind, effect.key.id, state)
-	}
-
-	// Resources without direct cleanup effects still need a terminal manifest
-	// disposition. Host-scoped state follows its specific managed host or hosts;
-	// durable and borrowed state remains outside Environment cleanup.
-	resourceSnapshot := resources.snapshot().Resources()
-	chainStates := make(map[ChainID]ResourceState)
-	for _, record := range resourceSnapshot {
-		if record.Kind == ResourceKindChain {
-			chainStates[ChainID(record.ID)] = record.State
-		}
-	}
-	for _, record := range resourceSnapshot {
-		switch record.Ownership {
-		case OwnershipBorrowed, OwnershipOwnedDurable:
-			if record.State == ResourceStateReady || record.State == ResourceStateAcquired {
-				_ = resources.setResourceState(record.Kind, record.ID, ResourceStateRetained)
-			}
-		case OwnershipOwnedHostScoped:
-			hosts := resources.resourceHosts(record.Kind, record.ID)
-			allReleased := len(hosts) != 0
-			for _, host := range hosts {
-				if chainStates[host] != ResourceStateReleased {
-					allReleased = false
-					break
-				}
-			}
-			if record.State == ResourceStateReady ||
-				record.State == ResourceStateAcquired ||
-				record.State == ResourceStateFailed ||
-				record.State == ResourceStateReleaseFailed {
-				state := ResourceStateReleaseFailed
-				if allReleased {
-					state = ResourceStateReleased
-				}
-				_ = resources.setResourceState(record.Kind, record.ID, state)
-			}
-		case OwnershipOwnedEphemeral:
-			if _, ok := hasEffect[resourceKey{kind: record.Kind, id: record.ID}]; ok {
-				continue
-			}
-			if record.State == ResourceStateReleased {
-				continue
-			}
-			_ = resources.setResourceState(record.Kind, record.ID, ResourceStateReleaseFailed)
-			failures = append(failures, &cleanupFailure{
-				kind: record.Kind, id: record.ID, action: CleanupActionStop,
-				cause: errors.New("owned ephemeral resource has no release effect"),
-			})
-		}
+		effect.done = true
 	}
 	return failures
 }

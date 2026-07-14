@@ -30,7 +30,6 @@ type Chain struct {
 	evmChainID uint64
 	rpcURL     string
 	timing     Timing
-	ownership  Ownership
 	impl       chainimpl.Chain
 	lease      *environmentLease
 	mining     *Mining

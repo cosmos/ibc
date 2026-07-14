@@ -1,5 +1,5 @@
 {
-  "name": "@ibc-link/eureka-contract-artifacts",
+  "name": "@ibc-link/solidity-ibc-contract-artifacts",
   "private": true,
   "dependencies": {
     "@openzeppelin/contracts": "5.6.1"

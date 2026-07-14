@@ -1,4 +1,4 @@
-package eureka
+package solidityibc
 
 import (
 	"encoding/json"
