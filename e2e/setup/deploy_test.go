@@ -2,9 +2,9 @@ package setup_test
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
@@ -12,9 +12,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
-	"github.com/cosmos/ibc/e2e/internal/testapp/contracts"
-
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
 )
 
 func TestTestApps_SelectedSuite_VerifiesDeploymentOnChain(t *testing.T) {
@@ -71,45 +69,39 @@ func assertTestAppsOnChain(
 		require.NotEmpty(t, code, "%s at %s must have bytecode on Chain %s", name, address, chainID)
 	}
 
-	counterABI, err := contracts.Counter.ParsedABI()
-	require.NoError(t, err)
-	callData, err := counterABI.Pack("count")
-	require.NoError(t, err)
-
 	counterAddress := common.HexToAddress(apps.Counter)
-	result, err := client.CallContract(
-		ctx,
-		ethereum.CallMsg{To: &counterAddress, Data: callData},
-		nil,
-	)
+	var countSign int
+	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
+		counter, err := bindings.NewCounterCaller(counterAddress, caller)
+		if err != nil {
+			return err
+		}
+		count, err := counter.Count(&bind.CallOpts{Context: ctx})
+		if err == nil {
+			countSign = count.Sign()
+		}
+		return err
+	})
 	require.NoError(t, err, "call Counter.count() on Chain %s", chainID)
+	require.Zero(t, countSign, "freshly deployed Counter.count() must be 0 on Chain %s", chainID)
 
-	values, err := counterABI.Unpack("count", result)
-	require.NoError(t, err)
-	require.Len(t, values, 1)
-	count, ok := values[0].(*big.Int)
-	require.True(t, ok, "count() returns a uint256")
-	require.Zero(t, count.Sign(), "freshly deployed Counter.count() must be 0 on Chain %s", chainID)
-
-	iftABI, err := contracts.MockIFT.ParsedABI()
-	require.NoError(t, err)
-	callData, err = iftABI.Pack("balanceOf", application)
-	require.NoError(t, err)
 	iftAddress := common.HexToAddress(apps.MockIFT)
-	result, err = client.CallContract(
-		ctx,
-		ethereum.CallMsg{To: &iftAddress, Data: callData},
-		nil,
-	)
+	var balanceSign int
+	err = client.UseContractCaller(func(caller bind.ContractCaller) error {
+		ift, bindErr := bindings.NewMockIFTCaller(iftAddress, caller)
+		if bindErr != nil {
+			return bindErr
+		}
+		balance, callErr := ift.BalanceOf(&bind.CallOpts{Context: ctx}, application)
+		if callErr == nil {
+			balanceSign = balance.Sign()
+		}
+		return callErr
+	})
 	require.NoError(t, err, "call MockIFT.balanceOf(application signer) on Chain %s", chainID)
-	values, err = iftABI.Unpack("balanceOf", result)
-	require.NoError(t, err)
-	require.Len(t, values, 1)
-	balance, ok := values[0].(*big.Int)
-	require.True(t, ok, "balanceOf returns a uint256")
 	require.Positive(
 		t,
-		balance.Sign(),
+		balanceSign,
 		"test-app deployer must mint the application signer's initial IFT supply on Chain %s",
 		chainID,
 	)

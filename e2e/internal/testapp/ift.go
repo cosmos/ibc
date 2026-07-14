@@ -7,11 +7,13 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/testapp/contracts"
+	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
 )
 
 const (
@@ -20,7 +22,7 @@ const (
 	eventIFTRefunded = "IFTRefunded"
 )
 
-var iftABI = contracts.MockIFT.MustABI()
+var iftABI = mustABI(bindings.MockIFTMetaData)
 
 type IFTRequest struct {
 	// Amount must be positive and fit in a uint256. Prepare takes its own copy.
@@ -153,8 +155,7 @@ func (p *PreparedIFT) Submit(ctx context.Context) (*IFTTransfer, error) {
 		p.app.sender,
 		p.app.sourceApp,
 		data,
-		iftABI,
-		eventIFTSent,
+		iftSentSequence(p.app.sourceApp),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("testapp: send IFT on route %q: %w", p.app.routeID, err)
@@ -299,7 +300,19 @@ func (i *IFT) balance(
 	client *environment.EVM,
 	contract, holder common.Address,
 ) (*big.Int, error) {
-	return callUint(ctx, client, iftABI, contract, "balanceOf", holder)
+	var balance *big.Int
+	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := bindings.NewMockIFTCaller(contract, caller)
+		if err != nil {
+			return fmt.Errorf("testapp: bind MockIFT %s: %w", contract, err)
+		}
+		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("testapp: query MockIFT balance of %s: %w", holder, err)
+	}
+	return balance, nil
 }
 
 func (t *IFTTransfer) verifyBalance(
@@ -326,59 +339,65 @@ func (t *IFTTransfer) verifyBalance(
 	return nil
 }
 
-type iftReceivedLog struct {
-	RouteID  string `abi:"routeId"`
-	Seq      *big.Int
-	Receiver common.Address
-	Amount   *big.Int
-}
-
-func (t *IFTTransfer) awaitReceived(ctx context.Context) (iftReceivedLog, error) {
+func (t *IFTTransfer) awaitReceived(ctx context.Context) (*bindings.MockIFTIFTReceived, error) {
 	definition := iftABI.Events[eventIFTReceived]
-	description := fmt.Sprintf("IFT delivery for packet %s", t.packet.reference())
-	return awaitEvent(
+	parser := mustBinding(bindings.NewMockIFTFilterer(t.app.destApp, nil))
+	return awaitPacketEvent(
 		ctx,
-		t.app.destination.chain,
-		t.app.destination.evm,
-		t.app.destApp,
+		eventSource{endpoint: t.app.destination, contract: t.app.destApp},
 		definition.ID,
-		description,
-		func(data []byte) (iftReceivedLog, error) {
-			var event iftReceivedLog
-			if err := iftABI.UnpackIntoInterface(&event, eventIFTReceived, data); err != nil {
-				return iftReceivedLog{}, fmt.Errorf("testapp: decode IFTReceived: %w", err)
+		"IFT",
+		func(log types.Log) (*bindings.MockIFTIFTReceived, error) {
+			event, err := parser.ParseIFTReceived(log)
+			if err != nil {
+				return nil, fmt.Errorf("testapp: decode IFTReceived: %w", err)
 			}
 			return event, nil
 		},
-		func(event iftReceivedLog) bool {
-			return event.RouteID == string(t.packet.RouteID) && event.Seq.Uint64() == t.packet.Sequence
+		t.packet,
+		func(event *bindings.MockIFTIFTReceived) (string, *big.Int) {
+			return event.RouteId, event.Seq
 		},
 	)
 }
 
-type iftRefundedLog struct {
-	Seq    *big.Int
-	Sender common.Address
-	Amount *big.Int
-}
-
-func (t *IFTTransfer) awaitRefunded(ctx context.Context) (iftRefundedLog, error) {
+func (t *IFTTransfer) awaitRefunded(ctx context.Context) (*bindings.MockIFTIFTRefunded, error) {
 	definition := iftABI.Events[eventIFTRefunded]
+	parser, err := bindings.NewMockIFTFilterer(t.app.sourceApp, nil)
+	if err != nil {
+		return nil, fmt.Errorf("testapp: bind source MockIFT events: %w", err)
+	}
 	description := fmt.Sprintf("IFT refund for packet %s", t.packet.reference())
 	return awaitEvent(
 		ctx,
-		t.app.source.chain,
-		t.app.source.evm,
-		t.app.sourceApp,
+		eventSource{endpoint: t.app.source, contract: t.app.sourceApp},
 		definition.ID,
 		description,
-		func(data []byte) (iftRefundedLog, error) {
-			var event iftRefundedLog
-			if err := iftABI.UnpackIntoInterface(&event, eventIFTRefunded, data); err != nil {
-				return iftRefundedLog{}, fmt.Errorf("testapp: decode IFTRefunded: %w", err)
+		func(log types.Log) (*bindings.MockIFTIFTRefunded, error) {
+			event, err := parser.ParseIFTRefunded(log)
+			if err != nil {
+				return nil, fmt.Errorf("testapp: decode IFTRefunded: %w", err)
 			}
 			return event, nil
 		},
-		func(event iftRefundedLog) bool { return event.Seq.Uint64() == t.packet.Sequence },
+		func(event *bindings.MockIFTIFTRefunded) bool { return event.Seq.Uint64() == t.packet.Sequence },
 	)
+}
+
+func iftSentSequence(address common.Address) func(*types.Receipt) (uint64, bool, error) {
+	parser := mustBinding(bindings.NewMockIFTFilterer(address, nil))
+	return func(receipt *types.Receipt) (uint64, bool, error) {
+		definition := iftABI.Events[eventIFTSent]
+		for _, log := range receipt.Logs {
+			if log.Address != address || len(log.Topics) == 0 || log.Topics[0] != definition.ID {
+				continue
+			}
+			event, err := parser.ParseIFTSent(*log)
+			if err != nil {
+				return 0, false, fmt.Errorf("testapp: decode IFTSent: %w", err)
+			}
+			return event.Seq.Uint64(), true, nil
+		}
+		return 0, false, nil
+	}
 }

@@ -2,24 +2,6 @@ template: testify
 formatter: gofmt
 include-auto-generated: true
 packages:
-  github.com/cosmos/ibc/link/internal/types/v2/attestor:
-    config:
-      include-auto-generated: true
-      dir: "{{.InterfaceDir}}"
-      filename: "attestor.mock.go"
-      pkgname: "{{.SrcPackageName}}"
-      structname: "Mock{{.InterfaceName}}"
-    interfaces:
-      AttestationServiceClient:
-  github.com/cosmos/ibc/link/internal/types/v2/relayer:
-    config:
-      include-auto-generated: true
-      dir: "{{.InterfaceDir}}"
-      filename: "relayer.mock.go"
-      pkgname: "{{.SrcPackageName}}"
-      structname: "Mock{{.InterfaceName}}"
-    interfaces:
-      RelayerApiServiceClient:
   github.com/cosmos/ibc/link/internal/store:
     config:
       dir: "{{.InterfaceDir}}"

@@ -7,14 +7,12 @@
 package attestor
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,12 +23,15 @@ import (
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/ports"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
+
+	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
 )
 
 const (
@@ -40,11 +41,10 @@ const (
 
 	signerAlias = "managed-attestor-signer"
 
-	latestAttestableHeightPath = "/ibc.v2.attestor.AttestationService/LatestAttestableHeight"
-	defaultStartupTimeout      = 30 * time.Second
-	probeRequestTimeout        = 500 * time.Millisecond
-	stopGrace                  = 12 * time.Second
-	startupLogTailBytes        = 4096
+	defaultStartupTimeout = 30 * time.Second
+	probeRequestTimeout   = 500 * time.Millisecond
+	stopGrace             = 12 * time.Second
+	startupLogTailBytes   = 4096
 )
 
 // Spec contains all process-local inputs needed to start one Link attestor.
@@ -65,7 +65,7 @@ type Process struct {
 	signerAddress common.Address
 	endpoint      string
 	name          string
-	http          *http.Client
+	client        attestorv2.AttestationServiceClient
 	out           *logWriter
 	handle        *proc.Handle
 }
@@ -118,8 +118,11 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 		signerAddress: crypto.PubkeyToAddress(key.PublicKey),
 		endpoint:      endpoint,
 		name:          spec.Name,
-		http:          &http.Client{Timeout: probeRequestTimeout},
-		out:           out,
+		client: attestorv2.NewAttestationServiceClient(
+			&http.Client{Timeout: probeRequestTimeout},
+			endpoint,
+		),
+		out: out,
 	}
 	p.handle = proc.Reap(cmd, proc.Hooks{AfterWait: out.close})
 
@@ -137,46 +140,14 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 func (p *Process) SignerAddress() common.Address { return p.signerAddress }
 
 func (p *Process) latestAttestableHeight(ctx context.Context) (uint64, error) {
-	body, err := json.Marshal(latestHeightRequest{Attestor: p.name})
-	if err != nil {
-		return 0, fmt.Errorf("encode latest attestable height request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(
+	response, err := p.client.LatestAttestableHeight(
 		ctx,
-		http.MethodPost,
-		p.endpoint+latestAttestableHeightPath,
-		bytes.NewReader(body),
+		connect.NewRequest(&attestorv2.LatestAttestableHeightRequest{Attestor: p.name}),
 	)
-	if err != nil {
-		return 0, fmt.Errorf("build latest attestable height request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Connect-Protocol-Version", "1")
-
-	resp, err := p.http.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("call latest attestable height at %s: %w", p.endpoint, err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return 0, fmt.Errorf(
-			"call latest attestable height at %s: %s: %s",
-			p.endpoint,
-			resp.Status,
-			strings.TrimSpace(string(responseBody)),
-		)
-	}
-
-	var result latestHeightResponse
-	if decodeErr := json.NewDecoder(resp.Body).Decode(&result); decodeErr != nil {
-		return 0, fmt.Errorf("decode latest attestable height response: %w", decodeErr)
-	}
-	height, err := parseProtoUint64(result.Height)
-	if err != nil {
-		return 0, fmt.Errorf("decode latest attestable height response: %w", err)
-	}
-	return height, nil
+	return response.Msg.Height, nil
 }
 
 // Stop asks the whole subprocess group to exit and escalates to SIGKILL after
@@ -322,27 +293,6 @@ func writePrivateFile(path string, data []byte) error {
 		return err
 	}
 	return file.Close()
-}
-
-type latestHeightRequest struct {
-	Attestor string `json:"attestor"`
-}
-
-type latestHeightResponse struct {
-	Height json.RawMessage `json:"height"`
-}
-
-func parseProtoUint64(raw json.RawMessage) (uint64, error) {
-	text := strings.TrimSpace(string(raw))
-	if text == "" || text == "null" {
-		return 0, errors.New("height is missing")
-	}
-	text = strings.Trim(text, `"`)
-	height, err := strconv.ParseUint(text, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid height %q: %w", text, err)
-	}
-	return height, nil
 }
 
 type logWriter struct {

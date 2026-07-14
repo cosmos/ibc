@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
@@ -180,6 +181,14 @@ func (e *EVM) CallContract(
 		return err
 	})
 	return result, err
+}
+
+// UseContractCaller lends the active EVM client as a read-only generated
+// contract backend. The client remains owned by the environment.
+func (e *EVM) UseContractCaller(use func(bind.ContractCaller) error) error {
+	return e.use(func(client *chainevm.EVMClient) error {
+		return use(client.Client())
+	})
 }
 
 func (e *EVM) use(use func(*chainevm.EVMClient) error) error {

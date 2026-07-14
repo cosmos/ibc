@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 
@@ -108,23 +107,10 @@ func sqliteDSN(path string) string {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) ensureSchema(ctx context.Context) error {
-	for _, stmt := range splitStatements(schemaSQL) {
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("store: ensure schema: %w", err)
-		}
+	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
+		return fmt.Errorf("store: ensure schema: %w", err)
 	}
 	return nil
-}
-
-func splitStatements(schema string) []string {
-	parts := strings.Split(schema, ";")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if strings.TrimSpace(p) != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 func (s *Store) SaveTestApps(ctx context.Context, deployment wire.TestAppDeployment) error {

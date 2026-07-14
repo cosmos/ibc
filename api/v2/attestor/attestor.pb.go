@@ -119,7 +119,7 @@ const file_attestor_proto_rawDesc = "" +
 	"\x1eLatestAttestableHeightResponse\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height2\x8f\x01\n" +
 	"\x12AttestationService\x12y\n" +
-	"\x16LatestAttestableHeight\x12..ibc.v2.attestor.LatestAttestableHeightRequest\x1a/.ibc.v2.attestor.LatestAttestableHeightResponseB7Z5github.com/cosmos/ibc/link/internal/types/v2/attestorb\x06proto3"
+	"\x16LatestAttestableHeight\x12..ibc.v2.attestor.LatestAttestableHeightRequest\x1a/.ibc.v2.attestor.LatestAttestableHeightResponseB'Z%github.com/cosmos/ibc/api/v2/attestorb\x06proto3"
 
 var (
 	file_attestor_proto_rawDescOnce sync.Once

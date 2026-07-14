@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"os"
@@ -17,14 +18,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"golang.org/x/sync/singleflight"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/client"
+	"github.com/testcontainers/testcontainers-go"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/dockercli"
+	"github.com/cosmos/ibc/e2e/internal/harness/internal/containerutil"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/poll"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/ports"
 
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
+	containertypes "github.com/moby/moby/api/types/container"
 )
 
 const (
@@ -33,10 +36,9 @@ const (
 
 	anvilGasLimit     = 50_000_000
 	anvilReadyTimeout = 30 * time.Second
-	// anvilStopGrace must leave time to dump the --state file that StartNode reloads.
+	// Terminal shutdown leaves time for Anvil to flush its --state file.
 	anvilStopGrace   = 5 * time.Second
 	anvilStopTimeout = 15 * time.Second
-	anvilPullTimeout = 10 * time.Minute
 	anvilLogTimeout  = 10 * time.Second
 
 	containerStateDir     = "/anvil-state"
@@ -50,7 +52,7 @@ type Spec struct {
 	LogPath string
 	RunID   string
 	Image   string
-	// StatePath persists chain state across StopNode and StartNode; empty derives it from LogPath.
+	// StatePath stores chain state on graceful container shutdown; empty derives it from LogPath.
 	StatePath string
 
 	// BlockTime > 0 seals blocks via --block-time (whole seconds; rounded, rejected if it rounds
@@ -64,10 +66,8 @@ type Chain struct {
 
 	logPath string
 
-	spec Spec
-	port int
-
-	container string
+	spec      Spec
+	container testcontainers.Container
 
 	clientMu sync.RWMutex
 
@@ -97,10 +97,7 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 	if spec.ChainID == 0 {
 		return nil, fmt.Errorf("anvil chain %s: EVM chain id is required", spec.ID)
 	}
-	port, err := ports.FreePort()
-	if err != nil {
-		return nil, fmt.Errorf("allocate anvil port: %w", err)
-	}
+	var err error
 	if spec.StatePath == "" {
 		spec.StatePath, err = deriveStatePath(spec)
 		if err != nil {
@@ -112,17 +109,16 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 		return nil, err
 	}
 
-	container, ec, err := launchAnvil(ctx, spec, port, stateContainerPath, mountSpec)
+	container, rpcURL, ec, err := launchAnvil(ctx, spec, stateContainerPath, mountSpec)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Chain{
 		client:    ec,
-		Identity:  evm.NewIdentity(spec.ID, fmt.Sprintf("http://127.0.0.1:%d", port)),
+		Identity:  evm.NewIdentity(spec.ID, rpcURL),
 		logPath:   spec.LogPath,
 		spec:      spec,
-		port:      port,
 		container: container,
 	}, nil
 }
@@ -130,12 +126,8 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 func launchAnvil(
 	ctx context.Context,
 	spec Spec,
-	port int,
 	stateContainerPath, mountSpec string,
-) (string, *evm.EVMClient, error) {
-	rpcURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	container := containerName(spec)
-
+) (testcontainers.Container, string, *evm.EVMClient, error) {
 	args := []string{
 		"--port", "8545",
 		"--host", "0.0.0.0",
@@ -150,7 +142,7 @@ func launchAnvil(
 	if spec.BlockTime > 0 {
 		secs := uint64(math.Round(spec.BlockTime.Seconds()))
 		if secs == 0 {
-			return "", nil, fmt.Errorf(
+			return nil, "", nil, fmt.Errorf(
 				"anvil (chain %s): block time %v is below the 1s granularity of --block-time",
 				spec.ID,
 				spec.BlockTime,
@@ -159,35 +151,51 @@ func launchAnvil(
 		args = append(args, "--block-time", strconv.FormatUint(secs, 10))
 	}
 
-	if err := ensureDockerImage(ctx, spec.Image); err != nil {
-		return "", nil, fmt.Errorf("prepare anvil image %s: %w", spec.Image, err)
+	request := testcontainers.ContainerRequest{
+		Name:         containerName(spec),
+		Image:        spec.Image,
+		Entrypoint:   []string{"anvil"},
+		Cmd:          args,
+		ExposedPorts: []string{"8545/tcp"},
+		Labels:       containerutil.Labels(spec.RunID),
+		HostConfigModifier: func(config *containertypes.HostConfig) {
+			containerutil.BindPortsToLoopback(config, "8545/tcp")
+			config.Mounts = append(config.Mounts, mount.Mount{
+				Type:   mount.TypeBind,
+				Source: mountSpec,
+				Target: containerStateDir,
+			})
+		},
 	}
-
-	labels := dockercli.RunLabels(spec.RunID)
-	_, _ = dockercli.Output(ctx, "rm", "-f", container)
-	runArgs := []string{
-		"run", "-d",
-		"--name", container,
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: request,
+	})
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("create anvil container (chain %s): %w", spec.ID, err)
 	}
-	runArgs = append(runArgs, labels...)
-	runArgs = append(runArgs,
-		"-p", fmt.Sprintf("127.0.0.1:%d:8545", port),
-		"-v", mountSpec,
-		"--entrypoint", "anvil",
-		spec.Image,
-	)
-	runArgs = append(runArgs, args...)
-	if _, err := dockercli.Output(ctx, runArgs...); err != nil {
-		startErr := fmt.Errorf("start anvil container (chain %s): %w", spec.ID, err)
-		return "", nil, errors.Join(startErr, cleanupFailedStart(container, false))
+	if startErr := container.Start(ctx); startErr != nil {
+		startErr = fmt.Errorf("start anvil container (chain %s): %w", spec.ID, startErr)
+		return nil, "", nil, errors.Join(startErr, cleanupFailedStart(container))
 	}
+	host, err := container.Host(ctx)
+	if err != nil {
+		return nil, "", nil, errors.Join(fmt.Errorf("resolve anvil host: %w", err), cleanupFailedStart(container))
+	}
+	port, err := container.MappedPort(ctx, "8545/tcp")
+	if err != nil {
+		return nil, "", nil, errors.Join(
+			fmt.Errorf("resolve anvil RPC port: %w", err),
+			cleanupFailedStart(container),
+		)
+	}
+	rpcURL := fmt.Sprintf("http://%s:%s", host, port.Port())
 
 	ec, err := connectAnvil(ctx, spec, rpcURL)
 	if err != nil {
 		startupErr := anvilStartupError(container, err)
-		return "", nil, errors.Join(startupErr, cleanupFailedStart(container, true))
+		return nil, "", nil, errors.Join(startupErr, cleanupFailedStart(container))
 	}
-	return container, ec, nil
+	return container, rpcURL, ec, nil
 }
 
 func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient, error) {
@@ -304,28 +312,11 @@ func normalizeDockerSpec(spec Spec) (Spec, string, string, error) {
 	}
 	spec.StatePath = statePath
 	containerPath := path.Join(containerStateDir, filepath.Base(statePath))
-	return spec, containerPath, stateDir + ":" + containerStateDir, nil
-}
-
-var pullGroup singleflight.Group
-
-func ensureDockerImage(ctx context.Context, image string) error {
-	_, err, _ := pullGroup.Do(image, func() (any, error) {
-		if _, inspectErr := dockercli.Output(ctx, "image", "inspect", image); inspectErr == nil {
-			return nil, nil
-		}
-		pullCtx, cancel := context.WithTimeout(ctx, anvilPullTimeout)
-		defer cancel()
-		if _, pullErr := dockercli.Output(pullCtx, "pull", image); pullErr != nil {
-			return nil, pullErr
-		}
-		return nil, nil
-	})
-	return err
+	return spec, containerPath, stateDir, nil
 }
 
 func containerName(spec Spec) string {
-	return dockercli.NamePrefix(spec.RunID, spec.ID) + "-anvil"
+	return containerutil.NamePrefix(spec.RunID, spec.ID) + "-anvil"
 }
 
 func waitReady(ctx context.Context, probe func(context.Context) error, timeout time.Duration) error {
@@ -343,7 +334,7 @@ func waitReady(ctx context.Context, probe func(context.Context) error, timeout t
 	return nil
 }
 
-func anvilStartupError(container string, err error) error {
+func anvilStartupError(container testcontainers.Container, err error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), anvilLogTimeout)
 	defer cancel()
 	logs := dockerLogs(ctx, container)
@@ -353,16 +344,10 @@ func anvilStartupError(container string, err error) error {
 	return fmt.Errorf("%w\npartial anvil logs:\n%s", err, evm.Tail(logs, anvilStartupTailBytes))
 }
 
-func cleanupFailedStart(container string, stop bool) error {
-	var stopErr error
-	if stop {
-		ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
-		stopErr = stopContainer(ctx, container)
-		cancel()
-	}
-	rmCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+func cleanupFailedStart(container testcontainers.Container) error {
+	ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
 	defer cancel()
-	return errors.Join(stopErr, removeContainer(rmCtx, container))
+	return container.Terminate(ctx, testcontainers.StopTimeout(anvilStopGrace))
 }
 
 func deriveStatePath(spec Spec) (string, error) {
@@ -385,6 +370,10 @@ func (ac *Chain) CollectLogs(ctx context.Context) map[string]string {
 
 func (ac *Chain) Stop() error {
 	ac.mu.Lock()
+	if ac.closed && ac.container == nil {
+		ac.mu.Unlock()
+		return nil
+	}
 	if !ac.closed {
 		ac.closeEVMClient()
 		ac.closed = true
@@ -394,7 +383,12 @@ func (ac *Chain) Stop() error {
 	ac.mu.Unlock()
 
 	var stopErr error
-	if !alreadyStopped {
+	if alreadyStopped {
+		resumeCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+		stopErr = resumeContainer(resumeCtx, container)
+		cancel()
+	}
+	if stopErr == nil {
 		stopCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
 		stopErr = stopContainer(stopCtx, container)
 		cancel()
@@ -403,9 +397,10 @@ func (ac *Chain) Stop() error {
 	rmCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
 	rmErr := removeContainer(rmCtx, container)
 	cancel()
-	if stopErr == nil || rmErr == nil {
+	if rmErr == nil {
 		ac.mu.Lock()
 		ac.stopped = true
+		ac.container = nil
 		ac.mu.Unlock()
 	}
 	return errors.Join(stopErr, rmErr)
@@ -422,31 +417,53 @@ func (ac *Chain) snapshotLogs(ctx context.Context) string {
 	return log
 }
 
-func dockerLogs(ctx context.Context, container string) string {
-	data, err := dockercli.Output(ctx, "logs", container)
-	if err != nil || len(data) == 0 {
+func dockerLogs(ctx context.Context, container testcontainers.Container) string {
+	if container == nil {
+		return ""
+	}
+	reader, err := container.Logs(ctx)
+	if err != nil {
+		return ""
+	}
+	defer reader.Close() //nolint:errcheck
+	data, err := io.ReadAll(reader)
+	if err != nil {
 		return ""
 	}
 	return string(data)
 }
 
-func stopContainer(ctx context.Context, container string) error {
-	if _, err := dockercli.Output(
-		ctx,
-		"stop",
-		"-t",
-		strconv.Itoa(int(anvilStopGrace.Seconds())),
-		container,
-	); err != nil &&
-		!dockercli.MissingContainer(err) {
-		return err
+func stopContainer(ctx context.Context, container testcontainers.Container) error {
+	if container == nil || !container.IsRunning() {
+		return nil
 	}
-	return nil
+	grace := anvilStopGrace
+	return container.Stop(ctx, &grace)
 }
 
-func removeContainer(ctx context.Context, container string) error {
-	if _, err := dockercli.Output(ctx, "rm", "-f", container); err != nil && !dockercli.MissingContainer(err) {
+func removeContainer(ctx context.Context, container testcontainers.Container) error {
+	if container == nil {
+		return nil
+	}
+	return container.Terminate(ctx)
+}
+
+func pauseContainer(ctx context.Context, container testcontainers.Container) error {
+	docker, err := client.New(client.FromEnv)
+	if err != nil {
 		return err
 	}
-	return nil
+	defer docker.Close() //nolint:errcheck
+	_, err = docker.ContainerPause(ctx, container.GetContainerID(), client.ContainerPauseOptions{})
+	return err
+}
+
+func resumeContainer(ctx context.Context, container testcontainers.Container) error {
+	docker, err := client.New(client.FromEnv)
+	if err != nil {
+		return err
+	}
+	defer docker.Close() //nolint:errcheck
+	_, err = docker.ContainerUnpause(ctx, container.GetContainerID(), client.ContainerUnpauseOptions{})
+	return err
 }

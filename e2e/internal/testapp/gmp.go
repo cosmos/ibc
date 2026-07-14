@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/testapp/contracts"
+	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
 )
 
 const (
@@ -18,8 +20,8 @@ const (
 )
 
 var (
-	gmpABI     = contracts.MockGMP.MustABI()
-	counterABI = contracts.Counter.MustABI()
+	gmpABI     = mustABI(bindings.MockGMPMetaData)
+	counterABI = mustABI(bindings.CounterMetaData)
 )
 
 type GMPRequest struct {
@@ -103,8 +105,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		g.sender,
 		g.sourceApp,
 		data,
-		gmpABI,
-		eventGMPSent,
+		gmpSentSequence(g.sourceApp),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("testapp: send GMP on route %q: %w", g.routeID, err)
@@ -175,7 +176,19 @@ func (c *GMPCall) VerifyRejected(ctx context.Context) error {
 }
 
 func (g *GMP) count(ctx context.Context) (*big.Int, error) {
-	return callUint(ctx, g.destination.evm, counterABI, g.counter, "count")
+	var count *big.Int
+	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
+		counter, err := bindings.NewCounterCaller(g.counter, caller)
+		if err != nil {
+			return fmt.Errorf("testapp: bind Counter %s: %w", g.counter, err)
+		}
+		count, err = counter.Count(&bind.CallOpts{Context: ctx})
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("testapp: query Counter %s: %w", g.counter, err)
+	}
+	return count, nil
 }
 
 func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) error {
@@ -196,32 +209,42 @@ func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) 
 	return nil
 }
 
-type gmpReceivedLog struct {
-	RouteID string `abi:"routeId"`
-	Seq     *big.Int
-	Target  common.Address
-	Success bool
-}
-
-func (c *GMPCall) awaitReceived(ctx context.Context) (gmpReceivedLog, error) {
+func (c *GMPCall) awaitReceived(ctx context.Context) (*bindings.MockGMPGMPReceived, error) {
 	definition := gmpABI.Events[eventGMPReceived]
-	description := fmt.Sprintf("GMP delivery for packet %s", c.packet.reference())
-	return awaitEvent(
+	parser := mustBinding(bindings.NewMockGMPFilterer(c.app.destApp, nil))
+	return awaitPacketEvent(
 		ctx,
-		c.app.destination.chain,
-		c.app.destination.evm,
-		c.app.destApp,
+		eventSource{endpoint: c.app.destination, contract: c.app.destApp},
 		definition.ID,
-		description,
-		func(data []byte) (gmpReceivedLog, error) {
-			var event gmpReceivedLog
-			if err := gmpABI.UnpackIntoInterface(&event, eventGMPReceived, data); err != nil {
-				return gmpReceivedLog{}, fmt.Errorf("testapp: decode GMPReceived: %w", err)
+		"GMP",
+		func(log types.Log) (*bindings.MockGMPGMPReceived, error) {
+			event, err := parser.ParseGMPReceived(log)
+			if err != nil {
+				return nil, fmt.Errorf("testapp: decode GMPReceived: %w", err)
 			}
 			return event, nil
 		},
-		func(event gmpReceivedLog) bool {
-			return event.RouteID == string(c.packet.RouteID) && event.Seq.Uint64() == c.packet.Sequence
+		c.packet,
+		func(event *bindings.MockGMPGMPReceived) (string, *big.Int) {
+			return event.RouteId, event.Seq
 		},
 	)
+}
+
+func gmpSentSequence(address common.Address) func(*types.Receipt) (uint64, bool, error) {
+	parser := mustBinding(bindings.NewMockGMPFilterer(address, nil))
+	return func(receipt *types.Receipt) (uint64, bool, error) {
+		definition := gmpABI.Events[eventGMPSent]
+		for _, log := range receipt.Logs {
+			if log.Address != address || len(log.Topics) == 0 || log.Topics[0] != definition.ID {
+				continue
+			}
+			event, err := parser.ParseGMPSent(*log)
+			if err != nil {
+				return 0, false, fmt.Errorf("testapp: decode GMPSent: %w", err)
+			}
+			return event.Seq.Uint64(), true, nil
+		}
+		return 0, false, nil
+	}
 }

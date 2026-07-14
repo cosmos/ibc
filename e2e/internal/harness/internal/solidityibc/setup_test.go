@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/internal/solidityibc/accessmanager"
 
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -193,20 +194,18 @@ func grantCustomClientRole(
 	account common.Address,
 ) {
 	t.Helper()
-	accessABI, _, err := loadAccessManagerArtifact()
-	require.NoError(t, err)
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
 	require.NotNil(t, routerABI)
 	selector, err := customAddClientSelector(*routerABI)
 	require.NoError(t, err)
-	manager := bind.NewBoundContract(instance.AccessManager, accessABI, setup.backend, setup.backend, setup.backend)
+	manager, err := accessmanager.NewAccessManager(instance.AccessManager, setup.backend)
+	require.NoError(t, err)
 
 	const roleID uint64 = 42
 	_, tx, err := setup.send(ctx, admin, func(opts *bind.TransactOpts) (common.Address, *gethtypes.Transaction, error) {
-		transaction, sendErr := manager.Transact(
+		transaction, sendErr := manager.SetTargetFunctionRole(
 			opts,
-			"setTargetFunctionRole",
 			instance.Router,
 			[][4]byte{selector},
 			roleID,
@@ -218,7 +217,7 @@ func grantCustomClientRole(
 	require.NoError(t, err)
 
 	_, tx, err = setup.send(ctx, admin, func(opts *bind.TransactOpts) (common.Address, *gethtypes.Transaction, error) {
-		transaction, sendErr := manager.Transact(opts, "grantRole", roleID, account, uint32(0))
+		transaction, sendErr := manager.GrantRole(opts, roleID, account, uint32(0))
 		return common.Address{}, transaction, sendErr
 	})
 	require.NoError(t, err)

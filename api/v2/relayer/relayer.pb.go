@@ -119,7 +119,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\bchain_id\x18\x02 \x01(\tR\achainId\"\x0f\n" +
 	"\rRelayResponse2[\n" +
 	"\x11RelayerApiService\x12F\n" +
-	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00B6Z4github.com/cosmos/ibc/link/internal/types/v2/relayerb\x06proto3"
+	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00B&Z$github.com/cosmos/ibc/api/v2/relayerb\x06proto3"
 
 var (
 	file_relayer_proto_rawDescOnce sync.Once

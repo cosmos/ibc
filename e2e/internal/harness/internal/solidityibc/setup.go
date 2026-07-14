@@ -1,7 +1,6 @@
 package solidityibc
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -14,10 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/internal/solidityibc/accessmanager"
 )
 
 type contractBackend interface {
@@ -60,10 +59,6 @@ func (s *Setup) DeployInstance(
 	ctx context.Context,
 	authority evm.Account,
 ) (Instance, error) {
-	accessABI, accessBytecode, err := loadAccessManagerArtifact()
-	if err != nil {
-		return Instance{}, fmt.Errorf("solidity IBC deploy Instance: %w", err)
-	}
 	if authorityErr := validateAuthority(authority); authorityErr != nil {
 		return Instance{}, fmt.Errorf("solidity IBC deploy Instance: %w", authorityErr)
 	}
@@ -72,10 +67,8 @@ func (s *Setup) DeployInstance(
 		ctx,
 		authority,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
-			address, transaction, _, deployErr := bind.DeployContract(
+			address, transaction, _, deployErr := accessmanager.DeployAccessManager(
 				opts,
-				accessABI,
-				accessBytecode,
 				s.backend,
 				authority.Address(),
 			)
@@ -473,8 +466,14 @@ func isIBCClientNotFound(err error) bool {
 	if !ok || len(revertData) < 4 {
 		return false
 	}
-	selector := crypto.Keccak256([]byte("IBCClientNotFound(string)"))[:4]
-	return bytes.Equal(revertData[:4], selector)
+	routerABI, abiErr := ics26router.ContractMetaData.GetAbi()
+	if abiErr != nil || routerABI == nil {
+		return false
+	}
+	var selector [4]byte
+	copy(selector[:], revertData)
+	contractErr, lookupErr := routerABI.ErrorByID(selector)
+	return lookupErr == nil && contractErr.Name == "IBCClientNotFound"
 }
 
 func (s *Setup) requireCode(ctx context.Context, label string, address common.Address) error {
@@ -489,39 +488,29 @@ func (s *Setup) requireCode(ctx context.Context, label string, address common.Ad
 }
 
 func (s *Setup) requireAdmin(ctx context.Context, accessManager, authority common.Address) error {
-	accessABI, _, err := loadAccessManagerArtifact()
+	contract, err := accessmanager.NewAccessManager(accessManager, s.backend)
 	if err != nil {
-		return err
+		return fmt.Errorf("bind AccessManager: %w", err)
 	}
-	contract := bind.NewBoundContract(accessManager, accessABI, s.backend, nil, nil)
-	var output []any
-	if err := contract.Call(&bind.CallOpts{Context: ctx}, &output, "hasRole", uint64(0), authority); err != nil {
+	role, err := contract.HasRole(&bind.CallOpts{Context: ctx}, uint64(0), authority)
+	if err != nil {
 		return fmt.Errorf("query admin role: %w", err)
 	}
-	if len(output) != 2 {
-		return fmt.Errorf("query admin role returned %d values, want 2", len(output))
-	}
-	isAdmin := *abi.ConvertType(output[0], new(bool)).(*bool)
-	if !isAdmin {
+	if !role.IsMember {
 		return fmt.Errorf("address %s is not an AccessManager admin", authority)
 	}
 	return nil
 }
 
 func (s *Setup) requireAccessManager(ctx context.Context, address common.Address) error {
-	accessABI, _, err := loadAccessManagerArtifact()
+	contract, err := accessmanager.NewAccessManager(address, s.backend)
 	if err != nil {
-		return err
+		return fmt.Errorf("bind AccessManager: %w", err)
 	}
-	contract := bind.NewBoundContract(address, accessABI, s.backend, nil, nil)
-	var output []any
-	if err := contract.Call(&bind.CallOpts{Context: ctx}, &output, "ADMIN_ROLE"); err != nil {
+	adminRole, err := contract.ADMINROLE(&bind.CallOpts{Context: ctx})
+	if err != nil {
 		return fmt.Errorf("query ADMIN_ROLE: %w", err)
 	}
-	if len(output) != 1 {
-		return fmt.Errorf("query ADMIN_ROLE returned %d values, want 1", len(output))
-	}
-	adminRole := *abi.ConvertType(output[0], new(uint64)).(*uint64)
 	if adminRole != 0 {
 		return fmt.Errorf("ADMIN_ROLE is %d, want 0", adminRole)
 	}
@@ -545,29 +534,21 @@ func (s *Setup) requireCanAddCustomClient(
 		return err
 	}
 
-	accessABI, _, err := loadAccessManagerArtifact()
+	contract, err := accessmanager.NewAccessManager(instance.AccessManager, s.backend)
 	if err != nil {
-		return err
+		return fmt.Errorf("bind AccessManager: %w", err)
 	}
-	contract := bind.NewBoundContract(instance.AccessManager, accessABI, s.backend, nil, nil)
-	var output []any
-	if err := contract.Call(
+	permission, err := contract.CanCall(
 		&bind.CallOpts{Context: ctx},
-		&output,
-		"canCall",
 		authority,
 		instance.Router,
 		selector,
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("query addClient permission: %w", err)
 	}
-	if len(output) != 2 {
-		return fmt.Errorf("query addClient permission returned %d values, want 2", len(output))
-	}
-	immediate := *abi.ConvertType(output[0], new(bool)).(*bool)
-	delay := *abi.ConvertType(output[1], new(uint32)).(*uint32)
-	if !immediate {
-		return fmt.Errorf("address %s cannot call custom addClient immediately (delay %d)", authority, delay)
+	if !permission.Immediate {
+		return fmt.Errorf("address %s cannot call custom addClient immediately (delay %d)", authority, permission.Delay)
 	}
 	return nil
 }

@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cosmos/ibc/link/internal/service/signer"
-	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/internal/service/signer"
+
+	proto "github.com/cosmos/ibc/api/v2/attestor"
 )
 
 func TestService(t *testing.T) {
@@ -69,7 +70,11 @@ func TestService(t *testing.T) {
 	t.Run("remote", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		client := proto.NewMockAttestationServiceClient(t)
+		client := attestationClient{heights: map[string]uint64{
+			"alice": 10,
+			"bob":   20,
+			"carol": 30,
+		}}
 		service, err := New([]Attestor{
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
@@ -99,14 +104,6 @@ func TestService(t *testing.T) {
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
-				// ARRANGE
-				client.EXPECT().
-					LatestAttestableHeight(mock.Anything, latestAttestableHeightRequest(tt.name)).
-					Return(connect.NewResponse(&proto.LatestAttestableHeightResponse{
-						Height: tt.expectedHeight,
-					}), nil).
-					Once()
-
 				// ACT
 				height, err := service.LatestAttestableHeight(ctx, tt.alias)
 
@@ -129,7 +126,7 @@ func TestService(t *testing.T) {
 	t.Run("mix", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		client := proto.NewMockAttestationServiceClient(t)
+		client := attestationClient{heights: map[string]uint64{"bob": 20}}
 		service, err := New([]Attestor{
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
@@ -138,13 +135,6 @@ func TestService(t *testing.T) {
 		})
 		require.NoError(t, err)
 		start := uint64(time.Now().Unix())
-		client.EXPECT().
-			LatestAttestableHeight(mock.Anything, latestAttestableHeightRequest("bob")).
-			Return(connect.NewResponse(&proto.LatestAttestableHeightResponse{
-				Height: 20,
-			}), nil).
-			Once()
-
 		// ACT
 		remoteHeight, err := service.LatestAttestableHeight(ctx, "cosmos-bob")
 
@@ -160,15 +150,17 @@ func TestService(t *testing.T) {
 		assert.GreaterOrEqual(t, localHeight, start)
 		assert.LessOrEqual(t, localHeight, uint64(time.Now().Unix()))
 	})
-
 }
 
-func latestAttestableHeightRequest(attestor string) any {
-	matcher := func(req *connect.Request[proto.LatestAttestableHeightRequest]) bool {
-		return req.Msg.Attestor == attestor
-	}
+type attestationClient struct {
+	heights map[string]uint64
+}
 
-	return mock.MatchedBy(matcher)
+func (c attestationClient) LatestAttestableHeight(
+	_ context.Context,
+	req *connect.Request[proto.LatestAttestableHeightRequest],
+) (*connect.Response[proto.LatestAttestableHeightResponse], error) {
+	return connect.NewResponse(&proto.LatestAttestableHeightResponse{Height: c.heights[req.Msg.Attestor]}), nil
 }
 
 func must[T any](value T, err error) T {

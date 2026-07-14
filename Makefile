@@ -26,6 +26,9 @@ doctor-e2e: $(TEST_APP_ARTIFACTS) ## Check the e2e toolchain and configured SUT 
 	@command -v go >/dev/null || { echo "missing go" >&2; exit 1; }
 	@command -v docker >/dev/null || { echo "missing docker; Docker is required for e2e lanes" >&2; exit 1; }
 	@command -v forge >/dev/null || { echo "missing forge; Forge is required to verify test-app artifacts" >&2; exit 1; }
+	@command -v bun >/dev/null || { echo "missing bun; bun is required to install Solidity contract dependencies" >&2; exit 1; }
+	@command -v abigen >/dev/null || { echo "missing abigen; abigen is required to generate typed contract bindings" >&2; exit 1; }
+	@command -v jq >/dev/null || { echo "missing jq; jq is required to generate typed contract bindings" >&2; exit 1; }
 	@command -v golangci-lint >/dev/null || { echo "missing golangci-lint; it is required for e2e checks" >&2; exit 1; }
 	@docker info >/dev/null || { echo "docker daemon is not reachable" >&2; exit 1; }
 	@if [ -n "$$IBC_BIN" ]; then test -x "$$IBC_BIN" || { echo "IBC_BIN is not executable: $$IBC_BIN" >&2; exit 1; }; echo "IBC_BIN=$$IBC_BIN"; else echo "IBC_BIN=link/bin/ibc (built by build-link)"; fi
@@ -54,13 +57,21 @@ clean-e2e-dry-run: ## Preview e2e processes and Docker resources
 clean-e2e: ## Kill e2e processes and remove Docker resources
 	$(E2E_DIR)/scripts/clean.sh
 
-test-apps: ## Rebuild embedded test-application artifacts (requires forge)
+test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
 	forge build --root $(TEST_APP_DIR)
+	bun install --cwd $(HARNESS_DIR)/internal/solidityibc/contracts --frozen-lockfile
+	forge build --root $(HARNESS_DIR)/internal/solidityibc/contracts
+	$(E2E_DIR)/scripts/generate-contract-bindings.sh
 
-check-test-apps: ## Fail if embedded test-application artifacts are stale
+check-test-apps: ## Fail if contract artifacts or typed Go bindings are stale
 	forge build --force --root $(TEST_APP_DIR)
-	@git diff --exit-code -- $(TEST_APP_DIR)/out || { \
-		echo "$(TEST_APP_DIR)/out is stale — run 'make test-apps' and commit the result" >&2; exit 1; }
+	bun install --cwd $(HARNESS_DIR)/internal/solidityibc/contracts --frozen-lockfile
+	forge build --force --root $(HARNESS_DIR)/internal/solidityibc/contracts
+	$(E2E_DIR)/scripts/generate-contract-bindings.sh
+	@git diff --exit-code -- $(TEST_APP_DIR)/out $(TEST_APP_DIR)/bindings \
+		$(HARNESS_DIR)/internal/solidityibc/contracts/out \
+		$(HARNESS_DIR)/internal/solidityibc/accessmanager || { \
+		echo "contract artifacts or bindings are stale — run 'make test-apps' and commit the result" >&2; exit 1; }
 
 check-link: ## Run Link-local checks
 	$(MAKE) -C link check

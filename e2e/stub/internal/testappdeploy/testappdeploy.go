@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
-	"github.com/cosmos/ibc/e2e/internal/testapp/contracts"
+	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
 	"github.com/cosmos/ibc/e2e/stub/internal/cfg"
 	"github.com/cosmos/ibc/e2e/stub/internal/exitcode"
 	"github.com/cosmos/ibc/e2e/stub/internal/onchain"
@@ -187,14 +187,8 @@ func deployTestApps(
 	opts *bind.TransactOpts,
 	client *ethclient.Client,
 ) (deployedTestApps, string, error) {
-	parsed, err := contracts.TestAppDeployer.ParsedABI()
-	if err != nil {
-		return deployedTestApps{}, "", err
-	}
-	deployer, tx, _, err := bind.DeployContract(
+	deployer, tx, contract, err := bindings.DeployTestAppDeployer(
 		opts,
-		parsed,
-		contracts.TestAppDeployer.Bytecode,
 		client,
 		initialIFTSupply,
 	)
@@ -209,18 +203,18 @@ func deployTestApps(
 		return deployedTestApps{}, "", fmt.Errorf("test app deployment reverted (tx %s)", tx.Hash().Hex())
 	}
 
+	parsed, err := bindings.TestAppDeployerMetaData.GetAbi()
+	if err != nil {
+		return deployedTestApps{}, "", fmt.Errorf("read test app deployer ABI: %w", err)
+	}
 	topic := parsed.Events["TestAppsDeployed"].ID
 	for _, lg := range rcpt.Logs {
 		if lg.Address != deployer || len(lg.Topics) == 0 || lg.Topics[0] != topic {
 			continue
 		}
-		var event struct {
-			MockGMP common.Address `abi:"mockGMP"`
-			MockIFT common.Address `abi:"mockIFT"`
-			Counter common.Address `abi:"counter"`
-		}
-		if err := parsed.UnpackIntoInterface(&event, "TestAppsDeployed", lg.Data); err != nil {
-			return deployedTestApps{}, "", fmt.Errorf("decode test app deployment event: %w", err)
+		event, parseErr := contract.ParseTestAppsDeployed(*lg)
+		if parseErr != nil {
+			return deployedTestApps{}, "", fmt.Errorf("decode test app deployment event: %w", parseErr)
 		}
 		return deployedTestApps{
 			mockGMP: event.MockGMP,

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"os"
@@ -15,13 +16,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/dockercli"
+	"github.com/cosmos/ibc/e2e/internal/harness/internal/containerutil"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/poll"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/ports"
 
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
+	containertypes "github.com/moby/moby/api/types/container"
 )
 
 const (
@@ -50,7 +54,7 @@ type Chain struct {
 	*evm.EVMClient
 	evm.Identity
 
-	container string
+	container testcontainers.Container
 	logID     string
 	treasury  evm.Account
 	wait      evm.TransactionWait
@@ -121,26 +125,44 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("remove stale besu network files: %w", removeErr)
 	}
 
-	namePrefix := dockercli.NamePrefix(spec.RunID, spec.ID)
-	labels := dockercli.RunLabels(spec.RunID)
+	namePrefix := containerutil.NamePrefix(spec.RunID, spec.ID)
+	labels := containerutil.Labels(spec.RunID)
 	generatorName := namePrefix + "-generate"
-	_, _ = dockercli.Output(ctx, "rm", "-f", generatorName)
-	genArgs := []string{
-		"run", "--rm",
-		"--name", generatorName,
-	}
-	genArgs = append(genArgs, labels...)
-	genArgs = append(genArgs,
-		"-v", chainDir+":/work",
-		"-w", "/work",
-		spec.Image,
-		"operator", "generate-blockchain-config",
-		"--config-file=qbftConfigFile.json",
-		"--to=networkFiles",
-		"--private-key-file-name=key",
-	)
+	generator, genErr := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		Started: true,
+		ContainerRequest: testcontainers.ContainerRequest{
+			Name:       generatorName,
+			Image:      spec.Image,
+			Labels:     labels,
+			WaitingFor: wait.ForExit().WithExitTimeout(besuReadyTimeout),
+			ConfigModifier: func(config *containertypes.Config) {
+				config.WorkingDir = "/work"
+			},
+			HostConfigModifier: func(config *containertypes.HostConfig) {
+				config.Mounts = append(config.Mounts, mount.Mount{
+					Type:   mount.TypeBind,
+					Source: chainDir,
+					Target: "/work",
+				})
+			},
+			Cmd: []string{
+				"operator", "generate-blockchain-config",
+				"--config-file=qbftConfigFile.json",
+				"--to=networkFiles",
+				"--private-key-file-name=key",
+			},
+		},
+	})
+	defer func() {
+		if generator != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), besuStopTimeout)
+			defer cancel()
+			if cleanupErr := generator.Terminate(cleanupCtx); cleanupErr != nil {
+				err = errors.Join(err, fmt.Errorf("remove besu config generator: %w", cleanupErr))
+			}
+		}
+	}()
 	// Besu may exit non-zero after writing complete artifacts.
-	_, genErr := dockercli.Output(ctx, genArgs...)
 	dataDir, err := prepareBesuNodeDir(chainDir)
 	if err != nil {
 		if genErr != nil {
@@ -151,17 +173,19 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		}
 		return nil, fmt.Errorf("validate generated besu QBFT artifacts: %w", err)
 	}
-
-	port, err := ports.FreePort()
-	if err != nil {
-		return nil, fmt.Errorf("allocate besu rpc port: %w", err)
+	if generator != nil {
+		cleanupCtx, cancel := context.WithTimeout(ctx, besuStopTimeout)
+		cleanupErr := generator.Terminate(cleanupCtx)
+		cancel()
+		if cleanupErr != nil {
+			return nil, fmt.Errorf("remove besu config generator: %w", cleanupErr)
+		}
+		generator = nil
 	}
 
 	bc := &Chain{
-		Identity:  evm.NewIdentity(spec.ID, fmt.Sprintf("http://127.0.0.1:%d", port)),
-		container: namePrefix,
-		logID:     spec.ID,
-		treasury:  treasury,
+		logID:    spec.ID,
+		treasury: treasury,
 		wait: evm.TransactionWait{
 			Timeout:      20 * time.Duration(periodSecs) * time.Second,
 			PollInterval: 250 * time.Millisecond,
@@ -175,27 +199,50 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		}
 	}()
 
-	runArgs := []string{
-		"run", "-d",
-		"--name", bc.container,
-		"-p", fmt.Sprintf("127.0.0.1:%d:8545", port),
+	request := testcontainers.ContainerRequest{
+		Name:         namePrefix,
+		Image:        spec.Image,
+		Labels:       labels,
+		ExposedPorts: []string{"8545/tcp"},
+		HostConfigModifier: func(config *containertypes.HostConfig) {
+			containerutil.BindPortsToLoopback(config, "8545/tcp")
+			config.Mounts = append(
+				config.Mounts,
+				mount.Mount{
+					Type:     mount.TypeBind,
+					Source:   filepath.Join(chainDir, "genesis.json"),
+					Target:   "/config/genesis.json",
+					ReadOnly: true,
+				},
+				mount.Mount{Type: mount.TypeBind, Source: dataDir, Target: "/var/lib/besu"},
+			)
+		},
+		Cmd: []string{
+			"--data-path=/var/lib/besu",
+			"--genesis-file=/config/genesis.json",
+			"--min-gas-price=0",
+			"--rpc-http-enabled",
+			"--rpc-http-host=0.0.0.0",
+			"--rpc-http-api=ETH,NET,WEB3",
+			"--host-allowlist=*",
+		},
 	}
-	runArgs = append(runArgs, labels...)
-	runArgs = append(runArgs,
-		"-v", filepath.Join(chainDir, "genesis.json")+":/config/genesis.json:ro",
-		"-v", dataDir+":/var/lib/besu",
-		spec.Image,
-		"--data-path=/var/lib/besu",
-		"--genesis-file=/config/genesis.json",
-		"--min-gas-price=0",
-		"--rpc-http-enabled",
-		"--rpc-http-host=0.0.0.0",
-		"--rpc-http-api=ETH,NET,WEB3",
-		"--host-allowlist=*",
-	)
-	if _, runErr := dockercli.Output(ctx, runArgs...); runErr != nil {
-		return nil, fmt.Errorf("start besu container %s: %w", bc.container, runErr)
+	bc.container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: request,
+		Started:          true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("start besu container %s: %w", namePrefix, err)
 	}
+	host, err := bc.container.Host(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve besu host: %w", err)
+	}
+	port, err := bc.container.MappedPort(ctx, "8545/tcp")
+	if err != nil {
+		return nil, fmt.Errorf("resolve besu RPC port: %w", err)
+	}
+	bc.Identity = evm.NewIdentity(spec.ID, fmt.Sprintf("http://%s:%s", host, port.Port()))
 
 	client, err := ethclient.DialContext(ctx, bc.RPCURL())
 	if err != nil {
@@ -261,7 +308,15 @@ func (bc *Chain) CollectLogs(ctx context.Context) map[string]string {
 	ctx, cancel := context.WithTimeout(ctx, besuLogTimeout)
 	defer cancel()
 
-	data, err := dockercli.Output(ctx, "logs", bc.container)
+	if bc.container == nil {
+		return nil
+	}
+	reader, err := bc.container.Logs(ctx)
+	if err != nil {
+		return nil
+	}
+	defer reader.Close() //nolint:errcheck
+	data, err := io.ReadAll(reader)
 	if err != nil || len(data) == 0 {
 		return nil
 	}
@@ -300,8 +355,10 @@ func (bc *Chain) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), besuStopTimeout)
 	defer cancel()
 
-	if _, err := dockercli.Output(ctx, "rm", "-f", container); err != nil && !dockercli.MissingContainer(err) {
-		return err
+	if container != nil {
+		if err := container.Terminate(ctx); err != nil {
+			return err
+		}
 	}
 	bc.mu.Lock()
 	bc.stopped = true

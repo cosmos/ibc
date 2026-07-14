@@ -6,6 +6,7 @@ require (
 	connectrpc.com/connect v1.20.0
 	connectrpc.com/grpcreflect v1.3.0
 	github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
+	github.com/cosmos/ibc/api v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/goccy/go-yaml v1.19.2
@@ -17,9 +18,10 @@ require (
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	google.golang.org/grpc v1.81.1
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	modernc.org/sqlite v1.53.0
 )
+
+replace github.com/cosmos/ibc/api => ../api
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
@@ -200,6 +202,7 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	modernc.org/libc v1.73.4 // indirect

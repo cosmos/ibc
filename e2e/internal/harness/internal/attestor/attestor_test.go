@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -18,9 +17,12 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
 )
 
 const testPrivateKey = "0000000000000000000000000000000000000000000000000000000000000006"
@@ -123,16 +125,6 @@ func TestStartRequiresFreshPrivateWorkspace(t *testing.T) {
 	require.ErrorContains(t, err, "create private work dir")
 }
 
-func TestParseProtoUint64AcceptsJSONNumberAndString(t *testing.T) {
-	for _, raw := range []string{`4242`, `"4242"`} {
-		height, err := parseProtoUint64(json.RawMessage(raw))
-		require.NoError(t, err)
-		require.Equal(t, uint64(4242), height)
-	}
-	_, err := parseProtoUint64(nil)
-	require.ErrorContains(t, err, "missing")
-}
-
 func TestStartRealIBCBinary(t *testing.T) {
 	binary := os.Getenv("IBC_LINK_ATTESTOR_REAL_BIN")
 	if binary == "" {
@@ -208,24 +200,8 @@ func runAttestorHelper() error {
 		return fmt.Errorf("helper listen: %w", err)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc(latestAttestableHeightPath, func(w http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodPost {
-			http.Error(w, "POST required", http.StatusMethodNotAllowed)
-			return
-		}
-		if request.Header.Get("Connect-Protocol-Version") != "1" ||
-			request.Header.Get("Content-Type") != "application/json" {
-			http.Error(w, "Connect JSON headers required", http.StatusUnsupportedMediaType)
-			return
-		}
-		var input latestHeightRequest
-		if err := json.NewDecoder(request.Body).Decode(&input); err != nil || input.Attestor != "attestor-a" {
-			http.Error(w, "unknown attestor", http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"height":"4242"}`)
-	})
+	path, handler := attestorv2.NewAttestationServiceHandler(helperAttestationService{})
+	mux.Handle(path, handler)
 	server := &http.Server{Handler: mux}
 	child := exec.Command("sleep", "60")
 	if err := child.Start(); err != nil {
@@ -263,6 +239,18 @@ func runAttestorHelper() error {
 	case err := <-done:
 		return fmt.Errorf("helper server exited: %w", err)
 	}
+}
+
+type helperAttestationService struct{}
+
+func (helperAttestationService) LatestAttestableHeight(
+	_ context.Context,
+	req *connect.Request[attestorv2.LatestAttestableHeightRequest],
+) (*connect.Response[attestorv2.LatestAttestableHeightResponse], error) {
+	if req.Msg.Attestor != "attestor-a" {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("unknown attestor %q", req.Msg.Attestor))
+	}
+	return connect.NewResponse(&attestorv2.LatestAttestableHeightResponse{Height: 4242}), nil
 }
 
 func helperConfigArgs(args []string) (string, string, error) {
