@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestIFTTransfer_AutoRelay(t *testing.T) {
@@ -27,7 +27,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	_, err = synthetic.AwaitState(ctx, relayer, transfer.Packet(), wire.PacketComplete, destination.Timing())
+	_, err = synthetic.AwaitState(ctx, relayer, transfer.Packet(), relayercmd.PacketComplete, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }

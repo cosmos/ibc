@@ -4,26 +4,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
-var (
-	cmdRelayer = &cobra.Command{
-		Use:   "relayer",
-		Short: "Relayer commands",
-	}
-
-	cmdRelayerRun = &cobra.Command{
-		Use:   "run",
-		Short: "Run the relayer",
-		RunE:  relayerRun,
-	}
-)
-
-var flagRelayerNoMigrate bool
-
-func relayerRun(_ *cobra.Command, _ []string) error {
+// RealRelayerRun is the retained real Relayer handler.
+func RealRelayerRun(_ *cobra.Command, _ []string, options relayercmd.RunOptions) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -34,7 +21,7 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if flagRelayerNoMigrate {
+	if options.NoMigrate {
 		app.Logger.Info("--no-migrate flag passed, skipping migrations")
 	} else {
 		applied, err := app.Store.MigrateUp()

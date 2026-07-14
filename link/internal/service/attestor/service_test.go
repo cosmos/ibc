@@ -11,7 +11,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/service/signer"
 
-	proto "github.com/cosmos/ibc/api/v2/attestor"
+	proto "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
 func TestService(t *testing.T) {

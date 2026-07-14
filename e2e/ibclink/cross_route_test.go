@@ -8,9 +8,9 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 // crossRouteSuite shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.
@@ -50,9 +50,9 @@ func TestCrossRoute_NoSequenceCollision(t *testing.T) {
 
 	destination, err := env.Chain("chain-a")
 	require.NoError(t, err)
-	_, err = synthetic.AwaitState(ctx, relayer, bToA.Packet(), wire.PacketComplete, destination.Timing())
+	_, err = synthetic.AwaitState(ctx, relayer, bToA.Packet(), relayercmd.PacketComplete, destination.Timing())
 	require.NoError(t, err)
-	_, err = synthetic.AwaitState(ctx, relayer, cToA.Packet(), wire.PacketComplete, destination.Timing())
+	_, err = synthetic.AwaitState(ctx, relayer, cToA.Packet(), relayercmd.PacketComplete, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, bToA.VerifyDelivered(ctx))
 	require.NoError(t, cToA.VerifyDelivered(ctx))

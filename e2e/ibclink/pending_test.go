@@ -8,9 +8,9 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestPendingPacket_Anvil_StatusIsBetterSignal(t *testing.T) {
@@ -44,7 +44,7 @@ func TestPendingPacket_Anvil_StatusIsBetterSignal(t *testing.T) {
 			ctx,
 			relayer,
 			transfer.Packet(),
-			wire.PacketPending,
+			relayercmd.PacketPending,
 			chainB.Timing(),
 		))
 		require.NoError(t, transfer.VerifyNotMinted(ctx))
@@ -54,7 +54,7 @@ func TestPendingPacket_Anvil_StatusIsBetterSignal(t *testing.T) {
 			ctx,
 			relayer,
 			transfer.Packet(),
-			wire.PacketComplete,
+			relayercmd.PacketComplete,
 			chainB.Timing(),
 		)
 		require.NoError(t, err)

@@ -19,11 +19,11 @@ Run targets from the repository root:
 
 ```sh
 make doctor-e2e
-make build-link build-stub
+make build-link
 make test-e2e
 ```
 
-`make build-link` produces `link/bin/ibc`; `make build-stub` produces the temporary synthetic implementation at `link/bin/ibc-stub`. `IBC_BIN` and `IBC_STUB_BIN` override those paths.
+`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. Link explicitly composes temporary handlers for config validation, test-application deployment, and Relayer execution into this binary.
 
 The same tests can select different Chain declarations:
 
@@ -53,7 +53,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
     destination, err := env.Chain(route.Destination)
     require.NoError(t, err)
     _, err = synthetic.AwaitState(
-        t.Context(), relayer, transfer.Packet(), wire.PacketComplete, destination.Timing(),
+        t.Context(), relayer, transfer.Packet(), relayercmd.PacketComplete, destination.Timing(),
     )
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyDelivered(t.Context()))
@@ -63,7 +63,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 `Environment` owns Chain clients and protocol resources. A route-bound `testapp` binding hides only application ABI, transaction, event, and state mechanics. The test keeps deployment, relayer status, fault injection, manual relay, and application assertions visibly ordered; there is no second aggregate beside the Environment.
 
-`synthetic.NewSigners` creates separate application and relayer identities for the test. Managed Chains fund them through their resolved funding capability; an attached Chain must fund the returned public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the stub configuration.
+`synthetic.NewSigners` creates separate application and relayer identities for the test. Managed Chains fund them through their resolved funding capability; an attached Chain must fund the returned public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the synthetic Link configuration.
 
 Tests assess required controls before startup and then request the resolved capability:
 

@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
+	"github.com/cosmos/ibc/link/cmd/configcmd"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 const (
@@ -94,7 +94,7 @@ func (s Signers) validate() error {
 	}
 }
 
-func (s Signers) store(dir string) ([]wire.Signer, error) {
+func (s Signers) store(dir string) ([]configcmd.Signer, error) {
 	appPath := filepath.Join(dir, "keys", applicationSignerAlias+".json")
 	relayerPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
 	if err := keyfile.Store(appPath, keyfile.ECDSA, crypto.FromECDSA(s.application.key)); err != nil {
@@ -103,8 +103,8 @@ func (s Signers) store(dir string) ([]wire.Signer, error) {
 	if err := keyfile.Store(relayerPath, keyfile.ECDSA, crypto.FromECDSA(s.relayer.key)); err != nil {
 		return nil, fmt.Errorf("store relayer signer: %w", err)
 	}
-	return []wire.Signer{
-		{Alias: applicationSignerAlias, Type: wire.SignerTypeLocal, File: appPath},
-		{Alias: relayerSignerAlias, Type: wire.SignerTypeLocal, File: relayerPath},
+	return []configcmd.Signer{
+		{Alias: applicationSignerAlias, Type: configcmd.SignerTypeLocal, File: appPath},
+		{Alias: relayerSignerAlias, Type: configcmd.SignerTypeLocal, File: relayerPath},
 	}, nil
 }

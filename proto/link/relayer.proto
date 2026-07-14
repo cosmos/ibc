@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ibc.v2.relayer;
 
-option go_package = "github.com/cosmos/ibc/api/v2/relayer";
+option go_package = "github.com/cosmos/ibc/link/api/v2/relayer";
 
 service RelayerApiService {
   // Relay will track the status of a transfer, and submit the transactions

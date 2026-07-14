@@ -40,7 +40,7 @@ set -eu
 while [ ! -f "$IBC_LINK_BINDING_TEST_RELEASE" ]; do sleep 0.01; done
 printf '{"valid":true}\n'
 `)
-	t.Setenv("IBC_STUB_BIN", script)
+	t.Setenv("IBC_BIN", script)
 
 	env := newProcessBindingTestEnvironment(t)
 	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
@@ -74,7 +74,7 @@ set -eu
 while [ ! -f "$IBC_LINK_BINDING_TEST_RELEASE" ]; do sleep 0.01; done
 printf '{"valid":true}\n'
 `)
-	t.Setenv("IBC_STUB_BIN", script)
+	t.Setenv("IBC_BIN", script)
 
 	env := newProcessBindingTestEnvironment(t)
 	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
@@ -108,7 +108,7 @@ set -eu
 IBC_LINK_BINDING_RELAYER_HELPER=1 exec "$IBC_LINK_BINDING_TEST_BINARY" \
   -test.run '^TestBoundRelayerHelperProcess$' -- "$@"
 `)
-	t.Setenv("IBC_STUB_BIN", script)
+	t.Setenv("IBC_BIN", script)
 
 	env := newProcessBindingTestEnvironment(t)
 	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
@@ -152,9 +152,9 @@ func TestBoundProcessOutputPassesThrough(t *testing.T) {
 set -eu
 printf '{"valid":false}\n'
 printf '%s\n' '`+endpoint+`' >&2
-exit 64
+exit 1
 `)
-		t.Setenv("IBC_STUB_BIN", script)
+		t.Setenv("IBC_BIN", script)
 		env := newProcessBindingTestEnvironment(t)
 		env.chains["managed"].rpcURL = endpoint
 		t.Cleanup(func() { require.NoError(t, env.Close(context.Background())) })
@@ -172,7 +172,7 @@ exit 64
 set -eu
 printf '%s\n' '`+endpoint+`'
 `)
-		t.Setenv("IBC_STUB_BIN", script)
+		t.Setenv("IBC_BIN", script)
 		env := newProcessBindingTestEnvironment(t)
 		env.chains["managed"].rpcURL = endpoint
 		t.Cleanup(func() { require.NoError(t, env.Close(context.Background())) })

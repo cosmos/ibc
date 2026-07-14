@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 // badCalldata does not match Counter's call surface, so delivery produces an error acknowledgement.
@@ -31,7 +31,7 @@ func TestGMPErrorAck(t *testing.T) {
 		ctx,
 		relayer,
 		call.Packet(),
-		wire.PacketErrorAck,
+		relayercmd.PacketErrorAck,
 		destination.Timing(),
 	)
 	require.NoError(t, err)

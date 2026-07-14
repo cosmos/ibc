@@ -3,10 +3,10 @@ package signer
 import (
 	"path/filepath"
 
-	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 // LocalKey is a key stored and used locally.

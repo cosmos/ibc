@@ -558,7 +558,7 @@ func requireCodeBearingEOAFundingRejected(
 
 func requireIBCLinkBinary(t *testing.T) {
 	t.Helper()
-	path := ibclink.ResolvedRealBin()
+	path := ibclink.ResolvedBin()
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.Getenv("IBC_BIN") != "" {

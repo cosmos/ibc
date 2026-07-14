@@ -4,14 +4,14 @@ import (
 	"testing"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
 
 func BindIFT(
 	t testing.TB,
 	env *environment.Environment,
-	deployment *wire.TestAppDeployment,
+	deployment *testappcmd.Deployment,
 	signers Signers,
 	route Route,
 ) *testapp.IFT {
@@ -33,7 +33,7 @@ func BindIFT(
 func BindGMP(
 	t testing.TB,
 	env *environment.Environment,
-	deployment *wire.TestAppDeployment,
+	deployment *testappcmd.Deployment,
 	signers Signers,
 	route Route,
 ) *testapp.GMP {
@@ -56,9 +56,9 @@ func BindGMP(
 func bindRoute(
 	t testing.TB,
 	env *environment.Environment,
-	deployment *wire.TestAppDeployment,
+	deployment *testappcmd.Deployment,
 	route Route,
-) (*environment.Chain, *environment.Chain, wire.ChainTestAppDeployment, wire.ChainTestAppDeployment) {
+) (*environment.Chain, *environment.Chain, testappcmd.ChainDeployment, testappcmd.ChainDeployment) {
 	t.Helper()
 	if env == nil {
 		t.Fatal("synthetic: Environment is required")

@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestManualRelay_UnknownSourceTxErrors(t *testing.T) {
@@ -17,7 +17,7 @@ func TestManualRelay_UnknownSourceTxErrors(t *testing.T) {
 	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	_, err := relayer.Relay(ctx, wire.RelayRequest{
+	_, err := relayer.Relay(ctx, relayercmd.RelayRequest{
 		SourceChainID: string(e2etest.ChainA),
 		SourceTxHash:  "0x00000000000000000000000000000000000000000000000000000000deadbeef",
 	})

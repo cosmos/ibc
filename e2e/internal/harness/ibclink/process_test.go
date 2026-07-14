@@ -5,18 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 )
-
-func TestClassifyMapsSysexitsToSentinels(t *testing.T) {
-	require.ErrorIs(t, classify(wire.ExitConfigInvalid), ErrConfigInvalid)
-	require.ErrorIs(t, classify(wire.ExitRPCUnreachable), ErrRPCUnreachable)
-	require.ErrorIs(t, classify(wire.ExitTestAppDeployFailure), ErrTestAppDeployFailed)
-	require.ErrorIs(t, classify(wire.ExitNotReady), ErrNotReady)
-	require.ErrorIs(t, classify(wire.ExitInternal), ErrInternal)
-	require.ErrorIs(t, classify(1), ErrInternal, "unknown non-zero codes classify as internal")
-}
 
 func TestSnippetTailTruncates(t *testing.T) {
 	require.Equal(t, "short", snippet("  short \n"))
@@ -29,7 +18,7 @@ func TestSnippetTailTruncates(t *testing.T) {
 }
 
 func TestExitErrorUnwrapsToClass(t *testing.T) {
-	err := &ExitError{Code: wire.ExitConfigInvalid, Class: ErrConfigInvalid, Stderr: "bad yaml"}
+	err := &ExitError{Code: 1, Class: ErrConfigInvalid, Stderr: "bad yaml"}
 	require.ErrorIs(t, err, ErrConfigInvalid)
 	require.ErrorContains(t, err, "bad yaml")
 }

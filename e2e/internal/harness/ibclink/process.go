@@ -11,14 +11,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 )
 
-const (
-	realBinEnv = "IBC_BIN"
-	stubBinEnv = "IBC_STUB_BIN"
-)
+const binEnv = "IBC_BIN"
 
 const maxStderrSnippet = 600
 
@@ -51,7 +46,7 @@ func (r *Driver) exec(ctx context.Context, bin, label string, args ...string) (*
 		var exitErr *exec.ExitError
 		switch {
 		case runErr == nil:
-			res.code = wire.ExitOK
+			res.code = 0
 		case errors.As(runErr, &exitErr):
 			res.code = exitErr.ExitCode()
 		default:
@@ -66,21 +61,6 @@ func (r *Driver) exec(ctx context.Context, bin, label string, args ...string) (*
 	return res, err
 }
 
-func classify(code int) error {
-	switch code {
-	case wire.ExitConfigInvalid:
-		return ErrConfigInvalid
-	case wire.ExitRPCUnreachable:
-		return ErrRPCUnreachable
-	case wire.ExitTestAppDeployFailure:
-		return ErrTestAppDeployFailed
-	case wire.ExitNotReady:
-		return ErrNotReady
-	default:
-		return ErrInternal
-	}
-}
-
 func snippet(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > maxStderrSnippet {
@@ -89,18 +69,11 @@ func snippet(s string) string {
 	return s
 }
 
-func ResolvedRealBin() string {
-	if v := os.Getenv(realBinEnv); v != "" {
+func ResolvedBin() string {
+	if v := os.Getenv(binEnv); v != "" {
 		return v
 	}
 	return defaultBinPath("ibc")
-}
-
-func ResolvedStubBin() string {
-	if v := os.Getenv(stubBinEnv); v != "" {
-		return v
-	}
-	return defaultBinPath("ibc-stub")
 }
 
 // Resolves link/bin relative to this source file, not the process cwd.

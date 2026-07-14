@@ -1,11 +1,13 @@
 version: v2
 plugins:
-  - remote: buf.build/protocolbuffers/go
-    out: ../api
-    opt: module=github.com/cosmos/ibc/api
-  - remote: buf.build/connectrpc/go
-    out: ../api
-    opt: module=github.com/cosmos/ibc/api,package_suffix
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    revision: 1
+    out: ../link
+    opt: module=github.com/cosmos/ibc/link
+  - remote: buf.build/connectrpc/go:v1.20.0
+    revision: 1
+    out: ../link
+    opt: module=github.com/cosmos/ibc/link,package_suffix
 
 inputs:
   - directory: link

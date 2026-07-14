@@ -291,7 +291,7 @@ func validateProductionPrerequisites(spec Spec, _ Runtime) error {
 	if len(spec.Attestors) == 0 {
 		return nil
 	}
-	path, err := filepath.Abs(ibclink.ResolvedRealBin())
+	path, err := filepath.Abs(ibclink.ResolvedBin())
 	if err != nil {
 		return fmt.Errorf("environment: resolve IBC Link binary prerequisite: %w", err)
 	}

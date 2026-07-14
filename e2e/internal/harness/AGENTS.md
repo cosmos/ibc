@@ -4,9 +4,9 @@ This repository-internal module is the black-box e2e harness. Its Link adapter o
 its public wire surface — CLI commands with JSON output, config YAML, and the status API — and
 corroborates outcomes by reading chain state with its own clients.
 
-- **The wall:** this module never imports `link/internal/...` or the stub's guts. Its go.mod has no
-  requirement on the link module; keep it that way. The single declaration of the wire contract is
-  `ibclink/wire`.
+- **The wall:** this module never imports `link/internal/...` or the stub's guts. It may import
+  public Link command transport types, generated RPC clients, and the signer-keyfile package, while
+  behavior remains observable only through the executable and HTTP surface.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `internal/poll.Until`; test-application effect and
   stability observation lives with the e2e-only bindings that interpret those effects.

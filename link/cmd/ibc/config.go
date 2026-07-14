@@ -7,41 +7,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
-// set in init()
-var (
-	// if true, perform extra validation checks like connecting to RPC,
-	// checking EVM addresses, etc.
-	flagConfigValidateLive bool
-
-	// if true, fail on unknown fields in the config file
-	flagConfigValidateStrict bool
-)
-
-var (
-	cmdConfig = &cobra.Command{
-		Use:              "config",
-		Short:            "Config commands",
-		PersistentPreRun: printConfigHome,
-	}
-
-	cmdConfigNew = &cobra.Command{
-		Use:   "new",
-		Short: "Create new config file",
-		RunE:  configNew,
-	}
-
-	cmdConfigValidate = &cobra.Command{
-		Use:   "validate",
-		Short: "Validate the config",
-		RunE:  configValidate,
-	}
-)
-
 func configNew(_ *cobra.Command, _ []string) error {
+	printConfigHome(nil, nil)
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return err
@@ -62,13 +34,15 @@ func configNew(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func configValidate(_ *cobra.Command, _ []string) error {
+// RealConfigValidate is the retained real config-validation handler.
+func RealConfigValidate(_ *cobra.Command, _ []string, options configcmd.ValidateOptions) error {
+	printConfigHome(nil, nil)
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return errors.Wrap(err, "setup home with config")
 	}
 
-	if flagConfigValidateLive {
+	if options.Live {
 		if err := store.ValidateConfigLive(cfg); err != nil {
 			return errors.Wrap(err, "config live validation")
 		}

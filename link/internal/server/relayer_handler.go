@@ -10,7 +10,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/service/relayer"
 
-	proto "github.com/cosmos/ibc/api/v2/relayer"
+	proto "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // RelayerHandler handles relayer RPC requests.

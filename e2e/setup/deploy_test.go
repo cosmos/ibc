@@ -10,9 +10,9 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
+	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
 
 func TestTestApps_SelectedSuite_VerifiesDeploymentOnChain(t *testing.T) {
@@ -52,7 +52,7 @@ func assertTestAppsOnChain(
 	t *testing.T,
 	chainID string,
 	client *environment.EVM,
-	apps wire.ChainTestAppDeployment,
+	apps testappcmd.ChainDeployment,
 	application common.Address,
 ) {
 	t.Helper()

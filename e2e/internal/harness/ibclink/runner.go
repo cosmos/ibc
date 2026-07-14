@@ -8,15 +8,15 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
+	"github.com/cosmos/ibc/link/cmd/configcmd"
+	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
 
 var (
-	ErrConfigInvalid       = errors.New("ibc: config invalid (exit 64)")
-	ErrRPCUnreachable      = errors.New("ibc: rpc unreachable (exit 65)")
-	ErrTestAppDeployFailed = errors.New("ibc: test app deploy failed (exit 66)")
-	ErrNotReady            = errors.New("ibc: not ready (exit 69)")
-	ErrInternal            = errors.New("ibc: internal error (exit 70)")
+	ErrConfigInvalid       = errors.New("ibc: config invalid")
+	ErrRPCUnreachable      = errors.New("ibc: rpc unreachable")
+	ErrTestAppDeployFailed = errors.New("ibc: test app deploy failed")
+	ErrInternal            = errors.New("ibc: internal error")
 )
 
 type ExitError struct {
@@ -35,8 +35,7 @@ func (e *ExitError) Error() string {
 func (e *ExitError) Unwrap() error { return e.Class }
 
 type Driver struct {
-	realBin    string
-	stubBin    string
+	bin        string
 	configHome string
 	configName string
 	bindings   processBindings
@@ -47,27 +46,26 @@ func NewDriver(configPath string) (*Driver, error) {
 		return nil, errors.New("ibclink: NewDriver requires a config path")
 	}
 	return &Driver{
-		realBin:    ResolvedRealBin(),
-		stubBin:    ResolvedStubBin(),
+		bin:        ResolvedBin(),
 		configHome: filepath.Dir(configPath),
 		configName: filepath.Base(configPath),
 	}, nil
 }
 
-func (r *Driver) ValidateConfig(ctx context.Context, live bool) (*wire.ValidateResult, error) {
+func (r *Driver) ValidateConfig(ctx context.Context, live bool) (*configcmd.ValidateResult, error) {
 	args := append([]string{"config", "validate"}, r.configArgs()...)
 	if live {
 		args = append(args, "--live")
 	}
-	res, err := r.exec(ctx, r.stubBin, "config validate", args...)
+	res, err := r.exec(ctx, r.bin, "config validate", args...)
 	if err != nil {
 		return nil, err
 	}
 
-	var out wire.ValidateResult
+	var out configcmd.ValidateResult
 	decoded := json.Unmarshal(res.stdout, &out) == nil
 
-	if res.code == wire.ExitOK {
+	if res.code == 0 {
 		if !decoded {
 			return nil, fmt.Errorf(
 				"ibc config validate: exit 0 but stdout is not a ValidateResult: %q",
@@ -76,21 +74,25 @@ func (r *Driver) ValidateConfig(ctx context.Context, live bool) (*wire.ValidateR
 		}
 		return &out, nil
 	}
-	var parsed *wire.ValidateResult
+	var parsed *configcmd.ValidateResult
 	if decoded {
 		parsed = &out
 	}
-	return parsed, &ExitError{Code: res.code, Class: classify(res.code), Stderr: snippet(res.stderr)}
+	class := ErrConfigInvalid
+	if decoded && out.Valid {
+		class = ErrRPCUnreachable
+	}
+	return parsed, &ExitError{Code: res.code, Class: class, Stderr: snippet(res.stderr)}
 }
 
 func (r *Driver) MigrateUp(ctx context.Context) error {
 	args := append([]string{"migrate", "up"}, r.configArgs()...)
-	res, err := r.exec(ctx, r.realBin, "migrate up", args...)
+	res, err := r.exec(ctx, r.bin, "migrate up", args...)
 	if err != nil {
 		return err
 	}
-	if res.code != wire.ExitOK {
-		return &ExitError{Code: res.code, Class: classify(res.code), Stderr: snippet(res.stderr)}
+	if res.code != 0 {
+		return &ExitError{Code: res.code, Class: ErrInternal, Stderr: snippet(res.stderr)}
 	}
 	if !json.Valid(res.stdout) {
 		return fmt.Errorf("ibc migrate up: stdout is not JSON: %q", string(res.stdout))
@@ -98,9 +100,9 @@ func (r *Driver) MigrateUp(ctx context.Context) error {
 	return nil
 }
 
-func (r *Driver) DeployTestApps(ctx context.Context) (*wire.TestAppDeployment, error) {
+func (r *Driver) DeployTestApps(ctx context.Context) (*testappcmd.Deployment, error) {
 	args := append([]string{"test-apps", "deploy"}, r.configArgs()...)
-	res, err := r.exec(ctx, r.stubBin, "test-apps deploy", args...)
+	res, err := r.exec(ctx, r.bin, "test-apps deploy", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -110,10 +112,10 @@ func (r *Driver) DeployTestApps(ctx context.Context) (*wire.TestAppDeployment, e
 // A non-zero deployment may still have created durable contracts. The
 // stub prints every receipt it has before exiting, so callers receive the
 // partial deployment together with the classified error.
-func decodeTestAppDeploymentResult(res *result) (*wire.TestAppDeployment, error) {
-	var deployment wire.TestAppDeployment
+func decodeTestAppDeploymentResult(res *result) (*testappcmd.Deployment, error) {
+	var deployment testappcmd.Deployment
 	decoded := json.Unmarshal(res.stdout, &deployment) == nil
-	if res.code == wire.ExitOK {
+	if res.code == 0 {
 		if !decoded {
 			return nil, fmt.Errorf(
 				"ibc test-apps deploy: exit 0 but stdout is not a TestAppDeployment: %q",
@@ -122,7 +124,7 @@ func decodeTestAppDeploymentResult(res *result) (*wire.TestAppDeployment, error)
 		}
 		return &deployment, nil
 	}
-	exitErr := &ExitError{Code: res.code, Class: classify(res.code), Stderr: snippet(res.stderr)}
+	exitErr := &ExitError{Code: res.code, Class: ErrTestAppDeployFailed, Stderr: snippet(res.stderr)}
 	if decoded {
 		return &deployment, exitErr
 	}

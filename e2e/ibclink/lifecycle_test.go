@@ -8,9 +8,9 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestRestartRecovery_ResumesPendingPacket(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRestartRecovery_ResumesPendingPacket(t *testing.T) {
 		ctx,
 		relayer,
 		transfer.Packet(),
-		wire.PacketComplete,
+		relayercmd.PacketComplete,
 		destination.Timing(),
 	)
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 			ctx,
 			relayer,
 			transfer.Packet(),
-			wire.PacketComplete,
+			relayercmd.PacketComplete,
 			chainB.Timing(),
 		)
 		require.NoError(t, err)

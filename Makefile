@@ -7,15 +7,10 @@ E2E_LANE ?= anvil
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
-LINK_BIN_DIR := $(CURDIR)/link/bin
 TEST_APP_DIR := $(E2E_DIR)/internal/testapp/contracts
 
 build-link: ## Build the Link binary
 	$(MAKE) -C link build
-
-build-stub: ## Build the temporary e2e stub into link/bin/ibc-stub
-	mkdir -p $(LINK_BIN_DIR)
-	go -C $(E2E_DIR) build -o $(LINK_BIN_DIR)/ibc-stub ./stub/cmd/ibc
 
 doctor-e2e: ## Check the runtime dependencies used by e2e tests
 	@command -v go >/dev/null || { echo "missing go" >&2; exit 1; }
@@ -32,10 +27,10 @@ doctor-e2e-tools: ## Check the generation and lint tools used by repository e2e 
 test-harness: build-link ## Run harness tests, including Docker-backed integrations when available
 	go -C $(HARNESS_DIR) test ./...
 
-test-unit: ## Run pure-Go e2e selection, helper, and stub tests; no chains
-	go -C $(E2E_DIR) test ./e2etest ./internal/... ./stub/...
+test-unit: ## Run pure-Go e2e selection and helper tests; no chains
+	go -C $(E2E_DIR) test ./e2etest ./internal/...
 
-test-e2e: build-link build-stub ## Run e2e tests (E2E_PKGS=... E2E_FLAGS=... E2E_LANE=...)
+test-e2e: build-link ## Run e2e tests (E2E_PKGS=... E2E_FLAGS=... E2E_LANE=...)
 	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test $(E2E_PKGS) $(E2E_FLAGS)
 
 lint-e2e: ## Lint the e2e and harness modules
@@ -64,6 +59,10 @@ check-test-apps: ## Fail if typed Go contract bindings are stale
 	forge build --force --root $(HARNESS_DIR)/internal/solidityibc/contracts
 	$(E2E_DIR)/scripts/generate-contract-bindings.sh
 	@git diff --exit-code -- $(TEST_APP_DIR)/bindings \
+		link/internal/stub/Counter.go \
+		link/internal/stub/MockGMP.go \
+		link/internal/stub/MockIFT.go \
+		link/internal/stub/TestAppDeployer.go \
 		$(HARNESS_DIR)/internal/solidityibc/accessmanager || { \
 		echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; exit 1; }
 
@@ -74,5 +73,5 @@ check-e2e: doctor-e2e doctor-e2e-tools test-harness test-unit lint-e2e check-tes
 
 check: check-link check-e2e ## Run Link and repository e2e checks
 
-.PHONY: help build-link build-stub doctor-e2e doctor-e2e-tools test-harness test-unit test-e2e lint-e2e lint-fix-e2e \
+.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-unit test-e2e lint-e2e lint-fix-e2e \
 	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-link check-e2e check

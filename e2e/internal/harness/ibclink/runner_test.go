@@ -4,13 +4,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 )
 
 func TestDecodeTestAppDeploymentPreservesPartialReceiptsOnFailure(t *testing.T) {
 	result := &result{
-		code: wire.ExitTestAppDeployFailure,
+		code: 1,
 		stdout: []byte(`{
   "chains": {"chain-a": {"counter": "0x1", "txHash": "0xreceipt"}}
 }`),
@@ -25,7 +23,7 @@ func TestDecodeTestAppDeploymentPreservesPartialReceiptsOnFailure(t *testing.T) 
 }
 
 func TestDecodeTestAppDeploymentRequiresJSONOnSuccess(t *testing.T) {
-	deployment, err := decodeTestAppDeploymentResult(&result{code: wire.ExitOK, stdout: []byte("not-json")})
+	deployment, err := decodeTestAppDeploymentResult(&result{code: 0, stdout: []byte("not-json")})
 	require.Nil(t, deployment)
 	require.ErrorContains(t, err, "stdout is not a TestAppDeployment")
 }

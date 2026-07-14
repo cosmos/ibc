@@ -1,20 +1,19 @@
 # Repository E2E Tests + Stub SUT Guide for AI Agents
 
-Two things live in this module: repository-level e2e packages (linear Go tests over the `internal/harness`
-surface) and `stub/` — the TEMPORARY stand-in `ibc` binary that fills e2e wire contracts the real
-Link binary (`../link/cmd/ibc`) does not yet satisfy.
+This module contains repository-level e2e packages: linear Go tests over the `internal/harness`
+surface. Temporary Link behavior lives in `../link/internal/stub` and is explicitly selected by
+the ordinary `ibc` binary's composition root.
 
 - Run everything from the repository root: `make test-e2e` for the smoke suite,
   `make test-e2e E2E_PKGS=./negative` for negative cases, or
   `make test-e2e E2E_PKGS=./ibclink E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'` for one loop.
   Lanes: `E2E_LANE=anvil|anvil-interval|besu`.
 - Tests start an `Environment`, hold the synthetic driver and relayer explicitly, and assert through
-  route-bound test-application bindings. Wire-contract tests may call the concrete driver or relayer directly.
-- **The stub is a swap ledger entry, not a product.** Each `Driver` method in
-  `internal/harness/ibclink/runner.go` selects the real or stub binary; long-lived command selection lives
-  in `daemon.go`. Once the real implementation satisfies the e2e wire contract, change that
-  method's binary selection, delete the stub piece it replaces, and keep every lane green. The root
-  e2e module is black-box infrastructure and must not import `link/internal`; the stub independently
-  implements the wire behavior it stands in for.
+  route-bound test-application bindings. Transport-contract tests may call the concrete driver or Relayer directly.
+- **The stub is a swap ledger entry, not a product.** The Link composition root visibly selects
+  temporary handlers. Once a real implementation satisfies the e2e transport contract, change that
+  handler selection, delete the unused stub code, and keep every lane green. E2e may import Link's
+  public command transport types, generated RPC clients, and signer-keyfile package for transport
+  and provisioning, but it must not import `link/internal` or invoke handlers in process.
 - Each test gets a fresh environment.
 - After a hard crash: `make clean-e2e-dry-run`, then `make clean-e2e` from the repository root.

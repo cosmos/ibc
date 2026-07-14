@@ -9,24 +9,24 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/observe"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func AwaitState(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
 	packet testapp.Packet,
-	want wire.PacketState,
+	want relayercmd.PacketState,
 	timing environment.Timing,
-) (wire.PacketStatus, error) {
+) (relayercmd.PacketStatus, error) {
 	if relayer == nil {
-		return wire.PacketStatus{}, errors.New("synthetic: relayer is required")
+		return relayercmd.PacketStatus{}, errors.New("synthetic: relayer is required")
 	}
 	packetID, err := packetID(packet)
 	if err != nil {
-		return wire.PacketStatus{}, err
+		return relayercmd.PacketStatus{}, err
 	}
 
 	description := fmt.Sprintf("packet %s to report status %q", packetID, want)
@@ -35,17 +35,17 @@ func AwaitState(
 		timing.CompletionBudget,
 		timing.PollInterval,
 		description,
-		func(ctx context.Context) (wire.PacketStatus, bool, error) {
-			status, err := relayer.Status(ctx, wire.StatusQuery{PacketID: packetID})
+		func(ctx context.Context) (relayercmd.PacketStatus, bool, error) {
+			status, err := relayer.Status(ctx, relayercmd.StatusQuery{PacketID: packetID})
 			if err != nil {
-				return wire.PacketStatus{}, false, err
+				return relayercmd.PacketStatus{}, false, err
 			}
 			observed, ok := status.Packet(packetID)
 			if !ok {
-				return wire.PacketStatus{}, false, fmt.Errorf("packet %s is absent from relayer status", packetID)
+				return relayercmd.PacketStatus{}, false, fmt.Errorf("packet %s is absent from relayer status", packetID)
 			}
 			if observed.State != want {
-				return wire.PacketStatus{}, false, fmt.Errorf(
+				return relayercmd.PacketStatus{}, false, fmt.Errorf(
 					"packet %s is %q, want %q",
 					packetID,
 					observed.State,
@@ -53,10 +53,10 @@ func AwaitState(
 				)
 			}
 			if err := crossCheck(packet, observed); err != nil {
-				return wire.PacketStatus{}, true, err
+				return relayercmd.PacketStatus{}, true, err
 			}
 			if err := validateTerminalStatus(observed); err != nil {
-				return wire.PacketStatus{}, true, err
+				return relayercmd.PacketStatus{}, true, err
 			}
 			return observed, true, nil
 		},
@@ -69,7 +69,7 @@ func AwaitStable(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
 	packet testapp.Packet,
-	want wire.PacketState,
+	want relayercmd.PacketState,
 	timing environment.Timing,
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, timing.CompletionBudget)
@@ -95,7 +95,7 @@ func AwaitStable(
 			)
 		case <-ticker.C:
 		}
-		status, err := relayer.Status(ctx, wire.StatusQuery{PacketID: packetID})
+		status, err := relayer.Status(ctx, relayercmd.StatusQuery{PacketID: packetID})
 		if err != nil {
 			return err
 		}
@@ -121,7 +121,7 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet testapp.Packet)
 	if err != nil {
 		return err
 	}
-	result, err := relayer.Relay(ctx, wire.RelayRequest{
+	result, err := relayer.Relay(ctx, relayercmd.RelayRequest{
 		SourceChainID: string(packet.Source),
 		SourceTxHash:  packet.SourceTxHash,
 	})
@@ -139,19 +139,19 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet testapp.Packet)
 }
 
 func packetID(packet testapp.Packet) (string, error) {
-	var application wire.AppType
+	var application relayercmd.AppType
 	switch packet.Application() {
 	case testapp.ApplicationIFT:
-		application = wire.AppTypeIFT
+		application = relayercmd.AppTypeIFT
 	case testapp.ApplicationGMP:
-		application = wire.AppTypeGMP
+		application = relayercmd.AppTypeGMP
 	default:
 		return "", fmt.Errorf("synthetic: unsupported test application %q", packet.Application())
 	}
-	return wire.PacketID(string(packet.RouteID), application, packet.Sequence), nil
+	return relayercmd.PacketID(string(packet.RouteID), application, packet.Sequence), nil
 }
 
-func crossCheck(packet testapp.Packet, observed wire.PacketStatus) error {
+func crossCheck(packet testapp.Packet, observed relayercmd.PacketStatus) error {
 	packetID, err := packetID(packet)
 	if err != nil {
 		return err
@@ -186,13 +186,13 @@ func crossCheck(packet testapp.Packet, observed wire.PacketStatus) error {
 	return nil
 }
 
-func validateTerminalStatus(status wire.PacketStatus) error {
+func validateTerminalStatus(status relayercmd.PacketStatus) error {
 	switch status.State {
-	case wire.PacketComplete:
+	case relayercmd.PacketComplete:
 		if status.EffectTxHash == "" {
 			return fmt.Errorf("synthetic: complete packet %s has no effect transaction", status.PacketID)
 		}
-	case wire.PacketTimedOut, wire.PacketErrorAck:
+	case relayercmd.PacketTimedOut, relayercmd.PacketErrorAck:
 		if status.EffectTxHash == "" {
 			return fmt.Errorf("synthetic: %s packet %s has no effect transaction", status.State, status.PacketID)
 		}

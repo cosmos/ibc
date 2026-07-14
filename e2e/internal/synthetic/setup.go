@@ -15,8 +15,9 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/configcmd"
+	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
 
 const relayerStopTimeout = 15 * time.Second
@@ -63,7 +64,7 @@ func Deploy(
 	env *environment.Environment,
 	signers Signers,
 	routes ...Route,
-) (*ibclink.Driver, *wire.TestAppDeployment) {
+) (*ibclink.Driver, *testappcmd.Deployment) {
 	t.Helper()
 	if env == nil {
 		t.Fatal("synthetic: Environment is required")
@@ -149,15 +150,15 @@ func buildConfig(
 	env *environment.Environment,
 	driver *ibclink.Driver,
 	routes []Route,
-	signers []wire.Signer,
+	signers []configcmd.Signer,
 	dbPath string,
-) wire.ConfigYAML {
+) configcmd.Config {
 	t.Helper()
-	config := wire.ConfigYAML{
-		Chains:  make([]wire.Chain, 0, len(env.Chains())),
+	config := configcmd.Config{
+		Chains:  make([]configcmd.Chain, 0, len(env.Chains())),
 		Signers: signers,
-		DB:      wire.DB{Type: wire.DBTypeSQLite, URL: dbPath},
-		Relayer: wire.Relayer{Routes: make([]wire.Route, 0, len(routes))},
+		DB:      configcmd.DB{Type: configcmd.DBTypeSQLite, URL: dbPath},
+		Relayer: configcmd.Relayer{Routes: make([]configcmd.Route, 0, len(routes))},
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
@@ -168,9 +169,9 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("synthetic: resolve Chain %q process binding: %v", id, err)
 		}
-		config.Chains = append(config.Chains, wire.Chain{
+		config.Chains = append(config.Chains, configcmd.Chain{
 			ID:            string(id),
-			Type:          wire.ChainTypeEVM,
+			Type:          configcmd.ChainTypeEVM,
 			ChainID:       chain.EVMChainID(),
 			EVMSigner:     relayerSignerAlias,
 			TestAppSigner: applicationSignerAlias,
@@ -179,14 +180,14 @@ func buildConfig(
 	}
 
 	for _, route := range routes {
-		compiled := wire.Route{
+		compiled := configcmd.Route{
 			ID:          string(route.ID),
 			Source:      string(route.Source),
 			Destination: string(route.Destination),
-			Type:        wire.RouteEVMToEVMAttested,
+			Type:        configcmd.RouteEVMToEVMAttested,
 		}
 		if route.Manual {
-			compiled.AutoRelay = &wire.AutoRelay{Enabled: false}
+			compiled.AutoRelay = &configcmd.AutoRelay{Enabled: false}
 		}
 		config.Relayer.Routes = append(config.Relayer.Routes, compiled)
 	}

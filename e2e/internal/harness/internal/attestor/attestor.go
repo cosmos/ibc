@@ -29,10 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
+	"github.com/cosmos/ibc/link/keyfile"
 
-	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
+	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
 const (

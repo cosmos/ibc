@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 )
 
 type Relayer struct {
-	readiness wire.Readiness
+	readiness relayercmd.Readiness
 	httpAddr  string
 	http      *http.Client
 	h         *proc.Handle
@@ -42,7 +42,7 @@ func (r *Driver) StartRelayer(ctx context.Context) (*Relayer, error) {
 }
 
 type readyResult struct {
-	readiness wire.Readiness
+	readiness relayercmd.Readiness
 	err       error
 }
 
@@ -58,7 +58,7 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	}()
 
 	args := append([]string{"relayer", "run"}, r.configArgs()...)
-	bin := r.stubBin
+	bin := r.bin
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.Env = processEnv.variables
@@ -121,7 +121,7 @@ func drainStdout(rc io.Reader, readyCh chan<- readyResult) {
 }
 
 func parseReadiness(line string) readyResult {
-	var r wire.Readiness
+	var r relayercmd.Readiness
 	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &r); err != nil {
 		return readyResult{
 			err: fmt.Errorf("first stdout line is not readiness JSON (%q): %w", strings.TrimSpace(line), err),
@@ -133,32 +133,32 @@ func parseReadiness(line string) readyResult {
 	return readyResult{readiness: r}
 }
 
-func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (wire.Readiness, error) {
+func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayercmd.Readiness, error) {
 	timer := time.NewTimer(defaultStartupTimeout)
 	defer timer.Stop()
 	select {
 	case res := <-readyCh:
 		if res.err != nil {
-			return wire.Readiness{}, fmt.Errorf("ibc relayer run: %w", res.err)
+			return relayercmd.Readiness{}, fmt.Errorf("ibc relayer run: %w", res.err)
 		}
 		return res.readiness, nil
 	case <-timer.C:
-		return wire.Readiness{}, fmt.Errorf("ibc relayer run: not ready within %s", defaultStartupTimeout)
+		return relayercmd.Readiness{}, fmt.Errorf("ibc relayer run: not ready within %s", defaultStartupTimeout)
 	case <-ctx.Done():
-		return wire.Readiness{}, fmt.Errorf("ibc relayer run: startup canceled: %w", ctx.Err())
+		return relayercmd.Readiness{}, fmt.Errorf("ibc relayer run: startup canceled: %w", ctx.Err())
 	}
 }
 
-func (d *Relayer) Ready() wire.Readiness { return d.readiness }
+func (d *Relayer) Ready() relayercmd.Readiness { return d.readiness }
 
-func (d *Relayer) Status(ctx context.Context, q wire.StatusQuery) (*wire.Status, error) {
-	u := d.apiURL(wire.StatusPath)
+func (d *Relayer) Status(ctx context.Context, q relayercmd.StatusQuery) (*relayercmd.Status, error) {
+	u := d.apiURL(relayercmd.StatusPath)
 	vals := url.Values{}
 	if q.RouteID != "" {
-		vals.Set(wire.StatusQueryRoute, q.RouteID)
+		vals.Set(relayercmd.StatusQueryRoute, q.RouteID)
 	}
 	if q.PacketID != "" {
-		vals.Set(wire.StatusQueryPacket, q.PacketID)
+		vals.Set(relayercmd.StatusQueryPacket, q.PacketID)
 	}
 	u.RawQuery = vals.Encode()
 
@@ -166,15 +166,15 @@ func (d *Relayer) Status(ctx context.Context, q wire.StatusQuery) (*wire.Status,
 	if err != nil {
 		return nil, fmt.Errorf("ibc status: build request: %w", err)
 	}
-	var status wire.Status
+	var status relayercmd.Status
 	if err := d.doJSON(req, "ibc status", &status); err != nil {
 		return nil, err
 	}
 	return &status, nil
 }
 
-func (d *Relayer) Relay(ctx context.Context, in wire.RelayRequest) (*wire.RelayResult, error) {
-	u := d.apiURL(wire.RelayPath)
+func (d *Relayer) Relay(ctx context.Context, in relayercmd.RelayRequest) (*relayercmd.RelayResult, error) {
+	u := d.apiURL(relayercmd.RelayPath)
 	body, err := json.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("ibc relay: encode request: %w", err)
@@ -184,7 +184,7 @@ func (d *Relayer) Relay(ctx context.Context, in wire.RelayRequest) (*wire.RelayR
 		return nil, fmt.Errorf("ibc relay: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	var result wire.RelayResult
+	var result relayercmd.RelayResult
 	if err := d.doJSON(req, "ibc relay", &result); err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (d *Relayer) Relay(ctx context.Context, in wire.RelayRequest) (*wire.RelayR
 
 // Pins the /health wire contract at startup (not a liveness wait).
 func (d *Relayer) probeHealth(ctx context.Context) error {
-	u := d.apiURL(wire.HealthPath)
+	u := d.apiURL(relayercmd.HealthPath)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("ibc relayer run: health: build request: %w", err)

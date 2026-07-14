@@ -12,9 +12,9 @@ import (
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 // externalChainID differs from managedChainID so live validate exercises chain-id on a second node.
@@ -79,7 +79,7 @@ func TestExternalChain_EnvironmentConnectsButDoesNotOwn(t *testing.T) {
 			rctx,
 			relayer,
 			transfer.Packet(),
-			wire.PacketComplete,
+			relayercmd.PacketComplete,
 			attached.Timing(),
 		)
 		require.NoError(t, awaitErr)

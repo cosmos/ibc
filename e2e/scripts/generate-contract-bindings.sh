@@ -20,11 +20,16 @@ generate() {
 
 test_apps="$repo_root/e2e/internal/testapp/contracts"
 bindings="$test_apps/bindings"
-mkdir -p "$bindings"
+stub="$repo_root/link/internal/stub"
+mkdir -p "$bindings" "$stub"
 generate "$test_apps/out/Counter.sol/Counter.json" bindings Counter "$bindings/Counter.go"
 generate "$test_apps/out/MockGMP.sol/MockGMP.json" bindings MockGMP "$bindings/MockGMP.go"
 generate "$test_apps/out/MockIFT.sol/MockIFT.json" bindings MockIFT "$bindings/MockIFT.go"
 generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" bindings TestAppDeployer "$bindings/TestAppDeployer.go"
+generate "$test_apps/out/Counter.sol/Counter.json" stub Counter "$stub/Counter.go"
+generate "$test_apps/out/MockGMP.sol/MockGMP.json" stub MockGMP "$stub/MockGMP.go"
+generate "$test_apps/out/MockIFT.sol/MockIFT.json" stub MockIFT "$stub/MockIFT.go"
+generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" stub TestAppDeployer "$stub/TestAppDeployer.go"
 
 solidity_ibc="$repo_root/e2e/internal/harness/internal/solidityibc"
 access_manager="$solidity_ibc/accessmanager"

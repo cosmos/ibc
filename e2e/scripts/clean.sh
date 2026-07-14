@@ -44,11 +44,11 @@ sweep() {
 	kill -9 $pids 2>/dev/null || true
 }
 
-# Match either SUT binary (real `ibc` or the e2e `ibc-stub`) running `relayer run`, scoped to the
+# Match the `ibc` SUT running `relayer run`, scoped to the
 # harness's compiled config (ibc-link.config.yaml, always in --config of a harness-spawned daemon) so a
 # developer's own unrelated `ibc relayer run` is never signaled. Binary is anchored at a path separator
 # or start of the cmdline so an unrelated `…ibc` suffix can't false-match.
-sweep "e2e relayer daemons" '(^|/)ibc(-stub)? relayer run .*ibc-link\.config\.yaml'
+sweep "e2e relayer daemons" '(^|/)ibc relayer run .*ibc-link\.config\.yaml'
 
 docker_sweep() {
 	if ! command -v docker >/dev/null; then

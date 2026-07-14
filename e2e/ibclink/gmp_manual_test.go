@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestGMPCall_ManualRelay(t *testing.T) {
@@ -29,7 +29,7 @@ func TestGMPCall_ManualRelay(t *testing.T) {
 		ctx,
 		relayer,
 		call.Packet(),
-		wire.PacketPending,
+		relayercmd.PacketPending,
 		destination.Timing(),
 	))
 	require.NoError(t, call.VerifyTargetUnchanged(ctx))
@@ -38,7 +38,7 @@ func TestGMPCall_ManualRelay(t *testing.T) {
 		ctx,
 		relayer,
 		call.Packet(),
-		wire.PacketComplete,
+		relayercmd.PacketComplete,
 		destination.Timing(),
 	)
 	require.NoError(t, err)

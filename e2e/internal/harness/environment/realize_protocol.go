@@ -463,7 +463,7 @@ func acquireAttestor(
 		return attestorAcquisition{}, err
 	}
 	process, err := managedattestor.Start(ctx, managedattestor.Spec{
-		BinaryPath:    ibclink.ResolvedRealBin(),
+		BinaryPath:    ibclink.ResolvedBin(),
 		WorkDir:       filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
 		Name:          string(declaration.ID),
 		ChainID:       strconv.FormatUint(dependencies.observed.chain.evmChainID, 10),

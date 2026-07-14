@@ -21,9 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/api/v2/keyfile"
+	"github.com/cosmos/ibc/link/keyfile"
 
-	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
+	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
 const testPrivateKey = "0000000000000000000000000000000000000000000000000000000000000006"
