@@ -20,6 +20,14 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       RelayerApiServiceClient:
+  github.com/cosmos/ibc/link/internal/store:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "store.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Repository:
   github.com/cosmos/kms/gen/signerservice:
     config:
       include-auto-generated: true
