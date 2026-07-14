@@ -285,24 +285,15 @@ func TestSpecValidateConnectionPair(t *testing.T) {
 	})
 }
 
-func TestSpecValidateRejectsInvalidClientDeclaration(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		spec := validSpec()
-		var client *NewClient
-		spec.Connections[0].A = client
-		require.ErrorContains(t, spec.validate(), "end A: declaration is nil")
-	})
-
-	t.Run("pointer variant", func(t *testing.T) {
-		spec := validSpec()
-		client := spec.Connections[0].A.(NewClient)
-		spec.Connections[0].A = &client
-		require.ErrorContains(
-			t,
-			spec.validate(),
-			"unsupported declaration *environment.NewClient; use a concrete value",
-		)
-	})
+func TestSpecValidateRejectsPointerClientDeclaration(t *testing.T) {
+	spec := validSpec()
+	client := spec.Connections[0].A.(NewClient)
+	spec.Connections[0].A = &client
+	require.ErrorContains(
+		t,
+		spec.validate(),
+		"unsupported declaration *environment.NewClient; use a concrete value",
+	)
 }
 
 func TestSpecValidateDoesNotMutate(t *testing.T) {

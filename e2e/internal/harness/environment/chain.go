@@ -52,12 +52,7 @@ func (c *Chain) bindLease(lease *environmentLease) {
 }
 
 func (c *Chain) use(use func() error) error {
-	var err error
-	if c.lease == nil {
-		err = use()
-	} else {
-		err = c.lease.use(use)
-	}
+	err := c.lease.use(use)
 	if errors.Is(err, ErrEnvironmentClosed) {
 		err = fmt.Errorf("%w: Chain %q", err, c.id)
 	}
@@ -254,7 +249,7 @@ type Funding struct {
 }
 
 func (f *Funding) EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error {
-	return useCapability(f.chain, func() error {
+	return f.chain.use(func() error {
 		return f.controller.EnsureEOABalance(ctx, address, minimum)
 	})
 }
@@ -265,23 +260,23 @@ type Mining struct {
 }
 
 func (m *Mining) Pause(ctx context.Context) error {
-	return useCapability(m.chain, func() error { return m.controller.PauseMining(ctx) })
+	return m.chain.use(func() error { return m.controller.PauseMining(ctx) })
 }
 
 func (m *Mining) Resume(ctx context.Context) error {
-	return useCapability(m.chain, func() error { return m.controller.ResumeMining(ctx) })
+	return m.chain.use(func() error { return m.controller.ResumeMining(ctx) })
 }
 
 func (m *Mining) Mine(ctx context.Context, blocks int) error {
-	return useCapability(m.chain, func() error { return m.controller.MineBlocks(ctx, blocks) })
+	return m.chain.use(func() error { return m.controller.MineBlocks(ctx, blocks) })
 }
 
 func (m *Mining) AdvanceTime(ctx context.Context, d time.Duration) error {
-	return useCapability(m.chain, func() error { return m.controller.AdvanceTime(ctx, d) })
+	return m.chain.use(func() error { return m.controller.AdvanceTime(ctx, d) })
 }
 
 func (m *Mining) WithPaused(ctx context.Context, fn func() error) error {
-	return useCapability(m.chain, func() (err error) {
+	return m.chain.use(func() (err error) {
 		if pauseErr := m.controller.PauseMining(ctx); pauseErr != nil {
 			return pauseErr
 		}
@@ -300,18 +295,11 @@ type NodeLifecycle struct {
 }
 
 func (n *NodeLifecycle) Stop(ctx context.Context) error {
-	return useCapability(n.chain, func() error { return n.controller.StopNode(ctx) })
+	return n.chain.use(func() error { return n.controller.StopNode(ctx) })
 }
 
 func (n *NodeLifecycle) Start(ctx context.Context) error {
-	return useCapability(n.chain, func() error { return n.controller.StartNode(ctx) })
-}
-
-func useCapability(chain *Chain, use func() error) error {
-	if chain == nil {
-		return errors.New("environment: resolved capability is not bound to a Chain")
-	}
-	return chain.use(use)
+	return n.chain.use(func() error { return n.controller.StartNode(ctx) })
 }
 
 func instantTiming() Timing {

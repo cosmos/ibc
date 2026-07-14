@@ -20,10 +20,6 @@ func Setup(flags *FlagSet) (*wire.ConfigYAML, error) {
 		return nil, setupError(fmt.Errorf("unable to get config path: %w", err))
 	}
 
-	if ensureErr := EnsureDirectory(path); ensureErr != nil {
-		return nil, setupError(fmt.Errorf("unable to create home directory %s: %w", home, ensureErr))
-	}
-
 	if chdirErr := os.Chdir(home); chdirErr != nil {
 		return nil, setupError(
 			fmt.Errorf("unable to change working directory to %s: %w", home, chdirErr),

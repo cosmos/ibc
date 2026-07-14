@@ -26,18 +26,16 @@ func TestAccountFromHexAcceptsPrefix(t *testing.T) {
 	assert.Equal(t, withoutPrefix.Address(), withPrefix.Address())
 }
 
-func TestSignTxRecoversSender(t *testing.T) {
+func TestTransactOptsRecoversSender(t *testing.T) {
 	acct, err := AccountFromHex(testPrivateKeyHex)
 	require.NoError(t, err)
 	chainID := big.NewInt(31337)
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
-
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   chainID,
-		Nonce:     0,
 		To:        &to,
 		Value:     big.NewInt(1),
-		Gas:       21000,
+		Gas:       21_000,
 		GasFeeCap: big.NewInt(1_000_000_000),
 		GasTipCap: big.NewInt(1_000_000_000),
 	})
@@ -46,7 +44,6 @@ func TestSignTxRecoversSender(t *testing.T) {
 	require.NoError(t, err)
 	signed, err := opts.Signer(acct.Address(), tx)
 	require.NoError(t, err)
-
 	sender, err := types.Sender(types.LatestSignerForChainID(chainID), signed)
 	require.NoError(t, err)
 	assert.Equal(t, acct.Address(), sender)

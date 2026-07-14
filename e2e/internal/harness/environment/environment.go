@@ -86,10 +86,8 @@ func (e *Environment) Close(ctx context.Context) error {
 	if e.closed {
 		return nil
 	}
-	if e.lease != nil {
-		if err := e.lease.close(ctx); err != nil {
-			return fmt.Errorf("environment: wait for active operations before cleanup: %w", err)
-		}
+	if err := e.lease.close(ctx); err != nil {
+		return fmt.Errorf("environment: wait for active operations before cleanup: %w", err)
 	}
 
 	cleanupErrs := e.effects.cleanup(ctx)

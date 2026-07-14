@@ -16,7 +16,9 @@ import (
 )
 
 func TestFundingUnavailableWithoutManagedControl(t *testing.T) {
-	funding, err := (&Chain{id: "attached"}).Funding()
+	chain := &Chain{id: "attached"}
+	chain.bindLease(&environmentLease{})
+	funding, err := chain.Funding()
 	require.Nil(t, funding)
 	require.ErrorIs(t, err, ErrCapabilityUnavailable)
 }
@@ -34,9 +36,9 @@ func TestEVMTransactionWaitUsesChainTiming(t *testing.T) {
 func TestProtocolAuthorityFundingSkipsAttachedChains(t *testing.T) {
 	authority, err := evm.AccountFromHex(testPrimaryPrivateKeyHex)
 	require.NoError(t, err)
-	require.NoError(t, ensureProtocolAuthorityFunded(t.Context(), &Chain{
-		id: "attached",
-	}, authority))
+	chain := &Chain{id: "attached"}
+	chain.bindLease(&environmentLease{})
+	require.NoError(t, ensureProtocolAuthorityFunded(t.Context(), chain, authority))
 }
 
 func TestProtocolAuthorityFundingUsesManagedCapability(t *testing.T) {

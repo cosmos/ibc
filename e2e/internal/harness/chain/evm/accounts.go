@@ -9,7 +9,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -49,12 +48,4 @@ func (a Account) TransactOpts(chainID *big.Int) (*bind.TransactOpts, error) {
 		return nil, fmt.Errorf("create transactor: %w", err)
 	}
 	return opts, nil
-}
-
-func signTx(tx *types.Transaction, key *ecdsa.PrivateKey, chainID *big.Int) (*types.Transaction, error) {
-	signed, err := types.SignTx(tx, types.LatestSignerForChainID(chainID), key)
-	if err != nil {
-		return nil, fmt.Errorf("sign tx: %w", err)
-	}
-	return signed, nil
 }

@@ -16,12 +16,12 @@ import (
 )
 
 const schemaSQL = `
-CREATE TABLE IF NOT EXISTS test_app_deployments (
+CREATE TABLE IF NOT EXISTS stub_test_app_deployments (
     id         INTEGER PRIMARY KEY CHECK (id = 1),
     data       TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE TABLE IF NOT EXISTS packets (
+CREATE TABLE IF NOT EXISTS stub_packets (
     packet_id      TEXT PRIMARY KEY,
     route_id       TEXT NOT NULL,
     app_type       TEXT NOT NULL,
@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS packets (
     created_at     INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at     INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX IF NOT EXISTS packets_source_tx_hash_idx ON packets(source_tx_hash COLLATE NOCASE);
-CREATE TABLE IF NOT EXISTS relay_requests (
+CREATE INDEX IF NOT EXISTS stub_packets_source_tx_hash_idx ON stub_packets(source_tx_hash COLLATE NOCASE);
+CREATE TABLE IF NOT EXISTS stub_relay_requests (
     source_chain_id TEXT NOT NULL,
     source_tx_hash  TEXT NOT NULL,
     created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
@@ -119,7 +119,7 @@ func (s *Store) SaveTestApps(ctx context.Context, deployment wire.TestAppDeploym
 		return fmt.Errorf("store: encode test app deployment: %w", err)
 	}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO test_app_deployments(id, data) VALUES(1, ?)
+		INSERT INTO stub_test_app_deployments(id, data) VALUES(1, ?)
 		ON CONFLICT(id) DO UPDATE SET data = excluded.data, created_at = unixepoch()`, string(data))
 	if err != nil {
 		return fmt.Errorf("store: save test app deployment: %w", err)
@@ -129,7 +129,7 @@ func (s *Store) SaveTestApps(ctx context.Context, deployment wire.TestAppDeploym
 
 func (s *Store) LoadTestApps(ctx context.Context) (deployment wire.TestAppDeployment, found bool, err error) {
 	var data string
-	err = s.db.QueryRowContext(ctx, `SELECT data FROM test_app_deployments WHERE id = 1`).Scan(&data)
+	err = s.db.QueryRowContext(ctx, `SELECT data FROM stub_test_app_deployments WHERE id = 1`).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return wire.TestAppDeployment{}, false, nil
 	}
@@ -156,7 +156,7 @@ func (s *Store) RequireTestApps(ctx context.Context) (wire.TestAppDeployment, er
 // ON CONFLICT DO NOTHING: rediscovered packets converge; terminal rows never regress to pending.
 func (s *Store) InsertPending(ctx context.Context, p Packet) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO packets(
+		INSERT INTO stub_packets(
 			packet_id, route_id, app_type, sequence, state, source_tx_hash,
 			receiver, amount, target, payload, timeout_ts
 		)
@@ -172,7 +172,7 @@ func (s *Store) InsertPending(ctx context.Context, p Packet) error {
 
 func (s *Store) RequestRelay(ctx context.Context, sourceChainID, sourceTxHash string) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO relay_requests(source_chain_id, source_tx_hash)
+		INSERT INTO stub_relay_requests(source_chain_id, source_tx_hash)
 		VALUES(?, ?)
 		ON CONFLICT(source_chain_id, source_tx_hash) DO NOTHING`, sourceChainID, sourceTxHash)
 	if err != nil {
@@ -182,7 +182,7 @@ func (s *Store) RequestRelay(ctx context.Context, sourceChainID, sourceTxHash st
 }
 
 func (s *Store) RelayRequests(ctx context.Context) (map[RelayRequestKey]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT source_chain_id, source_tx_hash FROM relay_requests`)
+	rows, err := s.db.QueryContext(ctx, `SELECT source_chain_id, source_tx_hash FROM stub_relay_requests`)
 	if err != nil {
 		return nil, fmt.Errorf("store: query relay requests: %w", err)
 	}
@@ -204,7 +204,7 @@ func (s *Store) RelayRequests(ctx context.Context) (map[RelayRequestKey]bool, er
 
 func (s *Store) MarkComplete(ctx context.Context, packetID, effectTxHash string) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE packets SET state = ?, recv_tx_hash = ?, updated_at = unixepoch()
+		UPDATE stub_packets SET state = ?, recv_tx_hash = ?, updated_at = unixepoch()
 		WHERE packet_id = ? AND `+notTerminalClause,
 		string(wire.PacketComplete), effectTxHash, packetID)
 	if err != nil {
@@ -215,7 +215,7 @@ func (s *Store) MarkComplete(ctx context.Context, packetID, effectTxHash string)
 
 func (s *Store) MarkTimedOut(ctx context.Context, packetID, refundTxHash, reason string) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE packets SET state = ?, recv_tx_hash = ?, reason = ?, updated_at = unixepoch()
+		UPDATE stub_packets SET state = ?, recv_tx_hash = ?, reason = ?, updated_at = unixepoch()
 		WHERE packet_id = ? AND `+notTerminalClause,
 		string(wire.PacketTimedOut), refundTxHash, reason, packetID)
 	if err != nil {
@@ -226,7 +226,7 @@ func (s *Store) MarkTimedOut(ctx context.Context, packetID, refundTxHash, reason
 
 func (s *Store) MarkErrorAck(ctx context.Context, packetID, effectTxHash, reason string) error {
 	_, err := s.db.ExecContext(ctx, `
-		UPDATE packets SET state = ?, recv_tx_hash = ?, reason = ?, updated_at = unixepoch()
+		UPDATE stub_packets SET state = ?, recv_tx_hash = ?, reason = ?, updated_at = unixepoch()
 		WHERE packet_id = ? AND `+notTerminalClause,
 		string(wire.PacketErrorAck), effectTxHash, reason, packetID)
 	if err != nil {
@@ -243,7 +243,7 @@ func (s *Store) PacketsBySourceTx(ctx context.Context, sourceTxHash string) ([]P
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT packet_id, route_id, app_type, sequence, state, source_tx_hash, recv_tx_hash, reason,
 		       receiver, amount, target, payload, timeout_ts
-		FROM packets
+		FROM stub_packets
 		WHERE source_tx_hash = ? COLLATE NOCASE
 		ORDER BY created_at, sequence`, sourceTxHash)
 	if err != nil {
@@ -257,7 +257,7 @@ func (s *Store) PendingPackets(ctx context.Context) ([]Packet, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT packet_id, route_id, app_type, sequence, state, source_tx_hash, recv_tx_hash, reason,
 		       receiver, amount, target, payload, timeout_ts
-		FROM packets
+		FROM stub_packets
 		WHERE state = ?
 		ORDER BY created_at, sequence`, string(wire.PacketPending))
 	if err != nil {
@@ -269,7 +269,7 @@ func (s *Store) PendingPackets(ctx context.Context) ([]Packet, error) {
 
 func (s *Store) query(ctx context.Context, packetFilter string) ([]Packet, error) {
 	q := `SELECT packet_id, route_id, app_type, sequence, state, source_tx_hash, recv_tx_hash, reason,
-	             receiver, amount, target, payload, timeout_ts FROM packets`
+	             receiver, amount, target, payload, timeout_ts FROM stub_packets`
 	var args []any
 	if packetFilter != "" {
 		q += " WHERE packet_id = ?"

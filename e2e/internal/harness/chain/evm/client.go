@@ -240,7 +240,11 @@ func (e *EVMClient) buildSignedTx(
 		GasTipCap: tipCap,
 		Data:      data,
 	})
-	return signTx(tx, from.key, e.chainID)
+	signed, err := types.SignTx(tx, types.LatestSignerForChainID(e.chainID), from.key)
+	if err != nil {
+		return nil, fmt.Errorf("sign tx: %w", err)
+	}
+	return signed, nil
 }
 
 func (e *EVMClient) WaitNextPendingTx(ctx context.Context, wait TransactionWait) error {

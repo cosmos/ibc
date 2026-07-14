@@ -3,7 +3,6 @@ package environment
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"time"
 )
@@ -289,10 +288,6 @@ func (c ConnectionSpec) validate() error {
 }
 
 func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) (clientIdentityValue, error) {
-	if nilInterface(spec) {
-		return clientIdentityValue{}, errorsf("IBC Connection %q end %s: declaration is nil", connectionID, end)
-	}
-
 	var (
 		client       clientIdentityValue
 		variantField string
@@ -368,9 +363,6 @@ func (s Spec) validate() error {
 	attachedChains := make(map[ChainID]struct{}, len(s.Chains))
 	evmChainIDs := make(map[uint64]ChainID, len(s.Chains))
 	for n, chain := range s.Chains {
-		if nilInterface(chain) {
-			return errorsf("chains[%d]: declaration is nil", n)
-		}
 		switch chain.(type) {
 		case ManagedAnvil, ManagedBesu, AttachedEVM:
 		default:
@@ -397,9 +389,6 @@ func (s Spec) validate() error {
 	instances := make(map[IBCInstanceID]struct{}, len(s.IBCInstances))
 	newInstances := make(map[IBCInstanceID]struct{}, len(s.IBCInstances))
 	for n, instance := range s.IBCInstances {
-		if nilInterface(instance) {
-			return errorsf("IBCInstances[%d]: declaration is nil", n)
-		}
 		switch instance.(type) {
 		case NewIBCInstance, ExistingIBCInstance:
 		default:
@@ -519,14 +508,6 @@ func chainEVMID(spec ChainSpec) uint64 {
 	default:
 		panic(fmt.Sprintf("environment: unsupported validated Chain declaration %T", spec))
 	}
-}
-
-func nilInterface(value any) bool {
-	if value == nil {
-		return true
-	}
-	v := reflect.ValueOf(value)
-	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
 func contains[ID comparable](set map[ID]struct{}, id ID) bool {

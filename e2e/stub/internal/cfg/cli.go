@@ -56,14 +56,6 @@ func ExpandHome(path string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 }
 
-func EnsureDirectory(path string) error {
-	dir := filepath.Dir(path)
-	if dir == "." {
-		return nil
-	}
-	return os.MkdirAll(dir, 0o755)
-}
-
 func dbConfigFromURL(raw string) (wire.DB, error) {
 	switch raw {
 	case "":

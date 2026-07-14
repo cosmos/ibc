@@ -56,21 +56,21 @@ func SelectedSuite(t testing.TB) Suite {
 }
 
 func twoAnvilSuite(base uint64, interval time.Duration) Suite {
-	return suite(
-		[]environment.ChainSpec{
+	return SuiteFor(
+		environment.Spec{Chains: []environment.ChainSpec{
 			environment.ManagedAnvil{ID: ChainA, EVMChainID: base, BlockInterval: interval},
 			environment.ManagedAnvil{ID: ChainB, EVMChainID: base + 1, BlockInterval: interval},
-		},
+		}},
 		environment.Runtime{},
 	)
 }
 
 func twoBesuSuite() Suite {
-	return suite(
-		[]environment.ChainSpec{
+	return SuiteFor(
+		environment.Spec{Chains: []environment.ChainSpec{
 			environment.ManagedBesu{ID: ChainA, EVMChainID: besuChainIDBase},
 			environment.ManagedBesu{ID: ChainB, EVMChainID: besuChainIDBase + 1},
-		},
+		}},
 		environment.Runtime{},
 	)
 }
@@ -81,10 +81,6 @@ func SuiteFor(spec environment.Spec, runtime environment.Runtime) Suite {
 		environmentSpec:    spec,
 		environmentRuntime: runtime,
 	}
-}
-
-func suite(chains []environment.ChainSpec, runtime environment.Runtime) Suite {
-	return SuiteFor(environment.Spec{Chains: chains}, runtime)
 }
 
 // RequireAnvilLane deduplicates suites pinned to Anvil regardless of the
