@@ -16,7 +16,8 @@ type EventKind int
 
 // Event kinds
 const (
-	KindSendPacket EventKind = iota
+	KindUnknown EventKind = iota
+	KindSendPacket
 	KindWriteAck
 )
 
