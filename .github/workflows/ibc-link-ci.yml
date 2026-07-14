@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   changes:
-    name: Detect changes
+    name: Detect Changes
     runs-on: ubuntu-slim
     permissions:
       contents: read
@@ -99,7 +99,7 @@ jobs:
         run: make test
 
   verify-codegen:
-    name: Verify Codegen
+    name: Codegen Verify
     needs: changes
     if: needs.changes.outputs.sql == 'true' || needs.changes.outputs.proto == 'true'
     runs-on: ubuntu-latest
@@ -138,7 +138,7 @@ jobs:
           fi
 
   ci-ok:
-    name: CI OK
+    name: Wait OK
     if: always()
     needs: [changes, lint, build, test, verify-codegen]
     runs-on: ubuntu-latest

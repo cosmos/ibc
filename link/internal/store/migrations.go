@@ -25,7 +25,15 @@ const migrationTemplate = `-- +migrate Up
 
 // MigrationStatus represents migration entry in the database.
 type MigrationStatus struct {
-	ID        string     `json:"id"`
+
+
+
+
+
+
+
+
+	ID                string     `json:"id"`
 	Applied   bool       `json:"applied"`
 	AppliedAt *time.Time `json:"appliedAt,omitempty"`
 }
