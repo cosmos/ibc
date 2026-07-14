@@ -10,6 +10,8 @@ It shall be used to consolidate design rationale, protocol semantics, and encodi
 
 Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contribution guidelines.
 
+Repository-wide black-box acceptance tests live in [`e2e/`](e2e/README.md).
+
 ## What is IBC?
 
 <!-- markdown-link-check-disable-next-line -->

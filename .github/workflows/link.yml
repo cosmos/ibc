@@ -1,15 +1,19 @@
-name: Link
+name: Link and E2E
 
 on:
   push:
     branches: [main, development]
     paths:
       - "link/**"
+      - "e2e/**"
+      - "Makefile"
       - ".github/workflows/link.yml"
   pull_request:
     branches: [main, development]
     paths:
       - "link/**"
+      - "e2e/**"
+      - "Makefile"
       - ".github/workflows/link.yml"
 
 jobs:
@@ -17,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [link, link/e2e, link/harness]
+        module: [link, e2e, e2e/internal/harness]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -36,9 +40,9 @@ jobs:
         include:
           - module: link
             packages: ./...
-          - module: link/e2e
+          - module: e2e
             packages: ./e2etest ./internal/... ./stub/...
-          - module: link/harness
+          - module: e2e/internal/harness
             packages: ./...
     steps:
       - uses: actions/checkout@v4
@@ -46,17 +50,16 @@ jobs:
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache-dependency-path: ${{ matrix.module }}/go.sum
-      - if: matrix.module == 'link/harness'
-        run: make build
-        working-directory: link
-      - if: matrix.module == 'link/harness'
+      - if: matrix.module == 'e2e/internal/harness'
+        run: make build-link
+      - if: matrix.module == 'e2e/internal/harness'
         run: docker info
-      - if: matrix.module == 'link/harness'
+      - if: matrix.module == 'e2e/internal/harness'
         run: go test -count=1 ${{ matrix.packages }}
         working-directory: ${{ matrix.module }}
         env:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
-      - if: matrix.module != 'link/harness'
+      - if: matrix.module != 'e2e/internal/harness'
         run: go test ${{ matrix.packages }}
         working-directory: ${{ matrix.module }}
 
@@ -66,13 +69,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: link/go.mod
+          go-version-file: e2e/go.mod
           cache-dependency-path: |
             link/go.sum
-            link/e2e/go.sum
-            link/harness/go.sum
+            e2e/go.sum
+            e2e/internal/harness/go.sum
       - run: docker info
       - run: make test-e2e
-        working-directory: link
       - run: make test-e2e E2E_PKGS=./negative
-        working-directory: link
