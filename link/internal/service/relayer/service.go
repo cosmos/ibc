@@ -14,6 +14,8 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
+
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // Service represents relayer business logic.
@@ -125,11 +127,11 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 	return nil
 }
 
-func (s *Service) packetsFromEvents(chainID, txHash string, events []chains.PacketEvent) []store.CreatePacket {
+func (s *Service) packetsFromEvents(chainID, txHash string, events []v2.PacketEvent) []store.CreatePacket {
 	var packets []store.CreatePacket
 
 	for _, event := range events {
-		if event.Kind != chains.KindSendPacket {
+		if event.Kind != v2.KindSendPacket {
 			continue
 		}
 

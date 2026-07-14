@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 const (
@@ -67,12 +68,12 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), st, clientManager)
 
 		blockTime := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
-		events := []chains.PacketEvent{
+		events := []v2.PacketEvent{
 			{
 				Height:    100,
 				BlockTime: blockTime,
-				Kind:      chains.KindSendPacket,
-				Packet: chains.Packet{
+				Kind:      v2.KindSendPacket,
+				Packet: v2.Packet{
 					Sequence:         42,
 					SourceClient:     "base-0",
 					DestClient:       "ethereum-0",
@@ -83,8 +84,8 @@ func TestRelay(t *testing.T) {
 				// packets from unconfigured clients are skipped
 				Height:    100,
 				BlockTime: blockTime,
-				Kind:      chains.KindSendPacket,
-				Packet: chains.Packet{
+				Kind:      v2.KindSendPacket,
+				Packet: v2.Packet{
 					Sequence:     7,
 					SourceClient: "unknown-0",
 					DestClient:   "ethereum-0",
