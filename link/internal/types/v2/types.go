@@ -31,6 +31,16 @@ type Packet struct {
 	Payloads         []Payload
 }
 
+// WriteAckStatus the result of a packet's write acknowledgement.
+type WriteAckStatus int
+
+// Write ack statuses
+const (
+	WriteAckStatusUnknown WriteAckStatus = iota
+	WriteAckStatusSuccess
+	WriteAckStatusError
+)
+
 // PacketEvent a packet event.
 type PacketEvent struct {
 	Height    uint64
@@ -38,4 +48,11 @@ type PacketEvent struct {
 	Kind      EventKind
 	Packet    Packet
 	Acks      [][]byte
+}
+
+// Tx a transaction observed on a chain.
+type Tx struct {
+	Hash           string
+	Timestamp      time.Time
+	RelayerAddress string
 }

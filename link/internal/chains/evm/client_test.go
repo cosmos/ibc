@@ -3,6 +3,7 @@ package evm
 import (
 	"context"
 	"errors"
+	ethereum "github.com/ethereum/go-ethereum"
 	"math/big"
 	"testing"
 	"time"
@@ -10,7 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
@@ -184,4 +187,206 @@ func TestTxPacketEvents(t *testing.T) {
 		require.ErrorContains(t, err, "invalid ics26 router address")
 	})
 
+}
+
+func writeAckLog(t *testing.T, address common.Address, packet ics26router.IICS26RouterMsgsPacket, acks [][]byte) *types.Log {
+	t.Helper()
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	event := routerABI.Events[writeAckEvent]
+
+	data, err := event.Inputs.NonIndexed().Pack(packet, acks)
+	require.NoError(t, err)
+
+	return &types.Log{
+		Address: address,
+		Topics: []common.Hash{
+			event.ID,
+			crypto.Keccak256Hash([]byte(packet.DestClient)),
+			common.BigToHash(new(big.Int).SetUint64(packet.Sequence)),
+		},
+		Data: data,
+	}
+}
+
+func newTestClient(t *testing.T) (*Client, *MockETHClient) {
+	t.Helper()
+
+	eth := NewMockETHClient(t)
+	client, err := NewWithClient(chainIDEth, eth, routerAddress)
+	require.NoError(t, err)
+
+	return client, eth
+}
+
+func TestCommitmentQueries(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("packetNotReceived", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().CallContract(ctx, mock.Anything, (*big.Int)(nil)).Return(make([]byte, 32), nil).Once()
+
+		received, err := client.IsPacketReceived(ctx, "base-0", 42)
+
+		require.NoError(t, err)
+		assert.False(t, received)
+	})
+
+	t.Run("packetCommitted", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		commitment := make([]byte, 32)
+		commitment[31] = 1
+		eth.EXPECT().CallContract(ctx, mock.Anything, (*big.Int)(nil)).Return(commitment, nil).Once()
+
+		committed, err := client.IsPacketCommitted(ctx, "base-0", 42)
+
+		require.NoError(t, err)
+		assert.True(t, committed)
+	})
+}
+
+func TestFindPacketTx(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("found", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		log := types.Log{TxHash: txHash, BlockNumber: 100}
+		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return([]types.Log{log}, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(&types.Header{Time: 1752000000, Number: big.NewInt(100)}, nil).Once()
+		// sender lookup failures are tolerated
+		eth.EXPECT().TransactionByHash(ctx, txHash).Return(nil, false, errors.New("pruned")).Once()
+
+		tx, err := client.FindAckTx(ctx, "base-0", 42)
+
+		require.NoError(t, err)
+		assert.Equal(t, txHash.String(), tx.Hash)
+		assert.Equal(t, time.Unix(1752000000, 0).UTC(), tx.Timestamp)
+		assert.Empty(t, tx.RelayerAddress)
+	})
+
+	t.Run("notFound", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return(nil, nil).Once()
+
+		_, err := client.FindRecvTx(ctx, "base-0", 42)
+
+		require.ErrorIs(t, err, v2.ErrTxNotFound)
+	})
+
+	t.Run("ambiguous", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return([]types.Log{{}, {}}, nil).Once()
+
+		_, err := client.FindTimeoutTx(ctx, "base-0", 42)
+
+		require.ErrorContains(t, err, "expected 1")
+	})
+}
+
+func TestPacketWriteAckStatus(t *testing.T) {
+	ctx := context.Background()
+	packet := testPacket()
+
+	receiptWithAcks := func(t *testing.T, acks [][]byte) *types.Receipt {
+		t.Helper()
+
+		return &types.Receipt{
+			BlockNumber: big.NewInt(100),
+			Logs:        []*types.Log{writeAckLog(t, common.HexToAddress(routerAddress), packet, acks)},
+		}
+	}
+
+	t.Run("success", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receiptWithAcks(t, [][]byte{{0x01}}), nil).Once()
+
+		status, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient)
+
+		require.NoError(t, err)
+		assert.Equal(t, v2.WriteAckStatusSuccess, status)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receiptWithAcks(t, [][]byte{errorAcknowledgement[:]}), nil).Once()
+
+		status, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient)
+
+		require.NoError(t, err)
+		assert.Equal(t, v2.WriteAckStatusError, status)
+	})
+
+	t.Run("packetMismatch", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receiptWithAcks(t, [][]byte{{0x01}}), nil).Once()
+
+		_, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence+1, packet.SourceClient, packet.DestClient)
+
+		require.ErrorIs(t, err, v2.ErrWriteAckNotFoundForPacket)
+	})
+
+	t.Run("txNotFound", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, ethereum.NotFound).Once()
+
+		_, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient)
+
+		require.ErrorIs(t, err, v2.ErrTxNotFound)
+	})
+}
+
+func TestFinality(t *testing.T) {
+	ctx := context.Background()
+	offset := uint64(5)
+
+	t.Run("txFinalizedWithOffset", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{BlockNumber: big.NewInt(100)}, nil).Twice()
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(105), Time: 1}, nil).Once()
+
+		finalized, err := client.IsTxFinalized(ctx, txHash.String(), &offset)
+		require.NoError(t, err)
+		assert.True(t, finalized)
+
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(104), Time: 1}, nil).Once()
+
+		finalized, err = client.IsTxFinalized(ctx, txHash.String(), &offset)
+		require.NoError(t, err)
+		assert.False(t, finalized)
+	})
+
+	t.Run("txFinalizedNative", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{BlockNumber: big.NewInt(100)}, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64())).Return(&types.Header{Number: big.NewInt(100), Time: 1}, nil).Once()
+
+		finalized, err := client.IsTxFinalized(ctx, txHash.String(), nil)
+
+		require.NoError(t, err)
+		assert.True(t, finalized)
+	})
+
+	t.Run("timestampFinalizedWithOffset", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(100), Time: 1}, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(95)).Return(&types.Header{Number: big.NewInt(95), Time: 1752000000}, nil).Once()
+
+		finalized, err := client.IsTimestampFinalized(ctx, time.Unix(1751999999, 0), &offset)
+
+		require.NoError(t, err)
+		assert.True(t, finalized)
+	})
+}
+
+func TestWaitForChain(t *testing.T) {
+	ctx := context.Background()
+
+	client, eth := newTestClient(t)
+	future := uint64(time.Now().Add(time.Hour).Unix())
+	eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(1), Time: future}, nil).Once()
+
+	require.NoError(t, client.WaitForChain(ctx))
 }

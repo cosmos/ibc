@@ -3,6 +3,7 @@ package chains
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -15,6 +16,41 @@ import (
 // Client provides chain state queries.
 type Client interface {
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
+
+	// IsPacketReceived reports whether a packet receipt exists on the
+	// destination chain.
+	IsPacketReceived(ctx context.Context, destClientID string, sequence uint64) (bool, error)
+
+	// IsPacketCommitted reports whether the packet commitment still exists on
+	// the source chain; the commitment is deleted once the packet is acked or
+	// timed out.
+	IsPacketCommitted(ctx context.Context, sourceClientID string, sequence uint64) (bool, error)
+
+	FindRecvTx(ctx context.Context, destClientID string, sequence uint64) (*v2.Tx, error)
+	FindAckTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)
+	FindTimeoutTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)
+
+	// PacketWriteAckStatus extracts the write acknowledgement status for a
+	// packet from its recv transaction.
+	PacketWriteAckStatus(
+		ctx context.Context,
+		recvTxHash string,
+		sequence uint64,
+		sourceClientID string,
+		destClientID string,
+	) (v2.WriteAckStatus, error)
+
+	// IsTxFinalized reports whether a transaction is finalized; a nil offset
+	// uses the chain's native finality.
+	IsTxFinalized(ctx context.Context, txHash string, offset *uint64) (bool, error)
+
+	// IsTimestampFinalized reports whether the chain has finalized a block at
+	// or after the timestamp; a nil offset uses the chain's native finality.
+	IsTimestampFinalized(ctx context.Context, timestamp time.Time, offset *uint64) (bool, error)
+
+	// WaitForChain blocks until the chain's latest block time catches up to
+	// the current time.
+	WaitForChain(ctx context.Context) error
 }
 
 var _ Client = (*evm.Client)(nil)
