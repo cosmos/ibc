@@ -1,0 +1,150 @@
+name: Link CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: link
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      link: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.link }}
+      sql: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.sql }}
+      proto: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.proto }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            link:
+              - 'link/**'
+              - '.github/workflows/ibc-link-ci.yml'
+            sql:
+              - 'link/**/*.sql'
+              - 'link/internal/store/sqlc.yml'
+              - 'link/Makefile'
+            proto:
+              - 'proto/**'
+              - 'link/Makefile'
+
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.link == 'true'
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: link/go.mod
+          cache-dependency-path: link/go.sum
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          working-directory: link
+
+  build:
+    name: Build
+    needs: changes
+    if: needs.changes.outputs.link == 'true'
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: link/go.mod
+          cache-dependency-path: link/go.sum
+      - name: Download dependencies
+        run: go mod download
+      - name: Build
+        run: make build
+
+  test:
+    name: Test
+    needs: changes
+    if: needs.changes.outputs.link == 'true'
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 30
+    env:
+      # creates postgres docker container for testing
+      TEST_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: link/go.mod
+          cache-dependency-path: link/go.sum
+      - name: Test
+        run: make test
+
+  verify-codegen:
+    name: Codegen Verify
+    needs: changes
+    if: needs.changes.outputs.sql == 'true' || needs.changes.outputs.proto == 'true'
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: sqlc-dev/setup-sqlc@v5
+        if: needs.changes.outputs.sql == 'true'
+        with:
+          sqlc-version: "1.30.0"
+
+      - uses: bufbuild/buf-action@v1
+        if: needs.changes.outputs.proto == 'true'
+        with:
+          setup_only: true
+          version: "1.70.0"
+
+      - name: Generate SQL
+        if: needs.changes.outputs.sql == 'true'
+        run: make codegen-sql
+
+      - name: Generate Protos
+        if: needs.changes.outputs.proto == 'true'
+        run: make codegen-proto
+
+      - name: Ensure no changes
+        working-directory: .
+        run: |
+          changes=$(git status --porcelain)
+          if [[ -n "$changes" ]]; then
+            echo "Generated code is out of date. Run the relevant codegen target and commit the result."
+            echo "$changes"
+            git diff --stat
+            exit 1
+          fi
+
+  ci-ok:
+    # Ensure all jobs completed
+    name: Finalize
+    if: always()
+    needs: [changes, lint, build, test, verify-codegen]
+    runs-on: depot-ubuntu-24.04-4
+    steps:
+      - name: Check required jobs
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        working-directory: .
+        run: exit 1
