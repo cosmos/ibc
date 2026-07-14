@@ -68,7 +68,7 @@ func (h *RelayerHandler) Status(
 	ctx context.Context,
 	req *connect.Request[proto.StatusRequest],
 ) (*connect.Response[proto.StatusResponse], error) {
-	h.logger.Info("Status called", "chainID", req.Msg.ChainId, "txHash", req.Msg.TxHash)
+	h.logger.Info("Status", "chainID", req.Msg.ChainId, "txHash", req.Msg.TxHash)
 
 	statuses, err := h.srv.Status(ctx, req.Msg.ChainId, req.Msg.TxHash)
 	switch {
