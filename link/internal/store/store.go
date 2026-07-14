@@ -36,6 +36,43 @@ type Repository interface {
 	CreatePacket(ctx context.Context, input CreatePacket) error
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
+
+	// ListUnfinishedPackets returns packets that have not reached a terminal status.
+	ListUnfinishedPackets(ctx context.Context) ([]Packet, error)
+
+	UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error
+
+	UpdatePacketRecvTx(ctx context.Context, key PacketKey, tx PacketTx) error
+	ClearPacketRecvTx(ctx context.Context, key PacketKey) error
+
+	UpdatePacketWriteAck(ctx context.Context, key PacketKey, ack WriteAck) error
+
+	UpdatePacketAckTx(ctx context.Context, key PacketKey, tx PacketTx) error
+	ClearPacketAckTx(ctx context.Context, key PacketKey) error
+
+	UpdatePacketTimeoutTx(ctx context.Context, key PacketKey, tx PacketTx) error
+	ClearPacketTimeoutTx(ctx context.Context, key PacketKey) error
+}
+
+// PacketKey uniquely identifies a packet.
+type PacketKey struct {
+	SourceChainID  string
+	SourceClientID string
+	Sequence       uint64
+}
+
+// PacketTx a relay transaction recorded on a packet.
+type PacketTx struct {
+	Hash           string
+	Time           time.Time
+	RelayerAddress string
+}
+
+// WriteAck the write acknowledgement observed for a packet.
+type WriteAck struct {
+	TxHash string
+	TxTime time.Time
+	Status WriteAckStatus
 }
 
 // Migrator abstracts schema migrations

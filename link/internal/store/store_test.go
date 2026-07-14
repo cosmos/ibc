@@ -276,4 +276,98 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		require.NoError(t, err)
 		assert.Empty(t, packets)
 	})
+
+	t.Run("packetLifecycle", func(t *testing.T) {
+		const txHashLifecycle = "0xlifecycle"
+
+		input := CreatePacket{
+			Status:                    RelayStatusPending,
+			SourceChainID:             chainIDEth,
+			DestinationChainID:        chainIDBase,
+			SourceTxHash:              txHashLifecycle,
+			SourceTxTime:              time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC),
+			PacketSequenceNumber:      77,
+			PacketSourceClientID:      "base-0",
+			PacketDestinationClientID: "ethereum-0",
+			PacketTimeoutTimestamp:    time.Date(2026, 7, 14, 13, 0, 0, 0, time.UTC),
+		}
+		require.NoError(t, s.CreatePacket(ctx, input))
+
+		key := PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 77}
+		fetch := func() Packet {
+			packets, err := s.ListPacketsBySourceTx(ctx, chainIDEth, txHashLifecycle)
+			require.NoError(t, err)
+			require.Len(t, packets, 1)
+
+			return packets[0]
+		}
+		inUnfinished := func() bool {
+			unfinished, err := s.ListUnfinishedPackets(ctx)
+			require.NoError(t, err)
+			for _, p := range unfinished {
+				if p.SourceTxHash == txHashLifecycle {
+					return true
+				}
+			}
+
+			return false
+		}
+
+		require.True(t, inUnfinished())
+
+		// recv tx set and cleared
+		recvTime := time.Date(2026, 7, 14, 12, 1, 0, 0, time.UTC)
+		require.NoError(t, s.UpdatePacketStatus(ctx, key, RelayStatusDeliverRecvPacket))
+		require.NoError(t, s.UpdatePacketRecvTx(ctx, key, PacketTx{Hash: "0xrecv", Time: recvTime, RelayerAddress: "0xrelayer"}))
+
+		got := fetch()
+		assert.Equal(t, RelayStatusDeliverRecvPacket, got.Status)
+		require.NotNil(t, got.RecvTxHash)
+		assert.Equal(t, "0xrecv", *got.RecvTxHash)
+		assert.Equal(t, recvTime, got.RecvTxTime.UTC())
+		assert.Equal(t, "0xrelayer", *got.RecvTxRelayerAddress)
+
+		require.NoError(t, s.ClearPacketRecvTx(ctx, key))
+		got = fetch()
+		assert.Nil(t, got.RecvTxHash)
+		assert.Nil(t, got.RecvTxTime)
+		assert.Nil(t, got.RecvTxRelayerAddress)
+
+		// write ack
+		ackTime := time.Date(2026, 7, 14, 12, 2, 0, 0, time.UTC)
+		require.NoError(t, s.UpdatePacketWriteAck(ctx, key, WriteAck{TxHash: "0xwriteack", TxTime: ackTime, Status: WriteAckStatusSuccess}))
+		got = fetch()
+		assert.Equal(t, "0xwriteack", *got.WriteAckTxHash)
+		assert.Equal(t, ackTime, got.WriteAckTxTime.UTC())
+		assert.Equal(t, WriteAckStatusSuccess, *got.WriteAckStatus)
+
+		// ack tx set and cleared
+		require.NoError(t, s.UpdatePacketAckTx(ctx, key, PacketTx{Hash: "0xack", Time: ackTime, RelayerAddress: "0xrelayer"}))
+		got = fetch()
+		assert.Equal(t, "0xack", *got.AckTxHash)
+
+		require.NoError(t, s.ClearPacketAckTx(ctx, key))
+		got = fetch()
+		assert.Nil(t, got.AckTxHash)
+		assert.Nil(t, got.AckTxTime)
+		assert.Nil(t, got.AckTxRelayerAddress)
+
+		// timeout tx set and cleared
+		require.NoError(t, s.UpdatePacketTimeoutTx(ctx, key, PacketTx{Hash: "0xtimeout", Time: ackTime, RelayerAddress: "0xrelayer"}))
+		got = fetch()
+		assert.Equal(t, "0xtimeout", *got.TimeoutTxHash)
+
+		require.NoError(t, s.ClearPacketTimeoutTx(ctx, key))
+		got = fetch()
+		assert.Nil(t, got.TimeoutTxHash)
+
+		// terminal status leaves the unfinished set
+		require.NoError(t, s.UpdatePacketStatus(ctx, key, RelayStatusCompleteWithAck))
+		assert.False(t, inUnfinished())
+
+		// updates to a different key are noops for this packet
+		other := PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 78}
+		require.NoError(t, s.UpdatePacketRecvTx(ctx, other, PacketTx{Hash: "0xother", Time: recvTime, RelayerAddress: "0xrelayer"}))
+		assert.Nil(t, fetch().RecvTxHash)
+	})
 }
