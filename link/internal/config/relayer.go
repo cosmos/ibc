@@ -30,6 +30,14 @@ type RelayerConfig struct {
 	Routes         []RouteConfig          `yaml:"routesToRelay"`
 	// Signers the signer alias used to submit relay transactions per chain id.
 	Signers map[string]string `yaml:"signers,omitempty"`
+	// ProofAPI the proof api used to build relay transactions.
+	ProofAPI ProofAPIConfig `yaml:"proofApi,omitempty"`
+}
+
+// ProofAPIConfig connection details for the proof api.
+type ProofAPIConfig struct {
+	GRPC       string `yaml:"grpc"`
+	TLSEnabled bool   `yaml:"tlsEnabled,omitempty"`
 }
 
 // ChainOverride returns the relay settings override for a chain, or nil.

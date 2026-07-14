@@ -66,3 +66,7 @@ relayer:
   signers:
     "1": "relayer-key"
     "8453": "relayer-key"
+
+  # proof api used to build relay transactions
+  proofApi:
+    grpc: proof-api.example.com:8080

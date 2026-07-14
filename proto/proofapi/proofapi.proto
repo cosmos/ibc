@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package proofapi;
+
+// vendored from skip-mev/relayer proto/eurekarelayer/relayer.proto (renamed
+// to proofapi.proto so the registered filename does not collide with
+// link/relayer.proto); the
+// go_package is rewritten to generate into this repo
+option go_package = "github.com/cosmos/ibc/link/internal/types/proofapi";
+
+// The proof API service definition.
+// Each proof API service is defined between two chains.
+// One chain is the source chain, and the other chain is the target chain.
+service ProofApiService {
+    // Relay the ibc packets produced by the results of transactions
+    rpc RelayByTx (RelayByTxRequest) returns (RelayByTxResponse);
+    // Create a new ibc client on the target (destination) chain
+    rpc CreateClient (CreateClientRequest) returns (CreateClientResponse);
+    // Update the ibc client on the target (destination) chain
+    rpc UpdateClient (UpdateClientRequest) returns (UpdateClientResponse);
+    // Request proof API information
+    rpc Info (InfoRequest) returns (InfoResponse);
+}
+
+// The relay by tx request message
+message RelayByTxRequest {
+    // The source chain identifier
+    string src_chain = 1;
+    // The target chain identifier
+    string dst_chain = 2;
+    // The identifiers for the IBC transactions to be relayed
+    // This is usually the transaction hash
+    repeated bytes source_tx_ids = 3;
+    // The identifiers for the IBC transactions on the target chain to be timed out
+    repeated bytes timeout_tx_ids = 4;
+    // The identifier for the source client
+    // Used for event filtering
+    string src_client_id = 5;
+    // The identifier for the destination client
+    // Used for event filtering
+    string dst_client_id = 6;
+    // The optional source chain send packet sequences for recv packets
+    // Used for event filtering, no filtering if empty
+    repeated uint64 src_packet_sequences = 7;
+    // The optional destination chain send packet sequences for acks and timeouts
+    // Used for event filtering, no filtering if empty
+    repeated uint64 dst_packet_sequences = 8;
+}
+
+// The relay by tx response message
+message RelayByTxResponse {
+    // The multicall transaction to be submitted by caller
+    bytes tx = 1;
+    // The contract address to submit the transaction, if applicable
+    string address = 2;
+}
+
+// The create client request message
+message CreateClientRequest {
+    // The source chain identifier
+    string src_chain = 1;
+    // The target chain identifier
+    string dst_chain = 2;
+    // Optional genesis parameters
+    map<string, string> parameters = 3;
+}
+
+// The create client response message
+message CreateClientResponse {
+    // The transaction to be submitted by caller
+    bytes tx = 1;
+    // The contract address to submit the transaction, if applicable
+    string address = 2;
+}
+
+// The update client request message
+message UpdateClientRequest {
+    // The source chain identifier
+    string src_chain = 1;
+    // The target chain identifier
+    string dst_chain = 2;
+    // The identifier for the client on the destination chain
+    string dst_client_id = 3;
+}
+
+// The update client response message
+message UpdateClientResponse {
+    // The transaction to be submitted by caller
+    bytes tx = 1;
+    // The contract address to submit the transaction, if applicable
+    string address = 2;
+}
+
+// Information request message
+message InfoRequest {
+    // The source chain identifier
+    string src_chain = 1;
+    // The target chain identifier
+    string dst_chain = 2;
+}
+
+// Information response message
+message InfoResponse {
+    // The target chain information
+    Chain target_chain = 1;
+    // The source chain information
+    Chain source_chain = 2;
+    // Metadata for the module
+    map<string, string> metadata = 3;
+}
+
+// The chain definition
+message Chain {
+    // The chain id
+    string chain_id = 1;
+    // The ibc version
+    string ibc_version = 2;
+    // The ibc contract address
+    string ibc_contract = 3;
+}
