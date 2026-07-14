@@ -1,4 +1,4 @@
-package negative_test
+package e2e_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
-func TestFault_NodeStop_RelayerRecovers(t *testing.T) {
+func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	selected := e2etest.SelectedSuite(t)
 	e2etest.RequireCapabilities(t, selected, environment.Requirements{
 		NodeLifecycle: []environment.ChainID{e2etest.ChainB},

@@ -1,4 +1,4 @@
-package ibclink_test
+package e2e_test
 
 import (
 	"math/big"
@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
-func TestRestartRecovery_ResumesPendingPacket(t *testing.T) {
+func TestRelayerRestart_ResumesPendingPacket(t *testing.T) {
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := synthetic.NewSigners(t)
 	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)

@@ -1,4 +1,4 @@
-package ibclink_test
+package e2e_test
 
 import (
 	"math/big"
@@ -27,7 +27,7 @@ func crossRouteSuite() e2etest.Suite {
 	}}, environment.Runtime{})
 }
 
-func TestCrossRoute_NoSequenceCollision(t *testing.T) {
+func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	e2etest.RequireAnvilLane(t)
 	env := e2etest.Start(t, crossRouteSuite())
 	signers := synthetic.NewSigners(t)

@@ -1,18 +1,23 @@
-package setup_test
+package e2e_test
 
 import (
+	"net"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/link/cmd/configcmd"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
-func TestValidateConfig_SelectedSuite(t *testing.T) {
+func TestConfigValidation(t *testing.T) {
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	a, err := env.Chain(e2etest.ChainA)
 	require.NoError(t, err)
@@ -137,4 +142,79 @@ func TestValidateConfig_SelectedSuite(t *testing.T) {
 		require.True(t, hasErrorPath(res.Errors, "chains[0].chainId"),
 			"expected located chain-id error, got %+v", res.Errors)
 	})
+}
+
+func requireExit(t *testing.T, err error, wantClass error) {
+	t.Helper()
+	require.Error(t, err, "command must fail")
+	require.ErrorIs(t, err, wantClass, "failure class")
+	var exitErr *ibclink.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	require.Equal(t, 1, exitErr.Code, "all ibc command failures use exit code 1")
+}
+
+func hasErrorPath(errs []configcmd.ValidationError, path string) bool {
+	for _, e := range errs {
+		if e.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func newDriver(t *testing.T) (*ibclink.Driver, string) {
+	t.Helper()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	driver, err := ibclink.NewDriver(configPath)
+	require.NoError(t, err)
+	return driver, configPath
+}
+
+func newEnvironmentDriver(t *testing.T, env *environment.Environment) (*ibclink.Driver, string) {
+	t.Helper()
+	driver, configPath := newDriver(t)
+	require.NoError(t, env.BindIBCLink(driver))
+	return driver, configPath
+}
+
+func chainRPC(t *testing.T, driver *ibclink.Driver, id environment.ChainID) configcmd.RPC {
+	t.Helper()
+	rpc, err := driver.ChainRPC(string(id))
+	require.NoError(t, err)
+	return rpc
+}
+
+func writeConfig(t *testing.T, path string, c configcmd.Config) {
+	t.Helper()
+	data, err := c.Marshal()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, data, 0o600))
+}
+
+func writeLocalSigner(t *testing.T, alias string) configcmd.Signer {
+	t.Helper()
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), alias+".json")
+	require.NoError(t, keyfile.Store(path, keyfile.ECDSA, crypto.FromECDSA(key)))
+	return configcmd.Signer{Alias: alias, Type: configcmd.SignerTypeLocal, File: path}
+}
+
+func refusingRPCURL(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = l.Close() })
+
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	return "http://" + l.Addr().String()
 }

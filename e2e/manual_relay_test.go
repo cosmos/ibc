@@ -1,4 +1,4 @@
-package negative_test
+package e2e_test
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
-func TestManualRelay_UnknownSourceTxErrors(t *testing.T) {
+func TestManualRelayRejectsUnknownSourceTransaction(t *testing.T) {
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := synthetic.NewSigners(t)
 	driver, _ := synthetic.Deploy(t, env, signers, synthetic.AtoB(e2etest.ChainA, e2etest.ChainB))

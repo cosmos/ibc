@@ -1,19 +1,14 @@
 # Repository E2E Test Surface
 
-This repository-level surface hosts black-box acceptance suites. The current suites drive IBC Link through its public CLI, config, readiness, relay, and status contracts. The accepted Link harness design is documented in [IBC Environment Architecture](../link/HARNESS-ARCHITECTURE-DESIGN.md); the synthetic traffic is transitional and does not shape that architecture.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts. The accepted Link harness design is documented in [IBC Environment Architecture](../link/HARNESS-ARCHITECTURE-DESIGN.md); the synthetic traffic is transitional and does not shape that architecture.
 
 `internal/harness/environment` realizes Chains and protocol resources. Tests then deploy the temporary MockIFT, MockGMP, and Counter applications and start the synthetic relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
-## Suites
+## Acceptance coverage
 
-| Suite | Package | What it proves |
-| --- | --- | --- |
-| Setup | `./setup` | Config validation, live RPC checks, typed test-application receipts, and on-chain deployment verification. |
-| Relayer flow | `./ibclink` | IFT/GMP happy paths plus pending/status and restart recovery behavior. |
-| External chain | `./external` | Relaying through an attached RPC that `Environment` does not own. |
-| Negative flow | `./negative` | Representative fault, timeout/refund, and error-ack cases. |
+The root package covers configuration validation, test-application deployment, IFT and GMP relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-## Running the suite
+## Running the acceptance tests
 
 Run targets from the repository root:
 
@@ -30,8 +25,7 @@ The same tests can select different Chain declarations:
 - `make test-e2e` uses instant-mining Anvil for fast feedback.
 - `make test-e2e E2E_LANE=anvil-interval` uses two-second Anvil blocks.
 - `make test-e2e E2E_LANE=besu` uses Besu QBFT.
-- `make test-e2e E2E_PKGS=./negative` runs the opt-in negative suite.
-- `make test-e2e E2E_PKGS=./ibclink E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'` runs one test repeatedly.
+- `make test-e2e E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'` runs one test repeatedly.
 
 `-e2e.lane` in `E2E_FLAGS` overrides `E2E_LANE`. Tests pinned to instant Anvil call `e2etest.RequireAnvilLane(t)` so a matrix runs them only in that lane. After a hard crash, use `make clean-e2e-dry-run` and then `make clean-e2e`.
 

@@ -1,5 +1,4 @@
-// Package external_test covers harness connectivity to an out-of-band chain.
-package external_test
+package e2e_test
 
 import (
 	"math/big"
@@ -24,7 +23,7 @@ const (
 	externalEndpoint environment.EndpointBindingID = "external-chain-b"
 )
 
-func TestExternalChain_EnvironmentConnectsButDoesNotOwn(t *testing.T) {
+func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 	e2etest.RequireAnvilLane(t)
 	ctx := t.Context()
 

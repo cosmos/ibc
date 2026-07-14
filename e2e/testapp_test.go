@@ -1,4 +1,4 @@
-package setup_test
+package e2e_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
 
-func TestTestApps_SelectedSuite_VerifiesDeploymentOnChain(t *testing.T) {
+func TestTestAppDeployment(t *testing.T) {
 	ctx := t.Context()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := synthetic.NewSigners(t)

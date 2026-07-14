@@ -1,4 +1,4 @@
-package ibclink_test
+package e2e_test
 
 import (
 	"math/big"
@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
-func TestPendingPacket_Anvil_StatusIsBetterSignal(t *testing.T) {
+func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	selected := e2etest.SelectedSuite(t)
 	e2etest.RequireCapabilities(t, selected, environment.Requirements{
 		MiningControl: []environment.ChainID{e2etest.ChainB},

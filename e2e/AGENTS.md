@@ -1,13 +1,12 @@
 # Repository E2E Tests + Stub SUT Guide for AI Agents
 
-This module contains repository-level e2e packages: linear Go tests over the `internal/harness`
-surface. Temporary Link behavior lives in `../link/internal/stub` and is explicitly selected by
-the ordinary `ibc` binary's composition root.
+This module contains one root repository-level acceptance package: linear Go tests over the
+`internal/harness` surface. Temporary Link behavior lives in `../link/internal/stub` and is
+explicitly selected by the ordinary `ibc` binary's composition root.
 
-- Run everything from the repository root: `make test-e2e` for the smoke suite,
-  `make test-e2e E2E_PKGS=./negative` for negative cases, or
-  `make test-e2e E2E_PKGS=./ibclink E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'` for one loop.
-  Lanes: `E2E_LANE=anvil|anvil-interval|besu`.
+- Run everything from the repository root: `make test-e2e` for the complete acceptance package, or
+  `make test-e2e E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'` for one focused loop. Lanes:
+  `E2E_LANE=anvil|anvil-interval|besu`.
 - Tests start an `Environment`, hold the synthetic driver and relayer explicitly, and assert through
   route-bound test-application bindings. Transport-contract tests may call the concrete driver or Relayer directly.
 - **The stub is a swap ledger entry, not a product.** The Link composition root visibly selects

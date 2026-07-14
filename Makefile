@@ -1,7 +1,6 @@
 help: ## List repository commands
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-E2E_PKGS ?= ./setup ./ibclink ./external
 E2E_FLAGS ?= -count=1
 E2E_LANE ?= anvil
 
@@ -30,8 +29,8 @@ test-harness: build-link ## Run harness tests, including Docker-backed integrati
 test-unit: ## Run pure-Go e2e selection and helper tests; no chains
 	go -C $(E2E_DIR) test ./e2etest ./internal/...
 
-test-e2e: build-link ## Run e2e tests (E2E_PKGS=... E2E_FLAGS=... E2E_LANE=...)
-	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test $(E2E_PKGS) $(E2E_FLAGS)
+test-e2e: build-link ## Run e2e tests (E2E_FLAGS=... E2E_LANE=...)
+	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . $(E2E_FLAGS)
 
 lint-e2e: ## Lint the e2e and harness modules
 	cd $(E2E_DIR) && golangci-lint run

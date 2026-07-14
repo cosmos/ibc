@@ -1,4 +1,4 @@
-package negative_test
+package e2e_test
 
 import (
 	"math/big"
@@ -15,10 +15,65 @@ import (
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
+func TestIFTTransfer_AutoRelay(t *testing.T) {
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	signers := synthetic.NewSigners(t)
+	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	transfer, err := ift.Send(ctx, testapp.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	_, err = synthetic.AwaitState(ctx, relayer, transfer.Packet(), relayercmd.PacketComplete, destination.Timing())
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+}
+
+func TestIFTTransfer_ManualRelay(t *testing.T) {
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	signers := synthetic.NewSigners(t)
+	route := synthetic.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	transfer, err := ift.Send(ctx, testapp.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	require.NoError(t, synthetic.AwaitStable(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		relayercmd.PacketPending,
+		destination.Timing(),
+	))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
+	require.NoError(t, synthetic.Relay(ctx, relayer, transfer.Packet()))
+	_, err = synthetic.AwaitState(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		relayercmd.PacketComplete,
+		destination.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+}
+
 const (
-	transferTimeout = 60 * time.Second
-	// Advance well past transferTimeout so the timeout check wins any relay race.
-	timeAdvance = 5 * transferTimeout
+	iftTransferTimeout = 60 * time.Second
+	// Advance well past iftTransferTimeout so the timeout check wins any relay race.
+	iftTimeoutAdvance = 5 * iftTransferTimeout
 )
 
 func TestIFTTimeout_Refund(t *testing.T) {
@@ -37,7 +92,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 	require.NoError(t, relayer.Stop(ctx))
 	transfer, err := ift.Send(ctx, testapp.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
+		Timeout: iftTransferTimeout,
 	})
 	require.NoError(t, err)
 
@@ -45,9 +100,9 @@ func TestIFTTimeout_Refund(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := chainB.Mining()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, timeAdvance))
+	require.NoError(t, mining.AdvanceTime(ctx, iftTimeoutAdvance))
 	relayer = synthetic.StartRelayer(t, driver, env)
-	assertTimedOutAndRefunded(t, env, relayer, transfer)
+	assertIFTTimedOutAndRefunded(t, env, relayer, transfer)
 }
 
 func TestIFTTimeout_ManualRelayRefund(t *testing.T) {
@@ -65,7 +120,7 @@ func TestIFTTimeout_ManualRelayRefund(t *testing.T) {
 
 	transfer, err := ift.Send(ctx, testapp.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
+		Timeout: iftTransferTimeout,
 	})
 	require.NoError(t, err)
 
@@ -73,12 +128,12 @@ func TestIFTTimeout_ManualRelayRefund(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := chainB.Mining()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, timeAdvance))
+	require.NoError(t, mining.AdvanceTime(ctx, iftTimeoutAdvance))
 	require.NoError(t, synthetic.Relay(ctx, relayer, transfer.Packet()))
-	assertTimedOutAndRefunded(t, env, relayer, transfer)
+	assertIFTTimedOutAndRefunded(t, env, relayer, transfer)
 }
 
-func assertTimedOutAndRefunded(
+func assertIFTTimedOutAndRefunded(
 	t *testing.T,
 	env *environment.Environment,
 	relayer *ibclink.Relayer,
