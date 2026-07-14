@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	ics26router "github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26_router"
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 )
 
 const (
