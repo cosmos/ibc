@@ -1,4 +1,5 @@
-package testapp
+// Package observe implements the polling policy shared by e2e observations.
+package observe
 
 import (
 	"context"
@@ -6,10 +7,10 @@ import (
 	"time"
 )
 
-// await retries transient observation errors until the probe succeeds or the
-// Chain's completion budget expires. A probe reports done with an error when
-// the observed result itself is invalid and retrying cannot fix it.
-func await[T any](
+// Await retries transient observation errors until the probe succeeds or the
+// completion budget expires. A probe reports done with an error when the
+// observed result itself is invalid and retrying cannot fix it.
+func Await[T any](
 	ctx context.Context,
 	budget, poll time.Duration,
 	description string,

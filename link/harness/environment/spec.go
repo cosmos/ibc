@@ -17,13 +17,12 @@ type (
 	ClientID      string
 	AttestorID    string
 
-	// EndpointBindingID and AuthorityID name values supplied separately at
-	// runtime. A durable Spec never contains endpoint credentials or secrets.
+	// EndpointBindingID and AuthorityID name values supplied separately at runtime.
 	EndpointBindingID string
 	AuthorityID       string
 
-	// Existing resource locators are non-secret authored identifiers. Their
-	// concrete interpretation belongs to realization, not to the desired graph.
+	// Existing resource locators are authored identifiers whose concrete
+	// interpretation belongs to realization, not to the desired graph.
 	IBCInstanceLocator string
 	IBCClientLocator   string
 )

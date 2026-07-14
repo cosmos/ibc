@@ -6,9 +6,7 @@ import (
 	"github.com/cosmos/ibc/link/harness/chain/evm"
 )
 
-// Runtime contains process-local bindings that must not be serialized with a Spec.
-// Endpoint URLs and private keys may contain credentials, so neither is copied into
-// the environment manifest.
+// Runtime contains process-local bindings that are separate from the durable Spec.
 type Runtime struct {
 	Endpoints   map[EndpointBindingID]EndpointBinding
 	Authorities map[AuthorityID]EVMAuthority

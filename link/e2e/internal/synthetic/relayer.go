@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/cosmos/ibc/link/e2e/internal/observe"
 	"github.com/cosmos/ibc/link/e2e/internal/testapp"
 	"github.com/cosmos/ibc/link/harness/environment"
 	"github.com/cosmos/ibc/link/harness/ibclink"
@@ -29,7 +30,7 @@ func AwaitState(
 	}
 
 	description := fmt.Sprintf("packet %s to report status %q", packetID, want)
-	return await(
+	return observe.Await(
 		ctx,
 		timing.CompletionBudget,
 		timing.PollInterval,
@@ -200,45 +201,6 @@ func validateTerminalStatus(status wire.PacketStatus) error {
 		}
 	}
 	return nil
-}
-
-func await[T any](
-	ctx context.Context,
-	budget, poll time.Duration,
-	description string,
-	probe func(context.Context) (T, bool, error),
-) (T, error) {
-	var zero T
-	ctx, cancel := context.WithTimeout(ctx, budget)
-	defer cancel()
-
-	ticker := time.NewTicker(poll)
-	defer ticker.Stop()
-	var lastErr error
-	for {
-		value, done, err := probe(ctx)
-		switch {
-		case done && err != nil:
-			return zero, err
-		case done:
-			return value, nil
-		case err != nil:
-			lastErr = err
-		}
-		select {
-		case <-ctx.Done():
-			if lastErr != nil {
-				return zero, fmt.Errorf(
-					"waiting for %s: %w (last observation error: %w)",
-					description,
-					ctx.Err(),
-					lastErr,
-				)
-			}
-			return zero, fmt.Errorf("waiting for %s: %w", description, ctx.Err())
-		case <-ticker.C:
-		}
-	}
 }
 
 func settleObservations(timing environment.Timing) int {

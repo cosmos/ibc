@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/cosmos/ibc/link/e2e/internal/observe"
 	"github.com/cosmos/ibc/link/harness/chain/evm"
 	"github.com/cosmos/ibc/link/harness/environment"
 
@@ -87,7 +88,7 @@ func awaitEvent[T any](
 		Topics:    [][]common.Hash{{topic}},
 	}
 	timing := chain.Timing()
-	return await(
+	return observe.Await(
 		ctx,
 		timing.CompletionBudget,
 		timing.PollInterval,

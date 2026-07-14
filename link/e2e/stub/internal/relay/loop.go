@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
-	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
@@ -334,7 +333,7 @@ func (r *relayer) deliverPending(ctx context.Context, src, dst *chainConn, p sto
 	}
 	tx, err := d.deliver(opts)
 	if err != nil {
-		return fmt.Errorf("submit %s: %s", d.effect, rpcsafe.RedactURLs(err.Error()))
+		return fmt.Errorf("submit %s: %w", d.effect, err)
 	}
 	rcpt, err := onchain.WaitMined(ctx, dst.client, tx)
 	if err != nil {
@@ -381,7 +380,7 @@ func (r *relayer) maybeTimeout(ctx context.Context, src, dst *chainConn, p store
 	received := receivedKeyFor(dst.id, p)
 	hdr, err := dst.client.HeaderByNumber(ctx, nil)
 	if err != nil {
-		return false, fmt.Errorf("destination head for timeout check: %s", rpcsafe.RedactURLs(err.Error()))
+		return false, fmt.Errorf("destination head for timeout check: %w", err)
 	}
 	if new(big.Int).SetUint64(hdr.Time).Cmp(d.timeout) < 0 {
 		return false, nil
@@ -415,7 +414,7 @@ func (r *relayer) maybeTimeout(ctx context.Context, src, dst *chainConn, p store
 	}
 	tx, err := d.refund(opts)
 	if err != nil {
-		return false, fmt.Errorf("submit refund on %s: %s", src.id, rpcsafe.RedactURLs(err.Error()))
+		return false, fmt.Errorf("submit refund on %s: %w", src.id, err)
 	}
 	rcpt, err := onchain.WaitMined(ctx, src.client, tx)
 	if err != nil {

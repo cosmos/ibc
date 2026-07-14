@@ -192,7 +192,7 @@ func TestStartRealizesMixedProtocolGraphWithInjectedDrivers(t *testing.T) {
 func TestStartConnectionFailurePreservesPartialReceiptsAndOwnership(t *testing.T) {
 	spec := mixedProtocolSpec()
 	runtime := mixedProtocolRuntime()
-	connectionErr := errors.New("client B setup failed with runtime-only detail")
+	connectionErr := errors.New("client B setup failed with adapter detail")
 	partial := IBCConnectionReceipt{
 		ID: "connection-ab",
 		A: &IBCClientReceipt{
@@ -281,7 +281,7 @@ func TestStartConnectionFailurePreservesPartialReceiptsAndOwnership(t *testing.T
 	var startErr *StartError
 	require.ErrorAs(t, err, &startErr)
 	require.ErrorIs(t, err, connectionErr)
-	require.NotContains(t, err.Error(), "runtime-only detail")
+	require.Contains(t, err.Error(), "adapter detail")
 	require.Equal(t, []FailureRecord{{
 		Kind: ResourceKindIBCConnection, ID: "connection-ab",
 	}}, startErr.Failures())

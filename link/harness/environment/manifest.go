@@ -74,7 +74,7 @@ type CleanupRecord struct {
 }
 
 // Manifest is an immutable snapshot. Accessors return copies, and its JSON
-// representation contains only the redacted records above.
+// representation contains only the typed records above.
 type Manifest struct {
 	resources []ResourceRecord
 	cleanup   []CleanupRecord

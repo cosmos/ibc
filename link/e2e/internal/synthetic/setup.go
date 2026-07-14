@@ -78,20 +78,23 @@ func Deploy(
 	if err != nil {
 		t.Fatalf("synthetic: store signers: %v", err)
 	}
-	config := buildConfig(t, env, routes, configuredSigners, filepath.Join(dir, "relayer.db"))
-	data, err := config.Marshal()
-	if err != nil {
-		t.Fatalf("synthetic: encode config: %v", err)
-	}
 	configPath := filepath.Join(dir, "ibc-link.config.yaml")
-	if writeErr := os.WriteFile(configPath, data, 0o600); writeErr != nil {
-		t.Fatalf("synthetic: write config: %v", writeErr)
-	}
-
 	driver, err := ibclink.NewDriver(configPath)
 	if err != nil {
 		t.Fatalf("synthetic: create driver: %v", err)
 	}
+	if bindErr := env.BindIBCLink(driver); bindErr != nil {
+		t.Fatalf("synthetic: bind IBC Link process: %v", bindErr)
+	}
+	config := buildConfig(t, env, driver, routes, configuredSigners, filepath.Join(dir, "relayer.db"))
+	data, err := config.Marshal()
+	if err != nil {
+		t.Fatalf("synthetic: encode config: %v", err)
+	}
+	if writeErr := os.WriteFile(configPath, data, 0o600); writeErr != nil {
+		t.Fatalf("synthetic: write config: %v", writeErr)
+	}
+
 	if migrationErr := driver.MigrateUp(t.Context()); migrationErr != nil {
 		t.Fatalf("synthetic: migrate database: %v", migrationErr)
 	}
@@ -144,6 +147,7 @@ func StartRelayer(
 func buildConfig(
 	t testing.TB,
 	env *environment.Environment,
+	driver *ibclink.Driver,
 	routes []Route,
 	signers []wire.Signer,
 	dbPath string,
@@ -160,13 +164,17 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("synthetic: resolve Chain %q: %v", id, err)
 		}
+		rpc, err := driver.ChainRPC(string(id))
+		if err != nil {
+			t.Fatalf("synthetic: resolve Chain %q process binding: %v", id, err)
+		}
 		config.Chains = append(config.Chains, wire.Chain{
 			ID:            string(id),
 			Type:          wire.ChainTypeEVM,
 			ChainID:       chain.EVMChainID(),
 			EVMSigner:     relayerSignerAlias,
 			TestAppSigner: applicationSignerAlias,
-			RPC:           wire.RPC{URL: chain.RPCURL()},
+			RPC:           rpc,
 		})
 	}
 

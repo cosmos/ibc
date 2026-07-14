@@ -27,6 +27,7 @@ const (
 	// Backstop: a status endpoint that accepts but never responds would hang an unbounded ctx forever.
 	statusHTTPTimeout = 30 * time.Second
 	killTimeout       = 5 * time.Second
+	errorBodyLimit    = 512
 )
 
 type Relayer struct {
@@ -46,10 +47,21 @@ type readyResult struct {
 }
 
 func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
+	processEnv, releaseBinding, err := r.acquireProcessEnv()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if releaseBinding != nil {
+			releaseBinding()
+		}
+	}()
+
 	args := append([]string{"relayer", "run"}, r.configArgs()...)
 	bin := r.stubBin
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
+	cmd.Env = processEnv.variables
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// First stdout line is the readiness JSON; stderr carries human logs and must stay separate.
@@ -62,9 +74,7 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 		return nil, fmt.Errorf("ibc relayer run: stderr pipe: %w", err)
 	}
 
-	d := &Relayer{
-		http: &http.Client{Timeout: statusHTTPTimeout},
-	}
+	d := &Relayer{http: &http.Client{Timeout: statusHTTPTimeout}}
 
 	if startErr := cmd.Start(); startErr != nil {
 		return nil, fmt.Errorf("start ibc relayer run (%s): %w", bin, startErr)
@@ -75,7 +85,8 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	drained.Add(2)
 	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
 	go func() { defer drained.Done(); _, _ = io.Copy(io.Discard, stderr) }()
-	d.h = proc.Reap(cmd, proc.Hooks{BeforeWait: drained.Wait})
+	d.h = proc.Reap(cmd, proc.Hooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
+	releaseBinding = nil
 
 	readiness, err := d.awaitReady(ctx, readyCh)
 	if err != nil {
@@ -201,14 +212,28 @@ func (d *Relayer) doJSON(req *http.Request, label string, out any) error {
 	}
 	defer resp.Body.Close() //nolint:errcheck
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit+1))
+		if readErr != nil {
+			return fmt.Errorf(
+				"%s: %s %s -> %s: read response body: %w",
+				label,
+				req.Method,
+				req.URL.String(),
+				resp.Status,
+				readErr,
+			)
+		}
+		bodyText := "<response body omitted: exceeds limit>"
+		if len(body) <= errorBodyLimit {
+			bodyText = strings.TrimSpace(string(body))
+		}
 		return fmt.Errorf(
 			"%s: %s %s -> %s: %s",
 			label,
 			req.Method,
 			req.URL.String(),
 			resp.Status,
-			strings.TrimSpace(string(body)),
+			bodyText,
 		)
 	}
 	if out == nil {

@@ -21,7 +21,6 @@ import (
 	"github.com/cosmos/ibc/link/e2e/stub/internal/cfg"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/exitcode"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
-	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/signing"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
@@ -80,10 +79,9 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 		g.Go(func() error {
 			chainDeployment, deployErr := deployChain(cmd.Context(), ch, signerKeys[ch.ID])
 			if deployErr != nil {
-				// Flatten dial errors so resolved ${ENV} credentials in RPC URLs never reach stderr.
 				return exitcode.New(
 					wire.ExitTestAppDeployFailure,
-					fmt.Errorf("deploy test apps to chain %s: %s", ch.ID, rpcsafe.RedactURLs(deployErr.Error())),
+					fmt.Errorf("deploy test apps to chain %s: %w", ch.ID, deployErr),
 				)
 			}
 			results[i] = chainResult{id: ch.ID, deployment: chainDeployment}

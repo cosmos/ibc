@@ -66,11 +66,8 @@ func acquireIBCInstances(
 				_ = resources.setResourceState(ResourceKindIBCInstance, string(id), ResourceStateFailed)
 			}
 			return nil, []FailureRecord{{
-					Kind: ResourceKindIBCInstance, ID: string(id),
-				}}, &redactedCause{
-					message: fmt.Sprintf("start IBC Instance %q failed", id),
-					cause:   err,
-				}
+				Kind: ResourceKindIBCInstance, ID: string(id),
+			}}, fmt.Errorf("start IBC Instance %q failed: %w", id, err)
 		}
 		if acquisition.instance == nil {
 			return nil, []FailureRecord{{
@@ -131,10 +128,7 @@ func acquireConnections(
 		prepared, failures, err := d.prepareConnections(ctx, spec, dependencies, runtime)
 		recordPreparedExistingClients(spec, prepared, receipts)
 		if err != nil {
-			return nil, nil, failures, &redactedCause{
-				message: "prepare IBC Connections failed",
-				cause:   err,
-			}
+			return nil, nil, failures, fmt.Errorf("prepare IBC Connections failed: %w", err)
 		}
 		dependencies = prepared
 	}
@@ -176,11 +170,8 @@ func acquireConnections(
 				_ = resources.setResourceState(ResourceKindIBCConnection, string(declaration.ID), ResourceStateFailed)
 			}
 			return nil, nil, []FailureRecord{{
-					Kind: ResourceKindIBCConnection, ID: string(declaration.ID),
-				}}, &redactedCause{
-					message: fmt.Sprintf("start IBC Connection %q failed", declaration.ID),
-					cause:   err,
-				}
+				Kind: ResourceKindIBCConnection, ID: string(declaration.ID),
+			}}, fmt.Errorf("start IBC Connection %q failed: %w", declaration.ID, err)
 		}
 		if err := resources.recordAcquired(
 			ResourceKindIBCConnection,
@@ -328,11 +319,8 @@ func acquireAttestors(
 				_ = resources.setResourceState(key.kind, key.id, ResourceStateFailed)
 			}
 			return nil, []FailureRecord{{
-					Kind: ResourceKindAttestor, ID: string(declaration.ID),
-				}}, &redactedCause{
-					message: fmt.Sprintf("start Attestor %q failed", declaration.ID),
-					cause:   err,
-				}
+				Kind: ResourceKindAttestor, ID: string(declaration.ID),
+			}}, fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
 		}
 		if acquisition.attestor == nil || acquisition.release == nil {
 			return nil, []FailureRecord{{

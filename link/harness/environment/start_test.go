@@ -135,7 +135,7 @@ func TestProductionPrerequisitesRequireExecutableAttestorBinary(t *testing.T) {
 }
 
 func TestStartFailureIsAtomicAndCleansAcquiredEffects(t *testing.T) {
-	primary := errors.New("second Chain failed with a secret endpoint")
+	primary := errors.New("second Chain failed with endpoint detail")
 	firstAcquired := make(chan struct{})
 	var releases atomic.Int32
 
@@ -169,7 +169,7 @@ func TestStartFailureIsAtomicAndCleansAcquiredEffects(t *testing.T) {
 	var startErr *StartError
 	require.ErrorAs(t, err, &startErr)
 	require.ErrorIs(t, err, primary)
-	require.NotContains(t, err.Error(), "secret endpoint")
+	require.Contains(t, err.Error(), "endpoint detail")
 	require.Equal(t, []FailureRecord{{
 		Kind: ResourceKindChain, ID: "second",
 	}}, startErr.Failures())
@@ -186,7 +186,7 @@ func TestStartFailureIsAtomicAndCleansAcquiredEffects(t *testing.T) {
 
 func TestStartFailureReportsCleanupFailure(t *testing.T) {
 	primary := errors.New("acquire failed")
-	releaseErr := errors.New("release failed with sensitive details")
+	releaseErr := errors.New("release failed with details")
 	firstAcquired := make(chan struct{})
 	var privateDir, diagnosticsDir string
 	spec := Spec{Chains: []ChainSpec{
@@ -242,8 +242,8 @@ func TestStartFailureReportsCleanupFailure(t *testing.T) {
 	var startErr *StartError
 	require.ErrorAs(t, err, &startErr)
 	require.ErrorIs(t, startErr.CleanupError(), releaseErr)
-	require.NotContains(t, err.Error(), "sensitive details")
-	require.NotContains(t, startErr.CleanupError().Error(), "sensitive details")
+	require.Contains(t, err.Error(), "release failed with details")
+	require.Contains(t, startErr.CleanupError().Error(), "release failed with details")
 	require.Equal(t, diagnosticsDir, startErr.DiagnosticsDir())
 	require.NotEqual(t, privateDir, startErr.DiagnosticsDir())
 	t.Cleanup(func() { require.NoError(t, os.RemoveAll(startErr.DiagnosticsDir())) })
@@ -448,7 +448,7 @@ func fakeAcquisition(
 		chain: &Chain{
 			id:         id,
 			evmChainID: 1,
-			rpcURL:     "http://redacted.invalid",
+			rpcURL:     "http://rpc.example.invalid",
 			timing:     instantTiming(),
 			ownership:  ownership,
 			impl:       impl,
@@ -464,7 +464,7 @@ type fakeRuntimeChain struct{ id string }
 var _ chainimpl.Chain = fakeRuntimeChain{}
 
 func (c fakeRuntimeChain) ID() string                           { return c.id }
-func (fakeRuntimeChain) RPCURL() string                         { return "http://redacted.invalid" }
+func (fakeRuntimeChain) RPCURL() string                         { return "http://rpc.example.invalid" }
 func (fakeRuntimeChain) Height(context.Context) (uint64, error) { return 1, nil }
 
 type fakeEVMRuntimeChain struct{ fakeRuntimeChain }

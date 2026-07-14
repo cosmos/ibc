@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,63 +32,36 @@ type Chain struct {
 	timing     Timing
 	ownership  Ownership
 	impl       chainimpl.Chain
-	lease      *chainLease
+	lease      *environmentLease
 	mining     *Mining
 	node       *NodeLifecycle
 	funding    *Funding
 }
 
-type chainLease struct {
-	mu     sync.RWMutex
-	closed bool
-}
-
-func (l *chainLease) use(use func() error) error {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	if l.closed {
-		return ErrEnvironmentClosed
-	}
-	return use()
-}
-
-func (l *chainLease) close() {
-	l.mu.Lock()
-	l.closed = true
-	l.mu.Unlock()
-}
-
-func (c *Chain) bindLease(lease *chainLease) {
+func (c *Chain) bindLease(lease *environmentLease) {
 	c.lease = lease
 	if c.mining != nil {
-		c.mining.lease = lease
+		c.mining.chain = c
 	}
 	if c.node != nil {
-		c.node.lease = lease
+		c.node.chain = c
 	}
 	if c.funding != nil {
-		c.funding.lease = lease
+		c.funding.chain = c
 	}
 }
 
 func (c *Chain) use(use func() error) error {
+	var err error
 	if c.lease == nil {
-		return use()
+		err = use()
+	} else {
+		err = c.lease.use(use)
 	}
-	if err := c.lease.use(use); err != nil {
-		if errors.Is(err, ErrEnvironmentClosed) {
-			return fmt.Errorf("%w: Chain %q", err, c.id)
-		}
-		return err
+	if errors.Is(err, ErrEnvironmentClosed) {
+		err = fmt.Errorf("%w: Chain %q", err, c.id)
 	}
-	return nil
-}
-
-func useChainLease(lease *chainLease, use func() error) error {
-	if lease == nil {
-		return use()
-	}
-	return lease.use(use)
+	return err
 }
 
 func (c *Chain) ID() ChainID        { return c.id }
@@ -130,7 +102,7 @@ type EVM struct {
 
 func (e *EVM) WaitNextPendingTx(ctx context.Context) error {
 	return e.use(func(client *chainevm.EVMClient) error {
-		return client.WaitNextPendingTx(ctx)
+		return client.WaitNextPendingTx(ctx, e.transactionWait())
 	})
 }
 
@@ -144,10 +116,17 @@ func (e *EVM) BroadcastTx(
 	var receipt *types.Receipt
 	err := e.use(func(client *chainevm.EVMClient) error {
 		var err error
-		receipt, err = client.BroadcastTx(ctx, from, to, data, value)
+		receipt, err = client.BroadcastTx(ctx, e.transactionWait(), from, to, data, value)
 		return err
 	})
 	return receipt, err
+}
+
+func (e *EVM) transactionWait() chainevm.TransactionWait {
+	return chainevm.TransactionWait{
+		Timeout:      e.chain.timing.CompletionBudget,
+		PollInterval: e.chain.timing.PollInterval,
+	}
 }
 
 func (e *EVM) Logs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
@@ -263,38 +242,38 @@ func (c *Chain) Funding() (*Funding, error) {
 
 type Funding struct {
 	controller chainimpl.EOAFunder
-	lease      *chainLease
+	chain      *Chain
 }
 
 func (f *Funding) EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error {
-	return useChainLease(f.lease, func() error {
+	return useCapability(f.chain, func() error {
 		return f.controller.EnsureEOABalance(ctx, address, minimum)
 	})
 }
 
 type Mining struct {
 	controller chainimpl.BlockController
-	lease      *chainLease
+	chain      *Chain
 }
 
 func (m *Mining) Pause(ctx context.Context) error {
-	return useChainLease(m.lease, func() error { return m.controller.PauseMining(ctx) })
+	return useCapability(m.chain, func() error { return m.controller.PauseMining(ctx) })
 }
 
 func (m *Mining) Resume(ctx context.Context) error {
-	return useChainLease(m.lease, func() error { return m.controller.ResumeMining(ctx) })
+	return useCapability(m.chain, func() error { return m.controller.ResumeMining(ctx) })
 }
 
 func (m *Mining) Mine(ctx context.Context, blocks int) error {
-	return useChainLease(m.lease, func() error { return m.controller.MineBlocks(ctx, blocks) })
+	return useCapability(m.chain, func() error { return m.controller.MineBlocks(ctx, blocks) })
 }
 
 func (m *Mining) AdvanceTime(ctx context.Context, d time.Duration) error {
-	return useChainLease(m.lease, func() error { return m.controller.AdvanceTime(ctx, d) })
+	return useCapability(m.chain, func() error { return m.controller.AdvanceTime(ctx, d) })
 }
 
 func (m *Mining) WithPaused(ctx context.Context, fn func() error) error {
-	return useChainLease(m.lease, func() (err error) {
+	return useCapability(m.chain, func() (err error) {
 		if pauseErr := m.controller.PauseMining(ctx); pauseErr != nil {
 			return pauseErr
 		}
@@ -309,15 +288,22 @@ func (m *Mining) WithPaused(ctx context.Context, fn func() error) error {
 
 type NodeLifecycle struct {
 	controller chainimpl.FaultInjector
-	lease      *chainLease
+	chain      *Chain
 }
 
 func (n *NodeLifecycle) Stop(ctx context.Context) error {
-	return useChainLease(n.lease, func() error { return n.controller.StopNode(ctx) })
+	return useCapability(n.chain, func() error { return n.controller.StopNode(ctx) })
 }
 
 func (n *NodeLifecycle) Start(ctx context.Context) error {
-	return useChainLease(n.lease, func() error { return n.controller.StartNode(ctx) })
+	return useCapability(n.chain, func() error { return n.controller.StartNode(ctx) })
+}
+
+func useCapability(chain *Chain, use func() error) error {
+	if chain == nil {
+		return errors.New("environment: resolved capability is not bound to a Chain")
+	}
+	return chain.use(use)
 }
 
 func instantTiming() Timing {

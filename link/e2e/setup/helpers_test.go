@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/harness/environment"
 	"github.com/cosmos/ibc/link/harness/ibclink"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 	"github.com/cosmos/ibc/link/internal/service/signer/keyfile"
@@ -32,20 +33,33 @@ func hasErrorPath(errs []wire.ValidationError, path string) bool {
 	return false
 }
 
-func newDriver(t *testing.T, configPath string) *ibclink.Driver {
+func newDriver(t *testing.T) (*ibclink.Driver, string) {
 	t.Helper()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	driver, err := ibclink.NewDriver(configPath)
 	require.NoError(t, err)
-	return driver
+	return driver, configPath
 }
 
-func writeConfig(t *testing.T, c wire.ConfigYAML) string {
+func newEnvironmentDriver(t *testing.T, env *environment.Environment) (*ibclink.Driver, string) {
+	t.Helper()
+	driver, configPath := newDriver(t)
+	require.NoError(t, env.BindIBCLink(driver))
+	return driver, configPath
+}
+
+func chainRPC(t *testing.T, driver *ibclink.Driver, id environment.ChainID) wire.RPC {
+	t.Helper()
+	rpc, err := driver.ChainRPC(string(id))
+	require.NoError(t, err)
+	return rpc
+}
+
+func writeConfig(t *testing.T, path string, c wire.ConfigYAML) {
 	t.Helper()
 	data, err := c.Marshal()
 	require.NoError(t, err)
-	p := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(p, data, 0o600))
-	return p
+	require.NoError(t, os.WriteFile(path, data, 0o600))
 }
 
 func writeLocalSigner(t *testing.T, alias string) wire.Signer {

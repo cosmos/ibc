@@ -53,6 +53,7 @@ type Chain struct {
 	container string
 	logID     string
 	treasury  evm.Account
+	wait      evm.TransactionWait
 
 	mu      sync.Mutex
 	stopped bool
@@ -161,6 +162,10 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		container: namePrefix,
 		logID:     spec.ID,
 		treasury:  treasury,
+		wait: evm.TransactionWait{
+			Timeout:      20 * time.Duration(periodSecs) * time.Second,
+			PollInterval: 250 * time.Millisecond,
+		},
 	}
 	defer func() {
 		if result == nil {
@@ -239,7 +244,7 @@ func (bc *Chain) EnsureEOABalance(ctx context.Context, address common.Address, m
 	}
 
 	shortfall := new(big.Int).Sub(minimum, current)
-	if _, sendErr := bc.BroadcastTx(ctx, bc.treasury, &address, nil, shortfall); sendErr != nil {
+	if _, sendErr := bc.BroadcastTx(ctx, bc.wait, bc.treasury, &address, nil, shortfall); sendErr != nil {
 		return fmt.Errorf("besu fund %s with %s wei: %w", address, shortfall, sendErr)
 	}
 	got, err := bc.Client().BalanceAt(ctx, address, nil)
@@ -439,10 +444,13 @@ func copyFile(src, dst string, mode os.FileMode) error {
 }
 
 func waitBesuReady(ctx context.Context, client *ethclient.Client, spec Spec) error {
+	ctx, cancel := context.WithTimeout(ctx, besuReadyTimeout)
+	defer cancel()
+
 	var startHeight uint64
 	var sawHeight bool
 	var lastErr error
-	err := poll.Until(ctx, 250*time.Millisecond, besuReadyTimeout, func(ctx context.Context) (bool, error) {
+	err := poll.Until(ctx, 250*time.Millisecond, func(ctx context.Context) (bool, error) {
 		got, err := client.ChainID(ctx)
 		if err != nil {
 			lastErr = err

@@ -100,6 +100,10 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 	if startErr != nil {
 		return nil, abortStart(ctx, startErr, failures, ws, resources, effects, protocolReceipts)
 	}
+	lease := &environmentLease{}
+	for _, chain := range chains {
+		chain.bindLease(lease)
+	}
 
 	instances, failures, startErr := acquireIBCInstances(
 		ctx, spec.IBCInstances, chains, runtime, d, resources, protocolReceipts,
@@ -122,11 +126,6 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		return nil, abortStart(ctx, startErr, failures, ws, resources, effects, protocolReceipts)
 	}
 
-	lease := &chainLease{}
-	for _, chain := range chains {
-		chain.bindLease(lease)
-	}
-
 	return &Environment{
 		chains:      chains,
 		instances:   instances,
@@ -136,7 +135,7 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		journal:     resources,
 		effects:     effects,
 		ws:          ws,
-		chainLease:  lease,
+		lease:       lease,
 	}, nil
 }
 
@@ -155,17 +154,17 @@ func abortStart(
 	// retained when cleanup fails.
 	cleanupErrs := effects.cleanup(context.WithoutCancel(ctx), resources)
 	if removeErr := ws.removePrivate(); removeErr != nil {
-		cleanupErrs = append(cleanupErrs, &redactedCause{
-			message: "environment cleanup private workspace removal failed",
-			cause:   removeErr,
-		})
+		cleanupErrs = append(
+			cleanupErrs,
+			fmt.Errorf("environment cleanup private workspace removal failed: %w", removeErr),
+		)
 	}
 	if len(cleanupErrs) == 0 {
 		if removeErr := ws.removeDiagnostics(); removeErr != nil {
-			cleanupErrs = append(cleanupErrs, &redactedCause{
-				message: "environment cleanup diagnostics removal failed",
-				cause:   removeErr,
-			})
+			cleanupErrs = append(
+				cleanupErrs,
+				fmt.Errorf("environment cleanup diagnostics removal failed: %w", removeErr),
+			)
 		}
 	}
 	diagnosticsDir := ""
@@ -297,10 +296,7 @@ func acquireChains(
 			defer wg.Done()
 			acquisition, err := d.acquireChain(ctx, declaration, runtime, ws)
 			if err != nil {
-				errs[i] = &redactedCause{
-					message: fmt.Sprintf("start Chain %q failed", declaration.chainID()),
-					cause:   err,
-				}
+				errs[i] = fmt.Errorf("start Chain %q failed: %w", declaration.chainID(), err)
 				cancel()
 				return
 			}

@@ -329,8 +329,11 @@ func containerName(spec Spec) string {
 }
 
 func waitReady(ctx context.Context, probe func(context.Context) error, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	var lastErr error
-	err := poll.Until(ctx, pollInterval, timeout, func(ctx context.Context) (bool, error) {
+	err := poll.Until(ctx, pollInterval, func(ctx context.Context) (bool, error) {
 		lastErr = probe(ctx)
 		return lastErr == nil, nil
 	})

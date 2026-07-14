@@ -63,9 +63,9 @@ Graph-addressable resources use distinct typed IDs. Declaration order has no lif
 
 ## Declaration
 
-`Spec` is durable desired state. It contains identities, references, and non-secret configuration, but no RPC clients, process handles, generated paths, credentials, or cleanup functions.
+`Spec` is durable desired state. It contains identities, references, and configuration, but no RPC clients, process handles, generated paths, or cleanup functions.
 
-`Runtime` supplies process-local endpoint and authority bindings named by the Spec. Secrets do not appear in the durable declaration or diagnostics.
+`Runtime` supplies process-local endpoint and authority bindings named by the Spec.
 
 Concrete declarations express acquisition semantics when they genuinely differ. Managed and attached Chains, or new and existing protocol state, are separate variants. Creation and reuse are strict: a new declaration creates state, while an existing declaration requires an explicit locator. There is no implicit discovery or adoption.
 
@@ -96,7 +96,11 @@ Behind that interface, realization:
 
 `Environment` is the resolved counterpart of `Spec`. Stable authored IDs locate typed Chains, IBC Instances, Clients, Connections, Attestors, and Relayers.
 
-Resolved resources expose stable facts and verified capabilities required by tests. Provider internals, raw credentials, process names, generated configuration, and cleanup hooks remain hidden.
+Resolved resources expose stable facts and verified capabilities required by tests. Provider internals, process names, generated configuration, and cleanup hooks remain hidden.
+
+Resolved Chains expose their RPC endpoints and may bind an IBC Link driver directly. Driver configuration uses environment-variable references whose values are supplied to the child process. The Environment's lifecycle lease remains borrowed until a one-shot command completes or a daemon is reaped; `Environment.Close` invalidates new binding use and waits for those active borrows, subject to its context.
+
+Errors and child-process responses pass through the harness boundary unchanged.
 
 Capabilities are derived from the concrete declaration, available authority, and adapter verification. Callers do not author capability booleans. Attachment grants connectivity, not ownership or mutation authority.
 
@@ -150,6 +154,6 @@ Implementation should proceed by defining the concrete `RelayerSpec`, resolved R
 - Define Relayer readiness, status, manual relay, lifecycle, signer, and finality semantics.
 - Decide when the synthetic lane has enough truthful replacement coverage to be deleted.
 - Shape any further test-application bindings and attached-Chain effect reporting from concrete tests.
-- Define diagnostic artifact schema, retention, and redaction only when consumers require them.
+- Define diagnostic artifact schema and retention only when consumers require them.
 - Model finality separately from timing when a real workflow requires it.
 - Add process-placement controls only when a concrete standalone versus co-located case requires them.

@@ -21,7 +21,6 @@ import (
 	"github.com/cosmos/ibc/link/e2e/stub/internal/exitcode"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/jsonout"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
-	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/signing"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/statusapi"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
@@ -174,7 +173,7 @@ func dialChains(
 			if err != nil {
 				return exitcode.New(
 					wire.ExitRPCUnreachable,
-					fmt.Errorf("connect chain %s: %s", ch.ID, rpcsafe.RedactURLs(err.Error())),
+					fmt.Errorf("connect chain %s: %w", ch.ID, err),
 				)
 			}
 			mu.Lock()

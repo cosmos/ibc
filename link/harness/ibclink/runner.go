@@ -39,6 +39,7 @@ type Driver struct {
 	stubBin    string
 	configHome string
 	configName string
+	bindings   processBindings
 }
 
 func NewDriver(configPath string) (*Driver, error) {

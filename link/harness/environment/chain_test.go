@@ -11,11 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/harness/chain/evm"
+
+	chainimpl "github.com/cosmos/ibc/link/harness/chain"
 )
 
 func TestFundingEnsuresMinimumEOABalanceThroughResolvedCapability(t *testing.T) {
 	controller := &recordingEOAFunder{}
-	chain := &Chain{id: "managed", funding: &Funding{controller: controller}}
+	chain := &Chain{
+		id: "managed", funding: &Funding{controller: controller},
+	}
+	chain.bindLease(&environmentLease{})
 	funding, err := chain.Funding()
 	require.NoError(t, err)
 
@@ -44,10 +49,12 @@ func TestProtocolAuthorityFundingUsesManagedCapability(t *testing.T) {
 	authority, err := evm.AccountFromHex(testPrimaryPrivateKeyHex)
 	require.NoError(t, err)
 	controller := &recordingEOAFunder{}
-	require.NoError(t, ensureProtocolAuthorityFunded(t.Context(), &Chain{
+	chain := &Chain{
 		id: "managed", ownership: OwnershipOwnedEphemeral,
 		funding: &Funding{controller: controller},
-	}, authority))
+	}
+	chain.bindLease(&environmentLease{})
+	require.NoError(t, ensureProtocolAuthorityFunded(t.Context(), chain, authority))
 	require.Equal(t, authority.Address(), controller.address)
 	require.Equal(t, "100000000000000000000", controller.minimum.String())
 }
@@ -65,7 +72,7 @@ func (f *recordingEOAFunder) EnsureEOABalance(_ context.Context, address common.
 
 func TestMiningWithPausedUsesFreshContextToResume(t *testing.T) {
 	controller := &recordingMining{}
-	mining := &Mining{controller: controller}
+	mining := bindTestMining(controller)
 	ctx, cancel := context.WithCancel(t.Context())
 
 	err := mining.WithPaused(ctx, func() error {
@@ -102,7 +109,10 @@ func TestMiningWithPausedJoinsCallbackAndResumeFailures(t *testing.T) {
 	callbackErr := errors.New("callback")
 	resumeErr := errors.New("resume")
 	controller := &failingResumeMining{resumeErr: resumeErr}
-	err := (&Mining{controller: controller}).WithPaused(t.Context(), func() error { return callbackErr })
+	err := bindTestMining(controller).WithPaused(
+		t.Context(),
+		func() error { return callbackErr },
+	)
 	require.ErrorIs(t, err, callbackErr)
 	require.ErrorIs(t, err, resumeErr)
 }
@@ -113,3 +123,10 @@ func (*failingResumeMining) PauseMining(context.Context) error                { 
 func (m *failingResumeMining) ResumeMining(context.Context) error             { return m.resumeErr }
 func (*failingResumeMining) MineBlocks(context.Context, int) error            { return nil }
 func (*failingResumeMining) AdvanceTime(context.Context, time.Duration) error { return nil }
+
+func bindTestMining(controller chainimpl.BlockController) *Mining {
+	mining := &Mining{controller: controller}
+	chain := &Chain{id: "test", mining: mining}
+	chain.bindLease(&environmentLease{})
+	return mining
+}

@@ -9,12 +9,9 @@ import (
 // Until returns the first predicate error and does not retry it.
 func Until(
 	ctx context.Context,
-	interval, timeout time.Duration,
+	interval time.Duration,
 	pred func(context.Context) (done bool, err error),
 ) error {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

@@ -21,7 +21,7 @@ type Environment struct {
 	effects *effectJournal
 	ws      workspace
 
-	chainLease *chainLease
+	lease *environmentLease
 
 	closeMu sync.Mutex
 	closed  bool
@@ -91,8 +91,10 @@ func (e *Environment) Close(ctx context.Context) error {
 	if e.closed {
 		return nil
 	}
-	if e.chainLease != nil {
-		e.chainLease.close()
+	if e.lease != nil {
+		if err := e.lease.close(ctx); err != nil {
+			return fmt.Errorf("environment: wait for active operations before cleanup: %w", err)
+		}
 	}
 
 	cleanupErrs := e.effects.cleanup(ctx, e.journal)
@@ -100,10 +102,7 @@ func (e *Environment) Close(ctx context.Context) error {
 		return errors.Join(cleanupErrs...)
 	}
 	if err := e.ws.remove(); err != nil {
-		return &redactedCause{
-			message: "environment cleanup workspace removal failed",
-			cause:   err,
-		}
+		return fmt.Errorf("environment cleanup workspace removal failed: %w", err)
 	}
 	e.closed = true
 	return nil

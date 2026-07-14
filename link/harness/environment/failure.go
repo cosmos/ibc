@@ -5,9 +5,7 @@ import (
 	"fmt"
 )
 
-// StartError reports an atomic realization failure without formatting the
-// underlying errors. The cause and joined cleanup error remain available for
-// errors.Is/errors.As and explicit inspection.
+// StartError reports an atomic realization failure and any cleanup failures.
 type StartError struct {
 	cause          error
 	cleanup        error
@@ -17,8 +15,7 @@ type StartError struct {
 	diagnosticsDir string
 }
 
-// FailureRecord locates a failed declaration without copying an adapter error
-// that may contain endpoint credentials or other runtime-only values.
+// FailureRecord locates a failed declaration.
 type FailureRecord struct {
 	Kind ResourceKind `json:"kind"`
 	ID   string       `json:"id"`
@@ -53,8 +50,9 @@ func (e *StartError) Error() string {
 	} else if len(e.failures) > 1 {
 		message = fmt.Sprintf("environment start failed for %d resources", len(e.failures))
 	}
+	message += ": " + e.cause.Error()
 	if e.cleanup != nil {
-		message += "; cleanup also failed"
+		message += "; cleanup also failed: " + e.cleanup.Error()
 	}
 	return message
 }
@@ -101,15 +99,7 @@ type cleanupFailure struct {
 }
 
 func (e *cleanupFailure) Error() string {
-	return fmt.Sprintf("environment cleanup %s for %s %q failed", e.action, e.kind, e.id)
+	return fmt.Sprintf("environment cleanup %s for %s %q failed: %v", e.action, e.kind, e.id, e.cause)
 }
 
 func (e *cleanupFailure) Unwrap() error { return e.cause }
-
-type redactedCause struct {
-	message string
-	cause   error
-}
-
-func (e *redactedCause) Error() string { return e.message }
-func (e *redactedCause) Unwrap() error { return e.cause }

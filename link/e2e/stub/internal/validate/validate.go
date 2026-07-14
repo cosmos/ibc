@@ -11,7 +11,6 @@ import (
 
 	"github.com/cosmos/ibc/link/e2e/stub/internal/cfg"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/exitcode"
-	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 	"github.com/cosmos/ibc/link/internal/config"
 )
@@ -235,7 +234,7 @@ func pingChains(ctx context.Context, c *wire.ConfigYAML) []wire.ValidationError 
 		if err != nil {
 			errs = append(errs, wire.ValidationError{
 				Path: fmt.Sprintf("chains[%d].rpc.url", i),
-				Msg:  fmt.Sprintf("rpc unreachable (%s): %s", rpcsafe.Endpoint(ch.RPC.URL), err),
+				Msg:  fmt.Sprintf("rpc unreachable (%s): %s", ch.RPC.URL, err),
 			})
 			continue
 		}
@@ -244,7 +243,7 @@ func pingChains(ctx context.Context, c *wire.ConfigYAML) []wire.ValidationError 
 				Path: fmt.Sprintf("chains[%d].chainId", i),
 				Msg: fmt.Sprintf(
 					"chain id mismatch (%s): config declares %d, node reports %d",
-					rpcsafe.Endpoint(ch.RPC.URL),
+					ch.RPC.URL,
 					ch.ChainID,
 					got,
 				),
@@ -260,16 +259,13 @@ func pingOne(ctx context.Context, rawURL string) (uint64, error) {
 
 	client, err := ethclient.DialContext(ctx, rawURL)
 	if err != nil {
-		return 0, errDial
+		return 0, fmt.Errorf("dial RPC %q: %w", rawURL, err)
 	}
 	defer client.Close()
 
 	id, err := client.ChainID(ctx)
 	if err != nil {
-		return 0, errDial
+		return 0, fmt.Errorf("read chain ID from RPC %q: %w", rawURL, err)
 	}
 	return id.Uint64(), nil
 }
-
-// Fixed URL-free probe error; caller reports rpcsafe.Endpoint separately so secrets never reach stdout.
-var errDial = fmt.Errorf("dial/chain-id probe failed")
