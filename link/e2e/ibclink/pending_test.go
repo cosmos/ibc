@@ -7,34 +7,58 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/e2e/e2etest"
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/harness/environment"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 func TestPendingPacket_Anvil_StatusIsBetterSignal(t *testing.T) {
-	e2etest.RequireAnvilLane(t)
-	run := e2etest.Start(t, topology.Anvil(topology.TwoEVM()))
+	selected := e2etest.SelectedSuite(t)
+	e2etest.RequireCapabilities(t, selected, environment.Requirements{
+		MiningControl: []environment.ChainID{e2etest.ChainB},
+	})
+	env := e2etest.Start(t, selected)
+	signers := synthetic.NewSigners(t)
+	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	chainB := run.Chain(topology.ChainB)
+	chainB, err := env.Chain(e2etest.ChainB)
+	require.NoError(t, err)
+	mining, err := chainB.Mining()
+	require.NoError(t, err)
 	dst, err := chainB.EVM()
 	require.NoError(t, err)
-	receiver, err := dst.NewFundedAccount(ctx)
-	require.NoError(t, err)
 
-	require.NoError(t, chainB.WithPausedMining(ctx, func() error {
-		out, err := run.IFT(ctx, harness.IFT{
-			Route: topology.RouteAtoB, Amount: big.NewInt(424_242), Receiver: receiver.Addr.Hex(),
-		})
+	require.NoError(t, mining.WithPaused(ctx, func() error {
+		transfer, err := ift.Send(ctx, testapp.IFTRequest{Amount: big.NewInt(424_242)})
 		require.NoError(t, err)
+		require.NoError(t, transfer.VerifyEscrowed(ctx))
 
 		require.NoError(t, dst.WaitNextPendingTx(ctx))
 
-		require.NoError(t, out.VerifyPending(ctx))
-		require.NoError(t, out.VerifyPendingStable(ctx))
+		require.NoError(t, synthetic.AwaitStable(
+			ctx,
+			relayer,
+			transfer.Packet(),
+			wire.PacketPending,
+			chainB.Timing(),
+		))
+		require.NoError(t, transfer.VerifyNotMinted(ctx))
 
-		require.NoError(t, chainB.Mine(ctx, 1))
-		require.NoError(t, out.VerifyComplete(ctx))
+		require.NoError(t, mining.Mine(ctx, 1))
+		_, err = synthetic.AwaitState(
+			ctx,
+			relayer,
+			transfer.Packet(),
+			wire.PacketComplete,
+			chainB.Timing(),
+		)
+		require.NoError(t, err)
+		require.NoError(t, transfer.VerifyDelivered(ctx))
 		return nil
 	}))
 }

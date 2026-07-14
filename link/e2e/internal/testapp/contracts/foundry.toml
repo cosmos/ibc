@@ -1,0 +1,10 @@
+# Test-only contracts for the IBC Link e2e harness. These are small mocks, not
+# the real Eureka protocol stack. Their committed artifacts are embedded so
+# tests do not need Forge at runtime.
+[profile.default]
+src = "src"
+out = "out"
+libs = []
+optimizer = true
+optimizer_runs = 200
+solc_version = "0.8.28"

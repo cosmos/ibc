@@ -7,35 +7,33 @@ import (
 )
 
 type ConfigYAML struct {
-	Chains  []Chain `yaml:"chains"`
-	DB      DB      `yaml:"db"`
-	Relayer Relayer `yaml:"relayer"`
+	Chains  []Chain  `yaml:"chains"`
+	Signers []Signer `yaml:"signers"`
+	DB      DB       `yaml:"db"`
+	Relayer Relayer  `yaml:"relayer"`
 }
 
 type Chain struct {
-	ID       string `yaml:"id"`
-	Type     string `yaml:"type"`
-	Provider string `yaml:"provider"`
-	ChainID  uint64 `yaml:"chainId,omitempty"`
-	// EVMSignerKey signs destination effects and source refunds; it is test-only plaintext.
-	EVMSignerKey string `yaml:"evmSignerKey,omitempty"`
-	RPC          RPC    `yaml:"rpc"`
+	ID            string `yaml:"id"`
+	Type          string `yaml:"type"`
+	ChainID       uint64 `yaml:"chainId,omitempty"`
+	EVMSigner     string `yaml:"evmSigner,omitempty"`
+	TestAppSigner string `yaml:"testAppSigner,omitempty"`
+	RPC           RPC    `yaml:"rpc"`
+}
+
+type Signer struct {
+	Alias string `yaml:"alias"`
+	Type  string `yaml:"type"`
+	File  string `yaml:"file"`
 }
 
 const (
-	ChainTypeEVM  = "evm"
-	ProviderAnvil = "anvil"
-	ProviderBesu  = "besu"
+	ChainTypeEVM    = "evm"
+	SignerTypeLocal = "local"
 
 	RouteEVMToEVMAttested = "evmToEvmAttested"
 )
-
-func RouteTypeFor(srcType, dstType string) (routeType string, ok bool) {
-	if srcType == ChainTypeEVM && dstType == ChainTypeEVM {
-		return RouteEVMToEVMAttested, true
-	}
-	return "", false
-}
 
 type RPC struct {
 	URL string `yaml:"url"`

@@ -8,44 +8,95 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/e2e/e2etest"
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/harness/environment"
+	"github.com/cosmos/ibc/link/harness/ibclink"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 const (
 	transferTimeout = 60 * time.Second
-	// Advance well past transferTimeout so the stub's timeout check fires before relay races it.
+	// Advance well past transferTimeout so the timeout check wins any relay race.
 	timeAdvance = 5 * transferTimeout
 )
 
 func TestIFTTimeout_Refund(t *testing.T) {
-	e2etest.RequireAnvilLane(t)
-	run := e2etest.Start(t, topology.Anvil(topology.TwoEVM()))
+	selected := e2etest.SelectedSuite(t)
+	e2etest.RequireCapabilities(t, selected, environment.Requirements{
+		MiningControl: []environment.ChainID{e2etest.ChainB},
+	})
+	env := e2etest.Start(t, selected)
+	signers := synthetic.NewSigners(t)
+	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	require.NoError(t, run.StopRelayer(ctx))
-
-	out, err := run.IFT(ctx, harness.IFT{
-		Route: topology.RouteAtoB, Amount: big.NewInt(3_000_000), Timeout: transferTimeout,
+	require.NoError(t, relayer.Stop(ctx))
+	transfer, err := ift.Send(ctx, testapp.IFTRequest{
+		Amount:  big.NewInt(3_000_000),
+		Timeout: transferTimeout,
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, run.Chain(topology.ChainB).AdvanceTime(ctx, timeAdvance))
-	require.NoError(t, run.RestartRelayer(ctx))
-	require.NoError(t, out.VerifyTimedOut(ctx))
+	chainB, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	mining, err := chainB.Mining()
+	require.NoError(t, err)
+	require.NoError(t, mining.AdvanceTime(ctx, timeAdvance))
+	relayer = synthetic.StartRelayer(t, driver, env)
+	assertTimedOutAndRefunded(t, env, relayer, transfer)
 }
 
 func TestIFTTimeout_ManualRelayRefund(t *testing.T) {
-	e2etest.RequireAnvilLane(t)
-	run := e2etest.Start(t, topology.Anvil(topology.TwoEVM()).WithManualRelay(topology.RouteAtoB))
+	selected := e2etest.SelectedSuite(t)
+	e2etest.RequireCapabilities(t, selected, environment.Requirements{
+		MiningControl: []environment.ChainID{e2etest.ChainB},
+	})
+	env := e2etest.Start(t, selected)
+	signers := synthetic.NewSigners(t)
+	route := synthetic.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	out, err := run.IFT(ctx, harness.IFT{
-		Route: topology.RouteAtoB, Amount: big.NewInt(3_000_000), Timeout: transferTimeout,
+	transfer, err := ift.Send(ctx, testapp.IFTRequest{
+		Amount:  big.NewInt(3_000_000),
+		Timeout: transferTimeout,
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, run.Chain(topology.ChainB).AdvanceTime(ctx, timeAdvance))
-	require.NoError(t, out.Relay(ctx))
-	require.NoError(t, out.VerifyTimedOut(ctx))
+	chainB, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	mining, err := chainB.Mining()
+	require.NoError(t, err)
+	require.NoError(t, mining.AdvanceTime(ctx, timeAdvance))
+	require.NoError(t, synthetic.Relay(ctx, relayer, transfer.Packet()))
+	assertTimedOutAndRefunded(t, env, relayer, transfer)
+}
+
+func assertTimedOutAndRefunded(
+	t *testing.T,
+	env *environment.Environment,
+	relayer *ibclink.Relayer,
+	transfer *testapp.IFTTransfer,
+) {
+	t.Helper()
+	ctx := t.Context()
+	packet := transfer.Packet()
+	source, err := env.Chain(packet.Source)
+	require.NoError(t, err)
+	_, err = synthetic.AwaitState(
+		ctx,
+		relayer,
+		packet,
+		wire.PacketTimedOut,
+		source.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyRefunded(ctx))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
 }

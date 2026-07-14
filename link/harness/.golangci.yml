@@ -1,12 +1,11 @@
-# Lint config for the e2e harness module. Mirrors link/.golangci.yml except that revive's
-# exported rule is off: the harness is test infrastructure consumed only by link/e2e, so
-# exported identifiers carry no doc-comment mandate.
+# Lint config for the e2e harness module. It mirrors link/.golangci.yml except
+# that it includes tests, excludes repetitive test literals from goconst, and
+# disables revive's exported rule for this test-infrastructure API.
 version: "2"
 
 run:
   go: "1.26"
   timeout: 30m
-  tests: false
 
 issues:
   max-same-issues: 50
@@ -66,3 +65,6 @@ linters:
           disabled: true
   exclusions:
     generated: lax
+    rules:
+      - path: (.+)_test\.go
+        linters: [goconst]

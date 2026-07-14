@@ -7,39 +7,61 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/e2e/e2etest"
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/harness/environment"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
-func TestFault_NodeStop_DaemonRecovers(t *testing.T) {
-	e2etest.RequireAnvilLane(t)
-	run := e2etest.Start(t, topology.Anvil(topology.TwoEVM()))
+func TestFault_NodeStop_RelayerRecovers(t *testing.T) {
+	selected := e2etest.SelectedSuite(t)
+	e2etest.RequireCapabilities(t, selected, environment.Requirements{
+		NodeLifecycle: []environment.ChainID{e2etest.ChainB},
+	})
+	env := e2etest.Start(t, selected)
+	signers := synthetic.NewSigners(t)
+	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	chainB := run.Chain(topology.ChainB)
-	dst, err := chainB.EVM()
+	chainB, err := env.Chain(e2etest.ChainB)
+	require.NoError(t, err)
+	node, err := chainB.NodeLifecycle()
 	require.NoError(t, err)
 
-	receiver, err := dst.NewFundedAccount(ctx)
-	require.NoError(t, err)
-	plan, err := run.PrepareIFT(ctx, harness.IFT{
-		Route: topology.RouteAtoB, Amount: big.NewInt(2_000_000), Receiver: receiver.Addr.Hex(),
+	prepared, err := ift.Prepare(ctx, testapp.IFTRequest{
+		Amount: big.NewInt(2_000_000),
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, chainB.StopNode(ctx))
-	_, err = dst.Height(ctx)
-	require.Error(t, err, "with the destination node stopped, a harness height query must fail")
+	require.NoError(t, node.Stop(ctx))
+	_, err = chainB.Height(ctx)
+	require.Error(t, err, "with the destination node stopped, an EVM height query must fail")
 
-	out, err := plan.Submit(ctx)
+	transfer, err := prepared.Submit(ctx)
 	require.NoError(t, err)
+	require.NoError(t, synthetic.AwaitStable(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		wire.PacketPending,
+		chainB.Timing(),
+	))
 
-	require.NoError(t, out.VerifyPendingStatus(ctx))
-	require.NoError(t, out.VerifyPendingStable(ctx))
+	require.NoError(t, node.Start(ctx))
+	_, err = chainB.Height(ctx)
+	require.NoError(t, err, "after node restart the destination must be reachable again")
 
-	require.NoError(t, chainB.StartNode(ctx))
-	_, err = dst.Height(ctx)
-	require.NoError(t, err, "after StartNode the destination must be reachable again")
-
-	require.NoError(t, out.VerifyComplete(ctx))
+	_, err = synthetic.AwaitState(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		wire.PacketComplete,
+		chainB.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
 }

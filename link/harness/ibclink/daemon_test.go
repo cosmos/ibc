@@ -30,8 +30,3 @@ func TestParseReadiness(t *testing.T) {
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "dbReady")
 }
-
-func TestDaemonInstancePaths(t *testing.T) {
-	require.Equal(t, "/w/ibc-link-daemon-2.log", daemonLogPath("/w/ibc-link.log", 2))
-	require.Equal(t, "/w/ibc-link-daemon-2.pid", daemonPidPath("/w/ibc-link.log", 2))
-}

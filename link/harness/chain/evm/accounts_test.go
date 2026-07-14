@@ -8,32 +8,35 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/ibc/link/harness/testkeys"
 )
 
-func TestFaucetAccountDerivation(t *testing.T) {
-	acct := FaucetAccount()
-	require.NotNil(t, acct.Key)
-	assert.Equal(t, common.HexToAddress(testkeys.FaucetAddressHex), acct.Addr)
-}
+const testPrivateKeyHex = "0000000000000000000000000000000000000000000000000000000000000001"
 
-func TestRelayerAccountDerivation(t *testing.T) {
-	acct := RelayerAccount()
-	require.NotNil(t, acct.Key)
-	assert.Equal(t, common.HexToAddress(testkeys.RelayerAddressHex), acct.Addr)
+func TestAccountFromHexDerivesAddress(t *testing.T) {
+	acct, err := AccountFromHex(testPrivateKeyHex)
+	require.NoError(t, err)
+	assert.Equal(t, common.HexToAddress("0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"), acct.Address())
 }
 
 func TestAccountFromHexAcceptsPrefix(t *testing.T) {
-	withPrefix, err := AccountFromHex("0x" + testkeys.FaucetPrivateKeyHex)
+	withPrefix, err := AccountFromHex("0x" + testPrivateKeyHex)
 	require.NoError(t, err)
-	withoutPrefix, err := AccountFromHex(testkeys.FaucetPrivateKeyHex)
+	withoutPrefix, err := AccountFromHex(testPrivateKeyHex)
 	require.NoError(t, err)
-	assert.Equal(t, withoutPrefix.Addr, withPrefix.Addr)
+	assert.Equal(t, withoutPrefix.Address(), withPrefix.Address())
+}
+
+func TestTransactOptsUsesAccountAddress(t *testing.T) {
+	acct, err := AccountFromHex(testPrivateKeyHex)
+	require.NoError(t, err)
+	opts, err := acct.TransactOpts(big.NewInt(31337))
+	require.NoError(t, err)
+	assert.Equal(t, acct.Address(), opts.From)
 }
 
 func TestSignTxRecoversSender(t *testing.T) {
-	acct := FaucetAccount()
+	acct, err := AccountFromHex(testPrivateKeyHex)
+	require.NoError(t, err)
 	chainID := big.NewInt(31337)
 	to := common.HexToAddress("0x0000000000000000000000000000000000000001")
 
@@ -47,10 +50,12 @@ func TestSignTxRecoversSender(t *testing.T) {
 		GasTipCap: big.NewInt(1_000_000_000),
 	})
 
-	signed, err := signTx(tx, acct.Key, chainID)
+	opts, err := acct.TransactOpts(chainID)
+	require.NoError(t, err)
+	signed, err := opts.Signer(acct.Address(), tx)
 	require.NoError(t, err)
 
 	sender, err := types.Sender(types.LatestSignerForChainID(chainID), signed)
 	require.NoError(t, err)
-	assert.Equal(t, acct.Addr, sender)
+	assert.Equal(t, acct.Address(), sender)
 }

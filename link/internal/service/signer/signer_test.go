@@ -75,3 +75,18 @@ func TestNewSignerFromConfigExpandsHome(t *testing.T) {
 	require.Equal(t, "local", alias)
 	require.Equal(t, key.PublicKey(), loadedSigner.PublicKey())
 }
+
+func TestNewSignerFromConfigRequiresExactFilePath(t *testing.T) {
+	key, err := GenerateLocalEd25519Signer()
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	require.NoError(t, key.StoreToFile(filepath.Join(dir, "signer.json")))
+
+	_, _, err = NewSignerFromConfig(context.Background(), config.SignerConfig{
+		Alias: "local",
+		Type:  config.SignerLocal,
+		File:  filepath.Join(dir, "signer"),
+	})
+	require.Error(t, err)
+}

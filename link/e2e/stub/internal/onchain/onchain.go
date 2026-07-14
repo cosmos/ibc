@@ -1,4 +1,4 @@
-// Package onchain provides EVM fixture bindings for stub deploy and relay.
+// Package onchain provides the EVM bindings used by the synthetic relayer.
 package onchain
 
 import (
@@ -6,53 +6,22 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/cosmos/ibc/link/harness/fixtures"
-	"github.com/cosmos/ibc/link/harness/testkeys"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp/contracts"
 
 	ethereum "github.com/ethereum/go-ethereum"
 )
 
 var (
-	faucetKey  *ecdsa.PrivateKey
-	faucetAddr common.Address
+	mockIFTABI = contracts.MockIFT.MustABI()
+	mockGMPABI = contracts.MockGMP.MustABI()
 )
-
-var (
-	mockIFTABI = fixtures.MockIFT.MustABI()
-	mockGMPABI = fixtures.MockGMP.MustABI()
-)
-
-func init() {
-	// Relayer signs per-chain EVMSignerKey from config; faucet is the shared Anvil #0 escrow account.
-	faucetKey, faucetAddr = mustKey(testkeys.FaucetPrivateKeyHex, "faucet")
-}
-
-func mustKey(hexKey, name string) (*ecdsa.PrivateKey, common.Address) {
-	k, err := crypto.HexToECDSA(hexKey)
-	if err != nil {
-		panic(fmt.Sprintf("onchain: invalid %s key: %v", name, err))
-	}
-	return k, crypto.PubkeyToAddress(k.PublicKey)
-}
-
-func ParseKey(hexKey string) (*ecdsa.PrivateKey, error) {
-	k, err := crypto.HexToECDSA(strings.TrimPrefix(hexKey, "0x"))
-	if err != nil {
-		return nil, fmt.Errorf("parse evm signer key: %w", err)
-	}
-	return k, nil
-}
-
-func FaucetAddress() common.Address { return faucetAddr }
 
 func dial(ctx context.Context, url string) (*ethclient.Client, error) {
 	c, err := ethclient.DialContext(ctx, url)
@@ -81,23 +50,14 @@ func Connect(ctx context.Context, url string) (*Conn, error) {
 	return &Conn{Client: client, ChainID: id}, nil
 }
 
-func (c *Conn) FaucetTransactor(ctx context.Context) (*bind.TransactOpts, error) {
-	return keyedTransactor(ctx, faucetKey, c.ChainID, "faucet")
-}
-
-func RelayerTransactor(ctx context.Context, key *ecdsa.PrivateKey, chainID *big.Int) (*bind.TransactOpts, error) {
-	return keyedTransactor(ctx, key, chainID, "relayer")
-}
-
-func keyedTransactor(
+func Transactor(
 	ctx context.Context,
 	key *ecdsa.PrivateKey,
 	chainID *big.Int,
-	name string,
 ) (*bind.TransactOpts, error) {
 	opts, err := bind.NewKeyedTransactorWithChainID(key, chainID)
 	if err != nil {
-		return nil, fmt.Errorf("build %s transactor: %w", name, err)
+		return nil, fmt.Errorf("build EVM transactor: %w", err)
 	}
 	opts.Context = ctx
 	return opts, nil
@@ -111,15 +71,15 @@ func WaitMined(ctx context.Context, client *ethclient.Client, tx *types.Transact
 	return rcpt, nil
 }
 
-type boundFixture struct {
+type boundContract struct {
 	Address common.Address
 	client  *ethclient.Client
 	bound   *bind.BoundContract
 	abi     abi.ABI
 }
 
-func newBoundFixture(addr common.Address, client *ethclient.Client, parsed abi.ABI) boundFixture {
-	return boundFixture{
+func newBoundContract(addr common.Address, client *ethclient.Client, parsed abi.ABI) boundContract {
+	return boundContract{
 		Address: addr,
 		client:  client,
 		bound:   bind.NewBoundContract(addr, parsed, client, client, client),
@@ -129,7 +89,7 @@ func newBoundFixture(addr common.Address, client *ethclient.Client, parsed abi.A
 
 type seqDecoder func(data []byte) (*big.Int, error)
 
-func (b *boundFixture) filterByEvent(
+func (b *boundContract) filterByEvent(
 	ctx context.Context,
 	event string,
 	fromBlock, toBlock uint64,
@@ -146,8 +106,7 @@ func (b *boundFixture) filterByEvent(
 	return logs, nil
 }
 
-// Source refund scans match raw fixture sequence; destination delivery uses route-scoped seq (see relay).
-func (b *boundFixture) findBySeq(
+func (b *boundContract) findBySeq(
 	ctx context.Context,
 	event string,
 	seq *big.Int,
@@ -178,38 +137,36 @@ type ReceivedResult struct {
 	Success bool
 }
 
-type receivedDecoder func(data []byte) (seq uint64, success bool, err error)
+type ReceivedKey struct {
+	RouteID  string
+	Sequence uint64
+}
+
+type receivedDecoder func(data []byte) (key ReceivedKey, success bool, err error)
 
 // recvCursor in relay holds fromBlock across ticks so idempotency scans read only new blocks.
-func (b *boundFixture) scanReceived(
+func (b *boundContract) scanReceived(
 	ctx context.Context,
 	event string,
 	fromBlock uint64,
 	decode receivedDecoder,
-) (map[uint64]ReceivedResult, uint64, error) {
-	head, err := b.client.BlockNumber(ctx)
-	if err != nil {
-		return nil, fromBlock, fmt.Errorf("head for %s scan: %w", event, err)
-	}
-	if head < fromBlock {
-		return nil, fromBlock, nil
-	}
-	logs, err := b.filterByEvent(ctx, event, fromBlock, head)
+) (map[ReceivedKey]ReceivedResult, uint64, error) {
+	logs, next, err := b.scanEvent(ctx, event, fromBlock)
 	if err != nil {
 		return nil, fromBlock, err
 	}
-	out := make(map[uint64]ReceivedResult, len(logs))
+	out := make(map[ReceivedKey]ReceivedResult, len(logs))
 	for _, lg := range logs {
-		seq, success, err := decode(lg.Data)
+		key, success, err := decode(lg.Data)
 		if err != nil {
 			return nil, fromBlock, err
 		}
-		out[seq] = ReceivedResult{TxHash: lg.TxHash, Success: success}
+		out[key] = ReceivedResult{TxHash: lg.TxHash, Success: success}
 	}
-	return out, head + 1, nil
+	return out, next, nil
 }
 
-func (b *boundFixture) scanEvent(ctx context.Context, event string, fromBlock uint64) ([]types.Log, uint64, error) {
+func (b *boundContract) scanEvent(ctx context.Context, event string, fromBlock uint64) ([]types.Log, uint64, error) {
 	head, err := b.client.BlockNumber(ctx)
 	if err != nil {
 		return nil, fromBlock, fmt.Errorf("head for %s scan: %w", event, err)
@@ -224,7 +181,7 @@ func (b *boundFixture) scanEvent(ctx context.Context, event string, fromBlock ui
 	return logs, head + 1, nil
 }
 
-func (b *boundFixture) firstReceiptLog(rcpt *types.Receipt, event string) (*types.Log, bool) {
+func (b *boundContract) firstReceiptLog(rcpt *types.Receipt, event string) (*types.Log, bool) {
 	topic := b.abi.Events[event].ID
 	for _, lg := range rcpt.Logs {
 		if lg.Address == b.Address && len(lg.Topics) > 0 && lg.Topics[0] == topic {
@@ -253,30 +210,28 @@ type iftSentData struct {
 }
 
 type iftReceived struct {
+	RouteID  string `abi:"routeId"`
 	Seq      *big.Int
 	Receiver common.Address
 	Amount   *big.Int
 }
 
 type MockIFT struct {
-	boundFixture
+	boundContract
 }
 
 func NewMockIFT(addr common.Address, client *ethclient.Client) *MockIFT {
-	return &MockIFT{newBoundFixture(addr, client, mockIFTABI)}
-}
-
-func (m *MockIFT) Mint(opts *bind.TransactOpts, to common.Address, amount *big.Int) (*types.Transaction, error) {
-	return m.bound.Transact(opts, "mint", to, amount)
+	return &MockIFT{newBoundContract(addr, client, mockIFTABI)}
 }
 
 func (m *MockIFT) ReceiveTransfer(
 	opts *bind.TransactOpts,
+	routeID string,
 	seq *big.Int,
 	receiver common.Address,
 	amount *big.Int,
 ) (*types.Transaction, error) {
-	return m.bound.Transact(opts, "receiveTransfer", seq, receiver, amount)
+	return m.bound.Transact(opts, "receiveTransfer", routeID, seq, receiver, amount)
 }
 
 func (m *MockIFT) Refund(opts *bind.TransactOpts, seq *big.Int) (*types.Transaction, error) {
@@ -286,13 +241,13 @@ func (m *MockIFT) Refund(opts *bind.TransactOpts, seq *big.Int) (*types.Transact
 func (m *MockIFT) ScanReceivedFrom(
 	ctx context.Context,
 	fromBlock uint64,
-) (map[uint64]ReceivedResult, uint64, error) {
-	return m.scanReceived(ctx, "IFTReceived", fromBlock, func(data []byte) (uint64, bool, error) {
+) (map[ReceivedKey]ReceivedResult, uint64, error) {
+	return m.scanReceived(ctx, "IFTReceived", fromBlock, func(data []byte) (ReceivedKey, bool, error) {
 		var ev iftReceived
 		if err := m.abi.UnpackIntoInterface(&ev, "IFTReceived", data); err != nil {
-			return 0, false, fmt.Errorf("decode IFTReceived: %w", err)
+			return ReceivedKey{}, false, fmt.Errorf("decode IFTReceived: %w", err)
 		}
-		return ev.Seq.Uint64(), true, nil
+		return ReceivedKey{RouteID: ev.RouteID, Sequence: ev.Seq.Uint64()}, true, nil
 	})
 }
 
@@ -372,38 +327,40 @@ type gmpSentData struct {
 
 // Success=false is the error-ack outcome (inner target reverted), not a delivery failure.
 type GMPReceived struct {
+	RouteID string `abi:"routeId"`
 	Seq     *big.Int
 	Target  common.Address
 	Success bool
 }
 
 type MockGMP struct {
-	boundFixture
+	boundContract
 }
 
 func NewMockGMP(addr common.Address, client *ethclient.Client) *MockGMP {
-	return &MockGMP{newBoundFixture(addr, client, mockGMPABI)}
+	return &MockGMP{newBoundContract(addr, client, mockGMPABI)}
 }
 
 func (m *MockGMP) Deliver(
 	opts *bind.TransactOpts,
+	routeID string,
 	seq *big.Int,
 	target common.Address,
 	payload []byte,
 ) (*types.Transaction, error) {
-	return m.bound.Transact(opts, "deliver", seq, target, payload)
+	return m.bound.Transact(opts, "deliver", routeID, seq, target, payload)
 }
 
 func (m *MockGMP) ScanReceivedFrom(
 	ctx context.Context,
 	fromBlock uint64,
-) (map[uint64]ReceivedResult, uint64, error) {
-	return m.scanReceived(ctx, "GMPReceived", fromBlock, func(data []byte) (uint64, bool, error) {
+) (map[ReceivedKey]ReceivedResult, uint64, error) {
+	return m.scanReceived(ctx, "GMPReceived", fromBlock, func(data []byte) (ReceivedKey, bool, error) {
 		ev, err := m.decodeReceived(data)
 		if err != nil {
-			return 0, false, err
+			return ReceivedKey{}, false, err
 		}
-		return ev.Seq.Uint64(), ev.Success, nil
+		return ReceivedKey{RouteID: ev.RouteID, Sequence: ev.Seq.Uint64()}, ev.Success, nil
 	})
 }
 

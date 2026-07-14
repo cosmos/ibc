@@ -15,16 +15,15 @@ import (
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
-	"github.com/cosmos/ibc/link/harness/fixturekeys"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 type relayer struct {
-	cfg   *wire.ConfigYAML
-	dep   wire.Deployment
-	conns map[string]*chainConn
-	store *store.Store
-	log   io.Writer
+	cfg      *wire.ConfigYAML
+	testApps wire.TestAppDeployment
+	conns    map[string]*chainConn
+	store    *store.Store
+	log      io.Writer
 	// recvCursor/recvSeen: relay loop only; recvActive limits caching to pending packets.
 	recvCursor map[string]uint64
 	recvSeen   map[receivedKey]onchain.ReceivedResult
@@ -36,14 +35,16 @@ type relayer struct {
 type receivedKey struct {
 	destination string
 	appType     wire.AppType
-	seq         uint64
+	routeID     string
+	sequence    uint64
 }
 
 func receivedKeyFor(destination string, p store.Packet) receivedKey {
 	return receivedKey{
 		destination: destination,
 		appType:     p.AppType,
-		seq:         fixturekeys.RouteScopedSeq(p.RouteID, p.Sequence),
+		routeID:     p.RouteID,
+		sequence:    p.Sequence,
 	}
 }
 
@@ -51,7 +52,10 @@ func (r *relayer) lookupReceived(
 	ctx context.Context,
 	want receivedKey,
 	addr common.Address,
-	scan func(ctx context.Context, fromBlock uint64) (map[uint64]onchain.ReceivedResult, uint64, error),
+	scan func(
+		ctx context.Context,
+		fromBlock uint64,
+	) (map[onchain.ReceivedKey]onchain.ReceivedResult, uint64, error),
 ) (onchain.ReceivedResult, bool, error) {
 	cursor := cursorKey(want.destination, addr)
 	results, next, err := scan(ctx, r.recvCursor[cursor])
@@ -59,8 +63,13 @@ func (r *relayer) lookupReceived(
 		return onchain.ReceivedResult{}, false, err
 	}
 	r.recvCursor[cursor] = next
-	for s, rec := range results {
-		key := receivedKey{destination: want.destination, appType: want.appType, seq: s}
+	for eventKey, rec := range results {
+		key := receivedKey{
+			destination: want.destination,
+			appType:     want.appType,
+			routeID:     eventKey.RouteID,
+			sequence:    eventKey.Sequence,
+		}
 		if _, pending := r.recvActive[key]; pending {
 			r.recvSeen[key] = rec
 		}
@@ -145,19 +154,19 @@ func (r *relayer) reconcilePacket(ctx context.Context, p store.Packet, requested
 		!requested[store.RelayRequestKey{SourceChainID: route.Source, SourceTxHash: p.SourceTxHash}] {
 		return nil
 	}
-	src, dst, srcDep, dstDep, err := r.routeContext(route)
+	src, dst, srcApps, dstApps, err := r.routeContext(route)
 	if err != nil {
 		return err
 	}
 	switch p.AppType {
 	case wire.AppTypeIFT:
-		d, err := r.iftDelivery(p, src, dst, srcDep, dstDep)
+		d, err := r.iftDelivery(p, src, dst, srcApps, dstApps)
 		if err != nil {
 			return err
 		}
 		return r.deliverPending(ctx, src, dst, p, d)
 	case wire.AppTypeGMP:
-		d, err := r.gmpDelivery(p, dst, dstDep)
+		d, err := r.gmpDelivery(p, dst, dstApps)
 		if err != nil {
 			return err
 		}
@@ -178,36 +187,36 @@ func (r *relayer) routeByID(id string) (wire.Route, bool) {
 
 func (r *relayer) routeContext(
 	route wire.Route,
-) (*chainConn, *chainConn, wire.ChainDeployment, wire.ChainDeployment, error) {
+) (*chainConn, *chainConn, wire.ChainTestAppDeployment, wire.ChainTestAppDeployment, error) {
 	src, ok := r.conns[route.Source]
 	if !ok {
-		return nil, nil, wire.ChainDeployment{}, wire.ChainDeployment{}, fmt.Errorf(
+		return nil, nil, wire.ChainTestAppDeployment{}, wire.ChainTestAppDeployment{}, fmt.Errorf(
 			"source chain %s not connected",
 			route.Source,
 		)
 	}
 	dst, ok := r.conns[route.Destination]
 	if !ok {
-		return nil, nil, wire.ChainDeployment{}, wire.ChainDeployment{}, fmt.Errorf(
+		return nil, nil, wire.ChainTestAppDeployment{}, wire.ChainTestAppDeployment{}, fmt.Errorf(
 			"destination chain %s not connected",
 			route.Destination,
 		)
 	}
-	srcDep, ok := r.dep.Chain(route.Source)
+	srcApps, ok := r.testApps.Chain(route.Source)
 	if !ok {
-		return nil, nil, wire.ChainDeployment{}, wire.ChainDeployment{}, fmt.Errorf(
-			"no deployment for source chain %s",
+		return nil, nil, wire.ChainTestAppDeployment{}, wire.ChainTestAppDeployment{}, fmt.Errorf(
+			"no test app deployment for source chain %s",
 			route.Source,
 		)
 	}
-	dstDep, ok := r.dep.Chain(route.Destination)
+	dstApps, ok := r.testApps.Chain(route.Destination)
 	if !ok {
-		return nil, nil, wire.ChainDeployment{}, wire.ChainDeployment{}, fmt.Errorf(
-			"no deployment for destination chain %s",
+		return nil, nil, wire.ChainTestAppDeployment{}, wire.ChainTestAppDeployment{}, fmt.Errorf(
+			"no test app deployment for destination chain %s",
 			route.Destination,
 		)
 	}
-	return src, dst, srcDep, dstDep, nil
+	return src, dst, srcApps, dstApps, nil
 }
 
 type delivery struct {
@@ -222,42 +231,19 @@ type delivery struct {
 	ackOK        func(rcpt *types.Receipt) (bool, error)
 }
 
-func (r *relayer) iftMintDelivery(p store.Packet, dst *chainConn, dstDep wire.ChainDeployment) (delivery, error) {
+func (r *relayer) iftDelivery(
+	p store.Packet,
+	src, dst *chainConn,
+	srcApps, dstApps wire.ChainTestAppDeployment,
+) (delivery, error) {
 	seq := new(big.Int).SetUint64(p.Sequence)
 	amount, ok := new(big.Int).SetString(p.Amount, 10)
 	if !ok {
 		return delivery{}, fmt.Errorf("invalid IFT amount %q", p.Amount)
 	}
-	dstIFTAddr, err := dstDep.Fixture(fixturekeys.MockIFT)
-	if err != nil {
-		return delivery{}, err
-	}
-	dstIFT := onchain.NewMockIFT(common.HexToAddress(dstIFTAddr), dst.client)
+	dstIFT := onchain.NewMockIFT(common.HexToAddress(dstApps.MockIFT), dst.client)
 	receiver := common.HexToAddress(p.Receiver)
-	// Destination idempotency keys on fixturekeys.RouteScopedSeq, not raw source sequence.
 	received := receivedKeyFor(dst.id, p)
-	scoped := new(big.Int).SetUint64(received.seq)
-	return delivery{
-		seq: seq,
-		findReceived: func(ctx context.Context) (onchain.ReceivedResult, bool, error) {
-			return r.lookupReceived(ctx, received, dstIFT.Address, dstIFT.ScanReceivedFrom)
-		},
-		deliver: func(opts *bind.TransactOpts) (*types.Transaction, error) {
-			return dstIFT.ReceiveTransfer(opts, scoped, receiver, amount)
-		},
-		effect: "recv",
-	}, nil
-}
-
-func (r *relayer) iftDelivery(
-	p store.Packet,
-	src, dst *chainConn,
-	srcDep, dstDep wire.ChainDeployment,
-) (delivery, error) {
-	d, err := r.iftMintDelivery(p, dst, dstDep)
-	if err != nil {
-		return delivery{}, err
-	}
 	timeout := big.NewInt(0)
 	if p.TimeoutTimestamp != "" {
 		var ok bool
@@ -266,40 +252,44 @@ func (r *relayer) iftDelivery(
 			return delivery{}, fmt.Errorf("invalid IFT timeout timestamp %q", p.TimeoutTimestamp)
 		}
 	}
-	srcIFTAddr, err := srcDep.Fixture(fixturekeys.MockIFT)
-	if err != nil {
-		return delivery{}, err
-	}
-	srcIFT := onchain.NewMockIFT(common.HexToAddress(srcIFTAddr), src.client)
-	d.timeout = timeout
-	d.refund = func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return srcIFT.Refund(opts, d.seq)
-	}
-	d.findRefunded = srcIFT.FindRefunded
-	return d, nil
+	srcIFT := onchain.NewMockIFT(common.HexToAddress(srcApps.MockIFT), src.client)
+	return delivery{
+		seq: seq,
+		findReceived: func(ctx context.Context) (onchain.ReceivedResult, bool, error) {
+			return r.lookupReceived(ctx, received, dstIFT.Address, dstIFT.ScanReceivedFrom)
+		},
+		deliver: func(opts *bind.TransactOpts) (*types.Transaction, error) {
+			return dstIFT.ReceiveTransfer(opts, p.RouteID, seq, receiver, amount)
+		},
+		effect:  "recv",
+		timeout: timeout,
+		refund: func(opts *bind.TransactOpts) (*types.Transaction, error) {
+			return srcIFT.Refund(opts, seq)
+		},
+		findRefunded: srcIFT.FindRefunded,
+	}, nil
 }
 
-func (r *relayer) gmpDelivery(p store.Packet, dst *chainConn, dstDep wire.ChainDeployment) (delivery, error) {
+func (r *relayer) gmpDelivery(
+	p store.Packet,
+	dst *chainConn,
+	dstApps wire.ChainTestAppDeployment,
+) (delivery, error) {
 	seq := new(big.Int).SetUint64(p.Sequence)
 	payload, err := hexutil.Decode(p.Payload)
 	if err != nil {
 		return delivery{}, fmt.Errorf("invalid GMP payload %q: %w", p.Payload, err)
 	}
-	dstGMPAddr, err := dstDep.Fixture(fixturekeys.MockGMP)
-	if err != nil {
-		return delivery{}, err
-	}
-	dstGMP := onchain.NewMockGMP(common.HexToAddress(dstGMPAddr), dst.client)
+	dstGMP := onchain.NewMockGMP(common.HexToAddress(dstApps.MockGMP), dst.client)
 	target := common.HexToAddress(p.Target)
 	received := receivedKeyFor(dst.id, p)
-	scoped := new(big.Int).SetUint64(received.seq)
 	return delivery{
 		seq: seq,
 		findReceived: func(ctx context.Context) (onchain.ReceivedResult, bool, error) {
 			return r.lookupReceived(ctx, received, dstGMP.Address, dstGMP.ScanReceivedFrom)
 		},
 		deliver: func(opts *bind.TransactOpts) (*types.Transaction, error) {
-			return dstGMP.Deliver(opts, scoped, target, payload)
+			return dstGMP.Deliver(opts, p.RouteID, seq, target, payload)
 		},
 		ackOK: func(rcpt *types.Receipt) (bool, error) {
 			ok, found, err := dstGMP.DeliveredSuccessFromReceipt(rcpt)
@@ -338,7 +328,7 @@ func (r *relayer) deliverPending(ctx context.Context, src, dst *chainConn, p sto
 		return r.finishTerminal(received, r.store.MarkComplete(ctx, p.PacketID, rec.TxHash.Hex()))
 	}
 
-	opts, err := onchain.RelayerTransactor(ctx, dst.signerKey, dst.chainID)
+	opts, err := onchain.Transactor(ctx, dst.signerKey, dst.chainID)
 	if err != nil {
 		return err
 	}
@@ -419,7 +409,7 @@ func (r *relayer) maybeTimeout(ctx context.Context, src, dst *chainConn, p store
 		return true, nil
 	}
 
-	opts, err := onchain.RelayerTransactor(ctx, src.signerKey, src.chainID)
+	opts, err := onchain.Transactor(ctx, src.signerKey, src.chainID)
 	if err != nil {
 		return false, err
 	}

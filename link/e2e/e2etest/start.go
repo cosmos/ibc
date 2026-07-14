@@ -1,17 +1,20 @@
-// Package e2etest is the only e2e helper package that imports testing.
+// Package e2etest selects and starts reusable Environment configurations.
 package e2etest
 
 import (
 	"context"
 	"flag"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/harness/environment"
+)
+
+const (
+	ChainA environment.ChainID = "chain-a"
+	ChainB environment.ChainID = "chain-b"
 )
 
 const (
@@ -21,6 +24,11 @@ const (
 	laneAnvil         = "anvil"
 	laneAnvilInterval = "anvil-interval"
 	laneBesu          = "besu"
+
+	anvilChainIDBase         = 31337
+	anvilIntervalChainIDBase = 31437
+	besuChainIDBase          = 32337
+	anvilIntervalBlockTime   = 2 * time.Second
 )
 
 var laneFlag = flag.String(
@@ -29,34 +37,63 @@ var laneFlag = flag.String(
 	"e2e lane to run: anvil, anvil-interval, or besu; overrides E2E_LANE",
 )
 
-func SelectedLane(t testing.TB) topology.Lane {
+// Suite is one reusable Environment selection.
+type Suite struct {
+	environmentSpec    environment.Spec
+	environmentRuntime environment.Runtime
+}
+
+func SelectedSuite(t testing.TB) Suite {
 	t.Helper()
 	switch selectedLaneName(t) {
 	case laneBesu:
-		requireDocker(t)
-		return topology.Besu
+		return twoBesuSuite()
 	case laneAnvilInterval:
-		return topology.AnvilInterval
+		return twoAnvilSuite(anvilIntervalChainIDBase, anvilIntervalBlockTime)
 	default:
-		return topology.Anvil
+		return twoAnvilSuite(anvilChainIDBase, 0)
 	}
 }
 
-func SelectedTopology(t testing.TB) topology.Topology {
-	t.Helper()
-	return SelectedLane(t)(topology.TwoEVM())
+func twoAnvilSuite(base uint64, interval time.Duration) Suite {
+	return suite(
+		[]environment.ChainSpec{
+			environment.ManagedAnvil{ID: ChainA, EVMChainID: base, BlockInterval: interval},
+			environment.ManagedAnvil{ID: ChainB, EVMChainID: base + 1, BlockInterval: interval},
+		},
+		environment.Runtime{},
+	)
 }
 
-// RequireAnvilLane deduplicates anvil-pinned topologies: they ignore SelectedLane and would re-run
-// under every -e2e.lane.
+func twoBesuSuite() Suite {
+	return suite(
+		[]environment.ChainSpec{
+			environment.ManagedBesu{ID: ChainA, EVMChainID: besuChainIDBase},
+			environment.ManagedBesu{ID: ChainB, EVMChainID: besuChainIDBase + 1},
+		},
+		environment.Runtime{},
+	)
+}
+
+// SuiteFor builds a selection for an explicit Environment.
+func SuiteFor(spec environment.Spec, runtime environment.Runtime) Suite {
+	return Suite{
+		environmentSpec:    spec,
+		environmentRuntime: runtime,
+	}
+}
+
+func suite(chains []environment.ChainSpec, runtime environment.Runtime) Suite {
+	return SuiteFor(environment.Spec{Chains: chains}, runtime)
+}
+
+// RequireAnvilLane deduplicates suites pinned to Anvil regardless of the
+// selected lane.
 func RequireAnvilLane(t testing.TB) {
 	t.Helper()
 	got := selectedLaneName(t)
 	if got != laneAnvil {
-		t.Skipf(
-			"runs only in the default anvil lane (dedup; its topology is anvil-pinned regardless of -e2e.lane); selected %s",
-			got,
-		)
+		t.Skipf("runs only in the default anvil lane; selected %s", got)
 	}
 }
 
@@ -91,52 +128,18 @@ func normalizeLaneName(name string) string {
 	return trimmed
 }
 
-func requireDocker(t testing.TB) {
+func Start(t testing.TB, selected Suite) *environment.Environment {
 	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Fatalf("docker is required for the besu e2e lane: %v", err)
-	}
-	if err := exec.Command("docker", "info").Run(); err != nil {
-		t.Fatalf("docker is not running or not reachable for the besu e2e lane: %v", err)
-	}
-}
-
-func StartHarness(t testing.TB, topo topology.Topology) *harness.Harness {
-	t.Helper()
-	keep := keepAfterTest()
-	h, err := harness.Start(t.Context(), harness.StartConfig{
-		Topology:    topo,
-		KeepOnClose: keep,
-		ArtifactDir: os.Getenv("E2E_ARTIFACT_DIR"),
-	})
+	env, err := environment.Start(t.Context(), selected.environmentSpec, selected.environmentRuntime)
 	if err != nil {
-		t.Fatalf("e2etest.StartHarness: %v", err)
-	}
-	if keep {
-		// Logged at startup, not teardown, so the path survives a wedged or panicking test.
-		t.Logf("KEEP_AFTER_TEST: world kept after test; workdir=%s", h.WorkDir())
+		t.Fatalf("e2etest: start Environment: %v", err)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
-		if err := h.Shutdown(ctx, t.Failed()); err != nil {
-			t.Logf("e2etest: harness shutdown: %v", err)
+		if err := env.Close(ctx); err != nil {
+			t.Errorf("e2etest: close Environment: %v", err)
 		}
 	})
-	return h
-}
-
-// Start registers one cleanup via Harness.Shutdown, which must own every daemon started by StartRelayer.
-func Start(t testing.TB, topo topology.Topology) *harness.Session {
-	t.Helper()
-	run, err := StartHarness(t, topo).StartRelayer(t.Context())
-	if err != nil {
-		t.Fatalf("e2etest.Start: %v", err)
-	}
-	return run
-}
-
-func keepAfterTest() bool {
-	v := os.Getenv("KEEP_AFTER_TEST")
-	return strings.EqualFold(v, "true") || v == "1"
+	return env
 }

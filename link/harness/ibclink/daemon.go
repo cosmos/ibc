@@ -5,16 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -28,43 +26,18 @@ const (
 	stopGrace = 10 * time.Second
 	// Backstop: a status endpoint that accepts but never responds would hang an unbounded ctx forever.
 	statusHTTPTimeout = 30 * time.Second
-	// Best-effort pre-stop snapshot; must not delay teardown on a wedged daemon.
-	finalStatusTimeout = 2 * time.Second
+	killTimeout       = 5 * time.Second
 )
 
-// Per-instance numbering so a Restart's os.Create does not truncate the prior daemon log.
-var daemonSeq atomic.Int64
-
-type Daemon interface {
-	Ready() wire.Readiness
-	Status(ctx context.Context, q wire.StatusQuery) (*wire.Status, error)
-	Relay(ctx context.Context, req wire.RelayRequest) (*wire.RelayResult, error)
-	Stop(ctx context.Context) error
-	Restart(ctx context.Context) (Daemon, error)
-	Logs() io.Reader
-	FinalStatus() (*wire.Status, bool)
-	LogLabel() string
-}
-
-type daemon struct {
-	runner    *runner
+type Relayer struct {
 	readiness wire.Readiness
 	httpAddr  string
 	http      *http.Client
-
-	logSeq int
-
-	out *safeWriter
-	h   *proc.Handle
-
-	mu          sync.Mutex
-	finalStatus *wire.Status
+	h         *proc.Handle
 }
 
-var _ Daemon = (*daemon)(nil)
-
-func (r *runner) Run(ctx context.Context) (Daemon, error) {
-	return startDaemon(ctx, r)
+func (r *Driver) StartRelayer(ctx context.Context) (*Relayer, error) {
+	return startRelayer(ctx, r)
 }
 
 type readyResult struct {
@@ -72,13 +45,9 @@ type readyResult struct {
 	err       error
 }
 
-func startDaemon(ctx context.Context, r *runner) (*daemon, error) {
-	const label = "relayer run"
+func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	args := append([]string{"relayer", "run"}, r.configArgs()...)
-	bin, err := r.binFor(label)
-	if err != nil {
-		return nil, err
-	}
+	bin := r.stubBin
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -93,62 +62,39 @@ func startDaemon(ctx context.Context, r *runner) (*daemon, error) {
 		return nil, fmt.Errorf("ibc relayer run: stderr pipe: %w", err)
 	}
 
-	seq := int(daemonSeq.Add(1))
-	out := &safeWriter{}
-	if r.logPath != "" {
-		if f, ferr := os.Create(daemonLogPath(r.logPath, seq)); ferr == nil {
-			out.f = f
-		}
-	}
-
-	d := &daemon{
-		runner: r,
-		logSeq: seq,
-		http:   &http.Client{Timeout: statusHTTPTimeout},
-		out:    out,
+	d := &Relayer{
+		http: &http.Client{Timeout: statusHTTPTimeout},
 	}
 
 	if startErr := cmd.Start(); startErr != nil {
-		out.close()
 		return nil, fmt.Errorf("start ibc relayer run (%s): %w", bin, startErr)
-	}
-	if r.logPath != "" {
-		pid := strconv.Itoa(cmd.Process.Pid)
-		_ = os.WriteFile(daemonPidPath(r.logPath, seq), []byte(pid+"\n"), 0o644)
 	}
 
 	readyCh := make(chan readyResult, 1)
 	var drained sync.WaitGroup
 	drained.Add(2)
-	go func() { defer drained.Done(); d.drainStdout(stdout, readyCh) }()
-	go func() { defer drained.Done(); d.drainStderr(stderr) }()
-	d.h = proc.Reap(cmd, drained.Wait)
-	go func() {
-		<-d.h.Done()
-		out.close()
-	}()
+	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
+	go func() { defer drained.Done(); _, _ = io.Copy(io.Discard, stderr) }()
+	d.h = proc.Reap(cmd, proc.Hooks{BeforeWait: drained.Wait})
 
 	readiness, err := d.awaitReady(ctx, readyCh)
 	if err != nil {
-		_ = d.kill()
-		return nil, err
+		return nil, errors.Join(err, d.kill())
 	}
 	d.readiness = readiness
 	d.httpAddr = readiness.Status.HTTP
 	if err := d.probeHealth(ctx); err != nil {
-		_ = d.kill()
-		return nil, err
+		return nil, errors.Join(err, d.kill())
 	}
 	return d, nil
 }
 
-func (d *daemon) drainStdout(rc io.Reader, readyCh chan<- readyResult) {
+func drainStdout(rc io.Reader, readyCh chan<- readyResult) {
 	br := bufio.NewReader(rc)
 	first := true
 	for {
 		line, err := br.ReadString('\n')
 		if len(line) > 0 {
-			d.out.writeLine(line)
 			if first {
 				first = false
 				readyCh <- parseReadiness(line)
@@ -176,20 +122,7 @@ func parseReadiness(line string) readyResult {
 	return readyResult{readiness: r}
 }
 
-func (d *daemon) drainStderr(rc io.Reader) {
-	br := bufio.NewReader(rc)
-	for {
-		line, err := br.ReadString('\n')
-		if len(line) > 0 {
-			d.out.writeLine(line)
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
-func (d *daemon) awaitReady(ctx context.Context, readyCh <-chan readyResult) (wire.Readiness, error) {
+func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (wire.Readiness, error) {
 	timer := time.NewTimer(defaultStartupTimeout)
 	defer timer.Stop()
 	select {
@@ -205,13 +138,9 @@ func (d *daemon) awaitReady(ctx context.Context, readyCh <-chan readyResult) (wi
 	}
 }
 
-func (d *daemon) Ready() wire.Readiness { return d.readiness }
+func (d *Relayer) Ready() wire.Readiness { return d.readiness }
 
-func (d *daemon) Logs() io.Reader { return bytes.NewReader(d.out.snapshot()) }
-
-func (d *daemon) LogLabel() string { return fmt.Sprintf("ibc-daemon-%d", d.logSeq) }
-
-func (d *daemon) Status(ctx context.Context, q wire.StatusQuery) (*wire.Status, error) {
+func (d *Relayer) Status(ctx context.Context, q wire.StatusQuery) (*wire.Status, error) {
 	u := d.apiURL(wire.StatusPath)
 	vals := url.Values{}
 	if q.RouteID != "" {
@@ -233,7 +162,7 @@ func (d *daemon) Status(ctx context.Context, q wire.StatusQuery) (*wire.Status, 
 	return &status, nil
 }
 
-func (d *daemon) Relay(ctx context.Context, in wire.RelayRequest) (*wire.RelayResult, error) {
+func (d *Relayer) Relay(ctx context.Context, in wire.RelayRequest) (*wire.RelayResult, error) {
 	u := d.apiURL(wire.RelayPath)
 	body, err := json.Marshal(in)
 	if err != nil {
@@ -252,7 +181,7 @@ func (d *daemon) Relay(ctx context.Context, in wire.RelayRequest) (*wire.RelayRe
 }
 
 // Pins the /health wire contract at startup (not a liveness wait).
-func (d *daemon) probeHealth(ctx context.Context) error {
+func (d *Relayer) probeHealth(ctx context.Context) error {
 	u := d.apiURL(wire.HealthPath)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -261,11 +190,11 @@ func (d *daemon) probeHealth(ctx context.Context) error {
 	return d.doJSON(req, "ibc relayer run: health", nil)
 }
 
-func (d *daemon) apiURL(path string) url.URL {
+func (d *Relayer) apiURL(path string) url.URL {
 	return url.URL{Scheme: "http", Host: d.httpAddr, Path: path}
 }
 
-func (d *daemon) doJSON(req *http.Request, label string, out any) error {
+func (d *Relayer) doJSON(req *http.Request, label string, out any) error {
 	resp, err := d.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("%s: %s %s: %w", label, req.Method, req.URL.String(), err)
@@ -291,81 +220,12 @@ func (d *daemon) doJSON(req *http.Request, label string, out any) error {
 	return nil
 }
 
-func (d *daemon) Stop(ctx context.Context) error {
-	d.snapshotFinalStatus(ctx)
+func (d *Relayer) Stop(ctx context.Context) error {
 	return d.h.SignalAndWait(ctx, syscall.SIGTERM, stopGrace)
 }
 
-func (d *daemon) snapshotFinalStatus(ctx context.Context) {
-	if d.httpAddr == "" {
-		return
-	}
-	sctx, cancel := context.WithTimeout(ctx, finalStatusTimeout)
+func (d *Relayer) kill() error {
+	ctx, cancel := context.WithTimeout(context.Background(), killTimeout)
 	defer cancel()
-	s, err := d.Status(sctx, wire.StatusQuery{})
-	if err != nil {
-		return
-	}
-	d.mu.Lock()
-	d.finalStatus = s
-	d.mu.Unlock()
-}
-
-func (d *daemon) FinalStatus() (*wire.Status, bool) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.finalStatus, d.finalStatus != nil
-}
-
-func (d *daemon) kill() error {
-	return d.h.SignalAndWait(context.Background(), syscall.SIGKILL, 0)
-}
-
-func (d *daemon) Restart(ctx context.Context) (Daemon, error) {
-	if err := d.Stop(ctx); err != nil {
-		return nil, fmt.Errorf("restart: stop current daemon: %w", err)
-	}
-	nd, err := startDaemon(ctx, d.runner)
-	if err != nil {
-		return nil, fmt.Errorf("restart: start new daemon: %w", err)
-	}
-	return nd, nil
-}
-
-func daemonLogPath(runnerLog string, instance int) string {
-	return fmt.Sprintf("%s-daemon-%d.log", strings.TrimSuffix(runnerLog, ".log"), instance)
-}
-
-func daemonPidPath(runnerLog string, instance int) string {
-	return fmt.Sprintf("%s-daemon-%d.pid", strings.TrimSuffix(runnerLog, ".log"), instance)
-}
-
-type safeWriter struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-	f   *os.File
-}
-
-func (w *safeWriter) writeLine(s string) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.buf.WriteString(s)
-	if w.f != nil {
-		_, _ = w.f.WriteString(s)
-	}
-}
-
-func (w *safeWriter) snapshot() []byte {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return append([]byte(nil), w.buf.Bytes()...)
-}
-
-func (w *safeWriter) close() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.f != nil {
-		_ = w.f.Close()
-		w.f = nil
-	}
+	return d.h.SignalAndWait(ctx, syscall.SIGKILL, 0)
 }

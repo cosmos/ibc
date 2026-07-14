@@ -22,6 +22,7 @@ import (
 	"github.com/cosmos/ibc/link/e2e/stub/internal/jsonout"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/rpcsafe"
+	"github.com/cosmos/ibc/link/e2e/stub/internal/signing"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/statusapi"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
@@ -65,6 +66,10 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 	if storeErr := cfg.RequireStore(c); storeErr != nil {
 		return exitcode.New(wire.ExitConfigInvalid, storeErr)
 	}
+	signerKeys, err := relaySignerKeys(c)
+	if err != nil {
+		return exitcode.New(wire.ExitConfigInvalid, err)
+	}
 
 	st, err := store.Open(c.DB.URL)
 	if err != nil {
@@ -72,15 +77,15 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 	}
 	defer st.Close() //nolint:errcheck
 
-	dep, err := st.RequireDeployment(ctx)
+	testApps, err := st.RequireTestApps(ctx)
 	if err != nil {
-		if errors.Is(err, store.ErrNoDeployment) {
+		if errors.Is(err, store.ErrNoTestApps) {
 			return exitcode.New(wire.ExitNotReady, fmt.Errorf("%w (db %q)", err, c.DB.URL))
 		}
 		return exitcode.New(wire.ExitInternal, err)
 	}
 
-	conns, err := dialChains(ctx, c, stderr)
+	conns, err := dialChains(ctx, c, signerKeys, stderr)
 	if err != nil {
 		return err
 	}
@@ -88,7 +93,7 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 
 	rel := &relayer{
 		cfg:        c,
-		dep:        dep,
+		testApps:   testApps,
 		conns:      conns,
 		store:      st,
 		log:        stderr,
@@ -108,11 +113,9 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 		}
 	}()
 
-	connectedIDs := make([]string, 0, len(conns))
+	connectedIDs := make([]string, 0, len(c.Chains))
 	for _, ch := range c.Chains {
-		if _, ok := conns[ch.ID]; ok {
-			connectedIDs = append(connectedIDs, ch.ID)
-		}
+		connectedIDs = append(connectedIDs, ch.ID)
 	}
 
 	// First stdout line is readiness JSON (wire.Readiness); harness blocks on it before HTTP probes.
@@ -155,6 +158,7 @@ func run(cmd *cobra.Command, flags *config.FlagSet) error {
 func dialChains(
 	ctx context.Context,
 	c *wire.ConfigYAML,
+	signerKeys map[string]*ecdsa.PrivateKey,
 	stderr io.Writer,
 ) (map[string]*chainConn, error) {
 	var (
@@ -166,10 +170,6 @@ func dialChains(
 		g.Go(func() error {
 			dialCtx, cancel := context.WithTimeout(gctx, startupDialTimeout)
 			defer cancel()
-			signerKey, keyErr := onchain.ParseKey(ch.EVMSignerKey)
-			if keyErr != nil {
-				return exitcode.New(wire.ExitConfigInvalid, fmt.Errorf("chain %s: %w", ch.ID, keyErr))
-			}
 			conn, err := onchain.Connect(dialCtx, ch.RPC.URL)
 			if err != nil {
 				return exitcode.New(
@@ -178,7 +178,9 @@ func dialChains(
 				)
 			}
 			mu.Lock()
-			conns[ch.ID] = &chainConn{id: ch.ID, client: conn.Client, chainID: conn.ChainID, signerKey: signerKey}
+			conns[ch.ID] = &chainConn{
+				id: ch.ID, client: conn.Client, chainID: conn.ChainID, signerKey: signerKeys[ch.ID],
+			}
 			mu.Unlock()
 			_, _ = fmt.Fprintf(stderr, "ibc relayer: connected chain %s (id %s)\n", ch.ID, conn.ChainID)
 			return nil
@@ -189,6 +191,31 @@ func dialChains(
 		return nil, err
 	}
 	return conns, nil
+}
+
+func relaySignerKeys(c *wire.ConfigYAML) (map[string]*ecdsa.PrivateKey, error) {
+	endpoints := make(map[string]struct{}, len(c.Relayer.Routes)*2)
+	for _, route := range c.Relayer.Routes {
+		endpoints[route.Source] = struct{}{}
+		endpoints[route.Destination] = struct{}{}
+	}
+
+	keys := make(map[string]*ecdsa.PrivateKey, len(endpoints))
+	for i, ch := range c.Chains {
+		if _, required := endpoints[ch.ID]; !required || ch.Type != wire.ChainTypeEVM {
+			continue
+		}
+		path := fmt.Sprintf("chains[%d].evmSigner", i)
+		if ch.EVMSigner == "" {
+			return nil, fmt.Errorf("%s: EVM relay signer alias is empty", path)
+		}
+		key, err := signing.LoadECDSA(c.Signers, ch.EVMSigner)
+		if err != nil {
+			return nil, fmt.Errorf("%s: EVM relay signer %q: %w", path, ch.EVMSigner, err)
+		}
+		keys[ch.ID] = key
+	}
+	return keys, nil
 }
 
 func closeConns(conns map[string]*chainConn) {

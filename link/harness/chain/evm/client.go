@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/cosmos/ibc/link/harness/internal/poll"
@@ -30,15 +29,13 @@ const (
 	ReceiptTimeout      = 30 * time.Second
 )
 
-var faucetFundingWei = new(big.Int).Mul(big.NewInt(100), big.NewInt(params.Ether))
-
 type EVMClient struct {
 	client  *ethclient.Client
 	chainID *big.Int
-	faucet  Account
 
-	// Faucet sends must be serialized across nonce reads and submission.
-	faucetMu sync.Mutex
+	// Local sends must be serialized across nonce reads and submission,
+	// regardless of which account pays for the transaction.
+	txMu sync.Mutex
 }
 
 // The caller remains responsible for readiness.
@@ -47,7 +44,7 @@ func NewConnectedClient(ctx context.Context, c *ethclient.Client) (*EVMClient, e
 	if err != nil {
 		return nil, fmt.Errorf("query chain id: %w", err)
 	}
-	return &EVMClient{client: c, chainID: id, faucet: FaucetAccount()}, nil
+	return &EVMClient{client: c, chainID: id}, nil
 }
 
 // It closes c on failure.
@@ -94,24 +91,20 @@ func (e *EVMClient) Logs(ctx context.Context, q ethereum.FilterQuery) ([]types.L
 	return e.client.FilterLogs(ctx, q)
 }
 
-// It returns only after funding is mined.
-func (e *EVMClient) NewFundedAccount(ctx context.Context) (Account, error) {
-	acct, err := NewAccount()
+// RequireEOA rejects addresses that cannot be funded consistently through a
+// plain value transfer across managed EVM providers.
+func (e *EVMClient) RequireEOA(ctx context.Context, address common.Address) error {
+	if address == (common.Address{}) {
+		return fmt.Errorf("EOA address is zero")
+	}
+	code, err := e.client.CodeAt(ctx, address, nil)
 	if err != nil {
-		return Account{}, err
+		return fmt.Errorf("query code at %s: %w", address, err)
 	}
-	if _, err := e.BroadcastTx(ctx, e.faucet, &acct.Addr, nil, faucetFundingWei); err != nil {
-		return Account{}, fmt.Errorf("fund new account %s: %w", acct.Addr, err)
+	if len(code) != 0 {
+		return fmt.Errorf("address %s has contract code and is not an EOA", address)
 	}
-	return acct, nil
-}
-
-func (e *EVMClient) NewReceiver(ctx context.Context) (string, error) {
-	acct, err := e.NewFundedAccount(ctx)
-	if err != nil {
-		return "", err
-	}
-	return acct.Addr.Hex(), nil
+	return nil
 }
 
 // It returns only after mining and treats reverts as errors.
@@ -143,10 +136,9 @@ func (e *EVMClient) signAndSend(
 	data []byte,
 	value *big.Int,
 ) (*types.Transaction, error) {
-	if from.Addr == e.faucet.Addr {
-		e.faucetMu.Lock()
-		defer e.faucetMu.Unlock()
-	}
+	e.txMu.Lock()
+	defer e.txMu.Unlock()
+
 	signed, err := e.buildSignedTx(ctx, from, to, data, value)
 	if err != nil {
 		return nil, err
@@ -164,7 +156,7 @@ func (e *EVMClient) buildSignedTx(
 	data []byte,
 	value *big.Int,
 ) (*types.Transaction, error) {
-	nonce, err := e.client.PendingNonceAt(ctx, from.Addr)
+	nonce, err := e.client.PendingNonceAt(ctx, from.addr)
 	if err != nil {
 		return nil, fmt.Errorf("pending nonce: %w", err)
 	}
@@ -174,7 +166,7 @@ func (e *EVMClient) buildSignedTx(
 		val.Set(value)
 	}
 
-	est, err := e.client.EstimateGas(ctx, ethereum.CallMsg{From: from.Addr, To: to, Value: val, Data: data})
+	est, err := e.client.EstimateGas(ctx, ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data})
 	if err != nil {
 		return nil, fmt.Errorf("estimate gas: %w", err)
 	}
@@ -184,7 +176,10 @@ func (e *EVMClient) buildSignedTx(
 	}
 
 	tipCap, err := e.client.SuggestGasTipCap(ctx)
-	if err != nil || tipCap == nil || tipCap.Sign() <= 0 {
+	if err != nil {
+		return nil, fmt.Errorf("suggest gas tip cap: %w", err)
+	}
+	if tipCap == nil || tipCap.Sign() <= 0 {
 		tipCap = big.NewInt(fallbackTipCapWei)
 	}
 
@@ -207,7 +202,7 @@ func (e *EVMClient) buildSignedTx(
 		GasTipCap: tipCap,
 		Data:      data,
 	})
-	return signTx(tx, from.Key, e.chainID)
+	return signTx(tx, from.key, e.chainID)
 }
 
 func (e *EVMClient) WaitNextPendingTx(ctx context.Context) error {

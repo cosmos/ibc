@@ -31,25 +31,19 @@ func Setup(flags *config.FlagSet) (*wire.ConfigYAML, error) {
 		)
 	}
 
-	realCfg, err := config.LoadFromFile(path, true, false)
+	c, err := Load(path)
 	if err != nil {
 		return nil, setupError(err)
 	}
-
 	if flags.DB != "" {
-		realCfg.DB, err = config.DBConfigFromURL(flags.DB)
-		if err != nil {
-			return nil, setupError(fmt.Errorf("invalid --db: %w", err))
+		db, dbErr := config.DBConfigFromURL(flags.DB)
+		if dbErr != nil {
+			return nil, setupError(fmt.Errorf("invalid --db: %w", dbErr))
 		}
+		c.DB = wire.DB{Type: db.Type, URL: db.URL}
 	}
 
-	wireCfg, err := Load(path)
-	if err != nil {
-		return nil, setupError(err)
-	}
-	wireCfg.DB = wire.DB{Type: realCfg.DB.Type, URL: realCfg.DB.URL}
-
-	return wireCfg, nil
+	return c, nil
 }
 
 func setupError(err error) error {
@@ -70,6 +64,20 @@ func Load(path string) (*wire.ConfigYAML, error) {
 		if err != nil {
 			return nil, fmt.Errorf("expand chains[%d].rpc.url: %w", i, err)
 		}
+	}
+	for i := range c.Signers {
+		c.Signers[i].File, err = resolveEnvRef(c.Signers[i].File)
+		if err != nil {
+			return nil, fmt.Errorf("expand signers[%d].file: %w", i, err)
+		}
+	}
+	c.DB.Type, err = resolveEnvRef(c.DB.Type)
+	if err != nil {
+		return nil, fmt.Errorf("expand db.type: %w", err)
+	}
+	c.DB.URL, err = resolveEnvRef(c.DB.URL)
+	if err != nil {
+		return nil, fmt.Errorf("expand db.url: %w", err)
 	}
 	return c, nil
 }

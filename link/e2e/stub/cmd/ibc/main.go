@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/e2e/stub/internal/deploy"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/exitcode"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/relay"
+	"github.com/cosmos/ibc/link/e2e/stub/internal/testappdeploy"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/validate"
 	"github.com/cosmos/ibc/link/internal/config"
 )
@@ -44,10 +44,13 @@ func newRoot() *cobra.Command {
 	configCmd := group("config", "configuration commands")
 	configCmd.AddCommand(validate.Command(&globalFlags))
 
+	testAppsCmd := group("test-apps", "synthetic test application commands")
+	testAppsCmd.AddCommand(testappdeploy.Command(&globalFlags))
+
 	relayerCmd := group("relayer", "relayer commands")
 	relayerCmd.AddCommand(relay.Command(&globalFlags))
 
-	root.AddCommand(configCmd, deploy.Command(&globalFlags), relayerCmd)
+	root.AddCommand(configCmd, testAppsCmd, relayerCmd)
 	return root
 }
 

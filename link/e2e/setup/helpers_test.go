@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/harness/ibclink"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
+	"github.com/cosmos/ibc/link/internal/service/signer/keyfile"
 )
 
 func requireExit(t *testing.T, err error, wantClass error, wantCode int) {
@@ -30,11 +32,11 @@ func hasErrorPath(errs []wire.ValidationError, path string) bool {
 	return false
 }
 
-func newRunner(t *testing.T, configPath string) ibclink.Runner {
+func newDriver(t *testing.T, configPath string) *ibclink.Driver {
 	t.Helper()
-	r, err := ibclink.NewRunner(ibclink.Options{ConfigPath: configPath})
+	driver, err := ibclink.NewDriver(configPath)
 	require.NoError(t, err)
-	return r
+	return driver
 }
 
 func writeConfig(t *testing.T, c wire.ConfigYAML) string {
@@ -44,6 +46,15 @@ func writeConfig(t *testing.T, c wire.ConfigYAML) string {
 	p := filepath.Join(t.TempDir(), "config.yaml")
 	require.NoError(t, os.WriteFile(p, data, 0o600))
 	return p
+}
+
+func writeLocalSigner(t *testing.T, alias string) wire.Signer {
+	t.Helper()
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), alias+".json")
+	require.NoError(t, keyfile.Store(path, keyfile.ECDSA, crypto.FromECDSA(key)))
+	return wire.Signer{Alias: alias, Type: wire.SignerTypeLocal, File: path}
 }
 
 func refusingRPCURL(t *testing.T) string {

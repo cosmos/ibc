@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/service/signer/keyfile"
 )
 
 // KeyType key type supported by local Signer
@@ -27,8 +28,8 @@ type Set struct {
 
 // KeyType & SignerType enums
 const (
-	EDDSA KeyType = "eddsa"
-	ECDSA KeyType = "ecdsa"
+	EDDSA KeyType = KeyType(keyfile.EDDSA)
+	ECDSA KeyType = KeyType(keyfile.ECDSA)
 )
 
 func NewSet() *Set {
@@ -54,7 +55,7 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", errors.Wrap(err, "expand local signer file")
 		}
 
-		s, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+		s, err := LocalKeyFromFile(path)
 
 		return s, cfg.Alias, err
 	case config.SignerRemote:
@@ -70,9 +71,6 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 }
 
 func ParseKeyType(raw string) (KeyType, error) {
-	if raw != string(EDDSA) && raw != string(ECDSA) {
-		return "", errors.Errorf("invalid key type: %s", raw)
-	}
-
-	return KeyType(raw), nil
+	parsed, err := keyfile.ParseType(raw)
+	return KeyType(parsed), err
 }

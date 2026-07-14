@@ -7,52 +7,85 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/e2e/e2etest"
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/harness/environment"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 func TestRestartRecovery_ResumesPendingPacket(t *testing.T) {
-	run := e2etest.Start(t, e2etest.SelectedTopology(t))
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	signers := synthetic.NewSigners(t)
+	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 	amount := big.NewInt(777_000)
 
-	require.NoError(t, run.StopRelayer(ctx))
+	require.NoError(t, relayer.Stop(ctx))
 
-	out, err := run.IFT(ctx, harness.IFT{Route: topology.RouteAtoB, Amount: amount})
+	transfer, err := ift.Send(ctx, testapp.IFTRequest{Amount: amount})
 	require.NoError(t, err)
 
-	require.NoError(t, out.VerifyEscrowed(ctx))
-	require.NoError(t, out.VerifyNoMint(ctx))
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
 
-	require.NoError(t, run.RestartRelayer(ctx))
-	require.NoError(t, out.VerifyComplete(ctx))
+	relayer = synthetic.StartRelayer(t, driver, env)
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	_, err = synthetic.AwaitState(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		wire.PacketComplete,
+		destination.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
 
 func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
-	e2etest.RequireAnvilLane(t)
-	run := e2etest.Start(t, topology.Anvil(topology.TwoEVM()).WithManualRelay(topology.RouteAtoB))
+	selected := e2etest.SelectedSuite(t)
+	e2etest.RequireCapabilities(t, selected, environment.Requirements{
+		MiningControl: []environment.ChainID{e2etest.ChainB},
+	})
+	env := e2etest.Start(t, selected)
+	signers := synthetic.NewSigners(t)
+	route := synthetic.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	chainB := run.Chain(topology.ChainB)
+	chainB, err := env.Chain(e2etest.ChainB)
+	require.NoError(t, err)
+	mining, err := chainB.Mining()
+	require.NoError(t, err)
 	dst, err := chainB.EVM()
 	require.NoError(t, err)
-	// Fund the receiver before pausing mining; a fresh account needs a mined tx.
-	receiver, err := dst.NewFundedAccount(ctx)
-	require.NoError(t, err)
 
-	// Keep destination mining paused across restart so delivery cannot finish before the new daemon is up.
-	require.NoError(t, chainB.WithPausedMining(ctx, func() error {
-		out, err := run.IFT(ctx, harness.IFT{
-			Route: topology.RouteAtoB, Amount: big.NewInt(888_000), Receiver: receiver.Addr.Hex(),
-		})
+	// Keep destination mining paused across restart so delivery cannot finish before the new Relayer is up.
+	require.NoError(t, mining.WithPaused(ctx, func() error {
+		transfer, err := ift.Send(ctx, testapp.IFTRequest{Amount: big.NewInt(888_000)})
 		require.NoError(t, err)
+		require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-		require.NoError(t, out.Relay(ctx))
-		require.NoError(t, run.RestartRelayer(ctx))
+		require.NoError(t, synthetic.Relay(ctx, relayer, transfer.Packet()))
+		require.NoError(t, relayer.Stop(ctx))
+		relayer = synthetic.StartRelayer(t, driver, env)
 
 		require.NoError(t, dst.WaitNextPendingTx(ctx))
-		require.NoError(t, chainB.Mine(ctx, 1))
-		require.NoError(t, out.VerifyComplete(ctx))
+		require.NoError(t, mining.Mine(ctx, 1))
+		_, err = synthetic.AwaitState(
+			ctx,
+			relayer,
+			transfer.Packet(),
+			wire.PacketComplete,
+			chainB.Timing(),
+		)
+		require.NoError(t, err)
+		require.NoError(t, transfer.VerifyDelivered(ctx))
 		return nil
 	}))
 }

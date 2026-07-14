@@ -7,10 +7,12 @@
 To create a migration, run the script from the project's root (./link)
 
 ```bash
-go run scripts/migratenew.go relay-submissions
-✔︎ Created link/internal/store/migrations/sqlite/001-relay-submissions.sql
-✔︎ Created link/internal/store/migrations/postgres/001-relay-submissions.sql
+go run scripts/migratenew.go add-packet-index
+✔︎ Created /path/to/ibc/link/internal/store/migrations/sqlite/002-add-packet-index.sql
+✔︎ Created /path/to/ibc/link/internal/store/migrations/postgres/002-add-packet-index.sql
 ```
+
+The script prints absolute paths and assigns the next migration number automatically.
 
 Edit both `migrations/sqlite/*.sql` and `migrations/postgres/*.sql`; keep behavior identical, syntax dialect-specific.
 

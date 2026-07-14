@@ -7,12 +7,9 @@ corroborates outcomes by reading chain state with its own clients.
 - **The wall:** this module never imports `link/internal/...` or the stub's guts. Its go.mod has no
   requirement on the link module; keep it that way. The single declaration of the wire contract is
   `ibclink/wire`.
-- **Two wait primitives only.** `onchain.Await` for effect waits (budget-bounded, retries through
-  transient probe errors); `internal/poll.Until` for launch-side readiness (aborts on the first
-  probe error). Never hand-roll a ticker loop; never sleep. Every wait budget derives from the
-  chain's `topology.TimingProfile`, never a literal tuned to instant Anvil. The one deliberate
-  exception is `wait.go`'s `waitPacketStable`, a stability assertion — the condition must hold at
-  every sample across the settle window, so it is not a wait-until and fits neither primitive.
+- Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
+  to instant Anvil. Launch-side readiness uses `internal/poll.Until`; test-application effect and
+  stability observation lives with the e2e-only bindings that interpret those effects.
 - **Docker discipline.** Containers/networks carry the `ibc-link-e2e=true` and
   `ibc-link-run=<runid>` labels and the `ibc-link-e2e-` name prefix, with pinned images. Anvil runs
   with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and it dumps its

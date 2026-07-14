@@ -6,19 +6,41 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/e2e/e2etest"
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 func TestGMPCall_ManualRelay(t *testing.T) {
-	run := e2etest.Start(t, e2etest.SelectedTopology(t).WithManualRelay(topology.RouteAtoB))
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	signers := synthetic.NewSigners(t)
+	route := synthetic.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	gmp := synthetic.BindGMP(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	out, err := run.GMP(ctx, harness.GMP{Route: topology.RouteAtoB})
+	call, err := gmp.Call(ctx, testapp.GMPRequest{})
 	require.NoError(t, err)
 
-	require.NoError(t, out.VerifyPending(ctx))
-	require.NoError(t, out.VerifyPendingStable(ctx))
-	require.NoError(t, out.Relay(ctx))
-	require.NoError(t, out.VerifyComplete(ctx))
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	require.NoError(t, synthetic.AwaitStable(
+		ctx,
+		relayer,
+		call.Packet(),
+		wire.PacketPending,
+		destination.Timing(),
+	))
+	require.NoError(t, call.VerifyTargetUnchanged(ctx))
+	require.NoError(t, synthetic.Relay(ctx, relayer, call.Packet()))
+	_, err = synthetic.AwaitState(
+		ctx,
+		relayer,
+		call.Packet(),
+		wire.PacketComplete,
+		destination.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, call.VerifyExecuted(ctx))
 }

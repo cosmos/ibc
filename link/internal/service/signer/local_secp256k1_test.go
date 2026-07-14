@@ -78,9 +78,9 @@ func TestLocalSecp256k1Signer(t *testing.T) {
 			ed25519Signer, err := GenerateLocalEd25519Signer()
 			require.NoError(t, err)
 
-			path := writeFileJSON(t, "secp256k1.json", keyFile{
-				Type:       ECDSA,
-				PrivateKey: base64.StdEncoding.EncodeToString(ed25519Signer.PrivateKey()),
+			path := writeFileJSON(t, "secp256k1.json", map[string]string{
+				"type":             string(ECDSA),
+				"privateKeyBase64": base64.StdEncoding.EncodeToString(ed25519Signer.PrivateKey()),
 			})
 
 			// ACT
@@ -97,9 +97,9 @@ func TestLocalSecp256k1Signer(t *testing.T) {
 		})
 
 		t.Run("bytesMismatch", func(t *testing.T) {
-			path := writeFileJSON(t, "secp256k1.json", keyFile{
-				Type:       ECDSA,
-				PrivateKey: base64.StdEncoding.EncodeToString([]byte("too short")),
+			path := writeFileJSON(t, "secp256k1.json", map[string]string{
+				"type":             string(ECDSA),
+				"privateKeyBase64": base64.StdEncoding.EncodeToString([]byte("too short")),
 			})
 
 			_, err := LocalKeyFromFile(path)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,7 @@ const (
 	besuStopTimeout         = 30 * time.Second
 	besuLogTimeout          = 10 * time.Second
 	besuStartupLogTailBytes = 4096
+	besuTreasuryBalanceHex  = "0xc9f2c9cd04674edea40000000"
 )
 
 type Spec struct {
@@ -40,8 +42,6 @@ type Spec struct {
 	WorkDir string
 	RunID   string
 	Image   string
-	// RelayerKeyHex must derive to the genesis-funded relayer address.
-	RelayerKeyHex string
 	// BlockPeriod is rounded to whole seconds and rejected if it rounds to zero.
 	BlockPeriod time.Duration
 }
@@ -52,16 +52,18 @@ type Chain struct {
 
 	container string
 	logID     string
+	treasury  evm.Account
 
 	mu      sync.Mutex
 	stopped bool
 	closed  bool
+
+	fundingMu sync.Mutex
 }
 
 var (
-	_ chainpkg.Chain            = (*Chain)(nil)
-	_ chainpkg.ReceiverProvider = (*Chain)(nil)
-	_ evm.ClientProvider        = (*Chain)(nil)
+	_ chainpkg.Chain     = (*Chain)(nil)
+	_ chainpkg.EOAFunder = (*Chain)(nil)
 )
 
 func DockerImage() string {
@@ -71,7 +73,7 @@ func DockerImage() string {
 	return DefaultDockerImage
 }
 
-func StartQBFT(ctx context.Context, spec Spec) (*Chain, error) {
+func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 	if spec.ID == "" {
 		return nil, errors.New("besu chain id is empty")
 	}
@@ -87,12 +89,9 @@ func StartQBFT(ctx context.Context, spec Spec) (*Chain, error) {
 	if spec.WorkDir == "" {
 		return nil, fmt.Errorf("besu chain %s: work dir is empty", spec.ID)
 	}
-	if spec.RelayerKeyHex == "" {
-		return nil, fmt.Errorf("besu chain %s: relayer key is empty", spec.ID)
-	}
-	relayer, err := evm.AccountFromHex(spec.RelayerKeyHex)
+	treasury, err := evm.NewAccount()
 	if err != nil {
-		return nil, fmt.Errorf("besu chain %s: relayer key: %w", spec.ID, err)
+		return nil, fmt.Errorf("besu chain %s: create funding treasury: %w", spec.ID, err)
 	}
 	periodSecs := int(math.Round(spec.BlockPeriod.Seconds()))
 	if periodSecs <= 0 {
@@ -113,7 +112,7 @@ func StartQBFT(ctx context.Context, spec Spec) (*Chain, error) {
 	_ = os.Chmod(chainDir, 0o777)
 
 	configPath := filepath.Join(chainDir, "qbftConfigFile.json")
-	if writeErr := writeBesuOperatorConfig(configPath, spec.ChainID, periodSecs, relayer.Addr); writeErr != nil {
+	if writeErr := writeBesuOperatorConfig(configPath, spec.ChainID, periodSecs, treasury.Address()); writeErr != nil {
 		return nil, writeErr
 	}
 	networkFilesDir := filepath.Join(chainDir, "networkFiles")
@@ -161,11 +160,13 @@ func StartQBFT(ctx context.Context, spec Spec) (*Chain, error) {
 		Identity:  evm.NewIdentity(spec.ID, fmt.Sprintf("http://127.0.0.1:%d", port)),
 		container: namePrefix,
 		logID:     spec.ID,
+		treasury:  treasury,
 	}
-	ok := false
 	defer func() {
-		if !ok {
-			_ = bc.Stop()
+		if result == nil {
+			if stopErr := bc.Stop(); stopErr != nil {
+				err = errors.Join(err, fmt.Errorf("clean up failed besu start: %w", stopErr))
+			}
 		}
 	}()
 
@@ -206,8 +207,49 @@ func StartQBFT(ctx context.Context, spec Spec) (*Chain, error) {
 	}
 
 	bc.EVMClient = ec
-	ok = true
 	return bc, nil
+}
+
+// EnsureEOABalance transfers only the shortfall from the Chain's private
+// treasury, then verifies the requested minimum on-chain.
+func (bc *Chain) EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error {
+	if minimum == nil || minimum.Sign() < 0 {
+		return fmt.Errorf("besu ensure EOA balance: minimum must be non-nil and non-negative")
+	}
+	if err := bc.RequireEOA(ctx, address); err != nil {
+		return fmt.Errorf("besu ensure EOA balance: %w", err)
+	}
+
+	bc.fundingMu.Lock()
+	defer bc.fundingMu.Unlock()
+
+	current, err := bc.Client().BalanceAt(ctx, address, nil)
+	if err != nil {
+		return fmt.Errorf("besu query balance for %s: %w", address, err)
+	}
+	if current.Cmp(minimum) >= 0 {
+		return nil
+	}
+	if address == bc.treasury.Address() {
+		return fmt.Errorf(
+			"besu treasury balance %s is below requested minimum %s",
+			current,
+			minimum,
+		)
+	}
+
+	shortfall := new(big.Int).Sub(minimum, current)
+	if _, sendErr := bc.BroadcastTx(ctx, bc.treasury, &address, nil, shortfall); sendErr != nil {
+		return fmt.Errorf("besu fund %s with %s wei: %w", address, shortfall, sendErr)
+	}
+	got, err := bc.Client().BalanceAt(ctx, address, nil)
+	if err != nil {
+		return fmt.Errorf("besu verify balance for %s: %w", address, err)
+	}
+	if got.Cmp(minimum) < 0 {
+		return fmt.Errorf("besu verify balance for %s: got %s, want at least %s", address, got, minimum)
+	}
+	return nil
 }
 
 func (bc *Chain) CollectLogs(ctx context.Context) map[string]string {
@@ -253,7 +295,7 @@ func (bc *Chain) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), besuStopTimeout)
 	defer cancel()
 
-	if _, err := dockercli.Output(ctx, "rm", "-f", container); err != nil && !dockercli.Missing(err) {
+	if _, err := dockercli.Output(ctx, "rm", "-f", container); err != nil && !dockercli.MissingContainer(err) {
 		return err
 	}
 	bc.mu.Lock()
@@ -283,6 +325,7 @@ type besuGenesisConfig struct {
 	BerlinBlock       uint64         `json:"berlinBlock"`
 	LondonBlock       uint64         `json:"londonBlock"`
 	ShanghaiTime      uint64         `json:"shanghaiTime"`
+	CancunTime        uint64         `json:"cancunTime"`
 	ZeroBaseFee       bool           `json:"zeroBaseFee"`
 	ContractSizeLimit int            `json:"contractSizeLimit"`
 	QBFT              besuQBFTConfig `json:"qbft"`
@@ -307,8 +350,8 @@ type besuNodes struct {
 	Count    int  `json:"count"`
 }
 
-func writeBesuOperatorConfig(path string, chainID uint64, blockPeriodSecs int, relayerAddr common.Address) error {
-	data, err := json.MarshalIndent(newBesuOperatorConfig(chainID, blockPeriodSecs, relayerAddr), "", "  ")
+func writeBesuOperatorConfig(path string, chainID uint64, blockPeriodSecs int, treasury common.Address) error {
+	data, err := json.MarshalIndent(newBesuOperatorConfig(chainID, blockPeriodSecs, treasury), "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal besu QBFT config: %w", err)
 	}
@@ -319,11 +362,9 @@ func writeBesuOperatorConfig(path string, chainID uint64, blockPeriodSecs int, r
 	return nil
 }
 
-func newBesuOperatorConfig(chainID uint64, blockPeriodSecs int, relayerAddr common.Address) besuOperatorConfig {
-	balance := "0x" + chainpkg.GenesisPrefund().Text(16)
+func newBesuOperatorConfig(chainID uint64, blockPeriodSecs int, treasury common.Address) besuOperatorConfig {
 	alloc := map[string]besuFund{
-		besuAllocKey(evm.FaucetAccount().Addr): {Balance: balance},
-		besuAllocKey(relayerAddr):              {Balance: balance},
+		besuAllocKey(treasury): {Balance: besuTreasuryBalanceHex},
 	}
 	return besuOperatorConfig{
 		Genesis: besuGenesis{
@@ -332,6 +373,7 @@ func newBesuOperatorConfig(chainID uint64, blockPeriodSecs int, relayerAddr comm
 				BerlinBlock:       0,
 				LondonBlock:       0,
 				ShanghaiTime:      0,
+				CancunTime:        0,
 				ZeroBaseFee:       true,
 				ContractSizeLimit: 2147483647,
 				QBFT: besuQBFTConfig{

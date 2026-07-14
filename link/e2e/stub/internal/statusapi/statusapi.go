@@ -106,7 +106,7 @@ func Handler(
 		_ = jsonout.Write(w, wire.RelayResult{PacketIDs: ids})
 	})
 	mux.HandleFunc("GET "+wire.HealthPath, func(w http.ResponseWriter, _ *http.Request) {
-		// Harness health probe checks status code only (200, empty body).
+		// The driver health probe checks status code only (200, empty body).
 		w.WriteHeader(http.StatusOK)
 	})
 	return mux

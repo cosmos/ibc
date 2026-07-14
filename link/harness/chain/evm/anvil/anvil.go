@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"golang.org/x/sync/singleflight"
 
@@ -56,7 +59,7 @@ type Spec struct {
 }
 
 type Chain struct {
-	*evm.EVMClient
+	client *evm.EVMClient
 	evm.Identity
 
 	logPath string
@@ -66,15 +69,18 @@ type Chain struct {
 
 	container string
 
+	clientMu sync.RWMutex
+
 	mu      sync.Mutex
 	stopped bool
 	closed  bool
+
+	fundingMu sync.Mutex
 }
 
 var (
-	_ chainpkg.Chain            = (*Chain)(nil)
-	_ chainpkg.ReceiverProvider = (*Chain)(nil)
-	_ evm.ClientProvider        = (*Chain)(nil)
+	_ chainpkg.Chain     = (*Chain)(nil)
+	_ chainpkg.EOAFunder = (*Chain)(nil)
 )
 
 func DockerImage() string {
@@ -112,7 +118,7 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 	}
 
 	return &Chain{
-		EVMClient: ec,
+		client:    ec,
 		Identity:  evm.NewIdentity(spec.ID, fmt.Sprintf("http://127.0.0.1:%d", port)),
 		logPath:   spec.LogPath,
 		spec:      spec,
@@ -136,6 +142,10 @@ func launchAnvil(
 		"--chain-id", strconv.FormatUint(spec.ChainID, 10),
 		"--gas-limit", strconv.Itoa(anvilGasLimit),
 		"--state", stateContainerPath,
+		// Managed chains use explicit signers. Keeping Anvil's deterministic accounts disabled
+		// avoids creating ambient identities, and quiet mode keeps its mnemonic out of diagnostics.
+		"--accounts", "0",
+		"--quiet",
 	}
 	if spec.BlockTime > 0 {
 		secs := uint64(math.Round(spec.BlockTime.Seconds()))
@@ -168,16 +178,14 @@ func launchAnvil(
 	)
 	runArgs = append(runArgs, args...)
 	if _, err := dockercli.Output(ctx, runArgs...); err != nil {
-		_ = removeContainer(context.Background(), container)
-		return "", nil, fmt.Errorf("start anvil container (chain %s): %w", spec.ID, err)
+		startErr := fmt.Errorf("start anvil container (chain %s): %w", spec.ID, err)
+		return "", nil, errors.Join(startErr, cleanupFailedStart(container, false))
 	}
 
 	ec, err := connectAnvil(ctx, spec, rpcURL)
 	if err != nil {
 		startupErr := anvilStartupError(container, err)
-		_ = stopContainer(context.Background(), container)
-		_ = removeContainer(context.Background(), container)
-		return "", nil, startupErr
+		return "", nil, errors.Join(startupErr, cleanupFailedStart(container, true))
 	}
 	return container, ec, nil
 }
@@ -199,6 +207,84 @@ func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient
 	}
 
 	return evm.NewVerifiedClient(ctx, client, spec.ChainID, fmt.Sprintf("anvil (chain %s)", spec.ID))
+}
+
+func (ac *Chain) WithEVMClient(use func(*evm.EVMClient) error) error {
+	ac.clientMu.RLock()
+	defer ac.clientMu.RUnlock()
+	if ac.client == nil {
+		return fmt.Errorf("anvil chain %s: EVM client is unavailable", ac.ID())
+	}
+	return use(ac.client)
+}
+
+func (ac *Chain) Height(ctx context.Context) (uint64, error) {
+	var height uint64
+	err := ac.WithEVMClient(func(client *evm.EVMClient) error {
+		var err error
+		height, err = client.Height(ctx)
+		return err
+	})
+	return height, err
+}
+
+func (ac *Chain) replaceEVMClient(client *evm.EVMClient) {
+	ac.clientMu.Lock()
+	defer ac.clientMu.Unlock()
+	if ac.client != nil {
+		ac.client.Close()
+	}
+	ac.client = client
+}
+
+func (ac *Chain) closeEVMClient() {
+	ac.clientMu.Lock()
+	defer ac.clientMu.Unlock()
+	if ac.client != nil {
+		ac.client.Close()
+		ac.client = nil
+	}
+}
+
+// EnsureEOABalance uses Anvil's development control to set and then verify the
+// requested minimum without exposing that control through the resolved Chain.
+func (ac *Chain) EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error {
+	if minimum == nil || minimum.Sign() < 0 {
+		return fmt.Errorf("anvil ensure EOA balance: minimum must be non-nil and non-negative")
+	}
+
+	ac.fundingMu.Lock()
+	defer ac.fundingMu.Unlock()
+
+	return ac.WithEVMClient(func(client *evm.EVMClient) error {
+		if err := client.RequireEOA(ctx, address); err != nil {
+			return fmt.Errorf("anvil ensure EOA balance: %w", err)
+		}
+		current, err := client.Client().BalanceAt(ctx, address, nil)
+		if err != nil {
+			return fmt.Errorf("anvil query balance for %s: %w", address, err)
+		}
+		if current.Cmp(minimum) >= 0 {
+			return nil
+		}
+		if setErr := client.RPCClient().CallContext(
+			ctx,
+			nil,
+			"anvil_setBalance",
+			address,
+			hexutil.EncodeBig(minimum),
+		); setErr != nil {
+			return fmt.Errorf("anvil set balance for %s: %w", address, setErr)
+		}
+		got, err := client.Client().BalanceAt(ctx, address, nil)
+		if err != nil {
+			return fmt.Errorf("anvil verify balance for %s: %w", address, err)
+		}
+		if got.Cmp(minimum) < 0 {
+			return fmt.Errorf("anvil verify balance for %s: got %s, want at least %s", address, got, minimum)
+		}
+		return nil
+	})
 }
 
 func normalizeDockerSpec(spec Spec) (Spec, string, string, error) {
@@ -255,11 +341,25 @@ func waitReady(ctx context.Context, probe func(context.Context) error, timeout t
 }
 
 func anvilStartupError(container string, err error) error {
-	logs := dockerLogs(context.Background(), container)
+	ctx, cancel := context.WithTimeout(context.Background(), anvilLogTimeout)
+	defer cancel()
+	logs := dockerLogs(ctx, container)
 	if logs == "" {
 		return err
 	}
 	return fmt.Errorf("%w\npartial anvil logs:\n%s", err, evm.Tail(logs, anvilStartupTailBytes))
+}
+
+func cleanupFailedStart(container string, stop bool) error {
+	var stopErr error
+	if stop {
+		ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+		stopErr = stopContainer(ctx, container)
+		cancel()
+	}
+	rmCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+	defer cancel()
+	return errors.Join(stopErr, removeContainer(rmCtx, container))
 }
 
 func deriveStatePath(spec Spec) (string, error) {
@@ -283,24 +383,29 @@ func (ac *Chain) CollectLogs(ctx context.Context) map[string]string {
 func (ac *Chain) Stop() error {
 	ac.mu.Lock()
 	if !ac.closed {
-		ac.Close()
+		ac.closeEVMClient()
 		ac.closed = true
 	}
 	container := ac.container
 	alreadyStopped := ac.stopped
 	ac.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
-	defer cancel()
-	var err error
+	var stopErr error
 	if !alreadyStopped {
-		err = stopContainer(ctx, container)
+		stopCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+		stopErr = stopContainer(stopCtx, container)
+		cancel()
 	}
-	ac.snapshotLogs(ctx)
-	if rmErr := removeContainer(ctx, container); err == nil {
-		err = rmErr
+	ac.snapshotLogs(context.Background())
+	rmCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+	rmErr := removeContainer(rmCtx, container)
+	cancel()
+	if stopErr == nil || rmErr == nil {
+		ac.mu.Lock()
+		ac.stopped = true
+		ac.mu.Unlock()
 	}
-	return err
+	return errors.Join(stopErr, rmErr)
 }
 
 func (ac *Chain) snapshotLogs(ctx context.Context) string {
@@ -330,14 +435,14 @@ func stopContainer(ctx context.Context, container string) error {
 		strconv.Itoa(int(anvilStopGrace.Seconds())),
 		container,
 	); err != nil &&
-		!dockercli.Missing(err) {
+		!dockercli.MissingContainer(err) {
 		return err
 	}
 	return nil
 }
 
 func removeContainer(ctx context.Context, container string) error {
-	if _, err := dockercli.Output(ctx, "rm", "-f", container); err != nil && !dockercli.Missing(err) {
+	if _, err := dockercli.Output(ctx, "rm", "-f", container); err != nil && !dockercli.MissingContainer(err) {
 		return err
 	}
 	return nil

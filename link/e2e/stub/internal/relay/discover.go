@@ -11,19 +11,18 @@ import (
 
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
-	"github.com/cosmos/ibc/link/harness/fixturekeys"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 func (r *relayer) discoverSources(ctx context.Context) error {
 	var errs []error
 	for _, ch := range r.cfg.Chains {
-		dep, ok := r.dep.Chain(ch.ID)
+		chainApps, ok := r.testApps.Chain(ch.ID)
 		if !ok {
-			errs = append(errs, fmt.Errorf("discover source %s: no deployment for chain", ch.ID))
+			errs = append(errs, fmt.Errorf("discover source %s: no test app deployment for chain", ch.ID))
 			continue
 		}
-		if err := r.discoverEVMSource(ctx, ch.ID, dep); err != nil {
+		if err := r.discoverEVMSource(ctx, ch.ID, chainApps); err != nil {
 			errs = append(errs, fmt.Errorf("discover evm source %s: %w", ch.ID, err))
 		}
 	}
@@ -34,18 +33,18 @@ func (r *relayer) discoverSourceTx(ctx context.Context, chainID, txHash string) 
 	if _, ok := r.cfg.Chain(chainID); !ok {
 		return fmt.Errorf("unknown source chain %q", chainID)
 	}
-	dep, ok := r.dep.Chain(chainID)
+	chainApps, ok := r.testApps.Chain(chainID)
 	if !ok {
-		return fmt.Errorf("discover source %s: no deployment for chain", chainID)
+		return fmt.Errorf("discover source %s: no test app deployment for chain", chainID)
 	}
-	return r.discoverEVMSourceTx(ctx, chainID, txHash, dep)
+	return r.discoverEVMSourceTx(ctx, chainID, txHash, chainApps)
 }
 
 func (r *relayer) discoverEVMSourceTx(
 	ctx context.Context,
 	chainID string,
 	txHash string,
-	dep wire.ChainDeployment,
+	chainApps wire.ChainTestAppDeployment,
 ) error {
 	conn, ok := r.conns[chainID]
 	if !ok {
@@ -66,11 +65,7 @@ func (r *relayer) discoverEVMSourceTx(
 		return fmt.Errorf("source transaction %s failed", receipt.TxHash.Hex())
 	}
 
-	iftAddr, err := dep.Fixture(fixturekeys.MockIFT)
-	if err != nil {
-		return err
-	}
-	ift := onchain.NewMockIFT(common.HexToAddress(iftAddr), conn.client)
+	ift := onchain.NewMockIFT(common.HexToAddress(chainApps.MockIFT), conn.client)
 	if event, found, eventErr := ift.SentFromReceipt(receipt); eventErr != nil {
 		return eventErr
 	} else if found {
@@ -79,11 +74,7 @@ func (r *relayer) discoverEVMSourceTx(
 		}
 	}
 
-	gmpAddr, err := dep.Fixture(fixturekeys.MockGMP)
-	if err != nil {
-		return err
-	}
-	gmp := onchain.NewMockGMP(common.HexToAddress(gmpAddr), conn.client)
+	gmp := onchain.NewMockGMP(common.HexToAddress(chainApps.MockGMP), conn.client)
 	if event, found, eventErr := gmp.SentFromReceipt(receipt); eventErr != nil {
 		return eventErr
 	} else if found {
@@ -92,16 +83,16 @@ func (r *relayer) discoverEVMSourceTx(
 	return nil
 }
 
-func (r *relayer) discoverEVMSource(ctx context.Context, chainID string, dep wire.ChainDeployment) error {
+func (r *relayer) discoverEVMSource(
+	ctx context.Context,
+	chainID string,
+	chainApps wire.ChainTestAppDeployment,
+) error {
 	conn, ok := r.conns[chainID]
 	if !ok {
 		return fmt.Errorf("chain %s is not connected", chainID)
 	}
-	iftAddr, err := dep.Fixture(fixturekeys.MockIFT)
-	if err != nil {
-		return err
-	}
-	ift := onchain.NewMockIFT(common.HexToAddress(iftAddr), conn.client)
+	ift := onchain.NewMockIFT(common.HexToAddress(chainApps.MockIFT), conn.client)
 	iftKey := cursorKey(chainID, ift.Address)
 	iftEvents, iftNext, err := ift.ScanSentFrom(ctx, r.sentCursor[iftKey])
 	if err != nil {
@@ -115,11 +106,7 @@ func (r *relayer) discoverEVMSource(ctx context.Context, chainID string, dep wir
 	// Advance cursor only after inserts land; failed insert retries the same window next tick.
 	r.sentCursor[iftKey] = iftNext
 
-	gmpAddr, err := dep.Fixture(fixturekeys.MockGMP)
-	if err != nil {
-		return err
-	}
-	gmp := onchain.NewMockGMP(common.HexToAddress(gmpAddr), conn.client)
+	gmp := onchain.NewMockGMP(common.HexToAddress(chainApps.MockGMP), conn.client)
 	gmpKey := cursorKey(chainID, gmp.Address)
 	gmpEvents, gmpNext, err := gmp.ScanSentFrom(ctx, r.sentCursor[gmpKey])
 	if err != nil {
@@ -167,7 +154,7 @@ func (r *relayer) insertEVMGMP(ctx context.Context, chainID string, event onchai
 	})
 }
 
-// CREATE fixture addresses collide across chains; key cursors by chain|addr, not addr alone.
+// CREATE addresses collide across chains; key cursors by chain|addr, not addr alone.
 func cursorKey(chainID string, addr common.Address) string {
 	return chainID + "|" + addr.Hex()
 }

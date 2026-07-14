@@ -1,12 +1,11 @@
-# Lint config for the e2e module. Mirrors link/.golangci.yml except that revive's exported
-# rule is off: everything under link/e2e is test infrastructure, not public surface, so
-# exported identifiers carry no doc-comment mandate.
+# Lint config for the e2e module. It mirrors link/.golangci.yml except that it
+# includes tests and disables revive's exported rule: this is test infrastructure,
+# not a public library surface.
 version: "2"
 
 run:
   go: "1.26"
   timeout: 30m
-  tests: false
 
 issues:
   max-same-issues: 50

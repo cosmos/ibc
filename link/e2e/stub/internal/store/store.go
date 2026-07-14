@@ -1,4 +1,4 @@
-// Package store is sqlite persistence shared by deploy, the relay daemon, and status API.
+// Package store is sqlite persistence shared by test app deployment, the relay daemon, and status API.
 package store
 
 import (
@@ -17,7 +17,7 @@ import (
 )
 
 const schemaSQL = `
-CREATE TABLE IF NOT EXISTS deployments (
+CREATE TABLE IF NOT EXISTS test_app_deployments (
     id         INTEGER PRIMARY KEY CHECK (id = 1),
     data       TEXT NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS relay_requests (
     UNIQUE(source_chain_id, source_tx_hash)
 );`
 
-var ErrNoDeployment = errors.New("no deployment found; run `ibc deploy` first")
+var ErrNoTestApps = errors.New("no test app deployment found; run `ibc test-apps deploy` first")
 
 type Store struct {
 	db *sql.DB
@@ -127,44 +127,44 @@ func splitStatements(schema string) []string {
 	return out
 }
 
-func (s *Store) SaveDeployment(ctx context.Context, dep wire.Deployment) error {
-	data, err := json.Marshal(dep)
+func (s *Store) SaveTestApps(ctx context.Context, deployment wire.TestAppDeployment) error {
+	data, err := json.Marshal(deployment)
 	if err != nil {
-		return fmt.Errorf("store: encode deployment: %w", err)
+		return fmt.Errorf("store: encode test app deployment: %w", err)
 	}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO deployments(id, data) VALUES(1, ?)
+		INSERT INTO test_app_deployments(id, data) VALUES(1, ?)
 		ON CONFLICT(id) DO UPDATE SET data = excluded.data, created_at = unixepoch()`, string(data))
 	if err != nil {
-		return fmt.Errorf("store: save deployment: %w", err)
+		return fmt.Errorf("store: save test app deployment: %w", err)
 	}
 	return nil
 }
 
-func (s *Store) LoadDeployment(ctx context.Context) (dep wire.Deployment, found bool, err error) {
+func (s *Store) LoadTestApps(ctx context.Context) (deployment wire.TestAppDeployment, found bool, err error) {
 	var data string
-	err = s.db.QueryRowContext(ctx, `SELECT data FROM deployments WHERE id = 1`).Scan(&data)
+	err = s.db.QueryRowContext(ctx, `SELECT data FROM test_app_deployments WHERE id = 1`).Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
-		return wire.Deployment{}, false, nil
+		return wire.TestAppDeployment{}, false, nil
 	}
 	if err != nil {
-		return wire.Deployment{}, false, fmt.Errorf("store: load deployment: %w", err)
+		return wire.TestAppDeployment{}, false, fmt.Errorf("store: load test app deployment: %w", err)
 	}
-	if err := json.Unmarshal([]byte(data), &dep); err != nil {
-		return wire.Deployment{}, false, fmt.Errorf("store: decode deployment: %w", err)
+	if err := json.Unmarshal([]byte(data), &deployment); err != nil {
+		return wire.TestAppDeployment{}, false, fmt.Errorf("store: decode test app deployment: %w", err)
 	}
-	return dep, true, nil
+	return deployment, true, nil
 }
 
-func (s *Store) RequireDeployment(ctx context.Context) (wire.Deployment, error) {
-	dep, found, err := s.LoadDeployment(ctx)
+func (s *Store) RequireTestApps(ctx context.Context) (wire.TestAppDeployment, error) {
+	deployment, found, err := s.LoadTestApps(ctx)
 	if err != nil {
-		return wire.Deployment{}, err
+		return wire.TestAppDeployment{}, err
 	}
 	if !found {
-		return wire.Deployment{}, ErrNoDeployment
+		return wire.TestAppDeployment{}, ErrNoTestApps
 	}
-	return dep, nil
+	return deployment, nil
 }
 
 // ON CONFLICT DO NOTHING: rediscovered packets converge; terminal rows never regress to pending.

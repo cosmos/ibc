@@ -6,21 +6,34 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/internal/config"
 )
 
-func TestLoadResolvesWholeURLReference(t *testing.T) {
+func TestLoadResolvesWholeEnvironmentReferences(t *testing.T) {
 	t.Setenv("IBC_LINK_TEST_RPC_URL", "http://localhost:8545/?token=secret&literal=$X")
+	t.Setenv("IBC_LINK_TEST_RELAYER_SIGNER", "/keys/relayer.json")
+	t.Setenv("IBC_LINK_TEST_DB_TYPE", "sqlite")
+	t.Setenv("IBC_LINK_TEST_DB_URL", "/data/relayer.db")
 	path := writeConfig(t, `
 chains:
   - id: chain-a
     type: evm
-    provider: anvil
     chainId: 31337
+    evmSigner: relayer
+    testAppSigner: application
     rpc:
       url: ${IBC_LINK_TEST_RPC_URL}
+signers:
+  - alias: relayer
+    type: local
+    file: ${IBC_LINK_TEST_RELAYER_SIGNER}
+  - alias: application
+    type: local
+    file: /keys/application.json
 db:
-  type: sqlite
-  url: ibc-test.db
+  type: ${IBC_LINK_TEST_DB_TYPE}
+  url: ${IBC_LINK_TEST_DB_URL}
 relayer:
   routes: []
 `)
@@ -28,6 +41,12 @@ relayer:
 	c, err := Load(path)
 	require.NoError(t, err)
 	require.Equal(t, "http://localhost:8545/?token=secret&literal=$X", c.Chains[0].RPC.URL)
+	require.Equal(t, "relayer", c.Chains[0].EVMSigner)
+	require.Equal(t, "application", c.Chains[0].TestAppSigner)
+	require.Equal(t, []string{"relayer", "application"}, []string{c.Signers[0].Alias, c.Signers[1].Alias})
+	require.Equal(t, "/keys/relayer.json", c.Signers[0].File)
+	require.Equal(t, "sqlite", c.DB.Type)
+	require.Equal(t, "/data/relayer.db", c.DB.URL)
 }
 
 func TestLoadLeavesPartialURLReferenceLiteral(t *testing.T) {
@@ -36,7 +55,6 @@ func TestLoadLeavesPartialURLReferenceLiteral(t *testing.T) {
 chains:
   - id: chain-a
     type: evm
-    provider: anvil
     chainId: 31337
     rpc:
       url: http://localhost:8545/?token=${IBC_LINK_TEST_RPC_TOKEN}
@@ -57,7 +75,6 @@ func TestLoadRejectsMissingURLReference(t *testing.T) {
 chains:
   - id: chain-a
     type: evm
-    provider: anvil
     chainId: 31337
     rpc:
       url: ${IBC_LINK_TEST_MISSING_RPC}
@@ -71,6 +88,68 @@ relayer:
 	_, err := Load(path)
 	require.ErrorContains(t, err, "expand chains[0].rpc.url")
 	require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_RPC is not set")
+}
+
+func TestLoadRejectsMissingSignerFileReference(t *testing.T) {
+	path := writeConfig(t, `
+signers:
+  - alias: relayer
+    type: local
+    file: ${IBC_LINK_TEST_MISSING_SIGNER_FILE}
+`)
+
+	_, err := Load(path)
+	require.ErrorContains(t, err, "expand signers[0].file")
+	require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_SIGNER_FILE is not set")
+}
+
+func TestLoadRejectsMissingDBReference(t *testing.T) {
+	path := writeConfig(t, `
+db:
+  type: sqlite
+  url: ${IBC_LINK_TEST_MISSING_DB_URL}
+`)
+
+	_, err := Load(path)
+	require.ErrorContains(t, err, "expand db.url")
+	require.ErrorContains(t, err, "environment variable IBC_LINK_TEST_MISSING_DB_URL is not set")
+}
+
+func TestSetupUsesWireConfigAndAppliesDBOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Chdir(home)
+	signerPath := filepath.Join(home, "not-created.json")
+	t.Setenv("IBC_LINK_TEST_SIGNER_FILE", signerPath)
+	require.NoError(t, os.WriteFile(filepath.Join(home, "ibc.yaml"), []byte(`
+chains:
+  - id: chain-a
+    type: evm
+    chainId: 31337
+    evmSigner: relayer
+    rpc:
+      url: http://localhost:8545
+signers:
+  - alias: relayer
+    type: local
+    file: ${IBC_LINK_TEST_SIGNER_FILE}
+db:
+  type: sqlite
+  url: relayer.db
+`), 0o600))
+
+	flags := config.DefaultFlagSet()
+	flags.Home = home
+	flags.Config = "ibc.yaml"
+	flags.DB = filepath.Join(home, "override.db")
+	c, err := Setup(&flags)
+	require.NoError(t, err)
+	require.Equal(t, "chain-a", c.Chains[0].ID)
+	require.Equal(t, signerPath, c.Signers[0].File)
+	require.Equal(t, "sqlite", c.DB.Type)
+	require.Equal(t, flags.DB, c.DB.URL)
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	require.Equal(t, home, cwd)
 }
 
 func writeConfig(t *testing.T, body string) string {

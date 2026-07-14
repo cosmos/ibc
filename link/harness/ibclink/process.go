@@ -31,14 +31,9 @@ type result struct {
 	code   int
 }
 
-func (r *runner) exec(ctx context.Context, label string, args ...string) (*result, error) {
+func (r *Driver) exec(ctx context.Context, bin, label string, args ...string) (*result, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
 	defer cancel()
-
-	bin, err := r.binFor(label)
-	if err != nil {
-		return nil, err
-	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 
 	var stdout, stderr bytes.Buffer
@@ -48,7 +43,6 @@ func (r *runner) exec(ctx context.Context, label string, args ...string) (*resul
 	runErr := cmd.Run()
 
 	stderrText := stderr.String()
-	r.writeLog(label, args, stderrText)
 	res := &result{stdout: stdout.Bytes(), stderr: stderrText}
 
 	var exitErr *exec.ExitError
@@ -67,26 +61,14 @@ func (r *runner) exec(ctx context.Context, label string, args ...string) (*resul
 	return res, nil
 }
 
-func (r *runner) writeLog(label string, args []string, stderrText string) {
-	if r.logPath == "" {
-		return
-	}
-	f, err := os.OpenFile(r.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return
-	}
-	defer f.Close() //nolint:errcheck
-	_, _ = fmt.Fprintf(f, "\n=== ibc %s | args: %s ===\n%s", label, strings.Join(args, " "), stderrText)
-}
-
 func classify(code int) error {
 	switch code {
 	case wire.ExitConfigInvalid:
 		return ErrConfigInvalid
 	case wire.ExitRPCUnreachable:
 		return ErrRPCUnreachable
-	case wire.ExitDeployFailure:
-		return ErrDeployFailed
+	case wire.ExitTestAppDeployFailure:
+		return ErrTestAppDeployFailed
 	case wire.ExitNotReady:
 		return ErrNotReady
 	default:

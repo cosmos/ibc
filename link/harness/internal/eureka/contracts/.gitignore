@@ -1,0 +1,6 @@
+/node_modules/
+/cache/
+/out/*
+!/out/AccessManager.sol/
+/out/AccessManager.sol/*
+!/out/AccessManager.sol/AccessManager.json

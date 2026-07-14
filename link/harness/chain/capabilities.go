@@ -2,8 +2,10 @@ package chain
 
 import (
 	"context"
-	"reflect"
+	"math/big"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type BlockController interface {
@@ -18,23 +20,9 @@ type FaultInjector interface {
 	StartNode(ctx context.Context) error
 }
 
-type ReceiverProvider interface {
-	NewReceiver(ctx context.Context) (string, error)
-}
-
-type CapabilityGater interface {
-	ProvidesCapability(t reflect.Type) bool
-}
-
-func As[T any](c Chain) (T, bool) {
-	impl, ok := any(c).(T)
-	if !ok {
-		var zero T
-		return zero, false
-	}
-	if g, ok := any(c).(CapabilityGater); ok && !g.ProvidesCapability(reflect.TypeOf((*T)(nil)).Elem()) {
-		var zero T
-		return zero, false
-	}
-	return impl, true
+// EOAFunder guarantees a verified minimum native-token balance for an
+// externally owned account. Managed Chain adapters implement the mechanism
+// without exposing their funding identities or controls to workflow callers.
+type EOAFunder interface {
+	EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error
 }

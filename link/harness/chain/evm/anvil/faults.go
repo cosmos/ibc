@@ -2,6 +2,7 @@ package anvil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cosmos/ibc/link/harness/chain"
@@ -35,11 +36,19 @@ func (ac *Chain) StartNode(ctx context.Context) error {
 	}
 	ec, err := connectAnvil(ctx, ac.spec, ac.RPCURL())
 	if err != nil {
-		_ = stopContainer(context.Background(), ac.container)
-		return fmt.Errorf("restart anvil node %s: %w", ac.ID(), anvilStartupError(ac.container, err))
+		startupErr := fmt.Errorf("restart anvil node %s: %w", ac.ID(), anvilStartupError(ac.container, err))
+		stopCtx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
+		stopErr := stopContainer(stopCtx, ac.container)
+		cancel()
+		if stopErr != nil {
+			// The container may still be running, so StopNode and terminal cleanup
+			// must be allowed to retry the stop.
+			ac.stopped = false
+			return errors.Join(startupErr, fmt.Errorf("stop anvil after failed restart: %w", stopErr))
+		}
+		return startupErr
 	}
-	ac.Close()
-	ac.EVMClient = ec
+	ac.replaceEVMClient(ec)
 	ac.closed = false
 	ac.stopped = false
 	return nil

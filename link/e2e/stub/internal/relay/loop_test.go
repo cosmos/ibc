@@ -7,21 +7,26 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/cosmos/ibc/link/harness/fixturekeys"
-	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/onchain"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
+)
+
+const (
+	testDestination = "dst"
+	testRouteID     = "r1"
 )
 
 func TestPendingReceivedKeysAreRouteScoped(t *testing.T) {
 	r := &relayer{cfg: &wire.ConfigYAML{Relayer: wire.Relayer{Routes: []wire.Route{
-		{ID: "r1", Destination: "dst"},
+		{ID: testRouteID, Destination: testDestination},
 	}}}}
-	p := store.Packet{RouteID: "r1", AppType: wire.AppTypeIFT, Sequence: 7}
+	p := store.Packet{RouteID: testRouteID, AppType: wire.AppTypeIFT, Sequence: 7}
 	want := receivedKey{
-		destination: "dst",
+		destination: testDestination,
 		appType:     wire.AppTypeIFT,
-		seq:         fixturekeys.RouteScopedSeq("r1", 7),
+		routeID:     testRouteID,
+		sequence:    7,
 	}
 
 	if _, ok := r.pendingReceivedKeys([]store.Packet{p})[want]; !ok {
@@ -31,8 +36,8 @@ func TestPendingReceivedKeysAreRouteScoped(t *testing.T) {
 
 func TestLookupReceivedCachesOnlyPendingKeys(t *testing.T) {
 	addr := common.HexToAddress("0x1234")
-	first := receivedKey{destination: "dst", appType: wire.AppTypeIFT, seq: 11}
-	second := receivedKey{destination: "dst", appType: wire.AppTypeIFT, seq: 12}
+	first := receivedKey{destination: testDestination, appType: wire.AppTypeIFT, routeID: testRouteID, sequence: 11}
+	second := receivedKey{destination: testDestination, appType: wire.AppTypeIFT, routeID: testRouteID, sequence: 12}
 	r := &relayer{
 		recvCursor: map[string]uint64{},
 		recvSeen:   map[receivedKey]onchain.ReceivedResult{},
@@ -40,16 +45,19 @@ func TestLookupReceivedCachesOnlyPendingKeys(t *testing.T) {
 	}
 
 	scans := 0
-	scan := func(_ context.Context, from uint64) (map[uint64]onchain.ReceivedResult, uint64, error) {
+	scan := func(
+		_ context.Context,
+		from uint64,
+	) (map[onchain.ReceivedKey]onchain.ReceivedResult, uint64, error) {
 		scans++
 		if scans == 1 {
 			if from != 0 {
 				t.Fatalf("first scan from block %d, want 0", from)
 			}
-			return map[uint64]onchain.ReceivedResult{
-				11: {Success: true},
-				12: {Success: true},
-				13: {Success: true},
+			return map[onchain.ReceivedKey]onchain.ReceivedResult{
+				{RouteID: testRouteID, Sequence: 11}: {Success: true},
+				{RouteID: testRouteID, Sequence: 12}: {Success: true},
+				{RouteID: testRouteID, Sequence: 13}: {Success: true},
 			}, 20, nil
 		}
 		if from != 20 {
@@ -67,14 +75,24 @@ func TestLookupReceivedCachesOnlyPendingKeys(t *testing.T) {
 	if len(r.recvSeen) != 2 {
 		t.Fatalf("cached results = %v; want only two pending keys", r.recvSeen)
 	}
-	historical := receivedKey{destination: "dst", appType: wire.AppTypeIFT, seq: 13}
+	historical := receivedKey{
+		destination: testDestination,
+		appType:     wire.AppTypeIFT,
+		routeID:     testRouteID,
+		sequence:    13,
+	}
 	if _, cached := r.recvSeen[historical]; cached {
 		t.Fatal("historical key was cached")
 	}
 }
 
 func TestFinishTerminalEvictsOnlyAfterPersistence(t *testing.T) {
-	key := receivedKey{destination: "dst", appType: wire.AppTypeGMP, seq: 9}
+	key := receivedKey{
+		destination: testDestination,
+		appType:     wire.AppTypeGMP,
+		routeID:     testRouteID,
+		sequence:    9,
+	}
 	r := &relayer{
 		recvSeen:   map[receivedKey]onchain.ReceivedResult{key: {Success: true}},
 		recvActive: map[receivedKey]struct{}{key: {}},

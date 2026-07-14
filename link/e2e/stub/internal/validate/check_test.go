@@ -8,26 +8,32 @@ import (
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
-const relayerKeyHex = "59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+const (
+	relayerSignerAlias      = "relayer"
+	missingSignerAlias      = "missing"
+	firstChainEVMSignerPath = "chains[0].evmSigner"
+	expectedDBURLPath       = "db.url"
+)
 
 func goodConfig() *wire.ConfigYAML {
 	return &wire.ConfigYAML{
+		Signers: []wire.Signer{{
+			Alias: relayerSignerAlias, Type: wire.SignerTypeLocal, File: "/keys/relayer.json",
+		}},
 		Chains: []wire.Chain{
 			{
-				ID:           "31337",
-				Type:         "evm",
-				Provider:     wire.ProviderAnvil,
-				ChainID:      31337,
-				EVMSignerKey: relayerKeyHex,
-				RPC:          wire.RPC{URL: "http://127.0.0.1:8545"},
+				ID:        "31337",
+				Type:      "evm",
+				ChainID:   31337,
+				EVMSigner: relayerSignerAlias,
+				RPC:       wire.RPC{URL: "http://127.0.0.1:8545"},
 			},
 			{
-				ID:           "31338",
-				Type:         "evm",
-				Provider:     wire.ProviderAnvil,
-				ChainID:      31338,
-				EVMSignerKey: relayerKeyHex,
-				RPC:          wire.RPC{URL: "http://127.0.0.1:8546"},
+				ID:        "31338",
+				Type:      "evm",
+				ChainID:   31338,
+				EVMSigner: relayerSignerAlias,
+				RPC:       wire.RPC{URL: "http://127.0.0.1:8546"},
 			},
 		},
 		DB: wire.DB{Type: wire.DBTypeSQLite, URL: "/tmp/relayer.db"},
@@ -41,33 +47,6 @@ func goodConfig() *wire.ConfigYAML {
 
 func TestCheck_Valid(t *testing.T) {
 	require.Empty(t, Check(goodConfig()), "a well-formed config has no structural errors")
-}
-
-func TestCheck_Providers(t *testing.T) {
-	tests := []struct {
-		name      string
-		provider  string
-		wantValid bool
-	}{
-		{name: "empty", provider: "", wantValid: false},
-		{name: "anvil", provider: wire.ProviderAnvil, wantValid: true},
-		{name: "besu", provider: wire.ProviderBesu, wantValid: true},
-		{name: "unknown", provider: "reth", wantValid: false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			c := goodConfig()
-			c.Chains[0].Provider = tc.provider
-
-			errs := Check(c)
-			if tc.wantValid {
-				require.Empty(t, errs)
-				return
-			}
-			require.Contains(t, pathsOf(errs), "chains[0].provider")
-		})
-	}
 }
 
 func pathsOf(errs []wire.ValidationError) []string {
@@ -104,12 +83,12 @@ func TestCheck_Invalid(t *testing.T) {
 		{
 			name:     "empty db path",
 			mutate:   func(c *wire.ConfigYAML) { c.DB.URL = "" },
-			wantPath: "db.url",
+			wantPath: expectedDBURLPath,
 		},
 		{
 			name:     "unsupported in-memory db path",
 			mutate:   func(c *wire.ConfigYAML) { c.DB.URL = ":memory:" },
-			wantPath: "db.url",
+			wantPath: expectedDBURLPath,
 		},
 		{
 			name:     "empty rpc url",
@@ -120,6 +99,34 @@ func TestCheck_Invalid(t *testing.T) {
 			name:     "duplicate chain id",
 			mutate:   func(c *wire.ConfigYAML) { c.Chains[1].ID = "31337" },
 			wantPath: "chains[1].id",
+		},
+		{
+			name:     "route endpoint missing EVM relay signer",
+			mutate:   func(c *wire.ConfigYAML) { c.Chains[0].EVMSigner = "" },
+			wantPath: firstChainEVMSignerPath,
+		},
+		{
+			name:     "route endpoint names unknown EVM relay signer",
+			mutate:   func(c *wire.ConfigYAML) { c.Chains[0].EVMSigner = missingSignerAlias },
+			wantPath: firstChainEVMSignerPath,
+		},
+		{
+			name: "non-route chain names unknown EVM relay signer",
+			mutate: func(c *wire.ConfigYAML) {
+				c.Relayer.Routes = nil
+				c.Chains[0].EVMSigner = missingSignerAlias
+			},
+			wantPath: firstChainEVMSignerPath,
+		},
+		{
+			name:     "test-app deployment names unknown signer",
+			mutate:   func(c *wire.ConfigYAML) { c.Chains[0].TestAppSigner = missingSignerAlias },
+			wantPath: "chains[0].testAppSigner",
+		},
+		{
+			name:     "duplicate signer alias",
+			mutate:   func(c *wire.ConfigYAML) { c.Signers = append(c.Signers, c.Signers[0]) },
+			wantPath: "signers[1].alias",
 		},
 	}
 

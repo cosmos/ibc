@@ -5,18 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/ibc/link/harness/chain/evm"
 )
 
-const expectedPrefundBalanceHex = "0xc9f2c9cd04674edea40000000"
+const expectedTreasuryBalanceHex = "0xc9f2c9cd04674edea40000000"
 
-func TestBesuOperatorConfigHarnessInvariants(t *testing.T) {
+func TestBesuOperatorConfigEnvironmentInvariants(t *testing.T) {
 	const chainID = 32337
 	const blockPeriodSecs = 2
 
-	cfg := newBesuOperatorConfig(chainID, blockPeriodSecs, evm.RelayerAccount().Addr)
+	treasury := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	cfg := newBesuOperatorConfig(chainID, blockPeriodSecs, treasury)
 
 	require.Equal(t, uint64(chainID), cfg.Genesis.Config.ChainID)
 	require.Equal(t, 1, cfg.Blockchain.Nodes.Count)
@@ -25,11 +25,11 @@ func TestBesuOperatorConfigHarnessInvariants(t *testing.T) {
 	require.True(t, cfg.Genesis.Config.ZeroBaseFee)
 	require.Equal(t, uint64(0), cfg.Genesis.Config.LondonBlock)
 	require.Equal(t, uint64(0), cfg.Genesis.Config.ShanghaiTime)
+	require.Equal(t, uint64(0), cfg.Genesis.Config.CancunTime)
 
-	faucet := besuAllocKey(evm.FaucetAccount().Addr)
-	relayer := besuAllocKey(evm.RelayerAccount().Addr)
-	require.Equal(t, expectedPrefundBalanceHex, cfg.Genesis.Alloc[faucet].Balance)
-	require.Equal(t, expectedPrefundBalanceHex, cfg.Genesis.Alloc[relayer].Balance)
+	require.Equal(t, map[string]besuFund{
+		besuAllocKey(treasury): {Balance: expectedTreasuryBalanceHex},
+	}, cfg.Genesis.Alloc)
 }
 
 func TestPrepareBesuNodeDir(t *testing.T) {

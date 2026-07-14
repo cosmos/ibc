@@ -7,22 +7,42 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/e2e/e2etest"
-	"github.com/cosmos/ibc/link/harness"
-	"github.com/cosmos/ibc/link/harness/topology"
+	"github.com/cosmos/ibc/link/e2e/internal/synthetic"
+	"github.com/cosmos/ibc/link/e2e/internal/testapp"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
 
 func TestIFTTransfer_ManualRelay(t *testing.T) {
-	run := e2etest.Start(t, e2etest.SelectedTopology(t).WithManualRelay(topology.RouteAtoB))
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	signers := synthetic.NewSigners(t)
+	route := synthetic.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := synthetic.Deploy(t, env, signers, route)
+	ift := synthetic.BindIFT(t, env, deployment, signers, route)
+	relayer := synthetic.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	out, err := run.IFT(ctx, harness.IFT{
-		Route:  topology.RouteAtoB,
-		Amount: big.NewInt(1_234_000),
-	})
+	transfer, err := ift.Send(ctx, testapp.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	require.NoError(t, out.VerifyPending(ctx))
-	require.NoError(t, out.VerifyPendingStable(ctx))
-	require.NoError(t, out.Relay(ctx))
-	require.NoError(t, out.VerifyComplete(ctx))
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	require.NoError(t, synthetic.AwaitStable(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		wire.PacketPending,
+		destination.Timing(),
+	))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
+	require.NoError(t, synthetic.Relay(ctx, relayer, transfer.Packet()))
+	_, err = synthetic.AwaitState(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		wire.PacketComplete,
+		destination.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
 }

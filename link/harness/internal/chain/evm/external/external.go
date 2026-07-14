@@ -23,11 +23,7 @@ type Chain struct {
 	evm.Identity
 }
 
-var (
-	_ chainpkg.Chain            = (*Chain)(nil)
-	_ chainpkg.ReceiverProvider = (*Chain)(nil)
-	_ evm.ClientProvider        = (*Chain)(nil)
-)
+var _ chainpkg.Chain = (*Chain)(nil)
 
 // The caller must close the returned connection.
 func Connect(ctx context.Context, spec Spec) (*Chain, error) {

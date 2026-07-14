@@ -20,14 +20,8 @@ func Output(ctx context.Context, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-func Missing(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "No such container") ||
-		strings.Contains(s, "No such network") ||
-		(strings.Contains(s, "network ") && strings.Contains(s, " not found"))
+func MissingContainer(err error) bool {
+	return strings.Contains(err.Error(), "No such container")
 }
 
 func Safe(in string) string {

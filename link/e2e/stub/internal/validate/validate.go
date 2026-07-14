@@ -16,7 +16,10 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
-const liveDialTimeout = 5 * time.Second
+const (
+	dbURLPath       = "db.url"
+	liveDialTimeout = 5 * time.Second
+)
 
 func Command(flags *config.FlagSet) *cobra.Command {
 	var live bool
@@ -73,9 +76,44 @@ func run(cmd *cobra.Command, flags *config.FlagSet, live bool) error {
 
 func Check(c *wire.ConfigYAML) []wire.ValidationError {
 	var errs []wire.ValidationError
+	signerAliases := map[string]bool{}
+	for i, configured := range c.Signers {
+		path := fmt.Sprintf("signers[%d]", i)
+		switch {
+		case configured.Alias == "":
+			errs = append(errs, wire.ValidationError{Path: path + ".alias", Msg: "signer alias is empty"})
+		case signerAliases[configured.Alias]:
+			errs = append(errs, wire.ValidationError{
+				Path: path + ".alias",
+				Msg:  fmt.Sprintf("duplicate signer alias %q", configured.Alias),
+			})
+		default:
+			signerAliases[configured.Alias] = true
+		}
+		switch configured.Type {
+		case wire.SignerTypeLocal:
+			if configured.File == "" {
+				errs = append(errs, wire.ValidationError{
+					Path: path + ".file",
+					Msg:  "local signer file is empty",
+				})
+			}
+		case "":
+			errs = append(errs, wire.ValidationError{Path: path + ".type", Msg: "signer type is empty"})
+		default:
+			errs = append(errs, wire.ValidationError{
+				Path: path + ".type",
+				Msg: fmt.Sprintf(
+					"unsupported signer type %q (stub supports %q)",
+					configured.Type,
+					wire.SignerTypeLocal,
+				),
+			})
+		}
+	}
+
 	chainIDs := map[string]bool{}
 	chainTypes := map[string]string{}
-	chainSignerKeys := map[string]string{}
 
 	for i, ch := range c.Chains {
 		if ch.RPC.URL == "" {
@@ -86,22 +124,6 @@ func Check(c *wire.ConfigYAML) []wire.ValidationError {
 		}
 		switch ch.Type {
 		case wire.ChainTypeEVM:
-			switch ch.Provider {
-			case wire.ProviderAnvil, wire.ProviderBesu:
-			case "":
-				errs = append(errs, wire.ValidationError{
-					Path: fmt.Sprintf("chains[%d].provider", i),
-					Msg:  "provider is empty",
-				})
-			default:
-				errs = append(errs, wire.ValidationError{
-					Path: fmt.Sprintf("chains[%d].provider", i),
-					Msg: fmt.Sprintf(
-						"unsupported provider %q (POC supports %q or %q)",
-						ch.Provider, wire.ProviderAnvil, wire.ProviderBesu,
-					),
-				})
-			}
 		case "":
 			errs = append(errs, wire.ValidationError{
 				Path: fmt.Sprintf("chains[%d].type", i),
@@ -111,6 +133,18 @@ func Check(c *wire.ConfigYAML) []wire.ValidationError {
 			errs = append(errs, wire.ValidationError{
 				Path: fmt.Sprintf("chains[%d].type", i),
 				Msg:  fmt.Sprintf("unsupported chain type %q (POC supports %q)", ch.Type, wire.ChainTypeEVM),
+			})
+		}
+		if ch.EVMSigner != "" && !signerAliases[ch.EVMSigner] {
+			errs = append(errs, wire.ValidationError{
+				Path: fmt.Sprintf("chains[%d].evmSigner", i),
+				Msg:  fmt.Sprintf("EVM relay signer alias %q names no configured signer", ch.EVMSigner),
+			})
+		}
+		if ch.TestAppSigner != "" && !signerAliases[ch.TestAppSigner] {
+			errs = append(errs, wire.ValidationError{
+				Path: fmt.Sprintf("chains[%d].testAppSigner", i),
+				Msg:  fmt.Sprintf("test-app signer alias %q names no configured signer", ch.TestAppSigner),
 			})
 		}
 		if ch.ID == "" {
@@ -126,14 +160,14 @@ func Check(c *wire.ConfigYAML) []wire.ValidationError {
 		}
 		chainIDs[ch.ID] = true
 		chainTypes[ch.ID] = ch.Type
-		chainSignerKeys[ch.ID] = ch.EVMSignerKey
 	}
 
 	if err := wire.ValidateDB(c.DB); err != nil {
-		errs = append(errs, wire.ValidationError{Path: "db.url", Msg: err.Error()})
+		errs = append(errs, wire.ValidationError{Path: dbURLPath, Msg: err.Error()})
 	}
 
 	routeIDs := map[string]bool{}
+	routeEndpoints := map[string]bool{}
 	for i, route := range c.Relayer.Routes {
 		path := fmt.Sprintf("relayer.routes[%d]", i)
 		switch {
@@ -160,45 +194,27 @@ func Check(c *wire.ConfigYAML) []wire.ValidationError {
 			})
 		}
 
-		knownType := route.Type == wire.RouteEVMToEVMAttested
-		if !knownType {
+		if route.Type != wire.RouteEVMToEVMAttested {
 			errs = append(errs, wire.ValidationError{
 				Path: path + ".type",
 				Msg:  fmt.Sprintf("unknown route type %q", route.Type),
 			})
 		}
-		for _, endpoint := range []struct{ path, id string }{
-			{path + ".source", route.Source},
-			{path + ".destination", route.Destination},
-		} {
-			if chainIDs[endpoint.id] && chainTypes[endpoint.id] == wire.ChainTypeEVM &&
-				chainSignerKeys[endpoint.id] == "" {
-				errs = append(errs, wire.ValidationError{
-					Path: endpoint.path,
-					Msg:  fmt.Sprintf("route endpoint %q is an EVM chain but declares no evmSignerKey", endpoint.id),
-				})
+		for _, endpoint := range []string{route.Source, route.Destination} {
+			if chainIDs[endpoint] && chainTypes[endpoint] == wire.ChainTypeEVM {
+				routeEndpoints[endpoint] = true
 			}
 		}
-		if knownType && chainIDs[route.Source] && chainIDs[route.Destination] {
-			want, relays := wire.RouteTypeFor(chainTypes[route.Source], chainTypes[route.Destination])
-			switch {
-			case !relays:
-				errs = append(errs, wire.ValidationError{
-					Path: path + ".type",
-					Msg: fmt.Sprintf(
-						"no route type relays %s -> %s",
-						chainTypes[route.Source], chainTypes[route.Destination],
-					),
-				})
-			case route.Type != want:
-				errs = append(errs, wire.ValidationError{
-					Path: path + ".type",
-					Msg: fmt.Sprintf(
-						"route type %q does not match endpoint families (%s -> %s needs %q)",
-						route.Type, chainTypes[route.Source], chainTypes[route.Destination], want,
-					),
-				})
-			}
+	}
+	for i, ch := range c.Chains {
+		if !routeEndpoints[ch.ID] || ch.Type != wire.ChainTypeEVM {
+			continue
+		}
+		if ch.EVMSigner == "" {
+			errs = append(errs, wire.ValidationError{
+				Path: fmt.Sprintf("chains[%d].evmSigner", i),
+				Msg:  "EVM relay signer alias is empty",
+			})
 		}
 	}
 	return errs

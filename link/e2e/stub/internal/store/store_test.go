@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cosmos/ibc/link/harness/fixturekeys"
 	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 )
+
+const testSourceTxHash = "0xsrc"
 
 func packetByID(ctx context.Context, s *Store, packetID string) (Packet, bool, error) {
 	rows, err := s.Packets(ctx, packetID)
@@ -42,11 +43,12 @@ func TestOpenSelfInitializesSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	if _, found, err := st.LoadDeployment(ctx); err != nil || found {
-		t.Fatalf("load on self-initialized empty store = found %v, err %v; want not found", found, err)
+	_, found, loadErr := st.LoadTestApps(ctx)
+	if loadErr != nil || found {
+		t.Fatalf("load on self-initialized empty store = found %v, err %v; want not found", found, loadErr)
 	}
-	if err := st.Close(); err != nil {
-		t.Fatalf("close first store: %v", err)
+	if closeErr := st.Close(); closeErr != nil {
+		t.Fatalf("close first store: %v", closeErr)
 	}
 
 	st, err = Open(path)
@@ -54,46 +56,46 @@ func TestOpenSelfInitializesSchema(t *testing.T) {
 		t.Fatalf("open store again: %v", err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	if _, found, err := st.LoadDeployment(ctx); err != nil || found {
+	if _, found, err := st.LoadTestApps(ctx); err != nil || found {
 		t.Fatalf("load after second open = found %v, err %v; want not found", found, err)
 	}
 }
 
-func TestDeploymentRoundTrip(t *testing.T) {
+func TestTestAppDeploymentRoundTrip(t *testing.T) {
 	st := open(t)
 	ctx := context.Background()
 
-	if _, found, err := st.LoadDeployment(ctx); err != nil || found {
+	if _, found, err := st.LoadTestApps(ctx); err != nil || found {
 		t.Fatalf("load on empty = found %v, err %v; want not found", found, err)
 	}
 
-	want := wire.Deployment{
-		Chains: map[string]wire.ChainDeployment{
-			"31337": {Fixtures: map[string]string{
-				fixturekeys.MockIFT: "0xaaa",
-				fixturekeys.MockGMP: "0xbbb",
-				fixturekeys.Counter: "0xccc",
-			}, ClientID: "client-31337"},
+	want := wire.TestAppDeployment{
+		Chains: map[string]wire.ChainTestAppDeployment{
+			"31337": {
+				MockIFT: "0xaaa", MockGMP: "0xbbb", Counter: "0xccc", TxHash: "0xreceipt",
+			},
 		},
-		TxHashes: []string{"0x1", "0x2"},
 	}
-	if err := st.SaveDeployment(ctx, want); err != nil {
-		t.Fatalf("save: %v", err)
+	if saveErr := st.SaveTestApps(ctx, want); saveErr != nil {
+		t.Fatalf("save: %v", saveErr)
 	}
-	got, found, err := st.LoadDeployment(ctx)
+	got, found, err := st.LoadTestApps(ctx)
 	if err != nil || !found {
 		t.Fatalf("load = found %v, err %v; want found", found, err)
 	}
-	if got.Chains["31337"].Fixtures[fixturekeys.MockIFT] != "0xaaa" || len(got.TxHashes) != 2 {
+	if got.Chains["31337"].MockIFT != "0xaaa" || got.Chains["31337"].TxHash != "0xreceipt" {
 		t.Fatalf("round-trip mismatch: %+v", got)
 	}
 
-	want.Chains["31337"] = wire.ChainDeployment{Fixtures: map[string]string{fixturekeys.MockIFT: "0xnew"}}
-	if err := st.SaveDeployment(ctx, want); err != nil {
-		t.Fatalf("re-save: %v", err)
+	want.Chains["31337"] = wire.ChainTestAppDeployment{MockIFT: "0xnew"}
+	if saveErr := st.SaveTestApps(ctx, want); saveErr != nil {
+		t.Fatalf("re-save: %v", saveErr)
 	}
-	got, _, _ = st.LoadDeployment(ctx)
-	if got.Chains["31337"].Fixtures[fixturekeys.MockIFT] != "0xnew" {
+	got, found, err = st.LoadTestApps(ctx)
+	if err != nil || !found {
+		t.Fatalf("load after re-save = found %v, err %v; want found", found, err)
+	}
+	if got.Chains["31337"].MockIFT != "0xnew" {
 		t.Fatalf("upsert did not overwrite: %+v", got)
 	}
 }
@@ -102,20 +104,13 @@ func TestPacketLifecycle(t *testing.T) {
 	st := open(t)
 	ctx := context.Background()
 
-	id := wire.PacketID("r1", wire.AppTypeIFT, 1)
-	if id != "r1-ift-1" {
-		t.Fatalf("PacketID = %q, want r1-ift-1", id)
-	}
-	if gmp := wire.PacketID("r1", wire.AppTypeGMP, 1); gmp == id {
-		t.Fatalf("GMP PacketID %q collided with IFT PacketID %q", gmp, id)
-	}
-
+	id := "r1-ift-1"
 	p := Packet{
 		PacketID:         id,
 		RouteID:          "r1",
 		AppType:          wire.AppTypeIFT,
 		Sequence:         1,
-		SourceTxHash:     "0xsrc",
+		SourceTxHash:     testSourceTxHash,
 		Receiver:         "0xreceiver",
 		Amount:           "42",
 		TimeoutTimestamp: "99",
@@ -131,7 +126,7 @@ func TestPacketLifecycle(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("packet = found %v, err %v", found, err)
 	}
-	if got.State != wire.PacketPending || got.SourceTxHash != "0xsrc" || got.AppType != wire.AppTypeIFT ||
+	if got.State != wire.PacketPending || got.SourceTxHash != testSourceTxHash || got.AppType != wire.AppTypeIFT ||
 		got.Amount != "42" {
 		t.Fatalf("pending packet = %+v", got)
 	}
@@ -141,18 +136,24 @@ func TestPacketLifecycle(t *testing.T) {
 		t.Fatalf("pending packets = %d, %v; want 1", len(pending), err)
 	}
 
-	if err := st.MarkComplete(ctx, id, "0xrecv"); err != nil {
-		t.Fatalf("complete: %v", err)
+	if completeErr := st.MarkComplete(ctx, id, "0xrecv"); completeErr != nil {
+		t.Fatalf("complete: %v", completeErr)
 	}
-	got, _, _ = packetByID(ctx, st, id)
+	got, found, err = packetByID(ctx, st, id)
+	if err != nil || !found {
+		t.Fatalf("completed packet = found %v, err %v", found, err)
+	}
 	if got.State != wire.PacketComplete || got.EffectTxHash != "0xrecv" {
 		t.Fatalf("completed packet = %+v", got)
 	}
 
-	if err := st.InsertPending(ctx, p); err != nil {
-		t.Fatalf("re-insert post-complete: %v", err)
+	if insertErr := st.InsertPending(ctx, p); insertErr != nil {
+		t.Fatalf("re-insert post-complete: %v", insertErr)
 	}
-	got, _, _ = packetByID(ctx, st, id)
+	got, found, err = packetByID(ctx, st, id)
+	if err != nil || !found {
+		t.Fatalf("packet after re-insert = found %v, err %v", found, err)
+	}
 	if got.State != wire.PacketComplete {
 		t.Fatalf("re-insert regressed state to %q", got.State)
 	}
@@ -161,11 +162,11 @@ func TestPacketLifecycle(t *testing.T) {
 	if err != nil || len(all) != 1 {
 		t.Fatalf("all packets = %d, %v; want 1", len(all), err)
 	}
-	if byPacket, _ := st.Packets(ctx, id); len(byPacket) != 1 {
-		t.Fatalf("by packet = %d; want 1", len(byPacket))
+	if byPacket, queryErr := st.Packets(ctx, id); queryErr != nil || len(byPacket) != 1 {
+		t.Fatalf("by packet = %d, %v; want 1", len(byPacket), queryErr)
 	}
-	if none, _ := st.Packets(ctx, "missing-packet"); len(none) != 0 {
-		t.Fatalf("by missing packet = %d; want 0", len(none))
+	if none, queryErr := st.Packets(ctx, "missing-packet"); queryErr != nil || len(none) != 0 {
+		t.Fatalf("by missing packet = %d, %v; want 0", len(none), queryErr)
 	}
 }
 
@@ -173,10 +174,10 @@ func TestRelayRequestsAreIdempotent(t *testing.T) {
 	st := open(t)
 	ctx := context.Background()
 
-	if err := st.RequestRelay(ctx, "chain-a", "0xsrc"); err != nil {
+	if err := st.RequestRelay(ctx, "chain-a", testSourceTxHash); err != nil {
 		t.Fatalf("request relay: %v", err)
 	}
-	if err := st.RequestRelay(ctx, "chain-a", "0xsrc"); err != nil {
+	if err := st.RequestRelay(ctx, "chain-a", testSourceTxHash); err != nil {
 		t.Fatalf("repeat request relay: %v", err)
 	}
 
@@ -184,7 +185,7 @@ func TestRelayRequestsAreIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("relay requests: %v", err)
 	}
-	if !got[(RelayRequestKey{SourceChainID: "chain-a", SourceTxHash: "0xsrc"})] || len(got) != 1 {
+	if !got[(RelayRequestKey{SourceChainID: "chain-a", SourceTxHash: testSourceTxHash})] || len(got) != 1 {
 		t.Fatalf("relay requests = %+v; want one chain-a/0xsrc entry", got)
 	}
 }

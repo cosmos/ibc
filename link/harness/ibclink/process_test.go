@@ -12,7 +12,7 @@ import (
 func TestClassifyMapsSysexitsToSentinels(t *testing.T) {
 	require.ErrorIs(t, classify(wire.ExitConfigInvalid), ErrConfigInvalid)
 	require.ErrorIs(t, classify(wire.ExitRPCUnreachable), ErrRPCUnreachable)
-	require.ErrorIs(t, classify(wire.ExitDeployFailure), ErrDeployFailed)
+	require.ErrorIs(t, classify(wire.ExitTestAppDeployFailure), ErrTestAppDeployFailed)
 	require.ErrorIs(t, classify(wire.ExitNotReady), ErrNotReady)
 	require.ErrorIs(t, classify(wire.ExitInternal), ErrInternal)
 	require.ErrorIs(t, classify(1), ErrInternal, "unknown non-zero codes classify as internal")

@@ -10,8 +10,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cosmos/ibc/link/harness/ibclink/wire"
 	"github.com/cosmos/ibc/link/e2e/stub/internal/store"
+	"github.com/cosmos/ibc/link/harness/ibclink/wire"
+)
+
+const (
+	testChainA = "chain-a"
+	testRouteA = "r-a"
 )
 
 func TestRelayUsesStoredPacketWithoutDiscovery(t *testing.T) {
@@ -19,7 +24,7 @@ func TestRelayUsesStoredPacketWithoutDiscovery(t *testing.T) {
 	ctx := context.Background()
 	const canonicalHash = "ABCDEF"
 	if err := st.InsertPending(ctx, store.Packet{
-		PacketID: "r-a-ift-1", RouteID: "r-a", AppType: wire.AppTypeIFT,
+		PacketID: "r-a-ift-1", RouteID: testRouteA, AppType: wire.AppTypeIFT,
 		Sequence: 1, SourceTxHash: canonicalHash,
 	}); err != nil {
 		t.Fatal(err)
@@ -30,7 +35,7 @@ func TestRelayUsesStoredPacketWithoutDiscovery(t *testing.T) {
 		calls++
 		return errors.New("must not run")
 	})
-	rr := relayRequest(t, h, wire.RelayRequest{SourceChainID: "chain-a", SourceTxHash: "abcdef"})
+	rr := relayRequest(t, h, wire.RelayRequest{SourceChainID: testChainA, SourceTxHash: "abcdef"})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
@@ -41,7 +46,7 @@ func TestRelayUsesStoredPacketWithoutDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !requests[store.RelayRequestKey{SourceChainID: "chain-a", SourceTxHash: canonicalHash}] {
+	if !requests[store.RelayRequestKey{SourceChainID: testChainA, SourceTxHash: canonicalHash}] {
 		t.Fatalf("relay requests = %+v, want canonical stored hash", requests)
 	}
 }
@@ -61,15 +66,15 @@ func TestRelayDiscoversOnlyNamedSourceTransaction(t *testing.T) {
 	h := Handler(st, testConfig(), func(ctx context.Context, chainID, sourceTxHash string) error {
 		gotChain, gotHash = chainID, sourceTxHash
 		return st.InsertPending(ctx, store.Packet{
-			PacketID: "r-a-ift-2", RouteID: "r-a", AppType: wire.AppTypeIFT,
+			PacketID: "r-a-ift-2", RouteID: testRouteA, AppType: wire.AppTypeIFT,
 			Sequence: 2, SourceTxHash: txHash,
 		})
 	})
-	rr := relayRequest(t, h, wire.RelayRequest{SourceChainID: "chain-a", SourceTxHash: txHash})
+	rr := relayRequest(t, h, wire.RelayRequest{SourceChainID: testChainA, SourceTxHash: txHash})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 	}
-	if gotChain != "chain-a" || gotHash != txHash {
+	if gotChain != testChainA || gotHash != txHash {
 		t.Fatalf("discovery got %q/%q", gotChain, gotHash)
 	}
 	var result wire.RelayResult
@@ -93,7 +98,7 @@ func TestRelayDiscoveryMissAndFailure(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			st := openTestStore(t)
 			h := Handler(st, testConfig(), func(context.Context, string, string) error { return tc.err })
-			rr := relayRequest(t, h, wire.RelayRequest{SourceChainID: "chain-a", SourceTxHash: "0xmissing"})
+			rr := relayRequest(t, h, wire.RelayRequest{SourceChainID: testChainA, SourceTxHash: "0xmissing"})
 			if rr.Code != tc.code {
 				t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
 			}
@@ -113,8 +118,8 @@ func openTestStore(t *testing.T) *store.Store {
 
 func testConfig() *wire.ConfigYAML {
 	return &wire.ConfigYAML{Relayer: wire.Relayer{Routes: []wire.Route{
-		{ID: "r-a", Source: "chain-a", Destination: "chain-b"},
-		{ID: "r-b", Source: "chain-b", Destination: "chain-a"},
+		{ID: testRouteA, Source: testChainA, Destination: "chain-b"},
+		{ID: "r-b", Source: "chain-b", Destination: testChainA},
 	}}}
 }
 
