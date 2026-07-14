@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 const (
@@ -96,7 +96,7 @@ func TestTxPacketEvents(t *testing.T) {
 		require.Len(t, events, 1)
 
 		event := events[0]
-		assert.Equal(t, chains.KindSendPacket, event.Kind)
+		assert.Equal(t, v2.KindSendPacket, event.Kind)
 		assert.Equal(t, uint64(100), event.Height)
 		assert.Equal(t, time.Unix(1752000000, 0).UTC(), event.BlockTime)
 		assert.Equal(t, uint64(42), event.Packet.Sequence)

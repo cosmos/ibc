@@ -6,6 +6,7 @@ package chains
 
 import (
 	"context"
+	"github.com/cosmos/ibc/link/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -37,23 +38,23 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 }
 
 // TxPacketEvents provides a mock function for the type MockClient
-func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error) {
+func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error) {
 	ret := _mock.Called(ctx, txHash)
 
 	if len(ret) == 0 {
 		panic("no return value specified for TxPacketEvents")
 	}
 
-	var r0 []PacketEvent
+	var r0 []v2.PacketEvent
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) ([]PacketEvent, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) ([]v2.PacketEvent, error)); ok {
 		return returnFunc(ctx, txHash)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) []PacketEvent); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) []v2.PacketEvent); ok {
 		r0 = returnFunc(ctx, txHash)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]PacketEvent)
+			r0 = ret.Get(0).([]v2.PacketEvent)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
@@ -94,12 +95,12 @@ func (_c *MockClient_TxPacketEvents_Call) Run(run func(ctx context.Context, txHa
 	return _c
 }
 
-func (_c *MockClient_TxPacketEvents_Call) Return(packetEvents []PacketEvent, err error) *MockClient_TxPacketEvents_Call {
+func (_c *MockClient_TxPacketEvents_Call) Return(packetEvents []v2.PacketEvent, err error) *MockClient_TxPacketEvents_Call {
 	_c.Call.Return(packetEvents, err)
 	return _c
 }
 
-func (_c *MockClient_TxPacketEvents_Call) RunAndReturn(run func(ctx context.Context, txHash []byte) ([]PacketEvent, error)) *MockClient_TxPacketEvents_Call {
+func (_c *MockClient_TxPacketEvents_Call) RunAndReturn(run func(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)) *MockClient_TxPacketEvents_Call {
 	_c.Call.Return(run)
 	return _c
 }

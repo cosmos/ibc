@@ -3,46 +3,11 @@ package chains
 
 import (
 	"context"
-	"time"
+
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // Client provides chain state queries.
 type Client interface {
-	TxPacketEvents(ctx context.Context, txHash []byte) ([]PacketEvent, error)
-}
-
-// EventKind the kind of packet event.
-type EventKind int
-
-// Event kinds
-const (
-	KindSendPacket EventKind = iota
-	KindWriteAck
-)
-
-// Payload a packet payload.
-type Payload struct {
-	SourcePort string
-	DestPort   string
-	Version    string
-	Encoding   string
-	Value      []byte
-}
-
-// Packet an IBC v2 packet.
-type Packet struct {
-	Sequence         uint64
-	SourceClient     string
-	DestClient       string
-	TimeoutTimestamp uint64
-	Payloads         []Payload
-}
-
-// PacketEvent a packet event.
-type PacketEvent struct {
-	Height    uint64
-	BlockTime time.Time
-	Kind      EventKind
-	Packet    Packet
-	Acks      [][]byte
+	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
 }

@@ -16,6 +16,8 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
+
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 const sendPacketEvent = "SendPacket"
@@ -80,7 +82,7 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 	}, nil
 }
 
-func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains.PacketEvent, error) {
+func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.PacketEvent, error) {
 	if len(rawTxHash) != common.HashLength {
 		return nil, errors.Errorf("invalid tx hash length %d, expected %d", len(rawTxHash), common.HashLength)
 	}
@@ -92,7 +94,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
 	}
 
-	var packets []chains.Packet
+	var packets []v2.Packet
 
 	for _, log := range receipt.Logs {
 		switch {
@@ -121,12 +123,12 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 		return nil, errors.Wrapf(err, "getting header %s for tx %s on chain %s", receipt.BlockNumber, txHash, c.chainID)
 	}
 
-	events := make([]chains.PacketEvent, len(packets))
+	events := make([]v2.PacketEvent, len(packets))
 	for i, packet := range packets {
-		events[i] = chains.PacketEvent{
+		events[i] = v2.PacketEvent{
 			Height:    receipt.BlockNumber.Uint64(),
 			BlockTime: blockTime(header),
-			Kind:      chains.KindSendPacket,
+			Kind:      v2.KindSendPacket,
 			Packet:    packet,
 		}
 	}
@@ -134,10 +136,10 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]chains
 	return events, nil
 }
 
-func toPacket(packet ics26router.IICS26RouterMsgsPacket) chains.Packet {
-	payloads := make([]chains.Payload, len(packet.Payloads))
+func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {
+	payloads := make([]v2.Payload, len(packet.Payloads))
 	for i, payload := range packet.Payloads {
-		payloads[i] = chains.Payload{
+		payloads[i] = v2.Payload{
 			SourcePort: payload.SourcePort,
 			DestPort:   payload.DestPort,
 			Version:    payload.Version,
@@ -146,7 +148,7 @@ func toPacket(packet ics26router.IICS26RouterMsgsPacket) chains.Packet {
 		}
 	}
 
-	return chains.Packet{
+	return v2.Packet{
 		Sequence:         packet.Sequence,
 		SourceClient:     packet.SourceClient,
 		DestClient:       packet.DestClient,
