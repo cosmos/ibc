@@ -49,7 +49,7 @@ func (h *RelayerHandler) Relay(
 	ctx context.Context,
 	req *connect.Request[proto.RelayRequest],
 ) (*connect.Response[proto.RelayResponse], error) {
-	h.logger.Info("Relay called", "chainID", req.Msg.ChainId, "txHash", req.Msg.TxHash)
+	h.logger.Info("Relay", "chainID", req.Msg.ChainId, "txHash", req.Msg.TxHash)
 
 	err := h.srv.Relay(ctx, req.Msg.ChainId, req.Msg.TxHash)
 	switch {
