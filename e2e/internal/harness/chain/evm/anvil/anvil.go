@@ -402,6 +402,7 @@ func (ac *Chain) Stop() error {
 		ac.stopped = true
 		ac.container = nil
 		ac.mu.Unlock()
+		return nil
 	}
 	return errors.Join(stopErr, rmErr)
 }

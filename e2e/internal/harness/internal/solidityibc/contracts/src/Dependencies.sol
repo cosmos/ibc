@@ -7,4 +7,3 @@ pragma solidity ^0.8.28;
 // artifact; the Solidity IBC contracts themselves come from the pinned upstream Go
 // bindings.
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
-

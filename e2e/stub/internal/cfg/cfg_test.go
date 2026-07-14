@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 )
 
 func TestLoadResolvesWholeEnvironmentReferences(t *testing.T) {
@@ -150,28 +152,26 @@ db:
 	require.Equal(t, home, cwd)
 }
 
-func TestDBConfigFromURL(t *testing.T) {
+func TestDBConfigFromPath(t *testing.T) {
 	tests := []struct {
-		name     string
-		raw      string
-		wantType string
-		wantErr  string
+		name    string
+		raw     string
+		wantErr string
 	}{
-		{name: "sqlite path", raw: "relayer.db", wantType: "sqlite"},
-		{name: "postgres URL", raw: "postgres://localhost/ibc", wantType: "postgres"},
-		{name: "empty", wantErr: ".url must not be empty"},
-		{name: "in-memory sqlite", raw: ":memory:", wantErr: ".url must not be :memory:"},
+		{name: "sqlite path", raw: "relayer.db"},
+		{name: "empty", wantErr: "db url is empty"},
+		{name: "in-memory sqlite", raw: ":memory:", wantErr: "in-memory sqlite"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, err := dbConfigFromURL(test.raw)
+			db, err := dbConfigFromPath(test.raw)
 			if test.wantErr != "" {
 				require.ErrorContains(t, err, test.wantErr)
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, test.wantType, db.Type)
+			require.Equal(t, wire.DBTypeSQLite, db.Type)
 			require.Equal(t, test.raw, db.URL)
 		})
 	}

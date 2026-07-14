@@ -31,7 +31,7 @@ func Setup(flags *FlagSet) (*wire.ConfigYAML, error) {
 		return nil, setupError(err)
 	}
 	if flags.DB != "" {
-		db, dbErr := dbConfigFromURL(flags.DB)
+		db, dbErr := dbConfigFromPath(flags.DB)
 		if dbErr != nil {
 			return nil, setupError(fmt.Errorf("invalid --db: %w", dbErr))
 		}

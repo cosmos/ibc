@@ -3,14 +3,14 @@ package signer
 import (
 	"context"
 
+	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/service/signer/keyfile"
 )
 
 // KeyType key type supported by local Signer
-type KeyType string
+type KeyType = keyfile.Type
 
 // Signer represents signer that can either sign digests or messages.
 type Signer interface {
@@ -28,8 +28,8 @@ type Set struct {
 
 // KeyType & SignerType enums
 const (
-	EDDSA KeyType = KeyType(keyfile.EDDSA)
-	ECDSA KeyType = KeyType(keyfile.ECDSA)
+	EDDSA = keyfile.EDDSA
+	ECDSA = keyfile.ECDSA
 )
 
 func NewSet() *Set {
@@ -71,6 +71,5 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 }
 
 func ParseKeyType(raw string) (KeyType, error) {
-	parsed, err := keyfile.ParseType(raw)
-	return KeyType(parsed), err
+	return keyfile.ParseType(raw)
 }

@@ -10,4 +10,3 @@ bytecode_hash = "none"
 optimizer = true
 optimizer_runs = 10000
 via_ir = true
-

@@ -12,11 +12,6 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
 )
 
-const (
-	dbTypeSQLite   = "sqlite"
-	dbTypePostgres = "postgres"
-)
-
 type FlagSet struct {
 	Home   string
 	Config string
@@ -31,7 +26,7 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 	pf := cmd.PersistentFlags()
 	pf.StringVar(&flags.Home, "home", flags.Home, "IBC home directory")
 	pf.StringVar(&flags.Config, "config", flags.Config, "Config file relative to home")
-	pf.StringVar(&flags.DB, "db", flags.DB, "Database URL override")
+	pf.StringVar(&flags.DB, "db", flags.DB, "SQLite database path override")
 }
 
 func (f *FlagSet) ConfigPath() (string, error) {
@@ -56,18 +51,12 @@ func ExpandHome(path string) (string, error) {
 	return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 }
 
-func dbConfigFromURL(raw string) (wire.DB, error) {
-	switch raw {
-	case "":
-		return wire.DB{}, fmt.Errorf(".url must not be empty")
-	case ":memory:":
-		return wire.DB{}, fmt.Errorf(".url must not be :memory: for sqlite")
+func dbConfigFromPath(path string) (wire.DB, error) {
+	db := wire.DB{Type: wire.DBTypeSQLite, URL: path}
+	if err := wire.ValidateDB(db); err != nil {
+		return wire.DB{}, err
 	}
-	dbType := dbTypeSQLite
-	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
-		dbType = dbTypePostgres
-	}
-	return wire.DB{Type: dbType, URL: raw}, nil
+	return db, nil
 }
 
 func PrintJSON(value any) error {

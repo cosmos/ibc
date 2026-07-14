@@ -3,10 +3,10 @@ package signer
 import (
 	"path/filepath"
 
+	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/service/signer/keyfile"
 )
 
 // LocalKey is a key stored and used locally.
@@ -40,7 +40,7 @@ func LocalKeyFromFile(path string) (LocalKey, error) {
 		return nil, err
 	}
 
-	switch KeyType(keyType) {
+	switch keyType {
 	case EDDSA:
 		return NewLocalEd25519Signer(privateKey)
 	case ECDSA:
@@ -51,5 +51,5 @@ func LocalKeyFromFile(path string) (LocalKey, error) {
 }
 
 func storeKeyToFile(path string, keyType KeyType, privateKey []byte) error {
-	return keyfile.Store(path, keyfile.Type(keyType), privateKey)
+	return keyfile.Store(path, keyType, privateKey)
 }

@@ -219,9 +219,6 @@ func acquireIBCInstance(
 			accessManager: EVMAddress(resolved.AccessManager.Hex()),
 		}, nil
 	case ExistingIBCInstance:
-		if !common.IsHexAddress(string(instance.Locator)) {
-			return nil, fmt.Errorf("IBC Instance locator %q is not an EVM address", instance.Locator)
-		}
 		resolved, err := setup.AttachInstance(ctx, common.HexToAddress(string(instance.Locator)))
 		if err != nil {
 			return nil, err
@@ -317,24 +314,6 @@ func prepareConnections(
 					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", identity.ID, err)
 				}
 				dependencies.preparedClients[identity.ID] = prepared
-			}
-		}
-	}
-
-	seen := make(map[EVMAddress]ClientID)
-	for _, connection := range spec.Connections {
-		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			identity := clientIdentity(declaration)
-			resolved := dependencies.existingClients[identity.ID]
-			if resolved == nil {
-				resolved = &IBCClient{id: identity.ID}
-				for _, attestor := range dependencies.attestorSpecs[identity.ID] {
-					account, _ := runtime.evmAccount(attestor.Authority)
-					resolved.attestors = append(resolved.attestors, EVMAddress(account.Address().Hex()))
-				}
-			}
-			if err := recordResolvedAttestorUse(seen, resolved); err != nil {
-				return dependencies, err
 			}
 		}
 	}

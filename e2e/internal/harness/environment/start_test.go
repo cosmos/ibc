@@ -426,7 +426,9 @@ func (fakeRuntimeChain) Height(context.Context) (uint64, error) { return 1, nil 
 
 type fakeEVMRuntimeChain struct{ fakeRuntimeChain }
 
-func (fakeEVMRuntimeChain) EVM() *chainevm.EVMClient { return nil }
+func (fakeEVMRuntimeChain) WithEVMClient(use func(*chainevm.EVMClient) error) error {
+	return use(nil)
+}
 
 func testTiming() Timing {
 	return Timing{

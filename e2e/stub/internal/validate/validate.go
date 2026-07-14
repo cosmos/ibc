@@ -130,7 +130,7 @@ func Check(c *wire.ConfigYAML) []wire.ValidationError {
 		default:
 			errs = append(errs, wire.ValidationError{
 				Path: fmt.Sprintf("chains[%d].type", i),
-				Msg:  fmt.Sprintf("unsupported chain type %q (POC supports %q)", ch.Type, wire.ChainTypeEVM),
+				Msg:  fmt.Sprintf("unsupported chain type %q; expected %q", ch.Type, wire.ChainTypeEVM),
 			})
 		}
 		if ch.EVMSigner != "" && !signerAliases[ch.EVMSigner] {

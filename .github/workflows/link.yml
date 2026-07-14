@@ -75,5 +75,4 @@ jobs:
             e2e/go.sum
             e2e/internal/harness/go.sum
       - run: docker info
-      - run: make test-e2e
-      - run: make test-e2e E2E_PKGS=./negative
+      - run: make test-e2e E2E_PKGS='./setup ./ibclink ./external ./negative'

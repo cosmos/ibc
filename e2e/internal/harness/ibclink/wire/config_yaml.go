@@ -56,7 +56,7 @@ func ValidateDB(db DB) error {
 	case "":
 		return fmt.Errorf("db type is empty")
 	default:
-		return fmt.Errorf("unsupported db type %q (POC supports %q)", db.Type, DBTypeSQLite)
+		return fmt.Errorf("unsupported db type %q; expected %q", db.Type, DBTypeSQLite)
 	}
 	switch db.URL {
 	case "":

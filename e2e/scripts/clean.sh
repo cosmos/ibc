@@ -8,7 +8,7 @@ while [ "$#" -gt 0 ]; do
 		--dry-run) dry_run=1 ;;
 		-h|--help)
 			printf 'Usage: %s [--dry-run]\n\n' "$0"
-			printf 'Stops leaked e2e relayer daemons and removes e2e Docker resources by label or ibc-link-e2e- name prefix.\n'
+			printf 'Stops leaked e2e relayer daemons and removes e2e Docker containers by label.\n'
 			printf 'Daemons are matched by the harness config marker (ibc-link.config.yaml in argv), so a\n'
 			printf 'developer'"'"'s own unrelated "ibc relayer run" is left alone.\n'
 			exit 0
@@ -60,13 +60,8 @@ docker_sweep() {
 		return
 	fi
 
-	local containers networks
-	containers="$(
-		{
-			docker ps -aq --filter label=ibc-link-e2e=true
-			docker ps -aq --filter name='^/ibc-link-e2e-'
-		} 2>/dev/null | sort -u
-	)"
+	local containers
+	containers="$(docker ps -aq --filter label=ibc-link-e2e=true 2>/dev/null)"
 	if [ -z "$containers" ]; then
 		note "no e2e Docker containers found"
 	else
@@ -77,25 +72,6 @@ docker_sweep() {
 		if [ "$dry_run" -eq 0 ]; then
 			# shellcheck disable=SC2086
 			docker rm -f $containers >/dev/null 2>&1 || true
-		fi
-	fi
-
-	networks="$(
-		{
-			docker network ls -q --filter label=ibc-link-e2e=true
-			docker network ls -q --filter name='^ibc-link-e2e-'
-		} 2>/dev/null | sort -u
-	)"
-	if [ -z "$networks" ]; then
-		note "no e2e Docker networks found"
-	else
-		note "remove e2e Docker networks:"
-		for id in $networks; do
-			docker network ls --format '  {{.ID}} {{.Name}}' --filter "id=$id" || true
-		done
-		if [ "$dry_run" -eq 0 ]; then
-			# shellcheck disable=SC2086
-			docker network rm $networks >/dev/null 2>&1 || true
 		fi
 	fi
 }

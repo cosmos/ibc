@@ -2,7 +2,6 @@ package attestor
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -21,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/cosmos/ibc/api/v2/keyfile"
 
 	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
 )
@@ -56,12 +57,10 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	keyInfo, err := os.Stat(keyPath)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o600), keyInfo.Mode().Perm())
-	keyData, err := os.ReadFile(keyPath)
+	keyType, privateKey, err := keyfile.Load(keyPath)
 	require.NoError(t, err)
-	var stored keyFile
-	require.NoError(t, json.Unmarshal(keyData, &stored))
-	require.Equal(t, "ecdsa", stored.Type)
-	require.Equal(t, testPrivateKey, fmt.Sprintf("%x", mustDecodeBase64(t, stored.PrivateKey)))
+	require.Equal(t, keyfile.ECDSA, keyType)
+	require.Equal(t, testPrivateKey, fmt.Sprintf("%x", privateKey))
 
 	logs, err := os.ReadFile(filepath.Join(workDir, logFilename))
 	require.NoError(t, err)
@@ -250,11 +249,4 @@ func helperConfigArgs(args []string) (string, string, error) {
 		return "", "", fmt.Errorf("helper requires --home and --config, got %q", args)
 	}
 	return home, config, nil
-}
-
-func mustDecodeBase64(t *testing.T, value string) []byte {
-	t.Helper()
-	data, err := base64.StdEncoding.DecodeString(value)
-	require.NoError(t, err)
-	return data
 }

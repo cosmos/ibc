@@ -78,10 +78,11 @@ func (c *Chain) Height(ctx context.Context) (uint64, error) {
 // control of the underlying client lifecycle.
 func (c *Chain) EVM() (*EVM, error) {
 	err := c.use(func() error {
-		if !chainevm.SupportsClientAccess(c.impl) {
+		ok, err := chainevm.WithChainClient(c.impl, func(*chainevm.EVMClient) error { return nil })
+		if !ok {
 			return fmt.Errorf("%w: Chain %q has no EVM access", ErrCapabilityUnavailable, c.id)
 		}
-		return nil
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -162,20 +163,6 @@ func (e *EVM) BalanceAt(ctx context.Context, address common.Address, number *big
 		return err
 	})
 	return balance, err
-}
-
-func (e *EVM) CallContract(
-	ctx context.Context,
-	call ethereum.CallMsg,
-	number *big.Int,
-) ([]byte, error) {
-	var result []byte
-	err := e.use(func(client *chainevm.EVMClient) error {
-		var err error
-		result, err = client.Client().CallContract(ctx, call, number)
-		return err
-	})
-	return result, err
 }
 
 // UseContractCaller lends the active EVM client as a read-only generated

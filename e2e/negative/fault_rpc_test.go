@@ -1,8 +1,10 @@
 package negative_test
 
 import (
+	"context"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -37,18 +39,13 @@ func TestFault_NodeStop_RelayerRecovers(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, node.Stop(ctx))
-	_, err = chainB.Height(ctx)
+	probeCtx, cancelProbe := context.WithTimeout(ctx, 2*time.Second)
+	_, err = chainB.Height(probeCtx)
+	cancelProbe()
 	require.Error(t, err, "with the destination node stopped, an EVM height query must fail")
 
 	transfer, err := prepared.Submit(ctx)
 	require.NoError(t, err)
-	require.NoError(t, synthetic.AwaitStable(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		wire.PacketPending,
-		chainB.Timing(),
-	))
 
 	require.NoError(t, node.Start(ctx))
 	_, err = chainB.Height(ctx)

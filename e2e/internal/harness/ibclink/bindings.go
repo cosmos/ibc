@@ -41,9 +41,6 @@ func (r *Driver) BindChainRPCs(
 	resolvers map[string]func() (string, error),
 	acquire func() (release func(), err error),
 ) error {
-	if r == nil {
-		return errors.New("ibclink: Driver is required")
-	}
 	if acquire == nil {
 		return errors.New("ibclink: process binding lease is required")
 	}
@@ -72,9 +69,6 @@ func (r *Driver) BindChainRPCs(
 
 // ChainRPC returns the configuration reference for a bound Chain.
 func (r *Driver) ChainRPC(chainID string) (wire.RPC, error) {
-	if r == nil {
-		return wire.RPC{}, errors.New("ibclink: Driver is required")
-	}
 	bindings := r.bindings.snapshot()
 	if bindings == nil {
 		return wire.RPC{}, fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
@@ -96,9 +90,6 @@ func (r *Driver) withProcessEnv(use func(processEnvironment) error) error {
 }
 
 func (r *Driver) acquireProcessEnv() (processEnvironment, func(), error) {
-	if r == nil {
-		return processEnvironment{}, nil, errors.New("ibclink: Driver is required")
-	}
 	bindings := r.bindings.snapshot()
 	release, err := bindings.acquire()
 	if err != nil {

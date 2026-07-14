@@ -7,8 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink/wire"
-	"github.com/cosmos/ibc/e2e/internal/keyfile"
 )
 
 func TestLoadECDSA(t *testing.T) {

@@ -84,7 +84,7 @@ func NewVerifiedClient(
 
 func (e *EVMClient) Client() *ethclient.Client { return e.client }
 
-func (e *EVMClient) EVM() *EVMClient { return e }
+func (e *EVMClient) WithEVMClient(use func(*EVMClient) error) error { return use(e) }
 
 func (e *EVMClient) ChainID() *big.Int { return new(big.Int).Set(e.chainID) }
 

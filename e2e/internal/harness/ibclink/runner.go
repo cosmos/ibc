@@ -92,9 +92,8 @@ func (r *Driver) MigrateUp(ctx context.Context) error {
 	if res.code != wire.ExitOK {
 		return &ExitError{Code: res.code, Class: classify(res.code), Stderr: snippet(res.stderr)}
 	}
-	var out wire.MigrationUpResult
-	if err := json.Unmarshal(res.stdout, &out); err != nil {
-		return fmt.Errorf("ibc migrate up: decode stdout: %w (%q)", err, string(res.stdout))
+	if !json.Valid(res.stdout) {
+		return fmt.Errorf("ibc migrate up: stdout is not JSON: %q", string(res.stdout))
 	}
 	return nil
 }

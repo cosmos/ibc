@@ -10,7 +10,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
+	"github.com/cosmos/ibc/api/v2/keyfile"
 	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
 
 	attestorv2 "github.com/cosmos/ibc/api/v2/attestor"
@@ -299,19 +299,8 @@ func prepareWorkspace(spec Spec, key *ecdsa.PrivateKey, listenAddress string) (w
 		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: create private work dir %q: %w", dir, mkdirErr)
 	}
 
-	keysDir := filepath.Join(dir, "keys")
-	if mkdirErr := os.Mkdir(keysDir, 0o700); mkdirErr != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: create private keys dir: %w", mkdirErr)
-	}
-	keyPath := filepath.Join(keysDir, keyFilename)
-	keyData, err := json.Marshal(keyFile{
-		Type:       "ecdsa",
-		PrivateKey: base64.StdEncoding.EncodeToString(crypto.FromECDSA(key)),
-	})
-	if err != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: encode private key file: %w", err)
-	}
-	if writeErr := writePrivateFile(keyPath, keyData); writeErr != nil {
+	keyPath := filepath.Join(dir, "keys", keyFilename)
+	if writeErr := keyfile.Store(keyPath, keyfile.ECDSA, crypto.FromECDSA(key)); writeErr != nil {
 		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: write private key file: %w", writeErr)
 	}
 
@@ -460,9 +449,4 @@ type signerConfig struct {
 	Alias string `yaml:"alias"`
 	Type  string `yaml:"type"`
 	File  string `yaml:"file"`
-}
-
-type keyFile struct {
-	Type       string `json:"type"`
-	PrivateKey string `json:"privateKeyBase64"`
 }

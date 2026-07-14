@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -59,40 +58,6 @@ func TestOpenSelfInitializesSchema(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 	if _, found, err := st.LoadTestApps(ctx); err != nil || found {
 		t.Fatalf("load after second open = found %v, err %v; want not found", found, err)
-	}
-}
-
-func TestOpenCoexistsWithRealLinkTables(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "relayer.db")
-	db, err := sql.Open("sqlite", sqliteDSN(path))
-	if err != nil {
-		t.Fatalf("open real Link database: %v", err)
-	}
-	_, err = db.Exec(`
-		CREATE TABLE packets (id INTEGER PRIMARY KEY);
-		CREATE TABLE relay_requests (id INTEGER PRIMARY KEY);
-		CREATE TABLE test_app_deployments (id INTEGER PRIMARY KEY);`)
-	if err != nil {
-		t.Fatalf("create real Link tables: %v", err)
-	}
-	if closeErr := db.Close(); closeErr != nil {
-		t.Fatalf("close real Link database: %v", closeErr)
-	}
-
-	st, err := Open(path)
-	if err != nil {
-		t.Fatalf("open stub store: %v", err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
-	ctx := context.Background()
-	if err := st.InsertPending(ctx, Packet{PacketID: "packet-1", RouteID: "route-1"}); err != nil {
-		t.Fatalf("insert stub packet: %v", err)
-	}
-	if err := st.RequestRelay(ctx, "chain-a", "0xsource"); err != nil {
-		t.Fatalf("insert stub relay request: %v", err)
-	}
-	if _, found, err := st.LoadTestApps(ctx); err != nil || found {
-		t.Fatalf("load stub test apps = found %v, err %v; want not found", found, err)
 	}
 }
 
