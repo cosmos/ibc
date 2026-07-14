@@ -21,7 +21,7 @@ defaults:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-slim
+    runs-on: depot-ubuntu-24.04-4
     permissions:
       contents: read
       pull-requests: read
@@ -50,7 +50,7 @@ jobs:
     name: Lint
     needs: changes
     if: needs.changes.outputs.link == 'true'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -67,7 +67,7 @@ jobs:
     name: Build
     needs: changes
     if: needs.changes.outputs.link == 'true'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -84,7 +84,7 @@ jobs:
     name: Test
     needs: changes
     if: needs.changes.outputs.link == 'true'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 30
     env:
       # creates postgres docker container for testing
@@ -102,7 +102,7 @@ jobs:
     name: Codegen Verify
     needs: changes
     if: needs.changes.outputs.sql == 'true' || needs.changes.outputs.proto == 'true'
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -138,10 +138,11 @@ jobs:
           fi
 
   ci-ok:
-    name: Wait OK
+    # Ensure all jobs completed
+    name: Finalize
     if: always()
     needs: [changes, lint, build, test, verify-codegen]
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-4
     steps:
       - name: Check required jobs
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
