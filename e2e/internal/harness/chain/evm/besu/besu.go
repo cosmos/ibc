@@ -127,6 +127,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 
 	namePrefix := container.NamePrefix(spec.RunID, spec.ID)
 	labels := container.Labels(spec.RunID)
+	hostUser := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
 	generatorName := namePrefix + "-generate"
 	generator, genErr := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		Started: true,
@@ -137,6 +138,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			WaitingFor: wait.ForExit().WithExitTimeout(besuReadyTimeout),
 			ConfigModifier: func(config *containertypes.Config) {
 				config.WorkingDir = "/work"
+				config.User = hostUser
 			},
 			HostConfigModifier: func(config *containertypes.HostConfig) {
 				config.Mounts = append(config.Mounts, mount.Mount{
@@ -204,6 +206,9 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		Image:        spec.Image,
 		Labels:       labels,
 		ExposedPorts: []string{"8545/tcp"},
+		ConfigModifier: func(config *containertypes.Config) {
+			config.User = hostUser
+		},
 		HostConfigModifier: func(config *containertypes.HostConfig) {
 			container.BindPortsToLoopback(config, "8545/tcp")
 			config.Mounts = append(
