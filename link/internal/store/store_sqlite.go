@@ -123,16 +123,13 @@ func (db *SqliteDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.db, config.DBTypeSQLite)
 }
 
-func (db *SqliteDB) ExecTx(ctx context.Context, fn func(Repository) error) error {
-	tx, err := db.db.BeginTx(ctx, nil)
+func (db *SqliteDB) Transact(ctx context.Context, call func(repo Repository) error) error {
+	atomicDB, tx, err := db.atomicDB(ctx)
 	if err != nil {
-		return errors.Wrap(err, "beginning transaction")
+		return err
 	}
 
-	txDB := *db
-	txDB.repo = db.repo.WithTx(tx)
-
-	if err := fn(&txDB); err != nil {
+	if err := call(atomicDB); err != nil {
 		if errRollback := tx.Rollback(); errRollback != nil {
 			return errors.Wrapf(err, "rolling back transaction: %s", errRollback)
 		}
@@ -140,7 +137,11 @@ func (db *SqliteDB) ExecTx(ctx context.Context, fn func(Repository) error) error
 		return err
 	}
 
-	return errors.Wrap(tx.Commit(), "committing transaction")
+	if err := tx.Commit(); err != nil {
+		return errors.Wrap(err, "committing transaction")
+	}
+
+	return nil
 }
 
 func (db *SqliteDB) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
@@ -222,6 +223,24 @@ func (db *SqliteDB) ListPacketsBySourceTx(
 	}
 
 	return packets, nil
+}
+
+func (db *SqliteDB) copy() *SqliteDB {
+	copied := *db
+	return &copied
+}
+
+func (db *SqliteDB) atomicDB(ctx context.Context) (*SqliteDB, *sql.Tx, error) {
+	dbCopy := db.copy()
+
+	tx, err := db.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "beginning transaction")
+	}
+
+	dbCopy.repo = dbCopy.repo.WithTx(tx)
+
+	return dbCopy, tx, nil
 }
 
 func packetFromSqlite(row reposqlite.Packet) Packet {

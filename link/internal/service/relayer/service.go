@@ -35,7 +35,7 @@ type ChainClients interface {
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
-	ExecTx(ctx context.Context, fn func(store.Repository) error) error
+	Transact(ctx context.Context, call func(store.Repository) error) error
 }
 
 // Relay errors
@@ -105,7 +105,7 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 
 	packets := s.packetsFromEvents(chainID, txHash, events)
 
-	err = s.store.ExecTx(ctx, func(repo store.Repository) error {
+	err = s.store.Transact(ctx, func(repo store.Repository) error {
 		if errCreate := repo.CreateRelayRequest(ctx, chainID, txHash); errCreate != nil {
 			return errors.Wrap(errCreate, "creating relay request")
 		}

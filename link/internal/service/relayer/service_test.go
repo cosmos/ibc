@@ -98,7 +98,7 @@ func TestRelay(t *testing.T) {
 
 		// request and packets land in one transaction; hash normalized to lowercase
 		st.EXPECT().
-			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
+			Transact(ctx, mock.AnythingOfType("func(store.Repository) error")).
 			RunAndReturn(func(ctx context.Context, fn func(store.Repository) error) error {
 				return fn(repo)
 			}).
@@ -210,7 +210,7 @@ func TestRelay(t *testing.T) {
 		clients.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, nil).Once()
 		st.EXPECT().
-			ExecTx(ctx, mock.AnythingOfType("func(store.Repository) error")).
+			Transact(ctx, mock.AnythingOfType("func(store.Repository) error")).
 			Return(errors.New("boom")).
 			Once()
 
