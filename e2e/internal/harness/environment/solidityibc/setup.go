@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/solidityibc/accessmanager"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/accessmanager"
 )
 
 type contractBackend interface {

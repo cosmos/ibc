@@ -1,4 +1,4 @@
-// Package poll provides readiness polling for chain launchers.
+// Package poll provides readiness polling for EVM clients and launchers.
 package poll
 
 import (

@@ -13,10 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/solidityibc"
-
-	managedattestor "github.com/cosmos/ibc/e2e/internal/harness/internal/attestor"
 )
 
 type connectionDependencies struct {
@@ -462,7 +460,7 @@ func acquireAttestor(
 	if err != nil {
 		return attestorAcquisition{}, err
 	}
-	process, err := managedattestor.Start(ctx, managedattestor.Spec{
+	process, err := ibclink.StartAttestor(ctx, ibclink.AttestorLaunch{
 		BinaryPath:    ibclink.ResolvedBin(),
 		WorkDir:       filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
 		Name:          string(declaration.ID),

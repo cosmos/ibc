@@ -11,10 +11,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/chain/evm/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/chain/evm/external"
 )
 
 const (
@@ -388,7 +388,7 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 
 func attachEVM(ctx context.Context, spec AttachedEVM, runtime Runtime) (chainAcquisition, error) {
 	endpoint, _ := runtime.endpoint(spec.Endpoint)
-	adapter, err := external.Connect(ctx, external.Spec{
+	adapter, err := evm.ConnectAttached(ctx, evm.AttachedSpec{
 		ID:      string(spec.ID),
 		ChainID: spec.EVMChainID,
 		RPCURL:  endpoint.RPCURL,

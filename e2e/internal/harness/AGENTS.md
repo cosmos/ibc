@@ -8,7 +8,7 @@ corroborates outcomes by reading chain state with its own clients.
   public Link command transport types, generated RPC clients, and the signer-keyfile package, while
   behavior remains observable only through the executable and HTTP surface.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
-  to instant Anvil. Launch-side readiness uses `internal/poll.Until`; test-application effect and
+  to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and
   stability observation lives with the e2e-only bindings that interpret those effects.
 - **Docker discipline.** Containers/networks carry the `ibc-link-e2e=true` and
   `ibc-link-run=<runid>` labels and the `ibc-link-e2e-` name prefix, with pinned images. Anvil runs

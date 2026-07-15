@@ -1,4 +1,4 @@
-package attestor
+package ibclink
 
 import (
 	"context"
@@ -34,7 +34,7 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	process, err := Start(ctx, Spec{
+	process, err := StartAttestor(ctx, AttestorLaunch{
 		BinaryPath:    binary,
 		WorkDir:       workDir,
 		Name:          "attestor-a",
@@ -86,7 +86,7 @@ func TestStartReportsEarlyProcessExitWithLogs(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := Start(ctx, Spec{
+	_, err := StartAttestor(ctx, AttestorLaunch{
 		BinaryPath:    binary,
 		WorkDir:       filepath.Join(t.TempDir(), "attestor"),
 		Name:          "attestor-a",
@@ -100,7 +100,7 @@ func TestStartReportsEarlyProcessExitWithLogs(t *testing.T) {
 
 func TestStartRejectsInvalidInputsBeforeCreatingWorkspace(t *testing.T) {
 	workDir := filepath.Join(t.TempDir(), "attestor")
-	_, err := Start(context.Background(), Spec{
+	_, err := StartAttestor(context.Background(), AttestorLaunch{
 		BinaryPath:    "/definitely/not/a/binary",
 		WorkDir:       workDir,
 		Name:          "attestor-a",
@@ -114,7 +114,7 @@ func TestStartRejectsInvalidInputsBeforeCreatingWorkspace(t *testing.T) {
 
 func TestStartRequiresFreshPrivateWorkspace(t *testing.T) {
 	workDir := t.TempDir()
-	_, err := Start(context.Background(), Spec{
+	_, err := StartAttestor(context.Background(), AttestorLaunch{
 		BinaryPath:    "/definitely/not/a/binary",
 		WorkDir:       workDir,
 		Name:          "attestor-a",

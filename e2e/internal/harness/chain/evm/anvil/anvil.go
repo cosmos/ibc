@@ -23,8 +23,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/containerutil"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/poll"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
 
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	containertypes "github.com/moby/moby/api/types/container"
@@ -157,9 +157,9 @@ func launchAnvil(
 		Entrypoint:   []string{"anvil"},
 		Cmd:          args,
 		ExposedPorts: []string{"8545/tcp"},
-		Labels:       containerutil.Labels(spec.RunID),
+		Labels:       container.Labels(spec.RunID),
 		HostConfigModifier: func(config *containertypes.HostConfig) {
-			containerutil.BindPortsToLoopback(config, "8545/tcp")
+			container.BindPortsToLoopback(config, "8545/tcp")
 			config.Mounts = append(config.Mounts, mount.Mount{
 				Type:   mount.TypeBind,
 				Source: mountSpec,
@@ -316,7 +316,7 @@ func normalizeDockerSpec(spec Spec) (Spec, string, string, error) {
 }
 
 func containerName(spec Spec) string {
-	return containerutil.NamePrefix(spec.RunID, spec.ID) + "-anvil"
+	return container.NamePrefix(spec.RunID, spec.ID) + "-anvil"
 }
 
 func waitReady(ctx context.Context, probe func(context.Context) error, timeout time.Duration) error {

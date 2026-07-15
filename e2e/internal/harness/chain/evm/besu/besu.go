@@ -21,8 +21,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/containerutil"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/poll"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
 
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	containertypes "github.com/moby/moby/api/types/container"
@@ -125,8 +125,8 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("remove stale besu network files: %w", removeErr)
 	}
 
-	namePrefix := containerutil.NamePrefix(spec.RunID, spec.ID)
-	labels := containerutil.Labels(spec.RunID)
+	namePrefix := container.NamePrefix(spec.RunID, spec.ID)
+	labels := container.Labels(spec.RunID)
 	generatorName := namePrefix + "-generate"
 	generator, genErr := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		Started: true,
@@ -205,7 +205,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		Labels:       labels,
 		ExposedPorts: []string{"8545/tcp"},
 		HostConfigModifier: func(config *containertypes.HostConfig) {
-			containerutil.BindPortsToLoopback(config, "8545/tcp")
+			container.BindPortsToLoopback(config, "8545/tcp")
 			config.Mounts = append(
 				config.Mounts,
 				mount.Mount{

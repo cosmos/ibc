@@ -1,4 +1,4 @@
-package containerutil
+package container
 
 import (
 	"net/netip"

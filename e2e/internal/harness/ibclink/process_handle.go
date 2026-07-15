@@ -1,5 +1,4 @@
-// Package proc supervises the lifecycle of local subprocess groups.
-package proc
+package ibclink
 
 import (
 	"context"
@@ -12,9 +11,9 @@ import (
 )
 
 // Stop/reap state machine for a Setpgid child: owns cmd.Wait() and guards
-// group signals against PID recycling. SignalAndWait is safe to call repeatedly;
+// group signals against PID recycling. signalAndWait is safe to call repeatedly;
 // each caller has its own wait context.
-type Handle struct {
+type processHandle struct {
 	cmd  *exec.Cmd
 	done chan struct{}
 
@@ -26,13 +25,13 @@ type Handle struct {
 }
 
 // Hooks describe output lifecycle work around cmd.Wait.
-type Hooks struct {
+type processHooks struct {
 	BeforeWait func()
 	AfterWait  func()
 }
 
-func Reap(cmd *exec.Cmd, hooks Hooks) *Handle {
-	h := &Handle{cmd: cmd, done: make(chan struct{})}
+func reapProcess(cmd *exec.Cmd, hooks processHooks) *processHandle {
+	h := &processHandle{cmd: cmd, done: make(chan struct{})}
 	go func() {
 		if hooks.BeforeWait != nil {
 			hooks.BeforeWait()
@@ -51,9 +50,9 @@ func Reap(cmd *exec.Cmd, hooks Hooks) *Handle {
 	return h
 }
 
-func (h *Handle) Done() <-chan struct{} { return h.done }
+func (h *processHandle) doneCh() <-chan struct{} { return h.done }
 
-func (h *Handle) Err() error {
+func (h *processHandle) err() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.waitErr
@@ -62,7 +61,7 @@ func (h *Handle) Err() error {
 // Signals the group, escalating to SIGKILL after grace. It is safe to call
 // repeatedly. Checks reaped under mu before signaling so a recycled pid is
 // never killed.
-func (h *Handle) SignalAndWait(ctx context.Context, sig syscall.Signal, grace time.Duration) error {
+func (h *processHandle) signalAndWait(ctx context.Context, sig syscall.Signal, grace time.Duration) error {
 	h.mu.Lock()
 	if h.reaped {
 		h.mu.Unlock()
@@ -100,7 +99,7 @@ func (h *Handle) SignalAndWait(ctx context.Context, sig syscall.Signal, grace ti
 	}
 }
 
-func (h *Handle) wait(ctx context.Context) error {
+func (h *processHandle) wait(ctx context.Context) error {
 	select {
 	case <-h.done:
 		return nil
@@ -109,7 +108,7 @@ func (h *Handle) wait(ctx context.Context) error {
 	}
 }
 
-func (h *Handle) escalateKill(pgid int) error {
+func (h *processHandle) escalateKill(pgid int) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.reaped || h.killSent {

@@ -31,7 +31,7 @@ generate "$test_apps/out/MockGMP.sol/MockGMP.json" stub MockGMP "$stub/MockGMP.g
 generate "$test_apps/out/MockIFT.sol/MockIFT.json" stub MockIFT "$stub/MockIFT.go"
 generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" stub TestAppDeployer "$stub/TestAppDeployer.go"
 
-solidity_ibc="$repo_root/e2e/internal/harness/internal/solidityibc"
+solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
 access_manager="$solidity_ibc/accessmanager"
 mkdir -p "$access_manager"
 generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$access_manager/contract.go"

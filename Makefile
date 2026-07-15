@@ -48,21 +48,21 @@ clean-e2e: ## Kill e2e processes and remove Docker resources
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
 	forge build --root $(TEST_APP_DIR)
-	bun install --cwd $(HARNESS_DIR)/internal/solidityibc/contracts --frozen-lockfile
-	forge build --root $(HARNESS_DIR)/internal/solidityibc/contracts
+	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
+	forge build --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	$(E2E_DIR)/scripts/generate-contract-bindings.sh
 
 check-test-apps: ## Fail if typed Go contract bindings are stale
 	forge build --force --root $(TEST_APP_DIR)
-	bun install --cwd $(HARNESS_DIR)/internal/solidityibc/contracts --frozen-lockfile
-	forge build --force --root $(HARNESS_DIR)/internal/solidityibc/contracts
+	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
+	forge build --force --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	$(E2E_DIR)/scripts/generate-contract-bindings.sh
 	@git diff --exit-code -- $(TEST_APP_DIR)/bindings \
 		link/internal/stub/Counter.go \
 		link/internal/stub/MockGMP.go \
 		link/internal/stub/MockIFT.go \
 		link/internal/stub/TestAppDeployer.go \
-		$(HARNESS_DIR)/internal/solidityibc/accessmanager || { \
+		$(HARNESS_DIR)/environment/solidityibc/accessmanager || { \
 		echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; exit 1; }
 
 check-link: ## Run Link-local checks

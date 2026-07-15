@@ -1,10 +1,10 @@
-// Package attestor manages the current IBC Link attestor process as a black box.
+// Package ibclink manages IBC Link processes as black boxes.
 //
 // Readiness means that the process loaded its private configuration and serves
 // LatestAttestableHeight for the configured attestor. The current Link
 // implementation returns a synthetic timestamp from that RPC; this package
 // therefore does not claim that the process can produce or submit attestations.
-package attestor
+package ibclink
 
 import (
 	"bufio"
@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
 	"github.com/cosmos/ibc/link/keyfile"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
@@ -42,16 +41,16 @@ const (
 
 	signerAlias = "managed-attestor-signer"
 
-	defaultStartupTimeout = 30 * time.Second
-	probeRequestTimeout   = 500 * time.Millisecond
-	stopGrace             = 12 * time.Second
-	startupLogTailBytes   = 4096
+	attestorStartupTimeout = 30 * time.Second
+	probeRequestTimeout    = 500 * time.Millisecond
+	attestorStopGrace      = 12 * time.Second
+	startupLogTailBytes    = 4096
 )
 
-// Spec contains all process-local inputs needed to start one Link attestor.
-// WorkDir must name a path that does not already exist; Start creates it with
+// AttestorLaunch contains all process-local inputs needed to start one Link attestor.
+// WorkDir must name a path that does not already exist; StartAttestor creates it with
 // owner-only permissions and keeps the private key out of process arguments.
-type Spec struct {
+type AttestorLaunch struct {
 	BinaryPath    string
 	WorkDir       string
 	Name          string
@@ -64,32 +63,32 @@ type readinessResult struct {
 	err     error
 }
 
-// Process is a running IBC Link attestor whose public height endpoint has been
+// AttestorProcess is a running IBC Link attestor whose public height endpoint has been
 // successfully probed. It owns the subprocess group, but the caller owns the
 // containing workspace and decides when its files are removed.
-type Process struct {
+type AttestorProcess struct {
 	signerAddress common.Address
 	endpoint      string
 	name          string
 	client        attestorv2.AttestationServiceClient
 	out           *logWriter
 	readiness     <-chan readinessResult
-	handle        *proc.Handle
+	handle        *processHandle
 }
 
-// Start writes a private Link configuration and ECDSA key, starts `ibc
+// StartAttestor writes a private Link configuration and ECDSA key, starts `ibc
 // attestor run`, and returns only after LatestAttestableHeight succeeds.
-func Start(ctx context.Context, spec Spec) (*Process, error) {
-	key, err := validateSpec(spec)
+func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess, error) {
+	key, err := validateAttestorLaunch(launch)
 	if err != nil {
 		return nil, err
 	}
-	binaryPath, err := filepath.Abs(spec.BinaryPath)
+	binaryPath, err := filepath.Abs(launch.BinaryPath)
 	if err != nil {
 		return nil, fmt.Errorf("start IBC Link attestor: absolute binary path: %w", err)
 	}
 
-	paths, err := prepareWorkspace(spec, key, "127.0.0.1:0")
+	paths, err := prepareAttestorWorkspace(launch, key, "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
@@ -125,13 +124,13 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 		observeReadiness(stdout, out, readiness)
 	}()
 
-	p := &Process{
+	p := &AttestorProcess{
 		signerAddress: crypto.PubkeyToAddress(key.PublicKey),
-		name:          spec.Name,
+		name:          launch.Name,
 		out:           out,
 		readiness:     readiness,
 	}
-	p.handle = proc.Reap(cmd, proc.Hooks{
+	p.handle = reapProcess(cmd, processHooks{
 		BeforeWait: func() { <-stdoutDone },
 		AfterWait:  out.close,
 	})
@@ -147,9 +146,9 @@ func Start(ctx context.Context, spec Spec) (*Process, error) {
 
 // SignerAddress is the Ethereum address derived from the private ECDSA key
 // loaded by the child process.
-func (p *Process) SignerAddress() common.Address { return p.signerAddress }
+func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
-func (p *Process) latestAttestableHeight(ctx context.Context) (uint64, error) {
+func (p *AttestorProcess) latestAttestableHeight(ctx context.Context) (uint64, error) {
 	response, err := p.client.LatestAttestableHeight(
 		ctx,
 		connect.NewRequest(&attestorv2.LatestAttestableHeightRequest{Attestor: p.name}),
@@ -162,12 +161,12 @@ func (p *Process) latestAttestableHeight(ctx context.Context) (uint64, error) {
 
 // Stop asks the whole subprocess group to exit and escalates to SIGKILL after
 // a fixed grace period or when ctx expires. It is safe to call more than once.
-func (p *Process) Stop(ctx context.Context) error {
-	return p.handle.SignalAndWait(ctx, syscall.SIGTERM, stopGrace)
+func (p *AttestorProcess) Stop(ctx context.Context) error {
+	return p.handle.signalAndWait(ctx, syscall.SIGTERM, attestorStopGrace)
 }
 
-func (p *Process) awaitReady(ctx context.Context) error {
-	startupCtx, cancel := context.WithTimeout(ctx, defaultStartupTimeout)
+func (p *AttestorProcess) awaitReady(ctx context.Context) error {
+	startupCtx, cancel := context.WithTimeout(ctx, attestorStartupTimeout)
 	defer cancel()
 	address, err := p.awaitAddress(startupCtx)
 	if err != nil {
@@ -192,7 +191,7 @@ func (p *Process) awaitReady(ctx context.Context) error {
 		lastProbeErr = probeErr
 
 		select {
-		case <-p.handle.Done():
+		case <-p.handle.doneCh():
 			return p.readinessExitError()
 		case <-startupCtx.Done():
 			return fmt.Errorf(
@@ -207,7 +206,7 @@ func (p *Process) awaitReady(ctx context.Context) error {
 	}
 }
 
-func (p *Process) awaitAddress(ctx context.Context) (string, error) {
+func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
 	select {
 	case result := <-p.readiness:
 		if result.err != nil {
@@ -232,7 +231,7 @@ func (p *Process) awaitAddress(ctx context.Context) (string, error) {
 			)
 		}
 		return result.address, nil
-	case <-p.handle.Done():
+	case <-p.handle.doneCh():
 		return "", p.readinessExitError()
 	case <-ctx.Done():
 		return "", fmt.Errorf(
@@ -243,8 +242,8 @@ func (p *Process) awaitAddress(ctx context.Context) (string, error) {
 	}
 }
 
-func (p *Process) readinessExitError() error {
-	processErr := p.handle.Err()
+func (p *AttestorProcess) readinessExitError() error {
+	processErr := p.handle.err()
 	if processErr == nil {
 		processErr = errors.New("process exited successfully")
 	}
@@ -255,17 +254,17 @@ func (p *Process) readinessExitError() error {
 	)
 }
 
-func (p *Process) killAfterFailedStart() error {
+func (p *AttestorProcess) killAfterFailedStart() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return p.handle.SignalAndWait(ctx, syscall.SIGKILL, 0)
+	return p.handle.signalAndWait(ctx, syscall.SIGKILL, 0)
 }
 
-func (p *Process) logTail() string {
+func (p *AttestorProcess) logTail() string {
 	return strings.TrimSpace(string(p.out.tailSnapshot()))
 }
 
-func validateSpec(spec Spec) (*ecdsa.PrivateKey, error) {
+func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, error) {
 	switch {
 	case spec.BinaryPath == "":
 		return nil, errors.New("start IBC Link attestor: binary path is required")
@@ -290,7 +289,11 @@ type workspacePaths struct {
 	log string
 }
 
-func prepareWorkspace(spec Spec, key *ecdsa.PrivateKey, listenAddress string) (workspacePaths, error) {
+func prepareAttestorWorkspace(
+	spec AttestorLaunch,
+	key *ecdsa.PrivateKey,
+	listenAddress string,
+) (workspacePaths, error) {
 	dir, err := filepath.Abs(spec.WorkDir)
 	if err != nil {
 		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: absolute work dir: %w", err)

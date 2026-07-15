@@ -1,5 +1,5 @@
-// Package containerutil contains metadata shared by managed test containers.
-package containerutil
+// Package container contains metadata shared by managed EVM test containers.
+package container
 
 import (
 	"net/netip"

@@ -1,4 +1,4 @@
-package proc
+package ibclink
 
 import (
 	"bufio"
@@ -20,11 +20,11 @@ func TestSignalAndWaitCanceledThenReaps(t *testing.T) {
 	if startErr := cmd.Start(); startErr != nil {
 		t.Fatalf("start child: %v", startErr)
 	}
-	handle := Reap(cmd, Hooks{})
+	handle := reapProcess(cmd, processHooks{})
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = handle.SignalAndWait(ctx, syscall.SIGKILL, 0)
+		_ = handle.signalAndWait(ctx, syscall.SIGKILL, 0)
 	})
 
 	ready := make(chan error, 1)
@@ -47,7 +47,7 @@ func TestSignalAndWaitCanceledThenReaps(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	started := time.Now()
-	err = handle.SignalAndWait(canceled, syscall.SIGTERM, time.Minute)
+	err = handle.signalAndWait(canceled, syscall.SIGTERM, time.Minute)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled SignalAndWait error = %v, want context.Canceled", err)
 	}
@@ -57,10 +57,10 @@ func TestSignalAndWaitCanceledThenReaps(t *testing.T) {
 
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer waitCancel()
-	if err := handle.SignalAndWait(waitCtx, syscall.SIGTERM, 0); err != nil {
+	if err := handle.signalAndWait(waitCtx, syscall.SIGTERM, 0); err != nil {
 		t.Fatalf("subsequent SignalAndWait: %v", err)
 	}
-	if handle.Err() == nil {
+	if handle.err() == nil {
 		t.Fatal("reaped SIGKILL child has no wait error")
 	}
 }
@@ -73,19 +73,19 @@ func TestSignalAndWaitSIGKILLWaitsForReap(t *testing.T) {
 	}
 
 	allowWait := make(chan struct{})
-	handle := Reap(cmd, Hooks{BeforeWait: func() { <-allowWait }})
+	handle := reapProcess(cmd, processHooks{BeforeWait: func() { <-allowWait }})
 	t.Cleanup(func() {
 		closeIfOpen(allowWait)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = handle.SignalAndWait(ctx, syscall.SIGKILL, 0)
+		_ = handle.signalAndWait(ctx, syscall.SIGKILL, 0)
 	})
 
 	result := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go func() {
-		result <- handle.SignalAndWait(ctx, syscall.SIGKILL, 20*time.Millisecond)
+		result <- handle.signalAndWait(ctx, syscall.SIGKILL, 20*time.Millisecond)
 	}()
 
 	select {

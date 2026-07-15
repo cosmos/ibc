@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/solidityibc/accessmanager"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/accessmanager"
 
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )

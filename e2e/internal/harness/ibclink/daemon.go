@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/internal/proc"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
@@ -34,7 +33,7 @@ type Relayer struct {
 	readiness relayercmd.Readiness
 	httpAddr  string
 	http      *http.Client
-	h         *proc.Handle
+	h         *processHandle
 }
 
 func (r *Driver) StartRelayer(ctx context.Context) (*Relayer, error) {
@@ -85,7 +84,7 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	drained.Add(2)
 	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
 	go func() { defer drained.Done(); _, _ = io.Copy(io.Discard, stderr) }()
-	d.h = proc.Reap(cmd, proc.Hooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
+	d.h = reapProcess(cmd, processHooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
 	releaseBinding = nil
 
 	readiness, err := d.awaitReady(ctx, readyCh)
@@ -246,11 +245,11 @@ func (d *Relayer) doJSON(req *http.Request, label string, out any) error {
 }
 
 func (d *Relayer) Stop(ctx context.Context) error {
-	return d.h.SignalAndWait(ctx, syscall.SIGTERM, stopGrace)
+	return d.h.signalAndWait(ctx, syscall.SIGTERM, stopGrace)
 }
 
 func (d *Relayer) kill() error {
 	ctx, cancel := context.WithTimeout(context.Background(), killTimeout)
 	defer cancel()
-	return d.h.SignalAndWait(ctx, syscall.SIGKILL, 0)
+	return d.h.signalAndWait(ctx, syscall.SIGKILL, 0)
 }
