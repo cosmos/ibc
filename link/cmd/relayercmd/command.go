@@ -16,13 +16,8 @@ type RunOptions struct {
 	NoMigrate bool
 }
 
-// Handlers contains relayer behavior selected by the executable.
-type Handlers struct {
-	Run Handler
-}
-
 // NewCommand constructs the relayer command with its behavior injected by the executable.
-func NewCommand(handlers Handlers) *cobra.Command {
+func NewCommand(handler Handler) *cobra.Command {
 	cmd := &cobra.Command{Use: "relayer", Short: "Relayer commands"}
 	var options RunOptions
 	run := &cobra.Command{
@@ -30,7 +25,7 @@ func NewCommand(handlers Handlers) *cobra.Command {
 		Short:        "Run the relayer",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return handlers.Run(cmd, args, options)
+			return handler(cmd, args, options)
 		},
 	}
 	run.Flags().BoolVar(&options.NoMigrate, "no-migrate", false, "skip database migrations")

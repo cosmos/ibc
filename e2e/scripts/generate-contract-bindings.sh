@@ -19,17 +19,12 @@ generate() {
 }
 
 test_apps="$repo_root/e2e/internal/testapp/contracts"
-bindings="$test_apps/bindings"
-stub="$repo_root/link/internal/stub"
-mkdir -p "$bindings" "$stub"
-generate "$test_apps/out/Counter.sol/Counter.json" bindings Counter "$bindings/Counter.go"
-generate "$test_apps/out/MockGMP.sol/MockGMP.json" bindings MockGMP "$bindings/MockGMP.go"
-generate "$test_apps/out/MockIFT.sol/MockIFT.json" bindings MockIFT "$bindings/MockIFT.go"
-generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" bindings TestAppDeployer "$bindings/TestAppDeployer.go"
-generate "$test_apps/out/Counter.sol/Counter.json" stub Counter "$stub/Counter.go"
-generate "$test_apps/out/MockGMP.sol/MockGMP.json" stub MockGMP "$stub/MockGMP.go"
-generate "$test_apps/out/MockIFT.sol/MockIFT.json" stub MockIFT "$stub/MockIFT.go"
-generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" stub TestAppDeployer "$stub/TestAppDeployer.go"
+bindings="$repo_root/link/testappbindings"
+mkdir -p "$bindings"
+generate "$test_apps/out/Counter.sol/Counter.json" testappbindings Counter "$bindings/Counter.go"
+generate "$test_apps/out/MockGMP.sol/MockGMP.json" testappbindings MockGMP "$bindings/MockGMP.go"
+generate "$test_apps/out/MockIFT.sol/MockIFT.json" testappbindings MockIFT "$bindings/MockIFT.go"
+generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" testappbindings TestAppDeployer "$bindings/TestAppDeployer.go"
 
 solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
 access_manager="$solidity_ibc/accessmanager"

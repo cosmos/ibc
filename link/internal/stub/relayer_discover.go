@@ -121,7 +121,7 @@ func (r *relayer) discoverEVMSource(
 }
 
 func (r *relayer) insertEVMIFT(ctx context.Context, chainID string, event iftSent) error {
-	route, ok := r.routeByID(event.RouteID)
+	route, ok := r.cfg.Route(event.RouteID)
 	if !ok || route.Source != chainID {
 		return nil
 	}
@@ -138,7 +138,7 @@ func (r *relayer) insertEVMIFT(ctx context.Context, chainID string, event iftSen
 }
 
 func (r *relayer) insertEVMGMP(ctx context.Context, chainID string, event gmpSent) error {
-	route, ok := r.routeByID(event.RouteID)
+	route, ok := r.cfg.Route(event.RouteID)
 	if !ok || route.Source != chainID {
 		return nil
 	}

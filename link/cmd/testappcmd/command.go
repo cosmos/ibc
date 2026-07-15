@@ -6,19 +6,14 @@ import "github.com/spf13/cobra"
 // Handler implements a test-app subcommand.
 type Handler func(*cobra.Command, []string) error
 
-// Handlers contains test-app behavior selected by the executable.
-type Handlers struct {
-	Deploy Handler
-}
-
 // NewCommand constructs the test-app command with its behavior injected by the executable.
-func NewCommand(handlers Handlers) *cobra.Command {
+func NewCommand(handler Handler) *cobra.Command {
 	cmd := &cobra.Command{Use: "test-apps", Short: "Synthetic test application commands"}
 	cmd.AddCommand(&cobra.Command{
 		Use:          "deploy",
 		Short:        "Deploy the synthetic test applications",
 		SilenceUsage: true,
-		RunE:         handlers.Deploy,
+		RunE:         handler,
 	})
 	return cmd
 }

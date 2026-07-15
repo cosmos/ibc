@@ -47,7 +47,7 @@ jobs:
           version: v2.12.2
           working-directory: ${{ matrix.module }}
       - if: matrix.module == 'link'
-        run: golangci-lint run --tests ./internal/stub/...
+        run: make lint-stub-tests
         working-directory: link
 
   test:

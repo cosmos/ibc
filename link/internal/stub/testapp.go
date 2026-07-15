@@ -1,5 +1,3 @@
-// Package testappdeploy implements `ibc test-apps deploy` for the synthetic
-// e2e applications. It does not deploy the real Solidity IBC protocol stack.
 package stub
 
 import (
@@ -19,6 +17,7 @@ import (
 
 	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/cmd/testappcmd"
+	"github.com/cosmos/ibc/link/testappbindings"
 
 	internalconfig "github.com/cosmos/ibc/link/internal/config"
 )
@@ -176,7 +175,7 @@ func deployTestApps(
 	opts *bind.TransactOpts,
 	client *ethclient.Client,
 ) (deployedTestApps, string, error) {
-	deployer, tx, contract, err := DeployTestAppDeployer(
+	deployer, tx, contract, err := testappbindings.DeployTestAppDeployer(
 		opts,
 		client,
 		initialIFTSupply,
@@ -192,7 +191,7 @@ func deployTestApps(
 		return deployedTestApps{}, "", fmt.Errorf("test app deployment reverted (tx %s)", tx.Hash().Hex())
 	}
 
-	parsed, err := TestAppDeployerMetaData.GetAbi()
+	parsed, err := testappbindings.TestAppDeployerMetaData.GetAbi()
 	if err != nil {
 		return deployedTestApps{}, "", fmt.Errorf("read test app deployer ABI: %w", err)
 	}

@@ -1,4 +1,3 @@
-// Package signing resolves the local ECDSA signers referenced by the stub config.
 package stub
 
 import (

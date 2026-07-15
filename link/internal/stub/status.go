@@ -1,4 +1,3 @@
-// Package statusapi serves the daemon HTTP API from sqlite.
 package stub
 
 import (

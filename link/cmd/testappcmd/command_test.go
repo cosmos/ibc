@@ -10,10 +10,10 @@ import (
 
 func TestCommandRunsInjectedDeployHandler(t *testing.T) {
 	called := false
-	cmd := NewCommand(Handlers{Deploy: func(_ *cobra.Command, _ []string) error {
+	cmd := NewCommand(func(_ *cobra.Command, _ []string) error {
 		called = true
 		return nil
-	}})
+	})
 	cmd.SetArgs([]string{"deploy"})
 
 	require.NoError(t, cmd.Execute())

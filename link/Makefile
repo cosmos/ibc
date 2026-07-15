@@ -25,7 +25,9 @@ codegen-proto: ## Generate Go proto bindings
 check-proto: ## Fail if Link's generated API is stale or the removed API module returns
 	@command -v buf >/dev/null || { echo "missing buf; buf is required to verify Link's generated API" >&2; exit 1; }
 	cd ../proto && buf generate
-	@status="$$(git -C .. status --porcelain --untracked-files=all -- proto link/api/v2)"; \
+	@status="$$(git -C .. status --porcelain --untracked-files=all -- \
+		':(glob)link/api/v2/**/*.pb.go' \
+		':(glob)link/api/v2/**/*.connect.go')"; \
 		test -z "$$status" || { echo "Link API bindings are stale — run 'make codegen-proto' and commit the result" >&2; echo "$$status" >&2; exit 1; }
 	@test ! -e ../api || { echo "the removed standalone API module still exists" >&2; exit 1; }
 	@old_api='github.com/cosmos/ibc/'api; \

@@ -45,12 +45,8 @@ func init() {
 		New:      configNew,
 		Validate: stub.ConfigValidate(&globalFlags),
 	})
-	cmdRelayer := relayercmd.NewCommand(relayercmd.Handlers{
-		Run: stub.RelayerRun(&globalFlags),
-	})
-	cmdTestApps := testappcmd.NewCommand(testappcmd.Handlers{
-		Deploy: stub.TestAppsDeploy(&globalFlags),
-	})
+	cmdRelayer := relayercmd.NewCommand(stub.RelayerRun(&globalFlags))
+	cmdTestApps := testappcmd.NewCommand(stub.TestAppsDeploy(&globalFlags))
 
 	rootCmd.AddCommand(
 		cmdConfig,

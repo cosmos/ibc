@@ -1,4 +1,3 @@
-// Package onchain provides the EVM bindings used by the synthetic relayer.
 package stub
 
 import (
@@ -13,12 +12,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc/link/testappbindings"
+
 	ethereum "github.com/ethereum/go-ethereum"
 )
 
 var (
-	mockIFTABI = mustABI(MockIFTMetaData)
-	mockGMPABI = mustABI(MockGMPMetaData)
+	mockIFTABI = mustABI(testappbindings.MockIFTMetaData)
+	mockGMPABI = mustABI(testappbindings.MockGMPMetaData)
 )
 
 func mustABI(metadata *bind.MetaData) abi.ABI {
@@ -208,11 +209,11 @@ type iftSent struct {
 
 type testAppIFT struct {
 	boundContract
-	contract *MockIFT
+	contract *testappbindings.MockIFT
 }
 
 func newTestAppIFT(addr common.Address, client *ethclient.Client) *testAppIFT {
-	contract, err := NewMockIFT(addr, client)
+	contract, err := testappbindings.NewMockIFT(addr, client)
 	if err != nil {
 		panic(fmt.Sprintf("bind MockIFT %s: %v", addr, err))
 	}
@@ -331,11 +332,11 @@ type gmpReceived struct {
 
 type testAppGMP struct {
 	boundContract
-	contract *MockGMP
+	contract *testappbindings.MockGMP
 }
 
 func newTestAppGMP(addr common.Address, client *ethclient.Client) *testAppGMP {
-	contract, err := NewMockGMP(addr, client)
+	contract, err := testappbindings.NewMockGMP(addr, client)
 	if err != nil {
 		panic(fmt.Sprintf("bind MockGMP %s: %v", addr, err))
 	}

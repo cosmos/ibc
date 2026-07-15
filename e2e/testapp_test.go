@@ -11,8 +11,9 @@ import (
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/synthetic"
-	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
 	"github.com/cosmos/ibc/link/cmd/testappcmd"
+
+	bindings "github.com/cosmos/ibc/link/testappbindings"
 )
 
 func TestTestAppDeployment(t *testing.T) {

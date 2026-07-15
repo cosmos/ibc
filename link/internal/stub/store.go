@@ -1,4 +1,3 @@
-// Package store is sqlite persistence shared by test app deployment, the relay daemon, and status API.
 package stub
 
 import (

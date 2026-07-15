@@ -1,4 +1,3 @@
-// Package jsonout emits one compact JSON line per write (HTML escaping off) for readiness and status API.
 package stub
 
 import (

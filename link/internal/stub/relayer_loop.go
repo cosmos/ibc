@@ -125,7 +125,7 @@ func (r *relayer) reconcilePending(ctx context.Context) error {
 func (r *relayer) pendingReceivedKeys(packets []storedPacket) map[receivedKey]struct{} {
 	active := make(map[receivedKey]struct{}, len(packets))
 	for _, p := range packets {
-		route, ok := r.routeByID(p.RouteID)
+		route, ok := r.cfg.Route(p.RouteID)
 		if ok {
 			active[receivedKeyFor(route.Destination, p)] = struct{}{}
 		}
@@ -144,7 +144,7 @@ func (r *relayer) finishTerminal(key receivedKey, err error) error {
 }
 
 func (r *relayer) reconcilePacket(ctx context.Context, p storedPacket, requested map[relayRequestKey]bool) error {
-	route, ok := r.routeByID(p.RouteID)
+	route, ok := r.cfg.Route(p.RouteID)
 	if !ok {
 		return fmt.Errorf("unknown route %q", p.RouteID)
 	}
@@ -173,15 +173,6 @@ func (r *relayer) reconcilePacket(ctx context.Context, p storedPacket, requested
 	default:
 		return fmt.Errorf("unknown app type %q", p.AppType)
 	}
-}
-
-func (r *relayer) routeByID(id string) (configcmd.Route, bool) {
-	for _, route := range r.cfg.Relayer.Routes {
-		if route.ID == id {
-			return route, true
-		}
-	}
-	return configcmd.Route{}, false
 }
 
 func (r *relayer) routeContext(

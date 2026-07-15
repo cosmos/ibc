@@ -10,11 +10,11 @@ import (
 
 func TestCommandRunsInjectedRunHandler(t *testing.T) {
 	called := false
-	cmd := NewCommand(Handlers{Run: func(_ *cobra.Command, _ []string, options RunOptions) error {
+	cmd := NewCommand(func(_ *cobra.Command, _ []string, options RunOptions) error {
 		called = true
 		require.True(t, options.NoMigrate)
 		return nil
-	}})
+	})
 	cmd.SetArgs([]string{"run", "--no-migrate"})
 
 	require.NoError(t, cmd.Execute())

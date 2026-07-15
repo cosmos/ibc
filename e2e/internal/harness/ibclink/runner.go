@@ -109,9 +109,8 @@ func (r *Driver) DeployTestApps(ctx context.Context) (*testappcmd.Deployment, er
 	return decodeTestAppDeploymentResult(res)
 }
 
-// A non-zero deployment may still have created durable contracts. The
-// stub prints every receipt it has before exiting, so callers receive the
-// partial deployment together with the classified error.
+// A failed deployment may still have created contracts. Decode stdout before
+// classifying the exit status so callers can inspect the partial deployment.
 func decodeTestAppDeploymentResult(res *result) (*testappcmd.Deployment, error) {
 	var deployment testappcmd.Deployment
 	decoded := json.Unmarshal(res.stdout, &deployment) == nil

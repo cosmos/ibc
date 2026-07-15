@@ -11,7 +11,8 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/testapp/contracts/bindings"
+
+	bindings "github.com/cosmos/ibc/link/testappbindings"
 )
 
 const (

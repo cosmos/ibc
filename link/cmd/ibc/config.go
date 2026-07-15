@@ -7,9 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/store"
 )
 
 func configNew(_ *cobra.Command, _ []string) error {
@@ -30,29 +28,6 @@ func configNew(_ *cobra.Command, _ []string) error {
 	}
 
 	fmt.Printf("Config file created at %s\n", configPath)
-
-	return nil
-}
-
-// RealConfigValidate is the retained real config-validation handler.
-func RealConfigValidate(_ *cobra.Command, _ []string, options configcmd.ValidateOptions) error {
-	printConfigHome(nil, nil)
-	cfg, err := setupHomeWithConfig()
-	if err != nil {
-		return errors.Wrap(err, "setup home with config")
-	}
-
-	if options.Live {
-		if err := store.ValidateConfigLive(cfg); err != nil {
-			return errors.Wrap(err, "config live validation")
-		}
-	}
-
-	// todo: it still logs store's log, we need to add config.logging{} params
-	// to truly suppress logging (in followup PRs)
-	if !globalFlags.Quiet {
-		return config.PrintJSON(map[string]any{"status": "valid"})
-	}
 
 	return nil
 }

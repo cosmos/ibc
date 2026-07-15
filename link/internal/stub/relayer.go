@@ -1,4 +1,3 @@
-// Package relay implements `ibc relayer run`; first stdout line is readiness JSON the harness parses.
 package stub
 
 import (
