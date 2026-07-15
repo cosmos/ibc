@@ -9,6 +9,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 // RemoteSigner wraps KMS remote signer.
@@ -17,7 +19,7 @@ type RemoteSigner struct {
 	keyID  string
 
 	key     *signerservice.Key
-	keyType KeyType
+	keyType keyfile.Type
 
 	logger *slog.Logger
 }
@@ -60,8 +62,8 @@ func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string) (*RemoteSigner
 	return s, nil
 }
 
-func (r *RemoteSigner) IsLocal() bool { return false }
-func (r *RemoteSigner) Type() KeyType { return r.keyType }
+func (r *RemoteSigner) IsLocal() bool      { return false }
+func (r *RemoteSigner) Type() keyfile.Type { return r.keyType }
 
 func (r *RemoteSigner) PublicKey() []byte {
 	return r.key.Pubkey
@@ -104,7 +106,7 @@ func (r *RemoteSigner) setup(ctx context.Context) error {
 	return nil
 }
 
-func keyTypeFromProto(scheme signerservice.SignatureScheme) (KeyType, error) {
+func keyTypeFromProto(scheme signerservice.SignatureScheme) (keyfile.Type, error) {
 	switch scheme {
 	case signerservice.SignatureScheme_ED25519:
 		return EDDSA, nil

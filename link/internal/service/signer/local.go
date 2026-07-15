@@ -22,7 +22,7 @@ func KeyFilePath(homePath, keyName string) (string, error) {
 	return config.ExpandHome(path)
 }
 
-func GenerateLocalKey(keyType KeyType) (LocalKey, error) {
+func GenerateLocalKey(keyType keyfile.Type) (LocalKey, error) {
 	switch keyType {
 	case EDDSA:
 		return GenerateLocalEd25519Signer()
@@ -50,6 +50,6 @@ func LocalKeyFromFile(path string) (LocalKey, error) {
 	}
 }
 
-func storeKeyToFile(path string, keyType KeyType, privateKey []byte) error {
+func storeKeyToFile(path string, keyType keyfile.Type, privateKey []byte) error {
 	return keyfile.Store(path, keyType, privateKey)
 }

@@ -9,12 +9,9 @@ import (
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
-// KeyType key type supported by local Signer
-type KeyType = keyfile.Type
-
 // Signer represents signer that can either sign digests or messages.
 type Signer interface {
-	Type() KeyType
+	Type() keyfile.Type
 	IsLocal() bool
 
 	Sign(ctx context.Context, message []byte) ([]byte, error)
@@ -70,6 +67,6 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 	}
 }
 
-func ParseKeyType(raw string) (KeyType, error) {
+func ParseKeyType(raw string) (keyfile.Type, error) {
 	return keyfile.ParseType(raw)
 }
