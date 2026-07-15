@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/cosmos/ibc/link/internal/chains/manager"
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
@@ -38,7 +38,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Chain clients
-	clientManager, err := manager.NewFromConfig(cfg)
+	clientSet, err := chains.NewClientSetFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Services
-	relayerService := relayer.New(cfg, db, clientManager)
+	relayerService := relayer.New(cfg, db, clientSet)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)

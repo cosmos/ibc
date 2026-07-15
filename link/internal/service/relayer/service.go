@@ -23,11 +23,11 @@ type Service struct {
 	logger *slog.Logger
 	cfg    config.Config
 	store  Store
-	chains ChainClientManager
+	chains ChainClients
 }
 
-// ChainClientManager resolves chain clients by chain id.
-type ChainClientManager interface {
+// ChainClients resolves chain clients by chain id.
+type ChainClients interface {
 	GetClient(chainID string) (chains.Client, error)
 }
 
@@ -73,12 +73,12 @@ type PacketStatus struct {
 }
 
 // New Service constructor.
-func New(cfg config.Config, st Store, clientManager ChainClientManager) *Service {
+func New(cfg config.Config, st Store, clients ChainClients) *Service {
 	return &Service{
 		logger: slog.With("service", "relayer"),
 		cfg:    cfg,
 		store:  st,
-		chains: clientManager,
+		chains: clients,
 	}
 }
 

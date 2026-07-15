@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -39,8 +38,6 @@ type Client struct {
 	routerABI     *abi.ABI
 	logger        *slog.Logger
 }
-
-var _ chains.Client = (*Client)(nil)
 
 func New(chainID, rpcURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := ethclient.Dial(rpcURL)

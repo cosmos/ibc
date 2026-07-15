@@ -28,7 +28,7 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Store:
-      ChainClientManager:
+      ChainClients:
   github.com/cosmos/ibc/link/internal/store:
     config:
       dir: "{{.InterfaceDir}}"
