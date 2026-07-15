@@ -20,6 +20,15 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       RelayerApiServiceClient:
+  github.com/cosmos/ibc/link/internal/service/relayer:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "service.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Store:
+      ChainClients:
   github.com/cosmos/ibc/link/internal/store:
     config:
       dir: "{{.InterfaceDir}}"
@@ -28,6 +37,22 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Repository:
+  github.com/cosmos/ibc/link/internal/chains:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "chains.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Client:
+  github.com/cosmos/ibc/link/internal/chains/evm:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "evm.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      ETHClient:
   github.com/cosmos/kms/gen/signerservice:
     config:
       include-auto-generated: true

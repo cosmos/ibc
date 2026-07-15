@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store/repository/postgres"
 
+	pgx "github.com/jackc/pgx/v5"
 	migrate "github.com/rubenv/sql-migrate"
 )
 
@@ -115,16 +116,14 @@ func (db *PostgresDB) MigrationStatus() ([]MigrationStatus, error) {
 	return migrationStatus(db.sqlWrapper, config.DBTypePostgres)
 }
 
-func (db *PostgresDB) ExecTx(ctx context.Context, fn func(Repository) error) error {
-	tx, err := db.pool.Begin(ctx)
+func (db *PostgresDB) Transact(ctx context.Context, call func(repo Repository) error) error {
+	atomicDB, tx, err := db.atomicDB(ctx)
 	if err != nil {
-		return errors.Wrap(err, "beginning transaction")
+		return err
 	}
 
-	txDB := *db
-	txDB.repo = db.repo.WithTx(tx)
-
-	if err := fn(&txDB); err != nil {
+	err = call(atomicDB)
+	if err != nil {
 		if errRollback := tx.Rollback(ctx); errRollback != nil {
 			return errors.Wrapf(err, "rolling back transaction: %s", errRollback)
 		}
@@ -132,7 +131,11 @@ func (db *PostgresDB) ExecTx(ctx context.Context, fn func(Repository) error) err
 		return err
 	}
 
-	return errors.Wrap(tx.Commit(ctx), "committing transaction")
+	if err := tx.Commit(ctx); err != nil {
+		return errors.Wrap(err, "committing transaction")
+	}
+
+	return nil
 }
 
 func (db *PostgresDB) GetRelayRequest(
@@ -218,6 +221,24 @@ func (db *PostgresDB) ListPacketsBySourceTx(
 	}
 
 	return packets, nil
+}
+
+func (db *PostgresDB) copy() *PostgresDB {
+	copied := *db
+	return &copied
+}
+
+func (db *PostgresDB) atomicDB(ctx context.Context) (*PostgresDB, pgx.Tx, error) {
+	dbCopy := db.copy()
+
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "beginning transaction")
+	}
+
+	dbCopy.repo = dbCopy.repo.WithTx(tx)
+
+	return dbCopy, tx, nil
 }
 
 func packetFromPostgres(row postgres.Packet) Packet {
