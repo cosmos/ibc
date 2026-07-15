@@ -1,3 +1,18 @@
+SQLC_VERSION ?= 1.30.0
+BUF_VERSION ?= 1.70.0
+
+CI ?= false
+
+ifeq ($(CI),true)
+$(info Makefile: using CI mode)
+## Will use binaries from PATH
+SQLC ?= sqlc
+BUF ?= buf
+else
+SQLC ?= go run github.com/sqlc-dev/sqlc/cmd/sqlc@v$(SQLC_VERSION)
+BUF ?= go run github.com/bufbuild/buf/cmd/buf@v$(BUF_VERSION)
+endif
+
 help: ## List of commands
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
@@ -17,10 +32,10 @@ lint-stub-tests: ## Lint the temporary stub tests without changing Link's genera
 codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
-	cd internal/store && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+	cd internal/store && $(SQLC) generate
 
 codegen-proto: ## Generate Go proto bindings
-	cd ../proto && buf generate
+	cd ../proto && $(BUF) generate
 
 check-proto: ## Fail if Link's generated API is stale or the removed API module returns
 	@command -v buf >/dev/null || { echo "missing buf; buf is required to verify Link's generated API" >&2; exit 1; }
