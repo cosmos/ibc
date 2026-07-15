@@ -51,11 +51,7 @@ func NewClientSetFromConfig(cfg config.Config) (*ClientSet, error) {
 	return NewClientSet(clients), nil
 }
 
-func (s *ClientSet) GetClient(chainID string) (Client, error) {
+func (s *ClientSet) Get(chainID string) (Client, bool) {
 	client, ok := s.clients[chainID]
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for chain ID %s", chainID)
-	}
-
-	return client, nil
+	return client, ok
 }

@@ -93,7 +93,7 @@ func TestRelay(t *testing.T) {
 			},
 		}
 
-		clients.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
+		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
 		// request and packets land in one transaction; hash normalized to lowercase
@@ -144,14 +144,15 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), clients)
 
 		// config knows the chain but the manager has no client for it
-		clients.EXPECT().GetClient(chainIDEth).Return(nil, errors.New("no client")).Once()
+		clients.EXPECT().Get(chainIDEth).Return(nil, false).Once()
 
 		// ACT
 		err := service.Relay(ctx, chainIDEth, txHashLower)
 
 		// ASSERT
 		// a missing client is a server-side inconsistency, not a caller error
-		require.ErrorContains(t, err, "getting chain client")
+		require.ErrorContains(t, err, "client for chain")
+		require.ErrorIs(t, err, ErrNotFound)
 		require.NotErrorIs(t, err, ErrInvalidInput)
 	})
 
@@ -163,7 +164,7 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), clients)
 
 		// nothing is recorded when extraction fails
-		clients.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
+		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
 		// ACT
@@ -207,7 +208,7 @@ func TestRelay(t *testing.T) {
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients)
 
-		clients.EXPECT().GetClient(chainIDEth).Return(client, nil).Once()
+		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, nil).Once()
 		st.EXPECT().
 			Transact(ctx, mock.AnythingOfType("func(store.Repository) error")).

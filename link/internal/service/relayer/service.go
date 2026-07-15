@@ -28,7 +28,7 @@ type Service struct {
 
 // ChainClients resolves chain clients by chain id.
 type ChainClients interface {
-	GetClient(chainID string) (chains.Client, error)
+	Get(chainID string) (chains.Client, bool)
 }
 
 // Store queries used by the relayer gRPC handlers.
@@ -88,9 +88,9 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 		return err
 	}
 
-	client, err := s.chains.GetClient(chainID)
-	if err != nil {
-		return errors.Wrapf(err, "getting chain client for %q", chainID)
+	client, ok := s.chains.Get(chainID)
+	if !ok {
+		return errors.Wrapf(ErrNotFound, "client for chain %q", chainID)
 	}
 
 	hashBytes, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))

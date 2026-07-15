@@ -38,17 +38,17 @@ func (_m *MockChainClients) EXPECT() *MockChainClients_Expecter {
 	return &MockChainClients_Expecter{mock: &_m.Mock}
 }
 
-// GetClient provides a mock function for the type MockChainClients
-func (_mock *MockChainClients) GetClient(chainID string) (chains.Client, error) {
+// Get provides a mock function for the type MockChainClients
+func (_mock *MockChainClients) Get(chainID string) (chains.Client, bool) {
 	ret := _mock.Called(chainID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetClient")
+		panic("no return value specified for Get")
 	}
 
 	var r0 chains.Client
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (chains.Client, error)); ok {
+	var r1 bool
+	if returnFunc, ok := ret.Get(0).(func(string) (chains.Client, bool)); ok {
 		return returnFunc(chainID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(string) chains.Client); ok {
@@ -58,26 +58,26 @@ func (_mock *MockChainClients) GetClient(chainID string) (chains.Client, error) 
 			r0 = ret.Get(0).(chains.Client)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(string) bool); ok {
 		r1 = returnFunc(chainID)
 	} else {
-		r1 = ret.Error(1)
+		r1 = ret.Get(1).(bool)
 	}
 	return r0, r1
 }
 
-// MockChainClients_GetClient_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetClient'
-type MockChainClients_GetClient_Call struct {
+// MockChainClients_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type MockChainClients_Get_Call struct {
 	*mock.Call
 }
 
-// GetClient is a helper method to define mock.On call
+// Get is a helper method to define mock.On call
 //   - chainID string
-func (_e *MockChainClients_Expecter) GetClient(chainID any) *MockChainClients_GetClient_Call {
-	return &MockChainClients_GetClient_Call{Call: _e.mock.On("GetClient", chainID)}
+func (_e *MockChainClients_Expecter) Get(chainID any) *MockChainClients_Get_Call {
+	return &MockChainClients_Get_Call{Call: _e.mock.On("Get", chainID)}
 }
 
-func (_c *MockChainClients_GetClient_Call) Run(run func(chainID string)) *MockChainClients_GetClient_Call {
+func (_c *MockChainClients_Get_Call) Run(run func(chainID string)) *MockChainClients_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -90,12 +90,12 @@ func (_c *MockChainClients_GetClient_Call) Run(run func(chainID string)) *MockCh
 	return _c
 }
 
-func (_c *MockChainClients_GetClient_Call) Return(client chains.Client, err error) *MockChainClients_GetClient_Call {
-	_c.Call.Return(client, err)
+func (_c *MockChainClients_Get_Call) Return(client chains.Client, b bool) *MockChainClients_Get_Call {
+	_c.Call.Return(client, b)
 	return _c
 }
 
-func (_c *MockChainClients_GetClient_Call) RunAndReturn(run func(chainID string) (chains.Client, error)) *MockChainClients_GetClient_Call {
+func (_c *MockChainClients_Get_Call) RunAndReturn(run func(chainID string) (chains.Client, bool)) *MockChainClients_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
