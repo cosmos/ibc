@@ -1,4 +1,4 @@
-package testapp
+package e2etest
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 
 	bindings "github.com/cosmos/ibc/link/testappbindings"
 )
@@ -42,44 +42,6 @@ type GMP struct {
 	defaultCall []byte
 }
 
-func NewGMP(
-	routeID RouteID,
-	source, destination *environment.Chain,
-	sender evm.Account,
-	contracts GMPContracts,
-) (*GMP, error) {
-	sourceEndpoint, destinationEndpoint, err := bindRoute(routeID, source, destination)
-	if err != nil {
-		return nil, err
-	}
-	sourceApp, err := address("source MockGMP", contracts.Source)
-	if err != nil {
-		return nil, err
-	}
-	destinationApp, err := address("destination MockGMP", contracts.Destination)
-	if err != nil {
-		return nil, err
-	}
-	counter, err := address("destination Counter", contracts.Counter)
-	if err != nil {
-		return nil, err
-	}
-	defaultCall, err := counterABI.Pack("increment")
-	if err != nil {
-		return nil, fmt.Errorf("testapp: pack Counter.increment(): %w", err)
-	}
-	return &GMP{
-		routeID:     routeID,
-		source:      sourceEndpoint,
-		destination: destinationEndpoint,
-		sender:      sender,
-		sourceApp:   sourceApp,
-		destApp:     destinationApp,
-		counter:     counter,
-		defaultCall: defaultCall,
-	}, nil
-}
-
 type GMPCall struct {
 	app    *GMP
 	packet Packet
@@ -98,7 +60,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 	}
 	data, err := gmpABI.Pack("send", string(g.routeID), g.counter.Hex(), payload)
 	if err != nil {
-		return nil, fmt.Errorf("testapp: pack GMP send: %w", err)
+		return nil, fmt.Errorf("e2etest: pack GMP send: %w", err)
 	}
 	txHash, sequence, err := send(
 		ctx,
@@ -109,7 +71,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		gmpSentSequence(g.sourceApp),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("testapp: send GMP on route %q: %w", g.routeID, err)
+		return nil, fmt.Errorf("e2etest: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
 		app: g,
@@ -118,7 +80,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 			Source:       g.source.chain.ID(),
 			SourceTxHash: txHash,
 			Sequence:     sequence,
-			application:  ApplicationGMP,
+			appType:      relayercmd.AppTypeGMP,
 		},
 		before: before,
 	}, nil
@@ -135,14 +97,14 @@ func (c *GMPCall) VerifyExecuted(ctx context.Context) error {
 	}
 	if received.Target != c.app.counter {
 		return fmt.Errorf(
-			"testapp: GMP packet %s target: got %s, want %s",
+			"e2etest: GMP packet %s target: got %s, want %s",
 			c.packet.reference(),
 			received.Target.Hex(),
 			c.app.counter.Hex(),
 		)
 	}
 	if !received.Success {
-		return fmt.Errorf("testapp: GMP packet %s target call reverted", c.packet.reference())
+		return fmt.Errorf("e2etest: GMP packet %s target call reverted", c.packet.reference())
 	}
 	want := new(big.Int).Add(c.before, big.NewInt(1))
 	return c.verifyCount(ctx, want, "executed")
@@ -161,7 +123,7 @@ func (c *GMPCall) VerifyRejected(ctx context.Context) error {
 	}
 	if received.Target != c.app.counter {
 		return fmt.Errorf(
-			"testapp: GMP packet %s target: got %s, want %s",
+			"e2etest: GMP packet %s target: got %s, want %s",
 			c.packet.reference(),
 			received.Target.Hex(),
 			c.app.counter.Hex(),
@@ -169,7 +131,7 @@ func (c *GMPCall) VerifyRejected(ctx context.Context) error {
 	}
 	if received.Success {
 		return fmt.Errorf(
-			"testapp: GMP packet %s target call succeeded, want rejection",
+			"e2etest: GMP packet %s target call succeeded, want rejection",
 			c.packet.reference(),
 		)
 	}
@@ -181,13 +143,13 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
 		counter, err := bindings.NewCounterCaller(g.counter, caller)
 		if err != nil {
-			return fmt.Errorf("testapp: bind Counter %s: %w", g.counter, err)
+			return fmt.Errorf("e2etest: bind Counter %s: %w", g.counter, err)
 		}
 		count, err = counter.Count(&bind.CallOpts{Context: ctx})
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("testapp: query Counter %s: %w", g.counter, err)
+		return nil, fmt.Errorf("e2etest: query Counter %s: %w", g.counter, err)
 	}
 	return count, nil
 }
@@ -199,7 +161,7 @@ func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) 
 	}
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
-			"testapp: GMP packet %s target %s %s count: got %s, want %s",
+			"e2etest: GMP packet %s target %s %s count: got %s, want %s",
 			c.packet.reference(),
 			c.app.counter.Hex(),
 			state,
@@ -221,7 +183,7 @@ func (c *GMPCall) awaitReceived(ctx context.Context) (*bindings.MockGMPGMPReceiv
 		func(log types.Log) (*bindings.MockGMPGMPReceived, error) {
 			event, err := parser.ParseGMPReceived(log)
 			if err != nil {
-				return nil, fmt.Errorf("testapp: decode GMPReceived: %w", err)
+				return nil, fmt.Errorf("e2etest: decode GMPReceived: %w", err)
 			}
 			return event, nil
 		},
@@ -242,7 +204,7 @@ func gmpSentSequence(address common.Address) func(*types.Receipt) (uint64, bool,
 			}
 			event, err := parser.ParseGMPSent(*log)
 			if err != nil {
-				return 0, false, fmt.Errorf("testapp: decode GMPSent: %w", err)
+				return 0, false, fmt.Errorf("e2etest: decode GMPSent: %w", err)
 			}
 			return event.Seq.Uint64(), true, nil
 		}

@@ -11,8 +11,6 @@ import (
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/synthetic"
-	"github.com/cosmos/ibc/e2e/internal/testapp"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
@@ -41,10 +39,10 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 
 	startHeight, err := oob.Height(ctx)
 	require.NoError(t, err)
-	signers := synthetic.NewSigners(t)
+	signers := e2etest.NewSigners(t)
 	addresses := signers.Addresses()
-	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Application, synthetic.RequiredSignerBalance()))
-	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Relayer, synthetic.RequiredSignerBalance()))
+	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Application, e2etest.RequiredSignerBalance()))
+	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Relayer, e2etest.RequiredSignerBalance()))
 
 	suite := e2etest.SuiteFor(environment.Spec{Chains: []environment.ChainSpec{
 		environment.ManagedAnvil{ID: e2etest.ChainA, EVMChainID: managedChainID},
@@ -63,18 +61,18 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 	// Subtest teardown must finish before the out-of-band liveness probe below, or the check is vacuous.
 	t.Run("environment", func(t *testing.T) {
 		env := e2etest.Start(t, suite)
-		route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
-		driver, deployment := synthetic.Deploy(t, env, signers, route)
-		ift := synthetic.BindIFT(t, env, deployment, signers, route)
-		relayer := synthetic.StartRelayer(t, driver, env)
+		route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+		driver, deployment := e2etest.Deploy(t, env, signers, route)
+		ift := e2etest.BindIFT(t, env, deployment, signers, route)
+		relayer := e2etest.StartRelayer(t, driver, env)
 		rctx := t.Context()
 
-		transfer, sendErr := ift.Send(rctx, testapp.IFTRequest{Amount: big.NewInt(1_500_000)})
+		transfer, sendErr := ift.Send(rctx, e2etest.IFTRequest{Amount: big.NewInt(1_500_000)})
 		require.NoError(t, sendErr)
 
 		attached, chainErr := env.Chain(e2etest.ChainB)
 		require.NoError(t, chainErr)
-		_, awaitErr := synthetic.AwaitState(
+		_, awaitErr := e2etest.AwaitState(
 			rctx,
 			relayer,
 			transfer.Packet(),

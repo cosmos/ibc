@@ -7,8 +7,9 @@ explicitly selected by the ordinary `ibc` binary's composition root.
 - Run everything from the repository root: `make test-e2e` for the complete acceptance package, or
   `make test-e2e E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'` for one focused loop. Lanes:
   `E2E_LANE=anvil|anvil-interval|besu`.
-- Tests start an `Environment`, hold the synthetic driver and relayer explicitly, and assert through
-  route-bound test-application bindings. Transport-contract tests may call the concrete driver or Relayer directly.
+- Tests start an `Environment`, hold the temporary Link driver and relayer explicitly, and assert
+  through route-bound application bindings. This e2e-only setup lives in `e2etest`; transport-contract
+  tests may call the concrete driver or Relayer directly.
 - **The stub is a swap ledger entry, not a product.** The Link composition root visibly selects
   temporary handlers. Once a real implementation satisfies the e2e transport contract, change that
   handler selection, delete the unused stub code, and keep every lane green. E2e may import Link's

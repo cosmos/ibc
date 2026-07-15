@@ -1,4 +1,4 @@
-package observe
+package e2etest
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 func TestAwaitReturnsCompletedValue(t *testing.T) {
 	calls := 0
-	got, err := Await(
+	got, err := await(
 		context.Background(),
 		time.Second,
 		time.Millisecond,
@@ -29,7 +29,7 @@ func TestAwaitReturnsCompletedValue(t *testing.T) {
 func TestAwaitRetriesTransientObservationError(t *testing.T) {
 	transient := errors.New("temporarily unavailable")
 	calls := 0
-	got, err := Await(
+	got, err := await(
 		context.Background(),
 		time.Second,
 		time.Millisecond,
@@ -50,7 +50,7 @@ func TestAwaitRetriesTransientObservationError(t *testing.T) {
 func TestAwaitReturnsTerminalObservationError(t *testing.T) {
 	terminal := errors.New("invalid observation")
 	calls := 0
-	got, err := Await(
+	got, err := await(
 		context.Background(),
 		time.Second,
 		time.Millisecond,
@@ -68,7 +68,7 @@ func TestAwaitReturnsTerminalObservationError(t *testing.T) {
 func TestAwaitTimeoutIncludesLastObservationError(t *testing.T) {
 	lastObservation := errors.New("status unavailable")
 	calls := 0
-	got, err := Await(
+	got, err := await(
 		context.Background(),
 		time.Nanosecond,
 		time.Hour,
@@ -93,7 +93,7 @@ func TestAwaitCancellationWithoutObservationError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	got, err := Await(
+	got, err := await(
 		ctx,
 		time.Second,
 		time.Hour,

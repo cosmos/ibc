@@ -6,7 +6,7 @@ E2E_LANE ?= anvil
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
-TEST_APP_DIR := $(E2E_DIR)/internal/testapp/contracts
+TEST_APP_DIR := $(E2E_DIR)/e2etest/contracts
 
 build-link: ## Build the Link binary
 	$(MAKE) -C link build

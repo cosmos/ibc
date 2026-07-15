@@ -1,4 +1,4 @@
-package testapp
+package e2etest
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/observe"
 
 	ethereum "github.com/ethereum/go-ethereum"
 )
@@ -20,14 +19,14 @@ import (
 func mustABI(metadata *bind.MetaData) abi.ABI {
 	parsed, err := metadata.GetAbi()
 	if err != nil {
-		panic(fmt.Sprintf("testapp: parse generated contract ABI: %v", err))
+		panic(fmt.Sprintf("e2etest: parse generated contract ABI: %v", err))
 	}
 	return *parsed
 }
 
 func mustBinding[T any](binding T, err error) T {
 	if err != nil {
-		panic(fmt.Sprintf("testapp: construct generated contract binding: %v", err))
+		panic(fmt.Sprintf("e2etest: construct generated contract binding: %v", err))
 	}
 	return binding
 }
@@ -42,7 +41,7 @@ func send(
 ) (string, uint64, error) {
 	receipt, err := client.BroadcastTx(ctx, sender, &to, data, nil)
 	if err != nil {
-		return "", 0, fmt.Errorf("testapp: broadcast transaction: %w", err)
+		return "", 0, fmt.Errorf("e2etest: broadcast transaction: %w", err)
 	}
 	sequence, found, err := sequenceFromReceipt(receipt)
 	if err != nil {
@@ -50,7 +49,7 @@ func send(
 	}
 	if !found {
 		return "", 0, fmt.Errorf(
-			"testapp: source transaction %s emitted no application send event",
+			"e2etest: source transaction %s emitted no application send event",
 			receipt.TxHash.Hex(),
 		)
 	}
@@ -76,7 +75,7 @@ func awaitEvent[T any](
 		Topics:    [][]common.Hash{{topic}},
 	}
 	timing := source.endpoint.chain.Timing()
-	return observe.Await(
+	return await(
 		ctx,
 		timing.CompletionBudget,
 		timing.PollInterval,

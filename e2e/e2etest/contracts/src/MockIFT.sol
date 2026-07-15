@@ -13,7 +13,7 @@ contract MockIFT {
     }
     mapping(uint256 => Escrow) private _escrows;
 
-    // The synthetic relayer scans this event; receiver is a destination EVM address string.
+    // The test relayer scans this event; receiver is a destination EVM address string.
     event IFTSent(uint256 seq, string routeId, string receiver, uint256 amount, uint256 timeoutTimestamp);
     event IFTReceived(string routeId, uint256 seq, address receiver, uint256 amount);
     event IFTRefunded(uint256 seq, address sender, uint256 amount);

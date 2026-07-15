@@ -1,6 +1,4 @@
-// Package synthetic contains the temporary test-application bootstrap and
-// relayer plumbing used by the end-to-end suite.
-package synthetic
+package e2etest
 
 import (
 	"context"
@@ -15,7 +13,6 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/testapp"
 	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
@@ -25,21 +22,21 @@ const relayerStopTimeout = 15 * time.Second
 const weiPerEther int64 = 1_000_000_000_000_000_000
 
 // RequiredSignerBalance is the minimum balance external Chains must provision
-// for each synthetic actor before deployment.
+// for each test actor before deployment.
 func RequiredSignerBalance() *big.Int {
 	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
 }
 
 type Route struct {
-	ID          testapp.RouteID
+	ID          RouteID
 	Source      environment.ChainID
 	Destination environment.ChainID
 	Manual      bool
 }
 
 const (
-	RouteAtoB testapp.RouteID = "route-a-to-b"
-	RouteBtoA testapp.RouteID = "route-b-to-a"
+	RouteAtoB RouteID = "route-a-to-b"
+	RouteBtoA RouteID = "route-b-to-a"
 )
 
 func Bidirectional(a, b environment.ChainID) []Route {
@@ -58,7 +55,7 @@ func ManualAtoB(a, b environment.ChainID) Route {
 }
 
 // Deploy writes a temporary black-box configuration, runs its migration, and
-// deploys the synthetic test applications. It does not start the relayer.
+// deploys the test applications. It does not start the relayer.
 func Deploy(
 	t testing.TB,
 	env *environment.Environment,
@@ -67,47 +64,47 @@ func Deploy(
 ) (*ibclink.Driver, *testappcmd.Deployment) {
 	t.Helper()
 	if env == nil {
-		t.Fatal("synthetic: Environment is required")
+		t.Fatal("e2etest: Environment is required")
 	}
 	if err := signers.validate(); err != nil {
-		t.Fatalf("synthetic: invalid signers: %v", err)
+		t.Fatalf("e2etest: invalid signers: %v", err)
 	}
 	ensureSignerBalances(t, env, signers)
 
 	dir := t.TempDir()
 	configuredSigners, err := signers.store(dir)
 	if err != nil {
-		t.Fatalf("synthetic: store signers: %v", err)
+		t.Fatalf("e2etest: store signers: %v", err)
 	}
 	configPath := filepath.Join(dir, "ibc-link.config.yaml")
 	driver, err := ibclink.NewDriver(configPath)
 	if err != nil {
-		t.Fatalf("synthetic: create driver: %v", err)
+		t.Fatalf("e2etest: create driver: %v", err)
 	}
 	if bindErr := env.BindIBCLink(driver); bindErr != nil {
-		t.Fatalf("synthetic: bind IBC Link process: %v", bindErr)
+		t.Fatalf("e2etest: bind IBC Link process: %v", bindErr)
 	}
 	config := buildConfig(t, env, driver, routes, configuredSigners, filepath.Join(dir, "relayer.db"))
 	data, err := config.Marshal()
 	if err != nil {
-		t.Fatalf("synthetic: encode config: %v", err)
+		t.Fatalf("e2etest: encode config: %v", err)
 	}
 	if writeErr := os.WriteFile(configPath, data, 0o600); writeErr != nil {
-		t.Fatalf("synthetic: write config: %v", writeErr)
+		t.Fatalf("e2etest: write config: %v", writeErr)
 	}
 
 	if migrationErr := driver.MigrateUp(t.Context()); migrationErr != nil {
-		t.Fatalf("synthetic: migrate database: %v", migrationErr)
+		t.Fatalf("e2etest: migrate database: %v", migrationErr)
 	}
 
 	deployment, err := driver.DeployTestApps(t.Context())
 	if err != nil {
-		t.Fatalf("synthetic: deploy test applications: %v", err)
+		t.Fatalf("e2etest: deploy test applications: %v", err)
 	}
 	return driver, deployment
 }
 
-// StartRelayer starts the synthetic relayer and registers idempotent teardown.
+// StartRelayer starts the test relayer and registers idempotent teardown.
 func StartRelayer(
 	t testing.TB,
 	driver *ibclink.Driver,
@@ -115,21 +112,21 @@ func StartRelayer(
 ) *ibclink.Relayer {
 	t.Helper()
 	if driver == nil {
-		t.Fatal("synthetic: driver is required")
+		t.Fatal("e2etest: driver is required")
 	}
 	if env == nil {
-		t.Fatal("synthetic: Environment is required")
+		t.Fatal("e2etest: Environment is required")
 	}
 
 	relayer, err := driver.StartRelayer(t.Context())
 	if err != nil {
-		t.Fatalf("synthetic: start relayer: %v", err)
+		t.Fatalf("e2etest: start relayer: %v", err)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), relayerStopTimeout)
 		defer cancel()
 		if err := relayer.Stop(ctx); err != nil {
-			t.Errorf("synthetic: stop relayer: %v", err)
+			t.Errorf("e2etest: stop relayer: %v", err)
 		}
 	})
 
@@ -139,7 +136,7 @@ func StartRelayer(
 	}
 	for _, id := range env.Chains() {
 		if _, ok := connected[string(id)]; !ok {
-			t.Fatalf("synthetic: relayer did not connect to Chain %q", id)
+			t.Fatalf("e2etest: relayer did not connect to Chain %q", id)
 		}
 	}
 	return relayer
@@ -163,11 +160,11 @@ func buildConfig(
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
 		if err != nil {
-			t.Fatalf("synthetic: resolve Chain %q: %v", id, err)
+			t.Fatalf("e2etest: resolve Chain %q: %v", id, err)
 		}
 		rpc, err := driver.ChainRPC(string(id))
 		if err != nil {
-			t.Fatalf("synthetic: resolve Chain %q process binding: %v", id, err)
+			t.Fatalf("e2etest: resolve Chain %q process binding: %v", id, err)
 		}
 		config.Chains = append(config.Chains, configcmd.Chain{
 			ID:            string(id),
@@ -208,32 +205,32 @@ func ensureSignerBalances(t testing.TB, env *environment.Environment, signers Si
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
 		if err != nil {
-			t.Fatalf("synthetic: resolve Chain %q: %v", id, err)
+			t.Fatalf("e2etest: resolve Chain %q: %v", id, err)
 		}
 		funding, err := chain.Funding()
 		if err == nil {
 			for _, actor := range actors {
 				if fundErr := funding.EnsureEOABalance(t.Context(), actor.address, minimum); fundErr != nil {
-					t.Fatalf("synthetic: fund %s signer on Chain %q: %v", actor.role, id, fundErr)
+					t.Fatalf("e2etest: fund %s signer on Chain %q: %v", actor.role, id, fundErr)
 				}
 			}
 			continue
 		}
 		if !errors.Is(err, environment.ErrCapabilityUnavailable) {
-			t.Fatalf("synthetic: resolve funding on Chain %q: %v", id, err)
+			t.Fatalf("e2etest: resolve funding on Chain %q: %v", id, err)
 		}
 		evmAccess, evmErr := chain.EVM()
 		if evmErr != nil {
-			t.Fatalf("synthetic: resolve EVM access on attached Chain %q: %v", id, evmErr)
+			t.Fatalf("e2etest: resolve EVM access on attached Chain %q: %v", id, evmErr)
 		}
 		for _, actor := range actors {
 			balance, balanceErr := evmAccess.BalanceAt(t.Context(), actor.address, nil)
 			if balanceErr != nil {
-				t.Fatalf("synthetic: query %s signer balance on attached Chain %q: %v", actor.role, id, balanceErr)
+				t.Fatalf("e2etest: query %s signer balance on attached Chain %q: %v", actor.role, id, balanceErr)
 			}
 			if balance.Cmp(minimum) < 0 {
 				t.Fatalf(
-					"synthetic: %s signer %s on attached Chain %q has balance %s, need at least %s; provision it out of band",
+					"e2etest: %s signer %s on attached Chain %q has balance %s, need at least %s; provision it out of band",
 					actor.role,
 					actor.address,
 					id,

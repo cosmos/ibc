@@ -1,6 +1,6 @@
 # IBC Environment Architecture
 
-Status: accepted target; migration in progress. The synthetic acceptance path is transitional implementation state, not part of the target architecture.
+Status: accepted target; migration in progress. The temporary acceptance path is transitional implementation state, not part of the target architecture.
 
 ## Decision
 
@@ -114,13 +114,13 @@ Tests explicitly sequence setup, actions, fault injection, observation, and asse
 
 Focused modules may hide vertical mechanics such as ABI encoding, RPC calls, transaction submission, event decoding, polling, or process control. They should not hide horizontal orchestration across resources behind an aggregate `Run`, callback session, or outcome that silently performs the whole test.
 
-`e2etest` is a testing adapter only. It selects reusable Specs and runtime bindings, applies test policy, calls `environment.Start`, and registers `Environment.Close` with test cleanup. It does not add another environment-shaped declaration or own any other resource lifecycle.
+`e2etest` is a testing adapter only. It selects reusable Specs and runtime bindings, applies test policy, calls `environment.Start`, and registers `Environment.Close` with test cleanup. It also contains the temporary application, relayer, and observation mechanics used only by these acceptance tests. It does not add another environment-shaped declaration or own another aggregate resource lifecycle.
 
-## Test setup and the synthetic path
+## Test setup and the temporary acceptance path
 
-Applications used to produce observable traffic are ordinary test setup, not Environment resources. The e2e-only `testapp` and `synthetic` modules hide their vertical transaction and process mechanics, while tests keep deployment, orchestration, and lifecycle explicit. Their temporary routes and applications must not shape `environment.Spec` or be relabeled as IBC resources.
+Applications used to produce observable traffic are ordinary test setup, not Environment resources. The e2e-only `e2etest` package hides their vertical transaction, observation, and process mechanics, while tests keep deployment, orchestration, and lifecycle explicit. Temporary routes and applications must not shape `environment.Spec` or be relabeled as IBC resources.
 
-Synthetic tests create distinct application and relayer signers. Managed Chains fund their public addresses through the resolved funding capability; attached Chains require out-of-band funding. The temporary process receives signer aliases and protected local key files, while raw keys and provider-default accounts stay out of declarations, configuration, and test code.
+These tests create distinct application and relayer signers. Managed Chains fund their public addresses through the resolved funding capability; attached Chains require out-of-band funding. The temporary process receives signer aliases and protected local key files, while raw keys and provider-default accounts stay out of declarations, configuration, and test code.
 
 This lane remains until actual IBC Instances, Connections, and a truthful Relayer replace its traffic coverage. Its eventual deletion must not require changing the Environment interface.
 
@@ -146,13 +146,13 @@ This lane remains until actual IBC Instances, Connections, and a truthful Relaye
 
 The repository realizes Chains, IBC Instances, Connections, and Attestors. It does not yet declare or realize the truthful protocol Relayer described by this design.
 
-Implementation should proceed by defining the concrete `RelayerSpec`, resolved Relayer interface, readiness/status semantics, and process adapter together from the product Relayer port. Once real protocol traffic covers the same behavior, the isolated synthetic lane can be deleted without changing the Environment interface.
+Implementation should proceed by defining the concrete `RelayerSpec`, resolved Relayer interface, readiness/status semantics, and process adapter together from the product Relayer port. Once real protocol traffic covers the same behavior, the temporary acceptance machinery in `e2etest` can be deleted without changing the Environment interface.
 
 ## Open design work
 
 - Define concrete `RelayerSpec` variants and their dependency references from the product Relayer port.
 - Define Relayer readiness, status, manual relay, lifecycle, signer, and finality semantics.
-- Decide when the synthetic lane has enough truthful replacement coverage to be deleted.
+- Decide when the temporary acceptance lane has enough truthful replacement coverage to be deleted.
 - Shape any further test-application bindings and attached-Chain effect reporting from concrete tests.
 - Define diagnostic artifact schema and retention only when consumers require them.
 - Model finality separately from timing when a real workflow requires it.

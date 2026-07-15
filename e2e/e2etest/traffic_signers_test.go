@@ -1,4 +1,4 @@
-package synthetic
+package e2etest
 
 import (
 	"encoding/hex"

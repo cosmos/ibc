@@ -1,4 +1,4 @@
-package testapp
+package e2etest
 
 import (
 	"math/big"

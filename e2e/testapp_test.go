@@ -10,7 +10,6 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/link/cmd/testappcmd"
 
 	bindings "github.com/cosmos/ibc/link/testappbindings"
@@ -19,12 +18,12 @@ import (
 func TestTestAppDeployment(t *testing.T) {
 	ctx := t.Context()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
-	signers := synthetic.NewSigners(t)
-	_, deployment := synthetic.Deploy(
+	signers := e2etest.NewSigners(t)
+	_, deployment := e2etest.Deploy(
 		t,
 		env,
 		signers,
-		synthetic.AtoB(e2etest.ChainA, e2etest.ChainB),
+		e2etest.AtoB(e2etest.ChainA, e2etest.ChainB),
 	)
 
 	chainA, err := env.Chain(e2etest.ChainA)

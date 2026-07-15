@@ -1,4 +1,5 @@
-// Package e2etest selects and starts reusable Environment configurations.
+// Package e2etest selects and starts reusable Environment configurations and
+// provides the temporary Link traffic machinery used by the acceptance tests.
 package e2etest
 
 import (

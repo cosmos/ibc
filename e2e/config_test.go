@@ -12,7 +12,6 @@ import (
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/e2e/internal/synthetic"
 	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/keyfile"
 )
@@ -40,7 +39,7 @@ func TestConfigValidation(t *testing.T) {
 		},
 		DB: configcmd.DB{Type: configcmd.DBTypeSQLite, URL: filepath.Join(t.TempDir(), "valid.db")},
 		Relayer: configcmd.Relayer{Routes: []configcmd.Route{{
-			ID: string(synthetic.RouteAtoB), Source: string(e2etest.ChainA), Destination: string(e2etest.ChainB),
+			ID: string(e2etest.RouteAtoB), Source: string(e2etest.ChainA), Destination: string(e2etest.ChainB),
 			Type: configcmd.RouteEVMToEVMAttested,
 		}}},
 	}

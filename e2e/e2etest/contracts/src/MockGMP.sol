@@ -5,7 +5,7 @@ pragma solidity 0.8.28;
 contract MockGMP {
     uint256 private _seq;
 
-    // The synthetic relayer scans this event; target is a destination EVM address string.
+    // The test relayer scans this event; target is a destination EVM address string.
     event GMPSent(uint256 seq, string routeId, string target, bytes payload);
     event GMPReceived(string routeId, uint256 seq, address target, bool success);
 

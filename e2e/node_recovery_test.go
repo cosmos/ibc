@@ -10,8 +10,6 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/synthetic"
-	"github.com/cosmos/ibc/e2e/internal/testapp"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
@@ -21,11 +19,11 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 		NodeLifecycle: []environment.ChainID{e2etest.ChainB},
 	})
 	env := e2etest.Start(t, selected)
-	signers := synthetic.NewSigners(t)
-	route := synthetic.AtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, deployment := synthetic.Deploy(t, env, signers, route)
-	ift := synthetic.BindIFT(t, env, deployment, signers, route)
-	relayer := synthetic.StartRelayer(t, driver, env)
+	signers := e2etest.NewSigners(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.Deploy(t, env, signers, route)
+	ift := e2etest.BindIFT(t, env, deployment, signers, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	chainB, err := env.Chain(e2etest.ChainB)
@@ -33,7 +31,7 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	node, err := chainB.NodeLifecycle()
 	require.NoError(t, err)
 
-	prepared, err := ift.Prepare(ctx, testapp.IFTRequest{
+	prepared, err := ift.Prepare(ctx, e2etest.IFTRequest{
 		Amount: big.NewInt(2_000_000),
 	})
 	require.NoError(t, err)
@@ -51,7 +49,7 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	_, err = chainB.Height(ctx)
 	require.NoError(t, err, "after node restart the destination must be reachable again")
 
-	_, err = synthetic.AwaitState(
+	_, err = e2etest.AwaitState(
 		ctx,
 		relayer,
 		transfer.Packet(),

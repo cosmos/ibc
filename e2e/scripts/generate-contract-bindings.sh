@@ -18,7 +18,7 @@ generate() {
 	abigen --abi "$abi_file" --bin "$bin_file" --pkg "$package" --type "$type_name" --out "$output"
 }
 
-test_apps="$repo_root/e2e/internal/testapp/contracts"
+test_apps="$repo_root/e2e/e2etest/contracts"
 bindings="$repo_root/link/testappbindings"
 mkdir -p "$bindings"
 generate "$test_apps/out/Counter.sol/Counter.json" testappbindings Counter "$bindings/Counter.go"

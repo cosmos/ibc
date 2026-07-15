@@ -1,4 +1,4 @@
-package testapp
+package e2etest
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 
 	bindings "github.com/cosmos/ibc/link/testappbindings"
 )
@@ -44,34 +45,6 @@ type IFT struct {
 	destApp     common.Address
 }
 
-func NewIFT(
-	routeID RouteID,
-	source, destination *environment.Chain,
-	sender evm.Account,
-	contracts IFTContracts,
-) (*IFT, error) {
-	sourceEndpoint, destinationEndpoint, err := bindRoute(routeID, source, destination)
-	if err != nil {
-		return nil, err
-	}
-	sourceApp, err := address("source MockIFT", contracts.Source)
-	if err != nil {
-		return nil, err
-	}
-	destinationApp, err := address("destination MockIFT", contracts.Destination)
-	if err != nil {
-		return nil, err
-	}
-	return &IFT{
-		routeID:     routeID,
-		source:      sourceEndpoint,
-		destination: destinationEndpoint,
-		sender:      sender,
-		sourceApp:   sourceApp,
-		destApp:     destinationApp,
-	}, nil
-}
-
 type PreparedIFT struct {
 	app               *IFT
 	request           IFTRequest
@@ -90,7 +63,7 @@ type IFTTransfer struct {
 	destinationBefore *big.Int
 }
 
-var ErrIFTAlreadySubmitted = errors.New("testapp: prepared IFT has already been submitted")
+var errIFTAlreadySubmitted = errors.New("e2etest: prepared IFT has already been submitted")
 
 func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTTransfer, error) {
 	prepared, err := i.Prepare(ctx, request)
@@ -136,7 +109,7 @@ func (i *IFT) Prepare(ctx context.Context, request IFTRequest) (*PreparedIFT, er
 // cannot be retried because its balance baselines may no longer be current.
 func (p *PreparedIFT) Submit(ctx context.Context) (*IFTTransfer, error) {
 	if p.submitted {
-		return nil, ErrIFTAlreadySubmitted
+		return nil, errIFTAlreadySubmitted
 	}
 	p.submitted = true
 
@@ -148,7 +121,7 @@ func (p *PreparedIFT) Submit(ctx context.Context) (*IFTTransfer, error) {
 		new(big.Int).SetUint64(p.timeoutTimestamp),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("testapp: pack IFT sendTransfer: %w", err)
+		return nil, fmt.Errorf("e2etest: pack IFT sendTransfer: %w", err)
 	}
 	txHash, sequence, err := send(
 		ctx,
@@ -159,7 +132,7 @@ func (p *PreparedIFT) Submit(ctx context.Context) (*IFTTransfer, error) {
 		iftSentSequence(p.app.sourceApp),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("testapp: send IFT on route %q: %w", p.app.routeID, err)
+		return nil, fmt.Errorf("e2etest: send IFT on route %q: %w", p.app.routeID, err)
 	}
 	return &IFTTransfer{
 		app: p.app,
@@ -168,7 +141,7 @@ func (p *PreparedIFT) Submit(ctx context.Context) (*IFTTransfer, error) {
 			Source:       p.app.source.chain.ID(),
 			SourceTxHash: txHash,
 			Sequence:     sequence,
-			application:  ApplicationIFT,
+			appType:      relayercmd.AppTypeIFT,
 		},
 		receiver:          common.HexToAddress(p.request.Receiver),
 		amount:            new(big.Int).Set(p.request.Amount),
@@ -188,7 +161,7 @@ func (t *IFTTransfer) VerifyDelivered(ctx context.Context) error {
 	}
 	if received.Receiver != t.receiver {
 		return fmt.Errorf(
-			"testapp: IFT packet %s receiver: got %s, want %s",
+			"e2etest: IFT packet %s receiver: got %s, want %s",
 			t.packet.reference(),
 			received.Receiver.Hex(),
 			t.receiver.Hex(),
@@ -196,7 +169,7 @@ func (t *IFTTransfer) VerifyDelivered(ctx context.Context) error {
 	}
 	if received.Amount.Cmp(t.amount) != 0 {
 		return fmt.Errorf(
-			"testapp: IFT packet %s amount: got %s, want %s",
+			"e2etest: IFT packet %s amount: got %s, want %s",
 			t.packet.reference(),
 			received.Amount,
 			t.amount,
@@ -231,7 +204,7 @@ func (t *IFTTransfer) VerifyRefunded(ctx context.Context) error {
 	}
 	if refunded.Sender != t.app.sender.Address() {
 		return fmt.Errorf(
-			"testapp: IFT packet %s refund sender: got %s, want %s",
+			"e2etest: IFT packet %s refund sender: got %s, want %s",
 			t.packet.reference(),
 			refunded.Sender.Hex(),
 			t.app.sender.Address().Hex(),
@@ -239,7 +212,7 @@ func (t *IFTTransfer) VerifyRefunded(ctx context.Context) error {
 	}
 	if refunded.Amount.Cmp(t.amount) != 0 {
 		return fmt.Errorf(
-			"testapp: IFT packet %s refund amount: got %s, want %s",
+			"e2etest: IFT packet %s refund amount: got %s, want %s",
 			t.packet.reference(),
 			refunded.Amount,
 			t.amount,
@@ -257,14 +230,14 @@ func (t *IFTTransfer) VerifyRefunded(ctx context.Context) error {
 
 func validAmount(amount *big.Int) (*big.Int, error) {
 	if amount == nil {
-		return nil, errors.New("testapp: IFT amount is required")
+		return nil, errors.New("e2etest: IFT amount is required")
 	}
 	owned := new(big.Int).Set(amount)
 	if owned.Sign() <= 0 {
-		return nil, fmt.Errorf("testapp: IFT amount must be positive, got %s", owned)
+		return nil, fmt.Errorf("e2etest: IFT amount must be positive, got %s", owned)
 	}
 	if owned.BitLen() > 256 {
-		return nil, fmt.Errorf("testapp: IFT amount %s exceeds uint256", owned)
+		return nil, fmt.Errorf("e2etest: IFT amount %s exceeds uint256", owned)
 	}
 	return owned, nil
 }
@@ -275,7 +248,7 @@ func (i *IFT) receiver(value string) (common.Address, error) {
 	}
 	account, err := evm.NewAccount()
 	if err != nil {
-		return common.Address{}, fmt.Errorf("testapp: generate IFT receiver: %w", err)
+		return common.Address{}, fmt.Errorf("e2etest: generate IFT receiver: %w", err)
 	}
 	return account.Address(), nil
 }
@@ -287,7 +260,7 @@ func (i *IFT) timeoutTimestamp(ctx context.Context, timeout time.Duration) (uint
 	header, err := i.destination.evm.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf(
-			"testapp: read destination Chain %q head for IFT timeout: %w",
+			"e2etest: read destination Chain %q head for IFT timeout: %w",
 			i.destination.chain.ID(),
 			err,
 		)
@@ -305,13 +278,13 @@ func (i *IFT) balance(
 	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := bindings.NewMockIFTCaller(contract, caller)
 		if err != nil {
-			return fmt.Errorf("testapp: bind MockIFT %s: %w", contract, err)
+			return fmt.Errorf("e2etest: bind MockIFT %s: %w", contract, err)
 		}
 		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("testapp: query MockIFT balance of %s: %w", holder, err)
+		return nil, fmt.Errorf("e2etest: query MockIFT balance of %s: %w", holder, err)
 	}
 	return balance, nil
 }
@@ -329,7 +302,7 @@ func (t *IFTTransfer) verifyBalance(
 	}
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
-			"testapp: IFT packet %s %s balance of %s: got %s, want %s",
+			"e2etest: IFT packet %s %s balance of %s: got %s, want %s",
 			t.packet.reference(),
 			state,
 			holder.Hex(),
@@ -351,7 +324,7 @@ func (t *IFTTransfer) awaitReceived(ctx context.Context) (*bindings.MockIFTIFTRe
 		func(log types.Log) (*bindings.MockIFTIFTReceived, error) {
 			event, err := parser.ParseIFTReceived(log)
 			if err != nil {
-				return nil, fmt.Errorf("testapp: decode IFTReceived: %w", err)
+				return nil, fmt.Errorf("e2etest: decode IFTReceived: %w", err)
 			}
 			return event, nil
 		},
@@ -366,7 +339,7 @@ func (t *IFTTransfer) awaitRefunded(ctx context.Context) (*bindings.MockIFTIFTRe
 	definition := iftABI.Events[eventIFTRefunded]
 	parser, err := bindings.NewMockIFTFilterer(t.app.sourceApp, nil)
 	if err != nil {
-		return nil, fmt.Errorf("testapp: bind source MockIFT events: %w", err)
+		return nil, fmt.Errorf("e2etest: bind source MockIFT events: %w", err)
 	}
 	description := fmt.Sprintf("IFT refund for packet %s", t.packet.reference())
 	return awaitEvent(
@@ -377,7 +350,7 @@ func (t *IFTTransfer) awaitRefunded(ctx context.Context) (*bindings.MockIFTIFTRe
 		func(log types.Log) (*bindings.MockIFTIFTRefunded, error) {
 			event, err := parser.ParseIFTRefunded(log)
 			if err != nil {
-				return nil, fmt.Errorf("testapp: decode IFTRefunded: %w", err)
+				return nil, fmt.Errorf("e2etest: decode IFTRefunded: %w", err)
 			}
 			return event, nil
 		},
@@ -395,7 +368,7 @@ func iftSentSequence(address common.Address) func(*types.Receipt) (uint64, bool,
 			}
 			event, err := parser.ParseIFTSent(*log)
 			if err != nil {
-				return 0, false, fmt.Errorf("testapp: decode IFTSent: %w", err)
+				return 0, false, fmt.Errorf("e2etest: decode IFTSent: %w", err)
 			}
 			return event.Seq.Uint64(), true, nil
 		}
