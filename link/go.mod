@@ -8,6 +8,7 @@ require (
 	github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
+	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/goccy/go-yaml v1.19.2
 	github.com/jackc/pgx/v5 v5.10.0
@@ -17,6 +18,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
+	golang.org/x/sync v0.21.0
 	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	modernc.org/sqlite v1.53.0
@@ -57,7 +59,6 @@ require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/deepmap/oapi-codegen v1.6.0 // indirect
-	github.com/deliveryhero/pipeline/v2 v2.2.0 // indirect
 	github.com/dgraph-io/badger/v4 v4.2.0 // indirect
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -236,7 +237,6 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260508192327-42602be52be6 // indirect
 	golang.org/x/text v0.38.0 // indirect

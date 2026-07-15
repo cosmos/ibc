@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains"
+	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
@@ -282,3 +283,22 @@ func TestPipelineLifecycle(t *testing.T) {
 
 func chainsWriteAckSuccess() v2.WriteAckStatus { return v2.WriteAckStatusSuccess }
 func chainsWriteAckError() v2.WriteAckStatus   { return v2.WriteAckStatusError }
+
+// routedConfig a config whose clients and routes cover testRoute.
+func routedConfig() config.Config {
+	return config.Config{
+		Relayer: config.RelayerConfig{
+			Clients: []config.ClientConfig{
+				{
+					Alias:                "test-route",
+					ClientID:             testRoute.SourceClientID,
+					ChainID:              testRoute.SourceChainID,
+					CounterpartyChainID:  testRoute.DestinationChainID,
+					CounterpartyClientID: testRoute.DestinationClientID,
+					Type:                 config.ClientTypeAttestation,
+				},
+			},
+			Routes: []config.RouteConfig{{SourceClient: "test-route"}},
+		},
+	}
+}

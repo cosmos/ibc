@@ -26,6 +26,10 @@ func ConditionallyBatchProcess(
 
 	go func() {
 		for i := range in {
+			if i == nil {
+				continue
+			}
+
 			if i.Error() != "" {
 				// errored transfers skip batching and flow through immediately
 				out <- i

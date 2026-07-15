@@ -36,7 +36,8 @@ func NewTransfer(packet store.Packet, logger *slog.Logger) *Transfer {
 }
 
 func (t *Transfer) Error() string {
-	if t.ProcessingError == nil {
+	// nil transfers appear in pipeline channels during shutdown
+	if t == nil || t.ProcessingError == nil {
 		return ""
 	}
 
