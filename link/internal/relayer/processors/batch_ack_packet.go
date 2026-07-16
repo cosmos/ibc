@@ -1,10 +1,11 @@
-package pipeline
+package processors
 
 import (
 	"context"
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -25,7 +26,7 @@ func NewBatchAckPacket(
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	submitter txmgr.Submitter,
-	route Route,
+	route transfer.Route,
 	relaySuccessAcks, relayErrorAcks bool,
 ) BatchAckPacket {
 	return BatchAckPacket{
@@ -41,8 +42,8 @@ func NewBatchAckPacket(
 	}
 }
 
-func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	txIDs, sequences := collectTxIDs(transfers, func(t *Transfer) (string, error) {
+func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+	txIDs, sequences := collectTxIDs(transfers, func(t *transfer.Transfer) (string, error) {
 		if t.WriteAckTxHash == nil {
 			return "", errors.New("trying to deliver ack packet without a write ack tx hash")
 		}
@@ -63,10 +64,10 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 		func(repo store.Repository, key store.PacketKey, tx store.PacketTx) error {
 			return repo.UpdatePacketAckTx(ctx, key, tx)
 		},
-		func(transfer *Transfer, tx store.PacketTx) {
-			transfer.AckTxHash = &tx.Hash
-			transfer.AckTxTime = &tx.Time
-			transfer.AckTxRelayerAddress = &tx.RelayerAddress
+		func(tr *transfer.Transfer, tx store.PacketTx) {
+			tr.AckTxHash = &tx.Hash
+			tr.AckTxTime = &tx.Time
+			tr.AckTxRelayerAddress = &tx.RelayerAddress
 		})
 	if err != nil {
 		return nil, errors.Wrapf(err, "delivering ack tx for batch of %d transfers", len(sequences))
@@ -75,29 +76,29 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 	return out, nil
 }
 
-func (p BatchAckPacket) Cancel(transfers []*Transfer, err error) {
-	for _, transfer := range transfers {
-		transfer.GetLogger().Error("Delivering batch ack tx", "error", err)
+func (p BatchAckPacket) Cancel(transfers []*transfer.Transfer, err error) {
+	for _, tr := range transfers {
+		tr.GetLogger().Error("Delivering batch ack tx", "error", err)
 	}
 }
 
-func (p BatchAckPacket) ShouldProcess(transfer *Transfer) bool {
-	if transfer.WriteAckTxHash == nil {
+func (p BatchAckPacket) ShouldProcess(tr *transfer.Transfer) bool {
+	if tr.WriteAckTxHash == nil {
 		return false
 	}
 
-	if transfer.WriteAckStatus == nil {
-		transfer.GetLogger().Warn("This is a bug! Transfer has a write ack tx hash but no write ack status")
+	if tr.WriteAckStatus == nil {
+		tr.GetLogger().Warn("This is a bug! Transfer has a write ack tx hash but no write ack status")
 
 		return false
 	}
 
-	if (isErrorAck(*transfer.WriteAckStatus) && !p.relayErrorAcks) ||
-		(isSuccessAck(*transfer.WriteAckStatus) && !p.relaySuccessAcks) {
+	if (transfer.IsErrorAck(*tr.WriteAckStatus) && !p.relayErrorAcks) ||
+		(transfer.IsSuccessAck(*tr.WriteAckStatus) && !p.relaySuccessAcks) {
 		return false
 	}
 
-	return transfer.AckTxHash == nil && transfer.TimeoutTxHash == nil
+	return tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 
 func (p BatchAckPacket) Status() store.RelayStatus {

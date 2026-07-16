@@ -1,4 +1,4 @@
-package pipeline
+package processors
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -28,33 +29,33 @@ func NewCheckPacketCommitment(chainClients ChainClients, storage AckTimeoutTxSto
 	return CheckPacketCommitment{chains: chainClients, storage: storage}
 }
 
-func (p CheckPacketCommitment) Process(ctx context.Context, transfer *Transfer) (*Transfer, error) {
-	client, ok := p.chains.Get(transfer.SourceChainID)
+func (p CheckPacketCommitment) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+	client, ok := p.chains.Get(tr.SourceChainID)
 	if !ok {
-		return nil, errors.Errorf("no configured chain client for source chain %s", transfer.SourceChainID)
+		return nil, errors.Errorf("no configured chain client for source chain %s", tr.SourceChainID)
 	}
 
-	committed, err := client.IsPacketCommitted(ctx, transfer.PacketSourceClientID, transfer.PacketSequenceNumber)
+	committed, err := client.IsPacketCommitted(ctx, tr.PacketSourceClientID, tr.PacketSequenceNumber)
 	if err != nil {
-		return nil, errors.Wrapf(err, "checking packet commitment on source chain %s", transfer.SourceChainID)
+		return nil, errors.Wrapf(err, "checking packet commitment on source chain %s", tr.SourceChainID)
 	}
 
 	if committed {
 		// the packet has not been acked or timed out yet; continue as normal
-		return transfer, nil
+		return tr, nil
 	}
 
-	transfer.GetLogger().Info("Packet commitment gone from source chain, searching for the ack or timeout tx")
+	tr.GetLogger().Info("Packet commitment gone from source chain, searching for the ack or timeout tx")
 
 	// race the two lookups; whichever finds its tx cancels the other
 	var ackTx, timeoutTx *v2.Tx
 	g, gctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		tx, errFind := client.FindAckTx(gctx, transfer.PacketSourceClientID, transfer.PacketSequenceNumber)
+		tx, errFind := client.FindAckTx(gctx, tr.PacketSourceClientID, tr.PacketSequenceNumber)
 		if errFind != nil {
 			if !errors.Is(errFind, v2.ErrTxNotFound) && !errors.Is(errFind, context.Canceled) {
-				transfer.GetLogger().Warn("Finding ack tx after missing packet commitment", "error", errFind)
+				tr.GetLogger().Warn("Finding ack tx after missing packet commitment", "error", errFind)
 			}
 
 			// do not cancel the timeout lookup
@@ -67,10 +68,10 @@ func (p CheckPacketCommitment) Process(ctx context.Context, transfer *Transfer) 
 	})
 
 	g.Go(func() error {
-		tx, errFind := client.FindTimeoutTx(gctx, transfer.PacketSourceClientID, transfer.PacketSequenceNumber)
+		tx, errFind := client.FindTimeoutTx(gctx, tr.PacketSourceClientID, tr.PacketSequenceNumber)
 		if errFind != nil {
 			if !errors.Is(errFind, v2.ErrTxNotFound) && !errors.Is(errFind, context.Canceled) {
-				transfer.GetLogger().Warn("Finding timeout tx after missing packet commitment", "error", errFind)
+				tr.GetLogger().Warn("Finding timeout tx after missing packet commitment", "error", errFind)
 			}
 
 			// do not cancel the ack lookup
@@ -93,40 +94,40 @@ func (p CheckPacketCommitment) Process(ctx context.Context, transfer *Transfer) 
 		)
 	case ackTx != nil:
 		tx := store.PacketTx{Hash: ackTx.Hash, Time: ackTx.Timestamp, RelayerAddress: ackTx.RelayerAddress}
-		if err := p.storage.UpdatePacketAckTx(ctx, transfer.Key(), tx); err != nil {
+		if err := p.storage.UpdatePacketAckTx(ctx, tr.Key(), tx); err != nil {
 			return nil, errors.Wrapf(err, "recording existing ack tx %s", ackTx.Hash)
 		}
 
-		transfer.AckTxHash = &ackTx.Hash
-		transfer.AckTxTime = &ackTx.Timestamp
-		transfer.AckTxRelayerAddress = &ackTx.RelayerAddress
+		tr.AckTxHash = &ackTx.Hash
+		tr.AckTxTime = &ackTx.Timestamp
+		tr.AckTxRelayerAddress = &ackTx.RelayerAddress
 
-		return transfer, nil
+		return tr, nil
 	case timeoutTx != nil:
 		tx := store.PacketTx{Hash: timeoutTx.Hash, Time: timeoutTx.Timestamp, RelayerAddress: timeoutTx.RelayerAddress}
-		if err := p.storage.UpdatePacketTimeoutTx(ctx, transfer.Key(), tx); err != nil {
+		if err := p.storage.UpdatePacketTimeoutTx(ctx, tr.Key(), tx); err != nil {
 			return nil, errors.Wrapf(err, "recording existing timeout tx %s", timeoutTx.Hash)
 		}
 
-		transfer.TimeoutTxHash = &timeoutTx.Hash
-		transfer.TimeoutTxTime = &timeoutTx.Timestamp
-		transfer.TimeoutTxRelayerAddress = &timeoutTx.RelayerAddress
+		tr.TimeoutTxHash = &timeoutTx.Hash
+		tr.TimeoutTxTime = &timeoutTx.Timestamp
+		tr.TimeoutTxRelayerAddress = &timeoutTx.RelayerAddress
 
-		return transfer, nil
+		return tr, nil
 	default:
 		return nil, errors.Errorf(
 			"no ack or timeout tx found after packet commitment missing on chain %s",
-			transfer.SourceChainID,
+			tr.SourceChainID,
 		)
 	}
 }
 
-func (p CheckPacketCommitment) Cancel(transfer *Transfer, err error) {
-	transfer.GetLogger().Error("Checking packet commitment", "error", err)
+func (p CheckPacketCommitment) Cancel(tr *transfer.Transfer, err error) {
+	tr.GetLogger().Error("Checking packet commitment", "error", err)
 }
 
-func (p CheckPacketCommitment) ShouldProcess(transfer *Transfer) bool {
-	return transfer.AckTxHash == nil && transfer.TimeoutTxHash == nil
+func (p CheckPacketCommitment) ShouldProcess(tr *transfer.Transfer) bool {
+	return tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 
 func (p CheckPacketCommitment) Status() store.RelayStatus {

@@ -1,10 +1,11 @@
-package pipeline
+package processors
 
 import (
 	"context"
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -22,7 +23,7 @@ func NewBatchTimeoutPacket(
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	submitter txmgr.Submitter,
-	route Route,
+	route transfer.Route,
 ) BatchTimeoutPacket {
 	return BatchTimeoutPacket{
 		batchDeps{chains: chainClients, storage: storage, proofAPI: proofAPI, submitter: submitter, route: route},
@@ -30,8 +31,8 @@ func NewBatchTimeoutPacket(
 }
 
 //nolint:dupl // the batch directions are structurally parallel by design
-func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	txIDs, sequences := collectTxIDs(transfers, func(t *Transfer) (string, error) {
+func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+	txIDs, sequences := collectTxIDs(transfers, func(t *transfer.Transfer) (string, error) {
 		return t.SourceTxHash, nil
 	})
 
@@ -48,10 +49,10 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 		func(repo store.Repository, key store.PacketKey, tx store.PacketTx) error {
 			return repo.UpdatePacketTimeoutTx(ctx, key, tx)
 		},
-		func(transfer *Transfer, tx store.PacketTx) {
-			transfer.TimeoutTxHash = &tx.Hash
-			transfer.TimeoutTxTime = &tx.Time
-			transfer.TimeoutTxRelayerAddress = &tx.RelayerAddress
+		func(tr *transfer.Transfer, tx store.PacketTx) {
+			tr.TimeoutTxHash = &tx.Hash
+			tr.TimeoutTxTime = &tx.Time
+			tr.TimeoutTxRelayerAddress = &tx.RelayerAddress
 		})
 	if err != nil {
 		return nil, errors.Wrapf(err, "delivering timeout tx for batch of %d transfers", len(sequences))
@@ -60,16 +61,16 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	return out, nil
 }
 
-func (p BatchTimeoutPacket) Cancel(transfers []*Transfer, err error) {
-	for _, transfer := range transfers {
-		transfer.GetLogger().Error("Delivering batch timeout tx", "error", err)
+func (p BatchTimeoutPacket) Cancel(transfers []*transfer.Transfer, err error) {
+	for _, tr := range transfers {
+		tr.GetLogger().Error("Delivering batch timeout tx", "error", err)
 	}
 }
 
-func (p BatchTimeoutPacket) ShouldProcess(transfer *Transfer) bool {
-	shouldBeTimedOut := transfer.IsTimedOut() && transfer.RecvTxHash == nil && transfer.AckTxHash == nil
+func (p BatchTimeoutPacket) ShouldProcess(tr *transfer.Transfer) bool {
+	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
 
-	return shouldBeTimedOut && transfer.TimeoutTxHash == nil
+	return shouldBeTimedOut && tr.TimeoutTxHash == nil
 }
 
 func (p BatchTimeoutPacket) Status() store.RelayStatus {

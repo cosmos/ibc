@@ -1,5 +1,6 @@
 // Package pipeline relays packets through their full lifecycle.
-package pipeline
+// Package transfer models the packet lifecycle the relayer drives.
+package transfer
 
 import (
 	"log/slog"
@@ -91,21 +92,23 @@ func (t *Transfer) IsComplete(relaySuccessAcks, relayErrorAcks bool) bool {
 
 	// without an ack tx the transfer is only complete when its ack kind does
 	// not require relaying
-	if isErrorAck(*t.WriteAckStatus) && relayErrorAcks {
+	if IsErrorAck(*t.WriteAckStatus) && relayErrorAcks {
 		return false
 	}
 
-	if isSuccessAck(*t.WriteAckStatus) && relaySuccessAcks {
+	if IsSuccessAck(*t.WriteAckStatus) && relaySuccessAcks {
 		return false
 	}
 
 	return true
 }
 
-func isErrorAck(status store.WriteAckStatus) bool {
+// IsErrorAck reports whether the ack is the universal error acknowledgement.
+func IsErrorAck(status store.WriteAckStatus) bool {
 	return status == store.WriteAckStatusError || status == store.WriteAckStatusUnknown
 }
 
-func isSuccessAck(status store.WriteAckStatus) bool {
+// IsSuccessAck reports whether the ack is a success acknowledgement.
+func IsSuccessAck(status store.WriteAckStatus) bool {
 	return status == store.WriteAckStatusSuccess
 }

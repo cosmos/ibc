@@ -1,4 +1,4 @@
-package pipeline
+package dispatch
 
 import (
 	"context"
@@ -7,19 +7,20 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
 // DefaultPollInterval how often the dispatcher polls for unfinished packets.
 const DefaultPollInterval = 5 * time.Second
 
-// ErrTransferAlreadyInPipeline the transfer is already being relayed.
+// ErrTransferAlreadyInPipeline the tr is already being relayed.
 var ErrTransferAlreadyInPipeline = errors.New("transfer already in pipeline")
 
 // DispatcherStorage the persistence used by the dispatcher.
 type DispatcherStorage interface {
 	ListUnfinishedPackets(ctx context.Context) ([]store.Packet, error)
-	StatusStorage
+	UpdatePacketStatus(ctx context.Context, key store.PacketKey, status store.RelayStatus) error
 }
 
 // RelayDispatcher polls the store for unfinished packets and routes them to
@@ -79,17 +80,17 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 	}
 
 	for _, packet := range packets {
-		transfer := NewTransfer(packet, d.logger)
+		tr := transfer.NewTransfer(packet, d.logger)
 
-		err := d.SubmitTransfer(ctx, transfer)
+		err := d.SubmitTransfer(ctx, tr)
 		switch {
 		case errors.Is(err, ErrTransferAlreadyInPipeline):
 			continue
 		case err != nil:
-			transfer.GetLogger().Error("Submitting transfer failed, marking packet failed", "error", err)
+			tr.GetLogger().Error("Submitting tr failed, marking packet failed", "error", err)
 
-			if errUpdate := d.storage.UpdatePacketStatus(ctx, transfer.Key(), store.RelayStatusFailed); errUpdate != nil {
-				transfer.GetLogger().Error("Marking packet failed", "error", errUpdate)
+			if errUpdate := d.storage.UpdatePacketStatus(ctx, tr.Key(), store.RelayStatusFailed); errUpdate != nil {
+				tr.GetLogger().Error("Marking packet failed", "error", errUpdate)
 			}
 		}
 	}
@@ -97,14 +98,14 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 	return nil
 }
 
-// SubmitTransfer routes the transfer to its pipeline and pushes it.
-func (d *RelayDispatcher) SubmitTransfer(ctx context.Context, transfer *Transfer) error {
-	pipeline, err := d.manager.Pipeline(ctx, transfer)
+// SubmitTransfer routes the tr to its pipeline and pushes it.
+func (d *RelayDispatcher) SubmitTransfer(ctx context.Context, tr *transfer.Transfer) error {
+	pipeline, err := d.manager.Pipeline(ctx, tr)
 	if err != nil {
 		return errors.Wrap(err, "getting pipeline for transfer")
 	}
 
-	if !pipeline.Push(ctx, transfer) {
+	if !pipeline.Push(ctx, tr) {
 		return ErrTransferAlreadyInPipeline
 	}
 

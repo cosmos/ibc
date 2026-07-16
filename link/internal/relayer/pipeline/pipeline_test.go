@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/ibc/link/internal/relayer/processors"
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -25,7 +28,7 @@ const (
 	timeoutTxHash = "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 )
 
-var testRoute = Route{
+var testRoute = transfer.Route{
 	SourceChainID:       "1",
 	SourceClientID:      "base-0",
 	DestinationChainID:  "8453",
@@ -75,7 +78,7 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 	return env, deps
 }
 
-func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *Transfer {
+func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.Transfer {
 	t.Helper()
 
 	ctx := context.Background()
@@ -96,13 +99,13 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *Transfer 
 	require.NoError(t, err)
 	require.Len(t, packets, 1)
 
-	return NewTransfer(packets[0], slog.Default())
+	return transfer.NewTransfer(packets[0], slog.Default())
 }
 
-func (env *pipelineEnv) storedPacket(t *testing.T, transfer *Transfer) store.Packet {
+func (env *pipelineEnv) storedPacket(t *testing.T, tr *transfer.Transfer) store.Packet {
 	t.Helper()
 
-	packets, err := env.store.ListPacketsBySourceTx(context.Background(), transfer.SourceChainID, transfer.SourceTxHash)
+	packets, err := env.store.ListPacketsBySourceTx(context.Background(), tr.SourceChainID, tr.SourceTxHash)
 	require.NoError(t, err)
 	require.Len(t, packets, 1)
 
@@ -126,16 +129,16 @@ func relayResponse(to string) *connect.Response[proto.RelayByTxResponse] {
 	return connect.NewResponse(&proto.RelayByTxResponse{Tx: []byte{0xca, 0x11}, Address: to})
 }
 
-func runPipeline(t *testing.T, deps Deps, opts Options, transfer *Transfer) *Transfer {
+func runPipeline(t *testing.T, deps Deps, opts Options, tr *transfer.Transfer) *transfer.Transfer {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	p := NewPipeline(ctx, slog.Default(), deps, testRoute, opts)
-	require.True(t, p.Push(ctx, transfer))
+	require.True(t, p.Push(ctx, tr))
 
-	done := make(chan *Transfer, 1)
+	done := make(chan *transfer.Transfer, 1)
 	go func() {
 		out, err := p.Poll()
 		require.NoError(t, err)
@@ -148,7 +151,7 @@ func runPipeline(t *testing.T, deps Deps, opts Options, transfer *Transfer) *Tra
 
 		return out
 	case <-time.After(15 * time.Second):
-		t.Fatal("pipeline did not emit the transfer in time")
+		t.Fatal("pipeline did not emit the tr in time")
 
 		return nil
 	}
@@ -159,12 +162,12 @@ func TestPipelineLifecycle(t *testing.T) {
 
 	t.Run("recvToWriteAckSuccessComplete", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
-		transfer := env.createPacket(t, time.Now().Add(time.Hour))
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
 		// packet not yet received, commitment present, send finalized
 		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
 		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
-		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, transfer.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
+		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// recv delivery via proof api and submitter
 		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Once()
@@ -174,13 +177,13 @@ func TestPipelineLifecycle(t *testing.T) {
 			SubmittedAt:    time.Now().UTC(),
 			RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.DestinationChainID, recvTxHash, RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
+		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.DestinationChainID, recvTxHash, processors.RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
 
 		// write ack found with success status; success acks are not relayed
 		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
 			Return(chainsWriteAckSuccess(), nil).Once()
 
-		out := runPipeline(t, deps, fastOpts(), transfer)
+		out := runPipeline(t, deps, fastOpts(), tr)
 
 		require.Empty(t, out.Error())
 		assert.Equal(t, store.RelayStatusCompleteWithWriteAckSuccess, out.Status)
@@ -196,11 +199,11 @@ func TestPipelineLifecycle(t *testing.T) {
 
 	t.Run("errorAckRelayedToComplete", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
-		transfer := env.createPacket(t, time.Now().Add(time.Hour))
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
 		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
 		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
-		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, transfer.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
+		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// recv delivery
 		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Times(2)
@@ -208,7 +211,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.submitter.EXPECT().Submit(mock.Anything, testRoute.DestinationChainID, mock.Anything).Return(&txmgr.Submission{
 			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.DestinationChainID, recvTxHash, RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
+		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.DestinationChainID, recvTxHash, processors.RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
 
 		// error write ack: relayed back to the source chain
 		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
@@ -220,9 +223,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.submitter.EXPECT().Submit(mock.Anything, testRoute.SourceChainID, mock.Anything).Return(&txmgr.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.SourceChainID, ackTxHash, RetryAckExpiry, mock.Anything).Return(false, nil).Once()
+		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.SourceChainID, ackTxHash, processors.RetryAckExpiry, mock.Anything).Return(false, nil).Once()
 
-		out := runPipeline(t, deps, fastOpts(), transfer)
+		out := runPipeline(t, deps, fastOpts(), tr)
 
 		require.Empty(t, out.Error())
 		assert.Equal(t, store.RelayStatusCompleteWithAck, out.Status)
@@ -235,11 +238,11 @@ func TestPipelineLifecycle(t *testing.T) {
 
 	t.Run("timedOutPacketCompletesWithTimeout", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
-		transfer := env.createPacket(t, time.Now().Add(-time.Hour))
+		tr := env.createPacket(t, time.Now().Add(-time.Hour))
 
 		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
 		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Once()
-		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, transfer.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
+		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 		env.dstClient.EXPECT().IsTimestampFinalized(mock.Anything, mock.Anything, (*uint64)(nil)).Return(true, nil).Once()
 
 		// timeout delivery on the source chain
@@ -248,9 +251,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.submitter.EXPECT().Submit(mock.Anything, testRoute.SourceChainID, mock.Anything).Return(&txmgr.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.SourceChainID, timeoutTxHash, RetryTimeoutExpiry, mock.Anything).Return(false, nil).Once()
+		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.SourceChainID, timeoutTxHash, processors.RetryTimeoutExpiry, mock.Anything).Return(false, nil).Once()
 
-		out := runPipeline(t, deps, fastOpts(), transfer)
+		out := runPipeline(t, deps, fastOpts(), tr)
 
 		require.Empty(t, out.Error())
 		assert.Equal(t, store.RelayStatusCompleteWithTimeout, out.Status)
@@ -264,15 +267,15 @@ func TestPipelineLifecycle(t *testing.T) {
 
 	t.Run("sendNotFinalizedPoisonsForRun", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
-		transfer := env.createPacket(t, time.Now().Add(time.Hour))
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
 		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
 		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Once()
-		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, transfer.SourceTxHash, (*uint64)(nil)).Return(false, nil).Once()
+		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(false, nil).Once()
 
-		out := runPipeline(t, deps, fastOpts(), transfer)
+		out := runPipeline(t, deps, fastOpts(), tr)
 
-		assert.ErrorIs(t, out.ProcessingError, ErrSendNotFinalized)
+		assert.ErrorIs(t, out.ProcessingError, transfer.ErrSendNotFinalized)
 
 		// the packet stays unfinished for the next run
 		unfinished, err := env.store.ListUnfinishedPackets(context.Background())

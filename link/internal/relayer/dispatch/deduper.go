@@ -1,16 +1,18 @@
-package pipeline
+package dispatch
 
 import (
 	"context"
 	"sync"
 
+	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
 // Deduper rejects transfers already in flight in the wrapped pipeline.
 // It consumes the pipeline's output itself to learn when transfers leave.
 type Deduper struct {
-	pipeline TransferPipeline
+	pipeline pipeline.TransferPipeline
 
 	mu         sync.Mutex
 	inPipeline map[store.PacketKey]struct{}
@@ -18,11 +20,11 @@ type Deduper struct {
 	done chan struct{}
 }
 
-var _ TransferPipeline = (*Deduper)(nil)
+var _ pipeline.TransferPipeline = (*Deduper)(nil)
 
-func NewDeduper(pipeline TransferPipeline) *Deduper {
+func NewDeduper(pl pipeline.TransferPipeline) *Deduper {
 	deduper := &Deduper{
-		pipeline:   pipeline,
+		pipeline:   pl,
 		inPipeline: make(map[store.PacketKey]struct{}),
 		done:       make(chan struct{}),
 	}
@@ -32,10 +34,10 @@ func NewDeduper(pipeline TransferPipeline) *Deduper {
 	return deduper
 }
 
-func (d *Deduper) Push(ctx context.Context, transfer *Transfer) bool {
+func (d *Deduper) Push(ctx context.Context, tr *transfer.Transfer) bool {
 	d.mu.Lock()
 
-	key := transfer.Key()
+	key := tr.Key()
 	if _, exists := d.inPipeline[key]; exists {
 		d.mu.Unlock()
 
@@ -45,11 +47,11 @@ func (d *Deduper) Push(ctx context.Context, transfer *Transfer) bool {
 	d.inPipeline[key] = struct{}{}
 	d.mu.Unlock()
 
-	return d.pipeline.Push(ctx, transfer)
+	return d.pipeline.Push(ctx, tr)
 }
 
 // Poll is a noop: the deduper drains the wrapped pipeline itself.
-func (d *Deduper) Poll() (*Transfer, error) {
+func (d *Deduper) Poll() (*transfer.Transfer, error) {
 	return nil, nil
 }
 
@@ -62,17 +64,17 @@ func (d *Deduper) drain() {
 	defer close(d.done)
 
 	for {
-		transfer, err := d.pipeline.Poll()
+		tr, err := d.pipeline.Poll()
 		if err != nil {
 			return
 		}
 
-		if transfer == nil {
+		if tr == nil {
 			continue
 		}
 
 		d.mu.Lock()
-		delete(d.inPipeline, transfer.Key())
+		delete(d.inPipeline, tr.Key())
 		d.mu.Unlock()
 	}
 }

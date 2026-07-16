@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,10 +18,10 @@ import (
 func TestConditionallyBatchProcess(t *testing.T) {
 	ctx := context.Background()
 
-	collect := func(out <-chan *Transfer, n int) []*Transfer {
-		var got []*Transfer
-		for transfer := range out {
-			got = append(got, transfer)
+	collect := func(out <-chan *transfer.Transfer, n int) []*transfer.Transfer {
+		var got []*transfer.Transfer
+		for tr := range out {
+			got = append(got, tr)
 			if len(got) == n {
 				break
 			}
@@ -30,8 +32,8 @@ func TestConditionallyBatchProcess(t *testing.T) {
 
 	t.Run("batchesBySize", func(t *testing.T) {
 		storage := &statusRecorder{}
-		internal := &fakeBatchProcessor{shouldProcess: func(*Transfer) bool { return true }}
-		in := make(chan *Transfer)
+		internal := &fakeBatchProcessor{shouldProcess: func(*transfer.Transfer) bool { return true }}
+		in := make(chan *transfer.Transfer)
 
 		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 2, time.Minute, in, NewBatchProcessorMW(storage, internal))
 
@@ -50,8 +52,8 @@ func TestConditionallyBatchProcess(t *testing.T) {
 
 	t.Run("batchesByTimeout", func(t *testing.T) {
 		storage := &statusRecorder{}
-		internal := &fakeBatchProcessor{shouldProcess: func(*Transfer) bool { return true }}
-		in := make(chan *Transfer)
+		internal := &fakeBatchProcessor{shouldProcess: func(*transfer.Transfer) bool { return true }}
+		in := make(chan *transfer.Transfer)
 
 		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 50, 50*time.Millisecond, in, NewBatchProcessorMW(storage, internal))
 
@@ -70,8 +72,8 @@ func TestConditionallyBatchProcess(t *testing.T) {
 
 	t.Run("bypassesNonApplicableAndErrored", func(t *testing.T) {
 		storage := &statusRecorder{}
-		internal := &fakeBatchProcessor{shouldProcess: func(*Transfer) bool { return false }}
-		in := make(chan *Transfer)
+		internal := &fakeBatchProcessor{shouldProcess: func(*transfer.Transfer) bool { return false }}
+		in := make(chan *transfer.Transfer)
 
 		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 2, time.Hour, in, NewBatchProcessorMW(storage, internal))
 
@@ -96,7 +98,7 @@ func TestConditionallyBatchProcess(t *testing.T) {
 
 		release := make(chan struct{})
 		slow := &blockingBatchProcessor{release: release}
-		in := make(chan *Transfer)
+		in := make(chan *transfer.Transfer)
 
 		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 1, time.Hour, in, NewBatchProcessorMW(storage, slow))
 
@@ -127,16 +129,16 @@ type blockingBatchProcessor struct {
 	release <-chan struct{}
 }
 
-func (p *blockingBatchProcessor) ShouldProcess(*Transfer) bool { return true }
+func (p *blockingBatchProcessor) ShouldProcess(*transfer.Transfer) bool { return true }
 
 func (p *blockingBatchProcessor) Status() store.RelayStatus {
 	return store.RelayStatusDeliverRecvPacket
 }
 
-func (p *blockingBatchProcessor) Process(_ context.Context, batch []*Transfer) ([]*Transfer, error) {
+func (p *blockingBatchProcessor) Process(_ context.Context, batch []*transfer.Transfer) ([]*transfer.Transfer, error) {
 	<-p.release
 
 	return batch, nil
 }
 
-func (p *blockingBatchProcessor) Cancel([]*Transfer, error) {}
+func (p *blockingBatchProcessor) Cancel([]*transfer.Transfer, error) {}

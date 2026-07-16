@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/deliveryhero/pipeline/v2"
+
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 )
 
 // ConditionallyBatchProcess batches the transfers the processor applies to
@@ -18,11 +20,11 @@ func ConditionallyBatchProcess(
 	concurrency int,
 	maxSize int,
 	maxDuration time.Duration,
-	in <-chan *Transfer,
+	in <-chan *transfer.Transfer,
 	processor BatchProcessorMW,
-) <-chan *Transfer {
-	out := make(chan *Transfer)
-	toBatch := make(chan *Transfer)
+) <-chan *transfer.Transfer {
+	out := make(chan *transfer.Transfer)
+	toBatch := make(chan *transfer.Transfer)
 
 	go func() {
 		for i := range in {
@@ -44,7 +46,7 @@ func ConditionallyBatchProcess(
 				continue
 			}
 
-			i.GetLogger().Debug("Pushing transfer into batch", "status", processor.Status())
+			i.GetLogger().Debug("Pushing tr into batch", "status", processor.Status())
 			toBatch <- i
 		}
 
@@ -63,7 +65,7 @@ func ConditionallyBatchProcess(
 	// pipeline. buffering the collected batches keeps upstream stages flowing.
 	const bufferSize = 1000
 
-	bufferedBatches := make(chan []*Transfer, bufferSize)
+	bufferedBatches := make(chan []*transfer.Transfer, bufferSize)
 	go func() {
 		for batch := range batches {
 			bufferedBatches <- batch

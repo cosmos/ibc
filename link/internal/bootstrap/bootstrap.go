@@ -4,7 +4,9 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relayer/dispatch"
 	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
 	"github.com/cosmos/ibc/link/internal/relayer/proofapi"
 	"github.com/cosmos/ibc/link/internal/server"
@@ -13,7 +15,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/store"
 
-	"github.com/cosmos/ibc/link/internal/chains"
 	txmgrevm "github.com/cosmos/ibc/link/internal/txmgr/evm"
 )
 
@@ -27,7 +28,7 @@ type Services struct {
 	Signers *signer.Set
 
 	// Dispatcher drives packet relaying; nil when no routes are configured
-	Dispatcher *pipeline.RelayDispatcher
+	Dispatcher *dispatch.RelayDispatcher
 
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
@@ -67,21 +68,21 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv.Register(relayerHandler)
 
 	// Relaying dispatcher; only assembled when routes are configured
-	var dispatcher *pipeline.RelayDispatcher
+	var dispatcher *dispatch.RelayDispatcher
 	if len(cfg.Relayer.Routes) > 0 {
 		submitter, errSubmitter := txmgrevm.NewFromConfig(cfg, signers)
 		if errSubmitter != nil {
 			return nil, errSubmitter
 		}
 
-		pipelineManager := pipeline.NewManager(logger, cfg, pipeline.Deps{
+		pipelineManager := dispatch.NewManager(logger, cfg, pipeline.Deps{
 			Storage:   db,
 			Chains:    clientSet,
 			ProofAPI:  proofapi.NewClient(cfg.Relayer.ProofAPI),
 			Submitter: submitter,
 		})
 
-		dispatcher = pipeline.NewRelayDispatcher(db, pipelineManager, pipeline.DefaultPollInterval, logger)
+		dispatcher = dispatch.NewRelayDispatcher(db, pipelineManager, dispatch.DefaultPollInterval, logger)
 	}
 
 	services := &Services{

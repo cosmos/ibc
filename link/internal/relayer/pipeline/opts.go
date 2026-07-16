@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 )
 
 // Batch defaults applied when a chain has no overrides.
@@ -38,7 +39,7 @@ type Options struct {
 // OptionsFromConfig maps chain overrides onto pipeline options: recv batching
 // follows the destination chain, ack and timeout batching and the ack relay
 // flags follow the source chain.
-func OptionsFromConfig(cfg config.Config, route Route) Options {
+func OptionsFromConfig(cfg config.Config, route transfer.Route) Options {
 	opts := Options{
 		RelaySuccessAcks:    defaultRelaySuccessAcks,
 		RelayErrorAcks:      defaultRelayErrorAcks,

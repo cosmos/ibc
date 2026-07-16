@@ -1,4 +1,4 @@
-package pipeline
+package dispatch
 
 import (
 	"context"
@@ -8,43 +8,45 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 )
 
 // Manager creates and caches one pipeline per route.
 type Manager struct {
 	logger *slog.Logger
 	cfg    config.Config
-	deps   Deps
+	deps   pipeline.Deps
 
 	mu        sync.Mutex
-	pipelines map[Route]TransferPipeline
+	pipelines map[transfer.Route]pipeline.TransferPipeline
 }
 
 // RouteManager routes transfers to their pipeline.
 type RouteManager interface {
-	Pipeline(ctx context.Context, transfer *Transfer) (TransferPipeline, error)
+	Pipeline(ctx context.Context, tr *transfer.Transfer) (pipeline.TransferPipeline, error)
 	Close()
 }
 
 var _ RouteManager = (*Manager)(nil)
 
-func NewManager(logger *slog.Logger, cfg config.Config, deps Deps) *Manager {
+func NewManager(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) *Manager {
 	return &Manager{
 		logger:    logger,
 		cfg:       cfg,
 		deps:      deps,
-		pipelines: make(map[Route]TransferPipeline),
+		pipelines: make(map[transfer.Route]pipeline.TransferPipeline),
 	}
 }
 
-// Pipeline returns the pipeline for the transfer's route, creating it on
+// Pipeline returns the pipeline for the tr's route, creating it on
 // first use. Transfers whose source client has no configured route error.
-func (m *Manager) Pipeline(ctx context.Context, transfer *Transfer) (TransferPipeline, error) {
-	route := Route{
-		SourceChainID:       transfer.SourceChainID,
-		SourceClientID:      transfer.PacketSourceClientID,
-		DestinationChainID:  transfer.DestinationChainID,
-		DestinationClientID: transfer.PacketDestinationClientID,
+func (m *Manager) Pipeline(ctx context.Context, tr *transfer.Transfer) (pipeline.TransferPipeline, error) {
+	route := transfer.Route{
+		SourceChainID:       tr.SourceChainID,
+		SourceClientID:      tr.PacketSourceClientID,
+		DestinationChainID:  tr.DestinationChainID,
+		DestinationClientID: tr.PacketDestinationClientID,
 	}
 
 	if !m.isRouted(route) {
@@ -69,13 +71,13 @@ func (m *Manager) Pipeline(ctx context.Context, transfer *Transfer) (TransferPip
 		"destinationClientID", route.DestinationClientID,
 	)
 
-	pipeline := NewDeduper(NewPipeline(ctx, m.logger, m.deps, route, OptionsFromConfig(m.cfg, route)))
+	pipeline := NewDeduper(pipeline.NewPipeline(ctx, m.logger, m.deps, route, pipeline.OptionsFromConfig(m.cfg, route)))
 	m.pipelines[route] = pipeline
 
 	return pipeline, nil
 }
 
-func (m *Manager) isRouted(route Route) bool {
+func (m *Manager) isRouted(route transfer.Route) bool {
 	client, ok := m.cfg.Relayer.Client(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return false

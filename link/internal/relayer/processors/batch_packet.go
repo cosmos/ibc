@@ -1,4 +1,4 @@
-package pipeline
+package processors
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -18,14 +19,6 @@ import (
 // waitForChainTimeout bounds how long batch delivery waits for the target
 // chain to catch up to the current time before gas estimation.
 const waitForChainTimeout = 2 * time.Minute
-
-// Route identifies the client pair a pipeline relays.
-type Route struct {
-	SourceChainID       string
-	SourceClientID      string
-	DestinationChainID  string
-	DestinationClientID string
-}
 
 // TxStorage persists batch delivery results transactionally.
 type TxStorage interface {
@@ -38,23 +31,26 @@ type batchDeps struct {
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
 	submitter txmgr.Submitter
-	route     Route
+	route     transfer.Route
 }
 
 // collectTxIDs gathers the unique tx ids and all sequences for a batch,
 // poisoning transfers whose hash cannot be decoded.
-func collectTxIDs(transfers []*Transfer, txHash func(*Transfer) (string, error)) (txIDs [][]byte, sequences []uint64) {
+func collectTxIDs(
+	transfers []*transfer.Transfer,
+	txHash func(*transfer.Transfer) (string, error),
+) (txIDs [][]byte, sequences []uint64) {
 	txSet := make(map[string]struct{})
 
-	for _, transfer := range transfers {
-		hash, err := txHash(transfer)
+	for _, tr := range transfers {
+		hash, err := txHash(tr)
 		if err != nil {
-			transfer.ProcessingError = err
+			tr.ProcessingError = err
 
 			continue
 		}
 
-		sequences = append(sequences, transfer.PacketSequenceNumber)
+		sequences = append(sequences, tr.PacketSequenceNumber)
 
 		if _, ok := txSet[hash]; ok {
 			continue
@@ -62,7 +58,7 @@ func collectTxIDs(transfers []*Transfer, txHash func(*Transfer) (string, error))
 
 		txID, err := hex.DecodeString(strings.TrimPrefix(hash, "0x"))
 		if err != nil {
-			transfer.ProcessingError = errors.Wrapf(err, "decoding tx hash %q", hash)
+			tr.ProcessingError = errors.Wrapf(err, "decoding tx hash %q", hash)
 
 			continue
 		}
@@ -75,15 +71,15 @@ func collectTxIDs(transfers []*Transfer, txHash func(*Transfer) (string, error))
 }
 
 // processBatch requests relay tx bytes from the proof api, submits them on
-// the target chain, and records the resulting tx on every healthy transfer.
+// the target chain, and records the resulting tx on every healthy tr.
 func (d batchDeps) processBatch(
 	ctx context.Context,
-	transfers []*Transfer,
+	transfers []*transfer.Transfer,
 	req *proto.RelayByTxRequest,
 	targetChainID string,
 	record func(repo store.Repository, key store.PacketKey, tx store.PacketTx) error,
-	apply func(transfer *Transfer, tx store.PacketTx),
-) ([]*Transfer, error) {
+	apply func(tr *transfer.Transfer, tx store.PacketTx),
+) ([]*transfer.Transfer, error) {
 	resp, err := d.proofAPI.RelayByTx(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, errors.Wrap(err, "getting relay tx from proof api")
@@ -118,17 +114,17 @@ func (d batchDeps) processBatch(
 	}
 
 	err = d.storage.Transact(ctx, func(repo store.Repository) error {
-		for _, transfer := range transfers {
-			if transfer.ProcessingError != nil {
+		for _, tr := range transfers {
+			if tr.ProcessingError != nil {
 				continue
 			}
 
-			if errRecord := record(repo, transfer.Key(), tx); errRecord != nil {
+			if errRecord := record(repo, tr.Key(), tx); errRecord != nil {
 				return errors.Wrapf(
 					errRecord,
 					"recording relay tx %s for sequence %d",
 					tx.Hash,
-					transfer.PacketSequenceNumber,
+					tr.PacketSequenceNumber,
 				)
 			}
 		}
@@ -139,12 +135,12 @@ func (d batchDeps) processBatch(
 		return nil, errors.Wrap(err, "recording batch relay txs")
 	}
 
-	for _, transfer := range transfers {
-		if transfer.ProcessingError != nil {
+	for _, tr := range transfers {
+		if tr.ProcessingError != nil {
 			continue
 		}
 
-		apply(transfer, tx)
+		apply(tr, tx)
 	}
 
 	return transfers, nil

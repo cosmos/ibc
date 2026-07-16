@@ -1,4 +1,4 @@
-package pipeline
+package dispatch
 
 import (
 	"context"
@@ -7,6 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,19 +18,46 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
+const recvTxHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+var testRoute = transfer.Route{
+	SourceChainID:       "1",
+	SourceClientID:      "base-0",
+	DestinationChainID:  "8453",
+	DestinationClientID: "ethereum-0",
+}
+
+func routedConfig() config.Config {
+	return config.Config{
+		Relayer: config.RelayerConfig{
+			Clients: []config.ClientConfig{
+				{
+					Alias:                "test-route",
+					ClientID:             testRoute.SourceClientID,
+					ChainID:              testRoute.SourceChainID,
+					CounterpartyChainID:  testRoute.DestinationChainID,
+					CounterpartyClientID: testRoute.DestinationClientID,
+					Type:                 config.ClientTypeAttestation,
+				},
+			},
+			Routes: []config.RouteConfig{{SourceClient: "test-route"}},
+		},
+	}
+}
+
 // fakePipeline records pushes and lets tests control Push acceptance.
 type fakePipeline struct {
 	mu     sync.Mutex
-	pushed []*Transfer
+	pushed []*transfer.Transfer
 	accept bool
-	out    chan *Transfer
+	out    chan *transfer.Transfer
 }
 
 func newFakePipeline(accept bool) *fakePipeline {
-	return &fakePipeline{accept: accept, out: make(chan *Transfer, 100)}
+	return &fakePipeline{accept: accept, out: make(chan *transfer.Transfer, 100)}
 }
 
-func (p *fakePipeline) Push(_ context.Context, t *Transfer) bool {
+func (p *fakePipeline) Push(_ context.Context, t *transfer.Transfer) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -39,7 +70,7 @@ func (p *fakePipeline) Push(_ context.Context, t *Transfer) bool {
 	return true
 }
 
-func (p *fakePipeline) Poll() (*Transfer, error) {
+func (p *fakePipeline) Poll() (*transfer.Transfer, error) {
 	t, ok := <-p.out
 	if !ok {
 		return nil, errors.New("closed")
@@ -58,12 +89,12 @@ func (p *fakePipeline) pushCount() int {
 }
 
 type fakeManager struct {
-	pipeline TransferPipeline
+	pipeline pipeline.TransferPipeline
 	err      error
 	closed   bool
 }
 
-func (m *fakeManager) Pipeline(context.Context, *Transfer) (TransferPipeline, error) {
+func (m *fakeManager) Pipeline(context.Context, *transfer.Transfer) (pipeline.TransferPipeline, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -181,16 +212,16 @@ func TestPipelineDeduper(t *testing.T) {
 		inner := newFakePipeline(true)
 		deduper := NewDeduper(inner)
 
-		transfer := testTransfer(t)
+		tr := testTransfer(t)
 
-		assert.True(t, deduper.Push(ctx, transfer))
-		assert.False(t, deduper.Push(ctx, transfer))
+		assert.True(t, deduper.Push(ctx, tr))
+		assert.False(t, deduper.Push(ctx, tr))
 		assert.Equal(t, 1, inner.pushCount())
 
-		// once the transfer exits the pipeline it can be pushed again
-		inner.out <- transfer
+		// once the tr exits the pipeline it can be pushed again
+		inner.out <- tr
 		require.Eventually(t, func() bool {
-			return deduper.Push(ctx, transfer)
+			return deduper.Push(ctx, tr)
 		}, 5*time.Second, 10*time.Millisecond)
 
 		deduper.Close()
@@ -208,12 +239,12 @@ func TestManager(t *testing.T) {
 		// pipeline outputs only close on cancellation; cancel before Close
 		t.Cleanup(func() { cancel(); manager.Close() })
 
-		transfer := env.createPacket(t, time.Now().Add(time.Hour))
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-		first, err := manager.Pipeline(pipelineCtx, transfer)
+		first, err := manager.Pipeline(pipelineCtx, tr)
 		require.NoError(t, err)
 
-		second, err := manager.Pipeline(pipelineCtx, transfer)
+		second, err := manager.Pipeline(pipelineCtx, tr)
 		require.NoError(t, err)
 
 		assert.Same(t, first, second)
@@ -224,10 +255,10 @@ func TestManager(t *testing.T) {
 
 		manager := NewManager(slog.Default(), routedConfig(), deps)
 
-		transfer := env.createPacket(t, time.Now().Add(time.Hour))
-		transfer.PacketSourceClientID = "unknown-0"
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
+		tr.PacketSourceClientID = "unknown-0"
 
-		_, err := manager.Pipeline(ctx, transfer)
+		_, err := manager.Pipeline(ctx, tr)
 
 		require.ErrorContains(t, err, "no route configured")
 	})

@@ -1,4 +1,4 @@
-package pipeline
+package transfer
 
 import "github.com/pkg/errors"
 

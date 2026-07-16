@@ -1,10 +1,11 @@
-package pipeline
+package processors
 
 import (
 	"context"
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -22,7 +23,7 @@ func NewBatchRecvPacket(
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	submitter txmgr.Submitter,
-	route Route,
+	route transfer.Route,
 ) BatchRecvPacket {
 	return BatchRecvPacket{
 		batchDeps{chains: chainClients, storage: storage, proofAPI: proofAPI, submitter: submitter, route: route},
@@ -30,8 +31,8 @@ func NewBatchRecvPacket(
 }
 
 //nolint:dupl // the batch directions are structurally parallel by design
-func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	txIDs, sequences := collectTxIDs(transfers, func(t *Transfer) (string, error) {
+func (p BatchRecvPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+	txIDs, sequences := collectTxIDs(transfers, func(t *transfer.Transfer) (string, error) {
 		return t.SourceTxHash, nil
 	})
 
@@ -46,10 +47,10 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		func(repo store.Repository, key store.PacketKey, tx store.PacketTx) error {
 			return repo.UpdatePacketRecvTx(ctx, key, tx)
 		},
-		func(transfer *Transfer, tx store.PacketTx) {
-			transfer.RecvTxHash = &tx.Hash
-			transfer.RecvTxTime = &tx.Time
-			transfer.RecvTxRelayerAddress = &tx.RelayerAddress
+		func(tr *transfer.Transfer, tx store.PacketTx) {
+			tr.RecvTxHash = &tx.Hash
+			tr.RecvTxTime = &tx.Time
+			tr.RecvTxRelayerAddress = &tx.RelayerAddress
 		})
 	if err != nil {
 		return nil, errors.Wrapf(err, "delivering recv tx for batch of %d transfers", len(sequences))
@@ -58,14 +59,14 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 	return out, nil
 }
 
-func (p BatchRecvPacket) Cancel(transfers []*Transfer, err error) {
-	for _, transfer := range transfers {
-		transfer.GetLogger().Error("Delivering batch recv tx", "error", err)
+func (p BatchRecvPacket) Cancel(transfers []*transfer.Transfer, err error) {
+	for _, tr := range transfers {
+		tr.GetLogger().Error("Delivering batch recv tx", "error", err)
 	}
 }
 
-func (p BatchRecvPacket) ShouldProcess(transfer *Transfer) bool {
-	return transfer.RecvTxHash == nil && !transfer.IsTimedOut()
+func (p BatchRecvPacket) ShouldProcess(tr *transfer.Transfer) bool {
+	return tr.RecvTxHash == nil && !tr.IsTimedOut()
 }
 
 func (p BatchRecvPacket) Status() store.RelayStatus {
