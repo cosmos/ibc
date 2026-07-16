@@ -230,28 +230,39 @@ func (c Config) crossValidate() error {
 	}
 
 	if err := c.validateRelayerSigners(signerSet); err != nil {
-		return errors.Wrap(err, ".relayer.signers")
+		return errors.Wrap(err, ".relayer.routesToRelay")
 	}
 
 	return nil
 }
 
-// validateRelayerSigners ensures relayer signer entries resolve and that every
-// chain relay transactions are submitted to has a signer.
+// validateRelayerSigners ensures every route's signer aliases resolve to a
+// configured signer and that all routes agree on one signer per chain.
 func (c Config) validateRelayerSigners(signerSet map[string]struct{}) error {
-	for chainID, alias := range c.Relayer.Signers {
-		if _, ok := c.Chain(chainID); !ok {
-			return errors.Errorf("chainId %q not declared in top-level chains", chainID)
-		}
-
-		if _, exists := signerSet[alias]; !exists {
-			return errors.Errorf("references unknown signer %q for chain %q", alias, chainID)
-		}
-	}
-
 	if len(c.Relayer.Routes) > 0 && c.Relayer.ProofAPI.GRPC == "" {
 		return errors.New("proof api grpc address required to relay routes")
 	}
+
+	for _, route := range c.Relayer.Routes {
+		for _, alias := range []string{route.SourceSignerAlias, route.DestSignerAlias} {
+			if _, exists := signerSet[alias]; !exists {
+				return errors.Errorf("route %q references unknown signer %q", route.SourceClient, alias)
+			}
+		}
+	}
+
+	if _, err := RelayerChainSigners(c); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RelayerChainSigners resolves the signer alias for every chain relayed by the
+// configured routes. There is one submitter per chain, so routes sharing a
+// chain must name the same signer.
+func RelayerChainSigners(c Config) (map[string]string, error) {
+	aliases := make(map[string]string)
 
 	for _, route := range c.Relayer.Routes {
 		client, ok := c.Relayer.ClientByAlias(route.SourceClient)
@@ -259,14 +270,23 @@ func (c Config) validateRelayerSigners(signerSet map[string]struct{}) error {
 			continue // reported by route validation
 		}
 
-		for _, chainID := range []string{client.ChainID, client.CounterpartyChainID} {
-			if _, ok := c.Relayer.Signers[chainID]; !ok {
-				return errors.Errorf("missing signer for chain %q relayed by route %q", chainID, route.SourceClient)
+		for _, binding := range []struct{ chainID, alias string }{
+			{client.ChainID, route.SourceSignerAlias},
+			{client.CounterpartyChainID, route.DestSignerAlias},
+		} {
+			existing, seen := aliases[binding.chainID]
+			if seen && existing != binding.alias {
+				return nil, errors.Errorf(
+					"chain %q is assigned conflicting signers %q and %q across routes",
+					binding.chainID, existing, binding.alias,
+				)
 			}
+
+			aliases[binding.chainID] = binding.alias
 		}
 	}
 
-	return nil
+	return aliases, nil
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are

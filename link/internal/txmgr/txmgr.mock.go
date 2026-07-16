@@ -38,8 +38,8 @@ func (_m *MockSubmitter) EXPECT() *MockSubmitter_Expecter {
 }
 
 // ShouldRetry provides a mock function for the type MockSubmitter
-func (_mock *MockSubmitter) ShouldRetry(ctx context.Context, chainID string, txHash string, expiry time.Duration, sentAt time.Time) (bool, error) {
-	ret := _mock.Called(ctx, chainID, txHash, expiry, sentAt)
+func (_mock *MockSubmitter) ShouldRetry(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time) (bool, error) {
+	ret := _mock.Called(ctx, txHash, expiry, sentAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ShouldRetry")
@@ -47,16 +47,16 @@ func (_mock *MockSubmitter) ShouldRetry(ctx context.Context, chainID string, txH
 
 	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Duration, time.Time) (bool, error)); ok {
-		return returnFunc(ctx, chainID, txHash, expiry, sentAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Duration, time.Time) (bool, error)); ok {
+		return returnFunc(ctx, txHash, expiry, sentAt)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Duration, time.Time) bool); ok {
-		r0 = returnFunc(ctx, chainID, txHash, expiry, sentAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Duration, time.Time) bool); ok {
+		r0 = returnFunc(ctx, txHash, expiry, sentAt)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, time.Duration, time.Time) error); ok {
-		r1 = returnFunc(ctx, chainID, txHash, expiry, sentAt)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Duration, time.Time) error); ok {
+		r1 = returnFunc(ctx, txHash, expiry, sentAt)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -70,15 +70,14 @@ type MockSubmitter_ShouldRetry_Call struct {
 
 // ShouldRetry is a helper method to define mock.On call
 //   - ctx context.Context
-//   - chainID string
 //   - txHash string
 //   - expiry time.Duration
 //   - sentAt time.Time
-func (_e *MockSubmitter_Expecter) ShouldRetry(ctx any, chainID any, txHash any, expiry any, sentAt any) *MockSubmitter_ShouldRetry_Call {
-	return &MockSubmitter_ShouldRetry_Call{Call: _e.mock.On("ShouldRetry", ctx, chainID, txHash, expiry, sentAt)}
+func (_e *MockSubmitter_Expecter) ShouldRetry(ctx any, txHash any, expiry any, sentAt any) *MockSubmitter_ShouldRetry_Call {
+	return &MockSubmitter_ShouldRetry_Call{Call: _e.mock.On("ShouldRetry", ctx, txHash, expiry, sentAt)}
 }
 
-func (_c *MockSubmitter_ShouldRetry_Call) Run(run func(ctx context.Context, chainID string, txHash string, expiry time.Duration, sentAt time.Time)) *MockSubmitter_ShouldRetry_Call {
+func (_c *MockSubmitter_ShouldRetry_Call) Run(run func(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time)) *MockSubmitter_ShouldRetry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -88,24 +87,19 @@ func (_c *MockSubmitter_ShouldRetry_Call) Run(run func(ctx context.Context, chai
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 string
+		var arg2 time.Duration
 		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg2 = args[2].(time.Duration)
 		}
-		var arg3 time.Duration
+		var arg3 time.Time
 		if args[3] != nil {
-			arg3 = args[3].(time.Duration)
-		}
-		var arg4 time.Time
-		if args[4] != nil {
-			arg4 = args[4].(time.Time)
+			arg3 = args[3].(time.Time)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
-			arg4,
 		)
 	})
 	return _c
@@ -116,14 +110,14 @@ func (_c *MockSubmitter_ShouldRetry_Call) Return(b bool, err error) *MockSubmitt
 	return _c
 }
 
-func (_c *MockSubmitter_ShouldRetry_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string, expiry time.Duration, sentAt time.Time) (bool, error)) *MockSubmitter_ShouldRetry_Call {
+func (_c *MockSubmitter_ShouldRetry_Call) RunAndReturn(run func(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time) (bool, error)) *MockSubmitter_ShouldRetry_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Submit provides a mock function for the type MockSubmitter
-func (_mock *MockSubmitter) Submit(ctx context.Context, chainID string, intent TxIntent) (*Submission, error) {
-	ret := _mock.Called(ctx, chainID, intent)
+func (_mock *MockSubmitter) Submit(ctx context.Context, intent TxIntent) (*Submission, error) {
+	ret := _mock.Called(ctx, intent)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Submit")
@@ -131,18 +125,18 @@ func (_mock *MockSubmitter) Submit(ctx context.Context, chainID string, intent T
 
 	var r0 *Submission
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, TxIntent) (*Submission, error)); ok {
-		return returnFunc(ctx, chainID, intent)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, TxIntent) (*Submission, error)); ok {
+		return returnFunc(ctx, intent)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, TxIntent) *Submission); ok {
-		r0 = returnFunc(ctx, chainID, intent)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, TxIntent) *Submission); ok {
+		r0 = returnFunc(ctx, intent)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*Submission)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, TxIntent) error); ok {
-		r1 = returnFunc(ctx, chainID, intent)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, TxIntent) error); ok {
+		r1 = returnFunc(ctx, intent)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -156,30 +150,24 @@ type MockSubmitter_Submit_Call struct {
 
 // Submit is a helper method to define mock.On call
 //   - ctx context.Context
-//   - chainID string
 //   - intent TxIntent
-func (_e *MockSubmitter_Expecter) Submit(ctx any, chainID any, intent any) *MockSubmitter_Submit_Call {
-	return &MockSubmitter_Submit_Call{Call: _e.mock.On("Submit", ctx, chainID, intent)}
+func (_e *MockSubmitter_Expecter) Submit(ctx any, intent any) *MockSubmitter_Submit_Call {
+	return &MockSubmitter_Submit_Call{Call: _e.mock.On("Submit", ctx, intent)}
 }
 
-func (_c *MockSubmitter_Submit_Call) Run(run func(ctx context.Context, chainID string, intent TxIntent)) *MockSubmitter_Submit_Call {
+func (_c *MockSubmitter_Submit_Call) Run(run func(ctx context.Context, intent TxIntent)) *MockSubmitter_Submit_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 TxIntent
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 TxIntent
-		if args[2] != nil {
-			arg2 = args[2].(TxIntent)
+			arg1 = args[1].(TxIntent)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
 		)
 	})
 	return _c
@@ -190,7 +178,7 @@ func (_c *MockSubmitter_Submit_Call) Return(submission *Submission, err error) *
 	return _c
 }
 
-func (_c *MockSubmitter_Submit_Call) RunAndReturn(run func(ctx context.Context, chainID string, intent TxIntent) (*Submission, error)) *MockSubmitter_Submit_Call {
+func (_c *MockSubmitter_Submit_Call) RunAndReturn(run func(ctx context.Context, intent TxIntent) (*Submission, error)) *MockSubmitter_Submit_Call {
 	_c.Call.Return(run)
 	return _c
 }

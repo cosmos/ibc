@@ -3,10 +3,11 @@ package evm
 import (
 	"context"
 	"errors"
-	ethereum "github.com/ethereum/go-ethereum"
 	"math/big"
 	"testing"
 	"time"
+
+	ethereum "github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"

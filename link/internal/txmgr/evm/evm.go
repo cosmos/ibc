@@ -37,14 +37,10 @@ type ETHClient interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 }
 
-// EVM submits transactions to EVM chains.
-type EVM struct {
-	chains map[string]*evmChain
-}
+var _ txmgr.Submitter = (*Submitter)(nil)
 
-var _ txmgr.Submitter = (*EVM)(nil)
-
-type evmChain struct {
+// Submitter signs and broadcasts transactions on one EVM chain.
+type Submitter struct {
 	chainID   string
 	eth       ETHClient
 	signer    signer.Signer
@@ -69,11 +65,18 @@ type ChainOptions struct {
 	GasTipCapMultiplier *float64
 }
 
-// NewFromConfig builds a submitter for every chain with a relayer signer.
-func NewFromConfig(cfg config.Config, signers *signer.Set) (*EVM, error) {
-	evmChains := make(map[string]*evmChain, len(cfg.Relayer.Signers))
+// NewFromConfig builds one submitter per chain relayed by the configured
+// routes. Each route names the signer for its source and destination chains;
+// a chain always resolves to a single signer (enforced by config validation).
+func NewFromConfig(cfg config.Config, signers *signer.Set) (*txmgr.SubmitterSet, error) {
+	aliases, err := config.RelayerChainSigners(cfg)
+	if err != nil {
+		return nil, err
+	}
 
-	for chainID, alias := range cfg.Relayer.Signers {
+	submitters := make(map[string]txmgr.Submitter, len(aliases))
+
+	for chainID, alias := range aliases {
 		chain, ok := cfg.Chain(chainID)
 		if !ok || chain.Type() != config.ChainTypeEVM {
 			return nil, errors.Errorf("chain %q is not a configured evm chain", chainID)
@@ -100,28 +103,18 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*EVM, error) {
 			}
 		}
 
-		submitterChain, err := newEVMChain(chainID, eth, chainSigner, opts)
+		submitterChain, err := NewSubmitter(chainID, eth, chainSigner, opts)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating submitter for chain %q", chainID)
 		}
 
-		evmChains[chainID] = submitterChain
+		submitters[chainID] = submitterChain
 	}
 
-	return &EVM{chains: evmChains}, nil
+	return txmgr.NewSubmitterSet(submitters), nil
 }
 
-// NewWithChain builds a submitter for a single chain; used in tests.
-func NewWithChain(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*EVM, error) {
-	chain, err := newEVMChain(chainID, eth, chainSigner, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &EVM{chains: map[string]*evmChain{chainID: chain}}, nil
-}
-
-func newEVMChain(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*evmChain, error) {
+func NewSubmitter(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*Submitter, error) {
 	chainIDInt, ok := new(big.Int).SetString(chainID, 10)
 	if !ok {
 		return nil, errors.Errorf("invalid evm chain id %q", chainID)
@@ -141,7 +134,7 @@ func newEVMChain(chainID string, eth ETHClient, chainSigner signer.Signer, opts 
 		delay = DefaultTxSubmissionDelay
 	}
 
-	return &evmChain{
+	return &Submitter{
 		chainID:    chainID,
 		eth:        eth,
 		signer:     chainSigner,
@@ -154,31 +147,7 @@ func newEVMChain(chainID string, eth ETHClient, chainSigner signer.Signer, opts 
 	}, nil
 }
 
-func (e *EVM) Submit(ctx context.Context, chainID string, intent txmgr.TxIntent) (*txmgr.Submission, error) {
-	chain, ok := e.chains[chainID]
-	if !ok {
-		return nil, errors.Errorf("no submitter configured for chain %q", chainID)
-	}
-
-	return chain.submit(ctx, intent)
-}
-
-func (e *EVM) ShouldRetry(
-	ctx context.Context,
-	chainID string,
-	txHash string,
-	expiry time.Duration,
-	sentAt time.Time,
-) (bool, error) {
-	chain, ok := e.chains[chainID]
-	if !ok {
-		return false, errors.Errorf("no submitter configured for chain %q", chainID)
-	}
-
-	return chain.shouldRetry(ctx, txHash, expiry, sentAt)
-}
-
-func (c *evmChain) submit(ctx context.Context, intent txmgr.TxIntent) (*txmgr.Submission, error) {
+func (c *Submitter) Submit(ctx context.Context, intent txmgr.TxIntent) (*txmgr.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -219,7 +188,7 @@ func (c *evmChain) submit(ctx context.Context, intent txmgr.TxIntent) (*txmgr.Su
 	}, nil
 }
 
-func (c *evmChain) newTx(ctx context.Context, intent txmgr.TxIntent) (*types.Transaction, error) {
+func (c *Submitter) newTx(ctx context.Context, intent txmgr.TxIntent) (*types.Transaction, error) {
 	if !common.IsHexAddress(intent.To) {
 		return nil, errors.Errorf("invalid to address %q", intent.To)
 	}
@@ -267,7 +236,7 @@ func (c *evmChain) newTx(ctx context.Context, intent txmgr.TxIntent) (*types.Tra
 	}), nil
 }
 
-func (c *evmChain) shouldRetry(
+func (c *Submitter) ShouldRetry(
 	ctx context.Context,
 	txHash string,
 	expiry time.Duration,

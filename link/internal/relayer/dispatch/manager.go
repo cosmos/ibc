@@ -71,7 +71,12 @@ func (m *Manager) Pipeline(ctx context.Context, tr *transfer.Transfer) (pipeline
 		"destinationClientID", route.DestinationClientID,
 	)
 
-	pipeline := NewDeduper(pipeline.NewPipeline(ctx, m.logger, m.deps, route, pipeline.OptionsFromConfig(m.cfg, route)))
+	inner, err := pipeline.NewPipeline(ctx, m.logger, m.deps, route, pipeline.OptionsFromConfig(m.cfg, route))
+	if err != nil {
+		return nil, errors.Wrap(err, "creating pipeline")
+	}
+
+	pipeline := NewDeduper(inner)
 	m.pipelines[route] = pipeline
 
 	return pipeline, nil

@@ -2,10 +2,11 @@ package evm
 
 import (
 	"context"
-	"github.com/cosmos/ibc/link/internal/txmgr"
 	"math/big"
 	"testing"
 	"time"
+
+	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -24,7 +25,7 @@ const (
 	toAddress  = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 )
 
-func newTestSubmitter(t *testing.T, opts ChainOptions) (*EVM, *MockETHClient, signer.Signer) {
+func newTestSubmitter(t *testing.T, opts ChainOptions) (*Submitter, *MockETHClient, signer.Signer) {
 	t.Helper()
 
 	eth := NewMockETHClient(t)
@@ -32,7 +33,7 @@ func newTestSubmitter(t *testing.T, opts ChainOptions) (*EVM, *MockETHClient, si
 	chainSigner, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)
 
-	submitter, err := NewWithChain(chainIDEth, eth, chainSigner, opts)
+	submitter, err := NewSubmitter(chainIDEth, eth, chainSigner, opts)
 	require.NoError(t, err)
 
 	return submitter, eth, chainSigner
@@ -59,7 +60,7 @@ func TestSubmit(t *testing.T) {
 			sent = tx
 		}).Return(nil).Once()
 
-		sub, err := submitter.Submit(ctx, chainIDEth, txmgr.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}})
+		sub, err := submitter.Submit(ctx, txmgr.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}})
 
 		require.NoError(t, err)
 		require.NotNil(t, sent)
@@ -90,17 +91,9 @@ func TestSubmit(t *testing.T) {
 		eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
 		eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return(nil, nil).Once()
 
-		_, err := submitter.Submit(ctx, chainIDEth, txmgr.TxIntent{To: toAddress, Data: []byte{0x01}})
+		_, err := submitter.Submit(ctx, txmgr.TxIntent{To: toAddress, Data: []byte{0x01}})
 
 		require.ErrorContains(t, err, "no contract code")
-	})
-
-	t.Run("unknownChain", func(t *testing.T) {
-		submitter, _, _ := newTestSubmitter(t, ChainOptions{})
-
-		_, err := submitter.Submit(ctx, "999", txmgr.TxIntent{To: toAddress})
-
-		require.ErrorContains(t, err, "no submitter configured")
 	})
 }
 
@@ -113,7 +106,7 @@ func TestShouldRetry(t *testing.T) {
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
 
-		retry, err := submitter.ShouldRetry(ctx, chainIDEth, txHash, time.Hour, time.Now())
+		retry, err := submitter.ShouldRetry(ctx, txHash, time.Hour, time.Now())
 
 		require.ErrorIs(t, err, v2.ErrTxNotFound)
 		assert.False(t, retry)
@@ -124,7 +117,7 @@ func TestShouldRetry(t *testing.T) {
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
 
-		retry, err := submitter.ShouldRetry(ctx, chainIDEth, txHash, time.Minute, time.Now().Add(-time.Hour))
+		retry, err := submitter.ShouldRetry(ctx, txHash, time.Minute, time.Now().Add(-time.Hour))
 
 		require.NoError(t, err)
 		assert.True(t, retry)
@@ -134,7 +127,7 @@ func TestShouldRetry(t *testing.T) {
 		submitter, eth, _ := newTestSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).Once()
 
-		retry, err := submitter.ShouldRetry(ctx, chainIDEth, txHash, time.Minute, time.Now())
+		retry, err := submitter.ShouldRetry(ctx, txHash, time.Minute, time.Now())
 
 		require.NoError(t, err)
 		assert.True(t, retry)
@@ -144,7 +137,7 @@ func TestShouldRetry(t *testing.T) {
 		submitter, eth, _ := newTestSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).Once()
 
-		retry, err := submitter.ShouldRetry(ctx, chainIDEth, txHash, time.Minute, time.Now())
+		retry, err := submitter.ShouldRetry(ctx, txHash, time.Minute, time.Now())
 
 		require.NoError(t, err)
 		assert.False(t, retry)
@@ -154,7 +147,7 @@ func TestShouldRetry(t *testing.T) {
 		submitter, eth, _ := newTestSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, errors.New("rpc down")).Once()
 
-		_, err := submitter.ShouldRetry(ctx, chainIDEth, txHash, time.Minute, time.Now())
+		_, err := submitter.ShouldRetry(ctx, txHash, time.Minute, time.Now())
 
 		require.ErrorContains(t, err, "rpc down")
 	})

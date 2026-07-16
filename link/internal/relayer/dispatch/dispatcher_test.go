@@ -40,7 +40,7 @@ func routedConfig() config.Config {
 					Type:                 config.ClientTypeAttestation,
 				},
 			},
-			Routes: []config.RouteConfig{{SourceClient: "test-route"}},
+			Routes: []config.RouteConfig{{SourceClient: "test-route", SourceSignerAlias: "test-signer", DestSignerAlias: "test-signer"}},
 		},
 	}
 }

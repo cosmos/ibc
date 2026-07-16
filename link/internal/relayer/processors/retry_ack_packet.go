@@ -42,7 +42,6 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*tr
 
 	retry, err := p.submitter.ShouldRetry(
 		ctx,
-		p.route.SourceChainID,
 		*tr.AckTxHash,
 		RetryAckExpiry,
 		*tr.AckTxTime,

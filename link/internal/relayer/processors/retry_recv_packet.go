@@ -41,7 +41,6 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *transfer.Transfer) (*t
 
 	retry, err := p.submitter.ShouldRetry(
 		ctx,
-		p.route.DestinationChainID,
 		*tr.RecvTxHash,
 		RetryRecvExpiry,
 		*tr.RecvTxTime,

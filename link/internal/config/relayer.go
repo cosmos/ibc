@@ -28,8 +28,6 @@ type RelayerConfig struct {
 	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
 	Clients        []ClientConfig         `yaml:"clients"`
 	Routes         []RouteConfig          `yaml:"routesToRelay"`
-	// Signers the signer alias used to submit relay transactions per chain id.
-	Signers map[string]string `yaml:"signers,omitempty"`
 	// ProofAPI the proof api used to build relay transactions.
 	ProofAPI ProofAPIConfig `yaml:"proofApi,omitempty"`
 }
@@ -98,8 +96,12 @@ type AttestorEntry struct {
 // RouteConfig packets sent from the source client are relayed through the
 // entire packet lifecycle: recv, ack, timeout.
 type RouteConfig struct {
-	SourceClient string          `yaml:"sourceClient"`
-	AutoRelay    AutoRelayConfig `yaml:"autoRelay,omitempty"`
+	SourceClient string `yaml:"sourceClient"`
+	// SourceSignerAlias and DestSignerAlias are the signer aliases used to submit relay
+	// transactions on the route's source and destination chains.
+	SourceSignerAlias string          `yaml:"sourceSignerAlias"`
+	DestSignerAlias   string          `yaml:"destSignerAlias"`
+	AutoRelay         AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -332,8 +334,13 @@ func (c AttestorEntry) Validate() error {
 }
 
 func (c RouteConfig) Validate() error {
-	if c.SourceClient == "" {
+	switch {
+	case c.SourceClient == "":
 		return errors.New(".sourceClient required")
+	case c.SourceSignerAlias == "":
+		return errors.New(".sourceSignerAlias required")
+	case c.DestSignerAlias == "":
+		return errors.New(".destSignerAlias required")
 	}
 
 	return nil

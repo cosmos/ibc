@@ -59,13 +59,14 @@ relayer:
             type: local
   routesToRelay:
     - sourceClient: "eth-to-base"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
       autoRelay:
         enabled: false
         lookback: 100
     - sourceClient: "base-to-eth"
-  signers:
-    "1": "relayer-key"
-    "8453": "relayer-key"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
 
   # proof api used to build relay transactions
   proofApi:

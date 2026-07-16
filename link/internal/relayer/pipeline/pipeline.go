@@ -35,12 +35,17 @@ type Storage interface {
 	processors.TxStorage
 }
 
+// Submitters resolves the per-chain transaction submitter.
+type Submitters interface {
+	Get(chainID string) (txmgr.Submitter, bool)
+}
+
 // Deps the external systems a pipeline relays through.
 type Deps struct {
-	Storage   Storage
-	Chains    processors.ChainClients
-	ProofAPI  proto.ProofApiServiceClient
-	Submitter txmgr.Submitter
+	Storage    Storage
+	Chains     processors.ChainClients
+	ProofAPI   proto.ProofApiServiceClient
+	Submitters Submitters
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -63,7 +68,23 @@ var _ TransferPipeline = (*Pipeline)(nil)
 // NewPipeline builds the relaying pipeline for one route. Each pipeline is
 // unique to a route because batch stages assume all packets in a batch share
 // the route's destination.
-func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route transfer.Route, opts Options) *Pipeline {
+func NewPipeline(
+	ctx context.Context,
+	logger *slog.Logger,
+	deps Deps,
+	route transfer.Route,
+	opts Options,
+) (*Pipeline, error) {
+	srcSubmitter, ok := deps.Submitters.Get(route.SourceChainID)
+	if !ok {
+		return nil, errors.Errorf("no configured submitter for source chain %s", route.SourceChainID)
+	}
+
+	dstSubmitter, ok := deps.Submitters.Get(route.DestinationChainID)
+	if !ok {
+		return nil, errors.Errorf("no configured submitter for destination chain %s", route.DestinationChainID)
+	}
+
 	logger = logger.With(
 		"sourceChainID", route.SourceChainID,
 		"sourceClientID", route.SourceClientID,
@@ -112,13 +133,13 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, deps.Submitter, route),
+			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcSubmitter, route),
 		),
 	)
 
 	// clear stuck or failed timeout txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(deps.Submitter, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcSubmitter, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
 	output = ConditionallyBatchProcess(
@@ -130,13 +151,13 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, deps.Submitter, route),
+			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstSubmitter, route),
 		),
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(deps.Submitter, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstSubmitter, deps.Storage, route)), output)
 
 	// extract the write ack from the recv tx on the destination chain
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
@@ -174,7 +195,7 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 				deps.Chains,
 				deps.Storage,
 				deps.ProofAPI,
-				deps.Submitter,
+				srcSubmitter,
 				route,
 			),
 		),
@@ -182,13 +203,13 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 
 	// clear stuck or failed ack txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(deps.Submitter, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcSubmitter, deps.Storage, route)), output)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		processors.NewStateFinisher(deps.Storage), output)
 
-	return &Pipeline{input: input, output: output}
+	return &Pipeline{input: input, output: output}, nil
 }
 
 func (p *Pipeline) Push(_ context.Context, tr *transfer.Transfer) bool {

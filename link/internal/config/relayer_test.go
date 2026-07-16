@@ -300,25 +300,38 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".attestors duplicate entry",
 			},
 			{
-				name: "relayer signer for undeclared chain",
+				name: "route source signer with unknown alias",
 				patch: func(c *Config) {
-					c.Relayer.Signers["999"] = "relayer-key"
-				},
-				errContains: `.relayer.signers: chainId "999" not declared`,
-			},
-			{
-				name: "relayer signer with unknown alias",
-				patch: func(c *Config) {
-					c.Relayer.Signers["1"] = "ghost"
+					c.Relayer.Routes[0].SourceSignerAlias = "ghost"
 				},
 				errContains: `references unknown signer "ghost"`,
 			},
 			{
-				name: "route chain missing signer",
+				name: "route dest signer with unknown alias",
 				patch: func(c *Config) {
-					delete(c.Relayer.Signers, "8453")
+					c.Relayer.Routes[0].DestSignerAlias = "ghost"
 				},
-				errContains: `missing signer for chain "8453"`,
+				errContains: `references unknown signer "ghost"`,
+			},
+			{
+				name: "route missing source signer",
+				patch: func(c *Config) {
+					c.Relayer.Routes[0].SourceSignerAlias = ""
+				},
+				errContains: ".sourceSignerAlias required",
+			},
+			{
+				name: "conflicting signers for one chain across routes",
+				patch: func(c *Config) {
+					c.Signers = append(c.Signers, SignerConfig{
+						Alias:       "other-key",
+						Type:        SignerRemote,
+						GRPC:        "kms.example.com:9090",
+						RemoteKeyID: "other-key-id",
+					})
+					c.Relayer.Routes[1].SourceSignerAlias = "other-key"
+				},
+				errContains: "conflicting signers",
 			},
 			{
 				name: "routes require proof api",

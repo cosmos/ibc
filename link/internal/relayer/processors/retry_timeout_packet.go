@@ -46,7 +46,6 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *transfer.Transfer) 
 
 	retry, err := p.submitter.ShouldRetry(
 		ctx,
-		p.route.SourceChainID,
 		*tr.TimeoutTxHash,
 		RetryTimeoutExpiry,
 		*tr.TimeoutTxTime,

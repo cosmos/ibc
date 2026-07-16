@@ -58,15 +58,15 @@ relayer:
             grpc: attestor.example.com:3000
 
   # packets sent from the source client are relayed through the entire packet
-  # lifecycle: recv, ack, timeout
+  # lifecycle: recv, ack, timeout; the signer aliases submit the relay
+  # transactions on the route's source and destination chains
   routesToRelay:
     - sourceClient: "eth-to-base"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
     - sourceClient: "base-to-eth"
-
-  # signer aliases used to submit relay transactions per chain
-  signers:
-    "1": "relayer-key"
-    "8453": "relayer-key"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
 
   # proof api used to build relay transactions
   proofApi:

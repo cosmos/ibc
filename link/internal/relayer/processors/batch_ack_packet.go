@@ -101,7 +101,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 		return nil, errors.Wrap(errWait, "waiting for chain")
 	}
 
-	submission, err := p.submitter.Submit(ctx, p.route.SourceChainID, txmgr.TxIntent{
+	submission, err := p.submitter.Submit(ctx, txmgr.TxIntent{
 		To:   resp.Msg.GetAddress(),
 		Data: resp.Msg.GetTx(),
 	})
