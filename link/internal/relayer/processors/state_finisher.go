@@ -17,13 +17,11 @@ type StatusStorage interface {
 // StateFinisher assigns terminal statuses to completed transfers. It is not a
 // Processor: it has no status of its own to persist mid-flight.
 type StateFinisher struct {
-	storage          StatusStorage
-	relaySuccessAcks bool
-	relayErrorAcks   bool
+	storage StatusStorage
 }
 
-func NewStateFinisher(storage StatusStorage, relaySuccessAcks, relayErrorAcks bool) StateFinisher {
-	return StateFinisher{storage: storage, relaySuccessAcks: relaySuccessAcks, relayErrorAcks: relayErrorAcks}
+func NewStateFinisher(storage StatusStorage) StateFinisher {
+	return StateFinisher{storage: storage}
 }
 
 func (p StateFinisher) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
@@ -31,7 +29,7 @@ func (p StateFinisher) Process(ctx context.Context, tr *transfer.Transfer) (*tra
 		return tr, nil
 	}
 
-	if !tr.IsComplete(p.relaySuccessAcks, p.relayErrorAcks) {
+	if !tr.IsComplete() {
 		tr.GetLogger().Warn("State finisher received a tr that is neither errored nor complete")
 
 		return tr, nil
@@ -40,17 +38,13 @@ func (p StateFinisher) Process(ctx context.Context, tr *transfer.Transfer) (*tra
 	switch {
 	case tr.TimeoutTxHash != nil:
 		tr.Status = store.RelayStatusCompleteWithTimeout
-	case tr.WriteAckStatus == nil:
-		tr.GetLogger().
-			Warn("This is a bug! Completed non-timeout tr has no write ack status, not finishing")
-
-		return tr, nil
 	case tr.AckTxHash != nil:
 		tr.Status = store.RelayStatusCompleteWithAck
-	case transfer.IsErrorAck(*tr.WriteAckStatus):
-		tr.Status = store.RelayStatusCompleteWithWriteAckError
 	default:
-		tr.Status = store.RelayStatusCompleteWithWriteAckSuccess
+		tr.GetLogger().
+			Warn("This is a bug! Completed tr has neither a timeout nor an ack tx, not finishing")
+
+		return tr, nil
 	}
 
 	if err := p.storage.UpdatePacketStatus(ctx, tr.Key(), tr.Status); err != nil {

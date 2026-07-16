@@ -16,9 +16,6 @@ import (
 // transfers.
 type BatchAckPacket struct {
 	batchDeps
-
-	relaySuccessAcks bool
-	relayErrorAcks   bool
 }
 
 func NewBatchAckPacket(
@@ -27,7 +24,6 @@ func NewBatchAckPacket(
 	proofAPI proto.ProofApiServiceClient,
 	submitter txmgr.Submitter,
 	route transfer.Route,
-	relaySuccessAcks, relayErrorAcks bool,
 ) BatchAckPacket {
 	return BatchAckPacket{
 		batchDeps: batchDeps{
@@ -37,8 +33,6 @@ func NewBatchAckPacket(
 			submitter: submitter,
 			route:     route,
 		},
-		relaySuccessAcks: relaySuccessAcks,
-		relayErrorAcks:   relayErrorAcks,
 	}
 }
 
@@ -84,17 +78,6 @@ func (p BatchAckPacket) Cancel(transfers []*transfer.Transfer, err error) {
 
 func (p BatchAckPacket) ShouldProcess(tr *transfer.Transfer) bool {
 	if tr.WriteAckTxHash == nil {
-		return false
-	}
-
-	if tr.WriteAckStatus == nil {
-		tr.GetLogger().Warn("This is a bug! Transfer has a write ack tx hash but no write ack status")
-
-		return false
-	}
-
-	if (transfer.IsErrorAck(*tr.WriteAckStatus) && !p.relayErrorAcks) ||
-		(transfer.IsSuccessAck(*tr.WriteAckStatus) && !p.relaySuccessAcks) {
 		return false
 	}
 

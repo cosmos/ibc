@@ -65,9 +65,9 @@ func (t *Transfer) IsTimedOut() bool {
 	return time.Now().After(t.PacketTimeoutTimestamp)
 }
 
-// IsComplete reports whether the transfer has finished its lifecycle under the
-// configured ack relaying policy.
-func (t *Transfer) IsComplete(relaySuccessAcks, relayErrorAcks bool) bool {
+// IsComplete reports whether the transfer has finished its lifecycle: timed
+// out, or received with its ack relayed back to the source chain.
+func (t *Transfer) IsComplete() bool {
 	if t.ProcessingError != nil {
 		return false
 	}
@@ -84,31 +84,5 @@ func (t *Transfer) IsComplete(relaySuccessAcks, relayErrorAcks bool) bool {
 		return true
 	}
 
-	if t.WriteAckStatus == nil {
-		t.GetLogger().Warn("This is a bug! Transfer has a write ack tx hash but no write ack status")
-
-		return false
-	}
-
-	// without an ack tx the transfer is only complete when its ack kind does
-	// not require relaying
-	if IsErrorAck(*t.WriteAckStatus) && relayErrorAcks {
-		return false
-	}
-
-	if IsSuccessAck(*t.WriteAckStatus) && relaySuccessAcks {
-		return false
-	}
-
 	return true
-}
-
-// IsErrorAck reports whether the ack is the universal error acknowledgement.
-func IsErrorAck(status store.WriteAckStatus) bool {
-	return status == store.WriteAckStatusError || status == store.WriteAckStatusUnknown
-}
-
-// IsSuccessAck reports whether the ack is a success acknowledgement.
-func IsSuccessAck(status store.WriteAckStatus) bool {
-	return status == store.WriteAckStatusSuccess
 }

@@ -114,8 +114,6 @@ func (env *pipelineEnv) storedPacket(t *testing.T, tr *transfer.Transfer) store.
 
 func fastOpts() Options {
 	return Options{
-		RelaySuccessAcks:    false,
-		RelayErrorAcks:      true,
 		RecvBatchSize:       1,
 		RecvBatchTimeout:    50 * time.Millisecond,
 		AckBatchSize:        1,
@@ -169,8 +167,8 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
-		// recv delivery via proof api and submitter
-		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Once()
+		// recv then ack delivery via proof api
+		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Times(2)
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.submitter.EXPECT().Submit(mock.Anything, testRoute.DestinationChainID, mock.Anything).Return(&txmgr.Submission{
 			TxHash:         recvTxHash,
@@ -179,17 +177,25 @@ func TestPipelineLifecycle(t *testing.T) {
 		}, nil).Once()
 		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.DestinationChainID, recvTxHash, processors.RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
 
-		// write ack found with success status; success acks are not relayed
+		// success write ack: relayed back to the source chain like any other ack
 		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
 			Return(chainsWriteAckSuccess(), nil).Once()
+		env.dstClient.EXPECT().IsTxFinalized(mock.Anything, recvTxHash, (*uint64)(nil)).Return(true, nil).Once()
+
+		// ack delivery on the source chain
+		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+		env.submitter.EXPECT().Submit(mock.Anything, testRoute.SourceChainID, mock.Anything).Return(&txmgr.Submission{
+			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
+		env.submitter.EXPECT().ShouldRetry(mock.Anything, testRoute.SourceChainID, ackTxHash, processors.RetryAckExpiry, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
 		require.Empty(t, out.Error())
-		assert.Equal(t, store.RelayStatusCompleteWithWriteAckSuccess, out.Status)
+		assert.Equal(t, store.RelayStatusCompleteWithAck, out.Status)
 
 		stored := env.storedPacket(t, out)
-		assert.Equal(t, store.RelayStatusCompleteWithWriteAckSuccess, stored.Status)
+		assert.Equal(t, store.RelayStatusCompleteWithAck, stored.Status)
 		require.NotNil(t, stored.RecvTxHash)
 		assert.Equal(t, recvTxHash, *stored.RecvTxHash)
 		require.NotNil(t, stored.WriteAckStatus)

@@ -15,16 +15,10 @@ const (
 )
 
 // Ack relaying defaults
-const (
-	defaultRelaySuccessAcks = false
-	defaultRelayErrorAcks   = true
-)
+const ()
 
 // Options the per-route pipeline settings.
 type Options struct {
-	RelaySuccessAcks bool
-	RelayErrorAcks   bool
-
 	RecvBatchSize       int
 	RecvBatchTimeout    time.Duration
 	AckBatchSize        int
@@ -41,8 +35,6 @@ type Options struct {
 // flags follow the source chain.
 func OptionsFromConfig(cfg config.Config, route transfer.Route) Options {
 	opts := Options{
-		RelaySuccessAcks:    defaultRelaySuccessAcks,
-		RelayErrorAcks:      defaultRelayErrorAcks,
 		RecvBatchSize:       DefaultBatchSize,
 		RecvBatchTimeout:    DefaultBatchTimeout,
 		AckBatchSize:        DefaultBatchSize,
@@ -52,13 +44,6 @@ func OptionsFromConfig(cfg config.Config, route transfer.Route) Options {
 	}
 
 	if src := cfg.Relayer.ChainOverride(route.SourceChainID); src != nil {
-		if src.RelaySuccessAcks != nil {
-			opts.RelaySuccessAcks = *src.RelaySuccessAcks
-		}
-
-		if src.RelayErrorAcks != nil {
-			opts.RelayErrorAcks = *src.RelayErrorAcks
-		}
 
 		if src.PacketBatchSize != nil {
 			opts.AckBatchSize = *src.PacketBatchSize

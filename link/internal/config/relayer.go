@@ -60,9 +60,7 @@ type RelayerChainOverride struct {
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
 	// FinalityOffset blocks behind the tip considered final; nil uses the
 	// chain's native finality.
-	FinalityOffset   *uint64 `yaml:"finalityOffset,omitempty"`
-	RelaySuccessAcks *bool   `yaml:"relaySuccessAcks,omitempty"`
-	RelayErrorAcks   *bool   `yaml:"relayErrorAcks,omitempty"`
+	FinalityOffset *uint64 `yaml:"finalityOffset,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.

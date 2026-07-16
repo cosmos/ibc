@@ -148,8 +148,6 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 			deps.Storage,
 			processors.NewCheckWriteAckFinality(
 				deps.Chains,
-				opts.RelaySuccessAcks,
-				opts.RelayErrorAcks,
 				opts.DestinationFinalityOffset,
 			),
 		),
@@ -176,8 +174,6 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 				deps.ProofAPI,
 				deps.Submitter,
 				route,
-				opts.RelaySuccessAcks,
-				opts.RelayErrorAcks,
 			),
 		),
 	)
@@ -188,7 +184,7 @@ func NewPipeline(ctx context.Context, logger *slog.Logger, deps Deps, route tran
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		processors.NewStateFinisher(deps.Storage, opts.RelaySuccessAcks, opts.RelayErrorAcks), output)
+		processors.NewStateFinisher(deps.Storage), output)
 
 	return &Pipeline{input: input, output: output}
 }

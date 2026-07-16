@@ -13,23 +13,12 @@ import (
 // CheckWriteAckFinality gates ack relaying on the write ack tx being finalized
 // on the destination chain.
 type CheckWriteAckFinality struct {
-	chains           ChainClients
-	relaySuccessAcks bool
-	relayErrorAcks   bool
-	finalityOffset   *uint64
+	chains         ChainClients
+	finalityOffset *uint64
 }
 
-func NewCheckWriteAckFinality(
-	chainClients ChainClients,
-	relaySuccessAcks, relayErrorAcks bool,
-	finalityOffset *uint64,
-) CheckWriteAckFinality {
-	return CheckWriteAckFinality{
-		chains:           chainClients,
-		relaySuccessAcks: relaySuccessAcks,
-		relayErrorAcks:   relayErrorAcks,
-		finalityOffset:   finalityOffset,
-	}
+func NewCheckWriteAckFinality(chainClients ChainClients, finalityOffset *uint64) CheckWriteAckFinality {
+	return CheckWriteAckFinality{chains: chainClients, finalityOffset: finalityOffset}
 }
 
 func (p CheckWriteAckFinality) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
@@ -76,14 +65,7 @@ func (p CheckWriteAckFinality) ShouldProcess(tr *transfer.Transfer) bool {
 		return false
 	}
 
-	if tr.WriteAckStatus == nil {
-		tr.GetLogger().Warn("This is a bug! Transfer has a write ack tx hash but no write ack status")
-
-		return false
-	}
-
-	return (transfer.IsErrorAck(*tr.WriteAckStatus) && p.relayErrorAcks) ||
-		(transfer.IsSuccessAck(*tr.WriteAckStatus) && p.relaySuccessAcks)
+	return tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 
 func (p CheckWriteAckFinality) Status() store.RelayStatus {
