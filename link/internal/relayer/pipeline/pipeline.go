@@ -29,7 +29,9 @@ type Storage interface {
 	processors.RecvTxStorage
 	processors.AckTimeoutTxStorage
 	processors.WriteAckStorage
-	processors.ClearTxStorage
+	processors.ClearRecvTxStorage
+	processors.ClearAckTxStorage
+	processors.ClearTimeoutTxStorage
 	processors.TxStorage
 }
 

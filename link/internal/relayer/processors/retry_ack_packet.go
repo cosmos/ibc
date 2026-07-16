@@ -3,23 +3,35 @@ package processors
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
+
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
+
+// RetryAckExpiry is how long a submitted relay tx may sit unconfirmed before it is
+// cleared and redelivered.
+const RetryAckExpiry = 2 * time.Minute
+
+// ClearAckTxStorage clears a recorded relay tx so it is resubmitted.
+type ClearAckTxStorage interface {
+	ClearPacketAckTx(ctx context.Context, key store.PacketKey) error
+}
 
 // RetryAckPacket clears a stuck or failed ack tx so the ack is redelivered on
 // the next run.
 type RetryAckPacket struct {
 	submitter txmgr.Submitter
-	storage   ClearTxStorage
+	storage   ClearAckTxStorage
 	route     transfer.Route
 }
 
-func NewRetryAckPacket(submitter txmgr.Submitter, storage ClearTxStorage, route transfer.Route) RetryAckPacket {
+func NewRetryAckPacket(submitter txmgr.Submitter, storage ClearAckTxStorage, route transfer.Route) RetryAckPacket {
 	return RetryAckPacket{submitter: submitter, storage: storage, route: route}
 }
 
@@ -51,7 +63,14 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*tr
 }
 
 func (p RetryAckPacket) Cancel(tr *transfer.Transfer, err error) {
-	cancelRetry(tr, err, transfer.ErrRetryingAckPacket, "ack")
+	switch {
+	case errors.Is(err, transfer.ErrRetryingAckPacket):
+		tr.GetLogger().Warn("Retrying relay tx", "kind", "ack")
+	case errors.Is(err, v2.ErrTxNotFound):
+		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "ack")
+	default:
+		tr.GetLogger().Error("Checking relay tx retry", "kind", "ack", "error", err)
+	}
 }
 
 func (p RetryAckPacket) ShouldProcess(tr *transfer.Transfer) bool {
