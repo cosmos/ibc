@@ -14,8 +14,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/service/relayer"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/store"
-
-	txmgrevm "github.com/cosmos/ibc/link/internal/txmgr/evm"
+	"github.com/cosmos/ibc/link/internal/txmgr"
 )
 
 // Services is an outcome of IBC Link wiring (dep inject)
@@ -70,16 +69,16 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	// Relaying dispatcher; only assembled when routes are configured
 	var dispatcher *dispatch.RelayDispatcher
 	if len(cfg.Relayer.Routes) > 0 {
-		submitters, errSubmitters := txmgrevm.NewFromConfig(cfg, signers)
-		if errSubmitters != nil {
-			return nil, errSubmitters
+		submitters, errTxManagers := txmgr.NewFromConfig(cfg, signers)
+		if errTxManagers != nil {
+			return nil, errTxManagers
 		}
 
 		pipelineManager := dispatch.NewManager(logger, cfg, pipeline.Deps{
 			Storage:    db,
 			Chains:     clientSet,
 			ProofAPI:   proofapi.NewClient(cfg.Relayer.ProofAPI),
-			Submitters: submitters,
+			TxManagers: submitters,
 		})
 
 		dispatcher = dispatch.NewRelayDispatcher(db, pipelineManager, dispatch.DefaultPollInterval, logger)

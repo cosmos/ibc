@@ -59,9 +59,9 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.DestinationChainID: chains.NewMockClient(t),
 		},
 		ProofAPI: proto.NewMockProofApiServiceClient(t),
-		Submitters: staticSubmitters{
-			testRoute.SourceChainID:      txmgr.NewMockSubmitter(t),
-			testRoute.DestinationChainID: txmgr.NewMockSubmitter(t),
+		TxManagers: staticTxManagers{
+			testRoute.SourceChainID:      txmgr.NewMockTxManager(t),
+			testRoute.DestinationChainID: txmgr.NewMockTxManager(t),
 		},
 	}
 
@@ -92,9 +92,9 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.
 	return transfer.NewTransfer(packets[0], slog.Default())
 }
 
-type staticSubmitters map[string]txmgr.Submitter
+type staticTxManagers map[string]txmgr.TxManager
 
-func (s staticSubmitters) Get(chainID string) (txmgr.Submitter, bool) {
+func (s staticTxManagers) Get(chainID string) (txmgr.TxManager, bool) {
 	submitter, ok := s[chainID]
 	return submitter, ok
 }

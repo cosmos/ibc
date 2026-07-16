@@ -26,12 +26,12 @@ type ClearAckTxStorage interface {
 // RetryAckPacket clears a stuck or failed ack tx so the ack is redelivered on
 // the next run.
 type RetryAckPacket struct {
-	submitter txmgr.Submitter
+	submitter txmgr.TxManager
 	storage   ClearAckTxStorage
 	route     transfer.Route
 }
 
-func NewRetryAckPacket(submitter txmgr.Submitter, storage ClearAckTxStorage, route transfer.Route) RetryAckPacket {
+func NewRetryAckPacket(submitter txmgr.TxManager, storage ClearAckTxStorage, route transfer.Route) RetryAckPacket {
 	return RetryAckPacket{submitter: submitter, storage: storage, route: route}
 }
 

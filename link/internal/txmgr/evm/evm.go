@@ -14,9 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
-	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	ethereum "github.com/ethereum/go-ethereum"
@@ -37,10 +35,8 @@ type ETHClient interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 }
 
-var _ txmgr.Submitter = (*Submitter)(nil)
-
-// Submitter signs and broadcasts transactions on one EVM chain.
-type Submitter struct {
+// TxManager signs and broadcasts transactions on one EVM chain.
+type TxManager struct {
 	chainID   string
 	eth       ETHClient
 	signer    signer.Signer
@@ -65,56 +61,17 @@ type ChainOptions struct {
 	GasTipCapMultiplier *float64
 }
 
-// NewFromConfig builds one submitter per chain relayed by the configured
-// routes. Each route names the signer for its source and destination chains;
-// a chain always resolves to a single signer (enforced by config validation).
-func NewFromConfig(cfg config.Config, signers *signer.Set) (*txmgr.SubmitterSet, error) {
-	aliases, err := config.RelayerChainSigners(cfg)
+// NewFromRPC dials the chain's RPC and builds its tx manager.
+func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOptions) (*TxManager, error) {
+	eth, err := ethclient.Dial(rpcURL)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "dialing rpc for chain %q", chainID)
 	}
 
-	submitters := make(map[string]txmgr.Submitter, len(aliases))
-
-	for chainID, alias := range aliases {
-		chain, ok := cfg.Chain(chainID)
-		if !ok || chain.Type() != config.ChainTypeEVM {
-			return nil, errors.Errorf("chain %q is not a configured evm chain", chainID)
-		}
-
-		eth, err := ethclient.Dial(chain.EVM.RPC)
-		if err != nil {
-			return nil, errors.Wrapf(err, "dialing rpc for chain %q", chainID)
-		}
-
-		chainSigner, ok := signers.Get(alias)
-		if !ok {
-			return nil, errors.Errorf("unknown signer %q for chain %q", alias, chainID)
-		}
-
-		opts := ChainOptions{TxSubmissionDelay: DefaultTxSubmissionDelay}
-		if override := cfg.Relayer.ChainOverride(chainID); override != nil {
-			if override.TxSubmissionDelay != nil {
-				opts.TxSubmissionDelay = *override.TxSubmissionDelay
-			}
-			if override.EVM != nil {
-				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
-				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
-			}
-		}
-
-		submitterChain, err := NewSubmitter(chainID, eth, chainSigner, opts)
-		if err != nil {
-			return nil, errors.Wrapf(err, "creating submitter for chain %q", chainID)
-		}
-
-		submitters[chainID] = submitterChain
-	}
-
-	return txmgr.NewSubmitterSet(submitters), nil
+	return New(chainID, eth, chainSigner, opts)
 }
 
-func NewSubmitter(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*Submitter, error) {
+func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*TxManager, error) {
 	chainIDInt, ok := new(big.Int).SetString(chainID, 10)
 	if !ok {
 		return nil, errors.Errorf("invalid evm chain id %q", chainID)
@@ -134,7 +91,7 @@ func NewSubmitter(chainID string, eth ETHClient, chainSigner signer.Signer, opts
 		delay = DefaultTxSubmissionDelay
 	}
 
-	return &Submitter{
+	return &TxManager{
 		chainID:    chainID,
 		eth:        eth,
 		signer:     chainSigner,
@@ -147,7 +104,7 @@ func NewSubmitter(chainID string, eth ETHClient, chainSigner signer.Signer, opts
 	}, nil
 }
 
-func (c *Submitter) Submit(ctx context.Context, intent txmgr.TxIntent) (*txmgr.Submission, error) {
+func (c *TxManager) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -181,14 +138,14 @@ func (c *Submitter) Submit(ctx context.Context, intent txmgr.TxIntent) (*txmgr.S
 	c.lastSubmission = time.Now()
 	c.logger.Info("Submitted tx", "txHash", signedTx.Hash(), "to", intent.To)
 
-	return &txmgr.Submission{
+	return &v2.Submission{
 		TxHash:         signedTx.Hash().String(),
 		SubmittedAt:    time.Now().UTC(),
 		RelayerAddress: c.address.String(),
 	}, nil
 }
 
-func (c *Submitter) newTx(ctx context.Context, intent txmgr.TxIntent) (*types.Transaction, error) {
+func (c *TxManager) newTx(ctx context.Context, intent v2.TxIntent) (*types.Transaction, error) {
 	if !common.IsHexAddress(intent.To) {
 		return nil, errors.Errorf("invalid to address %q", intent.To)
 	}
@@ -236,7 +193,7 @@ func (c *Submitter) newTx(ctx context.Context, intent txmgr.TxIntent) (*types.Tr
 	}), nil
 }
 
-func (c *Submitter) ShouldRetry(
+func (c *TxManager) ShouldRetry(
 	ctx context.Context,
 	txHash string,
 	expiry time.Duration,

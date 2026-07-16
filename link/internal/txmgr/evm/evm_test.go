@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/txmgr"
-
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -25,7 +23,7 @@ const (
 	toAddress  = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 )
 
-func newTestSubmitter(t *testing.T, opts ChainOptions) (*Submitter, *MockETHClient, signer.Signer) {
+func newTestSubmitter(t *testing.T, opts ChainOptions) (*TxManager, *MockETHClient, signer.Signer) {
 	t.Helper()
 
 	eth := NewMockETHClient(t)
@@ -33,7 +31,7 @@ func newTestSubmitter(t *testing.T, opts ChainOptions) (*Submitter, *MockETHClie
 	chainSigner, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)
 
-	submitter, err := NewSubmitter(chainIDEth, eth, chainSigner, opts)
+	submitter, err := New(chainIDEth, eth, chainSigner, opts)
 	require.NoError(t, err)
 
 	return submitter, eth, chainSigner
@@ -60,7 +58,7 @@ func TestSubmit(t *testing.T) {
 			sent = tx
 		}).Return(nil).Once()
 
-		sub, err := submitter.Submit(ctx, txmgr.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}})
+		sub, err := submitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}})
 
 		require.NoError(t, err)
 		require.NotNil(t, sent)
@@ -91,7 +89,7 @@ func TestSubmit(t *testing.T) {
 		eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
 		eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return(nil, nil).Once()
 
-		_, err := submitter.Submit(ctx, txmgr.TxIntent{To: toAddress, Data: []byte{0x01}})
+		_, err := submitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
 
 		require.ErrorContains(t, err, "no contract code")
 	})

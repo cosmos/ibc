@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // BatchRecvPacket delivers one recv tx on the destination chain for a batch
@@ -22,7 +23,7 @@ type BatchRecvPacket struct {
 	chains    ChainClients
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
-	submitter txmgr.Submitter
+	submitter txmgr.TxManager
 	route     transfer.Route
 }
 
@@ -30,7 +31,7 @@ func NewBatchRecvPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
-	submitter txmgr.Submitter,
+	submitter txmgr.TxManager,
 	route transfer.Route,
 ) BatchRecvPacket {
 	return BatchRecvPacket{
@@ -95,7 +96,7 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*transfer.Tran
 		return nil, errors.Wrap(errWait, "waiting for chain")
 	}
 
-	submission, err := p.submitter.Submit(ctx, txmgr.TxIntent{
+	submission, err := p.submitter.Submit(ctx, v2.TxIntent{
 		To:   resp.Msg.GetAddress(),
 		Data: resp.Msg.GetTx(),
 	})

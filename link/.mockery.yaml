@@ -61,7 +61,7 @@ packages:
       pkgname: "{{.SrcPackageName}}"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
-      Submitter:
+      TxManager:
   github.com/cosmos/ibc/link/internal/txmgr/evm:
     config:
       dir: "{{.InterfaceDir}}"

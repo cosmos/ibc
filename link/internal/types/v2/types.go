@@ -56,3 +56,16 @@ type Tx struct {
 	Timestamp      time.Time
 	RelayerAddress string
 }
+
+// TxIntent a transaction for the relayer to submit.
+type TxIntent struct {
+	To   string
+	Data []byte
+}
+
+// Submission a transaction broadcast by the relayer.
+type Submission struct {
+	TxHash         string
+	SubmittedAt    time.Time
+	RelayerAddress string
+}

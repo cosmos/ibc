@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // BatchTimeoutPacket delivers one timeout tx on the source chain for a batch
@@ -23,7 +24,7 @@ type BatchTimeoutPacket struct {
 	chains    ChainClients
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
-	submitter txmgr.Submitter
+	submitter txmgr.TxManager
 	route     transfer.Route
 }
 
@@ -31,7 +32,7 @@ func NewBatchTimeoutPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
-	submitter txmgr.Submitter,
+	submitter txmgr.TxManager,
 	route transfer.Route,
 ) BatchTimeoutPacket {
 	return BatchTimeoutPacket{
@@ -96,7 +97,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.T
 		return nil, errors.Wrap(errWait, "waiting for chain")
 	}
 
-	submission, err := p.submitter.Submit(ctx, txmgr.TxIntent{
+	submission, err := p.submitter.Submit(ctx, v2.TxIntent{
 		To:   resp.Msg.GetAddress(),
 		Data: resp.Msg.GetTx(),
 	})

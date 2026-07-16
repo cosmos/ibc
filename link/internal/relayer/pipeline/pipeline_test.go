@@ -40,8 +40,8 @@ type pipelineEnv struct {
 	srcClient    *chains.MockClient
 	dstClient    *chains.MockClient
 	proofAPI     *proto.MockProofApiServiceClient
-	srcSubmitter *txmgr.MockSubmitter
-	dstSubmitter *txmgr.MockSubmitter
+	srcSubmitter *txmgr.MockTxManager
+	dstSubmitter *txmgr.MockTxManager
 }
 
 type staticChains map[string]chains.Client
@@ -66,15 +66,15 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		srcClient:    chains.NewMockClient(t),
 		dstClient:    chains.NewMockClient(t),
 		proofAPI:     proto.NewMockProofApiServiceClient(t),
-		srcSubmitter: txmgr.NewMockSubmitter(t),
-		dstSubmitter: txmgr.NewMockSubmitter(t),
+		srcSubmitter: txmgr.NewMockTxManager(t),
+		dstSubmitter: txmgr.NewMockTxManager(t),
 	}
 
 	deps := Deps{
 		Storage:  db,
 		Chains:   staticChains{testRoute.SourceChainID: env.srcClient, testRoute.DestinationChainID: env.dstClient},
 		ProofAPI: env.proofAPI,
-		Submitters: staticSubmitters{
+		TxManagers: staticTxManagers{
 			testRoute.SourceChainID:      env.srcSubmitter,
 			testRoute.DestinationChainID: env.dstSubmitter,
 		},
@@ -176,7 +176,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv then ack delivery via proof api
 		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Times(2)
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&txmgr.Submission{
+		env.dstSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash:         recvTxHash,
 			SubmittedAt:    time.Now().UTC(),
 			RelayerAddress: "0xrelayer",
@@ -190,7 +190,7 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		// ack delivery on the source chain
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&txmgr.Submission{
+		env.srcSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, processors.RetryAckExpiry, mock.Anything).Return(false, nil).Once()
@@ -220,7 +220,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Times(2)
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&txmgr.Submission{
+		env.dstSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.dstSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, processors.RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
@@ -232,7 +232,7 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		// ack delivery on the source chain
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&txmgr.Submission{
+		env.srcSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, processors.RetryAckExpiry, mock.Anything).Return(false, nil).Once()
@@ -260,7 +260,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		// timeout delivery on the source chain
 		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Once()
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&txmgr.Submission{
+		env.srcSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, processors.RetryTimeoutExpiry, mock.Anything).Return(false, nil).Once()
@@ -318,9 +318,9 @@ func routedConfig() config.Config {
 	}
 }
 
-type staticSubmitters map[string]txmgr.Submitter
+type staticTxManagers map[string]txmgr.TxManager
 
-func (s staticSubmitters) Get(chainID string) (txmgr.Submitter, bool) {
+func (s staticTxManagers) Get(chainID string) (txmgr.TxManager, bool) {
 	submitter, ok := s[chainID]
 	return submitter, ok
 }

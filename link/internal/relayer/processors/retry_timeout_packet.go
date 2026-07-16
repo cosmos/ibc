@@ -26,13 +26,13 @@ type ClearTimeoutTxStorage interface {
 // RetryTimeoutPacket clears a stuck or failed timeout tx so the timeout is
 // redelivered on the next run.
 type RetryTimeoutPacket struct {
-	submitter txmgr.Submitter
+	submitter txmgr.TxManager
 	storage   ClearTimeoutTxStorage
 	route     transfer.Route
 }
 
 func NewRetryTimeoutPacket(
-	submitter txmgr.Submitter,
+	submitter txmgr.TxManager,
 	storage ClearTimeoutTxStorage,
 	route transfer.Route,
 ) RetryTimeoutPacket {

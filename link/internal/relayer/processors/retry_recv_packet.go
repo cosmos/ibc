@@ -25,12 +25,12 @@ type ClearRecvTxStorage interface {
 // RetryRecvPacket clears a stuck or failed recv tx so the packet is
 // redelivered on the next run.
 type RetryRecvPacket struct {
-	submitter txmgr.Submitter
+	submitter txmgr.TxManager
 	storage   ClearRecvTxStorage
 	route     transfer.Route
 }
 
-func NewRetryRecvPacket(submitter txmgr.Submitter, storage ClearRecvTxStorage, route transfer.Route) RetryRecvPacket {
+func NewRetryRecvPacket(submitter txmgr.TxManager, storage ClearRecvTxStorage, route transfer.Route) RetryRecvPacket {
 	return RetryRecvPacket{submitter: submitter, storage: storage, route: route}
 }
 

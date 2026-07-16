@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // BatchAckPacket delivers one ack tx on the source chain for a batch of
@@ -22,7 +23,7 @@ type BatchAckPacket struct {
 	chains    ChainClients
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
-	submitter txmgr.Submitter
+	submitter txmgr.TxManager
 	route     transfer.Route
 }
 
@@ -30,7 +31,7 @@ func NewBatchAckPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
-	submitter txmgr.Submitter,
+	submitter txmgr.TxManager,
 	route transfer.Route,
 ) BatchAckPacket {
 	return BatchAckPacket{
@@ -101,7 +102,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 		return nil, errors.Wrap(errWait, "waiting for chain")
 	}
 
-	submission, err := p.submitter.Submit(ctx, txmgr.TxIntent{
+	submission, err := p.submitter.Submit(ctx, v2.TxIntent{
 		To:   resp.Msg.GetAddress(),
 		Data: resp.Msg.GetTx(),
 	})

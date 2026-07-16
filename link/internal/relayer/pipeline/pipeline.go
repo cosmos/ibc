@@ -35,9 +35,9 @@ type Storage interface {
 	processors.TxStorage
 }
 
-// Submitters resolves the per-chain transaction submitter.
-type Submitters interface {
-	Get(chainID string) (txmgr.Submitter, bool)
+// TxManagers resolves the per-chain transaction submitter.
+type TxManagers interface {
+	Get(chainID string) (txmgr.TxManager, bool)
 }
 
 // Deps the external systems a pipeline relays through.
@@ -45,7 +45,7 @@ type Deps struct {
 	Storage    Storage
 	Chains     processors.ChainClients
 	ProofAPI   proto.ProofApiServiceClient
-	Submitters Submitters
+	TxManagers TxManagers
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -75,14 +75,14 @@ func NewPipeline(
 	route transfer.Route,
 	opts Options,
 ) (*Pipeline, error) {
-	srcSubmitter, ok := deps.Submitters.Get(route.SourceChainID)
+	srcTxManager, ok := deps.TxManagers.Get(route.SourceChainID)
 	if !ok {
-		return nil, errors.Errorf("no configured submitter for source chain %s", route.SourceChainID)
+		return nil, errors.Errorf("no configured tx manager for source chain %s", route.SourceChainID)
 	}
 
-	dstSubmitter, ok := deps.Submitters.Get(route.DestinationChainID)
+	dstTxManager, ok := deps.TxManagers.Get(route.DestinationChainID)
 	if !ok {
-		return nil, errors.Errorf("no configured submitter for destination chain %s", route.DestinationChainID)
+		return nil, errors.Errorf("no configured tx manager for destination chain %s", route.DestinationChainID)
 	}
 
 	logger = logger.With(
@@ -133,13 +133,13 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcSubmitter, route),
+			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcTxManager, route),
 		),
 	)
 
 	// clear stuck or failed timeout txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcSubmitter, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxManager, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
 	output = ConditionallyBatchProcess(
@@ -151,13 +151,13 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstSubmitter, route),
+			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstTxManager, route),
 		),
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstSubmitter, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxManager, deps.Storage, route)), output)
 
 	// extract the write ack from the recv tx on the destination chain
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
@@ -195,7 +195,7 @@ func NewPipeline(
 				deps.Chains,
 				deps.Storage,
 				deps.ProofAPI,
-				srcSubmitter,
+				srcTxManager,
 				route,
 			),
 		),
@@ -203,7 +203,7 @@ func NewPipeline(
 
 	// clear stuck or failed ack txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcSubmitter, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxManager, deps.Storage, route)), output)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
