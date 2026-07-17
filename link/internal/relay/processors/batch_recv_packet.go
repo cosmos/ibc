@@ -9,7 +9,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -17,10 +17,9 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// BatchTimeoutPacket delivers one timeout tx on the source chain for a batch
-// of transfers. Timeouts flow back toward the original source chain, so the
-// proof api's source and destination are inverted.
-type BatchTimeoutPacket struct {
+// BatchRecvPacket delivers one recv tx on the destination chain for a batch
+// of transfers.
+type BatchRecvPacket struct {
 	chains    ChainClients
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
@@ -28,14 +27,14 @@ type BatchTimeoutPacket struct {
 	route     transfer.Route
 }
 
-func NewBatchTimeoutPacket(
+func NewBatchRecvPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	txManager txmgr.TxManager,
 	route transfer.Route,
-) BatchTimeoutPacket {
-	return BatchTimeoutPacket{
+) BatchRecvPacket {
+	return BatchRecvPacket{
 		chains:    chainClients,
 		storage:   storage,
 		proofAPI:  proofAPI,
@@ -44,7 +43,7 @@ func NewBatchTimeoutPacket(
 	}
 }
 
-func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+func (p BatchRecvPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
 	txSet := make(map[string]struct{})
 
 	var txIDs [][]byte
@@ -72,20 +71,20 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.T
 	}
 
 	resp, err := p.proofAPI.RelayByTx(ctx, connect.NewRequest(&proto.RelayByTxRequest{
-		SrcChain:           p.route.DestinationChainID,
-		DstChain:           p.route.SourceChainID,
-		TimeoutTxIds:       txIDs,
-		SrcClientId:        p.route.DestinationClientID,
-		DstClientId:        p.route.SourceClientID,
-		DstPacketSequences: sequences,
+		SrcChain:           p.route.SourceChainID,
+		DstChain:           p.route.DestinationChainID,
+		SourceTxIds:        txIDs,
+		SrcClientId:        p.route.SourceClientID,
+		DstClientId:        p.route.DestinationClientID,
+		SrcPacketSequences: sequences,
 	}))
 	if err != nil {
 		return nil, errors.Wrap(err, "getting relay tx from proof api")
 	}
 
-	client, ok := p.chains.Get(p.route.SourceChainID)
+	client, ok := p.chains.Get(p.route.DestinationChainID)
 	if !ok {
-		return nil, errors.Errorf("no configured chain client for chain %s", p.route.SourceChainID)
+		return nil, errors.Errorf("no configured chain client for chain %s", p.route.DestinationChainID)
 	}
 
 	// the chain must be caught up to the current time before gas estimation
@@ -117,7 +116,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.T
 				continue
 			}
 
-			if errRecord := repo.UpdatePacketTimeoutTx(ctx, tr.Key(), tx); errRecord != nil {
+			if errRecord := repo.UpdatePacketRecvTx(ctx, tr.Key(), tx); errRecord != nil {
 				return errors.Wrapf(
 					errRecord,
 					"recording relay tx %s for sequence %d",
@@ -138,26 +137,24 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.T
 			continue
 		}
 
-		tr.TimeoutTxHash = &tx.Hash
-		tr.TimeoutTxTime = &tx.Time
-		tr.TimeoutTxRelayerAddress = &tx.RelayerAddress
+		tr.RecvTxHash = &tx.Hash
+		tr.RecvTxTime = &tx.Time
+		tr.RecvTxRelayerAddress = &tx.RelayerAddress
 	}
 
 	return transfers, nil
 }
 
-func (p BatchTimeoutPacket) Cancel(transfers []*transfer.Transfer, err error) {
+func (p BatchRecvPacket) Cancel(transfers []*transfer.Transfer, err error) {
 	for _, tr := range transfers {
-		tr.GetLogger().Error("Delivering batch timeout tx", "error", err)
+		tr.GetLogger().Error("Delivering batch recv tx", "error", err)
 	}
 }
 
-func (p BatchTimeoutPacket) ShouldProcess(tr *transfer.Transfer) bool {
-	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
-
-	return shouldBeTimedOut && tr.TimeoutTxHash == nil
+func (p BatchRecvPacket) ShouldProcess(tr *transfer.Transfer) bool {
+	return tr.RecvTxHash == nil && !tr.IsTimedOut()
 }
 
-func (p BatchTimeoutPacket) Status() store.RelayStatus {
-	return store.RelayStatusDeliverTimeoutPacket
+func (p BatchRecvPacket) Status() store.RelayStatus {
+	return store.RelayStatusDeliverRecvPacket
 }

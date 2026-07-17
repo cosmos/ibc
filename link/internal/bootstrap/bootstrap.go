@@ -6,9 +6,9 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relayer/dispatch"
-	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
-	"github.com/cosmos/ibc/link/internal/relayer/proofapi"
+	"github.com/cosmos/ibc/link/internal/relay/dispatch"
+	"github.com/cosmos/ibc/link/internal/relay/pipeline"
+	"github.com/cosmos/ibc/link/internal/relay/proofapi"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/relayer"

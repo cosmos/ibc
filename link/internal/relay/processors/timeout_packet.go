@@ -1,3 +1,4 @@
+//nolint:dupl // the batch directions are structurally parallel by design
 package processors
 
 import (
@@ -8,7 +9,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -16,10 +17,10 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// BatchAckPacket delivers one ack tx on the source chain for a batch of
-// transfers. Acks flow back toward the original source chain, so the proof
-// api's source and destination are inverted.
-type BatchAckPacket struct {
+// BatchTimeoutPacket delivers one timeout tx on the source chain for a batch
+// of transfers. Timeouts flow back toward the original source chain, so the
+// proof api's source and destination are inverted.
+type BatchTimeoutPacket struct {
 	chains    ChainClients
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
@@ -27,14 +28,14 @@ type BatchAckPacket struct {
 	route     transfer.Route
 }
 
-func NewBatchAckPacket(
+func NewBatchTimeoutPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	txManager txmgr.TxManager,
 	route transfer.Route,
-) BatchAckPacket {
-	return BatchAckPacket{
+) BatchTimeoutPacket {
+	return BatchTimeoutPacket{
 		chains:    chainClients,
 		storage:   storage,
 		proofAPI:  proofAPI,
@@ -43,7 +44,7 @@ func NewBatchAckPacket(
 	}
 }
 
-func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
 	txSet := make(map[string]struct{})
 
 	var txIDs [][]byte
@@ -51,13 +52,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 	var sequences []uint64
 
 	for _, tr := range transfers {
-		if tr.WriteAckTxHash == nil {
-			tr.ProcessingError = errors.New("trying to deliver ack packet without a write ack tx hash")
-
-			continue
-		}
-
-		hash := *tr.WriteAckTxHash
+		hash := tr.SourceTxHash
 
 		sequences = append(sequences, tr.PacketSequenceNumber)
 
@@ -79,7 +74,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 	resp, err := p.proofAPI.RelayByTx(ctx, connect.NewRequest(&proto.RelayByTxRequest{
 		SrcChain:           p.route.DestinationChainID,
 		DstChain:           p.route.SourceChainID,
-		SourceTxIds:        txIDs,
+		TimeoutTxIds:       txIDs,
 		SrcClientId:        p.route.DestinationClientID,
 		DstClientId:        p.route.SourceClientID,
 		DstPacketSequences: sequences,
@@ -122,7 +117,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 				continue
 			}
 
-			if errRecord := repo.UpdatePacketAckTx(ctx, tr.Key(), tx); errRecord != nil {
+			if errRecord := repo.UpdatePacketTimeoutTx(ctx, tr.Key(), tx); errRecord != nil {
 				return errors.Wrapf(
 					errRecord,
 					"recording relay tx %s for sequence %d",
@@ -143,28 +138,26 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 			continue
 		}
 
-		tr.AckTxHash = &tx.Hash
-		tr.AckTxTime = &tx.Time
-		tr.AckTxRelayerAddress = &tx.RelayerAddress
+		tr.TimeoutTxHash = &tx.Hash
+		tr.TimeoutTxTime = &tx.Time
+		tr.TimeoutTxRelayerAddress = &tx.RelayerAddress
 	}
 
 	return transfers, nil
 }
 
-func (p BatchAckPacket) Cancel(transfers []*transfer.Transfer, err error) {
+func (p BatchTimeoutPacket) Cancel(transfers []*transfer.Transfer, err error) {
 	for _, tr := range transfers {
-		tr.GetLogger().Error("Delivering batch ack tx", "error", err)
+		tr.GetLogger().Error("Delivering batch timeout tx", "error", err)
 	}
 }
 
-func (p BatchAckPacket) ShouldProcess(tr *transfer.Transfer) bool {
-	if tr.WriteAckTxHash == nil {
-		return false
-	}
+func (p BatchTimeoutPacket) ShouldProcess(tr *transfer.Transfer) bool {
+	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
 
-	return tr.AckTxHash == nil && tr.TimeoutTxHash == nil
+	return shouldBeTimedOut && tr.TimeoutTxHash == nil
 }
 
-func (p BatchAckPacket) Status() store.RelayStatus {
-	return store.RelayStatusDeliverAckPacket
+func (p BatchTimeoutPacket) Status() store.RelayStatus {
+	return store.RelayStatusDeliverTimeoutPacket
 }

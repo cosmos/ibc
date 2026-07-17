@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/pipeline"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 )
 
 // Manager creates and caches one pipeline per route.

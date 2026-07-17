@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 )
 
 // Batch defaults applied when a chain has no overrides.

@@ -7,8 +7,8 @@ import (
 	"github.com/deliveryhero/pipeline/v2"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relayer/processors"
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"

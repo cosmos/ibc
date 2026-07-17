@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"

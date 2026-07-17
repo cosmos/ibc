@@ -7,7 +7,7 @@ import (
 
 	"github.com/deliveryhero/pipeline/v2"
 
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 )
 
 // ConditionallyBatchProcess batches the transfers the processor applies to

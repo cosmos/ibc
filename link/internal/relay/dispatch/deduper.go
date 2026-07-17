@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/cosmos/ibc/link/internal/relayer/pipeline"
-	"github.com/cosmos/ibc/link/internal/relayer/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/pipeline"
+	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
