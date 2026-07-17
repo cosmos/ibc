@@ -263,7 +263,7 @@ type ChainSignerBinding struct {
 // RelayerChainSigners resolves the unique (chain, signer) pairs across all
 // configured routes. A chain may appear with multiple signers when different
 // clients on it are relayed by different routes.
-func RelayerChainSigners(c Config) []ChainSignerBinding {
+func RelayerChainSigners(c Config) ([]ChainSignerBinding, error) {
 	seen := make(map[ChainSignerBinding]struct{})
 
 	var bindings []ChainSignerBinding
@@ -271,7 +271,7 @@ func RelayerChainSigners(c Config) []ChainSignerBinding {
 	for _, route := range c.Relayer.Routes {
 		client, ok := c.Relayer.ClientByAlias(route.SourceClient)
 		if !ok {
-			continue // reported by route validation
+			return nil, errors.Errorf("route references unknown client %q", route.SourceClient)
 		}
 
 		for _, binding := range []ChainSignerBinding{
@@ -287,7 +287,7 @@ func RelayerChainSigners(c Config) []ChainSignerBinding {
 		}
 	}
 
-	return bindings
+	return bindings, nil
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are

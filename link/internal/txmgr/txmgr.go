@@ -51,7 +51,10 @@ func (s *TxManagerSet) Get(chainID, signerAlias string) (TxManager, bool) {
 // routes. Each route names the signer for its source and destination chains;
 // a chain always resolves to a single signer (enforced by config validation).
 func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxManagerSet, error) {
-	bindings := config.RelayerChainSigners(cfg)
+	bindings, err := config.RelayerChainSigners(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	txManagers := make(map[config.ChainSignerBinding]TxManager, len(bindings))
 
