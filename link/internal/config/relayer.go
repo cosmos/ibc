@@ -29,6 +29,7 @@ type RelayerConfig struct {
 	Clients        []ClientConfig         `yaml:"clients"`
 	Routes         []RouteConfig          `yaml:"routesToRelay"`
 	// ProofAPI the proof api used to build relay transactions.
+	// TODO: remove this when we fold the proof api logic into ibc link.
 	ProofAPI ProofAPIConfig `yaml:"proofApi,omitempty"`
 }
 
