@@ -356,7 +356,7 @@ func (c *Client) PacketWriteAckStatus(
 	return v2.WriteAckStatusUnknown, v2.ErrWriteAckNotFoundForPacket
 }
 
-func (c *Client) IsTxFinalized(ctx context.Context, txHash string, offset *uint64) (bool, error) {
+func (c *Client) IsTxFinalized(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error) {
 	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
 		if errors.Is(err, ethereum.NotFound) {
@@ -366,7 +366,7 @@ func (c *Client) IsTxFinalized(ctx context.Context, txHash string, offset *uint6
 		return false, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
 	}
 
-	if offset == nil {
+	if finalityOffset == nil {
 		finalized, errHeader := c.eth.HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
 		if errHeader != nil {
 			return false, errors.Wrapf(errHeader, "getting finalized header on chain %s", c.chainID)
@@ -383,13 +383,13 @@ func (c *Client) IsTxFinalized(ctx context.Context, txHash string, offset *uint6
 	txBlock := receipt.BlockNumber.Uint64()
 	latestBlock := latest.Number.Uint64()
 
-	return latestBlock >= txBlock && latestBlock-txBlock >= *offset, nil
+	return latestBlock >= txBlock && latestBlock-txBlock >= *finalityOffset, nil
 }
 
-func (c *Client) IsTimestampFinalized(ctx context.Context, timestamp time.Time, offset *uint64) (bool, error) {
+func (c *Client) IsTimestampFinalized(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error) {
 	var header *types.Header
 
-	if offset == nil {
+	if finalityOffset == nil {
 		finalized, errHeader := c.eth.HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
 		if errHeader != nil {
 			return false, errors.Wrapf(errHeader, "getting finalized header on chain %s", c.chainID)
@@ -402,11 +402,11 @@ func (c *Client) IsTimestampFinalized(ctx context.Context, timestamp time.Time, 
 			return false, errors.Wrapf(errHeader, "getting latest header on chain %s", c.chainID)
 		}
 
-		if latest.Number.Uint64() < *offset {
+		if latest.Number.Uint64() < *finalityOffset {
 			return false, nil
 		}
 
-		finalized, errHeader := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(latest.Number.Uint64()-*offset))
+		finalized, errHeader := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(latest.Number.Uint64()-*finalityOffset))
 		if errHeader != nil {
 			return false, errors.Wrapf(errHeader, "getting offset header on chain %s", c.chainID)
 		}

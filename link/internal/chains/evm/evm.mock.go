@@ -6,12 +6,11 @@ package evm
 
 import (
 	"context"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	mock "github.com/stretchr/testify/mock"
+	"math/big"
 )
 
 // NewMockETHClient creates a new instance of MockETHClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

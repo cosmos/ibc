@@ -62,24 +62,24 @@ relayer:
   # transactions on the route's source and destination chains
   routesToRelay:
     - sourceClient: "eth-to-base"
-      sourceSignerAlias: "relayer-key"
-      destSignerAlias: "relayer-key"
+      sourceSignerAlias: "eth-relayer-key"
+      destSignerAlias: "base-relayer-key"
     - sourceClient: "base-to-eth"
-      sourceSignerAlias: "relayer-key"
-      destSignerAlias: "relayer-key"
-
-  # proof api used to build relay transactions
-  proofApi:
-    grpc: proof-api.example.com:8080
+      sourceSignerAlias: "base-relayer-key"
+      destSignerAlias: "eth-relayer-key"
 
 # signers define signing backends referenced by attestations and the relayer
 #
 # NOTE: each signer should have a unique alias
 signers:
-  - alias: "relayer-key"
+  - alias: "eth-relayer-key"
     type: remote
     grpc: cosmos-kms.example.com:9090
-    remoteKeyId: "relayer-key-id"
+    remoteKeyId: "eth-relayer-key-id"
+  - alias: "base-relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "base-relayer-key-id"
 #   - alias: my-local-signer
 #     type: local
 #     file: keys/my-key.json

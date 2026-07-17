@@ -5,9 +5,8 @@
 package attestor
 
 import (
-	"context"
-
 	"connectrpc.com/connect"
+	"context"
 	mock "github.com/stretchr/testify/mock"
 )
 

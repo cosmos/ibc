@@ -6,7 +6,6 @@ package store
 
 import (
 	"context"
-
 	mock "github.com/stretchr/testify/mock"
 )
 
