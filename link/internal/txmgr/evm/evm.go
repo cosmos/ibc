@@ -161,6 +161,10 @@ func (c *TxManager) newTx(ctx context.Context, intent v2.TxIntent) (*types.Trans
 		return nil, errors.Wrap(err, "getting latest header")
 	}
 
+	if head.BaseFee == nil {
+		return nil, errors.Errorf("chain %s has no base fee; it must support EIP-1559", c.chainID)
+	}
+
 	gasTipCap, err := c.eth.SuggestGasTipCap(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "getting suggested gas tip cap")

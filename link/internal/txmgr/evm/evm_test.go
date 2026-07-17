@@ -93,6 +93,16 @@ func TestSubmit(t *testing.T) {
 
 		require.ErrorContains(t, err, "no contract code")
 	})
+
+	t.Run("rejectsChainWithoutBaseFee", func(t *testing.T) {
+		txManager, eth, _ := newTestTxManager(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
+
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: nil}, nil).Once()
+
+		_, err := txManager.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
+
+		require.ErrorContains(t, err, "EIP-1559")
+	})
 }
 
 func TestShouldRetry(t *testing.T) {
