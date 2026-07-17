@@ -26,13 +26,13 @@ type ClearAckTxStorage interface {
 // RetryAckPacket clears a stuck or failed ack tx so the ack is redelivered on
 // the next run.
 type RetryAckPacket struct {
-	submitter txmgr.TxManager
+	txManager txmgr.TxManager
 	storage   ClearAckTxStorage
 	route     transfer.Route
 }
 
-func NewRetryAckPacket(submitter txmgr.TxManager, storage ClearAckTxStorage, route transfer.Route) RetryAckPacket {
-	return RetryAckPacket{submitter: submitter, storage: storage, route: route}
+func NewRetryAckPacket(txManager txmgr.TxManager, storage ClearAckTxStorage, route transfer.Route) RetryAckPacket {
+	return RetryAckPacket{txManager: txManager, storage: storage, route: route}
 }
 
 func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
@@ -40,7 +40,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*tr
 		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.submitter.ShouldRetry(
+	retry, err := p.txManager.ShouldRetry(
 		ctx,
 		*tr.AckTxHash,
 		RetryAckExpiry,

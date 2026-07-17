@@ -24,7 +24,7 @@ import (
 // when no override is configured.
 const DefaultTxSubmissionDelay = 2 * time.Second
 
-// ETHClient go-ethereum methods used by the EVM submitter.
+// ETHClient go-ethereum methods used by the EVM tx manager.
 type ETHClient interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)

@@ -95,6 +95,6 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.
 type staticTxManagers map[string]txmgr.TxManager
 
 func (s staticTxManagers) Get(chainID, _ string) (txmgr.TxManager, bool) {
-	submitter, ok := s[chainID]
-	return submitter, ok
+	txManager, ok := s[chainID]
+	return txManager, ok
 }

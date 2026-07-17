@@ -24,7 +24,7 @@ type BatchTimeoutPacket struct {
 	chains    ChainClients
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
-	submitter txmgr.TxManager
+	txManager txmgr.TxManager
 	route     transfer.Route
 }
 
@@ -32,14 +32,14 @@ func NewBatchTimeoutPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
-	submitter txmgr.TxManager,
+	txManager txmgr.TxManager,
 	route transfer.Route,
 ) BatchTimeoutPacket {
 	return BatchTimeoutPacket{
 		chains:    chainClients,
 		storage:   storage,
 		proofAPI:  proofAPI,
-		submitter: submitter,
+		txManager: txManager,
 		route:     route,
 	}
 }
@@ -97,7 +97,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.T
 		return nil, errors.Wrap(errWait, "waiting for chain")
 	}
 
-	submission, err := p.submitter.Submit(ctx, v2.TxIntent{
+	submission, err := p.txManager.Submit(ctx, v2.TxIntent{
 		To:   resp.Msg.GetAddress(),
 		Data: resp.Msg.GetTx(),
 	})

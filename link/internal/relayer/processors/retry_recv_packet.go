@@ -25,13 +25,13 @@ type ClearRecvTxStorage interface {
 // RetryRecvPacket clears a stuck or failed recv tx so the packet is
 // redelivered on the next run.
 type RetryRecvPacket struct {
-	submitter txmgr.TxManager
+	txManager txmgr.TxManager
 	storage   ClearRecvTxStorage
 	route     transfer.Route
 }
 
-func NewRetryRecvPacket(submitter txmgr.TxManager, storage ClearRecvTxStorage, route transfer.Route) RetryRecvPacket {
-	return RetryRecvPacket{submitter: submitter, storage: storage, route: route}
+func NewRetryRecvPacket(txManager txmgr.TxManager, storage ClearRecvTxStorage, route transfer.Route) RetryRecvPacket {
+	return RetryRecvPacket{txManager: txManager, storage: storage, route: route}
 }
 
 func (p RetryRecvPacket) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
@@ -39,7 +39,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *transfer.Transfer) (*t
 		return nil, errors.New("transfer has no recv tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.submitter.ShouldRetry(
+	retry, err := p.txManager.ShouldRetry(
 		ctx,
 		*tr.RecvTxHash,
 		RetryRecvExpiry,

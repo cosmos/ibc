@@ -69,7 +69,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	// Relaying dispatcher; only assembled when routes are configured
 	var dispatcher *dispatch.RelayDispatcher
 	if len(cfg.Relayer.Routes) > 0 {
-		submitters, errTxManagers := txmgr.NewFromConfig(cfg, signers)
+		txManagers, errTxManagers := txmgr.NewFromConfig(cfg, signers)
 		if errTxManagers != nil {
 			return nil, errTxManagers
 		}
@@ -78,7 +78,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 			Storage:    db,
 			Chains:     clientSet,
 			ProofAPI:   proofapi.NewClient(cfg.Relayer.ProofAPI),
-			TxManagers: submitters,
+			TxManagers: txManagers,
 		})
 
 		dispatcher = dispatch.NewRelayDispatcher(db, pipelineManager, dispatch.DefaultPollInterval, logger)
