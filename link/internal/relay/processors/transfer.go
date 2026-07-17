@@ -80,11 +80,7 @@ func (t *Transfer) IsComplete() bool {
 		return false
 	}
 
-	if t.AckTxHash != nil {
-		return true
-	}
-
-	return true
+	return t.AckTxHash != nil
 }
 
 // Route identifies the client pair a pipeline relays.

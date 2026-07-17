@@ -53,9 +53,9 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	for _, tr := range transfers {
 		hash := tr.SourceTxHash
 
-		sequences = append(sequences, tr.PacketSequenceNumber)
-
 		if _, ok := txSet[hash]; ok {
+			sequences = append(sequences, tr.PacketSequenceNumber)
+
 			continue
 		}
 
@@ -68,6 +68,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 
 		txIDs = append(txIDs, txID)
 		txSet[hash] = struct{}{}
+		sequences = append(sequences, tr.PacketSequenceNumber)
 	}
 
 	resp, err := p.proofAPI.RelayByTx(ctx, connect.NewRequest(&proto.RelayByTxRequest{
