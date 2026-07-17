@@ -1,10 +1,11 @@
-// Package pipeline relays packets through their full lifecycle.
 // Package transfer models the packet lifecycle the relayer drives.
 package transfer
 
 import (
 	"log/slog"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/store"
 )
@@ -86,3 +87,22 @@ func (t *Transfer) IsComplete() bool {
 
 	return true
 }
+
+// Route identifies the client pair a pipeline relays.
+type Route struct {
+	SourceChainID       string
+	SourceClientID      string
+	DestinationChainID  string
+	DestinationClientID string
+}
+
+// Retryable pipeline conditions
+var (
+	ErrSendNotFinalized     = errors.New("send tx not finalized")
+	ErrTimeoutNotFinalized  = errors.New("timeout timestamp not finalized")
+	ErrWriteAckNotFinalized = errors.New("write ack tx not finalized")
+
+	ErrRetryingRecvPacket    = errors.New("retrying recv packet")
+	ErrRetryingAckPacket     = errors.New("retrying ack packet")
+	ErrRetryingTimeoutPacket = errors.New("retrying timeout packet")
+)
