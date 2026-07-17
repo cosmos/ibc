@@ -14,7 +14,7 @@ import (
 // DefaultPollInterval how often the dispatcher polls for unfinished packets.
 const DefaultPollInterval = 5 * time.Second
 
-// ErrTransferAlreadyInPipeline the tr is already being relayed.
+// ErrTransferAlreadyInPipeline the transfer is already being relayed.
 var ErrTransferAlreadyInPipeline = errors.New("transfer already in pipeline")
 
 // DispatcherStorage the persistence used by the dispatcher.
@@ -87,7 +87,7 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 		case errors.Is(err, ErrTransferAlreadyInPipeline):
 			continue
 		case err != nil:
-			tr.GetLogger().Error("Submitting tr failed, marking packet failed", "error", err)
+			tr.GetLogger().Error("Submitting transfer failed, marking packet failed", "error", err)
 
 			if errUpdate := d.storage.UpdatePacketStatus(ctx, tr.Key(), store.RelayStatusFailed); errUpdate != nil {
 				tr.GetLogger().Error("Marking packet failed", "error", errUpdate)
@@ -98,7 +98,7 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 	return nil
 }
 
-// SubmitTransfer routes the tr to its pipeline and pushes it.
+// SubmitTransfer routes the transfer to its pipeline and pushes it.
 func (d *RelayDispatcher) SubmitTransfer(ctx context.Context, tr *processors.Transfer) error {
 	pipeline, err := d.manager.Pipeline(ctx, tr)
 	if err != nil {

@@ -212,7 +212,7 @@ func TestBatchProcessorMW(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, out, 1)
 		assert.NotEmpty(t, tr.Error())
-		// the tr whose status update failed must not be processed
+		// the transfer whose status update failed must not be processed
 		require.Len(t, internal.processed, 1)
 		assert.Empty(t, internal.processed[0])
 	})

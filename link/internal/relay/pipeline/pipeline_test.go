@@ -156,7 +156,7 @@ func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer)
 
 		return out
 	case <-time.After(15 * time.Second):
-		t.Fatal("pipeline did not emit the tr in time")
+		t.Fatal("pipeline did not emit the transfer in time")
 
 		return nil
 	}

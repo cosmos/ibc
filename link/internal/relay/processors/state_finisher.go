@@ -29,7 +29,7 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 	}
 
 	if !tr.IsComplete() {
-		tr.GetLogger().Warn("State finisher received a tr that is neither errored nor complete")
+		tr.GetLogger().Warn("State finisher received a transfer that is neither errored nor complete")
 
 		return tr, nil
 	}
@@ -41,14 +41,14 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 		tr.Status = store.RelayStatusCompleteWithAck
 	default:
 		tr.GetLogger().
-			Warn("This is a bug! Completed tr has neither a timeout nor an ack tx, not finishing")
+			Warn("This is a bug! Completed transfer has neither a timeout nor an ack tx, not finishing")
 
 		return tr, nil
 	}
 
 	if err := p.storage.UpdatePacketStatus(ctx, tr.Key(), tr.Status); err != nil {
-		tr.GetLogger().Error("Updating tr to terminal status", "status", tr.Status, "error", err)
-		tr.ProcessingError = errors.Wrapf(err, "updating tr status to %s", tr.Status)
+		tr.GetLogger().Error("Updating transfer to terminal status", "status", tr.Status, "error", err)
+		tr.ProcessingError = errors.Wrapf(err, "updating transfer status to %s", tr.Status)
 
 		return tr, nil
 	}
@@ -59,5 +59,5 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 }
 
 func (p StateFinisher) Cancel(tr *Transfer, err error) {
-	tr.GetLogger().Error("Finishing tr state", "error", err)
+	tr.GetLogger().Error("Finishing transfer state", "error", err)
 }

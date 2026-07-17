@@ -22,7 +22,7 @@ type Manager struct {
 	pipelines map[processors.Route]pipeline.TransferPipeline
 }
 
-// RouteManager routes transfers to their pipeline.
+// RouteManager identifies the pipeline a transfer is relayed through.
 type RouteManager interface {
 	Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error)
 	Close()
@@ -39,7 +39,7 @@ func NewManager(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) *Man
 	}
 }
 
-// Pipeline returns the pipeline for the tr's route, creating it on
+// Pipeline returns the pipeline for the transfer's route, creating it on
 // first use. Transfers whose source client has no configured route error.
 func (m *Manager) Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error) {
 	route := processors.Route{

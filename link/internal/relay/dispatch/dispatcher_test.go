@@ -218,7 +218,7 @@ func TestPipelineDeduper(t *testing.T) {
 		assert.False(t, deduper.Push(ctx, tr))
 		assert.Equal(t, 1, inner.pushCount())
 
-		// once the tr exits the pipeline it can be pushed again
+		// once the transfer exits the pipeline it can be pushed again
 		inner.out <- tr
 		require.Eventually(t, func() bool {
 			return deduper.Push(ctx, tr)

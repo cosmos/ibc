@@ -57,7 +57,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 			return nil, errors.Wrapf(errClear, "clearing recv tx %s", recvTxHash)
 		}
 
-		return nil, errors.Errorf("write ack for tr not found in recv tx %s", recvTxHash)
+		return nil, errors.Errorf("write ack for transfer not found in recv tx %s", recvTxHash)
 	case errors.Is(err, v2.ErrWriteAckDecoding):
 		// non-standard acknowledgement formats cannot be classified; record
 		// the ack with an unknown status

@@ -46,7 +46,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		return nil, errors.Wrapf(err, "clearing recv tx %s", *tr.RecvTxHash)
 	}
 
-	// error so the tr stops processing this run; it is picked up
+	// error so the transfer stops processing this run; it is picked up
 	// without the recv tx and redelivered on the next run
 	return nil, ErrRetryingRecvPacket
 }

@@ -15,21 +15,21 @@ type StatusStorage interface {
 	UpdatePacketStatus(ctx context.Context, key store.PacketKey, status store.RelayStatus) error
 }
 
-// Processor a pipeline step for a tr; wrapped by ProcessorMW.
+// Processor a pipeline step for a transfer; wrapped by ProcessorMW.
 type Processor interface {
-	// ShouldProcess reports whether this processor applies to the tr.
+	// ShouldProcess reports whether this processor applies to the transfer.
 	ShouldProcess(tr *processors.Transfer) bool
 
-	// Status the status a tr is in while processed by this processor.
+	// Status the status a transfer is in while processed by this processor.
 	Status() store.RelayStatus
 
 	pipeline.Processor[*processors.Transfer, *processors.Transfer]
 }
 
-// ProcessorMW wraps a Processor with the shared tr handling: errored,
+// ProcessorMW wraps a Processor with the shared transfer handling: errored,
 // failed, and non-applicable transfers pass through untouched; the status
 // transition is persisted before processing; processor errors poison the
-// tr instead of dropping it so it still reaches the pipeline output.
+// transfer instead of dropping it so it still reaches the pipeline output.
 type ProcessorMW struct {
 	storage  StatusStorage
 	internal Processor

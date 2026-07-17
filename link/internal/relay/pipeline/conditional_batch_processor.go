@@ -46,7 +46,7 @@ func ConditionallyBatchProcess(
 				continue
 			}
 
-			i.GetLogger().Debug("Pushing tr into batch", "status", processor.Status())
+			i.GetLogger().Debug("Pushing transfer into batch", "status", processor.Status())
 			toBatch <- i
 		}
 
