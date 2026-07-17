@@ -70,7 +70,7 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxManagerSet, error
 		}
 
 		opts := evm.ChainOptions{TxSubmissionDelay: evm.DefaultTxSubmissionDelay}
-		if override := cfg.Relayer.ChainOverride(pair.ChainID); override != nil {
+		if override, ok := cfg.Relayer.ChainOverride(pair.ChainID); ok {
 			if override.TxSubmissionDelay != nil {
 				opts.TxSubmissionDelay = *override.TxSubmissionDelay
 			}

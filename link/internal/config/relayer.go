@@ -39,17 +39,6 @@ type ProofAPIConfig struct {
 	TLSEnabled bool   `yaml:"tlsEnabled,omitempty"`
 }
 
-// ChainOverride returns the relay settings override for a chain, or nil.
-func (c RelayerConfig) ChainOverride(chainID string) *RelayerChainOverride {
-	for i := range c.ChainOverrides {
-		if c.ChainOverrides[i].ChainID == chainID {
-			return &c.ChainOverrides[i]
-		}
-	}
-
-	return nil
-}
-
 // RelayerChainOverride relay settings for one chain.
 type RelayerChainOverride struct {
 	ChainID            string            `yaml:"chainId"`
@@ -111,6 +100,17 @@ type AutoRelayConfig struct {
 	// Lookback the number of blocks the relayer looks back from the latest
 	// block to check for packets to relay.
 	Lookback uint64 `yaml:"lookback,omitempty"`
+}
+
+// ChainOverride returns the relay settings override for a chain.
+func (c RelayerConfig) ChainOverride(chainID string) (RelayerChainOverride, bool) {
+	for _, override := range c.ChainOverrides {
+		if override.ChainID == chainID {
+			return override, true
+		}
+	}
+
+	return RelayerChainOverride{}, false
 }
 
 // ClientByAlias returns the client config for the given alias.

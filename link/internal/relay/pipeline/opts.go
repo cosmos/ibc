@@ -56,7 +56,7 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 		}
 	}
 
-	if src := cfg.Relayer.ChainOverride(route.SourceChainID); src != nil {
+	if src, ok := cfg.Relayer.ChainOverride(route.SourceChainID); ok {
 
 		if src.PacketBatchSize != nil {
 			opts.AckBatchSize = *src.PacketBatchSize
@@ -71,7 +71,7 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 		opts.SourceFinalityOffset = src.FinalityOffset
 	}
 
-	if dst := cfg.Relayer.ChainOverride(route.DestinationChainID); dst != nil {
+	if dst, ok := cfg.Relayer.ChainOverride(route.DestinationChainID); ok {
 		if dst.PacketBatchSize != nil {
 			opts.RecvBatchSize = *dst.PacketBatchSize
 		}
