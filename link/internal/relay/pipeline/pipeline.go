@@ -217,10 +217,13 @@ func NewPipeline(
 	return &Pipeline{input: input, output: output}, nil
 }
 
-func (p *Pipeline) Push(_ context.Context, tr *processors.Transfer) bool {
-	p.input <- tr
-
-	return true
+func (p *Pipeline) Push(ctx context.Context, tr *processors.Transfer) bool {
+	select {
+	case p.input <- tr:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func (p *Pipeline) Poll() (*processors.Transfer, error) {

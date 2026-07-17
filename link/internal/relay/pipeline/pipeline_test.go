@@ -325,3 +325,31 @@ func (s staticTxManagers) Get(chainID, _ string) (txmgr.TxManager, bool) {
 	txManager, ok := s[chainID]
 	return txManager, ok
 }
+
+func TestPipelinePushRespectsContextCancellation(t *testing.T) {
+	// a zero-capacity, unread input channel simulates a full buffer: any send
+	// blocks until something reads it or the context cancels.
+	p := &Pipeline{input: make(chan *processors.Transfer)}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- p.Push(ctx, &processors.Transfer{})
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("Push returned before the input was read or the context was canceled")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	cancel()
+
+	select {
+	case pushed := <-done:
+		assert.False(t, pushed, "Push must report failure when canceled before the send lands")
+	case <-time.After(time.Second):
+		t.Fatal("Push did not return after its context was canceled; it is still blocked on the full buffer")
+	}
+}
