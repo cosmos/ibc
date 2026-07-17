@@ -31,19 +31,19 @@ var _ TxManager = (*evm.TxManager)(nil)
 // configured routes. A chain may carry several signers when different clients
 // on it are relayed by different routes.
 type TxManagerSet struct {
-	txManagers map[config.ChainSignerBinding]TxManager
+	txManagers map[config.ChainSignerPair]TxManager
 }
 
-func NewTxManagerSet(txManagers map[config.ChainSignerBinding]TxManager) *TxManagerSet {
+func NewTxManagerSet(txManagers map[config.ChainSignerPair]TxManager) *TxManagerSet {
 	if txManagers == nil {
-		txManagers = make(map[config.ChainSignerBinding]TxManager)
+		txManagers = make(map[config.ChainSignerPair]TxManager)
 	}
 
 	return &TxManagerSet{txManagers: txManagers}
 }
 
 func (s *TxManagerSet) Get(chainID, signerAlias string) (TxManager, bool) {
-	txManager, ok := s.txManagers[config.ChainSignerBinding{ChainID: chainID, SignerAlias: signerAlias}]
+	txManager, ok := s.txManagers[config.ChainSignerPair{ChainID: chainID, SignerAlias: signerAlias}]
 	return txManager, ok
 }
 
@@ -51,26 +51,26 @@ func (s *TxManagerSet) Get(chainID, signerAlias string) (TxManager, bool) {
 // routes. Each route names the signer for its source and destination chains;
 // a chain always resolves to a single signer (enforced by config validation).
 func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxManagerSet, error) {
-	bindings, err := config.RelayerChainSigners(cfg)
+	pairs, err := config.RelayerChainSignerPairs(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	txManagers := make(map[config.ChainSignerBinding]TxManager, len(bindings))
+	txManagers := make(map[config.ChainSignerPair]TxManager, len(pairs))
 
-	for _, binding := range bindings {
-		chain, ok := cfg.Chain(binding.ChainID)
+	for _, pair := range pairs {
+		chain, ok := cfg.Chain(pair.ChainID)
 		if !ok || chain.Type() != config.ChainTypeEVM {
-			return nil, errors.Errorf("chain %q is not a configured evm chain", binding.ChainID)
+			return nil, errors.Errorf("chain %q is not a configured evm chain", pair.ChainID)
 		}
 
-		chainSigner, ok := signers.Get(binding.SignerAlias)
+		chainSigner, ok := signers.Get(pair.SignerAlias)
 		if !ok {
-			return nil, errors.Errorf("unknown signer %q for chain %q", binding.SignerAlias, binding.ChainID)
+			return nil, errors.Errorf("unknown signer %q for chain %q", pair.SignerAlias, pair.ChainID)
 		}
 
 		opts := evm.ChainOptions{TxSubmissionDelay: evm.DefaultTxSubmissionDelay}
-		if override := cfg.Relayer.ChainOverride(binding.ChainID); override != nil {
+		if override := cfg.Relayer.ChainOverride(pair.ChainID); override != nil {
 			if override.TxSubmissionDelay != nil {
 				opts.TxSubmissionDelay = *override.TxSubmissionDelay
 			}
@@ -80,12 +80,12 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxManagerSet, error
 			}
 		}
 
-		txManager, err := evm.NewFromRPC(binding.ChainID, chain.EVM.RPC, chainSigner, opts)
+		txManager, err := evm.NewFromRPC(pair.ChainID, chain.EVM.RPC, chainSigner, opts)
 		if err != nil {
-			return nil, errors.Wrapf(err, "creating tx manager for chain %q", binding.ChainID)
+			return nil, errors.Wrapf(err, "creating tx manager for chain %q", pair.ChainID)
 		}
 
-		txManagers[binding] = txManager
+		txManagers[pair] = txManager
 	}
 
 	return NewTxManagerSet(txManagers), nil
