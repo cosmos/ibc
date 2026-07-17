@@ -9,7 +9,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -25,7 +24,7 @@ type BatchTimeoutPacket struct {
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
 	txManager txmgr.TxManager
-	route     transfer.Route
+	route     Route
 }
 
 func NewBatchTimeoutPacket(
@@ -33,7 +32,7 @@ func NewBatchTimeoutPacket(
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	txManager txmgr.TxManager,
-	route transfer.Route,
+	route Route,
 ) BatchTimeoutPacket {
 	return BatchTimeoutPacket{
 		chains:    chainClients,
@@ -44,7 +43,7 @@ func NewBatchTimeoutPacket(
 	}
 }
 
-func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
 	txSet := make(map[string]struct{})
 
 	var txIDs [][]byte
@@ -146,13 +145,13 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*transfer.T
 	return transfers, nil
 }
 
-func (p BatchTimeoutPacket) Cancel(transfers []*transfer.Transfer, err error) {
+func (p BatchTimeoutPacket) Cancel(transfers []*Transfer, err error) {
 	for _, tr := range transfers {
 		tr.GetLogger().Error("Delivering batch timeout tx", "error", err)
 	}
 }
 
-func (p BatchTimeoutPacket) ShouldProcess(tr *transfer.Transfer) bool {
+func (p BatchTimeoutPacket) ShouldProcess(tr *Transfer) bool {
 	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
 
 	return shouldBeTimedOut && tr.TimeoutTxHash == nil

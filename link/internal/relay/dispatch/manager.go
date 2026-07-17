@@ -9,7 +9,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 )
 
 // Manager creates and caches one pipeline per route.
@@ -19,12 +19,12 @@ type Manager struct {
 	deps   pipeline.Deps
 
 	mu        sync.Mutex
-	pipelines map[transfer.Route]pipeline.TransferPipeline
+	pipelines map[processors.Route]pipeline.TransferPipeline
 }
 
 // RouteManager routes transfers to their pipeline.
 type RouteManager interface {
-	Pipeline(ctx context.Context, tr *transfer.Transfer) (pipeline.TransferPipeline, error)
+	Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error)
 	Close()
 }
 
@@ -35,14 +35,14 @@ func NewManager(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) *Man
 		logger:    logger,
 		cfg:       cfg,
 		deps:      deps,
-		pipelines: make(map[transfer.Route]pipeline.TransferPipeline),
+		pipelines: make(map[processors.Route]pipeline.TransferPipeline),
 	}
 }
 
 // Pipeline returns the pipeline for the tr's route, creating it on
 // first use. Transfers whose source client has no configured route error.
-func (m *Manager) Pipeline(ctx context.Context, tr *transfer.Transfer) (pipeline.TransferPipeline, error) {
-	route := transfer.Route{
+func (m *Manager) Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error) {
+	route := processors.Route{
 		SourceChainID:       tr.SourceChainID,
 		SourceClientID:      tr.PacketSourceClientID,
 		DestinationChainID:  tr.DestinationChainID,
@@ -82,7 +82,7 @@ func (m *Manager) Pipeline(ctx context.Context, tr *transfer.Transfer) (pipeline
 	return pipeline, nil
 }
 
-func (m *Manager) isRouted(route transfer.Route) bool {
+func (m *Manager) isRouted(route processors.Route) bool {
 	client, ok := m.cfg.Relayer.Client(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return false

@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/relay/processors"
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
@@ -52,14 +51,14 @@ type Deps struct {
 // lifecycle. The pipeline owner closes the input via Close; the output closes
 // once the context is canceled and in-flight transfers drain.
 type Pipeline struct {
-	input  chan *transfer.Transfer
-	output <-chan *transfer.Transfer
+	input  chan *processors.Transfer
+	output <-chan *processors.Transfer
 }
 
 // TransferPipeline accepts transfers to relay and emits them once processed.
 type TransferPipeline interface {
-	Push(ctx context.Context, tr *transfer.Transfer) bool
-	Poll() (*transfer.Transfer, error)
+	Push(ctx context.Context, tr *processors.Transfer) bool
+	Poll() (*processors.Transfer, error)
 	Close()
 }
 
@@ -72,7 +71,7 @@ func NewPipeline(
 	ctx context.Context,
 	logger *slog.Logger,
 	deps Deps,
-	route transfer.Route,
+	route processors.Route,
 	opts Options,
 ) (*Pipeline, error) {
 	srcTxManager, ok := deps.TxManagers.Get(route.SourceChainID, opts.SourceSignerAlias)
@@ -98,9 +97,9 @@ func NewPipeline(
 		"destinationClientID", route.DestinationClientID,
 	)
 
-	input := make(chan *transfer.Transfer, inputBufferSize)
+	input := make(chan *processors.Transfer, inputBufferSize)
 
-	output := pipeline.Emitter(ctx, func() *transfer.Transfer {
+	output := pipeline.Emitter(ctx, func() *processors.Transfer {
 		return <-input
 	})
 
@@ -218,13 +217,13 @@ func NewPipeline(
 	return &Pipeline{input: input, output: output}, nil
 }
 
-func (p *Pipeline) Push(_ context.Context, tr *transfer.Transfer) bool {
+func (p *Pipeline) Push(_ context.Context, tr *processors.Transfer) bool {
 	p.input <- tr
 
 	return true
 }
 
-func (p *Pipeline) Poll() (*transfer.Transfer, error) {
+func (p *Pipeline) Poll() (*processors.Transfer, error) {
 	tr, ok := <-p.output
 	if !ok {
 		return nil, errors.New("pipeline closed")

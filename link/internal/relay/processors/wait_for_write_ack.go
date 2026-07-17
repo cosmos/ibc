@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -29,7 +28,7 @@ func NewWaitForWriteAck(chainClients ChainClients, storage WriteAckStorage) Wait
 	return WaitForWriteAck{chains: chainClients, storage: storage}
 }
 
-func (p WaitForWriteAck) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	client, ok := p.chains.Get(tr.DestinationChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
@@ -91,7 +90,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *transfer.Transfer) (*t
 	return tr, nil
 }
 
-func (p WaitForWriteAck) Cancel(tr *transfer.Transfer, err error) {
+func (p WaitForWriteAck) Cancel(tr *Transfer, err error) {
 	if errors.Is(err, v2.ErrTxNotFound) {
 		tr.GetLogger().Debug("Write ack tx not yet found on chain")
 
@@ -101,7 +100,7 @@ func (p WaitForWriteAck) Cancel(tr *transfer.Transfer, err error) {
 	tr.GetLogger().Error("Waiting for write ack", "error", err)
 }
 
-func (p WaitForWriteAck) ShouldProcess(tr *transfer.Transfer) bool {
+func (p WaitForWriteAck) ShouldProcess(tr *Transfer) bool {
 	return tr.RecvTxHash != nil && tr.WriteAckTxHash == nil && tr.TimeoutTxHash == nil
 }
 

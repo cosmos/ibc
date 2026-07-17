@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -29,7 +28,7 @@ func NewCheckPacketCommitment(chainClients ChainClients, storage AckTimeoutTxSto
 	return CheckPacketCommitment{chains: chainClients, storage: storage}
 }
 
-func (p CheckPacketCommitment) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	client, ok := p.chains.Get(tr.SourceChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for source chain %s", tr.SourceChainID)
@@ -122,11 +121,11 @@ func (p CheckPacketCommitment) Process(ctx context.Context, tr *transfer.Transfe
 	}
 }
 
-func (p CheckPacketCommitment) Cancel(tr *transfer.Transfer, err error) {
+func (p CheckPacketCommitment) Cancel(tr *Transfer, err error) {
 	tr.GetLogger().Error("Checking packet commitment", "error", err)
 }
 
-func (p CheckPacketCommitment) ShouldProcess(tr *transfer.Transfer) bool {
+func (p CheckPacketCommitment) ShouldProcess(tr *Transfer) bool {
 	return tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 

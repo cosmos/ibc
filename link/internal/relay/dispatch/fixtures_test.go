@@ -10,16 +10,16 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
 
-func testTransfer(t *testing.T) *transfer.Transfer {
+func testTransfer(t *testing.T) *processors.Transfer {
 	t.Helper()
 
-	return transfer.NewTransfer(store.Packet{
+	return processors.NewTransfer(store.Packet{
 		Status:                    store.RelayStatusPending,
 		SourceChainID:             testRoute.SourceChainID,
 		DestinationChainID:        testRoute.DestinationChainID,
@@ -68,7 +68,7 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	return &pipelineEnv{store: db}, deps
 }
 
-func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.Transfer {
+func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processors.Transfer {
 	t.Helper()
 
 	ctx := context.Background()
@@ -89,7 +89,7 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.
 	require.NoError(t, err)
 	require.Len(t, packets, 1)
 
-	return transfer.NewTransfer(packets[0], slog.Default())
+	return processors.NewTransfer(packets[0], slog.Default())
 }
 
 type staticTxManagers map[string]txmgr.TxManager

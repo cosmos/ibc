@@ -1,5 +1,4 @@
-// Package transfer models the packet lifecycle the relayer drives.
-package transfer
+package processors
 
 import (
 	"log/slog"

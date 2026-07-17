@@ -6,6 +6,7 @@ package relayer
 
 import (
 	"context"
+
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/store"
 	mock "github.com/stretchr/testify/mock"

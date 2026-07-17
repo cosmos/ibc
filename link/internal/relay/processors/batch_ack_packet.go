@@ -8,7 +8,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -24,7 +23,7 @@ type BatchAckPacket struct {
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
 	txManager txmgr.TxManager
-	route     transfer.Route
+	route     Route
 }
 
 func NewBatchAckPacket(
@@ -32,7 +31,7 @@ func NewBatchAckPacket(
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	txManager txmgr.TxManager,
-	route transfer.Route,
+	route Route,
 ) BatchAckPacket {
 	return BatchAckPacket{
 		chains:    chainClients,
@@ -43,7 +42,7 @@ func NewBatchAckPacket(
 	}
 }
 
-func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
 	txSet := make(map[string]struct{})
 
 	var txIDs [][]byte
@@ -151,13 +150,13 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*transfer.Trans
 	return transfers, nil
 }
 
-func (p BatchAckPacket) Cancel(transfers []*transfer.Transfer, err error) {
+func (p BatchAckPacket) Cancel(transfers []*Transfer, err error) {
 	for _, tr := range transfers {
 		tr.GetLogger().Error("Delivering batch ack tx", "error", err)
 	}
 }
 
-func (p BatchAckPacket) ShouldProcess(tr *transfer.Transfer) bool {
+func (p BatchAckPacket) ShouldProcess(tr *Transfer) bool {
 	if tr.WriteAckTxHash == nil {
 		return false
 	}

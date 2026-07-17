@@ -6,9 +6,10 @@ package chains
 
 import (
 	"context"
-	"github.com/cosmos/ibc/link/internal/types/v2"
-	mock "github.com/stretchr/testify/mock"
 	"time"
+
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	mock "github.com/stretchr/testify/mock"
 )
 
 // NewMockClient creates a new instance of MockClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

@@ -5,8 +5,9 @@
 package proofapi
 
 import (
-	"connectrpc.com/connect"
 	"context"
+
+	"connectrpc.com/connect"
 	mock "github.com/stretchr/testify/mock"
 )
 

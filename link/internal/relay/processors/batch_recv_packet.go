@@ -9,7 +9,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -24,7 +23,7 @@ type BatchRecvPacket struct {
 	storage   TxStorage
 	proofAPI  proto.ProofApiServiceClient
 	txManager txmgr.TxManager
-	route     transfer.Route
+	route     Route
 }
 
 func NewBatchRecvPacket(
@@ -32,7 +31,7 @@ func NewBatchRecvPacket(
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
 	txManager txmgr.TxManager,
-	route transfer.Route,
+	route Route,
 ) BatchRecvPacket {
 	return BatchRecvPacket{
 		chains:    chainClients,
@@ -43,7 +42,7 @@ func NewBatchRecvPacket(
 	}
 }
 
-func (p BatchRecvPacket) Process(ctx context.Context, transfers []*transfer.Transfer) ([]*transfer.Transfer, error) {
+func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
 	txSet := make(map[string]struct{})
 
 	var txIDs [][]byte
@@ -145,13 +144,13 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*transfer.Tran
 	return transfers, nil
 }
 
-func (p BatchRecvPacket) Cancel(transfers []*transfer.Transfer, err error) {
+func (p BatchRecvPacket) Cancel(transfers []*Transfer, err error) {
 	for _, tr := range transfers {
 		tr.GetLogger().Error("Delivering batch recv tx", "error", err)
 	}
 }
 
-func (p BatchRecvPacket) ShouldProcess(tr *transfer.Transfer) bool {
+func (p BatchRecvPacket) ShouldProcess(tr *Transfer) bool {
 	return tr.RecvTxHash == nil && !tr.IsTimedOut()
 }
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -21,7 +20,7 @@ func NewCheckTimeoutFinality(chainClients ChainClients, finalityOffset *uint64) 
 	return CheckTimeoutFinality{chains: chainClients, finalityOffset: finalityOffset}
 }
 
-func (p CheckTimeoutFinality) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p CheckTimeoutFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	client, ok := p.chains.Get(tr.DestinationChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
@@ -33,14 +32,14 @@ func (p CheckTimeoutFinality) Process(ctx context.Context, tr *transfer.Transfer
 	}
 
 	if !finalized {
-		return nil, transfer.ErrTimeoutNotFinalized
+		return nil, ErrTimeoutNotFinalized
 	}
 
 	return tr, nil
 }
 
-func (p CheckTimeoutFinality) Cancel(tr *transfer.Transfer, err error) {
-	if errors.Is(err, transfer.ErrTimeoutNotFinalized) {
+func (p CheckTimeoutFinality) Cancel(tr *Transfer, err error) {
+	if errors.Is(err, ErrTimeoutNotFinalized) {
 		if time.Since(tr.PacketTimeoutTimestamp) > nodeLagWarningAfter {
 			tr.GetLogger().
 				Warn("Timeout timestamp not finalized 30 minutes past timeout, is the node lagging?", "error", err)
@@ -52,7 +51,7 @@ func (p CheckTimeoutFinality) Cancel(tr *transfer.Transfer, err error) {
 	tr.GetLogger().Error("Checking timeout finality", "error", err)
 }
 
-func (p CheckTimeoutFinality) ShouldProcess(tr *transfer.Transfer) bool {
+func (p CheckTimeoutFinality) ShouldProcess(tr *Transfer) bool {
 	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
 
 	return shouldBeTimedOut && tr.TimeoutTxHash == nil

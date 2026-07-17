@@ -6,6 +6,7 @@ package mocks
 
 import (
 	"context"
+
 	"github.com/cosmos/kms/gen/signerservice"
 	mock "github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"

@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -24,7 +23,7 @@ func NewStateFinisher(storage StatusStorage) StateFinisher {
 	return StateFinisher{storage: storage}
 }
 
-func (p StateFinisher) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.Error() != "" {
 		return tr, nil
 	}
@@ -59,6 +58,6 @@ func (p StateFinisher) Process(ctx context.Context, tr *transfer.Transfer) (*tra
 	return tr, nil
 }
 
-func (p StateFinisher) Cancel(tr *transfer.Transfer, err error) {
+func (p StateFinisher) Cancel(tr *Transfer, err error) {
 	tr.GetLogger().Error("Finishing tr state", "error", err)
 }

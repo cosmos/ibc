@@ -6,7 +6,7 @@ import (
 	"github.com/deliveryhero/pipeline/v2"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -18,12 +18,12 @@ type StatusStorage interface {
 // Processor a pipeline step for a tr; wrapped by ProcessorMW.
 type Processor interface {
 	// ShouldProcess reports whether this processor applies to the tr.
-	ShouldProcess(tr *transfer.Transfer) bool
+	ShouldProcess(tr *processors.Transfer) bool
 
 	// Status the status a tr is in while processed by this processor.
 	Status() store.RelayStatus
 
-	pipeline.Processor[*transfer.Transfer, *transfer.Transfer]
+	pipeline.Processor[*processors.Transfer, *processors.Transfer]
 }
 
 // ProcessorMW wraps a Processor with the shared tr handling: errored,
@@ -39,7 +39,7 @@ func NewProcessorMW(storage StatusStorage, internal Processor) ProcessorMW {
 	return ProcessorMW{storage: storage, internal: internal}
 }
 
-func (mw ProcessorMW) Process(ctx context.Context, input *transfer.Transfer) (*transfer.Transfer, error) {
+func (mw ProcessorMW) Process(ctx context.Context, input *processors.Transfer) (*processors.Transfer, error) {
 	// input may be nil while the pipeline channels close down
 	if input == nil || input.Error() != "" {
 		return input, nil
@@ -84,7 +84,7 @@ func (mw ProcessorMW) Process(ctx context.Context, input *transfer.Transfer) (*t
 	return output, nil
 }
 
-func (mw ProcessorMW) Cancel(input *transfer.Transfer, err error) {
+func (mw ProcessorMW) Cancel(input *processors.Transfer, err error) {
 	if input == nil {
 		return
 	}
@@ -95,10 +95,10 @@ func (mw ProcessorMW) Cancel(input *transfer.Transfer, err error) {
 // BatchProcessor a pipeline step for a batch of transfers; wrapped by
 // BatchProcessorMW.
 type BatchProcessor interface {
-	ShouldProcess(tr *transfer.Transfer) bool
+	ShouldProcess(tr *processors.Transfer) bool
 	Status() store.RelayStatus
 
-	pipeline.Processor[[]*transfer.Transfer, []*transfer.Transfer]
+	pipeline.Processor[[]*processors.Transfer, []*processors.Transfer]
 }
 
 // BatchProcessorMW the batch equivalent of ProcessorMW: it partitions the
@@ -113,9 +113,9 @@ func NewBatchProcessorMW(storage StatusStorage, internal BatchProcessor) BatchPr
 	return BatchProcessorMW{storage: storage, internal: internal}
 }
 
-func (mw BatchProcessorMW) Process(ctx context.Context, batch []*transfer.Transfer) ([]*transfer.Transfer, error) {
-	var notProcessing []*transfer.Transfer
-	var toProcess []*transfer.Transfer
+func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Transfer) ([]*processors.Transfer, error) {
+	var notProcessing []*processors.Transfer
+	var toProcess []*processors.Transfer
 
 	for _, input := range batch {
 		switch {
@@ -128,7 +128,7 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*transfer.Transf
 
 		if err := mw.storage.UpdatePacketStatus(ctx, input.Key(), mw.internal.Status()); err != nil {
 			wrapped := errors.Wrapf(err, "updating packet status to %s from %s", mw.internal.Status(), input.Status)
-			mw.Cancel([]*transfer.Transfer{input}, wrapped)
+			mw.Cancel([]*processors.Transfer{input}, wrapped)
 			input.ProcessingError = wrapped
 			notProcessing = append(notProcessing, input)
 
@@ -157,11 +157,11 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*transfer.Transf
 	return append(output, notProcessing...), nil
 }
 
-func (mw BatchProcessorMW) Cancel(batch []*transfer.Transfer, err error) {
+func (mw BatchProcessorMW) Cancel(batch []*processors.Transfer, err error) {
 	mw.internal.Cancel(batch, err)
 }
 
-func (mw BatchProcessorMW) ShouldProcess(input *transfer.Transfer) bool {
+func (mw BatchProcessorMW) ShouldProcess(input *processors.Transfer) bool {
 	return mw.internal.ShouldProcess(input)
 }
 

@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -22,14 +21,14 @@ type ClearRecvTxStorage interface {
 type RetryRecvPacket struct {
 	txManager txmgr.TxManager
 	storage   ClearRecvTxStorage
-	route     transfer.Route
+	route     Route
 }
 
-func NewRetryRecvPacket(txManager txmgr.TxManager, storage ClearRecvTxStorage, route transfer.Route) RetryRecvPacket {
+func NewRetryRecvPacket(txManager txmgr.TxManager, storage ClearRecvTxStorage, route Route) RetryRecvPacket {
 	return RetryRecvPacket{txManager: txManager, storage: storage, route: route}
 }
 
-func (p RetryRecvPacket) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.RecvTxHash == nil || tr.RecvTxTime == nil {
 		return nil, errors.New("transfer has no recv tx details, violates ShouldProcess")
 	}
@@ -49,12 +48,12 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *transfer.Transfer) (*t
 
 	// error so the tr stops processing this run; it is picked up
 	// without the recv tx and redelivered on the next run
-	return nil, transfer.ErrRetryingRecvPacket
+	return nil, ErrRetryingRecvPacket
 }
 
-func (p RetryRecvPacket) Cancel(tr *transfer.Transfer, err error) {
+func (p RetryRecvPacket) Cancel(tr *Transfer, err error) {
 	switch {
-	case errors.Is(err, transfer.ErrRetryingRecvPacket):
+	case errors.Is(err, ErrRetryingRecvPacket):
 		tr.GetLogger().Warn("Retrying relay tx", "kind", "recv")
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "recv")
@@ -63,7 +62,7 @@ func (p RetryRecvPacket) Cancel(tr *transfer.Transfer, err error) {
 	}
 }
 
-func (p RetryRecvPacket) ShouldProcess(tr *transfer.Transfer) bool {
+func (p RetryRecvPacket) ShouldProcess(tr *Transfer) bool {
 	return tr.RecvTxHash != nil && tr.RecvTxTime != nil && tr.WriteAckTxHash == nil
 }
 

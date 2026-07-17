@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -25,7 +24,7 @@ func NewCheckRecvPacketDelivery(chainClients ChainClients, storage RecvTxStorage
 	return CheckRecvPacketDelivery{chains: chainClients, storage: storage}
 }
 
-func (p CheckRecvPacketDelivery) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p CheckRecvPacketDelivery) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	client, ok := p.chains.Get(tr.DestinationChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
@@ -60,11 +59,11 @@ func (p CheckRecvPacketDelivery) Process(ctx context.Context, tr *transfer.Trans
 	return tr, nil
 }
 
-func (p CheckRecvPacketDelivery) Cancel(tr *transfer.Transfer, err error) {
+func (p CheckRecvPacketDelivery) Cancel(tr *Transfer, err error) {
 	tr.GetLogger().Error("Checking recv packet delivery", "error", err)
 }
 
-func (p CheckRecvPacketDelivery) ShouldProcess(tr *transfer.Transfer) bool {
+func (p CheckRecvPacketDelivery) ShouldProcess(tr *Transfer) bool {
 	return tr.RecvTxHash == nil && tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 

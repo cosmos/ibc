@@ -7,7 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -80,7 +80,7 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 	}
 
 	for _, packet := range packets {
-		tr := transfer.NewTransfer(packet, d.logger)
+		tr := processors.NewTransfer(packet, d.logger)
 
 		err := d.SubmitTransfer(ctx, tr)
 		switch {
@@ -99,7 +99,7 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 }
 
 // SubmitTransfer routes the tr to its pipeline and pushes it.
-func (d *RelayDispatcher) SubmitTransfer(ctx context.Context, tr *transfer.Transfer) error {
+func (d *RelayDispatcher) SubmitTransfer(ctx context.Context, tr *processors.Transfer) error {
 	pipeline, err := d.manager.Pipeline(ctx, tr)
 	if err != nil {
 		return errors.Wrap(err, "getting pipeline for transfer")

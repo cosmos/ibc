@@ -9,7 +9,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +20,7 @@ import (
 
 const recvTxHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-var testRoute = transfer.Route{
+var testRoute = processors.Route{
 	SourceChainID:       "1",
 	SourceClientID:      "base-0",
 	DestinationChainID:  "8453",
@@ -48,16 +48,16 @@ func routedConfig() config.Config {
 // fakePipeline records pushes and lets tests control Push acceptance.
 type fakePipeline struct {
 	mu     sync.Mutex
-	pushed []*transfer.Transfer
+	pushed []*processors.Transfer
 	accept bool
-	out    chan *transfer.Transfer
+	out    chan *processors.Transfer
 }
 
 func newFakePipeline(accept bool) *fakePipeline {
-	return &fakePipeline{accept: accept, out: make(chan *transfer.Transfer, 100)}
+	return &fakePipeline{accept: accept, out: make(chan *processors.Transfer, 100)}
 }
 
-func (p *fakePipeline) Push(_ context.Context, t *transfer.Transfer) bool {
+func (p *fakePipeline) Push(_ context.Context, t *processors.Transfer) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -70,7 +70,7 @@ func (p *fakePipeline) Push(_ context.Context, t *transfer.Transfer) bool {
 	return true
 }
 
-func (p *fakePipeline) Poll() (*transfer.Transfer, error) {
+func (p *fakePipeline) Poll() (*processors.Transfer, error) {
 	t, ok := <-p.out
 	if !ok {
 		return nil, errors.New("closed")
@@ -94,7 +94,7 @@ type fakeManager struct {
 	closed   bool
 }
 
-func (m *fakeManager) Pipeline(context.Context, *transfer.Transfer) (pipeline.TransferPipeline, error) {
+func (m *fakeManager) Pipeline(context.Context, *processors.Transfer) (pipeline.TransferPipeline, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

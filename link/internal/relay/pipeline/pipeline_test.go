@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +27,7 @@ const (
 	timeoutTxHash = "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 )
 
-var testRoute = transfer.Route{
+var testRoute = processors.Route{
 	SourceChainID:       "1",
 	SourceClientID:      "base-0",
 	DestinationChainID:  "8453",
@@ -82,7 +82,7 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 	return env, deps
 }
 
-func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.Transfer {
+func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processors.Transfer {
 	t.Helper()
 
 	ctx := context.Background()
@@ -103,10 +103,10 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *transfer.
 	require.NoError(t, err)
 	require.Len(t, packets, 1)
 
-	return transfer.NewTransfer(packets[0], slog.Default())
+	return processors.NewTransfer(packets[0], slog.Default())
 }
 
-func (env *pipelineEnv) storedPacket(t *testing.T, tr *transfer.Transfer) store.Packet {
+func (env *pipelineEnv) storedPacket(t *testing.T, tr *processors.Transfer) store.Packet {
 	t.Helper()
 
 	packets, err := env.store.ListPacketsBySourceTx(context.Background(), tr.SourceChainID, tr.SourceTxHash)
@@ -133,7 +133,7 @@ func relayResponse(to string) *connect.Response[proto.RelayByTxResponse] {
 	return connect.NewResponse(&proto.RelayByTxResponse{Tx: []byte{0xca, 0x11}, Address: to})
 }
 
-func runPipeline(t *testing.T, deps Deps, opts Options, tr *transfer.Transfer) *transfer.Transfer {
+func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer) *processors.Transfer {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -143,7 +143,7 @@ func runPipeline(t *testing.T, deps Deps, opts Options, tr *transfer.Transfer) *
 	require.NoError(t, err)
 	require.True(t, p.Push(ctx, tr))
 
-	done := make(chan *transfer.Transfer, 1)
+	done := make(chan *processors.Transfer, 1)
 	go func() {
 		out, err := p.Poll()
 		require.NoError(t, err)
@@ -288,7 +288,7 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
-		assert.ErrorIs(t, out.ProcessingError, transfer.ErrSendNotFinalized)
+		assert.ErrorIs(t, out.ProcessingError, processors.ErrSendNotFinalized)
 
 		// the packet stays unfinished for the next run
 		unfinished, err := env.store.ListUnfinishedPackets(context.Background())

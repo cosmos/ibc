@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -21,7 +20,7 @@ func NewCheckWriteAckFinality(chainClients ChainClients, finalityOffset *uint64)
 	return CheckWriteAckFinality{chains: chainClients, finalityOffset: finalityOffset}
 }
 
-func (p CheckWriteAckFinality) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	client, ok := p.chains.Get(tr.DestinationChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
@@ -37,7 +36,7 @@ func (p CheckWriteAckFinality) Process(ctx context.Context, tr *transfer.Transfe
 	}
 
 	if !finalized {
-		return nil, transfer.ErrWriteAckNotFinalized
+		return nil, ErrWriteAckNotFinalized
 	}
 
 	if tr.WriteAckTxFinalizedTime == nil {
@@ -48,8 +47,8 @@ func (p CheckWriteAckFinality) Process(ctx context.Context, tr *transfer.Transfe
 	return tr, nil
 }
 
-func (p CheckWriteAckFinality) Cancel(tr *transfer.Transfer, err error) {
-	if errors.Is(err, transfer.ErrWriteAckNotFinalized) {
+func (p CheckWriteAckFinality) Cancel(tr *Transfer, err error) {
+	if errors.Is(err, ErrWriteAckNotFinalized) {
 		if tr.WriteAckTxTime != nil && time.Since(*tr.WriteAckTxTime) > nodeLagWarningAfter {
 			tr.GetLogger().Warn("Write ack tx not finalized after 30 minutes, is the node lagging?", "error", err)
 		}
@@ -60,7 +59,7 @@ func (p CheckWriteAckFinality) Cancel(tr *transfer.Transfer, err error) {
 	tr.GetLogger().Error("Checking write ack finality", "error", err)
 }
 
-func (p CheckWriteAckFinality) ShouldProcess(tr *transfer.Transfer) bool {
+func (p CheckWriteAckFinality) ShouldProcess(tr *Transfer) bool {
 	if tr.WriteAckTxHash == nil {
 		return false
 	}

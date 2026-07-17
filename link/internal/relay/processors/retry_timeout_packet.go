@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -23,18 +22,18 @@ type ClearTimeoutTxStorage interface {
 type RetryTimeoutPacket struct {
 	txManager txmgr.TxManager
 	storage   ClearTimeoutTxStorage
-	route     transfer.Route
+	route     Route
 }
 
 func NewRetryTimeoutPacket(
 	txManager txmgr.TxManager,
 	storage ClearTimeoutTxStorage,
-	route transfer.Route,
+	route Route,
 ) RetryTimeoutPacket {
 	return RetryTimeoutPacket{txManager: txManager, storage: storage, route: route}
 }
 
-func (p RetryTimeoutPacket) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.TimeoutTxHash == nil || tr.TimeoutTxTime == nil {
 		return nil, errors.New("transfer has no timeout tx details, violates ShouldProcess")
 	}
@@ -52,12 +51,12 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *transfer.Transfer) 
 		return nil, errors.Wrapf(err, "clearing timeout tx %s", *tr.TimeoutTxHash)
 	}
 
-	return nil, transfer.ErrRetryingTimeoutPacket
+	return nil, ErrRetryingTimeoutPacket
 }
 
-func (p RetryTimeoutPacket) Cancel(tr *transfer.Transfer, err error) {
+func (p RetryTimeoutPacket) Cancel(tr *Transfer, err error) {
 	switch {
-	case errors.Is(err, transfer.ErrRetryingTimeoutPacket):
+	case errors.Is(err, ErrRetryingTimeoutPacket):
 		tr.GetLogger().Warn("Retrying relay tx", "kind", "timeout")
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "timeout")
@@ -66,7 +65,7 @@ func (p RetryTimeoutPacket) Cancel(tr *transfer.Transfer, err error) {
 	}
 }
 
-func (p RetryTimeoutPacket) ShouldProcess(tr *transfer.Transfer) bool {
+func (p RetryTimeoutPacket) ShouldProcess(tr *Transfer) bool {
 	return tr.TimeoutTxHash != nil && tr.TimeoutTxTime != nil
 }
 

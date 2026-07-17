@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -21,7 +20,7 @@ func NewCheckSendFinality(chainClients ChainClients, finalityOffset *uint64) Che
 	return CheckSendFinality{chains: chainClients, finalityOffset: finalityOffset}
 }
 
-func (p CheckSendFinality) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p CheckSendFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	client, ok := p.chains.Get(tr.SourceChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for source chain %s", tr.SourceChainID)
@@ -38,7 +37,7 @@ func (p CheckSendFinality) Process(ctx context.Context, tr *transfer.Transfer) (
 	}
 
 	if !finalized {
-		return nil, transfer.ErrSendNotFinalized
+		return nil, ErrSendNotFinalized
 	}
 
 	if tr.SourceTxFinalizedTime == nil {
@@ -49,8 +48,8 @@ func (p CheckSendFinality) Process(ctx context.Context, tr *transfer.Transfer) (
 	return tr, nil
 }
 
-func (p CheckSendFinality) Cancel(tr *transfer.Transfer, err error) {
-	if errors.Is(err, transfer.ErrSendNotFinalized) {
+func (p CheckSendFinality) Cancel(tr *Transfer, err error) {
+	if errors.Is(err, ErrSendNotFinalized) {
 		if time.Since(tr.SourceTxTime) > nodeLagWarningAfter {
 			tr.GetLogger().Warn("Send tx not finalized after 30 minutes, is the node lagging?", "error", err)
 		}
@@ -61,7 +60,7 @@ func (p CheckSendFinality) Cancel(tr *transfer.Transfer, err error) {
 	tr.GetLogger().Error("Checking send tx finality", "error", err)
 }
 
-func (p CheckSendFinality) ShouldProcess(tr *transfer.Transfer) bool {
+func (p CheckSendFinality) ShouldProcess(tr *Transfer) bool {
 	return tr.RecvTxHash == nil
 }
 

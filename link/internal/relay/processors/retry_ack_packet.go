@@ -6,7 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
@@ -23,14 +22,14 @@ type ClearAckTxStorage interface {
 type RetryAckPacket struct {
 	txManager txmgr.TxManager
 	storage   ClearAckTxStorage
-	route     transfer.Route
+	route     Route
 }
 
-func NewRetryAckPacket(txManager txmgr.TxManager, storage ClearAckTxStorage, route transfer.Route) RetryAckPacket {
+func NewRetryAckPacket(txManager txmgr.TxManager, storage ClearAckTxStorage, route Route) RetryAckPacket {
 	return RetryAckPacket{txManager: txManager, storage: storage, route: route}
 }
 
-func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*transfer.Transfer, error) {
+func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.AckTxHash == nil || tr.AckTxTime == nil {
 		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
 	}
@@ -48,12 +47,12 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*tr
 		return nil, errors.Wrapf(err, "clearing ack tx %s", *tr.AckTxHash)
 	}
 
-	return nil, transfer.ErrRetryingAckPacket
+	return nil, ErrRetryingAckPacket
 }
 
-func (p RetryAckPacket) Cancel(tr *transfer.Transfer, err error) {
+func (p RetryAckPacket) Cancel(tr *Transfer, err error) {
 	switch {
-	case errors.Is(err, transfer.ErrRetryingAckPacket):
+	case errors.Is(err, ErrRetryingAckPacket):
 		tr.GetLogger().Warn("Retrying relay tx", "kind", "ack")
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "ack")
@@ -62,7 +61,7 @@ func (p RetryAckPacket) Cancel(tr *transfer.Transfer, err error) {
 	}
 }
 
-func (p RetryAckPacket) ShouldProcess(tr *transfer.Transfer) bool {
+func (p RetryAckPacket) ShouldProcess(tr *Transfer) bool {
 	return tr.AckTxHash != nil && tr.AckTxTime != nil
 }
 

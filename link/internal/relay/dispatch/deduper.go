@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/transfer"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -34,7 +34,7 @@ func NewDeduper(pl pipeline.TransferPipeline) *Deduper {
 	return deduper
 }
 
-func (d *Deduper) Push(ctx context.Context, tr *transfer.Transfer) bool {
+func (d *Deduper) Push(ctx context.Context, tr *processors.Transfer) bool {
 	d.mu.Lock()
 
 	key := tr.Key()
@@ -51,7 +51,7 @@ func (d *Deduper) Push(ctx context.Context, tr *transfer.Transfer) bool {
 }
 
 // Poll is a noop: the deduper drains the wrapped pipeline itself.
-func (d *Deduper) Poll() (*transfer.Transfer, error) {
+func (d *Deduper) Poll() (*processors.Transfer, error) {
 	return nil, nil
 }
 
