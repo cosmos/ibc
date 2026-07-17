@@ -119,6 +119,8 @@ func (env *pipelineEnv) storedPacket(t *testing.T, tr *transfer.Transfer) store.
 
 func fastOpts() Options {
 	return Options{
+		SourceSignerAlias:   "test-signer",
+		DestSignerAlias:     "test-signer",
 		RecvBatchSize:       1,
 		RecvBatchTimeout:    50 * time.Millisecond,
 		AckBatchSize:        1,
@@ -320,7 +322,7 @@ func routedConfig() config.Config {
 
 type staticTxManagers map[string]txmgr.TxManager
 
-func (s staticTxManagers) Get(chainID string) (txmgr.TxManager, bool) {
+func (s staticTxManagers) Get(chainID, _ string) (txmgr.TxManager, bool) {
 	submitter, ok := s[chainID]
 	return submitter, ok
 }

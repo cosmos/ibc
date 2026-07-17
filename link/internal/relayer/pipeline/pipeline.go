@@ -35,9 +35,9 @@ type Storage interface {
 	processors.TxStorage
 }
 
-// TxManagers resolves the per-chain transaction submitter.
+// TxManagers resolves the tx manager for a (chain, signer) pair.
 type TxManagers interface {
-	Get(chainID string) (txmgr.TxManager, bool)
+	Get(chainID, signerAlias string) (txmgr.TxManager, bool)
 }
 
 // Deps the external systems a pipeline relays through.
@@ -75,14 +75,20 @@ func NewPipeline(
 	route transfer.Route,
 	opts Options,
 ) (*Pipeline, error) {
-	srcTxManager, ok := deps.TxManagers.Get(route.SourceChainID)
+	srcTxManager, ok := deps.TxManagers.Get(route.SourceChainID, opts.SourceSignerAlias)
 	if !ok {
-		return nil, errors.Errorf("no configured tx manager for source chain %s", route.SourceChainID)
+		return nil, errors.Errorf(
+			"no configured tx manager for source chain %s and signer %q",
+			route.SourceChainID, opts.SourceSignerAlias,
+		)
 	}
 
-	dstTxManager, ok := deps.TxManagers.Get(route.DestinationChainID)
+	dstTxManager, ok := deps.TxManagers.Get(route.DestinationChainID, opts.DestSignerAlias)
 	if !ok {
-		return nil, errors.Errorf("no configured tx manager for destination chain %s", route.DestinationChainID)
+		return nil, errors.Errorf(
+			"no configured tx manager for destination chain %s and signer %q",
+			route.DestinationChainID, opts.DestSignerAlias,
+		)
 	}
 
 	logger = logger.With(

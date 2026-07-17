@@ -321,19 +321,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".sourceSignerAlias required",
 			},
 			{
-				name: "conflicting signers for one chain across routes",
-				patch: func(c *Config) {
-					c.Signers = append(c.Signers, SignerConfig{
-						Alias:       "other-key",
-						Type:        SignerRemote,
-						GRPC:        "kms.example.com:9090",
-						RemoteKeyID: "other-key-id",
-					})
-					c.Relayer.Routes[1].SourceSignerAlias = "other-key"
-				},
-				errContains: "conflicting signers",
-			},
-			{
 				name: "routes require proof api",
 				patch: func(c *Config) {
 					c.Relayer.ProofAPI.GRPC = ""

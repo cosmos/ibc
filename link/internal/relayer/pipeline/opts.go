@@ -14,11 +14,13 @@ const (
 	DefaultTimeoutBatchTimeout = time.Minute
 )
 
-// Ack relaying defaults
-const ()
-
 // Options the per-route pipeline settings.
 type Options struct {
+	// SourceSignerAlias and DestSignerAlias select the tx managers used to
+	// submit on the route's source and destination chains.
+	SourceSignerAlias string
+	DestSignerAlias   string
+
 	RecvBatchSize       int
 	RecvBatchTimeout    time.Duration
 	AckBatchSize        int
@@ -41,6 +43,17 @@ func OptionsFromConfig(cfg config.Config, route transfer.Route) Options {
 		AckBatchTimeout:     DefaultBatchTimeout,
 		TimeoutBatchSize:    DefaultBatchSize,
 		TimeoutBatchTimeout: DefaultTimeoutBatchTimeout,
+	}
+
+	if client, ok := cfg.Relayer.Client(route.SourceChainID, route.SourceClientID); ok {
+		for _, r := range cfg.Relayer.Routes {
+			if r.SourceClient == client.Alias {
+				opts.SourceSignerAlias = r.SourceSignerAlias
+				opts.DestSignerAlias = r.DestSignerAlias
+
+				break
+			}
+		}
 	}
 
 	if src := cfg.Relayer.ChainOverride(route.SourceChainID); src != nil {
