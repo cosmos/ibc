@@ -47,9 +47,10 @@ func (s *TxManagerSet) Get(chainID, signerAlias string) (TxManager, bool) {
 	return txManager, ok
 }
 
-// NewFromConfig builds one tx manager per chain relayed by the configured
-// routes. Each route names the signer for its source and destination chains;
-// a chain always resolves to a single signer (enforced by config validation).
+// NewFromConfig builds one tx manager per (chain, signer) pair relayed by the
+// configured routes. Routes naming the same pair share a tx manager; a chain
+// carries several when different clients on it are relayed with different
+// signers.
 func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxManagerSet, error) {
 	pairs, err := config.RelayerChainSignerPairs(cfg)
 	if err != nil {
