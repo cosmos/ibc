@@ -20,8 +20,9 @@ type TxManager interface {
 	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
 
 	// ShouldRetry reports whether a transaction submitted at sentAt is failed
-	// or has been pending past expiry and should be resubmitted.
-	ShouldRetry(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time) (bool, error)
+	// or has been pending past the implementation's retry expiry and should be
+	// resubmitted.
+	ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error)
 }
 
 var _ TxManager = (*evm.TxManager)(nil)

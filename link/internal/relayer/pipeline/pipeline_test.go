@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/relayer/processors"
 	"github.com/cosmos/ibc/link/internal/relayer/transfer"
 
 	"connectrpc.com/connect"
@@ -183,7 +182,7 @@ func TestPipelineLifecycle(t *testing.T) {
 			SubmittedAt:    time.Now().UTC(),
 			RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.dstTxManager.EXPECT().ShouldRetry(mock.Anything, recvTxHash, processors.RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
+		env.dstTxManager.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// success write ack: relayed back to the source chain like any other ack
 		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
@@ -195,7 +194,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.srcTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.srcTxManager.EXPECT().ShouldRetry(mock.Anything, ackTxHash, processors.RetryAckExpiry, mock.Anything).Return(false, nil).Once()
+		env.srcTxManager.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
@@ -225,7 +224,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.dstTxManager.EXPECT().ShouldRetry(mock.Anything, recvTxHash, processors.RetryRecvExpiry, mock.Anything).Return(false, nil).Once()
+		env.dstTxManager.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// error write ack: relayed back to the source chain
 		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
@@ -237,7 +236,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.srcTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.srcTxManager.EXPECT().ShouldRetry(mock.Anything, ackTxHash, processors.RetryAckExpiry, mock.Anything).Return(false, nil).Once()
+		env.srcTxManager.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
@@ -265,7 +264,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.srcTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
-		env.srcTxManager.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, processors.RetryTimeoutExpiry, mock.Anything).Return(false, nil).Once()
+		env.srcTxManager.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 

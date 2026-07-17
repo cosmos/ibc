@@ -3,7 +3,6 @@ package processors
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -13,10 +12,6 @@ import (
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
-
-// RetryTimeoutExpiry is how long a submitted relay tx may sit unconfirmed before it is
-// cleared and redelivered.
-const RetryTimeoutExpiry = 2 * time.Minute
 
 // ClearTimeoutTxStorage clears a recorded relay tx so it is resubmitted.
 type ClearTimeoutTxStorage interface {
@@ -44,12 +39,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *transfer.Transfer) 
 		return nil, errors.New("transfer has no timeout tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.txManager.ShouldRetry(
-		ctx,
-		*tr.TimeoutTxHash,
-		RetryTimeoutExpiry,
-		*tr.TimeoutTxTime,
-	)
+	retry, err := p.txManager.ShouldRetry(ctx, *tr.TimeoutTxHash, *tr.TimeoutTxTime)
 	if err != nil {
 		return nil, errors.Wrapf(err, "checking if timeout tx %s should be retried", *tr.TimeoutTxHash)
 	}

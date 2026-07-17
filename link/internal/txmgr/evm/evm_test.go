@@ -104,7 +104,7 @@ func TestShouldRetry(t *testing.T) {
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
 
-		retry, err := txManager.ShouldRetry(ctx, txHash, time.Hour, time.Now())
+		retry, err := txManager.ShouldRetry(ctx, txHash, time.Now())
 
 		require.ErrorIs(t, err, v2.ErrTxNotFound)
 		assert.False(t, retry)
@@ -115,7 +115,7 @@ func TestShouldRetry(t *testing.T) {
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
 
-		retry, err := txManager.ShouldRetry(ctx, txHash, time.Minute, time.Now().Add(-time.Hour))
+		retry, err := txManager.ShouldRetry(ctx, txHash, time.Now().Add(-time.Hour))
 
 		require.NoError(t, err)
 		assert.True(t, retry)
@@ -125,7 +125,7 @@ func TestShouldRetry(t *testing.T) {
 		txManager, eth, _ := newTestTxManager(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).Once()
 
-		retry, err := txManager.ShouldRetry(ctx, txHash, time.Minute, time.Now())
+		retry, err := txManager.ShouldRetry(ctx, txHash, time.Now())
 
 		require.NoError(t, err)
 		assert.True(t, retry)
@@ -135,7 +135,7 @@ func TestShouldRetry(t *testing.T) {
 		txManager, eth, _ := newTestTxManager(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).Once()
 
-		retry, err := txManager.ShouldRetry(ctx, txHash, time.Minute, time.Now())
+		retry, err := txManager.ShouldRetry(ctx, txHash, time.Now())
 
 		require.NoError(t, err)
 		assert.False(t, retry)
@@ -145,7 +145,7 @@ func TestShouldRetry(t *testing.T) {
 		txManager, eth, _ := newTestTxManager(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, errors.New("rpc down")).Once()
 
-		_, err := txManager.ShouldRetry(ctx, txHash, time.Minute, time.Now())
+		_, err := txManager.ShouldRetry(ctx, txHash, time.Now())
 
 		require.ErrorContains(t, err, "rpc down")
 	})

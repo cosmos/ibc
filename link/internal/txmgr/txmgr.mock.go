@@ -39,8 +39,8 @@ func (_m *MockTxManager) EXPECT() *MockTxManager_Expecter {
 }
 
 // ShouldRetry provides a mock function for the type MockTxManager
-func (_mock *MockTxManager) ShouldRetry(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time) (bool, error) {
-	ret := _mock.Called(ctx, txHash, expiry, sentAt)
+func (_mock *MockTxManager) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
+	ret := _mock.Called(ctx, txHash, sentAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ShouldRetry")
@@ -48,16 +48,16 @@ func (_mock *MockTxManager) ShouldRetry(ctx context.Context, txHash string, expi
 
 	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Duration, time.Time) (bool, error)); ok {
-		return returnFunc(ctx, txHash, expiry, sentAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) (bool, error)); ok {
+		return returnFunc(ctx, txHash, sentAt)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Duration, time.Time) bool); ok {
-		r0 = returnFunc(ctx, txHash, expiry, sentAt)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) bool); ok {
+		r0 = returnFunc(ctx, txHash, sentAt)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Duration, time.Time) error); ok {
-		r1 = returnFunc(ctx, txHash, expiry, sentAt)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Time) error); ok {
+		r1 = returnFunc(ctx, txHash, sentAt)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -72,13 +72,12 @@ type MockTxManager_ShouldRetry_Call struct {
 // ShouldRetry is a helper method to define mock.On call
 //   - ctx context.Context
 //   - txHash string
-//   - expiry time.Duration
 //   - sentAt time.Time
-func (_e *MockTxManager_Expecter) ShouldRetry(ctx any, txHash any, expiry any, sentAt any) *MockTxManager_ShouldRetry_Call {
-	return &MockTxManager_ShouldRetry_Call{Call: _e.mock.On("ShouldRetry", ctx, txHash, expiry, sentAt)}
+func (_e *MockTxManager_Expecter) ShouldRetry(ctx any, txHash any, sentAt any) *MockTxManager_ShouldRetry_Call {
+	return &MockTxManager_ShouldRetry_Call{Call: _e.mock.On("ShouldRetry", ctx, txHash, sentAt)}
 }
 
-func (_c *MockTxManager_ShouldRetry_Call) Run(run func(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time)) *MockTxManager_ShouldRetry_Call {
+func (_c *MockTxManager_ShouldRetry_Call) Run(run func(ctx context.Context, txHash string, sentAt time.Time)) *MockTxManager_ShouldRetry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -88,19 +87,14 @@ func (_c *MockTxManager_ShouldRetry_Call) Run(run func(ctx context.Context, txHa
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 time.Duration
+		var arg2 time.Time
 		if args[2] != nil {
-			arg2 = args[2].(time.Duration)
-		}
-		var arg3 time.Time
-		if args[3] != nil {
-			arg3 = args[3].(time.Time)
+			arg2 = args[2].(time.Time)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
-			arg3,
 		)
 	})
 	return _c
@@ -111,7 +105,7 @@ func (_c *MockTxManager_ShouldRetry_Call) Return(b bool, err error) *MockTxManag
 	return _c
 }
 
-func (_c *MockTxManager_ShouldRetry_Call) RunAndReturn(run func(ctx context.Context, txHash string, expiry time.Duration, sentAt time.Time) (bool, error)) *MockTxManager_ShouldRetry_Call {
+func (_c *MockTxManager_ShouldRetry_Call) RunAndReturn(run func(ctx context.Context, txHash string, sentAt time.Time) (bool, error)) *MockTxManager_ShouldRetry_Call {
 	_c.Call.Return(run)
 	return _c
 }

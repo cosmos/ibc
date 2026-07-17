@@ -2,7 +2,6 @@ package processors
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -12,10 +11,6 @@ import (
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
-
-// RetryRecvExpiry is how long a submitted relay tx may sit unconfirmed before it is
-// cleared and redelivered.
-const RetryRecvExpiry = 2 * time.Minute
 
 // ClearRecvTxStorage clears a recorded relay tx so it is resubmitted.
 type ClearRecvTxStorage interface {
@@ -39,12 +34,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *transfer.Transfer) (*t
 		return nil, errors.New("transfer has no recv tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.txManager.ShouldRetry(
-		ctx,
-		*tr.RecvTxHash,
-		RetryRecvExpiry,
-		*tr.RecvTxTime,
-	)
+	retry, err := p.txManager.ShouldRetry(ctx, *tr.RecvTxHash, *tr.RecvTxTime)
 	if err != nil {
 		return nil, errors.Wrapf(err, "checking if recv tx %s should be retried", *tr.RecvTxHash)
 	}

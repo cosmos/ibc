@@ -24,6 +24,10 @@ import (
 // when no override is configured.
 const DefaultTxSubmissionDelay = 2 * time.Second
 
+// retryExpiry is how long a submitted relay tx may sit without landing
+// before ShouldRetry reports it should be cleared and resubmitted.
+const retryExpiry = 2 * time.Minute
+
 // ETHClient go-ethereum methods used by the EVM tx manager.
 type ETHClient interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
@@ -193,12 +197,7 @@ func (c *TxManager) newTx(ctx context.Context, intent v2.TxIntent) (*types.Trans
 	}), nil
 }
 
-func (c *TxManager) ShouldRetry(
-	ctx context.Context,
-	txHash string,
-	expiry time.Duration,
-	sentAt time.Time,
-) (bool, error) {
+func (c *TxManager) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
 	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
 	switch {
 	case errors.Is(err, ethereum.NotFound):
@@ -207,7 +206,7 @@ func (c *TxManager) ShouldRetry(
 			return false, errors.Wrap(errHeader, "getting latest header")
 		}
 
-		expiresAt := sentAt.UTC().Add(expiry)
+		expiresAt := sentAt.UTC().Add(retryExpiry)
 		if expiresAt.Before(time.Unix(int64(latest.Time), 0)) {
 			return true, nil
 		}

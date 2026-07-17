@@ -3,7 +3,6 @@ package processors
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -13,10 +12,6 @@ import (
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
-
-// RetryAckExpiry is how long a submitted relay tx may sit unconfirmed before it is
-// cleared and redelivered.
-const RetryAckExpiry = 2 * time.Minute
 
 // ClearAckTxStorage clears a recorded relay tx so it is resubmitted.
 type ClearAckTxStorage interface {
@@ -40,12 +35,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *transfer.Transfer) (*tr
 		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.txManager.ShouldRetry(
-		ctx,
-		*tr.AckTxHash,
-		RetryAckExpiry,
-		*tr.AckTxTime,
-	)
+	retry, err := p.txManager.ShouldRetry(ctx, *tr.AckTxHash, *tr.AckTxTime)
 	if err != nil {
 		return nil, errors.Wrapf(err, "checking if ack tx %s should be retried", *tr.AckTxHash)
 	}
