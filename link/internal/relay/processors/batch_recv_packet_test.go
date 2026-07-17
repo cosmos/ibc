@@ -99,3 +99,38 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	client, ok := s[chainID]
 	return client, ok
 }
+
+// TestBatchRecvPacketShouldProcessExcludesAlreadySettled guards against a
+// regression where a transfer whose ack (or timeout) was recorded directly by
+// CheckPacketCommitment -- because the source commitment was already gone --
+// still had RecvTxHash nil and was not yet timed out, so BatchRecvPacket would
+// try to deliver a recv for a packet already settled on the source chain.
+func TestBatchRecvPacketShouldProcessExcludesAlreadySettled(t *testing.T) {
+	p := BatchRecvPacket{}
+
+	base := func() *Transfer {
+		return NewTransfer(store.Packet{
+			PacketTimeoutTimestamp: time.Now().Add(time.Hour),
+		}, slog.Default())
+	}
+
+	t.Run("freshTransfer", func(t *testing.T) {
+		require.True(t, p.ShouldProcess(base()))
+	})
+
+	t.Run("ackAlreadyRecordedWithoutRecv", func(t *testing.T) {
+		tr := base()
+		ackHash := "0xack"
+		tr.AckTxHash = &ackHash
+
+		require.False(t, p.ShouldProcess(tr))
+	})
+
+	t.Run("timeoutAlreadyRecordedWithoutRecv", func(t *testing.T) {
+		tr := base()
+		timeoutHash := "0xtimeout"
+		tr.TimeoutTxHash = &timeoutHash
+
+		require.False(t, p.ShouldProcess(tr))
+	})
+}

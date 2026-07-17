@@ -152,7 +152,7 @@ func (p BatchRecvPacket) Cancel(transfers []*Transfer, err error) {
 }
 
 func (p BatchRecvPacket) ShouldProcess(tr *Transfer) bool {
-	return tr.RecvTxHash == nil && !tr.IsTimedOut()
+	return tr.RecvTxHash == nil && !tr.IsTimedOut() && tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 
 func (p BatchRecvPacket) Status() store.RelayStatus {
