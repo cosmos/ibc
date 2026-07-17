@@ -321,13 +321,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".sourceSignerAlias required",
 			},
 			{
-				name: "routes require proof api",
-				patch: func(c *Config) {
-					c.Relayer.ProofAPI.GRPC = ""
-				},
-				errContains: "proof api grpc address required",
-			},
-			{
 				name: "route missing sourceClient",
 				patch: func(c *Config) {
 					c.Relayer.Routes[0].SourceClient = ""

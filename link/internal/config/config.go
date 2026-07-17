@@ -239,10 +239,6 @@ func (c Config) crossValidate() error {
 // validateRelayerSigners ensures every route's signer aliases resolve to a
 // configured signer.
 func (c Config) validateRelayerSigners(signerSet map[string]struct{}) error {
-	if len(c.Relayer.Routes) > 0 && c.Relayer.ProofAPI.GRPC == "" {
-		return errors.New("proof api grpc address required to relay routes")
-	}
-
 	for _, route := range c.Relayer.Routes {
 		for _, alias := range []string{route.SourceSignerAlias, route.DestSignerAlias} {
 			if _, exists := signerSet[alias]; !exists {
