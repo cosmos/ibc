@@ -406,7 +406,10 @@ func (c *Client) IsTimestampFinalized(ctx context.Context, timestamp time.Time, 
 			return false, nil
 		}
 
-		finalized, errHeader := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(latest.Number.Uint64()-*finalityOffset))
+		finalized, errHeader := c.eth.HeaderByNumber(
+			ctx,
+			new(big.Int).SetUint64(latest.Number.Uint64()-*finalityOffset),
+		)
 		if errHeader != nil {
 			return false, errors.Wrapf(errHeader, "getting offset header on chain %s", c.chainID)
 		}
