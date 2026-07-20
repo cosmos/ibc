@@ -141,12 +141,12 @@
             "components": [
               {
                 "name": "revisionNumber",
-                "type": "uint32",
+                "type": "uint64",
                 "internalType": "uint32"
               },
               {
                 "name": "revisionHeight",
-                "type": "uint32",
+                "type": "uint64",
                 "internalType": "uint32"
               }
             ]
@@ -901,12 +901,12 @@
             "components": [
               {
                 "name": "revisionNumber",
-                "type": "uint32",
+                "type": "uint64",
                 "internalType": "uint32"
               },
               {
                 "name": "revisionHeight",
-                "type": "uint32",
+                "type": "uint64",
                 "internalType": "uint32"
               }
             ]
@@ -1203,12 +1203,12 @@
             "components": [
               {
                 "name": "revisionNumber",
-                "type": "uint32",
+                "type": "uint64",
                 "internalType": "uint32"
               },
               {
                 "name": "revisionHeight",
-                "type": "uint32",
+                "type": "uint64",
                 "internalType": "uint32"
               }
             ]

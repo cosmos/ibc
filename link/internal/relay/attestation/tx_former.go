@@ -22,7 +22,7 @@ func mustRouterABI() *abi.ABI {
 // type. EVM chains have no notion of a revision/epoch, so RevisionNumber is
 // always 0.
 func height(h uint64) ics26router.IICS02ClientMsgsHeight {
-	return ics26router.IICS02ClientMsgsHeight{RevisionNumber: 0, RevisionHeight: uint32(h)} //nolint:gosec // heights fit in uint32 for the chains link targets
+	return ics26router.IICS02ClientMsgsHeight{RevisionNumber: 0, RevisionHeight: h}
 }
 
 // packUpdateClient packs a call to updateClient(clientId, updateMsg), where
