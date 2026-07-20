@@ -104,3 +104,26 @@ func TestRecoverSignerRejectsWrongLength(t *testing.T) {
 	_, err := recoverSigner([32]byte{}, []byte{0x01, 0x02})
 	require.Error(t, err)
 }
+
+// TestRecoverSignerAcceptsLegacyVByte verifies recoverSigner works against
+// signatures using Ethereum's legacy v (27/28), the convention the real
+// attestor signs with, not just the raw 0/1 recovery id crypto.Sign produces.
+func TestRecoverSignerAcceptsLegacyVByte(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	expected := crypto.PubkeyToAddress(key.PublicKey)
+
+	digest := taggedDigest([]byte("attested data"), attestationTypePacket)
+
+	sig, err := crypto.Sign(digest[:], key)
+	require.NoError(t, err)
+
+	legacySig := make([]byte, 65)
+	copy(legacySig, sig)
+	legacySig[64] += 27
+
+	recovered, err := recoverSigner(digest, legacySig)
+	require.NoError(t, err)
+	require.Equal(t, expected, recovered)
+}

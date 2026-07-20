@@ -221,14 +221,22 @@ func taggedDigest(attestationData []byte, typeTag byte) [32]byte {
 	return sha256.Sum256(append([]byte{typeTag}, inner[:]...))
 }
 
-// recoverSigner recovers the address that produced sig (65-byte r||s||v, v a
-// raw 0/1 recovery id) over digest.
+// recoverSigner recovers the address that produced sig (65-byte r||s||v)
+// over digest. crypto.SigToPub requires v as a raw 0/1 recovery id, but
+// attestors sign with Ethereum's legacy v (27/28), so it's normalized first.
 func recoverSigner(digest [32]byte, sig []byte) (common.Address, error) {
 	if len(sig) != 65 {
 		return common.Address{}, errors.Errorf("signature must be 65 bytes, got %d", len(sig))
 	}
 
-	pub, err := crypto.SigToPub(digest[:], sig)
+	normalized := make([]byte, 65)
+	copy(normalized, sig)
+
+	if normalized[64] >= 27 {
+		normalized[64] -= 27
+	}
+
+	pub, err := crypto.SigToPub(digest[:], normalized)
 	if err != nil {
 		return common.Address{}, errors.Wrap(err, "recovering signer public key")
 	}
