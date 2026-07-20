@@ -54,6 +54,15 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       ProofApiServiceClient:
+  github.com/cosmos/ibc/link/internal/types/ibcattestor:
+    config:
+      include-auto-generated: true
+      dir: "{{.InterfaceDir}}"
+      filename: "ibcattestor.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      AttestationServiceClient:
   github.com/cosmos/ibc/link/internal/txmgr:
     config:
       dir: "{{.InterfaceDir}}"

@@ -28,15 +28,6 @@ type RelayerConfig struct {
 	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
 	Clients        []ClientConfig         `yaml:"clients"`
 	Routes         []RouteConfig          `yaml:"routesToRelay"`
-	// ProofAPI the proof api used to build relay transactions.
-	// TODO: remove this when we fold the proof api logic into ibc link.
-	ProofAPI ProofAPIConfig `yaml:"proofApi,omitempty"`
-}
-
-// ProofAPIConfig connection details for the proof api.
-type ProofAPIConfig struct {
-	GRPC       string `yaml:"grpc"`
-	TLSEnabled bool   `yaml:"tlsEnabled,omitempty"`
 }
 
 // RelayerChainOverride relay settings for one chain.

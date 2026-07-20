@@ -6,9 +6,9 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relay/attestation"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/proofapi"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/relayer"
@@ -74,10 +74,15 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 			return nil, errTxManagers
 		}
 
+		glue, errGlue := attestation.NewGlue(cfg, clientSet)
+		if errGlue != nil {
+			return nil, errGlue
+		}
+
 		pipelineManager := dispatch.NewManager(logger, cfg, pipeline.Deps{
 			Storage:    db,
 			Chains:     clientSet,
-			ProofAPI:   proofapi.NewClient(cfg.Relayer.ProofAPI),
+			ProofAPI:   glue,
 			TxManagers: txManagers,
 		})
 
