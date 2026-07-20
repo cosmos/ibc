@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package ibc_attestor;
+
+// vendored from cosmos/solidity-ibc-eureka proto/ibc_attestor/attestation.proto;
+// the go_package is rewritten to generate into this repo.
+option go_package = "github.com/cosmos/ibc/link/internal/types/ibcattestor";
+
+// Attestation is a single attestation from a given block height for the requested data.
+message Attestation {
+  // The height of the attestation
+  uint64 height = 1;
+  // The timestamp of the block
+  optional uint64 timestamp = 2;
+  // The attested data
+  bytes attested_data = 3;
+  // The attestation signature
+  bytes signature = 4;
+}

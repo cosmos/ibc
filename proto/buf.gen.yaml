@@ -10,3 +10,4 @@ plugins:
 inputs:
   - directory: link
   - directory: proofapi
+  - directory: ibcattestor

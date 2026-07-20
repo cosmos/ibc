@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package ibc_attestor;
+
+// vendored from cosmos/solidity-ibc-eureka proto/ibc_attestor/ibc_attestor.proto
+// (the import path below is adjusted since buf treats this directory itself
+// as the proto root); the go_package is rewritten to generate into this repo.
+import "attestation.proto";
+
+option go_package = "github.com/cosmos/ibc/link/internal/types/ibcattestor";
+
+// Service definition for retrieving attestations.
+service AttestationService {
+  // Retrieves an attestation for a state at a given height.
+  rpc StateAttestation(StateAttestationRequest) returns (StateAttestationResponse);
+
+  // Retrieves an attestation for a set of packets.
+  rpc PacketAttestation(PacketAttestationRequest) returns (PacketAttestationResponse);
+
+  // Returns the latest height of the attested chain.
+  rpc LatestHeight(LatestHeightRequest) returns (LatestHeightResponse);
+}
+
+// Request message for getting an attestation for a state at a given height.
+message StateAttestationRequest {
+  // The height to attest to
+  uint64 height = 1;
+}
+
+// Response message for getting an attestation for a state at a given height.
+message StateAttestationResponse {
+  // The attestation
+  Attestation attestation = 1;
+}
+
+// Commitment type for packet attestation
+enum CommitmentType {
+  // Packet commitment (for SendPacket events)
+  COMMITMENT_TYPE_PACKET = 0;
+  // Acknowledgment commitment (for WriteAcknowledgement events)
+  COMMITMENT_TYPE_ACK = 1;
+  // Receipt commitment (for Timeout events - non-membership proof)
+  COMMITMENT_TYPE_RECEIPT = 2;
+}
+
+// Request message for getting an attestation for a set of packets.
+// This request's parameters does not include a height at the moment, because
+// we are currently only attesting to the latest height, and using the returned
+// height to request a state attestation.
+message PacketAttestationRequest {
+  // The packets to attest to
+  repeated bytes packets = 1;
+  // The height to attest to the packets at
+  uint64 height = 2;
+  // The type of commitment to attest (packet or acknowledgment)
+  // Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward compatibility)
+  CommitmentType commitment_type = 3;
+}
+
+// Response message for getting an attestation for a set of packets.
+message PacketAttestationResponse {
+  // The attestation
+  Attestation attestation = 1;
+}
+
+// Request message for getting the latest height.
+message LatestHeightRequest {}
+
+// Response message for getting the latest height.
+message LatestHeightResponse {
+  // The latest height of the attested chain
+  uint64 height = 1;
+}
