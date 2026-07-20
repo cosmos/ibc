@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 
 	"connectrpc.com/connect"
@@ -173,12 +174,31 @@ func reduceQuorum(responses []quorumResponse, threshold int) (quorumResult, erro
 
 	if len(signatures) < threshold {
 		return quorumResult{}, errors.Errorf(
-			"quorum not met: got %d of %d required signatures from %d configured attestors",
-			len(signatures), threshold, len(responses),
+			"quorum not met: got %d of %d required signatures from %d configured attestors (%s)",
+			len(signatures), threshold, len(responses), joinResponseErrors(responses),
 		)
 	}
 
 	return quorumResult{AttestationData: attestationData, Signatures: signatures}, nil
+}
+
+// joinResponseErrors summarizes why each non-contributing attestor was
+// excluded, so a quorum failure doesn't hide the underlying per-attestor
+// errors (network, protocol, or bad signature) behind just a vote count.
+func joinResponseErrors(responses []quorumResponse) string {
+	var msgs []string
+
+	for _, resp := range responses {
+		if resp.err != nil {
+			msgs = append(msgs, resp.err.Error())
+		}
+	}
+
+	if len(msgs) == 0 {
+		return "no errors; excluded due to disagreeing data or duplicate signer"
+	}
+
+	return strings.Join(msgs, "; ")
 }
 
 // latestHeight resolves a height every attestor in the quorum has observed,
@@ -221,8 +241,12 @@ func latestHeight(ctx context.Context, attestors []namedAttestorClient, threshol
 		answers int
 	)
 
+	var errMsgs []string
+
 	for _, resp := range responses {
 		if resp.err != nil {
+			errMsgs = append(errMsgs, resp.err.Error())
+
 			continue
 		}
 
@@ -235,7 +259,10 @@ func latestHeight(ctx context.Context, attestors []namedAttestorClient, threshol
 	}
 
 	if answers < threshold {
-		return 0, errors.Errorf("latest height quorum not met: got %d of %d required responses", answers, threshold)
+		return 0, errors.Errorf(
+			"latest height quorum not met: got %d of %d required responses (%s)",
+			answers, threshold, strings.Join(errMsgs, "; "),
+		)
 	}
 
 	return height, nil
@@ -254,10 +281,12 @@ func attestorClient(entry config.AttestorEntry) (ibcattestor.AttestationServiceC
 }
 
 // newAttestorHTTPClient dials attestors over unencrypted h2c, matching the
-// existing remote-attestor client used elsewhere in link.
+// existing remote-attestor client used elsewhere in link. HTTP1 must stay
+// unset: net/http.Transport only uses unencrypted HTTP/2 for http:// URLs
+// when HTTP1 is excluded from the protocol set, otherwise it falls back to
+// HTTP/1.1 and fails to parse the server's HTTP/2 preface.
 func newAttestorHTTPClient() *http.Client {
 	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
