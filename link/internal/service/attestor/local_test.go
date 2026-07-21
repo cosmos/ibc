@@ -21,6 +21,7 @@ func TestLocal(t *testing.T) {
 
 			attestorName string
 			chainID      string
+			client       Client
 			signer       signer.Signer
 
 			errContains string
@@ -29,12 +30,30 @@ func TestLocal(t *testing.T) {
 				name:         "ok",
 				attestorName: "alice",
 				chainID:      "chain-1",
+				client:       mockedClient(t, "chain-1"),
 				signer:       ecdsaSigner,
+			},
+			{
+				name:         "nilClient",
+				attestorName: "alice",
+				chainID:      "chain-1",
+				client:       nil,
+				signer:       ecdsaSigner,
+				errContains:  "client required",
+			},
+			{
+				name:         "clientChainIDMismatch",
+				attestorName: "alice",
+				chainID:      "chain-1",
+				client:       mockedClient(t, "chain-2"),
+				signer:       ecdsaSigner,
+				errContains:  "client chainID mismatch: got chain-2, want chain-1",
 			},
 			{
 				name:         "eddsaSigner",
 				attestorName: "alice",
 				chainID:      "chain-1",
+				client:       mockedClient(t, "chain-1"),
 				signer:       eddsaSigner,
 				errContains:  "ECDSA signer required, got eddsa",
 			},
@@ -42,6 +61,7 @@ func TestLocal(t *testing.T) {
 				name:         "emptyChainID",
 				attestorName: "alice",
 				chainID:      "",
+				client:       mockedClient(t, "chain-1"),
 				signer:       ecdsaSigner,
 				errContains:  "chainID required",
 			},
@@ -49,6 +69,7 @@ func TestLocal(t *testing.T) {
 				name:         "emptyName",
 				attestorName: "",
 				chainID:      "chain-1",
+				client:       mockedClient(t, "chain-1"),
 				signer:       ecdsaSigner,
 				errContains:  "name required",
 			},
@@ -57,12 +78,13 @@ func TestLocal(t *testing.T) {
 				signer:       nil,
 				attestorName: "alice",
 				chainID:      "chain-1",
+				client:       mockedClient(t, "chain-1"),
 				errContains:  "signer required",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ACT
-				attestor, err := NewLocal(tt.chainID, tt.attestorName, tt.signer)
+				attestor, err := NewLocal(tt.chainID, tt.attestorName, tt.client, tt.signer)
 
 				// ASSERT
 				if tt.errContains != "" {
@@ -79,4 +101,15 @@ func TestLocal(t *testing.T) {
 			})
 		}
 	})
+}
+
+type stubClient struct {
+	chainID string
+}
+
+func (c *stubClient) ChainID() string { return c.chainID }
+
+func mockedClient(t *testing.T, chainID string) Client {
+	t.Helper()
+	return &stubClient{chainID: chainID}
 }

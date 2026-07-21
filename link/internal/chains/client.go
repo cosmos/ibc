@@ -14,6 +14,7 @@ import (
 
 // Client provides chain state queries.
 type Client interface {
+	ChainID() string
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
 }
 

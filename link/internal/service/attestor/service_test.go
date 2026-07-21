@@ -20,8 +20,8 @@ func TestService(t *testing.T) {
 	t.Run("duplicateAliases", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			must(NewLocal("1", "alice", sampleSigner)),
-			must(NewLocal("2", "alice", sampleSigner)),
+			must(NewLocal("1", "alice", mockedClient(t, "1"), sampleSigner)),
+			must(NewLocal("2", "alice", mockedClient(t, "2"), sampleSigner)),
 		}
 
 		// ACT
@@ -36,9 +36,9 @@ func TestService(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		service, err := New([]Attestor{
-			must(NewLocal("1", "alice", sampleSigner)),
-			must(NewLocal("2", "bob", sampleSigner)),
-			must(NewLocal("3", "carol", sampleSigner)),
+			must(NewLocal("1", "alice", mockedClient(t, "1"), sampleSigner)),
+			must(NewLocal("2", "bob", mockedClient(t, "2"), sampleSigner)),
+			must(NewLocal("3", "carol", mockedClient(t, "3"), sampleSigner)),
 		})
 		require.NoError(t, err)
 
@@ -134,7 +134,7 @@ func TestService(t *testing.T) {
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
 			NewRemote("solana", "carol", "solana-carol", client),
-			must(NewLocal("ethereum", "dave", sampleSigner)),
+			must(NewLocal("ethereum", "dave", mockedClient(t, "ethereum"), sampleSigner)),
 		})
 		require.NoError(t, err)
 		start := uint64(time.Now().Unix())

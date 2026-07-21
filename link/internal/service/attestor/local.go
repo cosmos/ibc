@@ -10,6 +10,8 @@ import (
 )
 
 // LocalAttestor provides attestation data from the local process.
+// Right now we support only EVM attestations. Then porting Cosmos/Solana attestors, we'd need to refactor
+// LocalAttestor into LocalEVMAttestor, LocalCosmosAttestor, LocalSolanaAttestor, etc.
 type LocalAttestor struct {
 	chainID string
 	name    string
@@ -17,14 +19,23 @@ type LocalAttestor struct {
 	logger  *slog.Logger
 }
 
+type Client interface {
+	// todo
+	ChainID() string
+}
+
 var _ Attestor = &LocalAttestor{}
 
-func NewLocal(chainID, name string, backingSigner signer.Signer) (*LocalAttestor, error) {
+func NewLocal(chainID, name string, client Client, backingSigner signer.Signer) (*LocalAttestor, error) {
 	switch {
 	case chainID == "":
 		return nil, fmt.Errorf("chainID required")
 	case name == "":
 		return nil, fmt.Errorf("name required")
+	case client == nil:
+		return nil, fmt.Errorf("client required")
+	case client.ChainID() != chainID:
+		return nil, fmt.Errorf("client chainID mismatch: got %s, want %s", client.ChainID(), chainID)
 	case backingSigner == nil:
 		return nil, fmt.Errorf("signer required")
 	case backingSigner.Type() != signer.ECDSA:

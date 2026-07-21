@@ -37,6 +37,50 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 	return &MockClient_Expecter{mock: &_m.Mock}
 }
 
+// ChainID provides a mock function for the type MockClient
+func (_mock *MockClient) ChainID() string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ChainID")
+	}
+
+	var r0 string
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	return r0
+}
+
+// MockClient_ChainID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ChainID'
+type MockClient_ChainID_Call struct {
+	*mock.Call
+}
+
+// ChainID is a helper method to define mock.On call
+func (_e *MockClient_Expecter) ChainID() *MockClient_ChainID_Call {
+	return &MockClient_ChainID_Call{Call: _e.mock.On("ChainID")}
+}
+
+func (_c *MockClient_ChainID_Call) Run(run func()) *MockClient_ChainID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockClient_ChainID_Call) Return(s string) *MockClient_ChainID_Call {
+	_c.Call.Return(s)
+	return _c
+}
+
+func (_c *MockClient_ChainID_Call) RunAndReturn(run func() string) *MockClient_ChainID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // TxPacketEvents provides a mock function for the type MockClient
 func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error) {
 	ret := _mock.Called(ctx, txHash)

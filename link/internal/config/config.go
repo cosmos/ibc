@@ -86,9 +86,9 @@ type AttestationConfig struct {
 	// Should be unique across all attestations!
 	Signer string `yaml:"signer"`
 
-	// todo: future work
-	RouterAddress  string `yaml:"-"`
-	FinalityOffset int64  `yaml:"-"`
+	// Finality offset is the number of blocks to wait before attesting a block.
+	// Zero means "instant" finality.
+	FinalityOffset int64 `yaml:"finalityOffset"`
 }
 
 // ChainType the execution environment of a chain.
@@ -372,6 +372,8 @@ func (c AttestationConfig) Validate() error {
 		return errors.Errorf(".name required")
 	case c.Signer == "":
 		return errors.Errorf(".signer required")
+	case c.FinalityOffset < 0:
+		return errors.Errorf(".finalityOffset must be >= 0, got %d", c.FinalityOffset)
 	}
 
 	return nil

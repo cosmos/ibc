@@ -79,6 +79,10 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 	}, nil
 }
 
+func (c *Client) ChainID() string {
+	return c.chainID
+}
+
 func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.PacketEvent, error) {
 	if len(rawTxHash) != common.HashLength {
 		return nil, errors.Errorf("invalid tx hash length %d, expected %d", len(rawTxHash), common.HashLength)
