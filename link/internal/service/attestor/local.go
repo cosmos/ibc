@@ -19,6 +19,7 @@ type LocalAttestor struct {
 	logger  *slog.Logger
 }
 
+// Client is a chain client used by a local attestor.
 type Client interface {
 	// todo
 	ChainID() string
@@ -55,6 +56,20 @@ func NewLocal(chainID, name string, client Client, backingSigner signer.Signer) 
 func (a *LocalAttestor) LatestAttestableHeight(_ context.Context) (uint64, error) {
 	// todo: mocked
 	return uint64(time.Now().Unix()), nil
+}
+
+func (a *LocalAttestor) StateAttestation(_ context.Context, height uint64) (Attestation, error) {
+	// todo: mocked
+	return Attestation{
+		Height: height,
+	}, nil
+}
+
+func (a *LocalAttestor) PacketAttestation(_ context.Context, req PacketAttestationRequest) (Attestation, error) {
+	// todo: mocked
+	return Attestation{
+		Height: req.Height,
+	}, nil
 }
 
 // name and alias are identical for local attestors

@@ -124,7 +124,11 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}, nil
 }
 
-func buildAttestor(cfg config.Config, clients *chains.ClientSet, signers *signer.Set) (*attestor.Service, *server.AttestorHandler, error) {
+func buildAttestor(
+	cfg config.Config,
+	clients *chains.ClientSet,
+	signers *signer.Set,
+) (*attestor.Service, *server.AttestorHandler, error) {
 	// Services
 	attestorService, err := attestor.NewFromConfig(cfg, clients, signers)
 	if err != nil {

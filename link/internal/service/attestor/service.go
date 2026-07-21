@@ -34,7 +34,33 @@ type Attestor interface {
 	IsLocal() bool
 
 	LatestAttestableHeight(ctx context.Context) (uint64, error)
+	StateAttestation(ctx context.Context, height uint64) (Attestation, error)
+	PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error)
 }
+
+// PacketAttestationRequest is a request for packet commitment attestations.
+type PacketAttestationRequest struct {
+	Height         uint64
+	Packets        [][]byte
+	CommitmentType CommitmentType
+}
+
+// Attestation is a signed attestation over chain state or packet commitments.
+type Attestation struct {
+	Height uint64
+	// todo
+}
+
+// CommitmentType identifies the kind of packet commitment being attested.
+type CommitmentType int32
+
+// Commitment type values.
+const (
+	CommitmentTypeInvalid CommitmentType = iota
+	CommitmentTypePacket
+	CommitmentTypeAck
+	CommitmentTypeReceipt
+)
 
 // Attestor errors
 var (
@@ -112,4 +138,26 @@ func (s *Service) LatestAttestableHeight(ctx context.Context, attestorAlias stri
 	}
 
 	return attestor.LatestAttestableHeight(ctx)
+}
+
+func (s *Service) StateAttestation(ctx context.Context, attestorAlias string, height uint64) (Attestation, error) {
+	attestor, ok := s.attestors[attestorAlias]
+	if !ok {
+		return Attestation{}, ErrNotFound
+	}
+
+	return attestor.StateAttestation(ctx, height)
+}
+
+func (s *Service) PacketAttestation(
+	ctx context.Context,
+	attestorAlias string,
+	req PacketAttestationRequest,
+) (Attestation, error) {
+	attestor, ok := s.attestors[attestorAlias]
+	if !ok {
+		return Attestation{}, ErrNotFound
+	}
+
+	return attestor.PacketAttestation(ctx, req)
 }
