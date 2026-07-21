@@ -137,6 +137,10 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 	return events, nil
 }
 
+func (c *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	return c.eth.HeaderByNumber(ctx, number)
+}
+
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {
 	payloads := make([]v2.Payload, len(packet.Payloads))
 	for i, payload := range packet.Payloads {

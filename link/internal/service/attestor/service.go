@@ -88,7 +88,13 @@ func NewFromConfig(cfg config.Config, clients *chains.ClientSet, signers *signer
 			return fmt.Errorf("unknown signer %s", spec.Signer)
 		}
 
-		a, err := NewLocal(spec.ChainID, spec.Name, client, signer)
+		// todo: future: support many attestor implementations
+		evmClient, ok := client.(EVMClient)
+		if !ok {
+			return errors.New("only evm client are supported")
+		}
+
+		a, err := NewLocal(spec, evmClient, signer)
 		if err != nil {
 			return err
 		}

@@ -3,9 +3,9 @@ package attestor
 import (
 	"context"
 	"testing"
-	"time"
 
 	"connectrpc.com/connect"
+	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
 	"github.com/stretchr/testify/assert"
@@ -20,8 +20,8 @@ func TestService(t *testing.T) {
 	t.Run("duplicateAliases", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			must(NewLocal("1", "alice", mockedClient(t, "1"), sampleSigner)),
-			must(NewLocal("2", "alice", mockedClient(t, "2"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubEvmClient(t, "1"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "alice"}, stubEvmClient(t, "2"), sampleSigner)),
 		}
 
 		// ACT
@@ -36,13 +36,11 @@ func TestService(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		service, err := New([]Attestor{
-			must(NewLocal("1", "alice", mockedClient(t, "1"), sampleSigner)),
-			must(NewLocal("2", "bob", mockedClient(t, "2"), sampleSigner)),
-			must(NewLocal("3", "carol", mockedClient(t, "3"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubEvmClient(t, "1"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "bob"}, stubEvmClient(t, "2"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "3", Name: "carol"}, stubEvmClient(t, "3"), sampleSigner)),
 		})
 		require.NoError(t, err)
-
-		start := uint64(time.Now().Unix())
 
 		for _, alias := range []string{"alice", "bob", "carol"} {
 			t.Run(alias, func(t *testing.T) {
@@ -51,8 +49,7 @@ func TestService(t *testing.T) {
 
 				// ASSERT
 				require.NoError(t, err)
-				assert.GreaterOrEqual(t, height, start)
-				assert.LessOrEqual(t, height, uint64(time.Now().Unix()))
+				assert.Equal(t, uint64(1), height)
 			})
 		}
 
@@ -134,10 +131,9 @@ func TestService(t *testing.T) {
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
 			NewRemote("solana", "carol", "solana-carol", client),
-			must(NewLocal("ethereum", "dave", mockedClient(t, "ethereum"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "ethereum", Name: "dave"}, stubEvmClient(t, "ethereum"), sampleSigner)),
 		})
 		require.NoError(t, err)
-		start := uint64(time.Now().Unix())
 		client.EXPECT().
 			LatestAttestableHeight(mock.Anything, latestAttestableHeightRequest("bob")).
 			Return(connect.NewResponse(&proto.LatestAttestableHeightResponse{
@@ -157,8 +153,7 @@ func TestService(t *testing.T) {
 
 		// ASSERT
 		require.NoError(t, err)
-		assert.GreaterOrEqual(t, localHeight, start)
-		assert.LessOrEqual(t, localHeight, uint64(time.Now().Unix()))
+		assert.Equal(t, uint64(1), localHeight)
 	})
 
 }
