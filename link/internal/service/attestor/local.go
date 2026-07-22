@@ -4,18 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/big"
-	"time"
 
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 
 	evm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
-	eth "github.com/ethereum/go-ethereum/core/types"
 )
 
 // LocalAttestor provides attestation data from the local process.
@@ -26,26 +23,15 @@ type LocalAttestor struct {
 	name           string
 	finalityOffset uint
 
-	client EVMClient
+	client chains.Client
 	signer signer.Signer
 
 	logger *slog.Logger
 }
 
-// EVMClient is a chain client used by a local attestor.
-type EVMClient interface {
-	ChainID() string
-	HeaderByNumber(ctx context.Context, number *big.Int) (*eth.Header, error)
-}
-
 var _ Attestor = &LocalAttestor{}
 
-var (
-	blockFinalized = big.NewInt(rpc.FinalizedBlockNumber.Int64())
-	blockLatest    = big.NewInt(rpc.LatestBlockNumber.Int64())
-)
-
-func NewLocal(cfg config.AttestationConfig, client EVMClient, backingSigner signer.Signer) (*LocalAttestor, error) {
+func NewLocal(cfg config.AttestationConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
 	switch {
 	case cfg.ChainID == "":
 		return nil, fmt.Errorf("chainID required")
@@ -80,27 +66,24 @@ func NewLocal(cfg config.AttestationConfig, client EVMClient, backingSigner sign
 // If finality offset is zero, returns the "finalized" block.
 // Otherwise, returns the "latest" block minus the offset.
 func (a *LocalAttestor) LatestHeight(ctx context.Context) (uint64, error) {
-	block := blockFinalized
+	actualHeight := uint64(v2.FinalizedBlock)
 	if a.finalityOffset > 0 {
-		block = blockLatest
+		actualHeight = v2.LatestBlock
 	}
 
 	// TODO: cache last N headers to avoid extra RPC calls
-	header, err := a.client.HeaderByNumber(ctx, block)
-	switch {
-	case err != nil:
+	header, err := a.client.GetBlockHeader(ctx, actualHeight)
+	if err != nil {
 		return 0, err
-	case header == nil:
-		return 0, fmt.Errorf("header is nil")
 	}
 
-	height := header.Number.Uint64()
+	actualHeight = header.Height
 	offset := uint64(a.finalityOffset)
-	if offset >= height {
+	if offset >= actualHeight {
 		return 0, nil
 	}
 
-	return height - offset, nil
+	return actualHeight - offset, nil
 }
 
 func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
@@ -112,15 +95,12 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (At
 		return Attestation{}, errors.Wrapf(ErrNotFinalized, "latest %d, requested %d", latestHeight, height)
 	}
 
-	header, err := a.client.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
-	switch {
-	case err != nil:
+	header, err := a.client.GetBlockHeader(ctx, height)
+	if err != nil {
 		return Attestation{}, errors.Wrapf(err, "get header at height %d", height)
-	case header == nil:
-		return Attestation{}, errors.Wrapf(ErrNotFinalized, "header at height %d is nil", height)
 	}
 
-	attestedData, err := evm.EncodeStateAttestation(height, header.Time)
+	attestedData, err := evm.EncodeStateAttestation(height, uint64(header.Timestamp.Unix()))
 	if err != nil {
 		return Attestation{}, err
 	}
@@ -130,11 +110,9 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (At
 		return Attestation{}, fmt.Errorf("sign state attestation: %w", err)
 	}
 
-	timestamp := time.Unix(int64(header.Time), 0).UTC() //nolint:gosec // EVM block timestamps fit in int64
-
 	return Attestation{
 		Height:       height,
-		Timestamp:    &timestamp,
+		Timestamp:    &header.Timestamp,
 		AttestedData: attestedData,
 		Signature:    signature,
 	}, nil
@@ -170,6 +148,7 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 	_ = packets // used when implementing commitment retrieval
 
 	// TODO(5): Add an EVM client method to read getCommitment(pathHash) at exactly req.Height.
+	//   a.client.GetCommitment(ctx, req.Height, <pathHash>)
 	// TODO(6): For each packet, derive its raw ICS-24 path and keccak256 path hash.
 	// TODO(7): Enforce type semantics: packet must exist and equal the recomputed commitment,
 	// acknowledgement must exist, and receipt must be absent; fail the batch atomically.

@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
@@ -137,8 +138,24 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 	return events, nil
 }
 
-func (c *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	return c.eth.HeaderByNumber(ctx, number)
+func (c *Client) GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error) {
+	header, err := c.eth.HeaderByNumber(ctx, heightToBigInt(height))
+	switch {
+	case err != nil:
+		return v2.BlockHeader{}, errors.Wrapf(err, "getting header for height %d", height)
+	case header == nil:
+		return v2.BlockHeader{}, errors.Errorf("header is nil for height %d", height)
+	}
+
+	return v2.BlockHeader{
+		Height:    height,
+		Timestamp: blockTime(header),
+	}, nil
+}
+
+func (c *Client) GetCommitment(ctx context.Context, height uint64, pathHash [32]byte) ([32]byte, error) {
+	// todo
+	return [32]byte{}, errors.New("not implemented")
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {
@@ -164,4 +181,20 @@ func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {
 
 func blockTime(header *types.Header) time.Time {
 	return time.Unix(int64(header.Time), 0).UTC() //nolint:gosec // block times fit in int64
+}
+
+var (
+	blockFinalized = big.NewInt(rpc.FinalizedBlockNumber.Int64())
+	blockLatest    = big.NewInt(rpc.LatestBlockNumber.Int64())
+)
+
+func heightToBigInt(height uint64) *big.Int {
+	switch height {
+	case v2.LatestBlock:
+		return blockLatest
+	case v2.FinalizedBlock:
+		return blockFinalized
+	default:
+		return new(big.Int).SetUint64(height)
+	}
 }
