@@ -6,7 +6,8 @@ E2E_LANE ?= anvil
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
-TEST_APP_DIR := $(E2E_DIR)/e2etest/contracts
+CONTRACT_BINDINGS := $(addprefix $(HARNESS_DIR)/environment/solidityibc/,\
+	accessmanager escrow dummylightclient testerc20 counter iftsendcallconstructor)
 
 build-link: ## Build the Link binary
 	$(MAKE) -C link build
@@ -30,7 +31,7 @@ test-unit: ## Run pure-Go e2e selection and helper tests; no chains
 	go -C $(E2E_DIR) test ./e2etest ./internal/...
 
 test-e2e: build-link ## Run e2e tests (E2E_FLAGS=... E2E_LANE=...)
-	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . $(E2E_FLAGS)
+	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . -timeout 60m $(E2E_FLAGS)
 
 lint-e2e: ## Lint the e2e and harness modules
 	cd $(E2E_DIR) && golangci-lint run
@@ -47,19 +48,20 @@ clean-e2e: ## Kill e2e processes and remove Docker resources
 	$(E2E_DIR)/scripts/clean.sh
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
-	forge build --root $(TEST_APP_DIR)
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	$(E2E_DIR)/scripts/generate-contract-bindings.sh
 
 check-test-apps: ## Fail if typed Go contract bindings are stale
-	forge build --force --root $(TEST_APP_DIR)
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build --force --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	$(E2E_DIR)/scripts/generate-contract-bindings.sh
-	@git diff --exit-code -- link/testappbindings \
-		$(HARNESS_DIR)/environment/solidityibc/accessmanager || { \
-		echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; exit 1; }
+	@status="$$(git status --porcelain --untracked-files=all -- $(CONTRACT_BINDINGS))"; \
+		test -z "$$status" || { \
+			echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; \
+			echo "$$status" >&2; \
+			exit 1; \
+		}
 
 check-link: ## Run Link-local checks
 	$(MAKE) -C link check

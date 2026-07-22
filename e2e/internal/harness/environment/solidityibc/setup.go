@@ -3,12 +3,17 @@ package solidityibc
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"slices"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ibcerc20"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics20transfer"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27account"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,6 +22,8 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/accessmanager"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/dummylightclient"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/escrow"
 )
 
 type contractBackend interface {
@@ -63,9 +70,7 @@ func (s *Setup) DeployInstance(
 		return Instance{}, fmt.Errorf("solidity IBC deploy Instance: %w", authorityErr)
 	}
 
-	accessAddress, tx, err := s.send(
-		ctx,
-		authority,
+	accessAddress, err := s.deployVerified(ctx, authority, "AccessManager",
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := accessmanager.DeployAccessManager(
 				opts,
@@ -73,47 +78,21 @@ func (s *Setup) DeployInstance(
 				authority.Address(),
 			)
 			return address, transaction, deployErr
-		},
-	)
-	if err != nil {
-		return Instance{}, fmt.Errorf("solidity IBC deploy AccessManager: %w", err)
-	}
-	accessReceipt, err := s.awaitMined(ctx, "deploy AccessManager", tx)
+		})
 	if err != nil {
 		return Instance{}, err
-	}
-	if deploymentErr := requireDeploymentAddress("AccessManager", accessAddress, accessReceipt); deploymentErr != nil {
-		return Instance{}, deploymentErr
 	}
 	if adminErr := s.requireAdmin(ctx, accessAddress, authority.Address()); adminErr != nil {
 		return Instance{}, fmt.Errorf("solidity IBC verify AccessManager: %w", adminErr)
 	}
 
-	routerImplementation, tx, err := s.send(
-		ctx,
-		authority,
+	routerImplementation, err := s.deployVerified(ctx, authority, "ICS26Router implementation",
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := ics26router.DeployContract(opts, s.backend)
 			return address, transaction, deployErr
-		},
-	)
-	if err != nil {
-		return Instance{}, fmt.Errorf("solidity IBC deploy ICS26Router implementation: %w", err)
-	}
-	implementationReceipt, err := s.awaitMined(
-		ctx,
-		"deploy ICS26Router implementation",
-		tx,
-	)
+		})
 	if err != nil {
 		return Instance{}, err
-	}
-	if deploymentErr := requireDeploymentAddress(
-		"ICS26Router implementation",
-		routerImplementation,
-		implementationReceipt,
-	); deploymentErr != nil {
-		return Instance{}, deploymentErr
 	}
 
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
@@ -128,9 +107,7 @@ func (s *Setup) DeployInstance(
 		return Instance{}, fmt.Errorf("solidity IBC encode ICS26Router initialization: %w", err)
 	}
 
-	routerProxy, tx, err := s.send(
-		ctx,
-		authority,
+	routerProxy, err := s.deployVerified(ctx, authority, "initialized ICS26Router proxy",
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := erc1967proxy.DeployContract(
 				opts,
@@ -139,23 +116,14 @@ func (s *Setup) DeployInstance(
 				initialization,
 			)
 			return address, transaction, deployErr
-		},
-	)
+		})
 	if err != nil {
-		return Instance{}, fmt.Errorf("solidity IBC deploy initialized ICS26Router proxy: %w", err)
-	}
-	proxyReceipt, err := s.awaitMined(ctx, "deploy initialized ICS26Router proxy", tx)
-	instance := Instance{AccessManager: accessAddress, Router: routerProxy}
-	if err != nil {
-		return Instance{}, err
-	}
-	if err := requireDeploymentAddress("ICS26Router proxy", routerProxy, proxyReceipt); err != nil {
 		return Instance{}, err
 	}
 	if _, err := s.AttachInstance(ctx, routerProxy); err != nil {
 		return Instance{}, fmt.Errorf("solidity IBC verify deployed Instance: %w", err)
 	}
-	return instance, nil
+	return Instance{AccessManager: accessAddress, Router: routerProxy}, nil
 }
 
 // AttachInstance resolves the AccessManager from the router locator and
@@ -194,6 +162,241 @@ func (s *Setup) AttachInstance(
 	return Instance{AccessManager: authority, Router: routerAddress}, nil
 }
 
+const (
+	transferPortID = "transfer"
+	gmpPortID      = "gmpport"
+)
+
+// DeployAppStack deploys ICS20 Transfer and ICS27 GMP (with their logic
+// contracts), registers both ports on the router, and opens public relaying.
+func (s *Setup) DeployAppStack(
+	ctx context.Context,
+	authority evm.Account,
+	instance Instance,
+) (AppStack, error) {
+	if authorityErr := validateAuthority(authority); authorityErr != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC deploy AppStack: %w", authorityErr)
+	}
+	if instance.Router == (common.Address{}) || instance.AccessManager == (common.Address{}) {
+		return AppStack{}, fmt.Errorf("solidity IBC deploy AppStack: Instance is incomplete")
+	}
+
+	escrowLogic, err := s.deployVerified(ctx, authority, "Escrow logic",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := escrow.DeployEscrow(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	ibcERC20Logic, err := s.deployVerified(ctx, authority, "IBCERC20 logic",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := ibcerc20.DeployContract(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	accountLogic, err := s.deployVerified(ctx, authority, "ICS27Account logic",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := ics27account.DeployContract(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	ics20Impl, err := s.deployVerified(ctx, authority, "ICS20Transfer implementation",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := ics20transfer.DeployContract(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	ics27Impl, err := s.deployVerified(ctx, authority, "ICS27GMP implementation",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := ics27gmp.DeployContract(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	ics20ABI, err := ics20transfer.ContractMetaData.GetAbi()
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode ICS20Transfer initialization: %w", err)
+	}
+	if ics20ABI == nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode ICS20Transfer initialization: upstream binding has no ABI")
+	}
+	ics20Init, err := ics20ABI.Pack(
+		"initialize",
+		instance.Router,
+		escrowLogic,
+		ibcERC20Logic,
+		common.Address{},
+		instance.AccessManager,
+	)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode ICS20Transfer initialization: %w", err)
+	}
+
+	ics20Proxy, err := s.deployVerified(ctx, authority, "initialized ICS20Transfer proxy",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := erc1967proxy.DeployContract(
+				opts,
+				s.backend,
+				ics20Impl,
+				ics20Init,
+			)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+	if codeErr := s.requireCode(ctx, "ICS20Transfer proxy", ics20Proxy); codeErr != nil {
+		return AppStack{}, codeErr
+	}
+
+	ics27ABI, err := ics27gmp.ContractMetaData.GetAbi()
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode ICS27GMP initialization: %w", err)
+	}
+	if ics27ABI == nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode ICS27GMP initialization: upstream binding has no ABI")
+	}
+	ics27Init, err := ics27ABI.Pack("initialize", instance.Router, accountLogic, instance.AccessManager)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode ICS27GMP initialization: %w", err)
+	}
+
+	ics27Proxy, err := s.deployVerified(ctx, authority, "initialized ICS27GMP proxy",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := erc1967proxy.DeployContract(
+				opts,
+				s.backend,
+				ics27Impl,
+				ics27Init,
+			)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+	if codeErr := s.requireCode(ctx, "ICS27GMP proxy", ics27Proxy); codeErr != nil {
+		return AppStack{}, codeErr
+	}
+
+	router, err := ics26router.NewContract(instance.Router, s.backend)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC register AppStack: bind ICS26Router: %w", err)
+	}
+	_, tx, err := s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := router.AddIBCApp0(opts, transferPortID, ics20Proxy)
+		return common.Address{}, transaction, sendErr
+	})
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC register transfer app: %w", err)
+	}
+	if _, err = s.awaitMined(ctx, "register transfer app", tx); err != nil {
+		return AppStack{}, err
+	}
+	_, tx, err = s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := router.AddIBCApp0(opts, gmpPortID, ics27Proxy)
+		return common.Address{}, transaction, sendErr
+	})
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC register gmpport app: %w", err)
+	}
+	if _, err = s.awaitMined(ctx, "register gmpport app", tx); err != nil {
+		return AppStack{}, err
+	}
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: read ICS26Router ABI: %w", err)
+	}
+	if routerABI == nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: upstream ICS26Router binding has no ABI")
+	}
+	selectors, err := publicRelayingSelectors(*routerABI)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: %w", err)
+	}
+	manager, err := accessmanager.NewAccessManager(instance.AccessManager, s.backend)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: bind AccessManager: %w", err)
+	}
+	_, tx, err = s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := manager.SetTargetFunctionRole(
+			opts,
+			instance.Router,
+			selectors,
+			math.MaxUint64, // OZ AccessManager PUBLIC_ROLE
+		)
+		return common.Address{}, transaction, sendErr
+	})
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: %w", err)
+	}
+	if _, err = s.awaitMined(ctx, "open public relaying", tx); err != nil {
+		return AppStack{}, err
+	}
+
+	registeredTransfer, err := router.GetIBCApp(&bind.CallOpts{Context: ctx}, transferPortID)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC verify transfer app: %w", err)
+	}
+	if registeredTransfer != ics20Proxy {
+		return AppStack{}, fmt.Errorf(
+			"solidity IBC verify transfer app: router has %s, want %s",
+			registeredTransfer,
+			ics20Proxy,
+		)
+	}
+	registeredGMP, err := router.GetIBCApp(&bind.CallOpts{Context: ctx}, gmpPortID)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC verify gmpport app: %w", err)
+	}
+	if registeredGMP != ics27Proxy {
+		return AppStack{}, fmt.Errorf(
+			"solidity IBC verify gmpport app: router has %s, want %s",
+			registeredGMP,
+			ics27Proxy,
+		)
+	}
+
+	recvPacketSelector, err := methodSelector(*routerABI, "recvPacket")
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC verify public recvPacket: %w", err)
+	}
+	unrelated := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	permission, err := manager.CanCall(
+		&bind.CallOpts{Context: ctx},
+		unrelated,
+		instance.Router,
+		recvPacketSelector,
+	)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC verify public recvPacket: query CanCall: %w", err)
+	}
+	if !permission.Immediate {
+		return AppStack{}, fmt.Errorf(
+			"solidity IBC verify public recvPacket: unrelated address cannot call immediately (delay %d)",
+			permission.Delay,
+		)
+	}
+
+	return AppStack{
+		ICS20Transfer: ics20Proxy,
+		ICS27GMP:      ics27Proxy,
+	}, nil
+}
+
 // PreparedClient is a validated, side-effect-free Client deployment. It keeps
 // preparation facts private so deployment cannot bypass the graph-wide
 // preflight performed by environment realization.
@@ -201,8 +404,17 @@ type PreparedClient struct {
 	setup     *Setup
 	authority evm.Account
 	instance  Instance
+	kind      preparedClientKind
 	config    AttestationClientConfig
+	dummy     DummyClientConfig
 }
+
+type preparedClientKind int
+
+const (
+	preparedAttestationClient preparedClientKind = iota
+	preparedDummyClient
+)
 
 // PrepareClient validates one Client deployment without submitting a
 // transaction. The returned value owns the snapshotted inputs used by Deploy.
@@ -229,7 +441,46 @@ func (s *Setup) PrepareClient(
 	if err := s.verifyClientVacant(ctx, instance, config.ID); err != nil {
 		return nil, fmt.Errorf("solidity IBC prepare Client: %w", err)
 	}
-	return &PreparedClient{setup: s, authority: authority, instance: instance, config: config}, nil
+	return &PreparedClient{
+		setup:     s,
+		authority: authority,
+		instance:  instance,
+		kind:      preparedAttestationClient,
+		config:    config,
+	}, nil
+}
+
+// PrepareDummyClient validates one dummy Client deployment without submitting a
+// transaction. The returned value owns the snapshotted inputs used by Deploy.
+func (s *Setup) PrepareDummyClient(
+	ctx context.Context,
+	authority evm.Account,
+	router common.Address,
+	config DummyClientConfig,
+) (*PreparedClient, error) {
+	if err := config.validate(); err != nil {
+		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
+	}
+	if err := validateAuthority(authority); err != nil {
+		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
+	}
+	instance, err := s.AttachInstance(ctx, router)
+	if err != nil {
+		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
+	}
+	if err := s.requireCanAddCustomClient(ctx, instance, authority.Address()); err != nil {
+		return nil, fmt.Errorf("solidity IBC prepare dummy Client: authority cannot register it: %w", err)
+	}
+	if err := s.verifyClientVacant(ctx, instance, config.ID); err != nil {
+		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
+	}
+	return &PreparedClient{
+		setup:     s,
+		authority: authority,
+		instance:  instance,
+		kind:      preparedDummyClient,
+		dummy:     config,
+	}, nil
 }
 
 // Deploy submits a prepared Client deployment and registers it with the router.
@@ -237,14 +488,23 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 	if p == nil || p.setup == nil {
 		return Client{}, fmt.Errorf("solidity IBC deploy Client: preparation is required")
 	}
+	switch p.kind {
+	case preparedAttestationClient:
+		return p.deployAttestationClient(ctx)
+	case preparedDummyClient:
+		return p.deployDummyClient(ctx)
+	default:
+		return Client{}, fmt.Errorf("solidity IBC deploy Client: unsupported preparation kind %d", p.kind)
+	}
+}
+
+func (p *PreparedClient) deployAttestationClient(ctx context.Context) (Client, error) {
 	s := p.setup
 	authority := p.authority
 	instance := p.instance
 	config := p.config
 
-	clientAddress, tx, err := s.send(
-		ctx,
-		authority,
+	clientAddress, err := s.deployVerified(ctx, authority, "attestation Client "+config.ID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := attestation.DeployContract(
 				opts,
@@ -256,44 +516,20 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 				config.RoleManager,
 			)
 			return address, transaction, deployErr
-		},
-	)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC deploy attestation Client %q: %w", config.ID, err)
-	}
-	clientReceipt, err := s.awaitMined(
-		ctx,
-		"deploy attestation Client "+config.ID,
-		tx,
-	)
+		})
 	if err != nil {
 		return Client{}, err
-	}
-	if deploymentErr := requireDeploymentAddress(
-		"attestation Client "+config.ID,
-		clientAddress,
-		clientReceipt,
-	); deploymentErr != nil {
-		return Client{}, deploymentErr
 	}
 
-	router, err := ics26router.NewContract(instance.Router, s.backend)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC register Client %q: bind ICS26Router: %w", config.ID, err)
-	}
-	_, tx, err = s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
-		transaction, sendErr := router.AddClient(opts, config.ID, ics26router.IICS02ClientMsgsCounterpartyInfo{
-			ClientId:     config.CounterpartyClientID,
-			MerklePrefix: [][]byte{{}},
-		}, clientAddress)
-		return common.Address{}, transaction, sendErr
-	})
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC register Client %q: %w", config.ID, err)
-	}
-	_, err = s.awaitMined(ctx, "register Client "+config.ID, tx)
-	if err != nil {
-		return Client{}, err
+	if registerErr := s.registerClient(
+		ctx,
+		authority,
+		instance,
+		config.ID,
+		config.CounterpartyClientID,
+		clientAddress,
+	); registerErr != nil {
+		return Client{}, registerErr
 	}
 
 	client, err := s.verifyClient(ctx, instance, config.ID, clientAddress, config.CounterpartyClientID)
@@ -301,6 +537,74 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 		return Client{}, fmt.Errorf("solidity IBC verify deployed Client %q: %w", config.ID, err)
 	}
 	return client, nil
+}
+
+func (p *PreparedClient) deployDummyClient(ctx context.Context) (Client, error) {
+	s := p.setup
+	authority := p.authority
+	instance := p.instance
+	config := p.dummy
+
+	clientAddress, err := s.deployVerified(ctx, authority, "dummy Client "+config.ID,
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := dummylightclient.DeployDummyLightClient(
+				opts,
+				s.backend,
+				0,              // updateResult: UpdateResult.Update
+				math.MaxUint64, // membershipResult: non-membership timestamp for timeouts
+				false,          // membershipShouldFail
+			)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return Client{}, err
+	}
+
+	if registerErr := s.registerClient(
+		ctx,
+		authority,
+		instance,
+		config.ID,
+		config.CounterpartyClientID,
+		clientAddress,
+	); registerErr != nil {
+		return Client{}, registerErr
+	}
+
+	client, err := s.verifyDummyClient(ctx, instance, config.ID, clientAddress, config.CounterpartyClientID)
+	if err != nil {
+		return Client{}, fmt.Errorf("solidity IBC verify deployed dummy Client %q: %w", config.ID, err)
+	}
+	return client, nil
+}
+
+func (s *Setup) registerClient(
+	ctx context.Context,
+	authority evm.Account,
+	instance Instance,
+	clientID string,
+	counterpartyClientID string,
+	clientAddress common.Address,
+) error {
+	router, err := ics26router.NewContract(instance.Router, s.backend)
+	if err != nil {
+		return fmt.Errorf("solidity IBC register Client %q: bind ICS26Router: %w", clientID, err)
+	}
+	_, tx, err := s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := router.AddClient(opts, clientID, ics26router.IICS02ClientMsgsCounterpartyInfo{
+			ClientId:     counterpartyClientID,
+			MerklePrefix: [][]byte{{}},
+		}, clientAddress)
+		return common.Address{}, transaction, sendErr
+	})
+	if err != nil {
+		return fmt.Errorf("solidity IBC register Client %q: %w", clientID, err)
+	}
+	_, err = s.awaitMined(ctx, "register Client "+clientID, tx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // verifyClientVacant proves that a custom Client ID is currently unoccupied.
@@ -346,51 +650,16 @@ func (s *Setup) verifyClient(
 	expectedAddress common.Address,
 	counterpartyClientID string,
 ) (Client, error) {
-	if clientID == "" {
-		return Client{}, fmt.Errorf("solidity IBC attach Client: empty client id")
-	}
-	if counterpartyClientID == "" {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: empty counterparty client id", clientID)
-	}
-	router, err := ics26router.NewContract(instance.Router, s.backend)
+	registered, err := s.verifyRegisteredClient(
+		ctx,
+		instance,
+		clientID,
+		expectedAddress,
+		counterpartyClientID,
+		"attestation Client "+clientID,
+	)
 	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind ICS26Router: %w", clientID, err)
-	}
-	registered, err := router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query router client: %w", clientID, err)
-	}
-	if expectedAddress != (common.Address{}) && registered != expectedAddress {
-		return Client{}, fmt.Errorf(
-			"solidity IBC attach Client %q: router has address %s, want %s",
-			clientID,
-			registered,
-			expectedAddress,
-		)
-	}
-	if registered == (common.Address{}) {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: router returned a zero contract address", clientID)
-	}
-	if codeErr := s.requireCode(ctx, "attestation Client "+clientID, registered); codeErr != nil {
-		return Client{}, codeErr
-	}
-	counterparty, err := router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query counterparty: %w", clientID, err)
-	}
-	if counterparty.ClientId != counterpartyClientID {
-		return Client{}, fmt.Errorf(
-			"solidity IBC attach Client %q: counterparty id is %q, want %q",
-			clientID,
-			counterparty.ClientId,
-			counterpartyClientID,
-		)
-	}
-	if len(counterparty.MerklePrefix) != 1 || len(counterparty.MerklePrefix[0]) != 0 {
-		return Client{}, fmt.Errorf(
-			"solidity IBC attach Client %q: counterparty Merkle prefix is not the EVM empty prefix",
-			clientID,
-		)
+		return Client{}, err
 	}
 
 	lightClient, err := attestation.NewContract(registered, s.backend)
@@ -412,6 +681,91 @@ func (s *Setup) verifyClient(
 		Attestors:             slices.Clone(set.AttestorAddresses),
 		MinRequiredSignatures: set.MinRequiredSigs,
 	}, nil
+}
+
+func (s *Setup) verifyDummyClient(
+	ctx context.Context,
+	instance Instance,
+	clientID string,
+	expectedAddress common.Address,
+	counterpartyClientID string,
+) (Client, error) {
+	registered, err := s.verifyRegisteredClient(
+		ctx,
+		instance,
+		clientID,
+		expectedAddress,
+		counterpartyClientID,
+		"dummy Client "+clientID,
+	)
+	if err != nil {
+		return Client{}, err
+	}
+	return Client{
+		ID:                   clientID,
+		Address:              registered,
+		CounterpartyClientID: counterpartyClientID,
+	}, nil
+}
+
+func (s *Setup) verifyRegisteredClient(
+	ctx context.Context,
+	instance Instance,
+	clientID string,
+	expectedAddress common.Address,
+	counterpartyClientID string,
+	codeLabel string,
+) (common.Address, error) {
+	if clientID == "" {
+		return common.Address{}, fmt.Errorf("solidity IBC attach Client: empty client id")
+	}
+	if counterpartyClientID == "" {
+		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: empty counterparty client id", clientID)
+	}
+	router, err := ics26router.NewContract(instance.Router, s.backend)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: bind ICS26Router: %w", clientID, err)
+	}
+	registered, err := router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: query router client: %w", clientID, err)
+	}
+	if expectedAddress != (common.Address{}) && registered != expectedAddress {
+		return common.Address{}, fmt.Errorf(
+			"solidity IBC attach Client %q: router has address %s, want %s",
+			clientID,
+			registered,
+			expectedAddress,
+		)
+	}
+	if registered == (common.Address{}) {
+		return common.Address{}, fmt.Errorf(
+			"solidity IBC attach Client %q: router returned a zero contract address",
+			clientID,
+		)
+	}
+	if codeErr := s.requireCode(ctx, codeLabel, registered); codeErr != nil {
+		return common.Address{}, codeErr
+	}
+	counterparty, err := router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: query counterparty: %w", clientID, err)
+	}
+	if counterparty.ClientId != counterpartyClientID {
+		return common.Address{}, fmt.Errorf(
+			"solidity IBC attach Client %q: counterparty id is %q, want %q",
+			clientID,
+			counterparty.ClientId,
+			counterpartyClientID,
+		)
+	}
+	if len(counterparty.MerklePrefix) != 1 || len(counterparty.MerklePrefix[0]) != 0 {
+		return common.Address{}, fmt.Errorf(
+			"solidity IBC attach Client %q: counterparty Merkle prefix is not the EVM empty prefix",
+			clientID,
+		)
+	}
+	return registered, nil
 }
 
 func (s *Setup) send(
@@ -459,6 +813,28 @@ func (s *Setup) awaitMined(
 		return receipt, fmt.Errorf("solidity IBC %s: transaction %s reverted", stage, tx.Hash())
 	}
 	return receipt, nil
+}
+
+// deployVerified submits one contract deployment, waits for it to mine, and
+// verifies the receipt reports the predicted address.
+func (s *Setup) deployVerified(
+	ctx context.Context,
+	authority evm.Account,
+	name string,
+	deploy func(*bind.TransactOpts) (common.Address, *types.Transaction, error),
+) (common.Address, error) {
+	address, tx, err := s.send(ctx, authority, deploy)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("solidity IBC deploy %s: %w", name, err)
+	}
+	receipt, err := s.awaitMined(ctx, "deploy "+name, tx)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if err := requireDeploymentAddress(name, address, receipt); err != nil {
+		return common.Address{}, err
+	}
+	return address, nil
 }
 
 func isIBCClientNotFound(err error) bool {
@@ -562,6 +938,30 @@ func customAddClientSelector(routerABI abi.ABI) ([4]byte, error) {
 		}
 	}
 	return [4]byte{}, fmt.Errorf("upstream ICS26Router ABI has no custom addClient overload")
+}
+
+func publicRelayingSelectors(routerABI abi.ABI) ([][4]byte, error) {
+	names := []string{"recvPacket", "ackPacket", "timeoutPacket", "updateClient"}
+	selectors := make([][4]byte, 0, len(names))
+	for _, name := range names {
+		selector, err := methodSelector(routerABI, name)
+		if err != nil {
+			return nil, err
+		}
+		selectors = append(selectors, selector)
+	}
+	return selectors, nil
+}
+
+func methodSelector(contractABI abi.ABI, rawName string) ([4]byte, error) {
+	for _, method := range contractABI.Methods {
+		if method.RawName == rawName {
+			var selector [4]byte
+			copy(selector[:], method.ID)
+			return selector, nil
+		}
+	}
+	return [4]byte{}, fmt.Errorf("upstream ABI has no %s method", rawName)
 }
 
 func validateAuthority(authority evm.Account) error {

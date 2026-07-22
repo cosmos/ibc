@@ -34,15 +34,15 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 		{ID: "c-to-a", Source: "chain-c", Destination: "chain-a"},
 	}
 	driver, deployment := e2etest.Deploy(t, env, signers, routes...)
-	bToAApp := e2etest.BindIFT(t, env, deployment, signers, routes[0])
-	cToAApp := e2etest.BindIFT(t, env, deployment, signers, routes[1])
+	bToAApp := e2etest.BindTransfer(t, env, deployment, signers, routes[0])
+	cToAApp := e2etest.BindTransfer(t, env, deployment, signers, routes[1])
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	bToA, err := bToAApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(333)})
+	bToA, err := bToAApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(333)})
 	require.NoError(t, err)
 	require.NoError(t, bToA.VerifyEscrowed(ctx))
-	cToA, err := cToAApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(444)})
+	cToA, err := cToAApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(444)})
 	require.NoError(t, err)
 	require.NoError(t, cToA.VerifyEscrowed(ctx))
 

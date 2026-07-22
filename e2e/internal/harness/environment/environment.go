@@ -53,12 +53,42 @@ func (e *Environment) IBCInstance(id IBCInstanceID) (*IBCInstance, error) {
 	return instance, nil
 }
 
+// IBCInstanceForChain returns the single IBC Instance hosted on chain. It
+// errors when the Chain hosts zero or multiple Instances.
+func (e *Environment) IBCInstanceForChain(id ChainID) (*IBCInstance, error) {
+	var found *IBCInstance
+	for _, instance := range e.instances {
+		if instance.chain.id != id {
+			continue
+		}
+		if found != nil {
+			return nil, fmt.Errorf("environment: multiple IBC Instances on Chain %q", id)
+		}
+		found = instance
+	}
+	if found == nil {
+		return nil, fmt.Errorf("environment: no IBC Instance on Chain %q", id)
+	}
+	return found, nil
+}
+
 func (e *Environment) Connection(id ConnectionID) (*Connection, error) {
 	connection, ok := e.connections[id]
 	if !ok {
 		return nil, fmt.Errorf("environment: no IBC Connection %q", id)
 	}
 	return connection, nil
+}
+
+// Connections returns the resolved IBC Connection identities in stable order.
+// The returned slice is owned by the caller.
+func (e *Environment) Connections() []ConnectionID {
+	ids := make([]ConnectionID, 0, len(e.connections))
+	for id := range e.connections {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
 }
 
 func (e *Environment) IBCClient(id ClientID) (*IBCClient, error) {

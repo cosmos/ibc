@@ -13,6 +13,8 @@ type IBCInstance struct {
 	chain         *Chain
 	locator       IBCInstanceLocator
 	accessManager EVMAddress
+	ics20Transfer EVMAddress
+	ics27GMP      EVMAddress
 }
 
 func (i *IBCInstance) ID() IBCInstanceID           { return i.id }
@@ -20,6 +22,18 @@ func (i *IBCInstance) Chain() *Chain               { return i.chain }
 func (i *IBCInstance) Locator() IBCInstanceLocator { return i.locator }
 func (i *IBCInstance) AccessManagerAddress() EVMAddress {
 	return i.accessManager
+}
+
+// ICS20TransferAddress returns the ICS20 Transfer proxy. It is zero for
+// attached instances, which resolve only the router and access manager.
+func (i *IBCInstance) ICS20TransferAddress() EVMAddress {
+	return i.ics20Transfer
+}
+
+// ICS27GMPAddress returns the ICS27 GMP proxy. It is zero for attached
+// instances, which resolve only the router and access manager.
+func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
+	return i.ics27GMP
 }
 
 // IBCClient is one resolved end of an IBC Connection. ID is the stable

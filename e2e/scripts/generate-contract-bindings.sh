@@ -13,20 +13,16 @@ generate() {
 	abi_file="$tmp_dir/$type_name.abi"
 	bin_file="$tmp_dir/$type_name.bin"
 
+	mkdir -p "$(dirname "$output")"
 	jq -c '.abi' "$artifact" > "$abi_file"
 	jq -r '.bytecode.object' "$artifact" > "$bin_file"
 	abigen --abi "$abi_file" --bin "$bin_file" --pkg "$package" --type "$type_name" --out "$output"
 }
 
-test_apps="$repo_root/e2e/e2etest/contracts"
-bindings="$repo_root/link/testappbindings"
-mkdir -p "$bindings"
-generate "$test_apps/out/Counter.sol/Counter.json" testappbindings Counter "$bindings/Counter.go"
-generate "$test_apps/out/MockGMP.sol/MockGMP.json" testappbindings MockGMP "$bindings/MockGMP.go"
-generate "$test_apps/out/MockIFT.sol/MockIFT.json" testappbindings MockIFT "$bindings/MockIFT.go"
-generate "$test_apps/out/TestAppDeployer.sol/TestAppDeployer.json" testappbindings TestAppDeployer "$bindings/TestAppDeployer.go"
-
 solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
-access_manager="$solidity_ibc/accessmanager"
-mkdir -p "$access_manager"
-generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$access_manager/contract.go"
+generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$solidity_ibc/accessmanager/contract.go"
+generate "$solidity_ibc/contracts/out/Escrow.sol/Escrow.json" escrow Escrow "$solidity_ibc/escrow/contract.go"
+generate "$solidity_ibc/contracts/out/DummyLightClient.sol/DummyLightClient.json" dummylightclient DummyLightClient "$solidity_ibc/dummylightclient/contract.go"
+generate "$solidity_ibc/contracts/out/TestERC20.sol/TestERC20.json" testerc20 TestERC20 "$solidity_ibc/testerc20/contract.go"
+generate "$solidity_ibc/contracts/out/Counter.sol/Counter.json" counter Counter "$solidity_ibc/counter/contract.go"
+generate "$solidity_ibc/contracts/out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json" iftsendcallconstructor EVMIFTSendCallConstructor "$solidity_ibc/iftsendcallconstructor/contract.go"

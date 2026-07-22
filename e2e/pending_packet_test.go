@@ -20,7 +20,7 @@ func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	ift := e2etest.BindIFT(t, env, deployment, signers, route)
+	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -32,7 +32,7 @@ func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, mining.WithPaused(ctx, func() error {
-		transfer, err := ift.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(424_242)})
+		transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(424_242)})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyEscrowed(ctx))
 

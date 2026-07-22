@@ -6,7 +6,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the YAML accepted by the stub-backed Link commands.
+// Config is the YAML accepted by Link commands.
 type Config struct {
 	Chains  []Chain  `yaml:"chains"`
 	Signers []Signer `yaml:"signers"`
@@ -16,12 +16,12 @@ type Config struct {
 
 // Chain configures one synthetic EVM chain.
 type Chain struct {
-	ID            string `yaml:"id"`
-	Type          string `yaml:"type"`
-	ChainID       uint64 `yaml:"chainId,omitempty"`
-	EVMSigner     string `yaml:"evmSigner,omitempty"`
-	TestAppSigner string `yaml:"testAppSigner,omitempty"`
-	RPC           RPC    `yaml:"rpc"`
+	ID          string `yaml:"id"`
+	Type        string `yaml:"type"`
+	ChainID     uint64 `yaml:"chainId,omitempty"`
+	EVMSigner   string `yaml:"evmSigner,omitempty"`
+	ICS26Router string `yaml:"ics26Router,omitempty"`
+	RPC         RPC    `yaml:"rpc"`
 }
 
 // Signer identifies one configured key.
@@ -85,11 +85,13 @@ type AutoRelay struct {
 
 // Route configures one directed synthetic relay route.
 type Route struct {
-	ID          string     `yaml:"id"`
-	Source      string     `yaml:"source"`
-	Destination string     `yaml:"destination"`
-	Type        string     `yaml:"type"`
-	AutoRelay   *AutoRelay `yaml:"autoRelay,omitempty"`
+	ID           string     `yaml:"id"`
+	Source       string     `yaml:"source"`
+	Destination  string     `yaml:"destination"`
+	Type         string     `yaml:"type"`
+	SourceClient string     `yaml:"sourceClient,omitempty"`
+	DestClient   string     `yaml:"destClient,omitempty"`
+	AutoRelay    *AutoRelay `yaml:"autoRelay,omitempty"`
 }
 
 // AutoRelayEnabled reports whether automatic relay is enabled.

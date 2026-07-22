@@ -167,9 +167,10 @@ type IBCInstanceSpec interface {
 	validateIBCInstance() error
 }
 
-// NewIBCInstance declares a new IBC installation on Chain. Its lifetime is
-// bounded by a managed host or durable on an attached host. Authority names
-// the runtime-provided signer permitted to create it.
+// NewIBCInstance declares a new IBC installation on Chain, including the
+// ICS20 Transfer and ICS27 GMP application stack. Its lifetime is bounded by
+// a managed host or durable on an attached host. Authority names the
+// runtime-provided signer permitted to create it.
 type NewIBCInstance struct {
 	ID        IBCInstanceID
 	Chain     ChainID
@@ -248,6 +249,17 @@ type NewClient struct {
 
 func (NewClient) clientSpec() {}
 
+// DummyClient declares a permissive light client end that accepts every
+// packet without attestors. When IBCInstance refers to a NewIBCInstance,
+// Authority must resolve to the same address as that Instance's Authority.
+type DummyClient struct {
+	ID          ClientID
+	IBCInstance IBCInstanceID
+	Authority   AuthorityID
+}
+
+func (DummyClient) clientSpec() {}
+
 // ExistingClient identifies an already-created IBC Client.
 type ExistingClient struct {
 	ID          ClientID
@@ -305,6 +317,10 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 				client.ID,
 			)
 		}
+	case DummyClient:
+		client = clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
+		variantField = "authority"
+		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		client = clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
 		variantField = "locator"
@@ -339,6 +355,8 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 func clientIdentity(spec ClientSpec) clientIdentityValue {
 	switch declaration := spec.(type) {
 	case NewClient:
+		return clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
+	case DummyClient:
 		return clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
 	case ExistingClient:
 		return clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
@@ -454,6 +472,14 @@ func (s Spec) validate() error {
 
 	attestors := make(map[AttestorID]struct{}, len(s.Attestors))
 	attestorsByClient := make(map[ClientID]int, len(s.Attestors))
+	dummyClients := make(map[ClientID]struct{})
+	for _, connection := range s.Connections {
+		for _, declaration := range []ClientSpec{connection.A, connection.B} {
+			if client, ok := declaration.(DummyClient); ok {
+				dummyClients[client.ID] = struct{}{}
+			}
+		}
+	}
 	for _, attestor := range s.Attestors {
 		if err := requireValue("Attestor id", string(attestor.ID)); err != nil {
 			return err
@@ -466,6 +492,9 @@ func (s Spec) validate() error {
 		}
 		if _, exists := clients[attestor.Client]; !exists {
 			return errorsf("Attestor %q references unknown IBC Client %q", attestor.ID, attestor.Client)
+		}
+		if _, isDummy := dummyClients[attestor.Client]; isDummy {
+			return errorsf("Attestor %q references DummyClient %q", attestor.ID, attestor.Client)
 		}
 		if err := requireValue(
 			fmt.Sprintf("Attestor %q authority", attestor.ID),

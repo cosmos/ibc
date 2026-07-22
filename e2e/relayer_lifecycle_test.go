@@ -16,14 +16,14 @@ func TestRelayerRestart_ResumesPendingPacket(t *testing.T) {
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	ift := e2etest.BindIFT(t, env, deployment, signers, route)
+	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 	amount := big.NewInt(777_000)
 
 	require.NoError(t, relayer.Stop(ctx))
 
-	transfer, err := ift.Send(ctx, e2etest.IFTRequest{Amount: amount})
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: amount})
 	require.NoError(t, err)
 
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
@@ -52,7 +52,7 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 	signers := e2etest.NewSigners(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	ift := e2etest.BindIFT(t, env, deployment, signers, route)
+	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -65,7 +65,7 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 
 	// Keep destination mining paused across restart so delivery cannot finish before the new Relayer is up.
 	require.NoError(t, mining.WithPaused(ctx, func() error {
-		transfer, err := ift.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(888_000)})
+		transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(888_000)})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyEscrowed(ctx))
 

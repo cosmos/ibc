@@ -2,6 +2,7 @@ package e2etest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -29,6 +30,32 @@ func mustBinding[T any](binding T, err error) T {
 		panic(fmt.Sprintf("e2etest: construct generated contract binding: %v", err))
 	}
 	return binding
+}
+
+func deployContract(
+	ctx context.Context,
+	client *environment.EVM,
+	sender evm.Account,
+	metadata *bind.MetaData,
+	constructorArgs ...any,
+) (common.Address, error) {
+	parsed := mustABI(metadata)
+	payload := common.FromHex(metadata.Bin)
+	if len(constructorArgs) > 0 {
+		packed, err := parsed.Pack("", constructorArgs...)
+		if err != nil {
+			return common.Address{}, fmt.Errorf("e2etest: pack constructor: %w", err)
+		}
+		payload = append(payload, packed...)
+	}
+	receipt, err := client.BroadcastTx(ctx, sender, nil, payload, nil)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: deploy contract: %w", err)
+	}
+	if receipt.ContractAddress == (common.Address{}) {
+		return common.Address{}, errors.New("e2etest: deployment produced no contract address")
+	}
+	return receipt.ContractAddress, nil
 }
 
 func send(
@@ -100,18 +127,29 @@ func awaitEvent[T any](
 	)
 }
 
-func awaitPacketEvent[T any](
+func awaitBalance(
 	ctx context.Context,
-	source eventSource,
-	topic common.Hash,
-	application string,
-	decode func(types.Log) (T, error),
-	packet Packet,
-	key func(T) (string, *big.Int),
-) (T, error) {
-	description := fmt.Sprintf("%s delivery for packet %s", application, packet.reference())
-	return awaitEvent(ctx, source, topic, description, decode, func(event T) bool {
-		routeID, sequence := key(event)
-		return routeID == string(packet.RouteID) && sequence.Uint64() == packet.Sequence
-	})
+	chain *environment.Chain,
+	description string,
+	probe func(context.Context) (*big.Int, error),
+	want *big.Int,
+) error {
+	timing := chain.Timing()
+	_, err := await(
+		ctx,
+		timing.CompletionBudget,
+		timing.PollInterval,
+		description,
+		func(ctx context.Context) (struct{}, bool, error) {
+			got, err := probe(ctx)
+			if err != nil {
+				return struct{}{}, false, err
+			}
+			if got.Cmp(want) != 0 {
+				return struct{}{}, false, fmt.Errorf("balance %s, want %s", got, want)
+			}
+			return struct{}{}, true, nil
+		},
+	)
+	return err
 }

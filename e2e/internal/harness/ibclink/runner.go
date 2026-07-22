@@ -9,14 +9,12 @@ import (
 	"path/filepath"
 
 	"github.com/cosmos/ibc/link/cmd/configcmd"
-	"github.com/cosmos/ibc/link/cmd/testappcmd"
 )
 
 var (
-	ErrConfigInvalid       = errors.New("ibc: config invalid")
-	ErrRPCUnreachable      = errors.New("ibc: rpc unreachable")
-	ErrTestAppDeployFailed = errors.New("ibc: test app deploy failed")
-	ErrInternal            = errors.New("ibc: internal error")
+	ErrConfigInvalid  = errors.New("ibc: config invalid")
+	ErrRPCUnreachable = errors.New("ibc: rpc unreachable")
+	ErrInternal       = errors.New("ibc: internal error")
 )
 
 type ExitError struct {
@@ -98,36 +96,6 @@ func (r *Driver) MigrateUp(ctx context.Context) error {
 		return fmt.Errorf("ibc migrate up: stdout is not JSON: %q", string(res.stdout))
 	}
 	return nil
-}
-
-func (r *Driver) DeployTestApps(ctx context.Context) (*testappcmd.Deployment, error) {
-	args := append([]string{"test-apps", "deploy"}, r.configArgs()...)
-	res, err := r.exec(ctx, r.bin, "test-apps deploy", args...)
-	if err != nil {
-		return nil, err
-	}
-	return decodeTestAppDeploymentResult(res)
-}
-
-// A failed deployment may still have created contracts. Decode stdout before
-// classifying the exit status so callers can inspect the partial deployment.
-func decodeTestAppDeploymentResult(res *result) (*testappcmd.Deployment, error) {
-	var deployment testappcmd.Deployment
-	decoded := json.Unmarshal(res.stdout, &deployment) == nil
-	if res.code == 0 {
-		if !decoded {
-			return nil, fmt.Errorf(
-				"ibc test-apps deploy: exit 0 but stdout is not a TestAppDeployment: %q",
-				string(res.stdout),
-			)
-		}
-		return &deployment, nil
-	}
-	exitErr := &ExitError{Code: res.code, Class: ErrTestAppDeployFailed, Stderr: snippet(res.stderr)}
-	if decoded {
-		return &deployment, exitErr
-	}
-	return nil, exitErr
 }
 
 func (r *Driver) configArgs() []string {

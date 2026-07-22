@@ -24,8 +24,3 @@ func TestValidAmountRejectsNonUint256(t *testing.T) {
 		require.Error(t, err)
 	}
 }
-
-func TestAddressRejectsInvalidInput(t *testing.T) {
-	_, err := address("target", "not-an-address")
-	require.ErrorContains(t, err, "not a valid EVM address")
-}

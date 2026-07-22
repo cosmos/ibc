@@ -1,12 +1,12 @@
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts. The accepted Link harness design is documented in [IBC Environment Architecture](../link/HARNESS-ARCHITECTURE-DESIGN.md); the temporary acceptance traffic is transitional and does not shape that architecture.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets: each Chain runs the real Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP) behind a permissive dummy light client that accepts every packet without proof verification, so the transport is real while attestation stays out of scope.
 
-`internal/harness/environment` realizes Chains and protocol resources. `e2etest` provides the temporary MockIFT, MockGMP, and Counter bindings plus Link process helpers. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
+`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack and dummy light clients. `e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
 ## Acceptance coverage
 
-The root package covers configuration validation, test-application deployment, IFT and GMP relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
+The root package covers configuration validation, protocol-stack deployment, ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
 ## Running the acceptance tests
 
@@ -18,7 +18,7 @@ make build-link
 make test-e2e
 ```
 
-`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. Link explicitly composes temporary handlers for config validation, test-application deployment, and Relayer execution into this binary.
+`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. Link explicitly composes temporary handlers for config validation and Relayer execution into this binary (`link/internal/ibcrelay`); the Relayer submits recv, ack, and timeout transactions with empty proofs, which the dummy light client accepts.
 
 The same tests can select different Chain declarations:
 
@@ -34,15 +34,15 @@ The same tests can select different Chain declarations:
 The setup sequence is deliberately explicit:
 
 ```go
-func TestIFTTransfer_AutoRelay(t *testing.T) {
+func TestTransfer_AutoRelay(t *testing.T) {
     env := e2etest.Start(t, e2etest.SelectedSuite(t))
     signers := e2etest.NewSigners(t)
     route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
     driver, deployment := e2etest.Deploy(t, env, signers, route)
-    ift := e2etest.BindIFT(t, env, deployment, signers, route)
+    transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
     relayer := e2etest.StartRelayer(t, driver, env)
 
-    transfer, err := ift.Send(t.Context(), e2etest.IFTRequest{Amount: big.NewInt(1_000)})
+    transfer, err := transferApp.Send(t.Context(), e2etest.TransferRequest{Amount: big.NewInt(1_000)})
     require.NoError(t, err)
     destination, err := env.Chain(route.Destination)
     require.NoError(t, err)
@@ -80,4 +80,4 @@ An invalid selection fails; an interchangeable selection that cannot guarantee a
 
 `e2etest.Suite` contains only an `environment.Spec` and its process-local runtime bindings. `SelectedSuite(t)` supplies the ordinary two-Chain selection for the chosen lane, while exceptional graphs use `e2etest.SuiteFor` directly. Temporary route configuration also lives in `e2etest`, but belongs to each test's explicit setup rather than the Environment selection.
 
-A reusable Environment constructor belongs in `e2etest` only when multiple tests need the same resource graph. Application deployment and temporary relay policy stay in the test setup that uses them. The Solidity sources for those applications live in `e2etest/contracts`.
+A reusable Environment constructor belongs in `e2etest` only when multiple tests need the same resource graph. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.

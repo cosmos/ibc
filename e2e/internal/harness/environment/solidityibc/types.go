@@ -17,7 +17,14 @@ type Instance struct {
 	Router        common.Address
 }
 
-// Client is an attestation light client registered with one Instance.
+// AppStack is the deployed IBC application layer bound to one Instance.
+type AppStack struct {
+	ICS20Transfer common.Address // ERC1967 proxy
+	ICS27GMP      common.Address // ERC1967 proxy
+}
+
+// Client is a light client registered with one Instance. Attestation clients
+// populate Attestors and MinRequiredSignatures; dummy clients leave both empty.
 type Client struct {
 	ID                    string
 	Address               common.Address
@@ -37,6 +44,14 @@ type AttestationClientConfig struct {
 	InitialHeight         uint64
 	InitialTimestamp      uint64
 	RoleManager           common.Address
+}
+
+// DummyClientConfig configures a permissive light client that accepts every
+// packet without proof verification. For timeout support its non-membership
+// timestamp is fixed at max uint64.
+type DummyClientConfig struct {
+	ID                   string
+	CounterpartyClientID string
 }
 
 func (c AttestationClientConfig) snapshot() AttestationClientConfig {
@@ -77,6 +92,16 @@ func (c AttestationClientConfig) validate() error {
 	}
 	if c.InitialTimestamp == 0 {
 		return fmt.Errorf("client %q has zero initial timestamp", c.ID)
+	}
+	return nil
+}
+
+func (c DummyClientConfig) validate() error {
+	if !validCustomClientID(c.ID) {
+		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", c.ID)
+	}
+	if c.CounterpartyClientID == "" {
+		return fmt.Errorf("client %q has an empty counterparty client id", c.ID)
 	}
 	return nil
 }

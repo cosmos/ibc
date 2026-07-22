@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 type RouteID string
@@ -18,8 +15,6 @@ type Packet struct {
 	Source       environment.ChainID
 	SourceTxHash string
 	Sequence     uint64
-
-	appType relayercmd.AppType
 }
 
 func (p Packet) reference() string {
@@ -63,11 +58,4 @@ func bindRoute(
 		)
 	}
 	return endpoint{chain: source, evm: sourceEVM}, endpoint{chain: destination, evm: destinationEVM}, nil
-}
-
-func address(label, value string) (common.Address, error) {
-	if !common.IsHexAddress(value) {
-		return common.Address{}, fmt.Errorf("e2etest: %s %q is not a valid EVM address", label, value)
-	}
-	return common.HexToAddress(value), nil
 }

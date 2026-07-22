@@ -3,49 +3,29 @@ package relayercmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 // Handler implements a relayer subcommand.
-type Handler func(*cobra.Command, []string, RunOptions) error
-
-// RunOptions contains relayer-run flags.
-type RunOptions struct {
-	NoMigrate bool
-}
+type Handler func(*cobra.Command, []string) error
 
 // NewCommand constructs the relayer command with its behavior injected by the executable.
 func NewCommand(handler Handler) *cobra.Command {
 	cmd := &cobra.Command{Use: "relayer", Short: "Relayer commands"}
-	var options RunOptions
 	run := &cobra.Command{
 		Use:          "run",
 		Short:        "Run the relayer",
 		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return handler(cmd, args, options)
-		},
+		RunE:         handler,
 	}
-	run.Flags().BoolVar(&options.NoMigrate, "no-migrate", false, "skip database migrations")
 	cmd.AddCommand(run)
 	return cmd
 }
 
-// AppType separates the independent IFT and GMP sequence spaces.
-type AppType string
-
-const (
-	// AppTypeIFT is the IFT application sequence space.
-	AppTypeIFT AppType = "IFT"
-	// AppTypeGMP is the GMP application sequence space.
-	AppTypeGMP AppType = "GMP"
-)
-
-// PacketID constructs the stable synthetic packet identifier.
-func PacketID(routeID string, app AppType, seq uint64) string {
-	return fmt.Sprintf("%s-%s-%d", routeID, strings.ToLower(string(app)), seq)
+// RoutePacketID constructs the stable synthetic IBC packet identifier.
+func RoutePacketID(routeID string, seq uint64) string {
+	return fmt.Sprintf("%s-%d", routeID, seq)
 }
 
 // HealthPath is the relayer health endpoint.

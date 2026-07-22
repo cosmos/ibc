@@ -43,6 +43,7 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 	addresses := signers.Addresses()
 	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Application, e2etest.RequiredSignerBalance()))
 	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Relayer, e2etest.RequiredSignerBalance()))
+	require.NoError(t, oob.EnsureEOABalance(ctx, e2etest.ProtocolAuthorityAddress(), e2etest.RequiredSignerBalance()))
 
 	suite := e2etest.SuiteFor(environment.Spec{Chains: []environment.ChainSpec{
 		environment.ManagedAnvil{ID: e2etest.ChainA, EVMChainID: managedChainID},
@@ -63,11 +64,11 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 		env := e2etest.Start(t, suite)
 		route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 		driver, deployment := e2etest.Deploy(t, env, signers, route)
-		ift := e2etest.BindIFT(t, env, deployment, signers, route)
+		transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
 		relayer := e2etest.StartRelayer(t, driver, env)
 		rctx := t.Context()
 
-		transfer, sendErr := ift.Send(rctx, e2etest.IFTRequest{Amount: big.NewInt(1_500_000)})
+		transfer, sendErr := transferApp.Send(rctx, e2etest.TransferRequest{Amount: big.NewInt(1_500_000)})
 		require.NoError(t, sendErr)
 
 		attached, chainErr := env.Chain(e2etest.ChainB)

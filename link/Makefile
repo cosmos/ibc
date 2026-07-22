@@ -26,8 +26,8 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
-lint-stub-tests: ## Lint the temporary stub tests without changing Link's general test-lint policy
-	golangci-lint run --tests ./internal/stub/...
+lint-ibcrelay-tests: ## Lint the temporary IBC relayer tests without changing Link's general test-lint policy
+	golangci-lint run --tests ./internal/ibcrelay/...
 
 codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
 
@@ -54,6 +54,6 @@ codegen-mocks: ## Generate mocks for the code
 test: ## Run tests
 	go test ./... -v
 
-check: build test lint lint-stub-tests check-proto ## Run Link build, tests, lint, and generation freshness
+check: build test lint lint-ibcrelay-tests check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build lint lint-fix lint-stub-tests test codegen codegen-sql codegen-proto codegen-mocks check-proto check
+.PHONY: help build lint lint-fix lint-ibcrelay-tests test codegen codegen-sql codegen-proto codegen-mocks check-proto check

@@ -128,7 +128,7 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet Packet) error {
 }
 
 func packetID(packet Packet) string {
-	return relayercmd.PacketID(string(packet.RouteID), packet.appType, packet.Sequence)
+	return relayercmd.RoutePacketID(string(packet.RouteID), packet.Sequence)
 }
 
 func crossCheck(packetID string, packet Packet, observed relayercmd.PacketStatus) error {

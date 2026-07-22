@@ -22,7 +22,7 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	ift := e2etest.BindIFT(t, env, deployment, signers, route)
+	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -31,7 +31,7 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	node, err := chainB.NodeLifecycle()
 	require.NoError(t, err)
 
-	prepared, err := ift.Prepare(ctx, e2etest.IFTRequest{
+	prepared, err := transferApp.Prepare(ctx, e2etest.TransferRequest{
 		Amount: big.NewInt(2_000_000),
 	})
 	require.NoError(t, err)

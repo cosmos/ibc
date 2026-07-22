@@ -10,9 +10,8 @@ import (
 
 	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
-	"github.com/cosmos/ibc/link/cmd/testappcmd"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/stub"
+	"github.com/cosmos/ibc/link/internal/ibcrelay"
 )
 
 // global globalFlags, loaded in config.DeclarePersistentFlags()
@@ -43,15 +42,13 @@ func init() {
 	config.DeclarePersistentFlags(rootCmd, &globalFlags)
 	cmdConfig := configcmd.NewCommand(configcmd.Handlers{
 		New:      configNew,
-		Validate: stub.ConfigValidate(&globalFlags),
+		Validate: ibcrelay.ConfigValidate(&globalFlags),
 	})
-	cmdRelayer := relayercmd.NewCommand(stub.RelayerRun(&globalFlags))
-	cmdTestApps := testappcmd.NewCommand(stub.TestAppsDeploy(&globalFlags))
+	cmdRelayer := relayercmd.NewCommand(ibcrelay.RelayerRun(&globalFlags))
 
 	rootCmd.AddCommand(
 		cmdConfig,
 		cmdRelayer,
-		cmdTestApps,
 		cmdAttestor,
 		cmdQuery,
 		cmdMigrate,

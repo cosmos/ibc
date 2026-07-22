@@ -22,6 +22,12 @@ func TestConfigValidation(t *testing.T) {
 	require.NoError(t, err)
 	b, err := env.Chain(e2etest.ChainB)
 	require.NoError(t, err)
+	instanceA, err := env.IBCInstanceForChain(e2etest.ChainA)
+	require.NoError(t, err)
+	instanceB, err := env.IBCInstanceForChain(e2etest.ChainB)
+	require.NoError(t, err)
+	connection, err := env.Connection(env.Connections()[0])
+	require.NoError(t, err)
 	relayerSigner := writeLocalSigner(t, "relayer")
 	driver, configPath := newEnvironmentDriver(t, env)
 
@@ -30,17 +36,21 @@ func TestConfigValidation(t *testing.T) {
 		Chains: []configcmd.Chain{
 			{
 				ID: string(e2etest.ChainA), Type: configcmd.ChainTypeEVM, ChainID: a.EVMChainID(),
-				EVMSigner: relayerSigner.Alias, RPC: chainRPC(t, driver, e2etest.ChainA),
+				EVMSigner: relayerSigner.Alias, ICS26Router: string(instanceA.Locator()),
+				RPC: chainRPC(t, driver, e2etest.ChainA),
 			},
 			{
 				ID: string(e2etest.ChainB), Type: configcmd.ChainTypeEVM, ChainID: b.EVMChainID(),
-				EVMSigner: relayerSigner.Alias, RPC: chainRPC(t, driver, e2etest.ChainB),
+				EVMSigner: relayerSigner.Alias, ICS26Router: string(instanceB.Locator()),
+				RPC: chainRPC(t, driver, e2etest.ChainB),
 			},
 		},
 		DB: configcmd.DB{Type: configcmd.DBTypeSQLite, URL: filepath.Join(t.TempDir(), "valid.db")},
 		Relayer: configcmd.Relayer{Routes: []configcmd.Route{{
 			ID: string(e2etest.RouteAtoB), Source: string(e2etest.ChainA), Destination: string(e2etest.ChainB),
-			Type: configcmd.RouteEVMToEVMAttested,
+			Type:         configcmd.RouteEVMToEVMAttested,
+			SourceClient: string(connection.A().Locator()),
+			DestClient:   string(connection.B().Locator()),
 		}}},
 	}
 	writeConfig(t, configPath, valid)
@@ -62,20 +72,23 @@ func TestConfigValidation(t *testing.T) {
 		bad := configcmd.Config{
 			Chains: []configcmd.Chain{
 				{
-					ID:      string(e2etest.ChainA),
-					Type:    configcmd.ChainTypeEVM,
-					ChainID: a.EVMChainID(),
-					RPC:     chainRPC(t, driver, e2etest.ChainA),
+					ID:          string(e2etest.ChainA),
+					Type:        configcmd.ChainTypeEVM,
+					ChainID:     a.EVMChainID(),
+					ICS26Router: string(instanceA.Locator()),
+					RPC:         chainRPC(t, driver, e2etest.ChainA),
 				},
 			},
 			DB: configcmd.DB{Type: configcmd.DBTypeSQLite, URL: filepath.Join(t.TempDir(), "bad.db")},
 			Relayer: configcmd.Relayer{
 				Routes: []configcmd.Route{
 					{
-						ID:          "route-bad",
-						Source:      string(e2etest.ChainA),
-						Destination: "999999",
-						Type:        configcmd.RouteEVMToEVMAttested,
+						ID:           "route-bad",
+						Source:       string(e2etest.ChainA),
+						Destination:  "999999",
+						Type:         configcmd.RouteEVMToEVMAttested,
+						SourceClient: "client-a",
+						DestClient:   "client-b",
 					},
 				},
 			},
@@ -90,16 +103,71 @@ func TestConfigValidation(t *testing.T) {
 			"expected located validation error, got %+v", res.Errors)
 	})
 
+	t.Run("missing_ics26_router_exit1", func(t *testing.T) {
+		ctx := t.Context()
+		driver, configPath := newEnvironmentDriver(t, env)
+		bad := valid
+		bad.Chains = append([]configcmd.Chain(nil), valid.Chains...)
+		bad.Chains[0].ICS26Router = ""
+		bad.DB.URL = filepath.Join(t.TempDir(), "missing-router.db")
+		writeConfig(t, configPath, bad)
+
+		res, err := driver.ValidateConfig(ctx, false)
+		requireExit(t, err, ibclink.ErrConfigInvalid)
+		require.NotNil(t, res)
+		require.False(t, res.Valid)
+		require.True(t, hasErrorPath(res.Errors, "chains[0].ics26Router"),
+			"expected located ics26Router error, got %+v", res.Errors)
+	})
+
+	t.Run("missing_route_clients_exit1", func(t *testing.T) {
+		ctx := t.Context()
+		driver, configPath := newEnvironmentDriver(t, env)
+		bad := valid
+		bad.Relayer.Routes = append([]configcmd.Route(nil), valid.Relayer.Routes...)
+		bad.Relayer.Routes[0].SourceClient = ""
+		bad.Relayer.Routes[0].DestClient = ""
+		bad.DB.URL = filepath.Join(t.TempDir(), "missing-clients.db")
+		writeConfig(t, configPath, bad)
+
+		res, err := driver.ValidateConfig(ctx, false)
+		requireExit(t, err, ibclink.ErrConfigInvalid)
+		require.NotNil(t, res)
+		require.False(t, res.Valid)
+		require.True(t, hasErrorPath(res.Errors, "relayer.routes[0].sourceClient"),
+			"expected located sourceClient error, got %+v", res.Errors)
+		require.True(t, hasErrorPath(res.Errors, "relayer.routes[0].destClient"),
+			"expected located destClient error, got %+v", res.Errors)
+	})
+
+	t.Run("invalid_ics26_router_exit1", func(t *testing.T) {
+		ctx := t.Context()
+		driver, configPath := newEnvironmentDriver(t, env)
+		bad := valid
+		bad.Chains = append([]configcmd.Chain(nil), valid.Chains...)
+		bad.Chains[0].ICS26Router = "not-an-address"
+		bad.DB.URL = filepath.Join(t.TempDir(), "bad-router.db")
+		writeConfig(t, configPath, bad)
+
+		res, err := driver.ValidateConfig(ctx, false)
+		requireExit(t, err, ibclink.ErrConfigInvalid)
+		require.NotNil(t, res)
+		require.False(t, res.Valid)
+		require.True(t, hasErrorPath(res.Errors, "chains[0].ics26Router"),
+			"expected located ics26Router error, got %+v", res.Errors)
+	})
+
 	t.Run("live_down_rpc_exit1", func(t *testing.T) {
 		ctx := t.Context()
 		driver, configPath := newDriver(t)
 		down := configcmd.Config{
 			Chains: []configcmd.Chain{
 				{
-					ID:      string(e2etest.ChainA),
-					Type:    configcmd.ChainTypeEVM,
-					ChainID: a.EVMChainID(),
-					RPC:     configcmd.RPC{URL: refusingRPCURL(t)},
+					ID:          string(e2etest.ChainA),
+					Type:        configcmd.ChainTypeEVM,
+					ChainID:     a.EVMChainID(),
+					ICS26Router: string(instanceA.Locator()),
+					RPC:         configcmd.RPC{URL: refusingRPCURL(t)},
 				},
 			},
 			DB: configcmd.DB{Type: configcmd.DBTypeSQLite, URL: filepath.Join(t.TempDir(), "down.db")},
@@ -120,10 +188,11 @@ func TestConfigValidation(t *testing.T) {
 		wrongID := configcmd.Config{
 			Chains: []configcmd.Chain{
 				{
-					ID:      string(e2etest.ChainA),
-					Type:    configcmd.ChainTypeEVM,
-					ChainID: a.EVMChainID() + 99999,
-					RPC:     chainRPC(t, driver, e2etest.ChainA),
+					ID:          string(e2etest.ChainA),
+					Type:        configcmd.ChainTypeEVM,
+					ChainID:     a.EVMChainID() + 99999,
+					ICS26Router: string(instanceA.Locator()),
+					RPC:         chainRPC(t, driver, e2etest.ChainA),
 				},
 			},
 			DB: configcmd.DB{Type: configcmd.DBTypeSQLite, URL: filepath.Join(t.TempDir(), "wrongid.db")},
