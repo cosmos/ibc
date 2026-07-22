@@ -2,12 +2,14 @@ package attestor
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
 	"connectrpc.com/connect"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
+	eth "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -36,9 +38,9 @@ func TestService(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		service, err := New([]Attestor{
-			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubEvmClient(t, "1"), sampleSigner)),
-			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "bob"}, stubEvmClient(t, "2"), sampleSigner)),
-			must(NewLocal(config.AttestationConfig{ChainID: "3", Name: "carol"}, stubEvmClient(t, "3"), sampleSigner)),
+			stubLocalAttestor(t, "1", "alice", sampleSigner),
+			stubLocalAttestor(t, "2", "bob", sampleSigner),
+			stubLocalAttestor(t, "3", "carol", sampleSigner),
 		})
 		require.NoError(t, err)
 
@@ -131,7 +133,7 @@ func TestService(t *testing.T) {
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
 			NewRemote("solana", "carol", "solana-carol", client),
-			must(NewLocal(config.AttestationConfig{ChainID: "ethereum", Name: "dave"}, stubEvmClient(t, "ethereum"), sampleSigner)),
+			stubLocalAttestor(t, "ethereum", "dave", sampleSigner),
 		})
 		require.NoError(t, err)
 		client.EXPECT().
@@ -164,6 +166,25 @@ func latestAttestableHeightRequest(attestor string) any {
 	}
 
 	return mock.MatchedBy(matcher)
+}
+
+func stubLocalAttestor(t *testing.T, chainID, name string, backingSigner signer.Signer) *LocalAttestor {
+	t.Helper()
+
+	client := stubEvmClient(t, chainID)
+	client.EXPECT().
+		HeaderByNumber(mock.Anything, blockFinalized).
+		Return(&eth.Header{Number: big.NewInt(1)}, nil).
+		Once()
+
+	attestor, err := NewLocal(
+		config.AttestationConfig{ChainID: chainID, Name: name},
+		client,
+		backingSigner,
+	)
+	require.NoError(t, err)
+
+	return attestor
 }
 
 func must[T any](value T, err error) T {

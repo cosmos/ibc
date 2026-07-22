@@ -294,10 +294,6 @@ func stubEvmClient(t *testing.T, chainID string) *mocks.MockEVMClient {
 
 	client := mocks.NewMockEVMClient(t)
 	client.EXPECT().ChainID().Return(chainID).Maybe()
-	client.EXPECT().
-		HeaderByNumber(mock.Anything, mock.Anything).
-		Return(&eth.Header{Number: big.NewInt(1)}, nil).
-		Maybe()
 
 	return client
 }
