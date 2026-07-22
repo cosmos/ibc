@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
 	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
@@ -287,6 +288,122 @@ func TestLocal(t *testing.T) {
 			assert.Empty(t, result)
 		})
 	})
+
+	t.Run("PacketAttestation", func(t *testing.T) {
+		validPacket := encodedPacket(t)
+
+		for _, tt := range []struct {
+			name            string
+			request         PacketAttestationRequest
+			latestHeader    *eth.Header
+			latestHeightErr error
+			expectedErr     error
+			errContains     string
+		}{
+			{
+				name: "rejects empty packet batch",
+				request: PacketAttestationRequest{
+					CommitmentType: CommitmentTypePacket,
+				},
+				expectedErr: ErrInvalidInput,
+				errContains: "packet count 0",
+			},
+			{
+				name: "rejects packet batch above limit",
+				request: PacketAttestationRequest{
+					Packets:        make([][]byte, MaxPacketsPerAttestation+1),
+					CommitmentType: CommitmentTypePacket,
+				},
+				expectedErr: ErrInvalidInput,
+				errContains: "packet count 101",
+			},
+			{
+				name: "rejects malformed packet",
+				request: PacketAttestationRequest{
+					Packets:        [][]byte{{1, 2, 3}},
+					CommitmentType: CommitmentTypePacket,
+				},
+				expectedErr: ErrInvalidInput,
+				errContains: "decode packet 0",
+			},
+			{
+				name: "rejects unsupported commitment type",
+				request: PacketAttestationRequest{
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypeInvalid,
+				},
+				expectedErr: ErrInvalidInput,
+				errContains: "unsupported commitment type 0",
+			},
+			{
+				name: "rejects unfinalized height",
+				request: PacketAttestationRequest{
+					Height:         11,
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypePacket,
+				},
+				latestHeader: &eth.Header{Number: big.NewInt(10)},
+				expectedErr:  ErrNotFinalized,
+			},
+			{
+				name: "returns latest height error",
+				request: PacketAttestationRequest{
+					Height:         10,
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypePacket,
+				},
+				latestHeightErr: errors.New("rpc down"),
+				errContains:     "get latest attestable height: rpc down",
+			},
+			{
+				name: "accepts valid request through finality validation",
+				request: PacketAttestationRequest{
+					Height:         10,
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypePacket,
+				},
+				latestHeader: &eth.Header{Number: big.NewInt(10)},
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ARRANGE
+				client := stubEvmClient(t, "chain-1")
+				if tt.latestHeader != nil || tt.latestHeightErr != nil {
+					client.EXPECT().
+						HeaderByNumber(mock.Anything, blockFinalized).
+						Return(tt.latestHeader, tt.latestHeightErr).
+						Once()
+				}
+				attestor, err := NewLocal(
+					config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+					client,
+					ecdsaSigner,
+				)
+				require.NoError(t, err)
+
+				// ACT
+				result, err := attestor.PacketAttestation(context.Background(), tt.request)
+
+				// ASSERT
+				if tt.expectedErr != nil {
+					require.ErrorIs(t, err, tt.expectedErr)
+					assert.Empty(t, result)
+					if tt.errContains != "" {
+						assert.ErrorContains(t, err, tt.errContains)
+					}
+					return
+				}
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+					assert.Empty(t, result)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tt.request.Height, result.Height)
+			})
+		}
+	})
 }
 
 func stubEvmClient(t *testing.T, chainID string) *mocks.MockEVMClient {
@@ -309,6 +426,33 @@ func generateECDSASigner(t *testing.T) *signer.LocalSecp256k1Signer {
 	require.NoError(t, err)
 
 	return localSigner
+}
+
+func encodedPacket(t *testing.T) []byte {
+	t.Helper()
+
+	contractABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	encoded, err := contractABI.Methods["isPacketReceived"].Inputs.Pack(
+		ics26router.IICS26RouterMsgsPacket{
+			Sequence:         7,
+			SourceClient:     "source-client",
+			DestClient:       "destination-client",
+			TimeoutTimestamp: 1_700_000_000,
+			Payloads: []ics26router.IICS26RouterMsgsPayload{
+				{
+					SourcePort: "transfer",
+					DestPort:   "transfer",
+					Version:    "ics20-1",
+					Encoding:   "application/json",
+					Value:      []byte("payload"),
+				},
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	return encoded
 }
 
 func assertSignatureFromSigner(

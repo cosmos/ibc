@@ -65,11 +65,15 @@ const (
 	CommitmentTypeReceipt
 )
 
+// MaxPacketsPerAttestation bounds packet decoding and chain calls per request.
+const MaxPacketsPerAttestation = 100
+
 // Attestor errors
 var (
 	ErrNotFound       = errors.New("attestor not found")
 	ErrNoAttestations = errors.New("no attestations provided")
 	ErrNotFinalized   = errors.New("block is not finalized")
+	ErrInvalidInput   = errors.New("invalid input")
 )
 
 // NewFromConfig creates a new attestor service from the configuration.

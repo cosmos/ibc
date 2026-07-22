@@ -11,15 +11,17 @@ type Signer interface {
 	Sign(ctx context.Context, data []byte) ([]byte, error)
 }
 
-const stateAttestationTag byte = 0x01
+// Domain separation tags.
+const (
+	TagStateAttestation byte = 0x01
+)
 
-// SignABI signs sha256(0x01 || sha256(data)), matching the state-attestation
-// digest expected by the Solidity verifier and the Rust attestor.
-func SignABI(ctx context.Context, signer Signer, data []byte) ([]byte, error) {
+// SignABI signs sha256(tag || sha256(data)), matching the domain separation.
+func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte, error) {
 	innerHash := sha256.Sum256(data)
 
 	var signingInput [1 + sha256.Size]byte
-	signingInput[0] = stateAttestationTag
+	signingInput[0] = tag
 	copy(signingInput[1:], innerHash[:])
 	digest := sha256.Sum256(signingInput[:])
 
