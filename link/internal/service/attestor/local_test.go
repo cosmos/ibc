@@ -295,6 +295,8 @@ func TestLocal(t *testing.T) {
 		decodedPacket, err := attestorevm.DecodePacket(validPacket)
 		require.NoError(t, err)
 		pathHash := attestorevm.PathHash(attestorevm.PathPacket(decodedPacket.SourceClient, decodedPacket.Sequence))
+		ackPathHash := attestorevm.PathHash(attestorevm.PathAck(decodedPacket.DestClient, decodedPacket.Sequence))
+		receiptPathHash := attestorevm.PathHash(attestorevm.PathReceipt(decodedPacket.DestClient, decodedPacket.Sequence))
 		packetCommitment := attestorevm.PacketCommitment(decodedPacket)
 
 		for _, tt := range []struct {
@@ -439,7 +441,7 @@ func TestLocal(t *testing.T) {
 
 		t.Run("signsPacket", func(t *testing.T) {
 			// ARRANGE
-			const height = 10
+			const height = uint64(10)
 
 			client := stubChainClient(t, "chain-1")
 			client.EXPECT().
@@ -486,6 +488,90 @@ func TestLocal(t *testing.T) {
 			expectedDigest := sha256.Sum256(signingInput)
 			assertSignatureFromSigner(t, ecdsaSigner, expectedDigest, result.Signature)
 		})
+
+		t.Run("commitmentSemantics", func(t *testing.T) {
+			for _, tt := range []struct {
+				name           string
+				commitmentType CommitmentType
+				path           [32]byte
+				commitment     [32]byte
+				errContains    string
+			}{
+				{
+					name:           "rejectsPacketMismatch",
+					commitmentType: CommitmentTypePacket,
+					path:           pathHash,
+					commitment:     [32]byte{1},
+					errContains:    "packet commitment mismatch",
+				},
+				{
+					name:           "acceptsPresentAck",
+					commitmentType: CommitmentTypeAck,
+					path:           ackPathHash,
+					commitment:     [32]byte{1},
+				},
+				{
+					name:           "rejectsMissingAck",
+					commitmentType: CommitmentTypeAck,
+					path:           ackPathHash,
+					errContains:    "acknowledgement commitment",
+				},
+				{
+					name:           "acceptsMissingReceipt",
+					commitmentType: CommitmentTypeReceipt,
+					path:           receiptPathHash,
+				},
+				{
+					name:           "rejectsPresentReceipt",
+					commitmentType: CommitmentTypeReceipt,
+					path:           receiptPathHash,
+					commitment:     [32]byte{1},
+					errContains:    "receipt exists",
+				},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					// ARRANGE
+					const height = uint64(10)
+					client := stubChainClient(t, "chain-1")
+					client.EXPECT().
+						GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+						Return(v2.BlockHeader{Height: height}, nil).
+						Once()
+					client.EXPECT().
+						GetCommitment(mock.Anything, height, tt.path).
+						Return(tt.commitment, nil).
+						Once()
+					attestor, err := NewLocal(
+						config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+						client,
+						ecdsaSigner,
+					)
+					require.NoError(t, err)
+
+					// ACT
+					result, err := attestor.PacketAttestation(context.Background(), PacketAttestationRequest{
+						Height:         height,
+						Packets:        [][]byte{validPacket},
+						CommitmentType: tt.commitmentType,
+					})
+
+					// ASSERT
+					if tt.errContains != "" {
+						require.ErrorContains(t, err, tt.errContains)
+						assert.Empty(t, result)
+						return
+					}
+
+					require.NoError(t, err)
+					expectedData, err := attestorevm.EncodePacketAttestation(height, []attestorevm.PacketCompact{
+						{Path: tt.path, Commitment: tt.commitment},
+					})
+					require.NoError(t, err)
+					assert.Equal(t, expectedData, result.AttestedData)
+					assert.NotEmpty(t, result.Signature)
+				})
+			}
+		})
 	})
 }
 
@@ -516,7 +602,7 @@ func sampleEvmPacket(t *testing.T) []byte {
 
 	contractABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
-	
+
 	encoded, err := contractABI.Methods["isPacketReceived"].Inputs.Pack(
 		ics26router.IICS26RouterMsgsPacket{
 			Sequence:         7,
