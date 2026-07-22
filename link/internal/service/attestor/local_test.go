@@ -5,17 +5,17 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"math/big"
 	"testing"
 	"time"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
 	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	kms "github.com/cosmos/kms/signing/file"
-	eth "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -34,7 +34,7 @@ func TestLocal(t *testing.T) {
 
 			attestorName string
 			chainID      string
-			client       EVMClient
+			client       chains.Client
 			signer       signer.Signer
 
 			errContains string
@@ -43,7 +43,7 @@ func TestLocal(t *testing.T) {
 				name:         "ok",
 				attestorName: "alice",
 				chainID:      "chain-1",
-				client:       stubEvmClient(t, "chain-1"),
+				client:       stubChainClient(t, "chain-1"),
 				signer:       ecdsaSigner,
 			},
 			{
@@ -58,7 +58,7 @@ func TestLocal(t *testing.T) {
 				name:         "clientChainIDMismatch",
 				attestorName: "alice",
 				chainID:      "chain-1",
-				client:       stubEvmClient(t, "chain-2"),
+				client:       stubChainClient(t, "chain-2"),
 				signer:       ecdsaSigner,
 				errContains:  "client chainID mismatch: got chain-2, want chain-1",
 			},
@@ -66,7 +66,7 @@ func TestLocal(t *testing.T) {
 				name:         "eddsaSigner",
 				attestorName: "alice",
 				chainID:      "chain-1",
-				client:       stubEvmClient(t, "chain-1"),
+				client:       stubChainClient(t, "chain-1"),
 				signer:       eddsaSigner,
 				errContains:  "ECDSA signer required, got eddsa",
 			},
@@ -74,7 +74,7 @@ func TestLocal(t *testing.T) {
 				name:         "emptyChainID",
 				attestorName: "alice",
 				chainID:      "",
-				client:       stubEvmClient(t, "chain-1"),
+				client:       stubChainClient(t, "chain-1"),
 				signer:       ecdsaSigner,
 				errContains:  "chainID required",
 			},
@@ -82,7 +82,7 @@ func TestLocal(t *testing.T) {
 				name:         "emptyName",
 				attestorName: "",
 				chainID:      "chain-1",
-				client:       stubEvmClient(t, "chain-1"),
+				client:       stubChainClient(t, "chain-1"),
 				signer:       ecdsaSigner,
 				errContains:  "name required",
 			},
@@ -91,7 +91,7 @@ func TestLocal(t *testing.T) {
 				signer:       nil,
 				attestorName: "alice",
 				chainID:      "chain-1",
-				client:       stubEvmClient(t, "chain-1"),
+				client:       stubChainClient(t, "chain-1"),
 				errContains:  "signer required",
 			},
 		} {
@@ -123,48 +123,49 @@ func TestLocal(t *testing.T) {
 		for _, tt := range []struct {
 			name           string
 			finalityOffset uint
-			header         *eth.Header
+			header         v2.BlockHeader
 			rpcErr         error
-			expectedBlock  *big.Int
+			expectedHeightArg uint64
 			expectedHeight uint64
 			errContains    string
 		}{
 			{
-				name:           "finalized block",
-				header:         &eth.Header{Number: big.NewInt(100)},
-				expectedBlock:  blockFinalized,
-				expectedHeight: 100,
+				name:              "finalizedBlock",
+				header:            v2.BlockHeader{Height: 100},
+				expectedHeightArg: v2.FinalizedBlock,
+				expectedHeight:    100,
 			},
 			{
-				name:           "latest block minus offset",
-				finalityOffset: 10,
-				header:         &eth.Header{Number: big.NewInt(100)},
-				expectedBlock:  blockLatest,
-				expectedHeight: 90,
+				name:              "latestBlockMinusOffset",
+				finalityOffset:    10,
+				header:            v2.BlockHeader{Height: 100},
+				expectedHeightArg: v2.LatestBlock,
+				expectedHeight:    90,
 			},
 			{
-				name:           "offset greater than latest block",
-				finalityOffset: 101,
-				header:         &eth.Header{Number: big.NewInt(100)},
-				expectedBlock:  blockLatest,
+				name:              "offsetGreaterThanLatestBlock",
+				finalityOffset:    101,
+				header:            v2.BlockHeader{Height: 100},
+				expectedHeightArg: v2.LatestBlock,
 			},
 			{
-				name:          "rpc error",
-				rpcErr:        errors.New("rpc down"),
-				expectedBlock: blockFinalized,
-				errContains:   "rpc down",
+				name:              "rpcError",
+				rpcErr:            errors.New("rpc down"),
+				expectedHeightArg: v2.FinalizedBlock,
+				errContains:       "rpc down",
 			},
 			{
-				name:          "missing header",
-				expectedBlock: blockFinalized,
-				errContains:   "header is nil",
+				name:              "missingHeader",
+				rpcErr:            errors.New("header is nil for height 18446744073709551614"),
+				expectedHeightArg: v2.FinalizedBlock,
+				errContains:       "header is nil",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				client := stubEvmClient(t, "chain-1")
+				client := stubChainClient(t, "chain-1")
 				client.EXPECT().
-					HeaderByNumber(mock.Anything, tt.expectedBlock).
+					GetBlockHeader(mock.Anything, tt.expectedHeightArg).
 					Return(tt.header, tt.rpcErr).
 					Once()
 
@@ -198,16 +199,16 @@ func TestLocal(t *testing.T) {
 				height    = uint64(42)
 				timestamp = uint64(1_700_000_000)
 			)
-			client := stubEvmClient(t, "chain-1")
+			client := stubChainClient(t, "chain-1")
 			client.EXPECT().
-				HeaderByNumber(mock.Anything, blockFinalized).
-				Return(&eth.Header{Number: big.NewInt(100)}, nil).
+				GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+				Return(v2.BlockHeader{Height: 100}, nil).
 				Once()
 			client.EXPECT().
-				HeaderByNumber(mock.Anything, new(big.Int).SetUint64(height)).
-				Return(&eth.Header{
-					Number: new(big.Int).SetUint64(height),
-					Time:   timestamp,
+				GetBlockHeader(mock.Anything, height).
+				Return(v2.BlockHeader{
+					Height:    height,
+					Timestamp: time.Unix(int64(timestamp), 0).UTC(),
 				}, nil).
 				Once()
 
@@ -240,10 +241,10 @@ func TestLocal(t *testing.T) {
 
 		t.Run("rejectsUnfinalizedHeight", func(t *testing.T) {
 			// ARRANGE
-			client := stubEvmClient(t, "chain-1")
+			client := stubChainClient(t, "chain-1")
 			client.EXPECT().
-				HeaderByNumber(mock.Anything, blockFinalized).
-				Return(&eth.Header{Number: big.NewInt(41)}, nil).
+				GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+				Return(v2.BlockHeader{Height: 41}, nil).
 				Once()
 
 			attestor, err := NewLocal(
@@ -261,16 +262,16 @@ func TestLocal(t *testing.T) {
 			assert.Empty(t, result)
 		})
 
-		t.Run("rejectsMissingHistoricalHeader", func(t *testing.T) {
+		t.Run("propagatesHistoricalHeaderError", func(t *testing.T) {
 			// ARRANGE
-			client := stubEvmClient(t, "chain-1")
+			client := stubChainClient(t, "chain-1")
 			client.EXPECT().
-				HeaderByNumber(mock.Anything, blockFinalized).
-				Return(&eth.Header{Number: big.NewInt(100)}, nil).
+				GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+				Return(v2.BlockHeader{Height: 100}, nil).
 				Once()
 			client.EXPECT().
-				HeaderByNumber(mock.Anything, big.NewInt(42)).
-				Return(nil, nil).
+				GetBlockHeader(mock.Anything, uint64(42)).
+				Return(v2.BlockHeader{}, errors.New("header is nil for height 42")).
 				Once()
 
 			attestor, err := NewLocal(
@@ -284,24 +285,29 @@ func TestLocal(t *testing.T) {
 			result, err := attestor.StateAttestation(context.Background(), 42)
 
 			// ASSERT
-			require.ErrorIs(t, err, ErrNotFinalized)
+			require.ErrorContains(t, err, "header is nil for height 42")
 			assert.Empty(t, result)
 		})
 	})
 
 	t.Run("PacketAttestation", func(t *testing.T) {
 		validPacket := encodedPacket(t)
+		decodedPacket, err := attestorevm.DecodePacket(validPacket)
+		require.NoError(t, err)
+		pathHash := attestorevm.PathHash(attestorevm.PathPacket(decodedPacket.SourceClient, decodedPacket.Sequence))
+		packetCommitment := attestorevm.PacketCommitment(decodedPacket)
 
 		for _, tt := range []struct {
 			name            string
 			request         PacketAttestationRequest
-			latestHeader    *eth.Header
+			latestHeader    *v2.BlockHeader
 			latestHeightErr error
+			commitment      *[32]byte
 			expectedErr     error
 			errContains     string
 		}{
 			{
-				name: "rejects empty packet batch",
+				name: "rejectsEmptyPacketBatch",
 				request: PacketAttestationRequest{
 					CommitmentType: CommitmentTypePacket,
 				},
@@ -309,7 +315,7 @@ func TestLocal(t *testing.T) {
 				errContains: "packet count 0",
 			},
 			{
-				name: "rejects packet batch above limit",
+				name: "rejectsPacketBatchAboveLimit",
 				request: PacketAttestationRequest{
 					Packets:        make([][]byte, MaxPacketsPerAttestation+1),
 					CommitmentType: CommitmentTypePacket,
@@ -318,8 +324,9 @@ func TestLocal(t *testing.T) {
 				errContains: "packet count 101",
 			},
 			{
-				name: "rejects malformed packet",
+				name: "rejectsMalformedPacket",
 				request: PacketAttestationRequest{
+					Height:         10,
 					Packets:        [][]byte{{1, 2, 3}},
 					CommitmentType: CommitmentTypePacket,
 				},
@@ -327,8 +334,9 @@ func TestLocal(t *testing.T) {
 				errContains: "decode packet 0",
 			},
 			{
-				name: "rejects unsupported commitment type",
+				name: "rejectsUnsupportedCommitmentType",
 				request: PacketAttestationRequest{
+					Height:         10,
 					Packets:        [][]byte{validPacket},
 					CommitmentType: CommitmentTypeInvalid,
 				},
@@ -336,17 +344,17 @@ func TestLocal(t *testing.T) {
 				errContains: "unsupported commitment type 0",
 			},
 			{
-				name: "rejects unfinalized height",
+				name: "rejectsUnfinalizedHeight",
 				request: PacketAttestationRequest{
 					Height:         11,
 					Packets:        [][]byte{validPacket},
 					CommitmentType: CommitmentTypePacket,
 				},
-				latestHeader: &eth.Header{Number: big.NewInt(10)},
+				latestHeader: &v2.BlockHeader{Height: 10},
 				expectedErr:  ErrNotFinalized,
 			},
 			{
-				name: "returns latest height error",
+				name: "returnsLatestHeightError",
 				request: PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{validPacket},
@@ -356,22 +364,33 @@ func TestLocal(t *testing.T) {
 				errContains:     "get latest attestable height: rpc down",
 			},
 			{
-				name: "accepts valid request through finality validation",
+				name: "acceptsValidRequest",
 				request: PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{validPacket},
 					CommitmentType: CommitmentTypePacket,
 				},
-				latestHeader: &eth.Header{Number: big.NewInt(10)},
+				latestHeader: &v2.BlockHeader{Height: 10},
+				commitment:   &packetCommitment,
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				client := stubEvmClient(t, "chain-1")
+				client := stubChainClient(t, "chain-1")
 				if tt.latestHeader != nil || tt.latestHeightErr != nil {
+					var header v2.BlockHeader
+					if tt.latestHeader != nil {
+						header = *tt.latestHeader
+					}
 					client.EXPECT().
-						HeaderByNumber(mock.Anything, blockFinalized).
-						Return(tt.latestHeader, tt.latestHeightErr).
+						GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+						Return(header, tt.latestHeightErr).
+						Once()
+				}
+				if tt.commitment != nil {
+					client.EXPECT().
+						GetCommitment(mock.Anything, tt.request.Height, pathHash).
+						Return(*tt.commitment, nil).
 						Once()
 				}
 				attestor, err := NewLocal(
@@ -406,10 +425,10 @@ func TestLocal(t *testing.T) {
 	})
 }
 
-func stubEvmClient(t *testing.T, chainID string) *mocks.MockEVMClient {
+func stubChainClient(t *testing.T, chainID string) *mocks.MockClient {
 	t.Helper()
 
-	client := mocks.NewMockEVMClient(t)
+	client := mocks.NewMockClient(t)
 	client.EXPECT().ChainID().Return(chainID).Maybe()
 
 	return client

@@ -2,14 +2,13 @@ package attestor
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
 	"connectrpc.com/connect"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
-	eth "github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -22,8 +21,8 @@ func TestService(t *testing.T) {
 	t.Run("duplicateAliases", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubEvmClient(t, "1"), sampleSigner)),
-			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "alice"}, stubEvmClient(t, "2"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubChainClient(t, "1"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "alice"}, stubChainClient(t, "2"), sampleSigner)),
 		}
 
 		// ACT
@@ -171,10 +170,10 @@ func latestHeightRequest(attestor string) any {
 func stubLocalAttestor(t *testing.T, chainID, name string, backingSigner signer.Signer) *LocalAttestor {
 	t.Helper()
 
-	client := stubEvmClient(t, chainID)
+	client := stubChainClient(t, chainID)
 	client.EXPECT().
-		HeaderByNumber(mock.Anything, blockFinalized).
-		Return(&eth.Header{Number: big.NewInt(1)}, nil).
+		GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+		Return(v2.BlockHeader{Height: 1}, nil).
 		Once()
 
 	attestor, err := NewLocal(

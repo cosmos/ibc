@@ -69,6 +69,9 @@ const (
 // MaxPacketsPerAttestation bounds packet decoding and chain calls per request.
 const MaxPacketsPerAttestation = 100
 
+// MaxPacketSizeBytes bounds the size of a single packet in bytes.
+const MaxPacketSizeBytes = 128 * 1024 // 128 KB
+
 // Attestor errors
 var (
 	ErrNotFound           = errors.New("attestor not found")
@@ -185,6 +188,12 @@ func (req PacketAttestationRequest) Validate() error {
 			count,
 			MaxPacketsPerAttestation,
 		)
+	}
+
+	for _, packet := range req.Packets {
+		if len(packet) > MaxPacketSizeBytes {
+			return errors.Errorf("packet size %d is greater than %d", len(packet), MaxPacketSizeBytes)
+		}
 	}
 
 	return validateHeight(req.Height)
