@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -69,7 +70,7 @@ func TestTxPacketEvents(t *testing.T) {
 	t.Run("parsesSendPacket", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		eth := NewMockETHClient(t)
+		eth := mocks.NewMockETHClient(t)
 		client, err := NewWithClient(chainIDEth, eth, routerAddress)
 		require.NoError(t, err)
 
@@ -111,7 +112,7 @@ func TestTxPacketEvents(t *testing.T) {
 	t.Run("noSendPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		eth := NewMockETHClient(t)
+		eth := mocks.NewMockETHClient(t)
 		client, err := NewWithClient(chainIDEth, eth, routerAddress)
 		require.NoError(t, err)
 
@@ -130,7 +131,7 @@ func TestTxPacketEvents(t *testing.T) {
 	t.Run("headerError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		eth := NewMockETHClient(t)
+		eth := mocks.NewMockETHClient(t)
 		client, err := NewWithClient(chainIDEth, eth, routerAddress)
 		require.NoError(t, err)
 
@@ -151,7 +152,7 @@ func TestTxPacketEvents(t *testing.T) {
 	t.Run("receiptError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		eth := NewMockETHClient(t)
+		eth := mocks.NewMockETHClient(t)
 		client, err := NewWithClient(chainIDEth, eth, routerAddress)
 		require.NoError(t, err)
 
@@ -166,7 +167,7 @@ func TestTxPacketEvents(t *testing.T) {
 
 	t.Run("invalidHashLength", func(t *testing.T) {
 		// ARRANGE
-		client, err := NewWithClient(chainIDEth, NewMockETHClient(t), routerAddress)
+		client, err := NewWithClient(chainIDEth, mocks.NewMockETHClient(t), routerAddress)
 		require.NoError(t, err)
 
 		// ACT
@@ -178,7 +179,7 @@ func TestTxPacketEvents(t *testing.T) {
 
 	t.Run("invalidRouterAddress", func(t *testing.T) {
 		// ACT
-		_, err := NewWithClient(chainIDEth, NewMockETHClient(t), "not-an-address")
+		_, err := NewWithClient(chainIDEth, mocks.NewMockETHClient(t), "not-an-address")
 
 		// ASSERT
 		require.ErrorContains(t, err, "invalid ics26 router address")
