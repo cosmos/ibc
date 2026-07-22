@@ -121,13 +121,13 @@ func TestLocal(t *testing.T) {
 
 	t.Run("LatestAttestableHeight", func(t *testing.T) {
 		for _, tt := range []struct {
-			name           string
-			finalityOffset uint
-			header         v2.BlockHeader
-			rpcErr         error
+			name              string
+			finalityOffset    uint
+			header            v2.BlockHeader
+			rpcErr            error
 			expectedHeightArg uint64
-			expectedHeight uint64
-			errContains    string
+			expectedHeight    uint64
+			errContains       string
 		}{
 			{
 				name:              "finalizedBlock",
@@ -291,7 +291,7 @@ func TestLocal(t *testing.T) {
 	})
 
 	t.Run("PacketAttestation", func(t *testing.T) {
-		validPacket := encodedPacket(t)
+		validPacket := sampleEvmPacket(t)
 		decodedPacket, err := attestorevm.DecodePacket(validPacket)
 		require.NoError(t, err)
 		pathHash := attestorevm.PathHash(attestorevm.PathPacket(decodedPacket.SourceClient, decodedPacket.Sequence))
@@ -303,7 +303,6 @@ func TestLocal(t *testing.T) {
 			latestHeader    *v2.BlockHeader
 			latestHeightErr error
 			commitment      *[32]byte
-			expectedErr     error
 			errContains     string
 		}{
 			{
@@ -311,7 +310,6 @@ func TestLocal(t *testing.T) {
 				request: PacketAttestationRequest{
 					CommitmentType: CommitmentTypePacket,
 				},
-				expectedErr: ErrInvalidInput,
 				errContains: "packet count 0",
 			},
 			{
@@ -320,7 +318,6 @@ func TestLocal(t *testing.T) {
 					Packets:        make([][]byte, MaxPacketsPerAttestation+1),
 					CommitmentType: CommitmentTypePacket,
 				},
-				expectedErr: ErrInvalidInput,
 				errContains: "packet count 101",
 			},
 			{
@@ -330,8 +327,33 @@ func TestLocal(t *testing.T) {
 					Packets:        [][]byte{{1, 2, 3}},
 					CommitmentType: CommitmentTypePacket,
 				},
-				expectedErr: ErrInvalidInput,
 				errContains: "decode packet 0",
+			},
+			{
+				name: "rejectsZeroHeight",
+				request: PacketAttestationRequest{
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypePacket,
+				},
+				errContains: "height must be greater than 0",
+			},
+			{
+				name: "rejectsLatestHeight",
+				request: PacketAttestationRequest{
+					Height:         v2.LatestBlock,
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypePacket,
+				},
+				errContains: "invalid height",
+			},
+			{
+				name: "rejectsFinalizedHeight",
+				request: PacketAttestationRequest{
+					Height:         uint64(v2.FinalizedBlock),
+					Packets:        [][]byte{validPacket},
+					CommitmentType: CommitmentTypePacket,
+				},
+				errContains: "invalid height",
 			},
 			{
 				name: "rejectsUnsupportedCommitmentType",
@@ -340,7 +362,6 @@ func TestLocal(t *testing.T) {
 					Packets:        [][]byte{validPacket},
 					CommitmentType: CommitmentTypeInvalid,
 				},
-				expectedErr: ErrInvalidInput,
 				errContains: "unsupported commitment type 0",
 			},
 			{
@@ -351,7 +372,7 @@ func TestLocal(t *testing.T) {
 					CommitmentType: CommitmentTypePacket,
 				},
 				latestHeader: &v2.BlockHeader{Height: 10},
-				expectedErr:  ErrNotFinalized,
+				errContains:  "block is not finalized",
 			},
 			{
 				name: "returnsLatestHeightError",
@@ -364,14 +385,15 @@ func TestLocal(t *testing.T) {
 				errContains:     "get latest attestable height: rpc down",
 			},
 			{
-				name: "acceptsValidRequest",
+				name: "returnsCommitmentNotFound",
 				request: PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{validPacket},
 					CommitmentType: CommitmentTypePacket,
 				},
 				latestHeader: &v2.BlockHeader{Height: 10},
-				commitment:   &packetCommitment,
+				commitment:   new([32]byte),
+				errContains:  `packet commitment for client "source-client" sequence 7`,
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -404,24 +426,66 @@ func TestLocal(t *testing.T) {
 				result, err := attestor.PacketAttestation(context.Background(), tt.request)
 
 				// ASSERT
-				if tt.expectedErr != nil {
-					require.ErrorIs(t, err, tt.expectedErr)
-					assert.Empty(t, result)
-					if tt.errContains != "" {
-						assert.ErrorContains(t, err, tt.errContains)
-					}
-					return
-				}
 				if tt.errContains != "" {
 					require.ErrorContains(t, err, tt.errContains)
-					assert.Empty(t, result)
+					require.Empty(t, result)
 					return
 				}
 
 				require.NoError(t, err)
-				assert.Equal(t, tt.request.Height, result.Height)
+				require.Equal(t, tt.request.Height, result.Height)
 			})
 		}
+
+		t.Run("signsPacket", func(t *testing.T) {
+			// ARRANGE
+			const height = 10
+
+			client := stubChainClient(t, "chain-1")
+			client.EXPECT().
+				GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+				Return(v2.BlockHeader{Height: height}, nil).
+				Once()
+			client.EXPECT().
+				GetCommitment(mock.Anything, height, pathHash).
+				Return(packetCommitment, nil).
+				Once()
+
+			attestor, err := NewLocal(
+				config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+				client,
+				ecdsaSigner,
+			)
+			require.NoError(t, err)
+
+			// Given expected data that we'll compare against the result.
+			expectedData, err := attestorevm.EncodePacketAttestation(height, []attestorevm.PacketCompact{
+				{Path: pathHash, Commitment: packetCommitment},
+			})
+			require.NoError(t, err)
+
+			// ACT
+			result, err := attestor.PacketAttestation(context.Background(), PacketAttestationRequest{
+				Height:         height,
+				Packets:        [][]byte{validPacket},
+				CommitmentType: CommitmentTypePacket,
+			})
+
+			// ASSERT
+			require.NoError(t, err)
+
+			require.Equal(t, height, result.Height)
+			require.Nil(t, result.Timestamp)
+			require.Equal(t, expectedData, result.AttestedData)
+
+			// Check signature
+			require.Len(t, result.Signature, 65)
+			require.Contains(t, []byte{27, 28}, result.Signature[64])
+			innerHash := sha256.Sum256(result.AttestedData)
+			signingInput := append([]byte{0x02}, innerHash[:]...)
+			expectedDigest := sha256.Sum256(signingInput)
+			assertSignatureFromSigner(t, ecdsaSigner, expectedDigest, result.Signature)
+		})
 	})
 }
 
@@ -447,11 +511,12 @@ func generateECDSASigner(t *testing.T) *signer.LocalSecp256k1Signer {
 	return localSigner
 }
 
-func encodedPacket(t *testing.T) []byte {
+func sampleEvmPacket(t *testing.T) []byte {
 	t.Helper()
 
 	contractABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
+	
 	encoded, err := contractABI.Methods["isPacketReceived"].Inputs.Pack(
 		ics26router.IICS26RouterMsgsPacket{
 			Sequence:         7,
