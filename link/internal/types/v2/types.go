@@ -1,7 +1,11 @@
 // Package v2 contains shared IBC v2 domain types.
 package v2
 
-import "time"
+import (
+	"time"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+)
 
 // EventKind the kind of packet event.
 type EventKind int
@@ -13,29 +17,11 @@ const (
 	KindWriteAck
 )
 
-// Payload a packet payload.
-type Payload struct {
-	SourcePort string
-	DestPort   string
-	Version    string
-	Encoding   string
-	Value      []byte
-}
-
-// Packet an IBC v2 packet.
-type Packet struct {
-	Sequence         uint64
-	SourceClient     string
-	DestClient       string
-	TimeoutTimestamp uint64
-	Payloads         []Payload
-}
-
 // PacketEvent a packet event.
 type PacketEvent struct {
 	Height    uint64
 	BlockTime time.Time
 	Kind      EventKind
-	Packet    Packet
+	Packet    channeltypesv2.Packet
 	Acks      [][]byte
 }
