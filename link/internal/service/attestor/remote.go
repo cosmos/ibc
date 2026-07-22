@@ -43,12 +43,12 @@ func NewRemote(chainID, name, alias string, client proto.AttestationServiceClien
 	}
 }
 
-func (a *RemoteAttestor) LatestAttestableHeight(ctx context.Context) (uint64, error) {
-	req := &proto.LatestAttestableHeightRequest{
+func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
+	req := &proto.LatestHeightRequest{
 		Attestor: a.name,
 	}
 
-	res, err := a.client.LatestAttestableHeight(ctx, connect.NewRequest(req))
+	res, err := a.client.LatestHeight(ctx, connect.NewRequest(req))
 	if err != nil {
 		return 0, err
 	}
@@ -71,11 +71,16 @@ func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (A
 }
 
 func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
+	ct, err := CommitmentTypeToProto(req.CommitmentType)
+	if err != nil {
+		return Attestation{}, err
+	}
+
 	protoReq := &proto.PacketAttestationRequest{
 		Attestor:       a.name,
 		Packets:        req.Packets,
 		Height:         req.Height,
-		CommitmentType: CommitmentTypeToProto(req.CommitmentType),
+		CommitmentType: ct,
 	}
 
 	res, err := a.client.PacketAttestation(ctx, connect.NewRequest(protoReq))
@@ -110,16 +115,16 @@ func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 	}, nil
 }
 
-func CommitmentTypeToProto(ct CommitmentType) proto.CommitmentType {
+func CommitmentTypeToProto(ct CommitmentType) (proto.CommitmentType, error) {
 	switch ct {
 	case CommitmentTypePacket:
-		return proto.CommitmentType_COMMITMENT_TYPE_PACKET
+		return proto.CommitmentType_COMMITMENT_TYPE_PACKET, nil
 	case CommitmentTypeAck:
-		return proto.CommitmentType_COMMITMENT_TYPE_ACK
+		return proto.CommitmentType_COMMITMENT_TYPE_ACK, nil
 	case CommitmentTypeReceipt:
-		return proto.CommitmentType_COMMITMENT_TYPE_RECEIPT
+		return proto.CommitmentType_COMMITMENT_TYPE_RECEIPT, nil
 	default:
-		return proto.CommitmentType_COMMITMENT_TYPE_INVALID
+		return 0, errors.Errorf("unsupported commitment type: %d", ct)
 	}
 }
 

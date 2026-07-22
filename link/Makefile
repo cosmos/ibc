@@ -25,7 +25,7 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
-codegen: codegen-sql codegen-proto codegen-mocks codegen-abi ## Generate code
+codegen: codegen-sql codegen-proto codegen-abi codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
 	cd internal/store && $(SQLC) generate

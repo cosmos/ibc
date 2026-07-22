@@ -21,7 +21,7 @@ type AttestorHandler struct {
 
 // AttestorService defines attestor business logic.
 type AttestorService interface {
-	LatestAttestableHeight(ctx context.Context, attestor string) (uint64, error)
+	LatestHeight(ctx context.Context, attestor string) (uint64, error)
 	StateAttestation(ctx context.Context, attestor string, height uint64) (attestor.Attestation, error)
 	PacketAttestation(
 		ctx context.Context,
@@ -50,11 +50,11 @@ func (h *AttestorHandler) Name() string {
 	return proto.AttestationServiceName
 }
 
-func (h *AttestorHandler) LatestAttestableHeight(
+func (h *AttestorHandler) LatestHeight(
 	ctx context.Context,
-	req *connect.Request[proto.LatestAttestableHeightRequest],
-) (*connect.Response[proto.LatestAttestableHeightResponse], error) {
-	height, err := h.service.LatestAttestableHeight(ctx, req.Msg.Attestor)
+	req *connect.Request[proto.LatestHeightRequest],
+) (*connect.Response[proto.LatestHeightResponse], error) {
+	height, err := h.service.LatestHeight(ctx, req.Msg.Attestor)
 	switch {
 	case errors.Is(err, attestor.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -64,7 +64,7 @@ func (h *AttestorHandler) LatestAttestableHeight(
 		return nil, errInternal
 	}
 
-	return connect.NewResponse(&proto.LatestAttestableHeightResponse{Height: height}), nil
+	return connect.NewResponse(&proto.LatestHeightResponse{Height: height}), nil
 }
 
 func (h *AttestorHandler) StateAttestation(

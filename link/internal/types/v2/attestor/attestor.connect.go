@@ -38,9 +38,9 @@ const (
 	// AttestationServicePacketAttestationProcedure is the fully-qualified name of the
 	// AttestationService's PacketAttestation RPC.
 	AttestationServicePacketAttestationProcedure = "/ibc.v2.attestor.AttestationService/PacketAttestation"
-	// AttestationServiceLatestAttestableHeightProcedure is the fully-qualified name of the
-	// AttestationService's LatestAttestableHeight RPC.
-	AttestationServiceLatestAttestableHeightProcedure = "/ibc.v2.attestor.AttestationService/LatestAttestableHeight"
+	// AttestationServiceLatestHeightProcedure is the fully-qualified name of the AttestationService's
+	// LatestHeight RPC.
+	AttestationServiceLatestHeightProcedure = "/ibc.v2.attestor.AttestationService/LatestHeight"
 )
 
 // AttestationServiceClient is a client for the ibc.v2.attestor.AttestationService service.
@@ -50,7 +50,7 @@ type AttestationServiceClient interface {
 	// Retrieves an attestation for a set of packets.
 	PacketAttestation(context.Context, *connect.Request[PacketAttestationRequest]) (*connect.Response[PacketAttestationResponse], error)
 	// Returns the latest height the attestor will generate attestations for.
-	LatestAttestableHeight(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error)
+	LatestHeight(context.Context, *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error)
 }
 
 // NewAttestationServiceClient constructs a client for the ibc.v2.attestor.AttestationService
@@ -76,10 +76,10 @@ func NewAttestationServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(attestationServiceMethods.ByName("PacketAttestation")),
 			connect.WithClientOptions(opts...),
 		),
-		latestAttestableHeight: connect.NewClient[LatestAttestableHeightRequest, LatestAttestableHeightResponse](
+		latestHeight: connect.NewClient[LatestHeightRequest, LatestHeightResponse](
 			httpClient,
-			baseURL+AttestationServiceLatestAttestableHeightProcedure,
-			connect.WithSchema(attestationServiceMethods.ByName("LatestAttestableHeight")),
+			baseURL+AttestationServiceLatestHeightProcedure,
+			connect.WithSchema(attestationServiceMethods.ByName("LatestHeight")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -87,9 +87,9 @@ func NewAttestationServiceClient(httpClient connect.HTTPClient, baseURL string, 
 
 // attestationServiceClient implements AttestationServiceClient.
 type attestationServiceClient struct {
-	stateAttestation       *connect.Client[StateAttestationRequest, StateAttestationResponse]
-	packetAttestation      *connect.Client[PacketAttestationRequest, PacketAttestationResponse]
-	latestAttestableHeight *connect.Client[LatestAttestableHeightRequest, LatestAttestableHeightResponse]
+	stateAttestation  *connect.Client[StateAttestationRequest, StateAttestationResponse]
+	packetAttestation *connect.Client[PacketAttestationRequest, PacketAttestationResponse]
+	latestHeight      *connect.Client[LatestHeightRequest, LatestHeightResponse]
 }
 
 // StateAttestation calls ibc.v2.attestor.AttestationService.StateAttestation.
@@ -102,9 +102,9 @@ func (c *attestationServiceClient) PacketAttestation(ctx context.Context, req *c
 	return c.packetAttestation.CallUnary(ctx, req)
 }
 
-// LatestAttestableHeight calls ibc.v2.attestor.AttestationService.LatestAttestableHeight.
-func (c *attestationServiceClient) LatestAttestableHeight(ctx context.Context, req *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error) {
-	return c.latestAttestableHeight.CallUnary(ctx, req)
+// LatestHeight calls ibc.v2.attestor.AttestationService.LatestHeight.
+func (c *attestationServiceClient) LatestHeight(ctx context.Context, req *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error) {
+	return c.latestHeight.CallUnary(ctx, req)
 }
 
 // AttestationServiceHandler is an implementation of the ibc.v2.attestor.AttestationService service.
@@ -114,7 +114,7 @@ type AttestationServiceHandler interface {
 	// Retrieves an attestation for a set of packets.
 	PacketAttestation(context.Context, *connect.Request[PacketAttestationRequest]) (*connect.Response[PacketAttestationResponse], error)
 	// Returns the latest height the attestor will generate attestations for.
-	LatestAttestableHeight(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error)
+	LatestHeight(context.Context, *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error)
 }
 
 // NewAttestationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -136,10 +136,10 @@ func NewAttestationServiceHandler(svc AttestationServiceHandler, opts ...connect
 		connect.WithSchema(attestationServiceMethods.ByName("PacketAttestation")),
 		connect.WithHandlerOptions(opts...),
 	)
-	attestationServiceLatestAttestableHeightHandler := connect.NewUnaryHandler(
-		AttestationServiceLatestAttestableHeightProcedure,
-		svc.LatestAttestableHeight,
-		connect.WithSchema(attestationServiceMethods.ByName("LatestAttestableHeight")),
+	attestationServiceLatestHeightHandler := connect.NewUnaryHandler(
+		AttestationServiceLatestHeightProcedure,
+		svc.LatestHeight,
+		connect.WithSchema(attestationServiceMethods.ByName("LatestHeight")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/ibc.v2.attestor.AttestationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -148,8 +148,8 @@ func NewAttestationServiceHandler(svc AttestationServiceHandler, opts ...connect
 			attestationServiceStateAttestationHandler.ServeHTTP(w, r)
 		case AttestationServicePacketAttestationProcedure:
 			attestationServicePacketAttestationHandler.ServeHTTP(w, r)
-		case AttestationServiceLatestAttestableHeightProcedure:
-			attestationServiceLatestAttestableHeightHandler.ServeHTTP(w, r)
+		case AttestationServiceLatestHeightProcedure:
+			attestationServiceLatestHeightHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -167,6 +167,6 @@ func (UnimplementedAttestationServiceHandler) PacketAttestation(context.Context,
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.attestor.AttestationService.PacketAttestation is not implemented"))
 }
 
-func (UnimplementedAttestationServiceHandler) LatestAttestableHeight(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.attestor.AttestationService.LatestAttestableHeight is not implemented"))
+func (UnimplementedAttestationServiceHandler) LatestHeight(context.Context, *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.attestor.AttestationService.LatestHeight is not implemented"))
 }

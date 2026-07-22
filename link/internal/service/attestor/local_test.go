@@ -175,7 +175,7 @@ func TestLocal(t *testing.T) {
 				require.NoError(t, err)
 
 				// ACT
-				height, err := attestor.LatestAttestableHeight(context.Background())
+				height, err := attestor.LatestHeight(context.Background())
 
 				// ASSERT
 				if tt.errContains != "" {

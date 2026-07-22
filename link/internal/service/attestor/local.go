@@ -75,10 +75,10 @@ func NewLocal(cfg config.AttestationConfig, client EVMClient, backingSigner sign
 	}, nil
 }
 
-// LatestAttestableHeight returns the highest block number that is attestable.
+// LatestHeight returns the highest block number that is *attestable*.
 // If finality offset is zero, returns the "finalized" block.
 // Otherwise, returns the "latest" block minus the offset.
-func (a *LocalAttestor) LatestAttestableHeight(ctx context.Context) (uint64, error) {
+func (a *LocalAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	block := blockFinalized
 	if a.finalityOffset > 0 {
 		block = blockLatest
@@ -103,7 +103,7 @@ func (a *LocalAttestor) LatestAttestableHeight(ctx context.Context) (uint64, err
 }
 
 func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
-	latestHeight, err := a.LatestAttestableHeight(ctx)
+	latestHeight, err := a.LatestHeight(ctx)
 	switch {
 	case err != nil:
 		return Attestation{}, fmt.Errorf("get latest attestable height: %w", err)

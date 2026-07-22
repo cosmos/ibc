@@ -14,7 +14,7 @@ service AttestationService {
   rpc PacketAttestation(PacketAttestationRequest) returns (PacketAttestationResponse);
 
   // Returns the latest height the attestor will generate attestations for.
-  rpc LatestAttestableHeight(LatestAttestableHeightRequest) returns (LatestAttestableHeightResponse);
+  rpc LatestHeight(LatestHeightRequest) returns (LatestHeightResponse);
 }
 
 message StateAttestationRequest {
@@ -48,19 +48,18 @@ message PacketAttestationResponse {
   Attestation attestation = 1;
 }
 
-message LatestAttestableHeightRequest { string attestor = 1; }
+message LatestHeightRequest { string attestor = 1; }
 
-message LatestAttestableHeightResponse { uint64 height = 1; }
+message LatestHeightResponse { uint64 height = 1; }
 
 // Commitment type for packet attestation
 enum CommitmentType {
-  COMMITMENT_TYPE_INVALID = 0;
   // Packet commitment (for SendPacket events)
-  COMMITMENT_TYPE_PACKET = 1;
+  COMMITMENT_TYPE_PACKET = 0;
   // Acknowledgment commitment (for WriteAcknowledgement events)
-  COMMITMENT_TYPE_ACK = 2;
+  COMMITMENT_TYPE_ACK = 1;
   // Receipt commitment (for Timeout events - non-membership proof)
-  COMMITMENT_TYPE_RECEIPT = 3;
+  COMMITMENT_TYPE_RECEIPT = 2;
 }
 
 // Attestation is a single attestation from a given block height

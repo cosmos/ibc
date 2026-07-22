@@ -47,7 +47,7 @@ func TestService(t *testing.T) {
 		for _, alias := range []string{"alice", "bob", "carol"} {
 			t.Run(alias, func(t *testing.T) {
 				// ACT
-				height, err := service.LatestAttestableHeight(ctx, alias)
+				height, err := service.LatestHeight(ctx, alias)
 
 				// ASSERT
 				require.NoError(t, err)
@@ -57,7 +57,7 @@ func TestService(t *testing.T) {
 
 		t.Run("not found", func(t *testing.T) {
 			// ACT
-			height, err := service.LatestAttestableHeight(ctx, "zoe")
+			height, err := service.LatestHeight(ctx, "zoe")
 
 			// ASSERT
 			require.ErrorIs(t, err, ErrNotFound)
@@ -100,14 +100,14 @@ func TestService(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
 				client.EXPECT().
-					LatestAttestableHeight(mock.Anything, latestAttestableHeightRequest(tt.name)).
-					Return(connect.NewResponse(&proto.LatestAttestableHeightResponse{
+					LatestHeight(mock.Anything, latestHeightRequest(tt.name)).
+					Return(connect.NewResponse(&proto.LatestHeightResponse{
 						Height: tt.expectedHeight,
 					}), nil).
 					Once()
 
 				// ACT
-				height, err := service.LatestAttestableHeight(ctx, tt.alias)
+				height, err := service.LatestHeight(ctx, tt.alias)
 
 				// ASSERT
 				require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestService(t *testing.T) {
 
 		t.Run("not found", func(t *testing.T) {
 			// ACT
-			height, err := service.LatestAttestableHeight(ctx, "zoe")
+			height, err := service.LatestHeight(ctx, "zoe")
 
 			// ASSERT
 			require.ErrorIs(t, err, ErrNotFound)
@@ -137,21 +137,21 @@ func TestService(t *testing.T) {
 		})
 		require.NoError(t, err)
 		client.EXPECT().
-			LatestAttestableHeight(mock.Anything, latestAttestableHeightRequest("bob")).
-			Return(connect.NewResponse(&proto.LatestAttestableHeightResponse{
+			LatestHeight(mock.Anything, latestHeightRequest("bob")).
+			Return(connect.NewResponse(&proto.LatestHeightResponse{
 				Height: 20,
 			}), nil).
 			Once()
 
 		// ACT
-		remoteHeight, err := service.LatestAttestableHeight(ctx, "cosmos-bob")
+		remoteHeight, err := service.LatestHeight(ctx, "cosmos-bob")
 
 		// ASSERT
 		require.NoError(t, err)
 		assert.Equal(t, uint64(20), remoteHeight)
 
 		// ACT
-		localHeight, err := service.LatestAttestableHeight(ctx, "dave")
+		localHeight, err := service.LatestHeight(ctx, "dave")
 
 		// ASSERT
 		require.NoError(t, err)
@@ -160,8 +160,8 @@ func TestService(t *testing.T) {
 
 }
 
-func latestAttestableHeightRequest(attestor string) any {
-	matcher := func(req *connect.Request[proto.LatestAttestableHeightRequest]) bool {
+func latestHeightRequest(attestor string) any {
+	matcher := func(req *connect.Request[proto.LatestHeightRequest]) bool {
 		return req.Msg.Attestor == attestor
 	}
 

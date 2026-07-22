@@ -34,7 +34,7 @@ type Attestor interface {
 	// IsLocal returns true if the attestor is local.
 	IsLocal() bool
 
-	LatestAttestableHeight(ctx context.Context) (uint64, error)
+	LatestHeight(ctx context.Context) (uint64, error)
 	StateAttestation(ctx context.Context, height uint64) (Attestation, error)
 	PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error)
 }
@@ -141,13 +141,13 @@ func (s *Service) Add(id string, attestor Attestor) {
 	s.attestors[id] = attestor
 }
 
-func (s *Service) LatestAttestableHeight(ctx context.Context, attestorAlias string) (uint64, error) {
+func (s *Service) LatestHeight(ctx context.Context, attestorAlias string) (uint64, error) {
 	attestor, ok := s.attestors[attestorAlias]
 	if !ok {
 		return 0, ErrNotFound
 	}
 
-	return attestor.LatestAttestableHeight(ctx)
+	return attestor.LatestHeight(ctx)
 }
 
 func (s *Service) StateAttestation(ctx context.Context, attestorAlias string, height uint64) (Attestation, error) {
