@@ -75,8 +75,10 @@ func (h *AttestorHandler) StateAttestation(
 	switch {
 	case errors.Is(err, attestor.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, attestor.ErrInvalidInput):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, attestor.ErrNotFinalized):
-		return nil, connect.NewError(connect.CodeOutOfRange, err)
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("StateAttestation", "error", err)
@@ -99,12 +101,12 @@ func (h *AttestorHandler) PacketAttestation(
 
 	attestation, err := h.service.PacketAttestation(ctx, req.Msg.Attestor, packetReq)
 	switch {
-	case errors.Is(err, attestor.ErrNotFound):
+	case errors.Is(err, attestor.ErrNotFound), errors.Is(err, attestor.ErrCommitmentNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, attestor.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	case errors.Is(err, attestor.ErrNotFinalized):
-		return nil, connect.NewError(connect.CodeOutOfRange, err)
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("PacketAttestation", "error", err)

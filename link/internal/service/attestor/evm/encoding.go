@@ -8,6 +8,12 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
+// PacketCompact mirrors the Solidity PacketCompact struct.
+type PacketCompact struct {
+	Path       [32]byte `abi:"path"`
+	Commitment [32]byte `abi:"commitment"`
+}
+
 type payload struct {
 	SourcePort string `abi:"sourcePort"`
 	DestPort   string `abi:"destPort"`
@@ -29,11 +35,17 @@ type stateAttestation struct {
 	Timestamp uint64 `abi:"timestamp"`
 }
 
+type packetAttestation struct {
+	Height  uint64          `abi:"height"`
+	Packets []PacketCompact `abi:"packets"`
+}
+
 const (
-	abiBytes  = "bytes"
-	abiString = "string"
-	abiTuple  = "tuple[]"
-	abiUint64 = "uint64"
+	abiBytes   = "bytes"
+	abiBytes32 = "bytes32"
+	abiString  = "string"
+	abiTuple   = "tuple[]"
+	abiUint64  = "uint64"
 )
 
 var (
@@ -59,6 +71,16 @@ var (
 			}},
 		},
 	)}}
+
+	packetAttestationArgs = abi.Arguments{{Type: mustNewTuple(
+		[]abi.ArgumentMarshaling{
+			{Name: "height", Type: abiUint64},
+			{Name: "packets", Type: abiTuple, Components: []abi.ArgumentMarshaling{
+				{Name: "path", Type: abiBytes32},
+				{Name: "commitment", Type: abiBytes32},
+			}},
+		},
+	)}}
 )
 
 // EncodeStateAttestation encodes the Solidity StateAttestation struct.
@@ -69,6 +91,19 @@ func EncodeStateAttestation(height, timestamp uint64) ([]byte, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode state attestation: %w", err)
+	}
+
+	return data, nil
+}
+
+// EncodePacketAttestation encodes the Solidity PacketAttestation struct.
+func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, error) {
+	data, err := packetAttestationArgs.Pack(packetAttestation{
+		Height:  height,
+		Packets: packets,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode packet attestation: %w", err)
 	}
 
 	return data, nil

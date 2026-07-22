@@ -13,7 +13,8 @@ type Signer interface {
 
 // Domain separation tags.
 const (
-	TagStateAttestation byte = 0x01
+	TagStateAttestation  byte = 0x01
+	TagPacketAttestation byte = 0x02
 )
 
 // SignABI signs sha256(tag || sha256(data)), matching the domain separation.

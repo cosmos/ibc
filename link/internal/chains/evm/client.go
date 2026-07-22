@@ -25,6 +25,7 @@ const sendPacketEvent = "SendPacket"
 // ETHClient go-ethereum methods used by Client.
 type ETHClient interface {
 	bind.ContractFilterer
+	bind.ContractBackend
 
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
@@ -32,12 +33,16 @@ type ETHClient interface {
 
 // Client implements chains.Client for EVM chains.
 type Client struct {
-	chainID       string
-	routerAddress common.Address
-	eth           ETHClient
-	router        *ics26router.ContractFilterer
-	routerABI     *abi.ABI
-	logger        *slog.Logger
+	chainID string
+
+	eth ETHClient
+
+	routerAddress  common.Address
+	routerFilterer *ics26router.ContractFilterer
+	routerABI      *abi.ABI
+	router         *ics26router.Contract
+
+	logger *slog.Logger
 }
 
 func New(chainID, rpcURL, ics26RouterAddress string) (*Client, error) {
@@ -56,7 +61,7 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 
 	routerAddress := common.HexToAddress(ics26RouterAddress)
 
-	router, err := ics26router.NewContractFilterer(routerAddress, eth)
+	routerFilterer, err := ics26router.NewContractFilterer(routerAddress, eth)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating ics26 router filterer")
 	}
@@ -66,17 +71,25 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 		return nil, errors.Wrap(err, "getting ics26 router abi")
 	}
 
+	router, err := ics26router.NewContract(routerAddress, eth)
+	if err != nil {
+		return nil, errors.Wrap(err, "creating ics26 router contract")
+	}
+
 	if _, ok := routerABI.Events[sendPacketEvent]; !ok {
 		return nil, errors.Errorf("event %q not found in ics26 router abi", sendPacketEvent)
 	}
 
 	return &Client{
-		chainID:       chainID,
-		routerAddress: routerAddress,
-		eth:           eth,
-		router:        router,
-		routerABI:     routerABI,
-		logger:        slog.With("module", "chains", "chainType", "evm", "chainID", chainID),
+		chainID: chainID,
+		eth:     eth,
+
+		routerAddress:  routerAddress,
+		routerFilterer: routerFilterer,
+		routerABI:      routerABI,
+		router:         router,
+
+		logger: slog.With("module", "chains", "chainType", "evm", "chainID", chainID),
 	}, nil
 }
 
@@ -108,7 +121,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 			continue
 		}
 
-		sendPacket, errParse := c.router.ParseSendPacket(*log)
+		sendPacket, errParse := c.routerFilterer.ParseSendPacket(*log)
 		if errParse != nil {
 			return nil, errors.Wrapf(errParse, "parsing send packet event from tx %s on chain %s", txHash, c.chainID)
 		}
@@ -148,14 +161,23 @@ func (c *Client) GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHea
 	}
 
 	return v2.BlockHeader{
-		Height:    height,
+		Height:    header.Number.Uint64(),
 		Timestamp: blockTime(header),
 	}, nil
 }
 
-func (c *Client) GetCommitment(ctx context.Context, height uint64, pathHash [32]byte) ([32]byte, error) {
-	// todo
-	return [32]byte{}, errors.New("not implemented")
+func (c *Client) GetCommitment(ctx context.Context, height uint64, hashedPath [32]byte) ([32]byte, error) {
+	opts := &bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: heightToBigInt(height),
+	}
+
+	commitment, err := c.router.GetCommitment(opts, hashedPath)
+	if err != nil {
+		return [32]byte{}, errors.Wrapf(err, "getting commitment at height %d on chain %s", height, c.chainID)
+	}
+
+	return commitment, nil
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {

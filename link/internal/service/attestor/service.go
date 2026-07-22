@@ -2,10 +2,11 @@ package attestor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
@@ -70,10 +71,11 @@ const MaxPacketsPerAttestation = 100
 
 // Attestor errors
 var (
-	ErrNotFound       = errors.New("attestor not found")
-	ErrNoAttestations = errors.New("no attestations provided")
-	ErrNotFinalized   = errors.New("block is not finalized")
-	ErrInvalidInput   = errors.New("invalid input")
+	ErrNotFound           = errors.New("attestor not found")
+	ErrNoAttestations     = errors.New("no attestations provided")
+	ErrNotFinalized       = errors.New("block is not finalized")
+	ErrInvalidInput       = errors.New("invalid input")
+	ErrCommitmentNotFound = errors.New("commitment not found")
 )
 
 // NewFromConfig creates a new attestor service from the configuration.
@@ -139,33 +141,51 @@ func (s *Service) Add(id string, attestor Attestor) {
 	s.attestors[id] = attestor
 }
 
-func (s *Service) LatestHeight(ctx context.Context, attestorAlias string) (uint64, error) {
-	attestor, ok := s.attestors[attestorAlias]
+func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {
+	a, ok := s.attestors[attestor]
 	if !ok {
 		return 0, ErrNotFound
 	}
 
-	return attestor.LatestHeight(ctx)
+	return a.LatestHeight(ctx)
 }
 
-func (s *Service) StateAttestation(ctx context.Context, attestorAlias string, height uint64) (Attestation, error) {
-	attestor, ok := s.attestors[attestorAlias]
+func (s *Service) StateAttestation(ctx context.Context, attestor string, height uint64) (Attestation, error) {
+	a, ok := s.attestors[attestor]
 	if !ok {
 		return Attestation{}, ErrNotFound
 	}
 
-	return attestor.StateAttestation(ctx, height)
+	return a.StateAttestation(ctx, height)
 }
 
 func (s *Service) PacketAttestation(
 	ctx context.Context,
-	attestorAlias string,
+	attestor string,
 	req PacketAttestationRequest,
 ) (Attestation, error) {
-	attestor, ok := s.attestors[attestorAlias]
+	a, ok := s.attestors[attestor]
 	if !ok {
 		return Attestation{}, ErrNotFound
 	}
 
-	return attestor.PacketAttestation(ctx, req)
+	return a.PacketAttestation(ctx, req)
+}
+
+func (req PacketAttestationRequest) Validate() error {
+	switch req.CommitmentType {
+	case CommitmentTypePacket, CommitmentTypeAck, CommitmentTypeReceipt:
+	default:
+		return errors.Errorf("unsupported commitment type %d", req.CommitmentType)
+	}
+
+	if count := len(req.Packets); count == 0 || count > MaxPacketsPerAttestation {
+		return errors.Errorf(
+			"packet count %d is outside allowed range 1..%d",
+			count,
+			MaxPacketsPerAttestation,
+		)
+	}
+
+	return validateHeight(req.Height)
 }
