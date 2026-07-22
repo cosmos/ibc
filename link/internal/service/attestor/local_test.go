@@ -2,20 +2,27 @@ package attestor
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
+	kms "github.com/cosmos/kms/signing/file"
 	eth "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLocal(t *testing.T) {
-	ecdsaSigner, err := signer.GenerateLocalSecp256k1Signer()
-	require.NoError(t, err)
+	ecdsaSigner := generateECDSASigner(t)
 
 	eddsaSigner, err := signer.GenerateLocalEd25519Signer()
 	require.NoError(t, err)
@@ -154,14 +161,15 @@ func TestLocal(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				client := &stubClient{
-					chainID: "chain-1",
-					header:  tt.header,
-					err:     tt.rpcErr,
-				}
+				client := stubEvmClient(t, "chain-1")
+				client.EXPECT().
+					HeaderByNumber(mock.Anything, tt.expectedBlock).
+					Return(tt.header, tt.rpcErr).
+					Once()
+
 				attestor, err := NewLocal(config.AttestationConfig{
-					ChainID:       "chain-1",
-					Name:          "alice",
+					ChainID:        "chain-1",
+					Name:           "alice",
 					FinalityOffset: tt.finalityOffset,
 				}, client, ecdsaSigner)
 				require.NoError(t, err)
@@ -170,7 +178,6 @@ func TestLocal(t *testing.T) {
 				height, err := attestor.LatestAttestableHeight(context.Background())
 
 				// ASSERT
-				assert.Equal(t, tt.expectedBlock, client.requestedNumber)
 				if tt.errContains != "" {
 					require.ErrorContains(t, err, tt.errContains)
 					assert.Zero(t, height)
@@ -182,26 +189,146 @@ func TestLocal(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("StateAttestation", func(t *testing.T) {
+		t.Run("signsFinalizedState", func(t *testing.T) {
+			// ARRANGE
+			const (
+				height    = uint64(42)
+				timestamp = uint64(1_700_000_000)
+			)
+			client := stubEvmClient(t, "chain-1")
+			client.EXPECT().
+				HeaderByNumber(mock.Anything, blockFinalized).
+				Return(&eth.Header{Number: big.NewInt(100)}, nil).
+				Once()
+			client.EXPECT().
+				HeaderByNumber(mock.Anything, new(big.Int).SetUint64(height)).
+				Return(&eth.Header{
+					Number: new(big.Int).SetUint64(height),
+					Time:   timestamp,
+				}, nil).
+				Once()
+
+			attestor, err := NewLocal(config.AttestationConfig{
+				ChainID: "chain-1",
+				Name:    "alice",
+			}, client, ecdsaSigner)
+			require.NoError(t, err)
+
+			// ACT
+			result, err := attestor.StateAttestation(context.Background(), height)
+
+			// ASSERT
+			require.NoError(t, err)
+			assert.Equal(t, height, result.Height)
+			require.NotNil(t, result.Timestamp)
+			assert.Equal(t, time.Unix(int64(timestamp), 0).UTC(), *result.Timestamp)
+
+			expectedData, err := attestorevm.EncodeStateAttestation(height, timestamp)
+			require.NoError(t, err)
+			assert.Equal(t, expectedData, result.AttestedData)
+
+			require.Len(t, result.Signature, 65)
+			assert.Contains(t, []byte{27, 28}, result.Signature[64])
+			innerHash := sha256.Sum256(result.AttestedData)
+			signingInput := append([]byte{0x01}, innerHash[:]...)
+			expectedDigest := sha256.Sum256(signingInput)
+			assertSignatureFromSigner(t, ecdsaSigner, expectedDigest, result.Signature)
+		})
+
+		t.Run("rejectsUnfinalizedHeight", func(t *testing.T) {
+			// ARRANGE
+			client := stubEvmClient(t, "chain-1")
+			client.EXPECT().
+				HeaderByNumber(mock.Anything, blockFinalized).
+				Return(&eth.Header{Number: big.NewInt(41)}, nil).
+				Once()
+
+			attestor, err := NewLocal(
+				config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+				client,
+				ecdsaSigner,
+			)
+			require.NoError(t, err)
+
+			// ACT
+			result, err := attestor.StateAttestation(context.Background(), 42)
+
+			// ASSERT
+			require.ErrorIs(t, err, ErrNotFinalized)
+			assert.Empty(t, result)
+		})
+
+		t.Run("rejectsMissingHistoricalHeader", func(t *testing.T) {
+			// ARRANGE
+			client := stubEvmClient(t, "chain-1")
+			client.EXPECT().
+				HeaderByNumber(mock.Anything, blockFinalized).
+				Return(&eth.Header{Number: big.NewInt(100)}, nil).
+				Once()
+			client.EXPECT().
+				HeaderByNumber(mock.Anything, big.NewInt(42)).
+				Return(nil, nil).
+				Once()
+
+			attestor, err := NewLocal(
+				config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+				client,
+				ecdsaSigner,
+			)
+			require.NoError(t, err)
+
+			// ACT
+			result, err := attestor.StateAttestation(context.Background(), 42)
+
+			// ASSERT
+			require.ErrorIs(t, err, ErrNotFinalized)
+			assert.Empty(t, result)
+		})
+	})
 }
 
-type stubClient struct {
-	chainID        string
-	header         *eth.Header
-	err            error
-	requestedNumber *big.Int
-}
-
-func (c *stubClient) ChainID() string { return c.chainID }
-
-func (c *stubClient) HeaderByNumber(_ context.Context, number *big.Int) (*eth.Header, error) {
-	c.requestedNumber = new(big.Int).Set(number)
-	return c.header, c.err
-}
-
-func stubEvmClient(t *testing.T, chainID string) EVMClient {
+func stubEvmClient(t *testing.T, chainID string) *mocks.MockEVMClient {
 	t.Helper()
-	return &stubClient{
-		chainID: chainID,
-		header:  &eth.Header{Number: big.NewInt(1)},
-	}
+
+	client := mocks.NewMockEVMClient(t)
+	client.EXPECT().ChainID().Return(chainID).Maybe()
+	client.EXPECT().
+		HeaderByNumber(mock.Anything, mock.Anything).
+		Return(&eth.Header{Number: big.NewInt(1)}, nil).
+		Maybe()
+
+	return client
+}
+
+func generateECDSASigner(t *testing.T) *signer.LocalSecp256k1Signer {
+	t.Helper()
+
+	kmsSigner, err := kms.GenerateSecp256k1Eth(rand.Reader)
+	require.NoError(t, err)
+	privateKey, err := kms.PrivateKeyFromSigner(kmsSigner)
+	require.NoError(t, err)
+	localSigner, err := signer.NewLocalSecp256k1Signer(privateKey)
+	require.NoError(t, err)
+
+	return localSigner
+}
+
+func assertSignatureFromSigner(
+	t *testing.T,
+	expectedSigner *signer.LocalSecp256k1Signer,
+	digest [sha256.Size]byte,
+	signature []byte,
+) {
+	t.Helper()
+
+	recoverySignature := append([]byte(nil), signature...)
+	recoverySignature[64] -= 27
+	publicKey, err := crypto.SigToPub(digest[:], recoverySignature)
+	require.NoError(t, err)
+
+	expectedPublicKey, err := crypto.DecompressPubkey(expectedSigner.PublicKey())
+	require.NoError(t, err)
+	assert.Equal(t, crypto.PubkeyToAddress(*expectedPublicKey), crypto.PubkeyToAddress(*publicKey))
 }

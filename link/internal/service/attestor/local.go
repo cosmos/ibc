@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 
+	evm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	eth "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -81,6 +84,7 @@ func (a *LocalAttestor) LatestAttestableHeight(ctx context.Context) (uint64, err
 		block = blockLatest
 	}
 
+	// TODO: cache last N headers to avoid extra RPC calls
 	header, err := a.client.HeaderByNumber(ctx, block)
 	switch {
 	case err != nil:
@@ -98,10 +102,40 @@ func (a *LocalAttestor) LatestAttestableHeight(ctx context.Context) (uint64, err
 	return height - offset, nil
 }
 
-func (a *LocalAttestor) StateAttestation(_ context.Context, height uint64) (Attestation, error) {
-	// todo: mocked
+func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+	latestHeight, err := a.LatestAttestableHeight(ctx)
+	switch {
+	case err != nil:
+		return Attestation{}, fmt.Errorf("get latest attestable height: %w", err)
+	case height > latestHeight:
+		return Attestation{}, errors.Wrapf(ErrNotFinalized, "latest %d, requested %d", latestHeight, height)
+	}
+
+	header, err := a.client.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
+	switch {
+	case err != nil:
+		return Attestation{}, fmt.Errorf("get header at height %d: %w", height, err)
+	case header == nil:
+		return Attestation{}, fmt.Errorf("%w: header at height %d is nil", ErrNotFinalized, height)
+	}
+
+	attestedData, err := evm.EncodeStateAttestation(height, header.Time)
+	if err != nil {
+		return Attestation{}, err
+	}
+
+	signature, err := evm.SignABI(ctx, a.signer, attestedData)
+	if err != nil {
+		return Attestation{}, fmt.Errorf("sign state attestation: %w", err)
+	}
+
+	timestamp := time.Unix(int64(header.Time), 0).UTC() //nolint:gosec // EVM block timestamps fit in int64
+
 	return Attestation{
-		Height: height,
+		Height:       height,
+		Timestamp:    &timestamp,
+		AttestedData: attestedData,
+		Signature:    signature,
 	}, nil
 }
 

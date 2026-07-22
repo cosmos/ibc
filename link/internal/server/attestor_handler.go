@@ -75,6 +75,8 @@ func (h *AttestorHandler) StateAttestation(
 	switch {
 	case errors.Is(err, attestor.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, attestor.ErrNotFinalized):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("StateAttestation", "error", err)
@@ -111,12 +113,17 @@ func (h *AttestorHandler) PacketAttestation(
 }
 
 func attestationToProto(a attestor.Attestation) *proto.Attestation {
-	// todo
+	var timestamp *uint64
+	if a.Timestamp != nil {
+		asUnix := uint64(a.Timestamp.Unix())
+		timestamp = &asUnix
+	}
+
 	return &proto.Attestation{
 		Height:       a.Height,
-		Timestamp:    new(uint64),
-		AttestedData: []byte{1, 2, 3},
-		Signature:    []byte{4, 5, 6},
+		Timestamp:    timestamp,
+		AttestedData: a.AttestedData,
+		Signature:    a.Signature,
 	}
 }
 

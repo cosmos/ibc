@@ -29,6 +29,14 @@ packages:
     interfaces:
       Store:
       ChainClients:
+  github.com/cosmos/ibc/link/internal/service/attestor:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "attestors.go"
+      pkgname: "mocks"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      EVMClient:
   github.com/cosmos/ibc/link/internal/store:
     config:
       dir: "{{.InterfaceDir}}"

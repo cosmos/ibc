@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
@@ -47,8 +48,10 @@ type PacketAttestationRequest struct {
 
 // Attestation is a signed attestation over chain state or packet commitments.
 type Attestation struct {
-	Height uint64
-	// todo
+	Height       uint64
+	Timestamp    *time.Time
+	AttestedData []byte
+	Signature    []byte
 }
 
 // CommitmentType identifies the kind of packet commitment being attested.
@@ -66,6 +69,7 @@ const (
 var (
 	ErrNotFound       = errors.New("attestor not found")
 	ErrNoAttestations = errors.New("no attestations provided")
+	ErrNotFinalized   = errors.New("block is not finalized")
 )
 
 // NewFromConfig creates a new attestor service from the configuration.

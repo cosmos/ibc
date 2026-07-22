@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
@@ -95,8 +96,17 @@ func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 		return Attestation{}, errors.New("attestation is nil")
 	}
 
+	var timestamp *time.Time
+	if a.Timestamp != nil {
+		t := time.Unix(int64(*a.Timestamp), 0)
+		timestamp = &t
+	}
+
 	return Attestation{
-		Height: a.Height,
+		Height:       a.Height,
+		Timestamp:    timestamp,
+		AttestedData: a.AttestedData,
+		Signature:    a.Signature,
 	}, nil
 }
 
