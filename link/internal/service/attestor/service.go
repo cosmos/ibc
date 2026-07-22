@@ -79,6 +79,7 @@ var (
 	ErrNotFinalized       = errors.New("block is not finalized")
 	ErrInvalidInput       = errors.New("invalid input")
 	ErrCommitmentNotFound = errors.New("commitment not found")
+	ErrReceiptExists      = errors.New("receipt exists")
 )
 
 // NewFromConfig creates a new attestor service from the configuration.

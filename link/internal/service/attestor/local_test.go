@@ -147,6 +147,7 @@ func TestLocal(t *testing.T) {
 				finalityOffset:    101,
 				header:            v2.BlockHeader{Height: 100},
 				expectedHeightArg: v2.LatestBlock,
+				errContains:       "latest height 100 does not exceed finality offset 101",
 			},
 			{
 				name:              "rpcError",

@@ -58,6 +58,8 @@ func (h *AttestorHandler) LatestHeight(
 	switch {
 	case errors.Is(err, attestor.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
+	case errors.Is(err, attestor.ErrNotFinalized):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("LatestAttestableHeight", "error", err)
@@ -105,7 +107,7 @@ func (h *AttestorHandler) PacketAttestation(
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	case errors.Is(err, attestor.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, attestor.ErrNotFinalized):
+	case errors.Is(err, attestor.ErrNotFinalized), errors.Is(err, attestor.ErrReceiptExists):
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor

@@ -80,7 +80,12 @@ func (a *LocalAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	actualHeight = header.Height
 	offset := uint64(a.finalityOffset)
 	if offset >= actualHeight {
-		return 0, nil
+		return 0, errors.Wrapf(
+			ErrNotFinalized,
+			"latest height %d does not exceed finality offset %d",
+			actualHeight,
+			offset,
+		)
 	}
 
 	return actualHeight - offset, nil
@@ -230,8 +235,8 @@ func (a *LocalAttestor) packetCompact(
 	case CommitmentTypeReceipt:
 		if commitment != ([32]byte{}) {
 			return evm.PacketCompact{}, errors.Wrapf(
-				ErrInvalidInput,
-				"receipt exists for client %q sequence %d",
+				ErrReceiptExists,
+				"client %q sequence %d",
 				packet.DestClient,
 				packet.Sequence,
 			)
