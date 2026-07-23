@@ -26,14 +26,7 @@ const (
 type ProofGenerator interface {
 	// LatestProvableHeight resolves the highest height a subsequent StateProof
 	// and PacketProofs call sharing that height can currently succeed at,
-	// along with that height's counterparty-chain timestamp: the two proofs
-	// must agree on height for on-chain verification to succeed, so callers
-	// resolve it once and pass the same value to both. Callers filter their
-	// own batch down to what's provable at the returned height/timestamp
-	// (e.g. packets observed at or before this height, or timeouts at or
-	// before this timestamp) rather than passing in a requirement, since
-	// demanding a specific height/timestamp up front would fail the whole
-	// batch if even one item in it isn't provable yet.
+	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
 	// StateProof proves the light client's counterparty state at height.

@@ -7,11 +7,11 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 )
 
@@ -51,7 +51,7 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 		return nil, errors.Errorf("state attestation height %d does not match requested height %d", decodedHeight, height)
 	}
 
-	proof, err := encodeAttestationProof(AttestationProof{
+	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
 		AttestationData: result.AttestationData,
 		Signatures:      result.Signatures,
 	})
@@ -102,7 +102,7 @@ func (g *Generator) PacketProofs(
 		return nil, errors.Errorf("packet attestation returned %d packets, expected %d", len(decodedPackets), len(packets))
 	}
 
-	proof, err := encodeAttestationProof(AttestationProof{
+	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
 		AttestationData: result.AttestationData,
 		Signatures:      result.Signatures,
 	})

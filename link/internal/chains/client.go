@@ -17,6 +17,7 @@ import (
 type Client interface {
 	ChainID() string
 
+	// TxPacketEvents reads every packet event emitted by txHash.
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
 
 	// IsPacketReceived reports whether a packet receipt exists on the

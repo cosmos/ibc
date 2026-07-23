@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -71,6 +71,23 @@ func TestQueryQuorum(t *testing.T) {
 
 		_, err := queryStateQuorum(ctx, attestors, 2, 10)
 		require.ErrorContains(t, err, "quorum not met", "the second attestor's disagreeing claim must not count toward quorum")
+	})
+
+	t.Run("majorityQuorumMetDespiteFirstAttestorDisagreeing", func(t *testing.T) {
+		// a1 answers first (by configured order) with a stale/wrong claim; a2
+		// and a3 agree with each other and alone meet the threshold. Quorum
+		// must be reduced by grouping on value, not by anchoring to whichever
+		// response happens to come first.
+		attestors := []attestor.Attestor{
+			signedAttestor(t, "a1", []byte("stale claim")),
+			signedAttestor(t, "a2", data),
+			signedAttestor(t, "a3", data),
+		}
+
+		result, err := queryStateQuorum(ctx, attestors, 2, 10)
+		require.NoError(t, err)
+		require.Equal(t, data, result.AttestationData)
+		require.Len(t, result.Signatures, 2)
 	})
 
 	t.Run("queryErrorExcludedNotFatal", func(t *testing.T) {

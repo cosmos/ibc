@@ -1,7 +1,6 @@
 package attestation
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"sync"
@@ -10,9 +9,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 )
 
 // quorumResult the aggregated, quorum-verified attestation for one claim:
@@ -38,8 +37,6 @@ func queryStateQuorum(
 }
 
 // queryPacketQuorum aggregates a PacketAttestation claim across attestors.
-// packets are the abi-encoded IICS26RouterMsgs.Packet blobs the attestor
-// independently re-derives paths and commitments from.
 func queryPacketQuorum(
 	ctx context.Context,
 	attestors []attestor.Attestor,
@@ -62,7 +59,7 @@ func queryPacketQuorum(
 
 type attestationQuery func(context.Context, attestor.Attestor) (attestor.Attestation, error)
 
-// quorumResponse one attestor's contribution to a quorum, before reduction.
+// quorumResponse one attestor's contribution to a quorum.
 type quorumResponse struct {
 	name   string
 	signer common.Address
@@ -73,11 +70,8 @@ type quorumResponse struct {
 
 // queryQuorum fans query out to every attestor concurrently, keeps only
 // responses whose signature recovers over the domain-tagged digest, requires
-// byte-equality of attestationData across kept responses (an honest quorum
-// always attests to the same claim), and requires the number of distinct
-// signers to reach threshold. The on-chain light client is the final arbiter
-// of which addresses are trusted; this only dedupes by recovered signer so a
-// single key answering on behalf of two attestor entries cannot count twice.
+// byte-equality of attestationData across kept responses, and requires
+// the number of distinct signers to reach threshold.
 func queryQuorum(
 	ctx context.Context,
 	attestors []attestor.Attestor,
@@ -125,42 +119,42 @@ func queryOne(ctx context.Context, a attestor.Attestor, typeTag byte, query atte
 	return quorumResponse{name: a.Name(), signer: signer, data: data, sig: sig}
 }
 
+// reduceQuorum groups responses by their exact attestationData value
+// and returns the first value whose distinct signers reach threshold.
 func reduceQuorum(responses []quorumResponse, threshold int) (quorumResult, error) {
-	seenSigners := make(map[common.Address]struct{})
-
-	var (
-		attestationData []byte
-		signatures      [][]byte
-	)
+	buckets := make(map[string][]quorumResponse)
 
 	for _, resp := range responses {
 		if resp.err != nil {
 			continue
 		}
 
-		if attestationData == nil {
-			attestationData = resp.data
-		} else if !bytes.Equal(attestationData, resp.data) {
-			// disagreeing attestor: excluded from quorum, not fatal on its own
-			continue
-		}
-
-		if _, dup := seenSigners[resp.signer]; dup {
-			continue
-		}
-
-		seenSigners[resp.signer] = struct{}{}
-		signatures = append(signatures, resp.sig)
+		buckets[string(resp.data)] = append(buckets[string(resp.data)], resp)
 	}
 
-	if len(signatures) < threshold {
-		return quorumResult{}, errors.Errorf(
-			"quorum not met: got %d of %d required signatures from %d configured attestors (%s)",
-			len(signatures), threshold, len(responses), joinResponseErrors(responses),
-		)
+	for _, bucket := range buckets {
+		seenSigners := make(map[common.Address]struct{})
+
+		var signatures [][]byte
+
+		for _, resp := range bucket {
+			if _, dup := seenSigners[resp.signer]; dup {
+				continue
+			}
+
+			seenSigners[resp.signer] = struct{}{}
+			signatures = append(signatures, resp.sig)
+		}
+
+		if len(signatures) >= threshold {
+			return quorumResult{AttestationData: bucket[0].data, Signatures: signatures}, nil
+		}
 	}
 
-	return quorumResult{AttestationData: attestationData, Signatures: signatures}, nil
+	return quorumResult{}, errors.Errorf(
+		"quorum not met: no attestationData value reached %d required signatures from %d configured attestors (%s)",
+		threshold, len(responses), joinResponseErrors(responses),
+	)
 }
 
 // joinResponseErrors summarizes why each non-contributing attestor was
@@ -182,12 +176,7 @@ func joinResponseErrors(responses []quorumResponse) string {
 	return strings.Join(msgs, "; ")
 }
 
-// latestProvableHeight finds a height every attestor in the quorum has
-// observed, so a subsequent state/packet attestation query at that height
-// can succeed against all of them, then looks up that height's timestamp on
-// the counterparty chain directly (a plain historical query — the height is
-// already-observed and immutable, unlike querying the chain's live tip,
-// which could run ahead of a lagging-but-healthy attestor quorum). It fans
+// latestProvableHeight finds a height every attestor in the quorum has. It fans
 // LatestHeight out concurrently and takes the minimum among the attestors
 // that answered, requiring at least threshold of them to respond.
 func latestProvableHeight(

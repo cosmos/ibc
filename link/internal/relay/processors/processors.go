@@ -19,14 +19,12 @@ type TxStorage interface {
 	Transact(ctx context.Context, fn func(store.Repository) error) error
 }
 
-// ChainClients resolves chain clients by chain id. Batch processors use the
-// same resolved chains.Client both to read packet events out of tx receipts
-// and to wait for the chain before submitting.
+// ChainClients resolves chain clients by chain id.
 type ChainClients interface {
 	Get(chainID string) (chains.Client, bool)
 }
 
-// ProofGenerators resolves proof generators by (chainID, clientID).
+// ProofGenerators resolves proof generators by (chainIDclientID).
 type ProofGenerators interface {
 	Get(chainID, clientID string) (proofgen.ProofGenerator, bool)
 }

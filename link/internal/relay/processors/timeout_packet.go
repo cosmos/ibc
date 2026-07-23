@@ -3,10 +3,12 @@ package processors
 
 import (
 	"context"
+	"encoding/hex"
+	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
@@ -18,77 +20,101 @@ import (
 // of transfers, proving non-membership of the packet's receipt on the
 // destination chain via the source chain's client tracking it.
 type BatchTimeoutPacket struct {
-	chains          ChainClients
-	storage         TxStorage
-	proofGenerators ProofGenerators
-	txBuilders      TxBuilders
-	txManager       txmgr.TxManager
-	route           Route
+	sourceChainClient chains.Client
+	route             Route
+	proofGen          proofgen.ProofGenerator
+	txBuilder         txbuilder.TxBuilder
+	txManager         txmgr.TxManager
+	storage           TxStorage
 }
 
 func NewBatchTimeoutPacket(
 	chainClients ChainClients,
-	storage TxStorage,
 	proofGenerators ProofGenerators,
 	txBuilders TxBuilders,
+	storage TxStorage,
 	txManager txmgr.TxManager,
 	route Route,
-) BatchTimeoutPacket {
-	return BatchTimeoutPacket{
-		chains:          chainClients,
-		storage:         storage,
-		proofGenerators: proofGenerators,
-		txBuilders:      txBuilders,
-		txManager:       txManager,
-		route:           route,
-	}
-}
-
-func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	proofGen, ok := p.proofGenerators.Get(p.route.SourceChainID, p.route.SourceClientID)
+) (BatchTimeoutPacket, error) {
+	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
 	if !ok {
-		return nil, errors.Errorf(
-			"no proof generator configured for client %q on chain %q", p.route.SourceClientID, p.route.SourceChainID,
+		return BatchTimeoutPacket{}, errors.Errorf("no configured chain client for chain %s", route.SourceChainID)
+	}
+
+	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+	if !ok {
+		return BatchTimeoutPacket{}, errors.Errorf(
+			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
 		)
 	}
 
-	height, timestamp, err := proofGen.LatestProvableHeight(ctx)
+	txBuilder, ok := txBuilders.Get(route.SourceChainID)
+	if !ok {
+		return BatchTimeoutPacket{}, errors.Errorf("no tx builder configured for chain %s", route.SourceChainID)
+	}
+
+	return BatchTimeoutPacket{
+		sourceChainClient: sourceChainClient,
+		route:             route,
+		proofGen:          proofGen,
+		txBuilder:         txBuilder,
+		txManager:         txManager,
+		storage:           storage,
+	}, nil
+}
+
+func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
+	proofHeight, timestamp, err := p.proofGen.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
 
-	client, ok := p.chains.Get(p.route.SourceChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for chain %s", p.route.SourceChainID)
+	var events []v2.PacketEvent
+
+	for _, tr := range transfers {
+		txID, errDecode := hex.DecodeString(strings.TrimPrefix(tr.SourceTxHash, "0x"))
+		if errDecode != nil {
+			tr.ProcessingError = errors.Wrapf(errDecode, "decoding tx hash %q", tr.SourceTxHash)
+
+			continue
+		}
+
+		txEvents, errEvents := p.sourceChainClient.TxPacketEvents(ctx, txID)
+		if errEvents != nil {
+			tr.ProcessingError = errors.Wrapf(errEvents, "reading packet events for tx %s", tr.SourceTxHash)
+
+			continue
+		}
+
+		event, errEvent := findPacketEvent(txEvents, tr.PacketSequenceNumber, tr.PacketSourceClientID, proofHeight)
+		if errEvent != nil {
+			tr.ProcessingError = errors.Wrapf(errEvent, "tx %s", tr.SourceTxHash)
+
+			continue
+		}
+
+		if tr.PacketTimeoutTimestamp.After(timestamp) {
+			tr.ProcessingError = errors.Errorf(
+				"packet timeout %s is after the currently provable timestamp %s", tr.PacketTimeoutTimestamp, timestamp,
+			)
+
+			continue
+		}
+
+		events = append(events, event)
 	}
 
-	events := batchPacketEvents(ctx, client, transfers, txbuilder.KindTimeout, height)
-
-	events = filterProvableTimeouts(events, timestamp, transfers)
 	if len(events) == 0 {
 		return transfers, nil
 	}
 
-	txBuilder, ok := p.txBuilders.Get(p.route.SourceChainID)
-	if !ok {
-		return nil, errors.Errorf("no tx builder configured for chain %s", p.route.SourceChainID)
-	}
-
-	relayTx, err := buildRelayTx(
-		ctx, client, proofGen, txBuilder,
-		p.route.SourceClientID, proofgen.KindReceiptAbsence, txbuilder.KindTimeout,
-		height, events,
+	submission, err := relayPackets(
+		ctx, p.sourceChainClient, p.proofGen, p.txBuilder, p.txManager,
+		p.route.SourceClientID, txbuilder.KindTimeout,
+		proofHeight, events,
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	submission, err := p.txManager.Submit(ctx, v2.TxIntent{
-		To:   common.BytesToAddress(relayTx.To).Hex(),
-		Data: relayTx.Data,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "submitting relay tx")
 	}
 
 	tx := store.PacketTx{

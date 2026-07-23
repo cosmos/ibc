@@ -40,12 +40,21 @@ type packetAttestation struct {
 	Packets []PacketCompact `abi:"packets"`
 }
 
+// AttestationProof mirrors IAttestationMsgs.AttestationProof: the calldata
+// the light client decodes on updateClient, verifyMembership, and
+// verifyNonMembership calls.
+type AttestationProof struct {
+	AttestationData []byte   `abi:"attestationData"`
+	Signatures      [][]byte `abi:"signatures"`
+}
+
 const (
-	abiBytes   = "bytes"
-	abiBytes32 = "bytes32"
-	abiString  = "string"
-	abiTuple   = "tuple[]"
-	abiUint64  = "uint64"
+	abiBytes      = "bytes"
+	abiBytes32    = "bytes32"
+	abiBytesSlice = "bytes[]"
+	abiString     = "string"
+	abiTuple      = "tuple[]"
+	abiUint64     = "uint64"
 )
 
 var (
@@ -79,6 +88,13 @@ var (
 				{Name: "path", Type: abiBytes32},
 				{Name: "commitment", Type: abiBytes32},
 			}},
+		},
+	)}}
+
+	attestationProofArgs = abi.Arguments{{Type: mustNewTuple(
+		[]abi.ArgumentMarshaling{
+			{Name: "attestationData", Type: abiBytes},
+			{Name: "signatures", Type: abiBytesSlice},
 		},
 	)}}
 )
@@ -205,6 +221,19 @@ func DecodePacket(data []byte) (channeltypesv2.Packet, error) {
 		TimeoutTimestamp:  decoded.Packet.TimeoutTimestamp,
 		Payloads:          payloads,
 	}, nil
+}
+
+// EncodeAttestationProof encodes the Solidity AttestationProof struct: the
+// calldata the light client decodes on updateClient, verifyMembership, and
+// verifyNonMembership calls. Only the relayer assembles this, for on-chain
+// submission -- the attestor has no equivalent.
+func EncodeAttestationProof(p AttestationProof) ([]byte, error) {
+	data, err := attestationProofArgs.Pack(p)
+	if err != nil {
+		return nil, fmt.Errorf("encode attestation proof: %w", err)
+	}
+
+	return data, nil
 }
 
 func mustNewTuple(components []abi.ArgumentMarshaling) abi.Type {

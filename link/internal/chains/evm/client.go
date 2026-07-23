@@ -114,6 +114,9 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 
 	txHash := common.BytesToHash(rawTxHash)
 
+	// TODO: cache receipts by tx hash -- the batch processors call this once
+	// per transfer, so multiple packets sharing one send tx fetch the same
+	// receipt more than once.
 	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)

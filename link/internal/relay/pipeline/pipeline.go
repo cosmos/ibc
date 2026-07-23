@@ -128,6 +128,13 @@ func NewPipeline(
 	)
 
 	// deliver timeouts in batches on the source chain
+	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxManager, route,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
+	}
+
 	output = ConditionallyBatchProcess(
 		ctx,
 		logger,
@@ -135,12 +142,7 @@ func NewPipeline(
 		opts.TimeoutBatchSize,
 		opts.TimeoutBatchTimeout,
 		output,
-		NewBatchProcessorMW(
-			deps.Storage,
-			processors.NewBatchTimeoutPacket(
-				deps.Chains, deps.Storage, deps.ProofGenerators, deps.TxBuilders, srcTxManager, route,
-			),
-		),
+		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
 	)
 
 	// clear stuck or failed timeout txs so they are redelivered next run
@@ -148,6 +150,13 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxManager, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
+	batchRecvPacket, err := processors.NewBatchRecvPacket(
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, dstTxManager, route,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing batch recv packet processor")
+	}
+
 	output = ConditionallyBatchProcess(
 		ctx,
 		logger,
@@ -155,12 +164,7 @@ func NewPipeline(
 		opts.RecvBatchSize,
 		opts.RecvBatchTimeout,
 		output,
-		NewBatchProcessorMW(
-			deps.Storage,
-			processors.NewBatchRecvPacket(
-				deps.Chains, deps.Storage, deps.ProofGenerators, deps.TxBuilders, dstTxManager, route,
-			),
-		),
+		NewBatchProcessorMW(deps.Storage, batchRecvPacket),
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
@@ -190,6 +194,13 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
 	// deliver acks in batches on the source chain
+	batchAckPacket, err := processors.NewBatchAckPacket(
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxManager, route,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing batch ack packet processor")
+	}
+
 	output = ConditionallyBatchProcess(
 		ctx,
 		logger,
@@ -197,17 +208,7 @@ func NewPipeline(
 		opts.AckBatchSize,
 		opts.AckBatchTimeout,
 		output,
-		NewBatchProcessorMW(
-			deps.Storage,
-			processors.NewBatchAckPacket(
-				deps.Chains,
-				deps.Storage,
-				deps.ProofGenerators,
-				deps.TxBuilders,
-				srcTxManager,
-				route,
-			),
-		),
+		NewBatchProcessorMW(deps.Storage, batchAckPacket),
 	)
 
 	// clear stuck or failed ack txs so they are redelivered next run

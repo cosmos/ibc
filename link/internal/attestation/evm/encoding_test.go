@@ -226,3 +226,14 @@ func expectedPacketAttestation(height uint64, packets []PacketCompact) []byte {
 
 	return expected
 }
+
+func TestAttestationProofEncode(t *testing.T) {
+	proof := AttestationProof{
+		AttestationData: []byte{0x01, 0x02, 0x03},
+		Signatures:      [][]byte{make([]byte, 65), make([]byte, 65)},
+	}
+
+	encoded, err := EncodeAttestationProof(proof)
+	require.NoError(t, err)
+	require.NotEmpty(t, encoded)
+}
