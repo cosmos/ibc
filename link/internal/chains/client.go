@@ -14,7 +14,12 @@ import (
 
 // Client provides chain state queries.
 type Client interface {
+	ChainID() string
+
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
+
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+	GetCommitment(ctx context.Context, height uint64, pathHash [32]byte) ([32]byte, error)
 }
 
 var _ Client = (*evm.Client)(nil)

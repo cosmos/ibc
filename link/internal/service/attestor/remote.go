@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"connectrpc.com/connect"
+	"github.com/pkg/errors"
 
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
 )
@@ -41,12 +43,12 @@ func NewRemote(chainID, name, alias string, client proto.AttestationServiceClien
 	}
 }
 
-func (a *RemoteAttestor) LatestAttestableHeight(ctx context.Context) (uint64, error) {
-	req := &proto.LatestAttestableHeightRequest{
+func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
+	req := &proto.LatestHeightRequest{
 		Attestor: a.name,
 	}
 
-	res, err := a.client.LatestAttestableHeight(ctx, connect.NewRequest(req))
+	res, err := a.client.LatestHeight(ctx, connect.NewRequest(req))
 	if err != nil {
 		return 0, err
 	}
@@ -54,10 +56,90 @@ func (a *RemoteAttestor) LatestAttestableHeight(ctx context.Context) (uint64, er
 	return res.Msg.Height, nil
 }
 
+func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+	req := &proto.StateAttestationRequest{
+		Attestor: a.name,
+		Height:   height,
+	}
+
+	res, err := a.client.StateAttestation(ctx, connect.NewRequest(req))
+	if err != nil {
+		return Attestation{}, err
+	}
+
+	return attestationFromProto(res.Msg.Attestation)
+}
+
+func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
+	ct, err := CommitmentTypeToProto(req.CommitmentType)
+	if err != nil {
+		return Attestation{}, err
+	}
+
+	protoReq := &proto.PacketAttestationRequest{
+		Attestor:       a.name,
+		Packets:        req.Packets,
+		Height:         req.Height,
+		CommitmentType: ct,
+	}
+
+	res, err := a.client.PacketAttestation(ctx, connect.NewRequest(protoReq))
+	if err != nil {
+		return Attestation{}, err
+	}
+
+	return attestationFromProto(res.Msg.Attestation)
+}
+
 func (a *RemoteAttestor) Name() string    { return a.name }
 func (a *RemoteAttestor) Alias() string   { return a.alias }
 func (a *RemoteAttestor) ChainID() string { return a.chainID }
 func (a *RemoteAttestor) IsLocal() bool   { return false }
+
+func attestationFromProto(a *proto.Attestation) (Attestation, error) {
+	if a == nil {
+		return Attestation{}, errors.New("attestation is nil")
+	}
+
+	var timestamp *time.Time
+	if a.Timestamp != nil {
+		t := time.Unix(int64(*a.Timestamp), 0)
+		timestamp = &t
+	}
+
+	return Attestation{
+		Height:       a.Height,
+		Timestamp:    timestamp,
+		AttestedData: a.AttestedData,
+		Signature:    a.Signature,
+	}, nil
+}
+
+func CommitmentTypeToProto(ct CommitmentType) (proto.CommitmentType, error) {
+	switch ct {
+	case CommitmentTypePacket:
+		return proto.CommitmentType_COMMITMENT_TYPE_PACKET, nil
+	case CommitmentTypeAck:
+		return proto.CommitmentType_COMMITMENT_TYPE_ACK, nil
+	case CommitmentTypeReceipt:
+		return proto.CommitmentType_COMMITMENT_TYPE_RECEIPT, nil
+	default:
+		return 0, errors.Errorf("unsupported commitment type: %d", ct)
+	}
+}
+
+func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
+	switch ct {
+	case proto.CommitmentType_COMMITMENT_TYPE_PACKET:
+		return CommitmentTypePacket, nil
+	case proto.CommitmentType_COMMITMENT_TYPE_ACK:
+		return CommitmentTypeAck, nil
+	case proto.CommitmentType_COMMITMENT_TYPE_RECEIPT:
+		return CommitmentTypeReceipt, nil
+	default:
+		return CommitmentTypeInvalid, errors.Errorf("unsupported commitment type: %s", ct)
+	}
+}
 
 // https://connectrpc.com/docs/go/getting-started/#make-requests
 // todo: revisit these params

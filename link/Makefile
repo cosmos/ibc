@@ -25,7 +25,7 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
-codegen: codegen-sql codegen-proto codegen-mocks codegen-abi ## Generate code
+codegen: codegen-sql codegen-proto codegen-abi codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
 	cd internal/store && $(SQLC) generate
@@ -34,7 +34,7 @@ codegen-proto: ## Generate Go proto bindings
 	cd ../proto && $(BUF) generate
 
 codegen-mocks: ## Generate mocks for the code
-	go run github.com/vektra/mockery/v3@v3.7.1
+	go run github.com/vektra/mockery/v3@v3.7.1 --log-level ERROR
 
 # todo: replace the copied ABI files and this target with the contracts' own build
 # outputs and go-abigen bindings once they are migrated from solidity-ibc-eureka

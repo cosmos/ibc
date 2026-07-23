@@ -37,27 +37,27 @@ func (_m *MockAttestationServiceClient) EXPECT() *MockAttestationServiceClient_E
 	return &MockAttestationServiceClient_Expecter{mock: &_m.Mock}
 }
 
-// LatestAttestableHeight provides a mock function for the type MockAttestationServiceClient
-func (_mock *MockAttestationServiceClient) LatestAttestableHeight(context1 context.Context, request *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error) {
+// LatestHeight provides a mock function for the type MockAttestationServiceClient
+func (_mock *MockAttestationServiceClient) LatestHeight(context1 context.Context, request *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error) {
 	ret := _mock.Called(context1, request)
 
 	if len(ret) == 0 {
-		panic("no return value specified for LatestAttestableHeight")
+		panic("no return value specified for LatestHeight")
 	}
 
-	var r0 *connect.Response[LatestAttestableHeightResponse]
+	var r0 *connect.Response[LatestHeightResponse]
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error)); ok {
 		return returnFunc(context1, request)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[LatestAttestableHeightRequest]) *connect.Response[LatestAttestableHeightResponse]); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[LatestHeightRequest]) *connect.Response[LatestHeightResponse]); ok {
 		r0 = returnFunc(context1, request)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*connect.Response[LatestAttestableHeightResponse])
+			r0 = ret.Get(0).(*connect.Response[LatestHeightResponse])
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[LatestAttestableHeightRequest]) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[LatestHeightRequest]) error); ok {
 		r1 = returnFunc(context1, request)
 	} else {
 		r1 = ret.Error(1)
@@ -65,27 +65,27 @@ func (_mock *MockAttestationServiceClient) LatestAttestableHeight(context1 conte
 	return r0, r1
 }
 
-// MockAttestationServiceClient_LatestAttestableHeight_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LatestAttestableHeight'
-type MockAttestationServiceClient_LatestAttestableHeight_Call struct {
+// MockAttestationServiceClient_LatestHeight_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LatestHeight'
+type MockAttestationServiceClient_LatestHeight_Call struct {
 	*mock.Call
 }
 
-// LatestAttestableHeight is a helper method to define mock.On call
+// LatestHeight is a helper method to define mock.On call
 //   - context1 context.Context
-//   - request *connect.Request[LatestAttestableHeightRequest]
-func (_e *MockAttestationServiceClient_Expecter) LatestAttestableHeight(context1 any, request any) *MockAttestationServiceClient_LatestAttestableHeight_Call {
-	return &MockAttestationServiceClient_LatestAttestableHeight_Call{Call: _e.mock.On("LatestAttestableHeight", context1, request)}
+//   - request *connect.Request[LatestHeightRequest]
+func (_e *MockAttestationServiceClient_Expecter) LatestHeight(context1 any, request any) *MockAttestationServiceClient_LatestHeight_Call {
+	return &MockAttestationServiceClient_LatestHeight_Call{Call: _e.mock.On("LatestHeight", context1, request)}
 }
 
-func (_c *MockAttestationServiceClient_LatestAttestableHeight_Call) Run(run func(context1 context.Context, request *connect.Request[LatestAttestableHeightRequest])) *MockAttestationServiceClient_LatestAttestableHeight_Call {
+func (_c *MockAttestationServiceClient_LatestHeight_Call) Run(run func(context1 context.Context, request *connect.Request[LatestHeightRequest])) *MockAttestationServiceClient_LatestHeight_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *connect.Request[LatestAttestableHeightRequest]
+		var arg1 *connect.Request[LatestHeightRequest]
 		if args[1] != nil {
-			arg1 = args[1].(*connect.Request[LatestAttestableHeightRequest])
+			arg1 = args[1].(*connect.Request[LatestHeightRequest])
 		}
 		run(
 			arg0,
@@ -95,12 +95,148 @@ func (_c *MockAttestationServiceClient_LatestAttestableHeight_Call) Run(run func
 	return _c
 }
 
-func (_c *MockAttestationServiceClient_LatestAttestableHeight_Call) Return(response *connect.Response[LatestAttestableHeightResponse], err error) *MockAttestationServiceClient_LatestAttestableHeight_Call {
+func (_c *MockAttestationServiceClient_LatestHeight_Call) Return(response *connect.Response[LatestHeightResponse], err error) *MockAttestationServiceClient_LatestHeight_Call {
 	_c.Call.Return(response, err)
 	return _c
 }
 
-func (_c *MockAttestationServiceClient_LatestAttestableHeight_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[LatestAttestableHeightRequest]) (*connect.Response[LatestAttestableHeightResponse], error)) *MockAttestationServiceClient_LatestAttestableHeight_Call {
+func (_c *MockAttestationServiceClient_LatestHeight_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[LatestHeightRequest]) (*connect.Response[LatestHeightResponse], error)) *MockAttestationServiceClient_LatestHeight_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PacketAttestation provides a mock function for the type MockAttestationServiceClient
+func (_mock *MockAttestationServiceClient) PacketAttestation(context1 context.Context, request *connect.Request[PacketAttestationRequest]) (*connect.Response[PacketAttestationResponse], error) {
+	ret := _mock.Called(context1, request)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PacketAttestation")
+	}
+
+	var r0 *connect.Response[PacketAttestationResponse]
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[PacketAttestationRequest]) (*connect.Response[PacketAttestationResponse], error)); ok {
+		return returnFunc(context1, request)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[PacketAttestationRequest]) *connect.Response[PacketAttestationResponse]); ok {
+		r0 = returnFunc(context1, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*connect.Response[PacketAttestationResponse])
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[PacketAttestationRequest]) error); ok {
+		r1 = returnFunc(context1, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAttestationServiceClient_PacketAttestation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PacketAttestation'
+type MockAttestationServiceClient_PacketAttestation_Call struct {
+	*mock.Call
+}
+
+// PacketAttestation is a helper method to define mock.On call
+//   - context1 context.Context
+//   - request *connect.Request[PacketAttestationRequest]
+func (_e *MockAttestationServiceClient_Expecter) PacketAttestation(context1 any, request any) *MockAttestationServiceClient_PacketAttestation_Call {
+	return &MockAttestationServiceClient_PacketAttestation_Call{Call: _e.mock.On("PacketAttestation", context1, request)}
+}
+
+func (_c *MockAttestationServiceClient_PacketAttestation_Call) Run(run func(context1 context.Context, request *connect.Request[PacketAttestationRequest])) *MockAttestationServiceClient_PacketAttestation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *connect.Request[PacketAttestationRequest]
+		if args[1] != nil {
+			arg1 = args[1].(*connect.Request[PacketAttestationRequest])
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAttestationServiceClient_PacketAttestation_Call) Return(response *connect.Response[PacketAttestationResponse], err error) *MockAttestationServiceClient_PacketAttestation_Call {
+	_c.Call.Return(response, err)
+	return _c
+}
+
+func (_c *MockAttestationServiceClient_PacketAttestation_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[PacketAttestationRequest]) (*connect.Response[PacketAttestationResponse], error)) *MockAttestationServiceClient_PacketAttestation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StateAttestation provides a mock function for the type MockAttestationServiceClient
+func (_mock *MockAttestationServiceClient) StateAttestation(context1 context.Context, request *connect.Request[StateAttestationRequest]) (*connect.Response[StateAttestationResponse], error) {
+	ret := _mock.Called(context1, request)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StateAttestation")
+	}
+
+	var r0 *connect.Response[StateAttestationResponse]
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[StateAttestationRequest]) (*connect.Response[StateAttestationResponse], error)); ok {
+		return returnFunc(context1, request)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[StateAttestationRequest]) *connect.Response[StateAttestationResponse]); ok {
+		r0 = returnFunc(context1, request)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*connect.Response[StateAttestationResponse])
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[StateAttestationRequest]) error); ok {
+		r1 = returnFunc(context1, request)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAttestationServiceClient_StateAttestation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StateAttestation'
+type MockAttestationServiceClient_StateAttestation_Call struct {
+	*mock.Call
+}
+
+// StateAttestation is a helper method to define mock.On call
+//   - context1 context.Context
+//   - request *connect.Request[StateAttestationRequest]
+func (_e *MockAttestationServiceClient_Expecter) StateAttestation(context1 any, request any) *MockAttestationServiceClient_StateAttestation_Call {
+	return &MockAttestationServiceClient_StateAttestation_Call{Call: _e.mock.On("StateAttestation", context1, request)}
+}
+
+func (_c *MockAttestationServiceClient_StateAttestation_Call) Run(run func(context1 context.Context, request *connect.Request[StateAttestationRequest])) *MockAttestationServiceClient_StateAttestation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *connect.Request[StateAttestationRequest]
+		if args[1] != nil {
+			arg1 = args[1].(*connect.Request[StateAttestationRequest])
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAttestationServiceClient_StateAttestation_Call) Return(response *connect.Response[StateAttestationResponse], err error) *MockAttestationServiceClient_StateAttestation_Call {
+	_c.Call.Return(response, err)
+	return _c
+}
+
+func (_c *MockAttestationServiceClient_StateAttestation_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[StateAttestationRequest]) (*connect.Response[StateAttestationResponse], error)) *MockAttestationServiceClient_StateAttestation_Call {
 	_c.Call.Return(run)
 	return _c
 }

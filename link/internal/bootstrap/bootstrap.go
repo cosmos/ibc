@@ -75,7 +75,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	if len(cfg.Attestor.Attestations) > 0 {
 		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
 
-		attestorService, attestorHandler, err := buildAttestor(cfg, signers)
+		attestorService, attestorHandler, err := buildAttestor(cfg, clientSet, signers)
 		if err != nil {
 			return nil, err
 		}
@@ -92,13 +92,19 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
 
+	// Chain clients
+	clientSet, err := chains.NewClientSetFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	// Signers
 	signers, err := signerSet(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	attestorService, attestorHandler, err := buildAttestor(cfg, signers)
+	attestorService, attestorHandler, err := buildAttestor(cfg, clientSet, signers)
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +124,13 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}, nil
 }
 
-func buildAttestor(cfg config.Config, signers *signer.Set) (*attestor.Service, *server.AttestorHandler, error) {
+func buildAttestor(
+	cfg config.Config,
+	clients *chains.ClientSet,
+	signers *signer.Set,
+) (*attestor.Service, *server.AttestorHandler, error) {
 	// Services
-	attestorService, err := attestor.NewFromConfig(cfg, signers)
+	attestorService, err := attestor.NewFromConfig(cfg, clients, signers)
 	if err != nil {
 		return nil, nil, err
 	}

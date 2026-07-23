@@ -11,9 +11,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/chains"
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -63,7 +65,7 @@ func TestRelay(t *testing.T) {
 		ctx := context.Background()
 		st := NewMockStore(t)
 		repo := store.NewMockRepository(t)
-		client := chains.NewMockClient(t)
+		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients)
 
@@ -73,11 +75,11 @@ func TestRelay(t *testing.T) {
 				Height:    100,
 				BlockTime: blockTime,
 				Kind:      v2.KindSendPacket,
-				Packet: v2.Packet{
-					Sequence:         42,
-					SourceClient:     "base-0",
-					DestClient:       "ethereum-0",
-					TimeoutTimestamp: 1780000000,
+				Packet: channeltypesv2.Packet{
+					Sequence:          42,
+					SourceClient:      "base-0",
+					DestinationClient: "ethereum-0",
+					TimeoutTimestamp:  1780000000,
 				},
 			},
 			{
@@ -85,10 +87,10 @@ func TestRelay(t *testing.T) {
 				Height:    100,
 				BlockTime: blockTime,
 				Kind:      v2.KindSendPacket,
-				Packet: v2.Packet{
-					Sequence:     7,
-					SourceClient: "unknown-0",
-					DestClient:   "ethereum-0",
+				Packet: channeltypesv2.Packet{
+					Sequence:          7,
+					SourceClient:      "unknown-0",
+					DestinationClient: "ethereum-0",
 				},
 			},
 		}
@@ -159,7 +161,7 @@ func TestRelay(t *testing.T) {
 	t.Run("extractionError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		client := chains.NewMockClient(t)
+		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), NewMockStore(t), clients)
 
@@ -204,7 +206,7 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		client := chains.NewMockClient(t)
+		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients)
 
