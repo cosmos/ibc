@@ -2,11 +2,12 @@
 // github.com/vektra/mockery
 // template: testify
 
-package relayer
+package mocks
 
 import (
 	"connectrpc.com/connect"
 	"context"
+	"github.com/cosmos/ibc/link/internal/types/v2/relayer"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -38,26 +39,26 @@ func (_m *MockRelayerApiServiceClient) EXPECT() *MockRelayerApiServiceClient_Exp
 }
 
 // Relay provides a mock function for the type MockRelayerApiServiceClient
-func (_mock *MockRelayerApiServiceClient) Relay(context1 context.Context, request *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error) {
+func (_mock *MockRelayerApiServiceClient) Relay(context1 context.Context, request *connect.Request[relayer.RelayRequest]) (*connect.Response[relayer.RelayResponse], error) {
 	ret := _mock.Called(context1, request)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Relay")
 	}
 
-	var r0 *connect.Response[RelayResponse]
+	var r0 *connect.Response[relayer.RelayResponse]
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[relayer.RelayRequest]) (*connect.Response[relayer.RelayResponse], error)); ok {
 		return returnFunc(context1, request)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[RelayRequest]) *connect.Response[RelayResponse]); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[relayer.RelayRequest]) *connect.Response[relayer.RelayResponse]); ok {
 		r0 = returnFunc(context1, request)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*connect.Response[RelayResponse])
+			r0 = ret.Get(0).(*connect.Response[relayer.RelayResponse])
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[RelayRequest]) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[relayer.RelayRequest]) error); ok {
 		r1 = returnFunc(context1, request)
 	} else {
 		r1 = ret.Error(1)
@@ -72,20 +73,20 @@ type MockRelayerApiServiceClient_Relay_Call struct {
 
 // Relay is a helper method to define mock.On call
 //   - context1 context.Context
-//   - request *connect.Request[RelayRequest]
+//   - request *connect.Request[relayer.RelayRequest]
 func (_e *MockRelayerApiServiceClient_Expecter) Relay(context1 any, request any) *MockRelayerApiServiceClient_Relay_Call {
 	return &MockRelayerApiServiceClient_Relay_Call{Call: _e.mock.On("Relay", context1, request)}
 }
 
-func (_c *MockRelayerApiServiceClient_Relay_Call) Run(run func(context1 context.Context, request *connect.Request[RelayRequest])) *MockRelayerApiServiceClient_Relay_Call {
+func (_c *MockRelayerApiServiceClient_Relay_Call) Run(run func(context1 context.Context, request *connect.Request[relayer.RelayRequest])) *MockRelayerApiServiceClient_Relay_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *connect.Request[RelayRequest]
+		var arg1 *connect.Request[relayer.RelayRequest]
 		if args[1] != nil {
-			arg1 = args[1].(*connect.Request[RelayRequest])
+			arg1 = args[1].(*connect.Request[relayer.RelayRequest])
 		}
 		run(
 			arg0,
@@ -95,37 +96,37 @@ func (_c *MockRelayerApiServiceClient_Relay_Call) Run(run func(context1 context.
 	return _c
 }
 
-func (_c *MockRelayerApiServiceClient_Relay_Call) Return(response *connect.Response[RelayResponse], err error) *MockRelayerApiServiceClient_Relay_Call {
+func (_c *MockRelayerApiServiceClient_Relay_Call) Return(response *connect.Response[relayer.RelayResponse], err error) *MockRelayerApiServiceClient_Relay_Call {
 	_c.Call.Return(response, err)
 	return _c
 }
 
-func (_c *MockRelayerApiServiceClient_Relay_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)) *MockRelayerApiServiceClient_Relay_Call {
+func (_c *MockRelayerApiServiceClient_Relay_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[relayer.RelayRequest]) (*connect.Response[relayer.RelayResponse], error)) *MockRelayerApiServiceClient_Relay_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Status provides a mock function for the type MockRelayerApiServiceClient
-func (_mock *MockRelayerApiServiceClient) Status(context1 context.Context, request *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error) {
+func (_mock *MockRelayerApiServiceClient) Status(context1 context.Context, request *connect.Request[relayer.StatusRequest]) (*connect.Response[relayer.StatusResponse], error) {
 	ret := _mock.Called(context1, request)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Status")
 	}
 
-	var r0 *connect.Response[StatusResponse]
+	var r0 *connect.Response[relayer.StatusResponse]
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[relayer.StatusRequest]) (*connect.Response[relayer.StatusResponse], error)); ok {
 		return returnFunc(context1, request)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[StatusRequest]) *connect.Response[StatusResponse]); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *connect.Request[relayer.StatusRequest]) *connect.Response[relayer.StatusResponse]); ok {
 		r0 = returnFunc(context1, request)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*connect.Response[StatusResponse])
+			r0 = ret.Get(0).(*connect.Response[relayer.StatusResponse])
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[StatusRequest]) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *connect.Request[relayer.StatusRequest]) error); ok {
 		r1 = returnFunc(context1, request)
 	} else {
 		r1 = ret.Error(1)
@@ -140,20 +141,20 @@ type MockRelayerApiServiceClient_Status_Call struct {
 
 // Status is a helper method to define mock.On call
 //   - context1 context.Context
-//   - request *connect.Request[StatusRequest]
+//   - request *connect.Request[relayer.StatusRequest]
 func (_e *MockRelayerApiServiceClient_Expecter) Status(context1 any, request any) *MockRelayerApiServiceClient_Status_Call {
 	return &MockRelayerApiServiceClient_Status_Call{Call: _e.mock.On("Status", context1, request)}
 }
 
-func (_c *MockRelayerApiServiceClient_Status_Call) Run(run func(context1 context.Context, request *connect.Request[StatusRequest])) *MockRelayerApiServiceClient_Status_Call {
+func (_c *MockRelayerApiServiceClient_Status_Call) Run(run func(context1 context.Context, request *connect.Request[relayer.StatusRequest])) *MockRelayerApiServiceClient_Status_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *connect.Request[StatusRequest]
+		var arg1 *connect.Request[relayer.StatusRequest]
 		if args[1] != nil {
-			arg1 = args[1].(*connect.Request[StatusRequest])
+			arg1 = args[1].(*connect.Request[relayer.StatusRequest])
 		}
 		run(
 			arg0,
@@ -163,12 +164,12 @@ func (_c *MockRelayerApiServiceClient_Status_Call) Run(run func(context1 context
 	return _c
 }
 
-func (_c *MockRelayerApiServiceClient_Status_Call) Return(response *connect.Response[StatusResponse], err error) *MockRelayerApiServiceClient_Status_Call {
+func (_c *MockRelayerApiServiceClient_Status_Call) Return(response *connect.Response[relayer.StatusResponse], err error) *MockRelayerApiServiceClient_Status_Call {
 	_c.Call.Return(response, err)
 	return _c
 }
 
-func (_c *MockRelayerApiServiceClient_Status_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)) *MockRelayerApiServiceClient_Status_Call {
+func (_c *MockRelayerApiServiceClient_Status_Call) RunAndReturn(run func(context1 context.Context, request *connect.Request[relayer.StatusRequest]) (*connect.Response[relayer.StatusResponse], error)) *MockRelayerApiServiceClient_Status_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -23,10 +24,10 @@ const (
 	toAddress  = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 )
 
-func newTestTxManager(t *testing.T, opts ChainOptions) (*TxManager, *MockETHClient, signer.Signer) {
+func newTestTxManager(t *testing.T, opts ChainOptions) (*TxManager, *mocks.MockTxMgrETHClient, signer.Signer) {
 	t.Helper()
 
-	eth := NewMockETHClient(t)
+	eth := mocks.NewMockTxMgrETHClient(t)
 
 	chainSigner, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)

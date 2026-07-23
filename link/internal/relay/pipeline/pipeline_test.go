@@ -39,9 +39,9 @@ type pipelineEnv struct {
 	store        *store.SqliteDB
 	srcClient    *mocks.MockClient
 	dstClient    *mocks.MockClient
-	proofAPI     *proto.MockProofApiServiceClient
-	srcTxManager *txmgr.MockTxManager
-	dstTxManager *txmgr.MockTxManager
+	proofAPI     *mocks.MockProofApiServiceClient
+	srcTxManager *mocks.MockTxManager
+	dstTxManager *mocks.MockTxManager
 }
 
 type staticChains map[string]chains.Client
@@ -65,9 +65,9 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		store:        db,
 		srcClient:    mocks.NewMockClient(t),
 		dstClient:    mocks.NewMockClient(t),
-		proofAPI:     proto.NewMockProofApiServiceClient(t),
-		srcTxManager: txmgr.NewMockTxManager(t),
-		dstTxManager: txmgr.NewMockTxManager(t),
+		proofAPI:     mocks.NewMockProofApiServiceClient(t),
+		srcTxManager: mocks.NewMockTxManager(t),
+		dstTxManager: mocks.NewMockTxManager(t),
 	}
 
 	deps := Deps{

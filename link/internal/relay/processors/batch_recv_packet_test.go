@@ -13,7 +13,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
-	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -60,7 +59,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	client := mocks.NewMockClient(t)
 	client.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 
-	proofAPI := proto.NewMockProofApiServiceClient(t)
+	proofAPI := mocks.NewMockProofApiServiceClient(t)
 
 	var captured *proto.RelayByTxRequest
 	proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).
@@ -70,7 +69,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			return connect.NewResponse(&proto.RelayByTxResponse{Tx: []byte{0x01}, Address: "0xrouter"}), nil
 		})
 
-	txManager := txmgr.NewMockTxManager(t)
+	txManager := mocks.NewMockTxManager(t)
 	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),

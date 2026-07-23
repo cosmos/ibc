@@ -14,7 +14,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
 
 func testTransfer(t *testing.T) *processors.Transfer {
@@ -59,10 +58,10 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.SourceChainID:      mocks.NewMockClient(t),
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
-		ProofAPI: proto.NewMockProofApiServiceClient(t),
+		ProofAPI: mocks.NewMockProofApiServiceClient(t),
 		TxManagers: staticTxManagers{
-			testRoute.SourceChainID:      txmgr.NewMockTxManager(t),
-			testRoute.DestinationChainID: txmgr.NewMockTxManager(t),
+			testRoute.SourceChainID:      mocks.NewMockTxManager(t),
+			testRoute.DestinationChainID: mocks.NewMockTxManager(t),
 		},
 	}
 

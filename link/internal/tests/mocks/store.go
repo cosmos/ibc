@@ -2,10 +2,11 @@
 // github.com/vektra/mockery
 // template: testify
 
-package store
+package mocks
 
 import (
 	"context"
+	"github.com/cosmos/ibc/link/internal/store"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -37,7 +38,7 @@ func (_m *MockRepository) EXPECT() *MockRepository_Expecter {
 }
 
 // ClearPacketAckTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) ClearPacketAckTx(ctx context.Context, key PacketKey) error {
+func (_mock *MockRepository) ClearPacketAckTx(ctx context.Context, key store.PacketKey) error {
 	ret := _mock.Called(ctx, key)
 
 	if len(ret) == 0 {
@@ -45,7 +46,7 @@ func (_mock *MockRepository) ClearPacketAckTx(ctx context.Context, key PacketKey
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey) error); ok {
 		r0 = returnFunc(ctx, key)
 	} else {
 		r0 = ret.Error(0)
@@ -60,20 +61,20 @@ type MockRepository_ClearPacketAckTx_Call struct {
 
 // ClearPacketAckTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
+//   - key store.PacketKey
 func (_e *MockRepository_Expecter) ClearPacketAckTx(ctx any, key any) *MockRepository_ClearPacketAckTx_Call {
 	return &MockRepository_ClearPacketAckTx_Call{Call: _e.mock.On("ClearPacketAckTx", ctx, key)}
 }
 
-func (_c *MockRepository_ClearPacketAckTx_Call) Run(run func(ctx context.Context, key PacketKey)) *MockRepository_ClearPacketAckTx_Call {
+func (_c *MockRepository_ClearPacketAckTx_Call) Run(run func(ctx context.Context, key store.PacketKey)) *MockRepository_ClearPacketAckTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
 		run(
 			arg0,
@@ -88,13 +89,13 @@ func (_c *MockRepository_ClearPacketAckTx_Call) Return(err error) *MockRepositor
 	return _c
 }
 
-func (_c *MockRepository_ClearPacketAckTx_Call) RunAndReturn(run func(ctx context.Context, key PacketKey) error) *MockRepository_ClearPacketAckTx_Call {
+func (_c *MockRepository_ClearPacketAckTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey) error) *MockRepository_ClearPacketAckTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ClearPacketRecvTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) ClearPacketRecvTx(ctx context.Context, key PacketKey) error {
+func (_mock *MockRepository) ClearPacketRecvTx(ctx context.Context, key store.PacketKey) error {
 	ret := _mock.Called(ctx, key)
 
 	if len(ret) == 0 {
@@ -102,7 +103,7 @@ func (_mock *MockRepository) ClearPacketRecvTx(ctx context.Context, key PacketKe
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey) error); ok {
 		r0 = returnFunc(ctx, key)
 	} else {
 		r0 = ret.Error(0)
@@ -117,20 +118,20 @@ type MockRepository_ClearPacketRecvTx_Call struct {
 
 // ClearPacketRecvTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
+//   - key store.PacketKey
 func (_e *MockRepository_Expecter) ClearPacketRecvTx(ctx any, key any) *MockRepository_ClearPacketRecvTx_Call {
 	return &MockRepository_ClearPacketRecvTx_Call{Call: _e.mock.On("ClearPacketRecvTx", ctx, key)}
 }
 
-func (_c *MockRepository_ClearPacketRecvTx_Call) Run(run func(ctx context.Context, key PacketKey)) *MockRepository_ClearPacketRecvTx_Call {
+func (_c *MockRepository_ClearPacketRecvTx_Call) Run(run func(ctx context.Context, key store.PacketKey)) *MockRepository_ClearPacketRecvTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
 		run(
 			arg0,
@@ -145,13 +146,13 @@ func (_c *MockRepository_ClearPacketRecvTx_Call) Return(err error) *MockReposito
 	return _c
 }
 
-func (_c *MockRepository_ClearPacketRecvTx_Call) RunAndReturn(run func(ctx context.Context, key PacketKey) error) *MockRepository_ClearPacketRecvTx_Call {
+func (_c *MockRepository_ClearPacketRecvTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey) error) *MockRepository_ClearPacketRecvTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ClearPacketTimeoutTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) error {
+func (_mock *MockRepository) ClearPacketTimeoutTx(ctx context.Context, key store.PacketKey) error {
 	ret := _mock.Called(ctx, key)
 
 	if len(ret) == 0 {
@@ -159,7 +160,7 @@ func (_mock *MockRepository) ClearPacketTimeoutTx(ctx context.Context, key Packe
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey) error); ok {
 		r0 = returnFunc(ctx, key)
 	} else {
 		r0 = ret.Error(0)
@@ -174,20 +175,20 @@ type MockRepository_ClearPacketTimeoutTx_Call struct {
 
 // ClearPacketTimeoutTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
+//   - key store.PacketKey
 func (_e *MockRepository_Expecter) ClearPacketTimeoutTx(ctx any, key any) *MockRepository_ClearPacketTimeoutTx_Call {
 	return &MockRepository_ClearPacketTimeoutTx_Call{Call: _e.mock.On("ClearPacketTimeoutTx", ctx, key)}
 }
 
-func (_c *MockRepository_ClearPacketTimeoutTx_Call) Run(run func(ctx context.Context, key PacketKey)) *MockRepository_ClearPacketTimeoutTx_Call {
+func (_c *MockRepository_ClearPacketTimeoutTx_Call) Run(run func(ctx context.Context, key store.PacketKey)) *MockRepository_ClearPacketTimeoutTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
 		run(
 			arg0,
@@ -202,13 +203,13 @@ func (_c *MockRepository_ClearPacketTimeoutTx_Call) Return(err error) *MockRepos
 	return _c
 }
 
-func (_c *MockRepository_ClearPacketTimeoutTx_Call) RunAndReturn(run func(ctx context.Context, key PacketKey) error) *MockRepository_ClearPacketTimeoutTx_Call {
+func (_c *MockRepository_ClearPacketTimeoutTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey) error) *MockRepository_ClearPacketTimeoutTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // CreatePacket provides a mock function for the type MockRepository
-func (_mock *MockRepository) CreatePacket(ctx context.Context, input CreatePacket) error {
+func (_mock *MockRepository) CreatePacket(ctx context.Context, input store.CreatePacket) error {
 	ret := _mock.Called(ctx, input)
 
 	if len(ret) == 0 {
@@ -216,7 +217,7 @@ func (_mock *MockRepository) CreatePacket(ctx context.Context, input CreatePacke
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, CreatePacket) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.CreatePacket) error); ok {
 		r0 = returnFunc(ctx, input)
 	} else {
 		r0 = ret.Error(0)
@@ -231,20 +232,20 @@ type MockRepository_CreatePacket_Call struct {
 
 // CreatePacket is a helper method to define mock.On call
 //   - ctx context.Context
-//   - input CreatePacket
+//   - input store.CreatePacket
 func (_e *MockRepository_Expecter) CreatePacket(ctx any, input any) *MockRepository_CreatePacket_Call {
 	return &MockRepository_CreatePacket_Call{Call: _e.mock.On("CreatePacket", ctx, input)}
 }
 
-func (_c *MockRepository_CreatePacket_Call) Run(run func(ctx context.Context, input CreatePacket)) *MockRepository_CreatePacket_Call {
+func (_c *MockRepository_CreatePacket_Call) Run(run func(ctx context.Context, input store.CreatePacket)) *MockRepository_CreatePacket_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 CreatePacket
+		var arg1 store.CreatePacket
 		if args[1] != nil {
-			arg1 = args[1].(CreatePacket)
+			arg1 = args[1].(store.CreatePacket)
 		}
 		run(
 			arg0,
@@ -259,7 +260,7 @@ func (_c *MockRepository_CreatePacket_Call) Return(err error) *MockRepository_Cr
 	return _c
 }
 
-func (_c *MockRepository_CreatePacket_Call) RunAndReturn(run func(ctx context.Context, input CreatePacket) error) *MockRepository_CreatePacket_Call {
+func (_c *MockRepository_CreatePacket_Call) RunAndReturn(run func(ctx context.Context, input store.CreatePacket) error) *MockRepository_CreatePacket_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -328,23 +329,23 @@ func (_c *MockRepository_CreateRelayRequest_Call) RunAndReturn(run func(ctx cont
 }
 
 // GetRelayRequest provides a mock function for the type MockRepository
-func (_mock *MockRepository) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
+func (_mock *MockRepository) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error) {
 	ret := _mock.Called(ctx, chainID, txHash)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetRelayRequest")
 	}
 
-	var r0 *RelayRequest
+	var r0 *store.RelayRequest
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*RelayRequest, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*store.RelayRequest, error)); ok {
 		return returnFunc(ctx, chainID, txHash)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *RelayRequest); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *store.RelayRequest); ok {
 		r0 = returnFunc(ctx, chainID, txHash)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*RelayRequest)
+			r0 = ret.Get(0).(*store.RelayRequest)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
@@ -391,34 +392,34 @@ func (_c *MockRepository_GetRelayRequest_Call) Run(run func(ctx context.Context,
 	return _c
 }
 
-func (_c *MockRepository_GetRelayRequest_Call) Return(relayRequest *RelayRequest, err error) *MockRepository_GetRelayRequest_Call {
+func (_c *MockRepository_GetRelayRequest_Call) Return(relayRequest *store.RelayRequest, err error) *MockRepository_GetRelayRequest_Call {
 	_c.Call.Return(relayRequest, err)
 	return _c
 }
 
-func (_c *MockRepository_GetRelayRequest_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) (*RelayRequest, error)) *MockRepository_GetRelayRequest_Call {
+func (_c *MockRepository_GetRelayRequest_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)) *MockRepository_GetRelayRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ListPacketsBySourceTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error) {
+func (_mock *MockRepository) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error) {
 	ret := _mock.Called(ctx, chainID, txHash)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListPacketsBySourceTx")
 	}
 
-	var r0 []Packet
+	var r0 []store.Packet
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]Packet, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]store.Packet, error)); ok {
 		return returnFunc(ctx, chainID, txHash)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []Packet); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []store.Packet); ok {
 		r0 = returnFunc(ctx, chainID, txHash)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]Packet)
+			r0 = ret.Get(0).([]store.Packet)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
@@ -465,34 +466,34 @@ func (_c *MockRepository_ListPacketsBySourceTx_Call) Run(run func(ctx context.Co
 	return _c
 }
 
-func (_c *MockRepository_ListPacketsBySourceTx_Call) Return(packets []Packet, err error) *MockRepository_ListPacketsBySourceTx_Call {
+func (_c *MockRepository_ListPacketsBySourceTx_Call) Return(packets []store.Packet, err error) *MockRepository_ListPacketsBySourceTx_Call {
 	_c.Call.Return(packets, err)
 	return _c
 }
 
-func (_c *MockRepository_ListPacketsBySourceTx_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) ([]Packet, error)) *MockRepository_ListPacketsBySourceTx_Call {
+func (_c *MockRepository_ListPacketsBySourceTx_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)) *MockRepository_ListPacketsBySourceTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ListUnfinishedPackets provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListUnfinishedPackets(ctx context.Context) ([]Packet, error) {
+func (_mock *MockRepository) ListUnfinishedPackets(ctx context.Context) ([]store.Packet, error) {
 	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListUnfinishedPackets")
 	}
 
-	var r0 []Packet
+	var r0 []store.Packet
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]Packet, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]store.Packet, error)); ok {
 		return returnFunc(ctx)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) []Packet); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []store.Packet); ok {
 		r0 = returnFunc(ctx)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]Packet)
+			r0 = ret.Get(0).([]store.Packet)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
@@ -527,18 +528,18 @@ func (_c *MockRepository_ListUnfinishedPackets_Call) Run(run func(ctx context.Co
 	return _c
 }
 
-func (_c *MockRepository_ListUnfinishedPackets_Call) Return(packets []Packet, err error) *MockRepository_ListUnfinishedPackets_Call {
+func (_c *MockRepository_ListUnfinishedPackets_Call) Return(packets []store.Packet, err error) *MockRepository_ListUnfinishedPackets_Call {
 	_c.Call.Return(packets, err)
 	return _c
 }
 
-func (_c *MockRepository_ListUnfinishedPackets_Call) RunAndReturn(run func(ctx context.Context) ([]Packet, error)) *MockRepository_ListUnfinishedPackets_Call {
+func (_c *MockRepository_ListUnfinishedPackets_Call) RunAndReturn(run func(ctx context.Context) ([]store.Packet, error)) *MockRepository_ListUnfinishedPackets_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdatePacketAckTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) UpdatePacketAckTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+func (_mock *MockRepository) UpdatePacketAckTx(ctx context.Context, key store.PacketKey, tx store.PacketTx) error {
 	ret := _mock.Called(ctx, key, tx)
 
 	if len(ret) == 0 {
@@ -546,7 +547,7 @@ func (_mock *MockRepository) UpdatePacketAckTx(ctx context.Context, key PacketKe
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey, PacketTx) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey, store.PacketTx) error); ok {
 		r0 = returnFunc(ctx, key, tx)
 	} else {
 		r0 = ret.Error(0)
@@ -561,25 +562,25 @@ type MockRepository_UpdatePacketAckTx_Call struct {
 
 // UpdatePacketAckTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
-//   - tx PacketTx
+//   - key store.PacketKey
+//   - tx store.PacketTx
 func (_e *MockRepository_Expecter) UpdatePacketAckTx(ctx any, key any, tx any) *MockRepository_UpdatePacketAckTx_Call {
 	return &MockRepository_UpdatePacketAckTx_Call{Call: _e.mock.On("UpdatePacketAckTx", ctx, key, tx)}
 }
 
-func (_c *MockRepository_UpdatePacketAckTx_Call) Run(run func(ctx context.Context, key PacketKey, tx PacketTx)) *MockRepository_UpdatePacketAckTx_Call {
+func (_c *MockRepository_UpdatePacketAckTx_Call) Run(run func(ctx context.Context, key store.PacketKey, tx store.PacketTx)) *MockRepository_UpdatePacketAckTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
-		var arg2 PacketTx
+		var arg2 store.PacketTx
 		if args[2] != nil {
-			arg2 = args[2].(PacketTx)
+			arg2 = args[2].(store.PacketTx)
 		}
 		run(
 			arg0,
@@ -595,13 +596,13 @@ func (_c *MockRepository_UpdatePacketAckTx_Call) Return(err error) *MockReposito
 	return _c
 }
 
-func (_c *MockRepository_UpdatePacketAckTx_Call) RunAndReturn(run func(ctx context.Context, key PacketKey, tx PacketTx) error) *MockRepository_UpdatePacketAckTx_Call {
+func (_c *MockRepository_UpdatePacketAckTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey, tx store.PacketTx) error) *MockRepository_UpdatePacketAckTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdatePacketRecvTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) UpdatePacketRecvTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+func (_mock *MockRepository) UpdatePacketRecvTx(ctx context.Context, key store.PacketKey, tx store.PacketTx) error {
 	ret := _mock.Called(ctx, key, tx)
 
 	if len(ret) == 0 {
@@ -609,7 +610,7 @@ func (_mock *MockRepository) UpdatePacketRecvTx(ctx context.Context, key PacketK
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey, PacketTx) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey, store.PacketTx) error); ok {
 		r0 = returnFunc(ctx, key, tx)
 	} else {
 		r0 = ret.Error(0)
@@ -624,25 +625,25 @@ type MockRepository_UpdatePacketRecvTx_Call struct {
 
 // UpdatePacketRecvTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
-//   - tx PacketTx
+//   - key store.PacketKey
+//   - tx store.PacketTx
 func (_e *MockRepository_Expecter) UpdatePacketRecvTx(ctx any, key any, tx any) *MockRepository_UpdatePacketRecvTx_Call {
 	return &MockRepository_UpdatePacketRecvTx_Call{Call: _e.mock.On("UpdatePacketRecvTx", ctx, key, tx)}
 }
 
-func (_c *MockRepository_UpdatePacketRecvTx_Call) Run(run func(ctx context.Context, key PacketKey, tx PacketTx)) *MockRepository_UpdatePacketRecvTx_Call {
+func (_c *MockRepository_UpdatePacketRecvTx_Call) Run(run func(ctx context.Context, key store.PacketKey, tx store.PacketTx)) *MockRepository_UpdatePacketRecvTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
-		var arg2 PacketTx
+		var arg2 store.PacketTx
 		if args[2] != nil {
-			arg2 = args[2].(PacketTx)
+			arg2 = args[2].(store.PacketTx)
 		}
 		run(
 			arg0,
@@ -658,13 +659,13 @@ func (_c *MockRepository_UpdatePacketRecvTx_Call) Return(err error) *MockReposit
 	return _c
 }
 
-func (_c *MockRepository_UpdatePacketRecvTx_Call) RunAndReturn(run func(ctx context.Context, key PacketKey, tx PacketTx) error) *MockRepository_UpdatePacketRecvTx_Call {
+func (_c *MockRepository_UpdatePacketRecvTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey, tx store.PacketTx) error) *MockRepository_UpdatePacketRecvTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdatePacketStatus provides a mock function for the type MockRepository
-func (_mock *MockRepository) UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error {
+func (_mock *MockRepository) UpdatePacketStatus(ctx context.Context, key store.PacketKey, status store.RelayStatus) error {
 	ret := _mock.Called(ctx, key, status)
 
 	if len(ret) == 0 {
@@ -672,7 +673,7 @@ func (_mock *MockRepository) UpdatePacketStatus(ctx context.Context, key PacketK
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey, RelayStatus) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey, store.RelayStatus) error); ok {
 		r0 = returnFunc(ctx, key, status)
 	} else {
 		r0 = ret.Error(0)
@@ -687,25 +688,25 @@ type MockRepository_UpdatePacketStatus_Call struct {
 
 // UpdatePacketStatus is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
-//   - status RelayStatus
+//   - key store.PacketKey
+//   - status store.RelayStatus
 func (_e *MockRepository_Expecter) UpdatePacketStatus(ctx any, key any, status any) *MockRepository_UpdatePacketStatus_Call {
 	return &MockRepository_UpdatePacketStatus_Call{Call: _e.mock.On("UpdatePacketStatus", ctx, key, status)}
 }
 
-func (_c *MockRepository_UpdatePacketStatus_Call) Run(run func(ctx context.Context, key PacketKey, status RelayStatus)) *MockRepository_UpdatePacketStatus_Call {
+func (_c *MockRepository_UpdatePacketStatus_Call) Run(run func(ctx context.Context, key store.PacketKey, status store.RelayStatus)) *MockRepository_UpdatePacketStatus_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
-		var arg2 RelayStatus
+		var arg2 store.RelayStatus
 		if args[2] != nil {
-			arg2 = args[2].(RelayStatus)
+			arg2 = args[2].(store.RelayStatus)
 		}
 		run(
 			arg0,
@@ -721,13 +722,13 @@ func (_c *MockRepository_UpdatePacketStatus_Call) Return(err error) *MockReposit
 	return _c
 }
 
-func (_c *MockRepository_UpdatePacketStatus_Call) RunAndReturn(run func(ctx context.Context, key PacketKey, status RelayStatus) error) *MockRepository_UpdatePacketStatus_Call {
+func (_c *MockRepository_UpdatePacketStatus_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey, status store.RelayStatus) error) *MockRepository_UpdatePacketStatus_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdatePacketTimeoutTx provides a mock function for the type MockRepository
-func (_mock *MockRepository) UpdatePacketTimeoutTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+func (_mock *MockRepository) UpdatePacketTimeoutTx(ctx context.Context, key store.PacketKey, tx store.PacketTx) error {
 	ret := _mock.Called(ctx, key, tx)
 
 	if len(ret) == 0 {
@@ -735,7 +736,7 @@ func (_mock *MockRepository) UpdatePacketTimeoutTx(ctx context.Context, key Pack
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey, PacketTx) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey, store.PacketTx) error); ok {
 		r0 = returnFunc(ctx, key, tx)
 	} else {
 		r0 = ret.Error(0)
@@ -750,25 +751,25 @@ type MockRepository_UpdatePacketTimeoutTx_Call struct {
 
 // UpdatePacketTimeoutTx is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
-//   - tx PacketTx
+//   - key store.PacketKey
+//   - tx store.PacketTx
 func (_e *MockRepository_Expecter) UpdatePacketTimeoutTx(ctx any, key any, tx any) *MockRepository_UpdatePacketTimeoutTx_Call {
 	return &MockRepository_UpdatePacketTimeoutTx_Call{Call: _e.mock.On("UpdatePacketTimeoutTx", ctx, key, tx)}
 }
 
-func (_c *MockRepository_UpdatePacketTimeoutTx_Call) Run(run func(ctx context.Context, key PacketKey, tx PacketTx)) *MockRepository_UpdatePacketTimeoutTx_Call {
+func (_c *MockRepository_UpdatePacketTimeoutTx_Call) Run(run func(ctx context.Context, key store.PacketKey, tx store.PacketTx)) *MockRepository_UpdatePacketTimeoutTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
-		var arg2 PacketTx
+		var arg2 store.PacketTx
 		if args[2] != nil {
-			arg2 = args[2].(PacketTx)
+			arg2 = args[2].(store.PacketTx)
 		}
 		run(
 			arg0,
@@ -784,13 +785,13 @@ func (_c *MockRepository_UpdatePacketTimeoutTx_Call) Return(err error) *MockRepo
 	return _c
 }
 
-func (_c *MockRepository_UpdatePacketTimeoutTx_Call) RunAndReturn(run func(ctx context.Context, key PacketKey, tx PacketTx) error) *MockRepository_UpdatePacketTimeoutTx_Call {
+func (_c *MockRepository_UpdatePacketTimeoutTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey, tx store.PacketTx) error) *MockRepository_UpdatePacketTimeoutTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdatePacketWriteAck provides a mock function for the type MockRepository
-func (_mock *MockRepository) UpdatePacketWriteAck(ctx context.Context, key PacketKey, ack WriteAck) error {
+func (_mock *MockRepository) UpdatePacketWriteAck(ctx context.Context, key store.PacketKey, ack store.WriteAck) error {
 	ret := _mock.Called(ctx, key, ack)
 
 	if len(ret) == 0 {
@@ -798,7 +799,7 @@ func (_mock *MockRepository) UpdatePacketWriteAck(ctx context.Context, key Packe
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketKey, WriteAck) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketKey, store.WriteAck) error); ok {
 		r0 = returnFunc(ctx, key, ack)
 	} else {
 		r0 = ret.Error(0)
@@ -813,25 +814,25 @@ type MockRepository_UpdatePacketWriteAck_Call struct {
 
 // UpdatePacketWriteAck is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key PacketKey
-//   - ack WriteAck
+//   - key store.PacketKey
+//   - ack store.WriteAck
 func (_e *MockRepository_Expecter) UpdatePacketWriteAck(ctx any, key any, ack any) *MockRepository_UpdatePacketWriteAck_Call {
 	return &MockRepository_UpdatePacketWriteAck_Call{Call: _e.mock.On("UpdatePacketWriteAck", ctx, key, ack)}
 }
 
-func (_c *MockRepository_UpdatePacketWriteAck_Call) Run(run func(ctx context.Context, key PacketKey, ack WriteAck)) *MockRepository_UpdatePacketWriteAck_Call {
+func (_c *MockRepository_UpdatePacketWriteAck_Call) Run(run func(ctx context.Context, key store.PacketKey, ack store.WriteAck)) *MockRepository_UpdatePacketWriteAck_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketKey
+		var arg1 store.PacketKey
 		if args[1] != nil {
-			arg1 = args[1].(PacketKey)
+			arg1 = args[1].(store.PacketKey)
 		}
-		var arg2 WriteAck
+		var arg2 store.WriteAck
 		if args[2] != nil {
-			arg2 = args[2].(WriteAck)
+			arg2 = args[2].(store.WriteAck)
 		}
 		run(
 			arg0,
@@ -847,7 +848,7 @@ func (_c *MockRepository_UpdatePacketWriteAck_Call) Return(err error) *MockRepos
 	return _c
 }
 
-func (_c *MockRepository_UpdatePacketWriteAck_Call) RunAndReturn(run func(ctx context.Context, key PacketKey, ack WriteAck) error) *MockRepository_UpdatePacketWriteAck_Call {
+func (_c *MockRepository_UpdatePacketWriteAck_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey, ack store.WriteAck) error) *MockRepository_UpdatePacketWriteAck_Call {
 	_c.Call.Return(run)
 	return _c
 }
