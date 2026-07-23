@@ -30,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(
 		cmdConfig,
 		cmdRelayer,
+		cmdAttestor,
 		cmdQuery,
 		cmdMigrate,
 		cmdKeys,
@@ -48,6 +49,9 @@ func init() {
 	// Relayer commands
 	cmdRelayer.AddCommand(cmdRelayerRun)
 	cmdRelayerRun.Flags().BoolVarP(&flagRelayerNoMigrate, "no-migrate", "", false, "skip database migrations")
+
+	// Attestor commands
+	cmdAttestor.AddCommand(cmdAttestorRun)
 
 	// Query commands
 	// todo
