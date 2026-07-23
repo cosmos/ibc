@@ -5,18 +5,18 @@ packages:
   github.com/cosmos/ibc/link/internal/types/v2/attestor:
     config:
       include-auto-generated: true
-      dir: "{{.InterfaceDir}}"
-      filename: "attestor.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "attestor.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       AttestationServiceClient:
   github.com/cosmos/ibc/link/internal/types/v2/relayer:
     config:
       include-auto-generated: true
-      dir: "{{.InterfaceDir}}"
-      filename: "relayer.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "relayerapi.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       RelayerApiServiceClient:
@@ -31,9 +31,9 @@ packages:
       ChainClients:
   github.com/cosmos/ibc/link/internal/store:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "store.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "store.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Repository:
@@ -71,18 +71,18 @@ packages:
       TxBuilder:
   github.com/cosmos/ibc/link/internal/txmgr:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "txmgr.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "txmanager.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       TxManager:
   github.com/cosmos/ibc/link/internal/txmgr/evm:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "evm.mock.go"
-      pkgname: "{{.SrcPackageName}}"
-      structname: "Mock{{.InterfaceName}}"
+      dir: "internal/tests/mocks"
+      filename: "txmgrethclient.go"
+      pkgname: "mocks"
+      structname: "MockTxMgrETHClient"
     interfaces:
       ETHClient:
   github.com/cosmos/ibc/link/internal/chains/evm:

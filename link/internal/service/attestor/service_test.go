@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	proto "github.com/cosmos/ibc/link/internal/types/v2/attestor"
 	"github.com/stretchr/testify/assert"
@@ -67,7 +68,7 @@ func TestService(t *testing.T) {
 	t.Run("remote", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		client := proto.NewMockAttestationServiceClient(t)
+		client := mocks.NewMockAttestationServiceClient(t)
 		service, err := New([]Attestor{
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
@@ -127,7 +128,7 @@ func TestService(t *testing.T) {
 	t.Run("mix", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		client := proto.NewMockAttestationServiceClient(t)
+		client := mocks.NewMockAttestationServiceClient(t)
 		service, err := New([]Attestor{
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),

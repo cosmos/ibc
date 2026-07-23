@@ -62,7 +62,7 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		repo := store.NewMockRepository(t)
+		repo := mocks.NewMockRepository(t)
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients)

@@ -83,8 +83,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.DestinationChainID: txbuilder.NewMockTxBuilder(t),
 		},
 		TxManagers: staticTxManagers{
-			testRoute.SourceChainID:      txmgr.NewMockTxManager(t),
-			testRoute.DestinationChainID: txmgr.NewMockTxManager(t),
+			testRoute.SourceChainID:      mocks.NewMockTxManager(t),
+			testRoute.DestinationChainID: mocks.NewMockTxManager(t),
 		},
 	}
 

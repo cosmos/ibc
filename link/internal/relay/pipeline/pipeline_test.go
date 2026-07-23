@@ -47,8 +47,8 @@ type pipelineEnv struct {
 	srcProofGen  *proofgen.MockProofGenerator
 	dstTxBuilder *txbuilder.MockTxBuilder
 	srcTxBuilder *txbuilder.MockTxBuilder
-	srcTxManager *txmgr.MockTxManager
-	dstTxManager *txmgr.MockTxManager
+	srcTxManager *mocks.MockTxManager
+	dstTxManager *mocks.MockTxManager
 }
 
 type staticChains map[string]chains.Client
@@ -90,8 +90,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		srcProofGen:  proofgen.NewMockProofGenerator(t),
 		dstTxBuilder: txbuilder.NewMockTxBuilder(t),
 		srcTxBuilder: txbuilder.NewMockTxBuilder(t),
-		srcTxManager: txmgr.NewMockTxManager(t),
-		dstTxManager: txmgr.NewMockTxManager(t),
+		srcTxManager: mocks.NewMockTxManager(t),
+		dstTxManager: mocks.NewMockTxManager(t),
 	}
 
 	deps := Deps{
