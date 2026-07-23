@@ -37,10 +37,9 @@ type Client struct {
 
 	eth ETHClient
 
-	routerAddress  common.Address
-	routerFilterer *ics26router.ContractFilterer
-	routerABI      *abi.ABI
-	router         *ics26router.Contract
+	routerAddress common.Address
+	routerABI     *abi.ABI
+	router        *ics26router.Contract
 
 	logger *slog.Logger
 }
@@ -61,11 +60,6 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 
 	routerAddress := common.HexToAddress(ics26RouterAddress)
 
-	routerFilterer, err := ics26router.NewContractFilterer(routerAddress, eth)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating ics26 router filterer")
-	}
-
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	if err != nil {
 		return nil, errors.Wrap(err, "getting ics26 router abi")
@@ -84,10 +78,9 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 		chainID: chainID,
 		eth:     eth,
 
-		routerAddress:  routerAddress,
-		routerFilterer: routerFilterer,
-		routerABI:      routerABI,
-		router:         router,
+		routerAddress: routerAddress,
+		routerABI:     routerABI,
+		router:        router,
 
 		logger: slog.With("module", "chains", "chainType", "evm", "chainID", chainID),
 	}, nil
@@ -121,7 +114,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 			continue
 		}
 
-		sendPacket, errParse := c.routerFilterer.ParseSendPacket(*log)
+		sendPacket, errParse := c.router.ParseSendPacket(*log)
 		if errParse != nil {
 			return nil, errors.Wrapf(errParse, "parsing send packet event from tx %s on chain %s", txHash, c.chainID)
 		}
