@@ -63,7 +63,7 @@ func TestTxPacketEvents(t *testing.T) {
 		assert.Equal(t, time.Unix(1752000000, 0).UTC(), event.BlockTime)
 		assert.Equal(t, uint64(42), event.Packet.Sequence)
 		assert.Equal(t, "base-0", event.Packet.SourceClient)
-		assert.Equal(t, "ethereum-0", event.Packet.DestClient)
+		assert.Equal(t, "ethereum-0", event.Packet.DestinationClient)
 		assert.Equal(t, uint64(1780000000), event.Packet.TimeoutTimestamp)
 		require.Len(t, event.Packet.Payloads, 1)
 		assert.Equal(t, "transfer", event.Packet.Payloads[0].SourcePort)

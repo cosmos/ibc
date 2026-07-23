@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
@@ -73,11 +75,11 @@ func TestRelay(t *testing.T) {
 				Height:    100,
 				BlockTime: blockTime,
 				Kind:      v2.KindSendPacket,
-				Packet: v2.Packet{
-					Sequence:         42,
-					SourceClient:     "base-0",
-					DestClient:       "ethereum-0",
-					TimeoutTimestamp: 1780000000,
+				Packet: channeltypesv2.Packet{
+					Sequence:          42,
+					SourceClient:      "base-0",
+					DestinationClient: "ethereum-0",
+					TimeoutTimestamp:  1780000000,
 				},
 			},
 			{
@@ -85,10 +87,10 @@ func TestRelay(t *testing.T) {
 				Height:    100,
 				BlockTime: blockTime,
 				Kind:      v2.KindSendPacket,
-				Packet: v2.Packet{
-					Sequence:     7,
-					SourceClient: "unknown-0",
-					DestClient:   "ethereum-0",
+				Packet: channeltypesv2.Packet{
+					Sequence:          7,
+					SourceClient:      "unknown-0",
+					DestinationClient: "ethereum-0",
 				},
 			},
 		}

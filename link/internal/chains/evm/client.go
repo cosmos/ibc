@@ -17,6 +17,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -102,7 +103,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
 	}
 
-	var packets []v2.Packet
+	var packets []channeltypesv2.Packet
 
 	for _, log := range receipt.Logs {
 		switch {
@@ -173,24 +174,24 @@ func (c *Client) GetCommitment(ctx context.Context, height uint64, hashedPath [3
 	return commitment, nil
 }
 
-func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {
-	payloads := make([]v2.Payload, len(packet.Payloads))
+func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
+	payloads := make([]channeltypesv2.Payload, len(packet.Payloads))
 	for i, payload := range packet.Payloads {
-		payloads[i] = v2.Payload{
-			SourcePort: payload.SourcePort,
-			DestPort:   payload.DestPort,
-			Version:    payload.Version,
-			Encoding:   payload.Encoding,
-			Value:      payload.Value,
+		payloads[i] = channeltypesv2.Payload{
+			SourcePort:      payload.SourcePort,
+			DestinationPort: payload.DestPort,
+			Version:         payload.Version,
+			Encoding:        payload.Encoding,
+			Value:           payload.Value,
 		}
 	}
 
-	return v2.Packet{
-		Sequence:         packet.Sequence,
-		SourceClient:     packet.SourceClient,
-		DestClient:       packet.DestClient,
-		TimeoutTimestamp: packet.TimeoutTimestamp,
-		Payloads:         payloads,
+	return channeltypesv2.Packet{
+		Sequence:          packet.Sequence,
+		SourceClient:      packet.SourceClient,
+		DestinationClient: packet.DestClient,
+		TimeoutTimestamp:  packet.TimeoutTimestamp,
+		Payloads:          payloads,
 	}
 }
 
