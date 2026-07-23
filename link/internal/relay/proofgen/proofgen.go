@@ -7,7 +7,7 @@ import (
 	"context"
 	"time"
 
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 )
 
 // ProofKind the kind of packet claim a proof attests to.
@@ -43,7 +43,7 @@ type ProofGenerator interface {
 	// height, one proof per packet with indices aligned to packets. Returns
 	// an error if a proof cannot be generated for any packet, rather than
 	// silently omitting it from the result.
-	PacketProofs(ctx context.Context, height uint64, kind ProofKind, packets []v2.Packet) ([][]byte, error)
+	PacketProofs(ctx context.Context, height uint64, kind ProofKind, packets []channeltypesv2.Packet) ([][]byte, error)
 }
 
 // Key identifies one configured light client by the chain it lives on and

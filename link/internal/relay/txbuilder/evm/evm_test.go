@@ -6,9 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 func testPacket() ics26router.IICS26RouterMsgsPacket {
@@ -79,7 +79,7 @@ func TestBuildRelayTxs(t *testing.T) {
 	router := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	client := New(router)
 
-	packet := v2.Packet{Sequence: 1, SourceClient: "base-0", DestClient: "ethereum-0", TimeoutTimestamp: 1234567890}
+	packet := channeltypesv2.Packet{Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890}
 	clientUpdate := txbuilder.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}
 
 	t.Run("recv", func(t *testing.T) {

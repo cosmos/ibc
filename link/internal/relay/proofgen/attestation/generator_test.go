@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
@@ -102,9 +103,9 @@ func TestGeneratorStateProof(t *testing.T) {
 func TestGeneratorPacketProofs(t *testing.T) {
 	ctx := context.Background()
 
-	packets := []v2.Packet{
-		{Sequence: 1, SourceClient: "src-0", DestClient: "dst-0", TimeoutTimestamp: 1000},
-		{Sequence: 2, SourceClient: "src-0", DestClient: "dst-0", TimeoutTimestamp: 1000},
+	packets := []channeltypesv2.Packet{
+		{Sequence: 1, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
+		{Sequence: 2, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
 	}
 
 	compact := []attestorevm.PacketCompact{

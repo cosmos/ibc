@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
@@ -140,7 +141,7 @@ func sendPacketEvent(sequence uint64) v2.PacketEvent {
 	return v2.PacketEvent{
 		Height: 100,
 		Kind:   v2.KindSendPacket,
-		Packet: v2.Packet{Sequence: sequence, SourceClient: testRoute.SourceClientID, DestClient: testRoute.DestinationClientID},
+		Packet: channeltypesv2.Packet{Sequence: sequence, SourceClient: testRoute.SourceClientID, DestinationClient: testRoute.DestinationClientID},
 	}
 }
 

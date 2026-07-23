@@ -2,7 +2,7 @@
 // update details. There is one implementation per supported chain type.
 package txbuilder
 
-import v2 "github.com/cosmos/ibc/link/internal/types/v2"
+import channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 
 // RelayKind the packet operation one PacketRelayItem asks to perform.
 type RelayKind int
@@ -19,7 +19,7 @@ const (
 // the membership/non-membership proof authorizing it.
 type PacketRelayItem struct {
 	Kind        RelayKind
-	Packet      v2.Packet
+	Packet      channeltypesv2.Packet
 	Acks        [][]byte // one per payload, order preserved; only set for KindAck
 	Proof       []byte
 	ProofHeight uint64

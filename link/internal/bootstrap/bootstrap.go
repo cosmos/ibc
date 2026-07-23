@@ -27,7 +27,7 @@ type Services struct {
 	Store   store.Store
 	Signers *signer.Set
 
-	// Dispatcher drives packet relaying; nil when no routes are configured
+	// Dispatcher drives packet relaying
 	Dispatcher *dispatch.RelayDispatcher
 
 	RelayerService  *relayer.Service
@@ -67,7 +67,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(relayerHandler)
 
-	// Relaying dispatcher; only assembled when routes are configured
+	// Relaying dispatcher
 	var dispatcher *dispatch.RelayDispatcher
 	if len(cfg.Relayer.Routes) > 0 {
 		txManagers, errTxManagers := txmgr.NewFromConfig(cfg, signers)

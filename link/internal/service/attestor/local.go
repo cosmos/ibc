@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	evm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -134,7 +137,7 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 	}
 
 	// 2. decode packets
-	packets := make([]v2.Packet, len(req.Packets))
+	packets := make([]channeltypesv2.Packet, len(req.Packets))
 	for i, encoded := range req.Packets {
 		packet, err := evm.DecodePacket(encoded)
 		if err != nil {
@@ -184,22 +187,22 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 func (a *LocalAttestor) packetCompact(
 	ctx context.Context,
 	height uint64,
-	packet v2.Packet,
+	packet channeltypesv2.Packet,
 	commitmentType CommitmentType,
 ) (evm.PacketCompact, error) {
 	var path []byte
 	switch commitmentType {
 	case CommitmentTypePacket:
-		path = evm.PathPacket(packet.SourceClient, packet.Sequence)
+		path = hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence)
 	case CommitmentTypeAck:
-		path = evm.PathAck(packet.DestClient, packet.Sequence)
+		path = hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence)
 	case CommitmentTypeReceipt:
-		path = evm.PathReceipt(packet.DestClient, packet.Sequence)
+		path = hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence)
 	default:
 		return evm.PacketCompact{}, errors.Wrapf(ErrInvalidInput, "unsupported commitment type %d", commitmentType)
 	}
 
-	pathHash := evm.PathHash(path)
+	pathHash := [32]byte(crypto.Keccak256Hash(path))
 	commitment, err := a.client.GetCommitment(ctx, height, pathHash)
 	if err != nil {
 		return evm.PacketCompact{}, errors.Wrapf(err, "get commitment at height %d", height)
@@ -215,7 +218,7 @@ func (a *LocalAttestor) packetCompact(
 				packet.Sequence,
 			)
 		}
-		if expected := evm.PacketCommitment(packet); commitment != expected {
+		if expected := [32]byte(channeltypesv2.CommitPacket(packet)); commitment != expected {
 			return evm.PacketCompact{}, errors.Wrapf(
 				ErrInvalidInput,
 				"packet commitment mismatch: got %x, expected %x",
@@ -228,7 +231,7 @@ func (a *LocalAttestor) packetCompact(
 			return evm.PacketCompact{}, errors.Wrapf(
 				ErrCommitmentNotFound,
 				"acknowledgement commitment for client %q sequence %d",
-				packet.DestClient,
+				packet.DestinationClient,
 				packet.Sequence,
 			)
 		}
@@ -237,7 +240,7 @@ func (a *LocalAttestor) packetCompact(
 			return evm.PacketCompact{}, errors.Wrapf(
 				ErrReceiptExists,
 				"client %q sequence %d",
-				packet.DestClient,
+				packet.DestinationClient,
 				packet.Sequence,
 			)
 		}

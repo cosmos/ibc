@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
@@ -90,7 +91,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			capturedTxIDs = append(capturedTxIDs, txHash)
 
 			return []v2.PacketEvent{
-				{Height: 100, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 1}},
+				{Height: 100, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 1}},
 			}, nil
 		}).Once()
 
@@ -182,7 +183,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	sourceClient := mocks.NewMockClient(t)
 	sourceClient.EXPECT().TxPacketEvents(mock.Anything, healthyTxID).Return([]v2.PacketEvent{
-		{Height: 100, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 1}},
+		{Height: 100, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 1}},
 	}, nil).Once()
 	sourceClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
 
@@ -272,10 +273,10 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	sourceClient := mocks.NewMockClient(t)
 	sourceClient.EXPECT().TxPacketEvents(mock.Anything, provableTxID).Return([]v2.PacketEvent{
-		{Height: 100, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 1}},
+		{Height: 100, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 1}},
 	}, nil).Once()
 	sourceClient.EXPECT().TxPacketEvents(mock.Anything, tooRecentTxID).Return([]v2.PacketEvent{
-		{Height: 150, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 2}},
+		{Height: 150, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 2}},
 	}, nil).Once()
 
 	proofGen := proofgen.NewMockProofGenerator(t)

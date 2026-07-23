@@ -8,10 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 var routerABI = mustRouterABI()
@@ -164,12 +164,12 @@ func packMulticall(calls [][]byte) ([]byte, error) {
 	return packed, nil
 }
 
-func toRouterPacket(packet v2.Packet) ics26router.IICS26RouterMsgsPacket {
+func toRouterPacket(packet channeltypesv2.Packet) ics26router.IICS26RouterMsgsPacket {
 	payloads := make([]ics26router.IICS26RouterMsgsPayload, len(packet.Payloads))
 	for i, p := range packet.Payloads {
 		payloads[i] = ics26router.IICS26RouterMsgsPayload{
 			SourcePort: p.SourcePort,
-			DestPort:   p.DestPort,
+			DestPort:   p.DestinationPort,
 			Version:    p.Version,
 			Encoding:   p.Encoding,
 			Value:      p.Value,
@@ -179,7 +179,7 @@ func toRouterPacket(packet v2.Packet) ics26router.IICS26RouterMsgsPacket {
 	return ics26router.IICS26RouterMsgsPacket{
 		Sequence:         packet.Sequence,
 		SourceClient:     packet.SourceClient,
-		DestClient:       packet.DestClient,
+		DestClient:       packet.DestinationClient,
 		TimeoutTimestamp: packet.TimeoutTimestamp,
 		Payloads:         payloads,
 	}

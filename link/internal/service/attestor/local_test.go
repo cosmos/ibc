@@ -8,6 +8,14 @@ import (
 	"testing"
 	"time"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	kms "github.com/cosmos/kms/signing/file"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
@@ -15,11 +23,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
-	kms "github.com/cosmos/kms/signing/file"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLocal(t *testing.T) {
@@ -295,10 +298,10 @@ func TestLocal(t *testing.T) {
 		validPacket := sampleEvmPacket(t)
 		decodedPacket, err := attestorevm.DecodePacket(validPacket)
 		require.NoError(t, err)
-		pathHash := attestorevm.PathHash(attestorevm.PathPacket(decodedPacket.SourceClient, decodedPacket.Sequence))
-		ackPathHash := attestorevm.PathHash(attestorevm.PathAck(decodedPacket.DestClient, decodedPacket.Sequence))
-		receiptPathHash := attestorevm.PathHash(attestorevm.PathReceipt(decodedPacket.DestClient, decodedPacket.Sequence))
-		packetCommitment := attestorevm.PacketCommitment(decodedPacket)
+		pathHash := [32]byte(crypto.Keccak256Hash(hostv2.PacketCommitmentKey(decodedPacket.SourceClient, decodedPacket.Sequence)))
+		ackPathHash := [32]byte(crypto.Keccak256Hash(hostv2.PacketAcknowledgementKey(decodedPacket.DestinationClient, decodedPacket.Sequence)))
+		receiptPathHash := [32]byte(crypto.Keccak256Hash(hostv2.PacketReceiptKey(decodedPacket.DestinationClient, decodedPacket.Sequence)))
+		packetCommitment := [32]byte(channeltypesv2.CommitPacket(decodedPacket))
 
 		for _, tt := range []struct {
 			name            string
@@ -442,7 +445,7 @@ func TestLocal(t *testing.T) {
 
 		t.Run("signsPacket", func(t *testing.T) {
 			// ARRANGE
-			const height = uint64(10)
+			const height uint64 = 10
 
 			client := stubChainClient(t, "chain-1")
 			client.EXPECT().
