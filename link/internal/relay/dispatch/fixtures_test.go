@@ -11,10 +11,11 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
 
 func testTransfer(t *testing.T) *processors.Transfer {
@@ -39,6 +40,20 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
+type staticProofGenerators map[string]proofgen.ProofGenerator
+
+func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+	gen, ok := s[proofgen.Key(chainID, clientID)]
+	return gen, ok
+}
+
+type staticTxBuilders map[string]txbuilder.TxBuilder
+
+func (s staticTxBuilders) Get(chainID string) (txbuilder.TxBuilder, bool) {
+	builder, ok := s[chainID]
+	return builder, ok
+}
+
 type pipelineEnv struct {
 	store *store.SqliteDB
 }
@@ -59,7 +74,14 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.SourceChainID:      mocks.NewMockClient(t),
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
-		ProofAPI: proto.NewMockProofApiServiceClient(t),
+		ProofGenerators: staticProofGenerators{
+			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): proofgen.NewMockProofGenerator(t),
+			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           proofgen.NewMockProofGenerator(t),
+		},
+		TxBuilders: staticTxBuilders{
+			testRoute.SourceChainID:      txbuilder.NewMockTxBuilder(t),
+			testRoute.DestinationChainID: txbuilder.NewMockTxBuilder(t),
+		},
 		TxManagers: staticTxManagers{
 			testRoute.SourceChainID:      txmgr.NewMockTxManager(t),
 			testRoute.DestinationChainID: txmgr.NewMockTxManager(t),

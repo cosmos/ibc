@@ -9,8 +9,6 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/txmgr"
-
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
 
 const (
@@ -41,10 +39,11 @@ type TxManagers interface {
 
 // Deps the external systems a pipeline relays through.
 type Deps struct {
-	Storage    Storage
-	Chains     processors.ChainClients
-	ProofAPI   proto.ProofApiServiceClient
-	TxManagers TxManagers
+	Storage         Storage
+	Chains          processors.ChainClients
+	ProofGenerators processors.ProofGenerators
+	TxBuilders      processors.TxBuilders
+	TxManagers      TxManagers
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -138,7 +137,9 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcTxManager, route),
+			processors.NewBatchTimeoutPacket(
+				deps.Chains, deps.Storage, deps.ProofGenerators, deps.TxBuilders, srcTxManager, route,
+			),
 		),
 	)
 
@@ -156,7 +157,9 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstTxManager, route),
+			processors.NewBatchRecvPacket(
+				deps.Chains, deps.Storage, deps.ProofGenerators, deps.TxBuilders, dstTxManager, route,
+			),
 		),
 	)
 
@@ -199,7 +202,8 @@ func NewPipeline(
 			processors.NewBatchAckPacket(
 				deps.Chains,
 				deps.Storage,
-				deps.ProofAPI,
+				deps.ProofGenerators,
+				deps.TxBuilders,
 				srcTxManager,
 				route,
 			),

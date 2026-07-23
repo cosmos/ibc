@@ -2,27 +2,50 @@ package processors
 
 import (
 	"context"
+	"encoding/hex"
 	"log/slog"
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
-
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
+type staticChains map[string]chains.Client
+
+func (s staticChains) Get(chainID string) (chains.Client, bool) {
+	client, ok := s[chainID]
+	return client, ok
+}
+
+type staticProofGenerators map[string]proofgen.ProofGenerator
+
+func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+	gen, ok := s[proofgen.Key(chainID, clientID)]
+	return gen, ok
+}
+
+type staticTxBuilders map[string]txbuilder.TxBuilder
+
+func (s staticTxBuilders) Get(chainID string) (txbuilder.TxBuilder, bool) {
+	builder, ok := s[chainID]
+	return builder, ok
+}
+
 // TestBatchRecvPacketSequenceAlignment guards against a regression where a
 // transfer whose tx hash fails to decode still contributed its sequence
-// number to the proof api request, leaving the request's sequences
-// out of sync with its tx ids.
+// number to the packet event filter, leaving events out of sync with the
+// batch's actual tx ids.
 func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	route := Route{
 		SourceChainID:       "1",
@@ -57,18 +80,30 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
-	client := mocks.NewMockClient(t)
-	client.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationClient := mocks.NewMockClient(t)
+	destinationClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 
-	proofAPI := proto.NewMockProofApiServiceClient(t)
+	sourceClient := mocks.NewMockClient(t)
 
-	var captured *proto.RelayByTxRequest
-	proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, req *connect.Request[proto.RelayByTxRequest]) (*connect.Response[proto.RelayByTxResponse], error) {
-			captured = req.Msg
+	var capturedTxIDs [][]byte
+	sourceClient.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, txHash []byte) ([]v2.PacketEvent, error) {
+			capturedTxIDs = append(capturedTxIDs, txHash)
 
-			return connect.NewResponse(&proto.RelayByTxResponse{Tx: []byte{0x01}, Address: "0xrouter"}), nil
-		})
+			return []v2.PacketEvent{
+				{Height: 100, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 1}},
+			}, nil
+		}).Once()
+
+	proofGen := proofgen.NewMockProofGenerator(t)
+	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), proofgen.KindPacketCommitment, mock.Anything).
+		Return([][]byte{{0x02}}, nil)
+
+	txBuilder := txbuilder.NewMockTxBuilder(t)
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
+		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txManager := txmgr.NewMockTxManager(t)
 	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
@@ -77,28 +112,207 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
-	chainSet := staticChains{route.DestinationChainID: client}
-
-	p := NewBatchRecvPacket(chainSet, db, proofAPI, txManager, route)
+	p := NewBatchRecvPacket(
+		staticChains{route.SourceChainID: sourceClient, route.DestinationChainID: destinationClient},
+		db,
+		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticTxBuilders{route.DestinationChainID: txBuilder},
+		txManager,
+		route,
+	)
 
 	_, err = p.Process(context.Background(), []*Transfer{valid, invalid})
 	require.NoError(t, err)
 
-	require.NotNil(t, captured)
-	require.Len(t, captured.SourceTxIds, 1, "only the valid tx hash should be included")
-	require.Len(t, captured.SrcPacketSequences, 1, "the decode-failed transfer's sequence must not be included")
-	require.EqualValues(t, valid.PacketSequenceNumber, captured.SrcPacketSequences[0])
+	require.Len(t, capturedTxIDs, 1, "only the valid tx hash should be included")
 
 	require.NotNil(t, invalid.ProcessingError)
 	require.Nil(t, valid.ProcessingError)
 	require.NotNil(t, valid.RecvTxHash)
 }
 
-type staticChains map[string]chains.Client
+// TestBatchRecvPacketToleratesPartialEventFetchFailure guards against a
+// regression where one transfer's tx failing to yield packet events (a
+// transient RPC error, say) would fail the whole batch and block every other
+// transfer in it from being relayed, even though their own tx hashes fetched
+// fine.
+func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
+	route := Route{
+		SourceChainID:       "1",
+		SourceClientID:      "base-0",
+		DestinationChainID:  "8453",
+		DestinationClientID: "ethereum-0",
+	}
 
-func (s staticChains) Get(chainID string) (chains.Client, bool) {
-	client, ok := s[chainID]
-	return client, ok
+	healthyHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	failingHash := "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+	healthy := NewTransfer(store.Packet{
+		SourceChainID:             route.SourceChainID,
+		DestinationChainID:        route.DestinationChainID,
+		SourceTxHash:              healthyHash,
+		PacketSequenceNumber:      1,
+		PacketSourceClientID:      route.SourceClientID,
+		PacketDestinationClientID: route.DestinationClientID,
+		PacketTimeoutTimestamp:    time.Now().Add(time.Hour),
+	}, slog.Default())
+
+	failing := NewTransfer(store.Packet{
+		SourceChainID:             route.SourceChainID,
+		DestinationChainID:        route.DestinationChainID,
+		SourceTxHash:              failingHash,
+		PacketSequenceNumber:      2,
+		PacketSourceClientID:      route.SourceClientID,
+		PacketDestinationClientID: route.DestinationClientID,
+		PacketTimeoutTimestamp:    time.Now().Add(time.Hour),
+	}, slog.Default())
+
+	db, err := store.NewSqliteInMemory()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.MigrateUp()
+	require.NoError(t, err)
+
+	destinationClient := mocks.NewMockClient(t)
+	destinationClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+
+	healthyTxID, err := hex.DecodeString(healthyHash[2:])
+	require.NoError(t, err)
+	failingTxID, err := hex.DecodeString(failingHash[2:])
+	require.NoError(t, err)
+
+	sourceClient := mocks.NewMockClient(t)
+	sourceClient.EXPECT().TxPacketEvents(mock.Anything, healthyTxID).Return([]v2.PacketEvent{
+		{Height: 100, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 1}},
+	}, nil).Once()
+	sourceClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
+
+	proofGen := proofgen.NewMockProofGenerator(t)
+	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), proofgen.KindPacketCommitment, mock.Anything).
+		Return([][]byte{{0x02}}, nil)
+
+	txBuilder := txbuilder.NewMockTxBuilder(t)
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
+		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
+
+	txManager := txmgr.NewMockTxManager(t)
+	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
+	}, nil).Once()
+
+	p := NewBatchRecvPacket(
+		staticChains{route.SourceChainID: sourceClient, route.DestinationChainID: destinationClient},
+		db,
+		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticTxBuilders{route.DestinationChainID: txBuilder},
+		txManager,
+		route,
+	)
+
+	_, err = p.Process(context.Background(), []*Transfer{healthy, failing})
+	require.NoError(t, err, "the batch as a whole must not fail just because one tx's events failed to fetch")
+
+	require.NotNil(t, failing.ProcessingError, "the transfer whose tx failed to fetch must be excluded and retried later")
+	require.Nil(t, healthy.ProcessingError, "the transfer whose tx fetched fine must still be relayed")
+	require.NotNil(t, healthy.RecvTxHash)
+}
+
+// TestBatchRecvPacketExcludesNotYetProvablePackets guards against a
+// regression where one recently-observed packet in a batch -- more recent
+// than the attestor quorum has currently caught up to -- would block every
+// other packet in the batch from being relayed, instead of just that one
+// packet waiting for the next run.
+func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
+	route := Route{
+		SourceChainID:       "1",
+		SourceClientID:      "base-0",
+		DestinationChainID:  "8453",
+		DestinationClientID: "ethereum-0",
+	}
+
+	provableHash := "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	tooRecentHash := "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+	provable := NewTransfer(store.Packet{
+		SourceChainID:             route.SourceChainID,
+		DestinationChainID:        route.DestinationChainID,
+		SourceTxHash:              provableHash,
+		PacketSequenceNumber:      1,
+		PacketSourceClientID:      route.SourceClientID,
+		PacketDestinationClientID: route.DestinationClientID,
+		PacketTimeoutTimestamp:    time.Now().Add(time.Hour),
+	}, slog.Default())
+
+	tooRecent := NewTransfer(store.Packet{
+		SourceChainID:             route.SourceChainID,
+		DestinationChainID:        route.DestinationChainID,
+		SourceTxHash:              tooRecentHash,
+		PacketSequenceNumber:      2,
+		PacketSourceClientID:      route.SourceClientID,
+		PacketDestinationClientID: route.DestinationClientID,
+		PacketTimeoutTimestamp:    time.Now().Add(time.Hour),
+	}, slog.Default())
+
+	db, err := store.NewSqliteInMemory()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	_, err = db.MigrateUp()
+	require.NoError(t, err)
+
+	destinationClient := mocks.NewMockClient(t)
+	destinationClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+
+	provableTxID, err := hex.DecodeString(provableHash[2:])
+	require.NoError(t, err)
+	tooRecentTxID, err := hex.DecodeString(tooRecentHash[2:])
+	require.NoError(t, err)
+
+	sourceClient := mocks.NewMockClient(t)
+	sourceClient.EXPECT().TxPacketEvents(mock.Anything, provableTxID).Return([]v2.PacketEvent{
+		{Height: 100, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 1}},
+	}, nil).Once()
+	sourceClient.EXPECT().TxPacketEvents(mock.Anything, tooRecentTxID).Return([]v2.PacketEvent{
+		{Height: 150, Kind: v2.KindSendPacket, Packet: v2.Packet{Sequence: 2}},
+	}, nil).Once()
+
+	proofGen := proofgen.NewMockProofGenerator(t)
+	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), proofgen.KindPacketCommitment, mock.Anything).
+		Return([][]byte{{0x02}}, nil)
+
+	txBuilder := txbuilder.NewMockTxBuilder(t)
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
+		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
+
+	txManager := txmgr.NewMockTxManager(t)
+	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
+	}, nil).Once()
+
+	p := NewBatchRecvPacket(
+		staticChains{route.SourceChainID: sourceClient, route.DestinationChainID: destinationClient},
+		db,
+		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticTxBuilders{route.DestinationChainID: txBuilder},
+		txManager,
+		route,
+	)
+
+	_, err = p.Process(context.Background(), []*Transfer{provable, tooRecent})
+	require.NoError(t, err, "the batch as a whole must not fail just because one packet isn't provable yet")
+
+	require.Nil(t, provable.ProcessingError)
+	require.NotNil(t, provable.RecvTxHash)
+
+	require.NotNil(t, tooRecent.ProcessingError, "the too-recent packet must be excluded and retried once attestors catch up")
+	require.Nil(t, tooRecent.RecvTxHash)
 }
 
 // TestBatchRecvPacketShouldProcessExcludesAlreadySettled guards against a

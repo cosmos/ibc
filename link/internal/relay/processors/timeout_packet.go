@@ -3,89 +3,114 @@ package processors
 
 import (
 	"context"
-	"encoding/hex"
-	"strings"
 
-	"connectrpc.com/connect"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txmgr"
-
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // BatchTimeoutPacket delivers one timeout tx on the source chain for a batch
-// of transfers. Timeouts flow back toward the original source chain, so the
-// proof api's source and destination are inverted.
+// of transfers, proving non-membership of the packet's receipt on the
+// destination chain via the source chain's client tracking it.
 type BatchTimeoutPacket struct {
-	chains    ChainClients
-	storage   TxStorage
-	proofAPI  proto.ProofApiServiceClient
-	txManager txmgr.TxManager
-	route     Route
+	chains          ChainClients
+	storage         TxStorage
+	proofGenerators ProofGenerators
+	txBuilders      TxBuilders
+	txManager       txmgr.TxManager
+	route           Route
 }
 
 func NewBatchTimeoutPacket(
 	chainClients ChainClients,
 	storage TxStorage,
-	proofAPI proto.ProofApiServiceClient,
+	proofGenerators ProofGenerators,
+	txBuilders TxBuilders,
 	txManager txmgr.TxManager,
 	route Route,
 ) BatchTimeoutPacket {
 	return BatchTimeoutPacket{
-		chains:    chainClients,
-		storage:   storage,
-		proofAPI:  proofAPI,
-		txManager: txManager,
-		route:     route,
+		chains:          chainClients,
+		storage:         storage,
+		proofGenerators: proofGenerators,
+		txBuilders:      txBuilders,
+		txManager:       txManager,
+		route:           route,
 	}
 }
 
 func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	txSet := make(map[string]struct{})
-
-	var txIDs [][]byte
-
-	var sequences []uint64
-
-	for _, tr := range transfers {
-		hash := tr.SourceTxHash
-
-		if _, ok := txSet[hash]; ok {
-			sequences = append(sequences, tr.PacketSequenceNumber)
-
-			continue
-		}
-
-		txID, err := hex.DecodeString(strings.TrimPrefix(hash, "0x"))
-		if err != nil {
-			tr.ProcessingError = errors.Wrapf(err, "decoding tx hash %q", hash)
-
-			continue
-		}
-
-		txIDs = append(txIDs, txID)
-		txSet[hash] = struct{}{}
-		sequences = append(sequences, tr.PacketSequenceNumber)
+	proofGen, ok := p.proofGenerators.Get(p.route.SourceChainID, p.route.SourceClientID)
+	if !ok {
+		return nil, errors.Errorf(
+			"no proof generator configured for client %q on chain %q", p.route.SourceClientID, p.route.SourceChainID,
+		)
 	}
 
-	resp, err := p.proofAPI.RelayByTx(ctx, connect.NewRequest(&proto.RelayByTxRequest{
-		SrcChain:           p.route.DestinationChainID,
-		DstChain:           p.route.SourceChainID,
-		TimeoutTxIds:       txIDs,
-		SrcClientId:        p.route.DestinationClientID,
-		DstClientId:        p.route.SourceClientID,
-		DstPacketSequences: sequences,
-	}))
+	height, timestamp, err := proofGen.LatestProvableHeight(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "getting relay tx from proof api")
+		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
 
 	client, ok := p.chains.Get(p.route.SourceChainID)
 	if !ok {
 		return nil, errors.Errorf("no configured chain client for chain %s", p.route.SourceChainID)
+	}
+
+	events := batchPacketEvents(ctx, client, transfers, func(tr *Transfer) (string, bool) {
+		return tr.SourceTxHash, true
+	})
+
+	events = filterProvableTimeouts(events, timestamp, transfers)
+	if len(events) == 0 {
+		return transfers, nil
+	}
+
+	stateProof, err := proofGen.StateProof(ctx, height)
+	if err != nil {
+		return nil, errors.Wrap(err, "generating state proof")
+	}
+
+	packets := make([]v2.Packet, len(events))
+	for i, event := range events {
+		packets[i] = event.Packet
+	}
+
+	packetProofs, err := proofGen.PacketProofs(ctx, height, proofgen.KindReceiptAbsence, packets)
+	if err != nil {
+		return nil, errors.Wrap(err, "generating packet proofs")
+	}
+
+	items := make([]txbuilder.PacketRelayItem, len(packets))
+	for i, packet := range packets {
+		items[i] = txbuilder.PacketRelayItem{
+			Kind:        txbuilder.KindTimeout,
+			Packet:      packet,
+			Proof:       packetProofs[i],
+			ProofHeight: height,
+		}
+	}
+
+	txBuilder, ok := p.txBuilders.Get(p.route.SourceChainID)
+	if !ok {
+		return nil, errors.Errorf("no tx builder configured for chain %s", p.route.SourceChainID)
+	}
+
+	relayTxs, err := txBuilder.BuildRelayTxs(txbuilder.ClientUpdate{
+		ClientID:   p.route.SourceClientID,
+		StateProof: stateProof,
+	}, items)
+	if err != nil {
+		return nil, errors.Wrap(err, "building relay tx")
+	}
+
+	if len(relayTxs) != 1 {
+		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
 	}
 
 	// the chain must be caught up to the current time before gas estimation
@@ -98,8 +123,8 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	}
 
 	submission, err := p.txManager.Submit(ctx, v2.TxIntent{
-		To:   resp.Msg.GetAddress(),
-		Data: resp.Msg.GetTx(),
+		To:   common.BytesToAddress(relayTxs[0].To).Hex(),
+		Data: relayTxs[0].Data,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "submitting relay tx")

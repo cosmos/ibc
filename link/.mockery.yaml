@@ -45,24 +45,30 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Client:
-  github.com/cosmos/ibc/link/internal/types/proofapi:
+  github.com/cosmos/ibc/link/internal/service/attestor:
     config:
-      include-auto-generated: true
       dir: "{{.InterfaceDir}}"
-      filename: "proofapi.mock.go"
+      filename: "attestor.mock.go"
       pkgname: "{{.SrcPackageName}}"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
-      ProofApiServiceClient:
-  github.com/cosmos/ibc/link/internal/types/ibcattestor:
+      Attestor:
+  github.com/cosmos/ibc/link/internal/relay/proofgen:
     config:
-      include-auto-generated: true
       dir: "{{.InterfaceDir}}"
-      filename: "ibcattestor.mock.go"
+      filename: "proofgen.mock.go"
       pkgname: "{{.SrcPackageName}}"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
-      AttestationServiceClient:
+      ProofGenerator:
+  github.com/cosmos/ibc/link/internal/relay/txbuilder:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "txbuilder.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      TxBuilder:
   github.com/cosmos/ibc/link/internal/txmgr:
     config:
       dir: "{{.InterfaceDir}}"

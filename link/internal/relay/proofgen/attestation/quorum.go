@@ -3,16 +3,15 @@ package attestation
 import (
 	"bytes"
 	"context"
-	"net/http"
 	"strings"
 	"sync"
+	"time"
 
-	"connectrpc.com/connect"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
-	ibcattestor "github.com/cosmos/ibc/link/internal/types/ibcattestor"
+	"github.com/cosmos/ibc/link/internal/chains"
+	"github.com/cosmos/ibc/link/internal/service/attestor"
 )
 
 // quorumResult the aggregated, quorum-verified attestation for one claim:
@@ -22,32 +21,18 @@ type quorumResult struct {
 	Signatures      [][]byte
 }
 
-// namedAttestorClient pairs an attestor client with the name used to
-// attribute errors to it.
-type namedAttestorClient struct {
-	Name   string
-	Client ibcattestor.AttestationServiceClient
-}
-
 // queryStateQuorum aggregates a StateAttestation claim across attestors.
 func queryStateQuorum(
 	ctx context.Context,
-	attestors []namedAttestorClient,
+	attestors []attestor.Attestor,
 	threshold int,
 	height uint64,
 ) (quorumResult, error) {
 	return queryQuorum(ctx, attestors, threshold, attestationTypeState, func(
 		ctx context.Context,
-		client ibcattestor.AttestationServiceClient,
-	) (*ibcattestor.Attestation, error) {
-		resp, err := client.StateAttestation(ctx, connect.NewRequest(&ibcattestor.StateAttestationRequest{
-			Height: height,
-		}))
-		if err != nil {
-			return nil, err
-		}
-
-		return resp.Msg.GetAttestation(), nil
+		a attestor.Attestor,
+	) (attestor.Attestation, error) {
+		return a.StateAttestation(ctx, height)
 	})
 }
 
@@ -56,30 +41,25 @@ func queryStateQuorum(
 // independently re-derives paths and commitments from.
 func queryPacketQuorum(
 	ctx context.Context,
-	attestors []namedAttestorClient,
+	attestors []attestor.Attestor,
 	threshold int,
 	packets [][]byte,
 	height uint64,
-	kind ibcattestor.CommitmentType,
+	kind attestor.CommitmentType,
 ) (quorumResult, error) {
 	return queryQuorum(ctx, attestors, threshold, attestationTypePacket, func(
 		ctx context.Context,
-		client ibcattestor.AttestationServiceClient,
-	) (*ibcattestor.Attestation, error) {
-		resp, err := client.PacketAttestation(ctx, connect.NewRequest(&ibcattestor.PacketAttestationRequest{
-			Packets:        packets,
+		a attestor.Attestor,
+	) (attestor.Attestation, error) {
+		return a.PacketAttestation(ctx, attestor.PacketAttestationRequest{
 			Height:         height,
+			Packets:        packets,
 			CommitmentType: kind,
-		}))
-		if err != nil {
-			return nil, err
-		}
-
-		return resp.Msg.GetAttestation(), nil
+		})
 	})
 }
 
-type attestationQuery func(context.Context, ibcattestor.AttestationServiceClient) (*ibcattestor.Attestation, error)
+type attestationQuery func(context.Context, attestor.Attestor) (attestor.Attestation, error)
 
 // quorumResponse one attestor's contribution to a quorum, before reduction.
 type quorumResponse struct {
@@ -99,7 +79,7 @@ type quorumResponse struct {
 // single key answering on behalf of two attestor entries cannot count twice.
 func queryQuorum(
 	ctx context.Context,
-	attestors []namedAttestorClient,
+	attestors []attestor.Attestor,
 	threshold int,
 	typeTag byte,
 	query attestationQuery,
@@ -112,14 +92,14 @@ func queryQuorum(
 
 	var wg sync.WaitGroup
 
-	for i, attestor := range attestors {
+	for i, a := range attestors {
 		wg.Add(1)
 
-		go func(i int, attestor namedAttestorClient) {
+		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
-			responses[i] = queryOne(ctx, attestor, typeTag, query)
-		}(i, attestor)
+			responses[i] = queryOne(ctx, a, typeTag, query)
+		}(i, a)
 	}
 
 	wg.Wait()
@@ -127,21 +107,21 @@ func queryQuorum(
 	return reduceQuorum(responses, threshold)
 }
 
-func queryOne(ctx context.Context, attestor namedAttestorClient, typeTag byte, query attestationQuery) quorumResponse {
-	attestation, err := query(ctx, attestor.Client)
+func queryOne(ctx context.Context, a attestor.Attestor, typeTag byte, query attestationQuery) quorumResponse {
+	attestation, err := query(ctx, a)
 	if err != nil {
-		return quorumResponse{name: attestor.Name, err: errors.Wrapf(err, "attestor %q", attestor.Name)}
+		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
-	data := attestation.GetAttestedData()
-	sig := attestation.GetSignature()
+	data := attestation.AttestedData
+	sig := attestation.Signature
 
 	signer, err := recoverSigner(taggedDigest(data, typeTag), sig)
 	if err != nil {
-		return quorumResponse{name: attestor.Name, err: errors.Wrapf(err, "attestor %q", attestor.Name)}
+		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
-	return quorumResponse{name: attestor.Name, signer: signer, data: data, sig: sig}
+	return quorumResponse{name: a.Name(), signer: signer, data: data, sig: sig}
 }
 
 func reduceQuorum(responses []quorumResponse, threshold int) (quorumResult, error) {
@@ -201,12 +181,20 @@ func joinResponseErrors(responses []quorumResponse) string {
 	return strings.Join(msgs, "; ")
 }
 
-// latestHeight resolves a height every attestor in the quorum has observed,
-// so a subsequent state/packet attestation query at that height can succeed
-// against all of them. It fans LatestHeight out concurrently and takes the
-// minimum among the attestors that answered, requiring at least threshold of
-// them to respond.
-func latestHeight(ctx context.Context, attestors []namedAttestorClient, threshold int) (uint64, error) {
+// latestProvableHeight finds a height every attestor in the quorum has
+// observed, so a subsequent state/packet attestation query at that height
+// can succeed against all of them, then looks up that height's timestamp on
+// the counterparty chain directly (a plain historical query — the height is
+// already-observed and immutable, unlike querying the chain's live tip,
+// which could run ahead of a lagging-but-healthy attestor quorum). It fans
+// LatestHeight out concurrently and takes the minimum among the attestors
+// that answered, requiring at least threshold of them to respond.
+func latestProvableHeight(
+	ctx context.Context,
+	attestors []attestor.Attestor,
+	threshold int,
+	counterpartyChain chains.Client,
+) (uint64, time.Time, error) {
 	type heightResponse struct {
 		height uint64
 		err    error
@@ -216,21 +204,21 @@ func latestHeight(ctx context.Context, attestors []namedAttestorClient, threshol
 
 	var wg sync.WaitGroup
 
-	for i, attestor := range attestors {
+	for i, a := range attestors {
 		wg.Add(1)
 
-		go func(i int, attestor namedAttestorClient) {
+		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
-			resp, err := attestor.Client.LatestHeight(ctx, connect.NewRequest(&ibcattestor.LatestHeightRequest{}))
+			height, err := a.LatestHeight(ctx)
 			if err != nil {
-				responses[i] = heightResponse{err: errors.Wrapf(err, "attestor %q", attestor.Name)}
+				responses[i] = heightResponse{err: errors.Wrapf(err, "attestor %q", a.Name())}
 
 				return
 			}
 
-			responses[i] = heightResponse{height: resp.Msg.GetHeight()}
-		}(i, attestor)
+			responses[i] = heightResponse{height: height}
+		}(i, a)
 	}
 
 	wg.Wait()
@@ -259,36 +247,16 @@ func latestHeight(ctx context.Context, attestors []namedAttestorClient, threshol
 	}
 
 	if answers < threshold {
-		return 0, errors.Errorf(
+		return 0, time.Time{}, errors.Errorf(
 			"latest height quorum not met: got %d of %d required responses (%s)",
 			answers, threshold, strings.Join(errMsgs, "; "),
 		)
 	}
 
-	return height, nil
-}
-
-func attestorClient(entry config.AttestorEntry) (ibcattestor.AttestationServiceClient, error) {
-	if entry.Type != config.AttestorTypeRemote {
-		return nil, errors.Errorf("type %q not yet supported for proof generation", entry.Type)
+	timestamp, err := counterpartyChain.BlockTimestamp(ctx, height)
+	if err != nil {
+		return 0, time.Time{}, errors.Wrapf(err, "getting timestamp for resolved height %d", height)
 	}
 
-	if entry.GRPC == "" {
-		return nil, errors.New("no grpc address configured")
-	}
-
-	return ibcattestor.NewAttestationServiceClient(newAttestorHTTPClient(), "http://"+entry.GRPC, connect.WithGRPC()), nil
-}
-
-// newAttestorHTTPClient dials attestors over unencrypted h2c, matching the
-// existing remote-attestor client used elsewhere in link. HTTP1 must stay
-// unset: net/http.Transport only uses unencrypted HTTP/2 for http:// URLs
-// when HTTP1 is excluded from the protocol set, otherwise it falls back to
-// HTTP/1.1 and fails to parse the server's HTTP/2 preface.
-func newAttestorHTTPClient() *http.Client {
-	protocols := new(http.Protocols)
-	protocols.SetHTTP2(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	return height, timestamp, nil
 }

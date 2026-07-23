@@ -8,17 +8,18 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 
-	"connectrpc.com/connect"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -36,10 +37,16 @@ var testRoute = processors.Route{
 }
 
 type pipelineEnv struct {
-	store        *store.SqliteDB
-	srcClient    *mocks.MockClient
-	dstClient    *mocks.MockClient
-	proofAPI     *proto.MockProofApiServiceClient
+	store     *store.SqliteDB
+	srcClient *mocks.MockClient
+	dstClient *mocks.MockClient
+	// dstProofGen/dstTxBuilder are resolved for the destination client/chain,
+	// used by recv delivery; srcProofGen/srcTxBuilder are resolved for the
+	// source client/chain, used by ack and timeout delivery.
+	dstProofGen  *proofgen.MockProofGenerator
+	srcProofGen  *proofgen.MockProofGenerator
+	dstTxBuilder *txbuilder.MockTxBuilder
+	srcTxBuilder *txbuilder.MockTxBuilder
 	srcTxManager *txmgr.MockTxManager
 	dstTxManager *txmgr.MockTxManager
 }
@@ -49,6 +56,20 @@ type staticChains map[string]chains.Client
 func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	client, ok := s[chainID]
 	return client, ok
+}
+
+type staticProofGenerators map[string]proofgen.ProofGenerator
+
+func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+	gen, ok := s[proofgen.Key(chainID, clientID)]
+	return gen, ok
+}
+
+type staticTxBuilders map[string]txbuilder.TxBuilder
+
+func (s staticTxBuilders) Get(chainID string) (txbuilder.TxBuilder, bool) {
+	builder, ok := s[chainID]
+	return builder, ok
 }
 
 func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
@@ -65,15 +86,25 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		store:        db,
 		srcClient:    mocks.NewMockClient(t),
 		dstClient:    mocks.NewMockClient(t),
-		proofAPI:     proto.NewMockProofApiServiceClient(t),
+		dstProofGen:  proofgen.NewMockProofGenerator(t),
+		srcProofGen:  proofgen.NewMockProofGenerator(t),
+		dstTxBuilder: txbuilder.NewMockTxBuilder(t),
+		srcTxBuilder: txbuilder.NewMockTxBuilder(t),
 		srcTxManager: txmgr.NewMockTxManager(t),
 		dstTxManager: txmgr.NewMockTxManager(t),
 	}
 
 	deps := Deps{
-		Storage:  db,
-		Chains:   staticChains{testRoute.SourceChainID: env.srcClient, testRoute.DestinationChainID: env.dstClient},
-		ProofAPI: env.proofAPI,
+		Storage: db,
+		Chains:  staticChains{testRoute.SourceChainID: env.srcClient, testRoute.DestinationChainID: env.dstClient},
+		ProofGenerators: staticProofGenerators{
+			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): env.dstProofGen,
+			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           env.srcProofGen,
+		},
+		TxBuilders: staticTxBuilders{
+			testRoute.DestinationChainID: env.dstTxBuilder,
+			testRoute.SourceChainID:      env.srcTxBuilder,
+		},
 		TxManagers: staticTxManagers{
 			testRoute.SourceChainID:      env.srcTxManager,
 			testRoute.DestinationChainID: env.dstTxManager,
@@ -81,6 +112,44 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 	}
 
 	return env, deps
+}
+
+// mockRelay wires up one batch delivery's worth of expectations across the
+// packet event, proof generation, and tx building stages, mirroring what the
+// real batch processors call in sequence. client is the mocks.MockClient
+// for whichever chain the batch reads packet events from.
+func mockRelay(
+	client *mocks.MockClient,
+	proofGen *proofgen.MockProofGenerator,
+	txBuilder *txbuilder.MockTxBuilder,
+	events []v2.PacketEvent,
+	to string,
+) {
+	const height = uint64(100)
+
+	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
+	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
+	proofGen.EXPECT().StateProof(mock.Anything, height).Return([]byte{0x01}, nil).Once()
+	proofGen.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
+		Return(make([][]byte, len(events)), nil).Once()
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
+		Return([]txbuilder.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
+}
+
+func sendPacketEvent(sequence uint64) v2.PacketEvent {
+	return v2.PacketEvent{
+		Height: 100,
+		Kind:   v2.KindSendPacket,
+		Packet: v2.Packet{Sequence: sequence, SourceClient: testRoute.SourceClientID, DestClient: testRoute.DestinationClientID},
+	}
+}
+
+func writeAckEvent(sequence uint64) v2.PacketEvent {
+	event := sendPacketEvent(sequence)
+	event.Kind = v2.KindWriteAck
+	event.Acks = [][]byte{{0xac}}
+
+	return event
 }
 
 func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processors.Transfer {
@@ -130,10 +199,6 @@ func fastOpts() Options {
 	}
 }
 
-func relayResponse(to string) *connect.Response[proto.RelayByTxResponse] {
-	return connect.NewResponse(&proto.RelayByTxResponse{Tx: []byte{0xca, 0x11}, Address: to})
-}
-
 func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer) *processors.Transfer {
 	t.Helper()
 
@@ -175,8 +240,8 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
-		// recv then ack delivery via proof api
-		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Times(2)
+		// recv delivery
+		mockRelay(env.srcClient, env.dstProofGen, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.dstTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash:         recvTxHash,
@@ -191,6 +256,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstClient.EXPECT().IsTxFinalized(mock.Anything, recvTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// ack delivery on the source chain
+		mockRelay(env.dstClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -220,7 +286,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// recv delivery
-		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Times(2)
+		mockRelay(env.srcClient, env.dstProofGen, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.dstTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -233,6 +299,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstClient.EXPECT().IsTxFinalized(mock.Anything, recvTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// ack delivery on the source chain
+		mockRelay(env.dstClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -260,7 +327,7 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstClient.EXPECT().IsTimestampFinalized(mock.Anything, mock.Anything, (*uint64)(nil)).Return(true, nil).Once()
 
 		// timeout delivery on the source chain
-		env.proofAPI.EXPECT().RelayByTx(mock.Anything, mock.Anything).Return(relayResponse("0xrouter"), nil).Once()
+		mockRelay(env.srcClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",

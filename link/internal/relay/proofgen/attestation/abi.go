@@ -1,6 +1,6 @@
-// Package attestation generates recv/ack/timeout relay transactions in
-// process by querying the attestor set configured for a client and
-// aggregating quorum, replacing the external proof api.
+// Package attestation implements proofgen.ProofGenerator for the
+// attestation-based light client: it queries a client's configured attestor
+// set for quorum-verified state and packet claims.
 package attestation
 
 import (
@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -54,37 +55,31 @@ type AttestationProof struct {
 }
 
 var (
-	packetType            abi.Type
+	packetArgs            = abi.Arguments{{Type: routerPacketType()}}
 	stateAttestationArgs  abi.Arguments
 	packetAttestationArgs abi.Arguments
 	attestationProofArgs  abi.Arguments
 )
 
+// routerPacketType returns the IICS26RouterMsgs.Packet tuple type straight
+// out of the already-vendored router ABI (the same one txbuilder/evm packs
+// recvPacket/ackPacket/timeoutPacket calls with), rather than hand-mirroring
+// the packet shape a second time: a change to the router's packet ABI then
+// only needs to be regenerated in one place instead of kept in sync by hand
+// in two.
+func routerPacketType() abi.Type {
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	if err != nil {
+		panic(errors.Wrap(err, "parsing ics26 router abi"))
+	}
+
+	// recvPacket(MsgRecvPacket{packet, proofCommitment, proofHeight}); the
+	// packet field is the first element of that tuple.
+	return *routerABI.Methods["recvPacket"].Inputs[0].Type.TupleElems[0]
+}
+
 //nolint:gochecknoinits // one-time ABI type construction, mirrors abigen's own package-level MetaData pattern
 func init() {
-	payloadComponents := []abi.ArgumentMarshaling{
-		{Name: "sourcePort", Type: "string"},
-		{Name: "destPort", Type: "string"},
-		{Name: "version", Type: "string"},
-		{Name: "encoding", Type: "string"},
-		{Name: "value", Type: "bytes"},
-	}
-
-	packetComponents := []abi.ArgumentMarshaling{
-		{Name: "sequence", Type: "uint64"},
-		{Name: "sourceClient", Type: "string"},
-		{Name: "destClient", Type: "string"},
-		{Name: "timeoutTimestamp", Type: "uint64"},
-		{Name: "payloads", Type: "tuple[]", Components: payloadComponents},
-	}
-
-	var err error
-
-	packetType, err = abi.NewType("tuple", "", packetComponents)
-	if err != nil {
-		panic(errors.Wrap(err, "constructing packet abi type"))
-	}
-
 	stateAttestationType, err := abi.NewType("tuple", "", []abi.ArgumentMarshaling{
 		{Name: "height", Type: "uint64"},
 		{Name: "timestamp", Type: "uint64"},
@@ -119,28 +114,12 @@ func init() {
 	attestationProofArgs = abi.Arguments{{Type: attestationProofType}}
 }
 
-type abiPayload struct {
-	SourcePort string
-	DestPort   string
-	Version    string
-	Encoding   string
-	Value      []byte
-}
-
-type abiPacket struct {
-	Sequence         uint64
-	SourceClient     string
-	DestClient       string
-	TimeoutTimestamp uint64
-	Payloads         []abiPayload
-}
-
 // encodePacket abi-encodes a packet as the Solidity IICS26RouterMsgs.Packet
 // tuple, the shape the attestor's PacketAttestationRequest.packets expects.
 func encodePacket(packet v2.Packet) ([]byte, error) {
-	payloads := make([]abiPayload, len(packet.Payloads))
+	payloads := make([]ics26router.IICS26RouterMsgsPayload, len(packet.Payloads))
 	for i, p := range packet.Payloads {
-		payloads[i] = abiPayload{
+		payloads[i] = ics26router.IICS26RouterMsgsPayload{
 			SourcePort: p.SourcePort,
 			DestPort:   p.DestPort,
 			Version:    p.Version,
@@ -149,7 +128,7 @@ func encodePacket(packet v2.Packet) ([]byte, error) {
 		}
 	}
 
-	value := abiPacket{
+	value := ics26router.IICS26RouterMsgsPacket{
 		Sequence:         packet.Sequence,
 		SourceClient:     packet.SourceClient,
 		DestClient:       packet.DestClient,
@@ -157,7 +136,7 @@ func encodePacket(packet v2.Packet) ([]byte, error) {
 		Payloads:         payloads,
 	}
 
-	encoded, err := (abi.Arguments{{Type: packetType}}).Pack(value)
+	encoded, err := packetArgs.Pack(value)
 	if err != nil {
 		return nil, errors.Wrap(err, "encoding packet")
 	}

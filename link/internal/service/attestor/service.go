@@ -145,6 +145,15 @@ func (s *Service) Add(id string, attestor Attestor) {
 	s.attestors[id] = attestor
 }
 
+// Get resolves a configured attestor by alias, for callers within this same
+// process that want to use it directly (e.g. proof generation resolving a
+// "local" attestor entry) instead of going through the gRPC-facing methods
+// below.
+func (s *Service) Get(alias string) (Attestor, bool) {
+	a, ok := s.attestors[alias]
+	return a, ok
+}
+
 func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {
 	a, ok := s.attestors[attestor]
 	if !ok {

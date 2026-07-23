@@ -116,7 +116,7 @@ func TestTxPacketEvents(t *testing.T) {
 	t.Run("parsesWriteAck", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		eth := NewMockETHClient(t)
+		eth := mocks.NewMockETHClient(t)
 		client, err := NewWithClient(chainIDEth, eth, routerAddress)
 		require.NoError(t, err)
 

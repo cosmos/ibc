@@ -17,6 +17,7 @@ import (
 type Client interface {
 	ChainID() string
 
+	// TxPacketEvents reads packet events out of a tx's receipt logs.
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
 
 	// IsPacketReceived reports whether a packet receipt exists on the
@@ -53,6 +54,11 @@ type Client interface {
 	// finalized head; otherwise against the block finalityOffset blocks behind
 	// the latest.
 	IsTimestampFinalized(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error)
+
+	// BlockTimestamp returns the timestamp of the block at height. height is
+	// assumed to already be in the past (e.g. a height a light client or
+	// attestor quorum has already observed), not the current chain tip.
+	BlockTimestamp(ctx context.Context, height uint64) (time.Time, error)
 
 	// WaitForChain blocks until the chain's latest block time catches up to
 	// the current time.

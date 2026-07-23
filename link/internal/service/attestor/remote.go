@@ -141,11 +141,12 @@ func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
 	}
 }
 
-// https://connectrpc.com/docs/go/getting-started/#make-requests
-// todo: revisit these params
+// newConnectHTTPClient dials attestors over unencrypted h2c. HTTP1 must stay
+// unset: net/http.Transport only uses unencrypted HTTP/2 for http:// URLs
+// when HTTP1 is excluded from the protocol set, otherwise it falls back to
+// HTTP/1.1 and fails to parse the server's HTTP/2 preface.
 func newConnectHTTPClient() *http.Client {
 	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 

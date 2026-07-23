@@ -38,6 +38,72 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 	return &MockClient_Expecter{mock: &_m.Mock}
 }
 
+// BlockTimestamp provides a mock function for the type MockClient
+func (_mock *MockClient) BlockTimestamp(ctx context.Context, height uint64) (time.Time, error) {
+	ret := _mock.Called(ctx, height)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BlockTimestamp")
+	}
+
+	var r0 time.Time
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) (time.Time, error)); ok {
+		return returnFunc(ctx, height)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) time.Time); ok {
+		r0 = returnFunc(ctx, height)
+	} else {
+		r0 = ret.Get(0).(time.Time)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
+		r1 = returnFunc(ctx, height)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_BlockTimestamp_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BlockTimestamp'
+type MockClient_BlockTimestamp_Call struct {
+	*mock.Call
+}
+
+// BlockTimestamp is a helper method to define mock.On call
+//   - ctx context.Context
+//   - height uint64
+func (_e *MockClient_Expecter) BlockTimestamp(ctx any, height any) *MockClient_BlockTimestamp_Call {
+	return &MockClient_BlockTimestamp_Call{Call: _e.mock.On("BlockTimestamp", ctx, height)}
+}
+
+func (_c *MockClient_BlockTimestamp_Call) Run(run func(ctx context.Context, height uint64)) *MockClient_BlockTimestamp_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uint64
+		if args[1] != nil {
+			arg1 = args[1].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_BlockTimestamp_Call) Return(time1 time.Time, err error) *MockClient_BlockTimestamp_Call {
+	_c.Call.Return(time1, err)
+	return _c
+}
+
+func (_c *MockClient_BlockTimestamp_Call) RunAndReturn(run func(ctx context.Context, height uint64) (time.Time, error)) *MockClient_BlockTimestamp_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ChainID provides a mock function for the type MockClient
 func (_mock *MockClient) ChainID() string {
 	ret := _mock.Called()
