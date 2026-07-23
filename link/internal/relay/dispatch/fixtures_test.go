@@ -12,6 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
@@ -55,8 +56,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	deps := pipeline.Deps{
 		Storage: db,
 		Chains: staticChains{
-			testRoute.SourceChainID:      chains.NewMockClient(t),
-			testRoute.DestinationChainID: chains.NewMockClient(t),
+			testRoute.SourceChainID:      mocks.NewMockClient(t),
+			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
 		ProofAPI: proto.NewMockProofApiServiceClient(t),
 		TxManagers: staticTxManagers{

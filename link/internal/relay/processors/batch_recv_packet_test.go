@@ -12,6 +12,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
@@ -56,7 +57,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
-	client := chains.NewMockClient(t)
+	client := mocks.NewMockClient(t)
 	client.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 
 	proofAPI := proto.NewMockProofApiServiceClient(t)

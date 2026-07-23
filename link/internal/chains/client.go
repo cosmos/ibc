@@ -15,6 +15,8 @@ import (
 
 // Client provides chain state queries.
 type Client interface {
+	ChainID() string
+
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
 
 	// IsPacketReceived reports whether a packet receipt exists on the
@@ -55,6 +57,14 @@ type Client interface {
 	// WaitForChain blocks until the chain's latest block time catches up to
 	// the current time.
 	WaitForChain(ctx context.Context) error
+
+	// GetBlockHeader returns the header at height, used by the attestor to
+	// read block timestamps for state attestations.
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+
+	// GetCommitment reads the IBC commitment stored at pathHash at height,
+	// used by the attestor to independently verify packet/ack/receipt claims.
+	GetCommitment(ctx context.Context, height uint64, pathHash [32]byte) ([32]byte, error)
 }
 
 var _ Client = (*evm.Client)(nil)

@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txmgr"
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -36,8 +37,8 @@ var testRoute = processors.Route{
 
 type pipelineEnv struct {
 	store        *store.SqliteDB
-	srcClient    *chains.MockClient
-	dstClient    *chains.MockClient
+	srcClient    *mocks.MockClient
+	dstClient    *mocks.MockClient
 	proofAPI     *proto.MockProofApiServiceClient
 	srcTxManager *txmgr.MockTxManager
 	dstTxManager *txmgr.MockTxManager
@@ -62,8 +63,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 
 	env := &pipelineEnv{
 		store:        db,
-		srcClient:    chains.NewMockClient(t),
-		dstClient:    chains.NewMockClient(t),
+		srcClient:    mocks.NewMockClient(t),
+		dstClient:    mocks.NewMockClient(t),
 		proofAPI:     proto.NewMockProofApiServiceClient(t),
 		srcTxManager: txmgr.NewMockTxManager(t),
 		dstTxManager: txmgr.NewMockTxManager(t),

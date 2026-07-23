@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -63,7 +63,7 @@ func TestRelay(t *testing.T) {
 		ctx := context.Background()
 		st := NewMockStore(t)
 		repo := store.NewMockRepository(t)
-		client := chains.NewMockClient(t)
+		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients)
 
@@ -159,7 +159,7 @@ func TestRelay(t *testing.T) {
 	t.Run("extractionError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
-		client := chains.NewMockClient(t)
+		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), NewMockStore(t), clients)
 
@@ -204,7 +204,7 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		client := chains.NewMockClient(t)
+		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients)
 

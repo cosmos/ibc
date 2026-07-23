@@ -39,9 +39,9 @@ packages:
       Repository:
   github.com/cosmos/ibc/link/internal/chains:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "chains.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "chainclient.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Client:
@@ -72,9 +72,9 @@ packages:
       ETHClient:
   github.com/cosmos/ibc/link/internal/chains/evm:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "evm.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "ethclient.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       ETHClient:
