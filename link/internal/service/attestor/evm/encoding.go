@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 )
 
 // PacketCompact mirrors the Solidity PacketCompact struct.
@@ -110,36 +110,36 @@ func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, er
 }
 
 // DecodePacket decodes a Solidity ABI-encoded IBC v2 packet.
-func DecodePacket(data []byte) (v2.Packet, error) {
+func DecodePacket(data []byte) (channeltypesv2.Packet, error) {
 	values, err := packetArgs.Unpack(data)
 	if err != nil {
-		return v2.Packet{}, fmt.Errorf("unpack packet: %w", err)
+		return channeltypesv2.Packet{}, fmt.Errorf("unpack packet: %w", err)
 	}
 
 	var decoded struct {
 		Packet packet
 	}
 	if err := packetArgs.Copy(&decoded, values); err != nil {
-		return v2.Packet{}, fmt.Errorf("copy packet: %w", err)
+		return channeltypesv2.Packet{}, fmt.Errorf("copy packet: %w", err)
 	}
 
-	payloads := make([]v2.Payload, len(decoded.Packet.Payloads))
+	payloads := make([]channeltypesv2.Payload, len(decoded.Packet.Payloads))
 	for i, item := range decoded.Packet.Payloads {
-		payloads[i] = v2.Payload{
-			SourcePort: item.SourcePort,
-			DestPort:   item.DestPort,
-			Version:    item.Version,
-			Encoding:   item.Encoding,
-			Value:      item.Value,
+		payloads[i] = channeltypesv2.Payload{
+			SourcePort:      item.SourcePort,
+			DestinationPort: item.DestPort,
+			Version:         item.Version,
+			Encoding:        item.Encoding,
+			Value:           item.Value,
 		}
 	}
 
-	return v2.Packet{
-		Sequence:         decoded.Packet.Sequence,
-		SourceClient:     decoded.Packet.SourceClient,
-		DestClient:       decoded.Packet.DestClient,
-		TimeoutTimestamp: decoded.Packet.TimeoutTimestamp,
-		Payloads:         payloads,
+	return channeltypesv2.Packet{
+		Sequence:          decoded.Packet.Sequence,
+		SourceClient:      decoded.Packet.SourceClient,
+		DestinationClient: decoded.Packet.DestClient,
+		TimeoutTimestamp:  decoded.Packet.TimeoutTimestamp,
+		Payloads:          payloads,
 	}, nil
 }
 

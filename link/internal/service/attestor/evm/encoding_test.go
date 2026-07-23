@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,25 +13,25 @@ import (
 func TestDecodePacket(t *testing.T) {
 	t.Run("decodesPacketAndPayloads", func(t *testing.T) {
 		// ARRANGE
-		expected := v2.Packet{
-			Sequence:         7,
-			SourceClient:     "source-client",
-			DestClient:       "destination-client",
-			TimeoutTimestamp: 1_700_000_000,
-			Payloads: []v2.Payload{
+		expected := channeltypesv2.Packet{
+			Sequence:          7,
+			SourceClient:      "source-client",
+			DestinationClient: "destination-client",
+			TimeoutTimestamp:  1_700_000_000,
+			Payloads: []channeltypesv2.Payload{
 				{
-					SourcePort: "transfer",
-					DestPort:   "transfer",
-					Version:    "ics20-1",
-					Encoding:   "application/json",
-					Value:      []byte("payload"),
+					SourcePort:      "transfer",
+					DestinationPort: "transfer",
+					Version:         "ics20-1",
+					Encoding:        "application/json",
+					Value:           []byte("payload"),
 				},
 				{
-					SourcePort: "gmp",
-					DestPort:   "destination-gmp",
-					Version:    "ics27-1",
-					Encoding:   "application/x-solidity-abi",
-					Value:      []byte{1, 2, 3},
+					SourcePort:      "gmp",
+					DestinationPort: "destination-gmp",
+					Version:         "ics27-1",
+					Encoding:        "application/x-solidity-abi",
+					Value:           []byte{1, 2, 3},
 				},
 			},
 		}
@@ -41,19 +41,19 @@ func TestDecodePacket(t *testing.T) {
 			ics26router.IICS26RouterMsgsPacket{
 				Sequence:         expected.Sequence,
 				SourceClient:     expected.SourceClient,
-				DestClient:       expected.DestClient,
+				DestClient:       expected.DestinationClient,
 				TimeoutTimestamp: expected.TimeoutTimestamp,
 				Payloads: []ics26router.IICS26RouterMsgsPayload{
 					{
 						SourcePort: expected.Payloads[0].SourcePort,
-						DestPort:   expected.Payloads[0].DestPort,
+						DestPort:   expected.Payloads[0].DestinationPort,
 						Version:    expected.Payloads[0].Version,
 						Encoding:   expected.Payloads[0].Encoding,
 						Value:      expected.Payloads[0].Value,
 					},
 					{
 						SourcePort: expected.Payloads[1].SourcePort,
-						DestPort:   expected.Payloads[1].DestPort,
+						DestPort:   expected.Payloads[1].DestinationPort,
 						Version:    expected.Payloads[1].Version,
 						Encoding:   expected.Payloads[1].Encoding,
 						Value:      expected.Payloads[1].Value,

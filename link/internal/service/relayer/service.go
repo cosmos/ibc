@@ -155,7 +155,7 @@ func (s *Service) packetsFromEvents(chainID, txHash string, events []v2.PacketEv
 			SourceTxTime:              event.BlockTime,
 			PacketSequenceNumber:      event.Packet.Sequence,
 			PacketSourceClientID:      event.Packet.SourceClient,
-			PacketDestinationClientID: event.Packet.DestClient,
+			PacketDestinationClientID: event.Packet.DestinationClient,
 			PacketTimeoutTimestamp:    unixTime(event.Packet.TimeoutTimestamp),
 		})
 	}
