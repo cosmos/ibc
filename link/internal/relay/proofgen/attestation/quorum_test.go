@@ -11,7 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // signedAttestor builds a attestor.MockAttestor whose StateAttestation call
@@ -23,7 +25,7 @@ func signedAttestor(t *testing.T, name string, attestedData []byte) *attestor.Mo
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	digest := taggedDigest(attestedData, attestationTypeState)
+	digest := attestorevm.Digest(attestorevm.TagStateAttestation, attestedData)
 	sig, err := crypto.Sign(digest[:], key)
 	require.NoError(t, err)
 
@@ -110,7 +112,7 @@ func TestQueryQuorum(t *testing.T) {
 		key, err := crypto.GenerateKey()
 		require.NoError(t, err)
 
-		digest := taggedDigest(data, attestationTypeState)
+		digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
 		sig, err := crypto.Sign(digest[:], key)
 		require.NoError(t, err)
 
@@ -170,7 +172,7 @@ func TestLatestProvableHeight(t *testing.T) {
 		}
 
 		counterpartyChain := mocks.NewMockClient(t)
-		counterpartyChain.EXPECT().BlockTimestamp(mock.Anything, uint64(80)).Return(someBlockTime, nil)
+		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(80)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 		height, timestamp, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
 		require.NoError(t, err)
@@ -186,7 +188,7 @@ func TestLatestProvableHeight(t *testing.T) {
 		}
 
 		counterpartyChain := mocks.NewMockClient(t)
-		counterpartyChain.EXPECT().BlockTimestamp(mock.Anything, uint64(95)).Return(someBlockTime, nil)
+		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(95)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 		height, _, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
 		require.NoError(t, err)
@@ -200,7 +202,7 @@ func TestLatestProvableHeight(t *testing.T) {
 			erroringHeightAttestor(t, "down2"),
 		}
 
-		// no BlockTimestamp expectation: quorum failure must short-circuit
+		// no GetBlockHeader expectation: quorum failure must short-circuit
 		// before ever consulting the chain
 		counterpartyChain := mocks.NewMockClient(t)
 
@@ -215,9 +217,9 @@ func TestLatestProvableHeight(t *testing.T) {
 		}
 
 		counterpartyChain := mocks.NewMockClient(t)
-		counterpartyChain.EXPECT().BlockTimestamp(mock.Anything, uint64(100)).Return(time.Time{}, assert.AnError)
+		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(100)).Return(v2.BlockHeader{}, assert.AnError)
 
 		_, _, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
-		require.ErrorContains(t, err, "getting timestamp")
+		require.ErrorContains(t, err, "getting header")
 	})
 }

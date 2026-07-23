@@ -10,6 +10,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -41,13 +42,13 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 		return nil, errors.Wrap(err, "querying state attestation quorum")
 	}
 
-	decoded, err := decodeStateAttestation(result.AttestationData)
+	decodedHeight, _, err := attestorevm.DecodeStateAttestation(result.AttestationData)
 	if err != nil {
 		return nil, errors.Wrap(err, "decoding state attestation quorum result")
 	}
 
-	if decoded.Height != height {
-		return nil, errors.Errorf("state attestation height %d does not match requested height %d", decoded.Height, height)
+	if decodedHeight != height {
+		return nil, errors.Errorf("state attestation height %d does not match requested height %d", decodedHeight, height)
 	}
 
 	proof, err := encodeAttestationProof(AttestationProof{
@@ -75,7 +76,7 @@ func (g *Generator) PacketProofs(
 	encodedPackets := make([][]byte, len(packets))
 
 	for i, packet := range packets {
-		encoded, errEnc := encodePacket(packet)
+		encoded, errEnc := attestorevm.EncodePacket(packet)
 		if errEnc != nil {
 			return nil, errors.Wrapf(errEnc, "encoding packet sequence %d", packet.Sequence)
 		}
@@ -88,17 +89,17 @@ func (g *Generator) PacketProofs(
 		return nil, errors.Wrap(err, "querying packet attestation quorum")
 	}
 
-	decoded, err := decodePacketAttestation(result.AttestationData)
+	decodedHeight, decodedPackets, err := attestorevm.DecodePacketAttestation(result.AttestationData)
 	if err != nil {
 		return nil, errors.Wrap(err, "decoding packet attestation quorum result")
 	}
 
-	if decoded.Height != height {
-		return nil, errors.Errorf("packet attestation height %d does not match requested height %d", decoded.Height, height)
+	if decodedHeight != height {
+		return nil, errors.Errorf("packet attestation height %d does not match requested height %d", decodedHeight, height)
 	}
 
-	if len(decoded.Packets) != len(packets) {
-		return nil, errors.Errorf("packet attestation returned %d packets, expected %d", len(decoded.Packets), len(packets))
+	if len(decodedPackets) != len(packets) {
+		return nil, errors.Errorf("packet attestation returned %d packets, expected %d", len(decodedPackets), len(packets))
 	}
 
 	proof, err := encodeAttestationProof(AttestationProof{
@@ -136,16 +137,11 @@ func commitmentTypeOf(kind proofgen.ProofKind) (attestor.CommitmentType, error) 
 // NewSetFromConfig resolves every configured client's attestor set, up
 // front, so the request path only ever queries already-resolved attestors.
 // clientSet resolves the chain client for each client's counterparty chain,
-// used to look up a resolved height's timestamp directly. dualMode is the
-// attestor service this same process runs, if any (nil when this process
-// doesn't run any attestors); a "local" attestor entry resolves to the
-// attestor dualMode already runs instead of dialing this process's own
-// server over the network.
+// used to look up a resolved height's timestamp directly.
 func NewSetFromConfig(
 	cfg config.Config,
 	clientSet *chains.ClientSet,
 	signers *signer.Set,
-	dualMode *attestor.Service,
 ) (*proofgen.Set, error) {
 	generators := make(map[string]proofgen.ProofGenerator, len(cfg.Relayer.Clients))
 
@@ -157,7 +153,7 @@ func NewSetFromConfig(
 		attestors := make([]attestor.Attestor, 0, len(clientCfg.AttestorSet.Attestors))
 
 		for _, entry := range clientCfg.AttestorSet.Attestors {
-			a, err := resolveAttestor(cfg, entry, clientCfg.CounterpartyChainID, clientSet, signers, dualMode)
+			a, err := resolveAttestor(cfg, entry, clientCfg.CounterpartyChainID, clientSet, signers)
 			if err != nil {
 				return nil, errors.Wrapf(err, "client %q attestor %q", clientCfg.Alias, entry.Name)
 			}
@@ -179,18 +175,17 @@ func NewSetFromConfig(
 }
 
 // resolveAttestor resolves one configured attestor-set entry to the
-// attestor.Attestor abstraction: a remote entry dials it directly; a local
-// entry is resolved against dualMode, the attestor service this same
-// process already runs (see NewSetFromConfig), so no client is created at
-// all for it. watchedChainID is the chain the attestor is expected to be
-// attesting, used only to label the remote attestor for logging.
+// attestor.Attestor abstraction: a remote entry dials it; a local entry
+// constructs the same attestor.LocalAttestor implementation this process
+// would run in dual mode, in-process, with no client or dial involved.
+// watchedChainID is the chain the attestor is expected to be attesting,
+// used only to label the remote attestor for logging.
 func resolveAttestor(
 	cfg config.Config,
 	entry config.AttestorEntry,
 	watchedChainID string,
 	clientSet *chains.ClientSet,
 	signers *signer.Set,
-	dualMode *attestor.Service,
 ) (attestor.Attestor, error) {
 	switch entry.Type {
 	case config.AttestorTypeRemote:
@@ -200,12 +195,6 @@ func resolveAttestor(
 
 		return attestor.NewRemoteFromURL(watchedChainID, entry.Name, entry.Name, "http://"+entry.GRPC), nil
 	case config.AttestorTypeLocal:
-		if dualMode != nil {
-			if a, ok := dualMode.Get(entry.Name); ok {
-				return a, nil
-			}
-		}
-
 		spec, ok := findAttestationConfig(cfg, entry.Name)
 		if !ok {
 			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)

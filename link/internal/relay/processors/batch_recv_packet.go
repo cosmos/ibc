@@ -61,38 +61,14 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		return nil, errors.Errorf("no configured chain client for chain %s", p.route.SourceChainID)
 	}
 
-	events := batchPacketEvents(ctx, sourceClient, transfers, func(tr *Transfer) (string, bool) {
-		return tr.SourceTxHash, true
-	})
-
-	events = filterProvableEvents(events, height, transfers)
+	events := batchPacketEvents(ctx, sourceClient, transfers, txbuilder.KindRecv, height)
 	if len(events) == 0 {
 		return transfers, nil
 	}
 
-	stateProof, err := proofGen.StateProof(ctx, height)
-	if err != nil {
-		return nil, errors.Wrap(err, "generating state proof")
-	}
-
-	packets := make([]v2.Packet, len(events))
-	for i, event := range events {
-		packets[i] = event.Packet
-	}
-
-	packetProofs, err := proofGen.PacketProofs(ctx, height, proofgen.KindPacketCommitment, packets)
-	if err != nil {
-		return nil, errors.Wrap(err, "generating packet proofs")
-	}
-
-	items := make([]txbuilder.PacketRelayItem, len(packets))
-	for i, packet := range packets {
-		items[i] = txbuilder.PacketRelayItem{
-			Kind:        txbuilder.KindRecv,
-			Packet:      packet,
-			Proof:       packetProofs[i],
-			ProofHeight: height,
-		}
+	destinationClient, ok := p.chains.Get(p.route.DestinationChainID)
+	if !ok {
+		return nil, errors.Errorf("no configured chain client for chain %s", p.route.DestinationChainID)
 	}
 
 	txBuilder, ok := p.txBuilders.Get(p.route.DestinationChainID)
@@ -100,35 +76,18 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		return nil, errors.Errorf("no tx builder configured for chain %s", p.route.DestinationChainID)
 	}
 
-	relayTxs, err := txBuilder.BuildRelayTxs(txbuilder.ClientUpdate{
-		ClientID:   p.route.DestinationClientID,
-		StateProof: stateProof,
-	}, items)
+	relayTx, err := buildRelayTx(
+		ctx, destinationClient, proofGen, txBuilder,
+		p.route.DestinationClientID, proofgen.KindPacketCommitment, txbuilder.KindRecv,
+		height, events,
+	)
 	if err != nil {
-		return nil, errors.Wrap(err, "building relay tx")
-	}
-
-	if len(relayTxs) != 1 {
-		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
-	}
-
-	client, ok := p.chains.Get(p.route.DestinationChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for chain %s", p.route.DestinationChainID)
-	}
-
-	// the chain must be caught up to the current time before gas estimation
-	// during delivery, or the tx reverts
-	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
-	defer cancel()
-
-	if errWait := client.WaitForChain(waitCtx); errWait != nil {
-		return nil, errors.Wrap(errWait, "waiting for chain")
+		return nil, err
 	}
 
 	submission, err := p.txManager.Submit(ctx, v2.TxIntent{
-		To:   common.BytesToAddress(relayTxs[0].To).Hex(),
-		Data: relayTxs[0].Data,
+		To:   common.BytesToAddress(relayTx.To).Hex(),
+		Data: relayTx.Data,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "submitting relay tx")

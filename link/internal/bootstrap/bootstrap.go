@@ -67,25 +67,6 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(relayerHandler)
 
-	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.
-	// This might be useful for PoC/testing environments or when an operator wants to run the relayer
-	// and one of attestors in the same process. Built before the dispatcher so proof generation can
-	// resolve "local" attestor entries against the attestors this same process already runs, instead
-	// of dialing itself over gRPC.
-	var attestorService *attestor.Service
-	if len(cfg.Attestor.Attestations) > 0 {
-		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
-
-		var attestorHandler *server.AttestorHandler
-
-		attestorService, attestorHandler, err = buildAttestor(cfg, clientSet, signers)
-		if err != nil {
-			return nil, err
-		}
-
-		srv.Register(attestorHandler)
-	}
-
 	// Relaying dispatcher; only assembled when routes are configured
 	var dispatcher *dispatch.RelayDispatcher
 	if len(cfg.Relayer.Routes) > 0 {
@@ -94,7 +75,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 			return nil, errTxManagers
 		}
 
-		proofGenerators, errProofGenerators := proofgenattestation.NewSetFromConfig(cfg, clientSet, signers, attestorService)
+		proofGenerators, errProofGenerators := proofgenattestation.NewSetFromConfig(cfg, clientSet, signers)
 		if errProofGenerators != nil {
 			return nil, errProofGenerators
 		}
@@ -116,14 +97,28 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	services := &Services{
-		Context:         ctx,
-		Logger:          logger,
-		Server:          srv,
-		Store:           db,
-		Signers:         signers,
-		RelayerService:  relayerService,
-		Dispatcher:      dispatcher,
-		AttestorService: attestorService,
+		Context:        ctx,
+		Logger:         logger,
+		Server:         srv,
+		Store:          db,
+		Signers:        signers,
+		RelayerService: relayerService,
+		Dispatcher:     dispatcher,
+	}
+
+	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.
+	// This might be useful for PoC/testing environments or when an operator wants to run the relayer
+	// and one of attestors in the same process
+	if len(cfg.Attestor.Attestations) > 0 {
+		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
+
+		attestorService, attestorHandler, err := buildAttestor(cfg, clientSet, signers)
+		if err != nil {
+			return nil, err
+		}
+
+		services.AttestorService = attestorService
+		srv.Register(attestorHandler)
 	}
 
 	return services, nil

@@ -96,6 +96,24 @@ func EncodeStateAttestation(height, timestamp uint64) ([]byte, error) {
 	return data, nil
 }
 
+// DecodeStateAttestation decodes a Solidity ABI-encoded StateAttestation
+// struct, the inverse of EncodeStateAttestation.
+func DecodeStateAttestation(data []byte) (height, timestamp uint64, err error) {
+	values, err := stateAttestationArgs.Unpack(data)
+	if err != nil {
+		return 0, 0, fmt.Errorf("unpack state attestation: %w", err)
+	}
+
+	var decoded struct {
+		StateAttestation stateAttestation
+	}
+	if err := stateAttestationArgs.Copy(&decoded, values); err != nil {
+		return 0, 0, fmt.Errorf("copy state attestation: %w", err)
+	}
+
+	return decoded.StateAttestation.Height, decoded.StateAttestation.Timestamp, nil
+}
+
 // EncodePacketAttestation encodes the Solidity PacketAttestation struct.
 func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, error) {
 	data, err := packetAttestationArgs.Pack(packetAttestation{
@@ -104,6 +122,52 @@ func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, er
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode packet attestation: %w", err)
+	}
+
+	return data, nil
+}
+
+// DecodePacketAttestation decodes a Solidity ABI-encoded PacketAttestation
+// struct, the inverse of EncodePacketAttestation.
+func DecodePacketAttestation(data []byte) (height uint64, packets []PacketCompact, err error) {
+	values, err := packetAttestationArgs.Unpack(data)
+	if err != nil {
+		return 0, nil, fmt.Errorf("unpack packet attestation: %w", err)
+	}
+
+	var decoded struct {
+		PacketAttestation packetAttestation
+	}
+	if err := packetAttestationArgs.Copy(&decoded, values); err != nil {
+		return 0, nil, fmt.Errorf("copy packet attestation: %w", err)
+	}
+
+	return decoded.PacketAttestation.Height, decoded.PacketAttestation.Packets, nil
+}
+
+// EncodePacket encodes a v2.Packet as the Solidity ABI IICS26RouterMsgs.Packet
+// tuple, the inverse of DecodePacket.
+func EncodePacket(p v2.Packet) ([]byte, error) {
+	payloads := make([]payload, len(p.Payloads))
+	for i, item := range p.Payloads {
+		payloads[i] = payload{
+			SourcePort: item.SourcePort,
+			DestPort:   item.DestPort,
+			Version:    item.Version,
+			Encoding:   item.Encoding,
+			Value:      item.Value,
+		}
+	}
+
+	data, err := packetArgs.Pack(packet{
+		Sequence:         p.Sequence,
+		SourceClient:     p.SourceClient,
+		DestClient:       p.DestClient,
+		TimeoutTimestamp: p.TimeoutTimestamp,
+		Payloads:         payloads,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode packet: %w", err)
 	}
 
 	return data, nil

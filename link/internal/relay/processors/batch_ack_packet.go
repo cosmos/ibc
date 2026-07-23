@@ -14,9 +14,7 @@ import (
 )
 
 // BatchAckPacket delivers one ack tx on the source chain for a batch of
-// transfers. Acks flow back toward the original source chain, so the
-// destination client processing them is the source chain's client tracking
-// the destination chain.
+// transfers.
 type BatchAckPacket struct {
 	chains          ChainClients
 	storage         TxStorage
@@ -62,75 +60,10 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 		return nil, errors.Errorf("no configured chain client for chain %s", p.route.DestinationChainID)
 	}
 
-	events := batchPacketEvents(ctx, destinationClient, transfers, func(tr *Transfer) (string, bool) {
-		if tr.WriteAckTxHash == nil {
-			return "", false
-		}
-
-		return *tr.WriteAckTxHash, true
-	})
-
-	events = filterProvableEvents(events, height, transfers)
+	events := batchPacketEvents(ctx, destinationClient, transfers, txbuilder.KindAck, height)
+	events = filterAcksPresent(events, transfers)
 	if len(events) == 0 {
 		return transfers, nil
-	}
-
-	stateProof, err := proofGen.StateProof(ctx, height)
-	if err != nil {
-		return nil, errors.Wrap(err, "generating state proof")
-	}
-
-	packets := make([]v2.Packet, len(events))
-	for i, event := range events {
-		packets[i] = event.Packet
-	}
-
-	packetProofs, err := proofGen.PacketProofs(ctx, height, proofgen.KindAcknowledgement, packets)
-	if err != nil {
-		return nil, errors.Wrap(err, "generating packet proofs")
-	}
-
-	bySeq := transfersBySequence(transfers)
-
-	items := make([]txbuilder.PacketRelayItem, 0, len(events))
-
-	for i, event := range events {
-		if len(event.Acks) == 0 {
-			if tr, ok := bySeq[event.Packet.Sequence]; ok {
-				tr.ProcessingError = errors.Errorf("no acknowledgement recorded for sequence %d", event.Packet.Sequence)
-			}
-
-			continue
-		}
-
-		items = append(items, txbuilder.PacketRelayItem{
-			Kind:        txbuilder.KindAck,
-			Packet:      event.Packet,
-			Acks:        event.Acks,
-			Proof:       packetProofs[i],
-			ProofHeight: height,
-		})
-	}
-
-	if len(items) == 0 {
-		return transfers, nil
-	}
-
-	txBuilder, ok := p.txBuilders.Get(p.route.SourceChainID)
-	if !ok {
-		return nil, errors.Errorf("no tx builder configured for chain %s", p.route.SourceChainID)
-	}
-
-	relayTxs, err := txBuilder.BuildRelayTxs(txbuilder.ClientUpdate{
-		ClientID:   p.route.SourceClientID,
-		StateProof: stateProof,
-	}, items)
-	if err != nil {
-		return nil, errors.Wrap(err, "building relay tx")
-	}
-
-	if len(relayTxs) != 1 {
-		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
 	}
 
 	client, ok := p.chains.Get(p.route.SourceChainID)
@@ -138,18 +71,23 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 		return nil, errors.Errorf("no configured chain client for chain %s", p.route.SourceChainID)
 	}
 
-	// the chain must be caught up to the current time before gas estimation
-	// during delivery, or the tx reverts
-	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
-	defer cancel()
+	txBuilder, ok := p.txBuilders.Get(p.route.SourceChainID)
+	if !ok {
+		return nil, errors.Errorf("no tx builder configured for chain %s", p.route.SourceChainID)
+	}
 
-	if errWait := client.WaitForChain(waitCtx); errWait != nil {
-		return nil, errors.Wrap(errWait, "waiting for chain")
+	relayTx, err := buildRelayTx(
+		ctx, client, proofGen, txBuilder,
+		p.route.SourceClientID, proofgen.KindAcknowledgement, txbuilder.KindAck,
+		height, events,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	submission, err := p.txManager.Submit(ctx, v2.TxIntent{
-		To:   common.BytesToAddress(relayTxs[0].To).Hex(),
-		Data: relayTxs[0].Data,
+		To:   common.BytesToAddress(relayTx.To).Hex(),
+		Data: relayTx.Data,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "submitting relay tx")

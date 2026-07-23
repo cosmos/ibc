@@ -106,7 +106,6 @@ func (c *Client) ChainID() string {
 	return c.chainID
 }
 
-// TxPacketEvents reads packet events out of a tx's receipt logs.
 func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.PacketEvent, error) {
 	if len(rawTxHash) != common.HashLength {
 		return nil, errors.Errorf("invalid tx hash length %d, expected %d", len(rawTxHash), common.HashLength)
@@ -195,16 +194,6 @@ func (c *Client) GetCommitment(ctx context.Context, height uint64, hashedPath [3
 	}
 
 	return commitment, nil
-}
-
-// BlockTimestamp returns the timestamp of the block at height.
-func (c *Client) BlockTimestamp(ctx context.Context, height uint64) (time.Time, error) {
-	header, err := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
-	if err != nil {
-		return time.Time{}, errors.Wrapf(err, "getting header %d on chain %s", height, c.chainID)
-	}
-
-	return blockTime(header), nil
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) v2.Packet {

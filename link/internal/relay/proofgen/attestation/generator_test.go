@@ -10,6 +10,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -19,13 +20,14 @@ import (
 func signedStateAttestor(t *testing.T, name string, height uint64) *attestor.MockAttestor {
 	t.Helper()
 
-	data, err := encodeStateAttestation(StateAttestation{Height: height, Timestamp: 1700000000})
+	data, err := attestorevm.EncodeStateAttestation(height, 1700000000)
 	require.NoError(t, err)
+
+	digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
 
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	digest := taggedDigest(data, attestationTypeState)
 	sig, err := crypto.Sign(digest[:], key)
 	require.NoError(t, err)
 
@@ -40,15 +42,22 @@ func signedStateAttestor(t *testing.T, name string, height uint64) *attestor.Moc
 
 // signedPacketAttestor builds a attestor.MockAttestor that answers
 // PacketAttestation with a validly-signed claim covering packets.
-func signedPacketAttestor(t *testing.T, name string, height uint64, packets []PacketCompact) *attestor.MockAttestor {
+func signedPacketAttestor(
+	t *testing.T,
+	name string,
+	height uint64,
+	packets []attestorevm.PacketCompact,
+) *attestor.MockAttestor {
 	t.Helper()
 
-	dataArgs := abiArgsFor(t, PacketAttestation{Height: height, Packets: packets})
+	dataArgs, err := attestorevm.EncodePacketAttestation(height, packets)
+	require.NoError(t, err)
+
+	digest := attestorevm.Digest(attestorevm.TagPacketAttestation, dataArgs)
 
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	digest := taggedDigest(dataArgs, attestationTypePacket)
 	sig, err := crypto.Sign(digest[:], key)
 	require.NoError(t, err)
 
@@ -59,15 +68,6 @@ func signedPacketAttestor(t *testing.T, name string, height uint64, packets []Pa
 	)
 
 	return a
-}
-
-func abiArgsFor(t *testing.T, p PacketAttestation) []byte {
-	t.Helper()
-
-	encoded, err := packetAttestationArgs.Pack(p)
-	require.NoError(t, err)
-
-	return encoded
 }
 
 func TestGeneratorStateProof(t *testing.T) {
@@ -107,7 +107,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		{Sequence: 2, SourceClient: "src-0", DestClient: "dst-0", TimeoutTimestamp: 1000},
 	}
 
-	compact := []PacketCompact{
+	compact := []attestorevm.PacketCompact{
 		{Path: [32]byte{1}, Commitment: [32]byte{2}},
 		{Path: [32]byte{3}, Commitment: [32]byte{4}},
 	}
@@ -145,7 +145,7 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 	}
 
 	counterpartyChain := mocks.NewMockClient(t)
-	counterpartyChain.EXPECT().BlockTimestamp(mock.Anything, uint64(90)).Return(someBlockTime, nil)
+	counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(90)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 	gen := New(attestors, 2, counterpartyChain)
 
