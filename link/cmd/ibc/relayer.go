@@ -68,8 +68,6 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 			}
 		}()
 
-		// cancel the dispatcher before the store closes; Run closes the
-		// pipelines on cancellation
 		graceful.AddCallback(func() error {
 			cancelDispatcher()
 			return nil
