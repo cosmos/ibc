@@ -12,7 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Fixtures from solidity-ibc-eureka at commit 8a110d3b2463d5703935a3bd170abd95ac42fff6.
+// Fixtures from solidity-ibc-eureka commit 8a110d3b2463d5703935a3bd170abd95ac42fff6:
+// test/solidity-ibc/ICS24HostTest.t.sol
 func TestSolidityCompatibility(t *testing.T) {
 	t.Run("packetCommitment", func(t *testing.T) {
 		value := mustDecodeHex(t,
