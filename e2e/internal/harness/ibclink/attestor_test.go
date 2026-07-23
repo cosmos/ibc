@@ -40,6 +40,8 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 		Name:          "attestor-a",
 		ChainID:       "observed-chain-1",
 		PrivateKeyHex: testPrivateKey,
+		RPCURL:        "http://127.0.0.1:8545",
+		ICS26Router:   "0x0000000000000000000000000000000000000001",
 	})
 	require.NoError(t, err)
 	require.Equal(t, common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141"), process.SignerAddress())
@@ -92,6 +94,8 @@ func TestStartReportsEarlyProcessExitWithLogs(t *testing.T) {
 		Name:          "attestor-a",
 		ChainID:       "observed-chain-1",
 		PrivateKeyHex: testPrivateKey,
+		RPCURL:        "http://127.0.0.1:8545",
+		ICS26Router:   "0x0000000000000000000000000000000000000001",
 	})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "exited before readiness")
@@ -106,6 +110,8 @@ func TestStartRejectsInvalidInputsBeforeCreatingWorkspace(t *testing.T) {
 		Name:          "attestor-a",
 		ChainID:       "observed-chain-1",
 		PrivateKeyHex: "invalid",
+		RPCURL:        "http://127.0.0.1:8545",
+		ICS26Router:   "0x0000000000000000000000000000000000000001",
 	})
 	require.ErrorContains(t, err, "parse private key")
 	_, statErr := os.Stat(workDir)
@@ -120,6 +126,8 @@ func TestStartRequiresFreshPrivateWorkspace(t *testing.T) {
 		Name:          "attestor-a",
 		ChainID:       "observed-chain-1",
 		PrivateKeyHex: testPrivateKey,
+		RPCURL:        "http://127.0.0.1:8545",
+		ICS26Router:   "0x0000000000000000000000000000000000000001",
 	})
 	require.ErrorContains(t, err, "create private work dir")
 }
@@ -223,16 +231,18 @@ func runAttestorHelper() error {
 	}
 }
 
-type helperAttestationService struct{}
+type helperAttestationService struct {
+	attestorv2.UnimplementedAttestationServiceHandler
+}
 
-func (helperAttestationService) LatestAttestableHeight(
+func (helperAttestationService) LatestHeight(
 	_ context.Context,
-	req *connect.Request[attestorv2.LatestAttestableHeightRequest],
-) (*connect.Response[attestorv2.LatestAttestableHeightResponse], error) {
+	req *connect.Request[attestorv2.LatestHeightRequest],
+) (*connect.Response[attestorv2.LatestHeightResponse], error) {
 	if req.Msg.Attestor != "attestor-a" {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("unknown attestor %q", req.Msg.Attestor))
 	}
-	return connect.NewResponse(&attestorv2.LatestAttestableHeightResponse{Height: 4242}), nil
+	return connect.NewResponse(&attestorv2.LatestHeightResponse{Height: 4242}), nil
 }
 
 func helperConfigArgs(args []string) (string, string, error) {

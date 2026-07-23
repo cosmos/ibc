@@ -29,7 +29,7 @@ lint-fix: ## Lint the code and fix errors
 lint-ibcrelay-tests: ## Lint the temporary IBC relayer tests without changing Link's general test-lint policy
 	golangci-lint run --tests ./internal/ibcrelay/...
 
-codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
+codegen: codegen-sql codegen-proto codegen-abi codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
 	cd internal/store && $(SQLC) generate
@@ -49,11 +49,21 @@ check-proto: ## Fail if Link's generated API is stale or the removed API module 
 		! git -C .. grep -n -F "$$old_api" -- . || { echo "the removed API module is still referenced" >&2; exit 1; }
 
 codegen-mocks: ## Generate mocks for the code
-	go run github.com/vektra/mockery/v3@v3.7.1
+	go run github.com/vektra/mockery/v3@v3.7.1 --log-level ERROR
+
+# todo: replace the copied ABI files and this target with the contracts' own build
+# outputs and go-abigen bindings once they are migrated from solidity-ibc-eureka
+codegen-abi: ## Generate Go bindings for EVM contract ABIs
+	mkdir -p internal/chains/evm/contracts/ics26router
+	go tool abigen \
+		--abi internal/chains/evm/abi/ics26_router.json \
+		--pkg ics26router \
+		--type Contract \
+		--out internal/chains/evm/contracts/ics26router/ics26router.go
 
 test: ## Run tests
 	go test ./... -v
 
 check: build test lint lint-ibcrelay-tests check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build lint lint-fix lint-ibcrelay-tests test codegen codegen-sql codegen-proto codegen-mocks check-proto check
+.PHONY: help build lint lint-fix lint-ibcrelay-tests test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check

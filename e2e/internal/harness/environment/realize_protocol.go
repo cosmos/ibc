@@ -508,6 +508,8 @@ func acquireAttestor(
 		Name:          string(declaration.ID),
 		ChainID:       strconv.FormatUint(dependencies.observed.chain.evmChainID, 10),
 		PrivateKeyHex: runtime.Authorities[declaration.Authority].PrivateKeyHex,
+		RPCURL:        dependencies.observed.chain.rpcURL,
+		ICS26Router:   string(dependencies.observed.locator),
 	})
 	if err != nil {
 		if process != nil {

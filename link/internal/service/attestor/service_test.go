@@ -3,13 +3,15 @@ package attestor
 import (
 	"context"
 	"testing"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
 )
@@ -21,8 +23,8 @@ func TestService(t *testing.T) {
 	t.Run("duplicateAliases", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			must(NewLocal("1", "alice", sampleSigner)),
-			must(NewLocal("2", "alice", sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubChainClient(t, "1"), sampleSigner)),
+			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "alice"}, stubChainClient(t, "2"), sampleSigner)),
 		}
 
 		// ACT
@@ -37,29 +39,26 @@ func TestService(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		service, err := New([]Attestor{
-			must(NewLocal("1", "alice", sampleSigner)),
-			must(NewLocal("2", "bob", sampleSigner)),
-			must(NewLocal("3", "carol", sampleSigner)),
+			stubLocalAttestor(t, "1", "alice", sampleSigner),
+			stubLocalAttestor(t, "2", "bob", sampleSigner),
+			stubLocalAttestor(t, "3", "carol", sampleSigner),
 		})
 		require.NoError(t, err)
-
-		start := uint64(time.Now().Unix())
 
 		for _, alias := range []string{"alice", "bob", "carol"} {
 			t.Run(alias, func(t *testing.T) {
 				// ACT
-				height, err := service.LatestAttestableHeight(ctx, alias)
+				height, err := service.LatestHeight(ctx, alias)
 
 				// ASSERT
 				require.NoError(t, err)
-				assert.GreaterOrEqual(t, height, start)
-				assert.LessOrEqual(t, height, uint64(time.Now().Unix()))
+				assert.Equal(t, uint64(1), height)
 			})
 		}
 
 		t.Run("not found", func(t *testing.T) {
 			// ACT
-			height, err := service.LatestAttestableHeight(ctx, "zoe")
+			height, err := service.LatestHeight(ctx, "zoe")
 
 			// ASSERT
 			require.ErrorIs(t, err, ErrNotFound)
@@ -105,7 +104,7 @@ func TestService(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ACT
-				height, err := service.LatestAttestableHeight(ctx, tt.alias)
+				height, err := service.LatestHeight(ctx, tt.alias)
 
 				// ASSERT
 				require.NoError(t, err)
@@ -115,7 +114,7 @@ func TestService(t *testing.T) {
 
 		t.Run("not found", func(t *testing.T) {
 			// ACT
-			height, err := service.LatestAttestableHeight(ctx, "zoe")
+			height, err := service.LatestHeight(ctx, "zoe")
 
 			// ASSERT
 			require.ErrorIs(t, err, ErrNotFound)
@@ -131,24 +130,23 @@ func TestService(t *testing.T) {
 			NewRemote("ethereum", "alice", "eth-alice", client),
 			NewRemote("cosmos", "bob", "cosmos-bob", client),
 			NewRemote("solana", "carol", "solana-carol", client),
-			must(NewLocal("ethereum", "dave", sampleSigner)),
+			stubLocalAttestor(t, "ethereum", "dave", sampleSigner),
 		})
 		require.NoError(t, err)
-		start := uint64(time.Now().Unix())
+
 		// ACT
-		remoteHeight, err := service.LatestAttestableHeight(ctx, "cosmos-bob")
+		remoteHeight, err := service.LatestHeight(ctx, "cosmos-bob")
 
 		// ASSERT
 		require.NoError(t, err)
 		assert.Equal(t, uint64(20), remoteHeight)
 
 		// ACT
-		localHeight, err := service.LatestAttestableHeight(ctx, "dave")
+		localHeight, err := service.LatestHeight(ctx, "dave")
 
 		// ASSERT
 		require.NoError(t, err)
-		assert.GreaterOrEqual(t, localHeight, start)
-		assert.LessOrEqual(t, localHeight, uint64(time.Now().Unix()))
+		assert.Equal(t, uint64(1), localHeight)
 	})
 }
 
@@ -156,11 +154,46 @@ type attestationClient struct {
 	heights map[string]uint64
 }
 
-func (c attestationClient) LatestAttestableHeight(
+var _ proto.AttestationServiceClient = attestationClient{}
+
+func (c attestationClient) LatestHeight(
 	_ context.Context,
-	req *connect.Request[proto.LatestAttestableHeightRequest],
-) (*connect.Response[proto.LatestAttestableHeightResponse], error) {
-	return connect.NewResponse(&proto.LatestAttestableHeightResponse{Height: c.heights[req.Msg.Attestor]}), nil
+	req *connect.Request[proto.LatestHeightRequest],
+) (*connect.Response[proto.LatestHeightResponse], error) {
+	return connect.NewResponse(&proto.LatestHeightResponse{Height: c.heights[req.Msg.Attestor]}), nil
+}
+
+func (c attestationClient) StateAttestation(
+	_ context.Context,
+	_ *connect.Request[proto.StateAttestationRequest],
+) (*connect.Response[proto.StateAttestationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, nil)
+}
+
+func (c attestationClient) PacketAttestation(
+	_ context.Context,
+	_ *connect.Request[proto.PacketAttestationRequest],
+) (*connect.Response[proto.PacketAttestationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, nil)
+}
+
+func stubLocalAttestor(t *testing.T, chainID, name string, backingSigner signer.Signer) *LocalAttestor {
+	t.Helper()
+
+	client := stubChainClient(t, chainID)
+	client.EXPECT().
+		GetBlockHeader(mock.Anything, uint64(v2.FinalizedBlock)).
+		Return(v2.BlockHeader{Height: 1}, nil).
+		Once()
+
+	attestor, err := NewLocal(
+		config.AttestationConfig{ChainID: chainID, Name: name},
+		client,
+		backingSigner,
+	)
+	require.NoError(t, err)
+
+	return attestor
 }
 
 func must[T any](value T, err error) T {

@@ -86,9 +86,9 @@ type AttestationConfig struct {
 	// Should be unique across all attestations!
 	Signer string `yaml:"signer"`
 
-	// todo: future work
-	RouterAddress  string `yaml:"-"`
-	FinalityOffset int64  `yaml:"-"`
+	// Finality offset is the number of blocks to wait before attesting a block.
+	// Zero returns the "finalized" block. Otherwise we use `"latest" - finalityOffset`
+	FinalityOffset uint `yaml:"finalityOffset"`
 }
 
 // ChainType the execution environment of a chain.

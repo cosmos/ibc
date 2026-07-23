@@ -1,7 +1,7 @@
 // Package ibclink manages IBC Link processes as black boxes.
 //
 // Readiness means that the process loaded its private configuration and serves
-// LatestAttestableHeight for the configured attestor. The current Link
+// LatestHeight for the configured attestor. The current Link
 // implementation returns a synthetic timestamp from that RPC; this package
 // therefore does not claim that the process can produce or submit attestations.
 package ibclink
@@ -56,6 +56,8 @@ type AttestorLaunch struct {
 	Name          string
 	ChainID       string
 	PrivateKeyHex string
+	RPCURL        string
+	ICS26Router   string
 }
 
 type readinessResult struct {
@@ -77,7 +79,7 @@ type AttestorProcess struct {
 }
 
 // StartAttestor writes a private Link configuration and ECDSA key, starts `ibc
-// attestor run`, and returns only after LatestAttestableHeight succeeds.
+// attestor run`, and returns only after LatestHeight succeeds.
 func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess, error) {
 	key, err := validateAttestorLaunch(launch)
 	if err != nil {
@@ -149,9 +151,9 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
 func (p *AttestorProcess) latestAttestableHeight(ctx context.Context) (uint64, error) {
-	response, err := p.client.LatestAttestableHeight(
+	response, err := p.client.LatestHeight(
 		ctx,
-		connect.NewRequest(&attestorv2.LatestAttestableHeightRequest{Attestor: p.name}),
+		connect.NewRequest(&attestorv2.LatestHeightRequest{Attestor: p.name}),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("call latest attestable height at %s: %w", p.endpoint, err)
@@ -276,6 +278,10 @@ func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, error) {
 		return nil, errors.New("start IBC Link attestor: chain id is required")
 	case spec.PrivateKeyHex == "":
 		return nil, errors.New("start IBC Link attestor: private key is required")
+	case spec.RPCURL == "":
+		return nil, errors.New("start IBC Link attestor: chain RPC URL is required")
+	case spec.ICS26Router == "":
+		return nil, errors.New("start IBC Link attestor: ICS26 router address is required")
 	}
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(spec.PrivateKeyHex, "0x"))
 	if err != nil {
@@ -313,10 +319,18 @@ func prepareAttestorWorkspace(
 			Type: "sqlite",
 			URL:  filepath.Join(dir, "ibc.db"),
 		},
-		Attestor: attestorConfig{Attestations: []attestationConfig{{
+		Chains: []chainConfig{{
 			ChainID: spec.ChainID,
-			Name:    spec.Name,
-			Signer:  signerAlias,
+			EVM: evmChainConfig{
+				RPC:         spec.RPCURL,
+				ICS26Router: spec.ICS26Router,
+			},
+		}},
+		Attestor: attestorConfig{Attestations: []attestationConfig{{
+			ChainID:        spec.ChainID,
+			Name:           spec.Name,
+			Signer:         signerAlias,
+			FinalityOffset: 1,
 		}}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,
@@ -425,8 +439,19 @@ func (w *logWriter) close() {
 type fileConfig struct {
 	Server   serverConfig   `yaml:"server"`
 	DB       dbConfig       `yaml:"db"`
+	Chains   []chainConfig  `yaml:"chains"`
 	Attestor attestorConfig `yaml:"attestor"`
 	Signers  []signerConfig `yaml:"signers"`
+}
+
+type chainConfig struct {
+	ChainID string         `yaml:"chainId"`
+	EVM     evmChainConfig `yaml:"evm"`
+}
+
+type evmChainConfig struct {
+	RPC         string `yaml:"rpc"`
+	ICS26Router string `yaml:"ics26Router"`
 }
 
 type serverConfig struct {
@@ -446,6 +471,10 @@ type attestationConfig struct {
 	ChainID string `yaml:"chainId"`
 	Name    string `yaml:"name"`
 	Signer  string `yaml:"signer"`
+
+	// FinalityOffset is kept at 1 ("latest" minus one block) because the dev
+	// chains behind the harness do not expose the "finalized" block tag.
+	FinalityOffset uint `yaml:"finalityOffset"`
 }
 
 type signerConfig struct {

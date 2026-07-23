@@ -18,8 +18,8 @@ type Store interface {
 	Repository
 	Migrator
 
-	// ExecTx runs fn in a transaction; fn's Repository is bound to it and rolled back on error.
-	ExecTx(ctx context.Context, fn func(Repository) error) error
+	// Transact runs call in a transaction; call's Repository is bound to it and rolled back on error.
+	Transact(ctx context.Context, call func(repo Repository) error) error
 
 	Ping(ctx context.Context) error
 	Close() error

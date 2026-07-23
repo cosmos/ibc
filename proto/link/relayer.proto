@@ -8,6 +8,10 @@ service RelayerApiService {
   // Relay will track the status of a transfer, and submit the transactions
   // required to complete the transfer via the bridging protocol.
   rpc Relay(RelayRequest) returns (RelayResponse) {}
+
+  // Status returns per-packet transfer status for a transaction previously
+  // submitted via Relay.
+  rpc Status(StatusRequest) returns (StatusResponse) {}
 }
 
 message RelayRequest {
@@ -16,3 +20,32 @@ message RelayRequest {
 }
 
 message RelayResponse {}
+
+message StatusRequest {
+  string tx_hash = 1;
+  string chain_id = 2;
+}
+
+message StatusResponse { repeated PacketStatus packet_statuses = 1; }
+
+enum TransferState {
+  TRANSFER_STATE_UNKNOWN = 0;
+  TRANSFER_STATE_PENDING = 1;
+  TRANSFER_STATE_COMPLETE = 2;
+  TRANSFER_STATE_FAILED = 3;
+}
+
+message TransactionInfo {
+  string tx_hash = 1;
+  string chain_id = 2;
+}
+
+message PacketStatus {
+  TransferState state = 1;
+  uint64 sequence_number = 2;
+  string source_client_id = 3;
+  TransactionInfo send_tx = 4;
+  TransactionInfo recv_tx = 5;
+  TransactionInfo ack_tx = 6;
+  TransactionInfo timeout_tx = 7;
+}

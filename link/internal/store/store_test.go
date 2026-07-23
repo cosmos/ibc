@@ -162,7 +162,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Equal(t, request.CreatedAt, requestAgain.CreatedAt)
 	})
 
-	t.Run("execTx", func(t *testing.T) {
+	t.Run("transact", func(t *testing.T) {
 		const txHashAtomic = "0xa70m1c"
 
 		packet := CreatePacket{
@@ -178,7 +178,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		}
 
 		// A failing fn rolls back every write
-		err := s.ExecTx(ctx, func(repo Repository) error {
+		err := s.Transact(ctx, func(repo Repository) error {
 			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
 				return err
 			}
@@ -198,7 +198,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Empty(t, packets)
 
 		// A successful fn commits every write
-		err = s.ExecTx(ctx, func(repo Repository) error {
+		err = s.Transact(ctx, func(repo Repository) error {
 			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
 				return err
 			}
