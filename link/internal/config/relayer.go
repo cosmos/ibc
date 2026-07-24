@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -74,8 +75,12 @@ type AttestorEntry struct {
 // RouteConfig packets sent from the source client are relayed through the
 // entire packet lifecycle: recv, ack, timeout.
 type RouteConfig struct {
-	SourceClient string          `yaml:"sourceClient"`
-	AutoRelay    AutoRelayConfig `yaml:"autoRelay,omitempty"`
+	SourceClient string `yaml:"sourceClient"`
+	// SourceSignerAlias and DestSignerAlias are the signer aliases used to submit relay
+	// transactions on the route's source and destination chains.
+	SourceSignerAlias string          `yaml:"sourceSignerAlias"`
+	DestSignerAlias   string          `yaml:"destSignerAlias"`
+	AutoRelay         AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -84,6 +89,17 @@ type AutoRelayConfig struct {
 	// Lookback the number of blocks the relayer looks back from the latest
 	// block to check for packets to relay.
 	Lookback uint64 `yaml:"lookback,omitempty"`
+}
+
+// ChainOverride returns the relay settings override for a chain.
+func (c RelayerConfig) ChainOverride(chainID string) (RelayerChainOverride, bool) {
+	for _, override := range c.ChainOverrides {
+		if override.ChainID == chainID {
+			return override, true
+		}
+	}
+
+	return RelayerChainOverride{}, false
 }
 
 // ClientByAlias returns the client config for the given alias.
@@ -188,6 +204,13 @@ func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
 }
 
 func (c RelayerConfig) validateRoutes() error {
+	// An empty relayer block is valid (e.g. an attestor-only process has no
+	// use for one), but configuring clients with no route to relay them is
+	// not.
+	if len(c.Clients) > 0 && len(c.Routes) == 0 {
+		return errors.New(".routesToRelay: no relayer routes configured")
+	}
+
 	routes := make(map[string]struct{})
 
 	for i, route := range c.Routes {
@@ -302,14 +325,21 @@ func (c AttestorEntry) Validate() error {
 		return errors.Errorf(".type unknown attestor type: %q", c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":
 		return errors.New(".grpc required for remote attestors")
+	case strings.Contains(c.GRPC, "://"):
+		return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
 	}
 
 	return nil
 }
 
 func (c RouteConfig) Validate() error {
-	if c.SourceClient == "" {
+	switch {
+	case c.SourceClient == "":
 		return errors.New(".sourceClient required")
+	case c.SourceSignerAlias == "":
+		return errors.New(".sourceSignerAlias required")
+	case c.DestSignerAlias == "":
+		return errors.New(".destSignerAlias required")
 	}
 
 	return nil

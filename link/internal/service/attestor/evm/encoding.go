@@ -40,12 +40,19 @@ type packetAttestation struct {
 	Packets []PacketCompact `abi:"packets"`
 }
 
+// AttestationProof mirrors IAttestationMsgs.AttestationProof
+type AttestationProof struct {
+	AttestationData []byte   `abi:"attestationData"`
+	Signatures      [][]byte `abi:"signatures"`
+}
+
 const (
-	abiBytes   = "bytes"
-	abiBytes32 = "bytes32"
-	abiString  = "string"
-	abiTuple   = "tuple[]"
-	abiUint64  = "uint64"
+	abiBytes      = "bytes"
+	abiBytes32    = "bytes32"
+	abiBytesSlice = "bytes[]"
+	abiString     = "string"
+	abiTuple      = "tuple[]"
+	abiUint64     = "uint64"
 )
 
 var (
@@ -81,6 +88,13 @@ var (
 			}},
 		},
 	)}}
+
+	attestationProofArgs = abi.Arguments{{Type: mustNewTuple(
+		[]abi.ArgumentMarshaling{
+			{Name: "attestationData", Type: abiBytes},
+			{Name: "signatures", Type: abiBytesSlice},
+		},
+	)}}
 )
 
 // EncodeStateAttestation encodes the Solidity StateAttestation struct.
@@ -96,6 +110,23 @@ func EncodeStateAttestation(height, timestamp uint64) ([]byte, error) {
 	return data, nil
 }
 
+// DecodeStateAttestation decodes a Solidity ABI-encoded StateAttestation struct
+func DecodeStateAttestation(data []byte) (height, timestamp uint64, err error) {
+	values, err := stateAttestationArgs.Unpack(data)
+	if err != nil {
+		return 0, 0, fmt.Errorf("unpack state attestation: %w", err)
+	}
+
+	var decoded struct {
+		StateAttestation stateAttestation
+	}
+	if err := stateAttestationArgs.Copy(&decoded, values); err != nil {
+		return 0, 0, fmt.Errorf("copy state attestation: %w", err)
+	}
+
+	return decoded.StateAttestation.Height, decoded.StateAttestation.Timestamp, nil
+}
+
 // EncodePacketAttestation encodes the Solidity PacketAttestation struct.
 func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, error) {
 	data, err := packetAttestationArgs.Pack(packetAttestation{
@@ -104,6 +135,51 @@ func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, er
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode packet attestation: %w", err)
+	}
+
+	return data, nil
+}
+
+// DecodePacketAttestation decodes a Solidity ABI-encoded PacketAttestation struct
+func DecodePacketAttestation(data []byte) (height uint64, packets []PacketCompact, err error) {
+	values, err := packetAttestationArgs.Unpack(data)
+	if err != nil {
+		return 0, nil, fmt.Errorf("unpack packet attestation: %w", err)
+	}
+
+	var decoded struct {
+		PacketAttestation packetAttestation
+	}
+	if err := packetAttestationArgs.Copy(&decoded, values); err != nil {
+		return 0, nil, fmt.Errorf("copy packet attestation: %w", err)
+	}
+
+	return decoded.PacketAttestation.Height, decoded.PacketAttestation.Packets, nil
+}
+
+// EncodePacket encodes a channeltypesv2.Packet as the Solidity ABI
+// IICS26RouterMsgs.Packet tuple
+func EncodePacket(p channeltypesv2.Packet) ([]byte, error) {
+	payloads := make([]payload, len(p.Payloads))
+	for i, item := range p.Payloads {
+		payloads[i] = payload{
+			SourcePort: item.SourcePort,
+			DestPort:   item.DestinationPort,
+			Version:    item.Version,
+			Encoding:   item.Encoding,
+			Value:      item.Value,
+		}
+	}
+
+	data, err := packetArgs.Pack(packet{
+		Sequence:         p.Sequence,
+		SourceClient:     p.SourceClient,
+		DestClient:       p.DestinationClient,
+		TimeoutTimestamp: p.TimeoutTimestamp,
+		Payloads:         payloads,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode packet: %w", err)
 	}
 
 	return data, nil
@@ -141,6 +217,16 @@ func DecodePacket(data []byte) (channeltypesv2.Packet, error) {
 		TimeoutTimestamp:  decoded.Packet.TimeoutTimestamp,
 		Payloads:          payloads,
 	}, nil
+}
+
+// EncodeAttestationProof encodes the Solidity AttestationProof struct
+func EncodeAttestationProof(p AttestationProof) ([]byte, error) {
+	data, err := attestationProofArgs.Pack(p)
+	if err != nil {
+		return nil, fmt.Errorf("encode attestation proof: %w", err)
+	}
+
+	return data, nil
 }
 
 func mustNewTuple(components []abi.ArgumentMarshaling) abi.Type {

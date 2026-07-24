@@ -58,23 +58,31 @@ relayer:
             grpc: attestor.example.com:3000
 
   # packets sent from the source client are relayed through the entire packet
-  # lifecycle: recv, ack, timeout
+  # lifecycle: recv, ack, timeout; the signer aliases submit the relay
+  # transactions on the route's source and destination chains
   routesToRelay:
     - sourceClient: "eth-to-base"
+      sourceSignerAlias: "eth-relayer-key"
+      destSignerAlias: "base-relayer-key"
     - sourceClient: "base-to-eth"
+      sourceSignerAlias: "base-relayer-key"
+      destSignerAlias: "eth-relayer-key"
 
-# signers define signing backends referenced by attestations
+# signers define signing backends referenced by attestations and the relayer
 #
 # NOTE: each signer should have a unique alias
 signers:
+  - alias: "eth-relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "eth-relayer-key-id"
+  - alias: "base-relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "base-relayer-key-id"
 #   - alias: my-local-signer
 #     type: local
 #     file: keys/my-key.json
-#
-#   - alias: my-remote-signer
-#     type: remote
-#     grpc: https://cosmos-kms.example.com
-#     remoteKeyId: key-id # KMS key ID for a remote signer
 
 # This section specifies ATTESTOR process configuration for `ibc attestor run`.
 # Also enables attestor sub-process with grpc server even for relayer (`ibc relayer run`)

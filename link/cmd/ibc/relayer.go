@@ -55,7 +55,13 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	if err := app.RelayerService.Start(); err != nil {
+		app.Logger.Error("Failed to start relayer dispatch loop", "error", err)
+		return err
+	}
+
 	graceful.AddCallback(app.Store.Close)
+	graceful.AddCallback(app.RelayerService.Stop)
 	graceful.AddCallback(app.Server.Stop)
 
 	// blocking

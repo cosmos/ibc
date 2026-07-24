@@ -225,7 +225,65 @@ func (c Config) crossValidate() error {
 		}
 	}
 
-	return c.validateChainReferences()
+	if err := c.validateChainReferences(); err != nil {
+		return err
+	}
+
+	if err := c.validateRelayerSigners(signerSet); err != nil {
+		return errors.Wrap(err, ".relayer.routesToRelay")
+	}
+
+	return nil
+}
+
+// validateRelayerSigners ensures every route's signer aliases resolve to a
+// configured signer.
+func (c Config) validateRelayerSigners(signerSet map[string]struct{}) error {
+	for _, route := range c.Relayer.Routes {
+		for _, alias := range []string{route.SourceSignerAlias, route.DestSignerAlias} {
+			if _, exists := signerSet[alias]; !exists {
+				return errors.Errorf("route %q references unknown signer %q", route.SourceClient, alias)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ChainSignerPair one (chain, signer alias) pair a route submits with.
+type ChainSignerPair struct {
+	ChainID     string
+	SignerAlias string
+}
+
+// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across all
+// configured routes. A chain may appear with multiple signers when different
+// clients on it are relayed by different routes.
+func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
+	seen := make(map[ChainSignerPair]struct{})
+
+	var pairs []ChainSignerPair
+
+	for _, route := range c.Relayer.Routes {
+		client, ok := c.Relayer.ClientByAlias(route.SourceClient)
+		if !ok {
+			return nil, errors.Errorf("route references unknown client %q", route.SourceClient)
+		}
+
+		for _, pair := range []ChainSignerPair{
+			{ChainID: client.ChainID, SignerAlias: route.SourceSignerAlias},
+			{ChainID: client.CounterpartyChainID, SignerAlias: route.DestSignerAlias},
+		} {
+			if _, dup := seen[pair]; dup {
+				continue
+			}
+
+			seen[pair] = struct{}{}
+			pairs = append(pairs, pair)
+		}
+	}
+
+	return pairs, nil
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are

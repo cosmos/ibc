@@ -290,3 +290,114 @@ func pgTimePtr(ts pgtype.Timestamptz) *time.Time {
 
 	return &t
 }
+
+func (db *PostgresDB) ListUnfinishedPackets(ctx context.Context) ([]Packet, error) {
+	db.logger.Debug("ListUnfinishedPackets")
+
+	rows, err := db.repo.ListUnfinishedPackets(ctx)
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	packets := make([]Packet, len(rows))
+	for i, row := range rows {
+		packets[i] = packetFromPostgres(row)
+	}
+
+	return packets, nil
+}
+
+func (db *PostgresDB) UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error {
+	db.logger.Debug("UpdatePacketStatus", "key", key, "status", status)
+
+	return db.repo.UpdatePacketStatus(ctx, postgres.UpdatePacketStatusParams{
+		Status:               string(status),
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) UpdatePacketRecvTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+	db.logger.Debug("UpdatePacketRecvTx", "key", key, "txHash", tx.Hash)
+
+	return db.repo.UpdatePacketRecvTx(ctx, postgres.UpdatePacketRecvTxParams{
+		RecvTxHash:           &tx.Hash,
+		RecvTxTime:           pgTimestamp(tx.Time),
+		RecvTxRelayerAddress: &tx.RelayerAddress,
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) ClearPacketRecvTx(ctx context.Context, key PacketKey) error {
+	db.logger.Debug("ClearPacketRecvTx", "key", key)
+
+	return db.repo.ClearPacketRecvTx(ctx, postgres.ClearPacketRecvTxParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) UpdatePacketWriteAck(ctx context.Context, key PacketKey, ack WriteAck) error {
+	db.logger.Debug("UpdatePacketWriteAck", "key", key, "txHash", ack.TxHash, "status", ack.Status)
+
+	status := string(ack.Status)
+
+	return db.repo.UpdatePacketWriteAck(ctx, postgres.UpdatePacketWriteAckParams{
+		WriteAckTxHash:       &ack.TxHash,
+		WriteAckTxTime:       pgTimestamp(ack.TxTime),
+		WriteAckStatus:       &status,
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) UpdatePacketAckTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+	db.logger.Debug("UpdatePacketAckTx", "key", key, "txHash", tx.Hash)
+
+	return db.repo.UpdatePacketAckTx(ctx, postgres.UpdatePacketAckTxParams{
+		AckTxHash:            &tx.Hash,
+		AckTxTime:            pgTimestamp(tx.Time),
+		AckTxRelayerAddress:  &tx.RelayerAddress,
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) ClearPacketAckTx(ctx context.Context, key PacketKey) error {
+	db.logger.Debug("ClearPacketAckTx", "key", key)
+
+	return db.repo.ClearPacketAckTx(ctx, postgres.ClearPacketAckTxParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) UpdatePacketTimeoutTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+	db.logger.Debug("UpdatePacketTimeoutTx", "key", key, "txHash", tx.Hash)
+
+	return db.repo.UpdatePacketTimeoutTx(ctx, postgres.UpdatePacketTimeoutTxParams{
+		TimeoutTxHash:           &tx.Hash,
+		TimeoutTxTime:           pgTimestamp(tx.Time),
+		TimeoutTxRelayerAddress: &tx.RelayerAddress,
+		SourceChainID:           key.SourceChainID,
+		PacketSourceClientID:    key.SourceClientID,
+		PacketSequenceNumber:    int64(key.Sequence),
+	})
+}
+
+func (db *PostgresDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) error {
+	db.logger.Debug("ClearPacketTimeoutTx", "key", key)
+
+	return db.repo.ClearPacketTimeoutTx(ctx, postgres.ClearPacketTimeoutTxParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}

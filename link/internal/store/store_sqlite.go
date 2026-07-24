@@ -325,3 +325,121 @@ func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
 
 	return u.String(), nil
 }
+
+func (db *SqliteDB) ListUnfinishedPackets(ctx context.Context) ([]Packet, error) {
+	db.logger.Debug("ListUnfinishedPackets")
+
+	rows, err := db.repo.ListUnfinishedPackets(ctx)
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	packets := make([]Packet, len(rows))
+	for i, row := range rows {
+		packets[i] = packetFromSqlite(row)
+	}
+
+	return packets, nil
+}
+
+func (db *SqliteDB) UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error {
+	db.logger.Debug("UpdatePacketStatus", "key", key, "status", status)
+
+	return db.repo.UpdatePacketStatus(ctx, reposqlite.UpdatePacketStatusParams{
+		Status:               string(status),
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) UpdatePacketRecvTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+	db.logger.Debug("UpdatePacketRecvTx", "key", key, "txHash", tx.Hash)
+
+	txTime := tx.Time.UTC()
+
+	return db.repo.UpdatePacketRecvTx(ctx, reposqlite.UpdatePacketRecvTxParams{
+		RecvTxHash:           &tx.Hash,
+		RecvTxTime:           &txTime,
+		RecvTxRelayerAddress: &tx.RelayerAddress,
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) ClearPacketRecvTx(ctx context.Context, key PacketKey) error {
+	db.logger.Debug("ClearPacketRecvTx", "key", key)
+
+	return db.repo.ClearPacketRecvTx(ctx, reposqlite.ClearPacketRecvTxParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) UpdatePacketWriteAck(ctx context.Context, key PacketKey, ack WriteAck) error {
+	db.logger.Debug("UpdatePacketWriteAck", "key", key, "txHash", ack.TxHash, "status", ack.Status)
+
+	status := string(ack.Status)
+	txTime := ack.TxTime.UTC()
+
+	return db.repo.UpdatePacketWriteAck(ctx, reposqlite.UpdatePacketWriteAckParams{
+		WriteAckTxHash:       &ack.TxHash,
+		WriteAckTxTime:       &txTime,
+		WriteAckStatus:       &status,
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) UpdatePacketAckTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+	db.logger.Debug("UpdatePacketAckTx", "key", key, "txHash", tx.Hash)
+
+	txTime := tx.Time.UTC()
+
+	return db.repo.UpdatePacketAckTx(ctx, reposqlite.UpdatePacketAckTxParams{
+		AckTxHash:            &tx.Hash,
+		AckTxTime:            &txTime,
+		AckTxRelayerAddress:  &tx.RelayerAddress,
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) ClearPacketAckTx(ctx context.Context, key PacketKey) error {
+	db.logger.Debug("ClearPacketAckTx", "key", key)
+
+	return db.repo.ClearPacketAckTx(ctx, reposqlite.ClearPacketAckTxParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) UpdatePacketTimeoutTx(ctx context.Context, key PacketKey, tx PacketTx) error {
+	db.logger.Debug("UpdatePacketTimeoutTx", "key", key, "txHash", tx.Hash)
+
+	txTime := tx.Time.UTC()
+
+	return db.repo.UpdatePacketTimeoutTx(ctx, reposqlite.UpdatePacketTimeoutTxParams{
+		TimeoutTxHash:           &tx.Hash,
+		TimeoutTxTime:           &txTime,
+		TimeoutTxRelayerAddress: &tx.RelayerAddress,
+		SourceChainID:           key.SourceChainID,
+		PacketSourceClientID:    key.SourceClientID,
+		PacketSequenceNumber:    int64(key.Sequence),
+	})
+}
+
+func (db *SqliteDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) error {
+	db.logger.Debug("ClearPacketTimeoutTx", "key", key)
+
+	return db.repo.ClearPacketTimeoutTx(ctx, reposqlite.ClearPacketTimeoutTxParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+}

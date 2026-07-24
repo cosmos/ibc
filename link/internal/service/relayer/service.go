@@ -13,6 +13,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relay/dispatch"
 	"github.com/cosmos/ibc/link/internal/store"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -24,6 +25,8 @@ type Service struct {
 	cfg    config.Config
 	store  Store
 	chains ChainClients
+
+	dispatcher *dispatch.RelayDispatcher
 }
 
 // ChainClients resolves chain clients by chain id.
@@ -72,14 +75,35 @@ type PacketStatus struct {
 	TimeoutTx      *TxInfo
 }
 
-// New Service constructor.
-func New(cfg config.Config, st Store, clients ChainClients) *Service {
+// New Service constructor. dispatcher may be nil for a service that only
+// serves the gRPC API, with no background dispatch loop.
+func New(cfg config.Config, st Store, clients ChainClients, dispatcher *dispatch.RelayDispatcher) *Service {
 	return &Service{
-		logger: slog.With("service", "relayer"),
-		cfg:    cfg,
-		store:  st,
-		chains: clients,
+		logger:     slog.With("service", "relayer"),
+		cfg:        cfg,
+		store:      st,
+		chains:     clients,
+		dispatcher: dispatcher,
 	}
+}
+
+// Start begins the background relay dispatch loop. A no-op if dispatcher is nil.
+func (s *Service) Start() error {
+	if s.dispatcher == nil {
+		return nil
+	}
+
+	return s.dispatcher.Start()
+}
+
+// Stop cancels the background relay dispatch loop and blocks until it has exited.
+// A no-op if dispatcher is nil.
+func (s *Service) Stop() error {
+	if s.dispatcher == nil {
+		return nil
+	}
+
+	return s.dispatcher.Stop()
 }
 
 func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
