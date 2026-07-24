@@ -2,7 +2,7 @@
 // github.com/vektra/mockery
 // template: testify
 
-package txbuilder
+package mocks
 
 import (
 	"github.com/cosmos/ibc/link/internal/types/v2"

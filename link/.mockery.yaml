@@ -55,17 +55,17 @@ packages:
       Attestor:
   github.com/cosmos/ibc/link/internal/relay/proofgen:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "proofgen.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "proofgen.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       ProofGenerator:
   github.com/cosmos/ibc/link/internal/relay/txbuilder:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "txbuilder.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "txbuilder.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       TxBuilder:

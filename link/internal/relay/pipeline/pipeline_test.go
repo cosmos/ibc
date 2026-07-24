@@ -44,10 +44,10 @@ type pipelineEnv struct {
 	// dstProofGen/dstTxBuilder are resolved for the destination client/chain,
 	// used by recv delivery; srcProofGen/srcTxBuilder are resolved for the
 	// source client/chain, used by ack and timeout delivery.
-	dstProofGen    *proofgen.MockProofGenerator
-	srcProofGen    *proofgen.MockProofGenerator
-	dstTxBuilder   *txbuilder.MockTxBuilder
-	srcTxBuilder   *txbuilder.MockTxBuilder
+	dstProofGen    *mocks.MockProofGenerator
+	srcProofGen    *mocks.MockProofGenerator
+	dstTxBuilder   *mocks.MockTxBuilder
+	srcTxBuilder   *mocks.MockTxBuilder
 	srcTxSubmitter *mocks.MockTxSubmitter
 	dstTxSubmitter *mocks.MockTxSubmitter
 }
@@ -87,10 +87,10 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		store:          db,
 		srcClient:      mocks.NewMockClient(t),
 		dstClient:      mocks.NewMockClient(t),
-		dstProofGen:    proofgen.NewMockProofGenerator(t),
-		srcProofGen:    proofgen.NewMockProofGenerator(t),
-		dstTxBuilder:   txbuilder.NewMockTxBuilder(t),
-		srcTxBuilder:   txbuilder.NewMockTxBuilder(t),
+		dstProofGen:    mocks.NewMockProofGenerator(t),
+		srcProofGen:    mocks.NewMockProofGenerator(t),
+		dstTxBuilder:   mocks.NewMockTxBuilder(t),
+		srcTxBuilder:   mocks.NewMockTxBuilder(t),
 		srcTxSubmitter: mocks.NewMockTxSubmitter(t),
 		dstTxSubmitter: mocks.NewMockTxSubmitter(t),
 	}
@@ -121,8 +121,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 // for whichever chain the batch reads packet events from.
 func mockRelay(
 	client *mocks.MockClient,
-	proofGen *proofgen.MockProofGenerator,
-	txBuilder *txbuilder.MockTxBuilder,
+	proofGen *mocks.MockProofGenerator,
+	txBuilder *mocks.MockTxBuilder,
 	events []v2.PacketEvent,
 	to string,
 ) {

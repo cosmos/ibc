@@ -75,12 +75,12 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
 		ProofGenerators: staticProofGenerators{
-			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): proofgen.NewMockProofGenerator(t),
-			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           proofgen.NewMockProofGenerator(t),
+			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): mocks.NewMockProofGenerator(t),
+			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           mocks.NewMockProofGenerator(t),
 		},
 		TxBuilders: staticTxBuilders{
-			testRoute.SourceChainID:      txbuilder.NewMockTxBuilder(t),
-			testRoute.DestinationChainID: txbuilder.NewMockTxBuilder(t),
+			testRoute.SourceChainID:      mocks.NewMockTxBuilder(t),
+			testRoute.DestinationChainID: mocks.NewMockTxBuilder(t),
 		},
 		TxSubmitters: staticTxSubmitters{
 			testRoute.SourceChainID:      mocks.NewMockTxSubmitter(t),
