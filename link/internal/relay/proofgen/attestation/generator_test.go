@@ -23,7 +23,7 @@ func signedStateAttestor(t *testing.T, name string, height uint64) *attestor.Moc
 	data, err := attestorevm.EncodeStateAttestation(height, 1700000000)
 	require.NoError(t, err)
 
-	digest := Digest(TagStateAttestation, data)
+	digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
 
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func signedPacketAttestor(
 	dataArgs, err := attestorevm.EncodePacketAttestation(height, packets)
 	require.NoError(t, err)
 
-	digest := Digest(TagPacketAttestation, dataArgs)
+	digest := attestorevm.Digest(attestorevm.TagPacketAttestation, dataArgs)
 
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)

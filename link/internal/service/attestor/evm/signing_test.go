@@ -1,4 +1,4 @@
-package attestation
+package evm
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 )
 
 func TestDigestMatchesFormula(t *testing.T) {
@@ -50,8 +48,8 @@ func TestRecoverSigner(t *testing.T) {
 
 	// AcceptsLegacyVByte verifies RecoverSigner works against signatures
 	// using Ethereum's legacy v (27/28), the convention the real attestor
-	// signs with (see attestorevm.SignABI), not just the raw 0/1 recovery id
-	// crypto.Sign itself produces.
+	// signs with (see SignABI/normalizeSignature), not just the raw 0/1
+	// recovery id crypto.Sign itself produces.
 	t.Run("acceptsLegacyVByte", func(t *testing.T) {
 		key, err := crypto.GenerateKey()
 		require.NoError(t, err)
@@ -72,7 +70,7 @@ func TestRecoverSigner(t *testing.T) {
 		require.Equal(t, expected, recovered)
 	})
 
-	t.Run("interopsWithAttestorSignABI", func(t *testing.T) {
+	t.Run("interopsWithSignABI", func(t *testing.T) {
 		key, err := crypto.GenerateKey()
 		require.NoError(t, err)
 
@@ -85,12 +83,12 @@ func TestRecoverSigner(t *testing.T) {
 
 		signer := stubSigner{sig: rawSig}
 
-		sig, err := attestorevm.SignABI(context.Background(), signer, attestorevm.TagStateAttestation, []byte("data"))
+		sig, err := SignABI(context.Background(), signer, TagStateAttestation, []byte("data"))
 		require.NoError(t, err)
 
 		recovered, err := RecoverSigner(digest, sig)
 		require.NoError(t, err)
-		require.Equal(t, expected, recovered, "RecoverSigner must accept exactly what attestorevm.SignABI produces")
+		require.Equal(t, expected, recovered, "RecoverSigner must accept exactly what SignABI produces")
 	})
 }
 

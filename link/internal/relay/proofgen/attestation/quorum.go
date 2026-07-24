@@ -12,6 +12,8 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 )
 
 // quorumResult the aggregated, quorum-verified attestation for one claim:
@@ -28,7 +30,7 @@ func queryStateQuorum(
 	threshold int,
 	height uint64,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, attestors, threshold, TagStateAttestation, func(
+	return queryQuorum(ctx, attestors, threshold, attestorevm.TagStateAttestation, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -45,7 +47,7 @@ func queryPacketQuorum(
 	height uint64,
 	kind attestor.CommitmentType,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, attestors, threshold, TagPacketAttestation, func(
+	return queryQuorum(ctx, attestors, threshold, attestorevm.TagPacketAttestation, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -111,7 +113,7 @@ func queryOne(ctx context.Context, a attestor.Attestor, typeTag byte, query atte
 	data := attestation.AttestedData
 	sig := attestation.Signature
 
-	signer, err := RecoverSigner(Digest(typeTag, data), sig)
+	signer, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
 	if err != nil {
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
