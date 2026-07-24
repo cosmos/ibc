@@ -40,9 +40,7 @@ type packetAttestation struct {
 	Packets []PacketCompact `abi:"packets"`
 }
 
-// AttestationProof mirrors IAttestationMsgs.AttestationProof: the calldata
-// the light client decodes on updateClient, verifyMembership, and
-// verifyNonMembership calls.
+// AttestationProof mirrors IAttestationMsgs.AttestationProof
 type AttestationProof struct {
 	AttestationData []byte   `abi:"attestationData"`
 	Signatures      [][]byte `abi:"signatures"`
@@ -112,8 +110,7 @@ func EncodeStateAttestation(height, timestamp uint64) ([]byte, error) {
 	return data, nil
 }
 
-// DecodeStateAttestation decodes a Solidity ABI-encoded StateAttestation
-// struct, the inverse of EncodeStateAttestation.
+// DecodeStateAttestation decodes a Solidity ABI-encoded StateAttestation struct
 func DecodeStateAttestation(data []byte) (height, timestamp uint64, err error) {
 	values, err := stateAttestationArgs.Unpack(data)
 	if err != nil {
@@ -143,8 +140,7 @@ func EncodePacketAttestation(height uint64, packets []PacketCompact) ([]byte, er
 	return data, nil
 }
 
-// DecodePacketAttestation decodes a Solidity ABI-encoded PacketAttestation
-// struct, the inverse of EncodePacketAttestation.
+// DecodePacketAttestation decodes a Solidity ABI-encoded PacketAttestation struct
 func DecodePacketAttestation(data []byte) (height uint64, packets []PacketCompact, err error) {
 	values, err := packetAttestationArgs.Unpack(data)
 	if err != nil {
@@ -162,7 +158,7 @@ func DecodePacketAttestation(data []byte) (height uint64, packets []PacketCompac
 }
 
 // EncodePacket encodes a channeltypesv2.Packet as the Solidity ABI
-// IICS26RouterMsgs.Packet tuple, the inverse of DecodePacket.
+// IICS26RouterMsgs.Packet tuple
 func EncodePacket(p channeltypesv2.Packet) ([]byte, error) {
 	payloads := make([]payload, len(p.Payloads))
 	for i, item := range p.Payloads {
@@ -223,10 +219,7 @@ func DecodePacket(data []byte) (channeltypesv2.Packet, error) {
 	}, nil
 }
 
-// EncodeAttestationProof encodes the Solidity AttestationProof struct: the
-// calldata the light client decodes on updateClient, verifyMembership, and
-// verifyNonMembership calls. Only the relayer assembles this, for on-chain
-// submission -- the attestor has no equivalent.
+// EncodeAttestationProof encodes the Solidity AttestationProof struct
 func EncodeAttestationProof(p AttestationProof) ([]byte, error) {
 	data, err := attestationProofArgs.Pack(p)
 	if err != nil {

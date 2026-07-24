@@ -5,6 +5,7 @@
 package txbuilder
 
 import (
+	"github.com/cosmos/ibc/link/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -36,26 +37,26 @@ func (_m *MockTxBuilder) EXPECT() *MockTxBuilder_Expecter {
 }
 
 // BuildRelayTxs provides a mock function for the type MockTxBuilder
-func (_mock *MockTxBuilder) BuildRelayTxs(clientUpdate ClientUpdate, packetRelayItems []PacketRelayItem) ([]RelayTx, error) {
+func (_mock *MockTxBuilder) BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error) {
 	ret := _mock.Called(clientUpdate, packetRelayItems)
 
 	if len(ret) == 0 {
 		panic("no return value specified for BuildRelayTxs")
 	}
 
-	var r0 []RelayTx
+	var r0 []v2.RelayTx
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(ClientUpdate, []PacketRelayItem) ([]RelayTx, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) ([]v2.RelayTx, error)); ok {
 		return returnFunc(clientUpdate, packetRelayItems)
 	}
-	if returnFunc, ok := ret.Get(0).(func(ClientUpdate, []PacketRelayItem) []RelayTx); ok {
+	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) []v2.RelayTx); ok {
 		r0 = returnFunc(clientUpdate, packetRelayItems)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]RelayTx)
+			r0 = ret.Get(0).([]v2.RelayTx)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(ClientUpdate, []PacketRelayItem) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(v2.ClientUpdate, []v2.PacketRelayItem) error); ok {
 		r1 = returnFunc(clientUpdate, packetRelayItems)
 	} else {
 		r1 = ret.Error(1)
@@ -69,21 +70,21 @@ type MockTxBuilder_BuildRelayTxs_Call struct {
 }
 
 // BuildRelayTxs is a helper method to define mock.On call
-//   - clientUpdate ClientUpdate
-//   - packetRelayItems []PacketRelayItem
+//   - clientUpdate v2.ClientUpdate
+//   - packetRelayItems []v2.PacketRelayItem
 func (_e *MockTxBuilder_Expecter) BuildRelayTxs(clientUpdate any, packetRelayItems any) *MockTxBuilder_BuildRelayTxs_Call {
 	return &MockTxBuilder_BuildRelayTxs_Call{Call: _e.mock.On("BuildRelayTxs", clientUpdate, packetRelayItems)}
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(clientUpdate ClientUpdate, packetRelayItems []PacketRelayItem)) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem)) *MockTxBuilder_BuildRelayTxs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 ClientUpdate
+		var arg0 v2.ClientUpdate
 		if args[0] != nil {
-			arg0 = args[0].(ClientUpdate)
+			arg0 = args[0].(v2.ClientUpdate)
 		}
-		var arg1 []PacketRelayItem
+		var arg1 []v2.PacketRelayItem
 		if args[1] != nil {
-			arg1 = args[1].([]PacketRelayItem)
+			arg1 = args[1].([]v2.PacketRelayItem)
 		}
 		run(
 			arg0,
@@ -93,12 +94,12 @@ func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(clientUpdate ClientUpda
 	return _c
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) Return(relayTxs []RelayTx, err error) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTxs_Call) Return(relayTxs []v2.RelayTx, err error) *MockTxBuilder_BuildRelayTxs_Call {
 	_c.Call.Return(relayTxs, err)
 	return _c
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) RunAndReturn(run func(clientUpdate ClientUpdate, packetRelayItems []PacketRelayItem) ([]RelayTx, error)) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTxs_Call) RunAndReturn(run func(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error)) *MockTxBuilder_BuildRelayTxs_Call {
 	_c.Call.Return(run)
 	return _c
 }

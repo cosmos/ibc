@@ -108,7 +108,7 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 
 	submission, err := relayPackets(
 		ctx, p.destinationChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
-		p.route.DestinationClientID, txbuilder.KindRecv,
+		p.route.DestinationClientID, v2.RelayKindRecv,
 		proofHeight, events,
 	)
 	if err != nil {

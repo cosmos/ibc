@@ -10,8 +10,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
-	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 var routerABI = mustRouterABI()
@@ -25,22 +24,20 @@ func mustRouterABI() *abi.ABI {
 	return parsed
 }
 
-// Client implements txbuilder.TxBuilder for one EVM chain's ICS26Router.
-type Client struct {
+// TxBuilder implements txbuilder.TxBuilder for one EVM chain's ICS26Router.
+type TxBuilder struct {
 	router common.Address
 }
 
-func New(router common.Address) *Client {
-	return &Client{router: router}
+func New(router common.Address) *TxBuilder {
+	return &TxBuilder{router: router}
 }
-
-var _ txbuilder.TxBuilder = (*Client)(nil)
 
 // BuildRelayTxs packs clientUpdate and every packetRelayItems entry into a
 // single ICS26Router.multicall transaction. EVM router calldata has no
 // meaningful size limit for the batch sizes the relayer forms, so this
 // always returns exactly one tx.
-func (c *Client) BuildRelayTxs(clientUpdate txbuilder.ClientUpdate, packetRelayItems []txbuilder.PacketRelayItem) ([]txbuilder.RelayTx, error) {
+func (c *TxBuilder) BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error) {
 	calls := make([][]byte, 0, len(packetRelayItems)+1)
 
 	updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.StateProof)
@@ -64,22 +61,22 @@ func (c *Client) BuildRelayTxs(clientUpdate txbuilder.ClientUpdate, packetRelayI
 		return nil, err
 	}
 
-	return []txbuilder.RelayTx{{To: c.router.Bytes(), Data: tx}}, nil
+	return []v2.RelayTx{{To: c.router.Bytes(), Data: tx}}, nil
 }
 
-func packRelayItem(item txbuilder.PacketRelayItem) ([]byte, error) {
+func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
 	packet := toRouterPacket(item.Packet)
 
 	switch item.Kind {
-	case txbuilder.KindRecv:
+	case v2.RelayKindRecv:
 		return packRecvPacket(packet, item.Proof, item.ProofHeight)
-	case txbuilder.KindAck:
+	case v2.RelayKindAck:
 		if len(item.Acks) == 0 {
 			return nil, errors.Errorf("no acknowledgement recorded for sequence %d", item.Packet.Sequence)
 		}
 
 		return packAckPacket(packet, item.Acks[0], item.Proof, item.ProofHeight)
-	case txbuilder.KindTimeout:
+	case v2.RelayKindTimeout:
 		return packTimeoutPacket(packet, item.Proof, item.ProofHeight)
 	default:
 		return nil, errors.Errorf("unsupported relay kind %v", item.Kind)
@@ -183,24 +180,4 @@ func toRouterPacket(packet channeltypesv2.Packet) ics26router.IICS26RouterMsgsPa
 		TimeoutTimestamp: packet.TimeoutTimestamp,
 		Payloads:         payloads,
 	}
-}
-
-// NewSetFromConfig builds a txbuilder.Set with one EVM Client per configured
-// EVM chain, bound to that chain's configured ICS26Router address.
-func NewSetFromConfig(cfg config.Config) (*txbuilder.Set, error) {
-	builders := make(map[string]txbuilder.TxBuilder, len(cfg.Chains))
-
-	for _, chainCfg := range cfg.Chains {
-		if chainCfg.EVM == nil {
-			continue
-		}
-
-		if !common.IsHexAddress(chainCfg.EVM.ICS26Router) {
-			return nil, errors.Errorf("chain %q: invalid ics26 router address %q", chainCfg.ChainID, chainCfg.EVM.ICS26Router)
-		}
-
-		builders[chainCfg.ChainID] = New(common.HexToAddress(chainCfg.EVM.ICS26Router))
-	}
-
-	return txbuilder.NewSet(builders), nil
 }

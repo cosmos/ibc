@@ -14,11 +14,7 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// findPacketEvent returns the event among events matching sequence and
-// clientID -- the packet's identity, since sequence numbers alone aren't
-// unique across different client pairs sharing one chain's events -- if
-// it's been observed at or below height, the height a membership/
-// non-membership proof can currently be generated for.
+// findPacketEvent returns the event among events matching sequence and clientID
 func findPacketEvent(events []v2.PacketEvent, sequence uint64, clientID string, provableHeight uint64) (v2.PacketEvent, error) {
 	for _, event := range events {
 		if event.Packet.Sequence != sequence || event.Packet.SourceClient != clientID {
@@ -37,29 +33,23 @@ func findPacketEvent(events []v2.PacketEvent, sequence uint64, clientID string, 
 	return v2.PacketEvent{}, errors.Errorf("no packet event for sequence %d client %q", sequence, clientID)
 }
 
-// proofKindFor maps relayKind to the proof claim it requires: recv proves a
-// packet commitment exists on the source chain, ack proves an
-// acknowledgement exists on the destination chain, and timeout proves a
-// packet receipt is absent from the destination chain.
-func proofKindFor(relayKind txbuilder.RelayKind) proofgen.ProofKind {
+// proofKindFor maps relayKind to the proof claim it requires
+func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 	switch relayKind {
-	case txbuilder.KindRecv:
-		return proofgen.KindPacketCommitment
-	case txbuilder.KindAck:
-		return proofgen.KindAcknowledgement
-	case txbuilder.KindTimeout:
-		return proofgen.KindReceiptAbsence
+	case v2.RelayKindRecv:
+		return v2.ProofKindPacketCommitment
+	case v2.RelayKindAck:
+		return v2.ProofKindAcknowledgement
+	case v2.RelayKindTimeout:
+		return v2.ProofKindReceiptAbsence
 	default:
-		return proofgen.KindUnknown
+		return v2.ProofKindUnknown
 	}
 }
 
 // relayPackets generates a state proof and per-packet proofs for events at
-// proofHeight, packs them into relayKind-tagged items (order-preserved, one
-// per event), asks txBuilder for the resulting transaction, waits for
-// chainClient's chain to catch up to the current time (gas estimation during
-// submission reverts otherwise), and submits it via txSubmitter. clientID is
-// the destination client the state proof updates.
+// proofHeight, asks txBuilder for the resulting transaction, and submits it
+// via txSubmitter
 func relayPackets(
 	ctx context.Context,
 	chainClient chains.Client,
@@ -67,7 +57,7 @@ func relayPackets(
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,
-	relayKind txbuilder.RelayKind,
+	relayKind v2.RelayKind,
 	proofHeight uint64,
 	events []v2.PacketEvent,
 ) (*v2.Submission, error) {
@@ -86,9 +76,9 @@ func relayPackets(
 		return nil, errors.Wrap(err, "generating packet proofs")
 	}
 
-	items := make([]txbuilder.PacketRelayItem, len(events))
+	items := make([]v2.PacketRelayItem, len(events))
 	for i, event := range events {
-		items[i] = txbuilder.PacketRelayItem{
+		items[i] = v2.PacketRelayItem{
 			Kind:        relayKind,
 			Packet:      event.Packet,
 			Acks:        event.Acks,
@@ -97,7 +87,7 @@ func relayPackets(
 		}
 	}
 
-	relayTxs, err := txBuilder.BuildRelayTxs(txbuilder.ClientUpdate{
+	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
 		ClientID:   clientID,
 		StateProof: stateProof,
 	}, items)

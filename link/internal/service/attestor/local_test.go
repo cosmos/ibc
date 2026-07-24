@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"

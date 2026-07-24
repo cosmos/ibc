@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -25,7 +24,7 @@ func signedAttestor(t *testing.T, name string, attestedData []byte) *attestor.Mo
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
-	digest := attestorevm.Digest(attestorevm.TagStateAttestation, attestedData)
+	digest := Digest(TagStateAttestation, attestedData)
 	sig, err := crypto.Sign(digest[:], key)
 	require.NoError(t, err)
 
@@ -129,7 +128,7 @@ func TestQueryQuorum(t *testing.T) {
 		key, err := crypto.GenerateKey()
 		require.NoError(t, err)
 
-		digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
+		digest := Digest(TagStateAttestation, data)
 		sig, err := crypto.Sign(digest[:], key)
 		require.NoError(t, err)
 

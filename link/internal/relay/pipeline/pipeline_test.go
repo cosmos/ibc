@@ -134,7 +134,7 @@ func mockRelay(
 	proofGen.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
 		Return(make([][]byte, len(events)), nil).Once()
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
-		Return([]txbuilder.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
+		Return([]v2.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
 }
 
 func sendPacketEvent(sequence uint64) v2.PacketEvent {

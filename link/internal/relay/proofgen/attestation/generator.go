@@ -7,26 +7,20 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	"github.com/cosmos/ibc/link/internal/service/signer"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // Generator implements proofgen.ProofGenerator for one configured
 // attestation light client: LatestProvableHeight/StateProof/PacketProofs all
-// query the same fixed attestor set and threshold; LatestProvableHeight
-// additionally reads the counterparty chain directly for the resolved
-// height's timestamp.
+// query the same fixed attestor set with the same quorum threshold
 type Generator struct {
 	attestors         []attestor.Attestor
 	threshold         int
 	counterpartyChain chains.Client
 }
-
-var _ proofgen.ProofGenerator = (*Generator)(nil)
 
 func New(attestors []attestor.Attestor, threshold int, counterpartyChain chains.Client) *Generator {
 	return &Generator{attestors: attestors, threshold: threshold, counterpartyChain: counterpartyChain}
@@ -65,7 +59,7 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 func (g *Generator) PacketProofs(
 	ctx context.Context,
 	height uint64,
-	kind proofgen.ProofKind,
+	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
 ) ([][]byte, error) {
 	commitmentType, err := commitmentTypeOf(kind)
@@ -112,7 +106,7 @@ func (g *Generator) PacketProofs(
 
 	// The attestor returns one shared proof blob covering every packet in the
 	// batch; PacketProofs' contract is one proof per input packet, so the same
-	// blob is returned len(packets) times rather than re-querying per packet.
+	// blob is returned len(packets) times.
 	proofs := make([][]byte, len(packets))
 	for i := range proofs {
 		proofs[i] = proof
@@ -121,107 +115,15 @@ func (g *Generator) PacketProofs(
 	return proofs, nil
 }
 
-func commitmentTypeOf(kind proofgen.ProofKind) (attestor.CommitmentType, error) {
+func commitmentTypeOf(kind v2.ProofKind) (attestor.CommitmentType, error) {
 	switch kind {
-	case proofgen.KindPacketCommitment:
+	case v2.ProofKindPacketCommitment:
 		return attestor.CommitmentTypePacket, nil
-	case proofgen.KindAcknowledgement:
+	case v2.ProofKindAcknowledgement:
 		return attestor.CommitmentTypeAck, nil
-	case proofgen.KindReceiptAbsence:
+	case v2.ProofKindReceiptAbsence:
 		return attestor.CommitmentTypeReceipt, nil
 	default:
 		return 0, errors.Errorf("unsupported proof kind %v", kind)
 	}
-}
-
-// NewSetFromConfig resolves every configured client's attestor set, up
-// front, so the request path only ever queries already-resolved attestors.
-// clientSet resolves the chain client for each client's counterparty chain,
-// used to look up a resolved height's timestamp directly.
-func NewSetFromConfig(
-	cfg config.Config,
-	clientSet *chains.ClientSet,
-	signers *signer.Set,
-) (*proofgen.Set, error) {
-	generators := make(map[string]proofgen.ProofGenerator, len(cfg.Relayer.Clients))
-
-	for _, clientCfg := range cfg.Relayer.Clients {
-		if clientCfg.AttestorSet == nil {
-			continue
-		}
-
-		attestors := make([]attestor.Attestor, 0, len(clientCfg.AttestorSet.Attestors))
-
-		for _, entry := range clientCfg.AttestorSet.Attestors {
-			a, err := resolveAttestor(cfg, entry, clientCfg.CounterpartyChainID, clientSet, signers)
-			if err != nil {
-				return nil, errors.Wrapf(err, "client %q attestor %q", clientCfg.Alias, entry.Name)
-			}
-
-			attestors = append(attestors, a)
-		}
-
-		counterpartyChain, ok := clientSet.Get(clientCfg.CounterpartyChainID)
-		if !ok {
-			return nil, errors.Errorf(
-				"client %q: no configured chain client for counterparty chain %q", clientCfg.Alias, clientCfg.CounterpartyChainID,
-			)
-		}
-
-		generators[proofgen.Key(clientCfg.ChainID, clientCfg.ClientID)] = New(attestors, clientCfg.AttestorSet.Threshold, counterpartyChain)
-	}
-
-	return proofgen.NewSet(generators), nil
-}
-
-// resolveAttestor resolves one configured attestor-set entry to the
-// attestor.Attestor abstraction: a remote entry dials it; a local entry
-// constructs the same attestor.LocalAttestor implementation this process
-// would run in dual mode, in-process, with no client or dial involved.
-// watchedChainID is the chain the attestor is expected to be attesting,
-// used only to label the remote attestor for logging.
-func resolveAttestor(
-	cfg config.Config,
-	entry config.AttestorEntry,
-	watchedChainID string,
-	clientSet *chains.ClientSet,
-	signers *signer.Set,
-) (attestor.Attestor, error) {
-	switch entry.Type {
-	case config.AttestorTypeRemote:
-		if entry.GRPC == "" {
-			return nil, errors.New("no grpc address configured")
-		}
-
-		return attestor.NewRemoteFromURL(watchedChainID, entry.Name, entry.Name, "http://"+entry.GRPC), nil
-	case config.AttestorTypeLocal:
-		spec, ok := findAttestationConfig(cfg, entry.Name)
-		if !ok {
-			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)
-		}
-
-		client, ok := clientSet.Get(spec.ChainID)
-		if !ok {
-			return nil, errors.Errorf("no configured chain client for chain %q", spec.ChainID)
-		}
-
-		s, ok := signers.Get(spec.Signer)
-		if !ok {
-			return nil, errors.Errorf("unknown signer %q", spec.Signer)
-		}
-
-		return attestor.NewLocal(spec, client, s)
-	default:
-		return nil, errors.Errorf("type %q not yet supported for proof generation", entry.Type)
-	}
-}
-
-func findAttestationConfig(cfg config.Config, name string) (config.AttestationConfig, bool) {
-	for _, spec := range cfg.Attestor.Attestations {
-		if spec.Name == name {
-			return spec, true
-		}
-	}
-
-	return config.AttestationConfig{}, false
 }

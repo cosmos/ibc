@@ -8,7 +8,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
-	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 func testPacket() ics26router.IICS26RouterMsgsPacket {
@@ -80,11 +80,11 @@ func TestBuildRelayTxs(t *testing.T) {
 	client := New(router)
 
 	packet := channeltypesv2.Packet{Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890}
-	clientUpdate := txbuilder.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}
+	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}
 
 	t.Run("recv", func(t *testing.T) {
-		items := []txbuilder.PacketRelayItem{
-			{Kind: txbuilder.KindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+		items := []v2.PacketRelayItem{
+			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		txs, err := client.BuildRelayTxs(clientUpdate, items)
@@ -95,8 +95,8 @@ func TestBuildRelayTxs(t *testing.T) {
 	})
 
 	t.Run("ackRequiresAckBytes", func(t *testing.T) {
-		items := []txbuilder.PacketRelayItem{
-			{Kind: txbuilder.KindAck, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+		items := []v2.PacketRelayItem{
+			{Kind: v2.RelayKindAck, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		_, err := client.BuildRelayTxs(clientUpdate, items)
@@ -104,8 +104,8 @@ func TestBuildRelayTxs(t *testing.T) {
 	})
 
 	t.Run("ack", func(t *testing.T) {
-		items := []txbuilder.PacketRelayItem{
-			{Kind: txbuilder.KindAck, Packet: packet, Acks: [][]byte{{0xac}}, Proof: []byte{0x02}, ProofHeight: 100},
+		items := []v2.PacketRelayItem{
+			{Kind: v2.RelayKindAck, Packet: packet, Acks: [][]byte{{0xac}}, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		txs, err := client.BuildRelayTxs(clientUpdate, items)
@@ -114,8 +114,8 @@ func TestBuildRelayTxs(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		items := []txbuilder.PacketRelayItem{
-			{Kind: txbuilder.KindTimeout, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+		items := []v2.PacketRelayItem{
+			{Kind: v2.RelayKindTimeout, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		txs, err := client.BuildRelayTxs(clientUpdate, items)
@@ -124,8 +124,8 @@ func TestBuildRelayTxs(t *testing.T) {
 	})
 
 	t.Run("unsupportedKind", func(t *testing.T) {
-		items := []txbuilder.PacketRelayItem{
-			{Kind: txbuilder.KindUnknown, Packet: packet},
+		items := []v2.PacketRelayItem{
+			{Kind: v2.RelayKindUnknown, Packet: packet},
 		}
 
 		_, err := client.BuildRelayTxs(clientUpdate, items)

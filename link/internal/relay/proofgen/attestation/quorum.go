@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 )
@@ -28,7 +27,7 @@ func queryStateQuorum(
 	threshold int,
 	height uint64,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, attestors, threshold, attestorevm.TagStateAttestation, func(
+	return queryQuorum(ctx, attestors, threshold, TagStateAttestation, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -45,7 +44,7 @@ func queryPacketQuorum(
 	height uint64,
 	kind attestor.CommitmentType,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, attestors, threshold, attestorevm.TagPacketAttestation, func(
+	return queryQuorum(ctx, attestors, threshold, TagPacketAttestation, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -111,7 +110,7 @@ func queryOne(ctx context.Context, a attestor.Attestor, typeTag byte, query atte
 	data := attestation.AttestedData
 	sig := attestation.Signature
 
-	signer, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
+	signer, err := RecoverSigner(Digest(typeTag, data), sig)
 	if err != nil {
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}

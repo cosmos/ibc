@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -320,6 +321,8 @@ func (c AttestorEntry) Validate() error {
 		return errors.Errorf(".type unknown attestor type: %q", c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":
 		return errors.New(".grpc required for remote attestors")
+	case strings.Contains(c.GRPC, "://"):
+		return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
 	}
 
 	return nil

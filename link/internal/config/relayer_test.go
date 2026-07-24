@@ -273,6 +273,13 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".grpc required for remote attestors",
 			},
 			{
+				name: "attestor grpc includes a scheme",
+				patch: func(c *Config) {
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].GRPC = "https://attestor.example.com:443"
+				},
+				errContains: ".grpc must be a bare host:port, not a URL",
+			},
+			{
 				name: "invalid attestor type",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].AttestorSet.Attestors[0].Type = "hybrid"

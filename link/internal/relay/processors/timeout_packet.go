@@ -17,8 +17,7 @@ import (
 )
 
 // BatchTimeoutPacket delivers one timeout tx on the source chain for a batch
-// of transfers, proving non-membership of the packet's receipt on the
-// destination chain via the source chain's client tracking it.
+// of transfers
 type BatchTimeoutPacket struct {
 	sourceChainClient chains.Client
 	route             Route
@@ -110,7 +109,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 
 	submission, err := relayPackets(
 		ctx, p.sourceChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, txbuilder.KindTimeout,
+		p.route.SourceClientID, v2.RelayKindTimeout,
 		proofHeight, events,
 	)
 	if err != nil {

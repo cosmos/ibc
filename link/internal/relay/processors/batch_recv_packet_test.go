@@ -98,12 +98,12 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	proofGen := proofgen.NewMockProofGenerator(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), proofgen.KindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := txbuilder.NewMockTxBuilder(t)
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
-		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
+		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
@@ -191,12 +191,12 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	proofGen := proofgen.NewMockProofGenerator(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), proofgen.KindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := txbuilder.NewMockTxBuilder(t)
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
-		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
+		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
@@ -284,12 +284,12 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	proofGen := proofgen.NewMockProofGenerator(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), proofgen.KindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := txbuilder.NewMockTxBuilder(t)
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
-		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
+		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{

@@ -9,9 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	attestorevm "github.com/cosmos/ibc/link/internal/attestation/evm"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -24,7 +23,7 @@ func signedStateAttestor(t *testing.T, name string, height uint64) *attestor.Moc
 	data, err := attestorevm.EncodeStateAttestation(height, 1700000000)
 	require.NoError(t, err)
 
-	digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
+	digest := Digest(TagStateAttestation, data)
 
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -54,7 +53,7 @@ func signedPacketAttestor(
 	dataArgs, err := attestorevm.EncodePacketAttestation(height, packets)
 	require.NoError(t, err)
 
-	digest := attestorevm.Digest(attestorevm.TagPacketAttestation, dataArgs)
+	digest := Digest(TagPacketAttestation, dataArgs)
 
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -121,7 +120,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 
 		gen := New(attestors, 2, nil)
 
-		proofs, err := gen.PacketProofs(ctx, 20, proofgen.KindPacketCommitment, packets)
+		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
 		require.NoError(t, err)
 		require.Len(t, proofs, len(packets))
 		require.Equal(t, proofs[0], proofs[1], "the shared attestation blob is duplicated across every packet index")
@@ -132,7 +131,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		// attestor, so the generator here is given no attestors at all.
 		gen := New(nil, 2, nil)
 
-		_, err := gen.PacketProofs(ctx, 20, proofgen.KindUnknown, packets)
+		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
 		require.Error(t, err)
 	})
 }
