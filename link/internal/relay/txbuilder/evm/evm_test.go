@@ -79,7 +79,12 @@ func TestBuildRelayTxs(t *testing.T) {
 	router := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	client := New(router)
 
-	packet := channeltypesv2.Packet{Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890}
+	packet := channeltypesv2.Packet{
+		Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890,
+		Payloads: []channeltypesv2.Payload{
+			{SourcePort: "transfer", DestinationPort: "transfer", Version: "ics20-1", Encoding: "application/x-solidity-abi", Value: []byte{0xde, 0xad}},
+		},
+	}
 	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}
 
 	t.Run("recv", func(t *testing.T) {
@@ -130,5 +135,17 @@ func TestBuildRelayTxs(t *testing.T) {
 
 		_, err := client.BuildRelayTxs(clientUpdate, items)
 		require.Error(t, err)
+	})
+
+	t.Run("multiPayloadRejected", func(t *testing.T) {
+		multiPayloadPacket := packet
+		multiPayloadPacket.Payloads = append(multiPayloadPacket.Payloads, multiPayloadPacket.Payloads[0])
+
+		items := []v2.PacketRelayItem{
+			{Kind: v2.RelayKindRecv, Packet: multiPayloadPacket, Proof: []byte{0x02}, ProofHeight: 100},
+		}
+
+		_, err := client.BuildRelayTxs(clientUpdate, items)
+		require.ErrorContains(t, err, "only supports single-payload packets")
 	})
 }

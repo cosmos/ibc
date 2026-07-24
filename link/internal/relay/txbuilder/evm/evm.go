@@ -71,6 +71,13 @@ func (c *TxBuilder) BuildRelayTxs(
 }
 
 func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
+	if len(item.Packet.Payloads) != 1 {
+		return nil, errors.Errorf(
+			"packet sequence %d has %d payloads: the router only supports single-payload packets",
+			item.Packet.Sequence, len(item.Packet.Payloads),
+		)
+	}
+
 	packet := toRouterPacket(item.Packet)
 
 	switch item.Kind {
