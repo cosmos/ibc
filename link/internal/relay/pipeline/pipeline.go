@@ -9,8 +9,6 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
-
-	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
 
 const (
@@ -41,10 +39,11 @@ type TxSubmitters interface {
 
 // Deps the external systems a pipeline relays through.
 type Deps struct {
-	Storage      Storage
-	Chains       processors.ChainClients
-	ProofAPI     proto.ProofApiServiceClient
-	TxSubmitters TxSubmitters
+	Storage         Storage
+	Chains          processors.ChainClients
+	ProofGenerators processors.ProofGenerators
+	TxBuilders      processors.TxBuilders
+	TxSubmitters    TxSubmitters
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -129,6 +128,13 @@ func NewPipeline(
 	)
 
 	// deliver timeouts in batches on the source chain
+	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
+	}
+
 	output = BatchProcess(
 		ctx,
 		logger,
@@ -136,10 +142,7 @@ func NewPipeline(
 		opts.TimeoutBatchSize,
 		opts.TimeoutBatchTimeout,
 		output,
-		NewBatchProcessorMW(
-			deps.Storage,
-			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcTxSubmitter, route),
-		),
+		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
 	)
 
 	// clear stuck or failed timeout txs so they are redelivered next run
@@ -147,6 +150,13 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxSubmitter, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
+	batchRecvPacket, err := processors.NewBatchRecvPacket(
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, dstTxSubmitter, route,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing batch recv packet processor")
+	}
+
 	output = BatchProcess(
 		ctx,
 		logger,
@@ -154,10 +164,7 @@ func NewPipeline(
 		opts.RecvBatchSize,
 		opts.RecvBatchTimeout,
 		output,
-		NewBatchProcessorMW(
-			deps.Storage,
-			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstTxSubmitter, route),
-		),
+		NewBatchProcessorMW(deps.Storage, batchRecvPacket),
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
@@ -187,6 +194,13 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
 	// deliver acks in batches on the source chain
+	batchAckPacket, err := processors.NewBatchAckPacket(
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing batch ack packet processor")
+	}
+
 	output = BatchProcess(
 		ctx,
 		logger,
@@ -194,16 +208,7 @@ func NewPipeline(
 		opts.AckBatchSize,
 		opts.AckBatchTimeout,
 		output,
-		NewBatchProcessorMW(
-			deps.Storage,
-			processors.NewBatchAckPacket(
-				deps.Chains,
-				deps.Storage,
-				deps.ProofAPI,
-				srcTxSubmitter,
-				route,
-			),
-		),
+		NewBatchProcessorMW(deps.Storage, batchAckPacket),
 	)
 
 	// clear stuck or failed ack txs so they are redelivered next run

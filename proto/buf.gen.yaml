@@ -9,4 +9,3 @@ plugins:
 
 inputs:
   - directory: link
-  - directory: proofapi

@@ -11,6 +11,8 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
@@ -38,11 +40,18 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticTxSubmitters map[string]txsubmitter.TxSubmitter
+type staticProofGenerators map[string]proofgen.ProofGenerator
 
-func (s staticTxSubmitters) Get(chainID, _ string) (txsubmitter.TxSubmitter, bool) {
-	txSubmitter, ok := s[chainID]
-	return txSubmitter, ok
+func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+	gen, ok := s[proofgen.Key(chainID, clientID)]
+	return gen, ok
+}
+
+type staticTxBuilders map[string]txbuilder.TxBuilder
+
+func (s staticTxBuilders) Get(chainID string) (txbuilder.TxBuilder, bool) {
+	builder, ok := s[chainID]
+	return builder, ok
 }
 
 type pipelineEnv struct {
@@ -65,7 +74,14 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.SourceChainID:      mocks.NewMockClient(t),
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
-		ProofAPI: mocks.NewMockProofApiServiceClient(t),
+		ProofGenerators: staticProofGenerators{
+			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): mocks.NewMockProofGenerator(t),
+			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           mocks.NewMockProofGenerator(t),
+		},
+		TxBuilders: staticTxBuilders{
+			testRoute.SourceChainID:      mocks.NewMockTxBuilder(t),
+			testRoute.DestinationChainID: mocks.NewMockTxBuilder(t),
+		},
 		TxSubmitters: staticTxSubmitters{
 			testRoute.SourceChainID:      mocks.NewMockTxSubmitter(t),
 			testRoute.DestinationChainID: mocks.NewMockTxSubmitter(t),
@@ -97,4 +113,11 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 	require.Len(t, packets, 1)
 
 	return processors.NewTransfer(packets[0], slog.Default())
+}
+
+type staticTxSubmitters map[string]txsubmitter.TxSubmitter
+
+func (s staticTxSubmitters) Get(chainID, _ string) (txsubmitter.TxSubmitter, bool) {
+	txSubmitter, ok := s[chainID]
+	return txSubmitter, ok
 }

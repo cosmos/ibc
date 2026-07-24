@@ -108,32 +108,50 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 
 	txHash := common.BytesToHash(rawTxHash)
 
+	// TODO: cache the call
 	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
 	}
 
-	var packets []channeltypesv2.Packet
+	sendPacketID := c.routerABI.Events[sendPacketEvent].ID
+	writeAckID := c.routerABI.Events[writeAckEvent].ID
+
+	var events []v2.PacketEvent
 
 	for _, log := range receipt.Logs {
-		switch {
-		case log == nil, len(log.Topics) == 0:
-			continue
-		case log.Address != c.routerAddress:
-			continue
-		case log.Topics[0] != c.routerABI.Events[sendPacketEvent].ID:
+		if log == nil || len(log.Topics) == 0 || log.Address != c.routerAddress {
 			continue
 		}
 
-		sendPacket, errParse := c.router.ParseSendPacket(*log)
-		if errParse != nil {
-			return nil, errors.Wrapf(errParse, "parsing send packet event from tx %s on chain %s", txHash, c.chainID)
-		}
+		switch log.Topics[0] {
+		case sendPacketID:
+			sendPacket, errParse := c.router.ParseSendPacket(*log)
+			if errParse != nil {
+				return nil, errors.Wrapf(
+					errParse,
+					"parsing send packet event from tx %s on chain %s",
+					txHash,
+					c.chainID,
+				)
+			}
 
-		packets = append(packets, toPacket(sendPacket.Packet))
+			events = append(events, v2.PacketEvent{Kind: v2.KindSendPacket, Packet: toPacket(sendPacket.Packet)})
+		case writeAckID:
+			writeAck, errParse := c.router.ParseWriteAcknowledgement(*log)
+			if errParse != nil {
+				return nil, errors.Wrapf(errParse, "parsing write ack event from tx %s on chain %s", txHash, c.chainID)
+			}
+
+			events = append(events, v2.PacketEvent{
+				Kind:   v2.KindWriteAck,
+				Packet: toPacket(writeAck.Packet),
+				Acks:   writeAck.Acknowledgements,
+			})
+		}
 	}
 
-	if len(packets) == 0 {
+	if len(events) == 0 {
 		return nil, nil
 	}
 
@@ -142,14 +160,9 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 		return nil, errors.Wrapf(err, "getting header %s for tx %s on chain %s", receipt.BlockNumber, txHash, c.chainID)
 	}
 
-	events := make([]v2.PacketEvent, len(packets))
-	for i, packet := range packets {
-		events[i] = v2.PacketEvent{
-			Height:    receipt.BlockNumber.Uint64(),
-			BlockTime: blockTime(header),
-			Kind:      v2.KindSendPacket,
-			Packet:    packet,
-		}
+	for i := range events {
+		events[i].Height = receipt.BlockNumber.Uint64()
+		events[i].BlockTime = blockTime(header)
 	}
 
 	return events, nil

@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/internal/chains"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -20,6 +22,16 @@ type TxStorage interface {
 // ChainClients resolves chain clients by chain id.
 type ChainClients interface {
 	Get(chainID string) (chains.Client, bool)
+}
+
+// ProofGenerators resolves proof generators by (chainIDclientID).
+type ProofGenerators interface {
+	Get(chainID, clientID string) (proofgen.ProofGenerator, bool)
+}
+
+// TxBuilders resolves tx builders by chain id.
+type TxBuilders interface {
+	Get(chainID string) (txbuilder.TxBuilder, bool)
 }
 
 // nodeLagWarningAfter how long a finality wait can run before warning that the

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -28,15 +29,6 @@ type RelayerConfig struct {
 	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
 	Clients        []ClientConfig         `yaml:"clients"`
 	Routes         []RouteConfig          `yaml:"routesToRelay"`
-	// ProofAPI the proof api used to build relay transactions.
-	// TODO: remove this when we fold the proof api logic into ibc link.
-	ProofAPI ProofAPIConfig `yaml:"proofApi,omitempty"`
-}
-
-// ProofAPIConfig connection details for the proof api.
-type ProofAPIConfig struct {
-	GRPC       string `yaml:"grpc"`
-	TLSEnabled bool   `yaml:"tlsEnabled,omitempty"`
 }
 
 // RelayerChainOverride relay settings for one chain.
@@ -46,9 +38,6 @@ type RelayerChainOverride struct {
 	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
-	// FinalityOffset blocks behind the tip considered final; nil uses the
-	// chain's native finality.
-	FinalityOffset *uint64 `yaml:"finalityOffset,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.
@@ -329,6 +318,8 @@ func (c AttestorEntry) Validate() error {
 		return errors.Errorf(".type unknown attestor type: %q", c.Type)
 	case c.Type == AttestorTypeRemote && c.GRPC == "":
 		return errors.New(".grpc required for remote attestors")
+	case strings.Contains(c.GRPC, "://"):
+		return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
 	}
 
 	return nil

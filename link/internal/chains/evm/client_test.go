@@ -113,6 +113,39 @@ func TestTxPacketEvents(t *testing.T) {
 		assert.Equal(t, []byte{0xde, 0xad, 0xbe, 0xef}, event.Packet.Payloads[0].Value)
 	})
 
+	t.Run("parsesWriteAck", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		eth := mocks.NewMockETHClient(t)
+		client, err := NewWithClient(chainIDEth, eth, routerAddress)
+		require.NoError(t, err)
+
+		packet := testPacket()
+		ack := []byte{0xac, 0x01}
+		receipt := &types.Receipt{
+			BlockNumber: big.NewInt(100),
+			Logs: []*types.Log{
+				writeAckLog(t, common.HexToAddress(routerAddress), packet, [][]byte{ack}),
+			},
+		}
+
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receipt, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(&types.Header{Time: 1752000000}, nil).Once()
+
+		// ACT
+		events, err := client.TxPacketEvents(ctx, txHash.Bytes())
+
+		// ASSERT
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+
+		event := events[0]
+		assert.Equal(t, v2.KindWriteAck, event.Kind)
+		assert.Equal(t, uint64(42), event.Packet.Sequence)
+		require.Len(t, event.Acks, 1)
+		assert.Equal(t, ack, event.Acks[0])
+	})
+
 	t.Run("noSendPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()

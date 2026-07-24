@@ -10,7 +10,8 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/proofapi"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/relayer"
@@ -59,7 +60,35 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		return nil, err
 	}
 
-	// Transaction Submitters
+	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.
+	// This might be useful for PoC/testing environments or when an operator wants to run the relayer
+	// and one of attestors in the same process.
+	var attestorService *attestor.Service
+
+	var attestorHandler *server.AttestorHandler
+
+	if len(cfg.Attestor.Attestations) > 0 {
+		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
+
+		attestorService, attestorHandler, err = buildAttestor(cfg, clientSet, signers)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Proof generators
+	proofGenerators, err := proofgen.NewSetFromConfig(cfg, clientSet, attestorService)
+	if err != nil {
+		return nil, err
+	}
+
+	// Transaction builders
+	txBuilders, err := txbuilder.NewSetFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Transaction submitters
 	txSubmitters, err := txsubmitter.NewFromConfig(cfg, signers)
 	if err != nil {
 		return nil, err
@@ -67,10 +96,11 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 
 	// Relaying dispatcher
 	pipelines := dispatch.NewPipelineSet(logger, cfg, pipeline.Deps{
-		Storage:      db,
-		Chains:       clientSet,
-		ProofAPI:     proofapi.NewClient(cfg.Relayer.ProofAPI),
-		TxSubmitters: txSubmitters,
+		Storage:         db,
+		Chains:          clientSet,
+		ProofGenerators: proofGenerators,
+		TxBuilders:      txBuilders,
+		TxSubmitters:    txSubmitters,
 	})
 	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, dispatch.DefaultPollInterval, logger)
 
@@ -84,32 +114,19 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(relayerHandler)
 
-	services := &Services{
+	if attestorHandler != nil {
+		srv.Register(attestorHandler)
+	}
+
+	return &Services{
 		Context:         ctx,
 		Logger:          logger,
 		Server:          srv,
 		Store:           db,
 		Signers:         signers,
 		RelayerService:  relayerService,
-		AttestorService: nil,
-	}
-
-	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.
-	// This might be useful for PoC/testing environments or when an operator wants to run the relayer
-	// and one of attestors in the same process
-	if len(cfg.Attestor.Attestations) > 0 {
-		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
-
-		attestorService, attestorHandler, err := buildAttestor(cfg, clientSet, signers)
-		if err != nil {
-			return nil, err
-		}
-
-		services.AttestorService = attestorService
-		srv.Register(attestorHandler)
-	}
-
-	return services, nil
+		AttestorService: attestorService,
+	}, nil
 }
 
 // BuildAttestors converts config into a runnable attestor process with all of the deps provisioned
