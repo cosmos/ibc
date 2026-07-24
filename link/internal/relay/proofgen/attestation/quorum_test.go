@@ -180,7 +180,7 @@ var someBlockTime = time.Unix(1700000000, 0).UTC()
 func TestLatestProvableHeight(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("takesMinAcrossQuorum", func(t *testing.T) {
+	t.Run("takesHighestHeightAtLeastThresholdAttestorsReached", func(t *testing.T) {
 		attestors := []attestor.Attestor{
 			heightAttestor(t, "a1", 100),
 			heightAttestor(t, "a2", 80),
@@ -188,11 +188,14 @@ func TestLatestProvableHeight(t *testing.T) {
 		}
 
 		counterpartyChain := mocks.NewMockClient(t)
-		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(80)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
+		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(100)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 		height, timestamp, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
 		require.NoError(t, err)
-		require.Equal(t, uint64(80), height, "a lagging-but-healthy attestor must not be excluded from the minimum")
+		require.Equal(
+			t, uint64(100), height,
+			"a single lagging attestor (a2) must not drag the resolved height below what threshold=2 others (a1, a3) already agree on",
+		)
 		require.Equal(t, someBlockTime, timestamp)
 	})
 

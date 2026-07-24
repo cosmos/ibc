@@ -2,6 +2,7 @@ package attestation
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -175,9 +176,12 @@ func joinResponseErrors(responses []quorumResponse) string {
 	return strings.Join(msgs, "; ")
 }
 
-// latestProvableHeight finds a height every attestor in the quorum has. It fans
-// LatestHeight out concurrently and takes the minimum among the attestors
-// that answered, requiring at least threshold of them to respond.
+// latestProvableHeight finds the highest height at least threshold attestors
+// have reached. It fans LatestHeight out concurrently, then sorts the
+// responding heights descending and takes the value at index threshold-1 --
+// not the minimum across every responder, which would let a single healthy
+// but lagging attestor drag the resolved height down even when threshold
+// others already agree on something fresher.
 func latestProvableHeight(
 	ctx context.Context,
 	attestors []attestor.Attestor,
@@ -213,12 +217,9 @@ func latestProvableHeight(
 	wg.Wait()
 
 	var (
-		height  uint64
-		found   bool
-		answers int
+		heights []uint64
+		errMsgs []string
 	)
-
-	var errMsgs []string
 
 	for _, resp := range responses {
 		if resp.err != nil {
@@ -227,20 +228,18 @@ func latestProvableHeight(
 			continue
 		}
 
-		answers++
-
-		if !found || resp.height < height {
-			height = resp.height
-			found = true
-		}
+		heights = append(heights, resp.height)
 	}
 
-	if answers < threshold {
+	if len(heights) < threshold {
 		return 0, time.Time{}, errors.Errorf(
 			"latest height quorum not met: got %d of %d required responses (%s)",
-			answers, threshold, strings.Join(errMsgs, "; "),
+			len(heights), threshold, strings.Join(errMsgs, "; "),
 		)
 	}
+
+	sort.Slice(heights, func(i, j int) bool { return heights[i] > heights[j] })
+	height := heights[threshold-1]
 
 	header, err := counterpartyChain.GetBlockHeader(ctx, height)
 	if err != nil {
