@@ -27,22 +27,22 @@ type TxSubmitter interface {
 
 var _ TxSubmitter = (*evm.TxSubmitter)(nil)
 
-// TxSubmitterSet holds one tx submitter per (chain, signer) pair relayed by
+// Set holds one tx submitter per (chain, signer) pair relayed by
 // the configured routes. A chain may carry several signers when different
 // clients on it are relayed by different routes.
-type TxSubmitterSet struct {
+type Set struct {
 	txSubmitters map[config.ChainSignerPair]TxSubmitter
 }
 
-func NewTxSubmitterSet(txSubmitters map[config.ChainSignerPair]TxSubmitter) *TxSubmitterSet {
+func NewSet(txSubmitters map[config.ChainSignerPair]TxSubmitter) *Set {
 	if txSubmitters == nil {
 		txSubmitters = make(map[config.ChainSignerPair]TxSubmitter)
 	}
 
-	return &TxSubmitterSet{txSubmitters: txSubmitters}
+	return &Set{txSubmitters: txSubmitters}
 }
 
-func (s *TxSubmitterSet) Get(chainID, signerAlias string) (TxSubmitter, bool) {
+func (s *Set) Get(chainID, signerAlias string) (TxSubmitter, bool) {
 	txSubmitter, ok := s.txSubmitters[config.ChainSignerPair{ChainID: chainID, SignerAlias: signerAlias}]
 	return txSubmitter, ok
 }
@@ -51,7 +51,7 @@ func (s *TxSubmitterSet) Get(chainID, signerAlias string) (TxSubmitter, bool) {
 // the configured routes. Routes naming the same pair share a tx submitter; a
 // chain carries several when different clients on it are relayed with
 // different signers.
-func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxSubmitterSet, error) {
+func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 	pairs, err := config.RelayerChainSignerPairs(cfg)
 	if err != nil {
 		return nil, err
@@ -89,5 +89,5 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*TxSubmitterSet, err
 		txSubmitters[pair] = txSubmitter
 	}
 
-	return NewTxSubmitterSet(txSubmitters), nil
+	return NewSet(txSubmitters), nil
 }

@@ -45,19 +45,29 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 		TimeoutBatchTimeout: DefaultTimeoutBatchTimeout,
 	}
 
-	if client, ok := cfg.Relayer.Client(route.SourceChainID, route.SourceClientID); ok {
+	if sourceClient, ok := cfg.Relayer.Client(route.SourceChainID, route.SourceClientID); ok {
 		for _, r := range cfg.Relayer.Routes {
-			if r.SourceClient == client.Alias {
+			if r.SourceClient == sourceClient.Alias {
 				opts.SourceSignerAlias = r.SourceSignerAlias
 				opts.DestSignerAlias = r.DestSignerAlias
 
 				break
 			}
 		}
+
+		if sourceClient.AttestorSet != nil {
+			offset := sourceClient.AttestorSet.CounterpartyChainFinalityOffset
+			opts.DestinationFinalityOffset = &offset
+		}
+	}
+
+	if destClient, ok := cfg.Relayer.Client(route.DestinationChainID, route.DestinationClientID); ok &&
+		destClient.AttestorSet != nil {
+		offset := destClient.AttestorSet.CounterpartyChainFinalityOffset
+		opts.SourceFinalityOffset = &offset
 	}
 
 	if src, ok := cfg.Relayer.ChainOverride(route.SourceChainID); ok {
-
 		if src.PacketBatchSize != nil {
 			opts.AckBatchSize = *src.PacketBatchSize
 			opts.TimeoutBatchSize = *src.PacketBatchSize
@@ -67,8 +77,6 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 			opts.AckBatchTimeout = *src.PacketBatchTimeout
 			opts.TimeoutBatchTimeout = *src.PacketBatchTimeout
 		}
-
-		opts.SourceFinalityOffset = src.FinalityOffset
 	}
 
 	if dst, ok := cfg.Relayer.ChainOverride(route.DestinationChainID); ok {
@@ -79,8 +87,6 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 		if dst.PacketBatchTimeout != nil {
 			opts.RecvBatchTimeout = *dst.PacketBatchTimeout
 		}
-
-		opts.DestinationFinalityOffset = dst.FinalityOffset
 	}
 
 	return opts

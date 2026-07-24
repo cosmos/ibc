@@ -8,8 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -37,7 +38,10 @@ func New(router common.Address) *TxBuilder {
 // single ICS26Router.multicall transaction. EVM router calldata has no
 // meaningful size limit for the batch sizes the relayer forms, so this
 // always returns exactly one tx.
-func (c *TxBuilder) BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error) {
+func (c *TxBuilder) BuildRelayTxs(
+	clientUpdate v2.ClientUpdate,
+	packetRelayItems []v2.PacketRelayItem,
+) ([]v2.RelayTx, error) {
 	calls := make([][]byte, 0, len(packetRelayItems)+1)
 
 	updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.StateProof)
@@ -48,7 +52,9 @@ func (c *TxBuilder) BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems
 	calls = append(calls, updateCall)
 
 	for _, item := range packetRelayItems {
-		call, err := packRelayItem(item)
+		var call []byte
+
+		call, err = packRelayItem(item)
 		if err != nil {
 			return nil, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
 		}

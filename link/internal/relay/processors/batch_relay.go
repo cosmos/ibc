@@ -6,16 +6,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // findPacketEvent returns the event among events matching sequence and clientID
-func findPacketEvent(events []v2.PacketEvent, sequence uint64, clientID string, provableHeight uint64) (v2.PacketEvent, error) {
+func findPacketEvent(
+	events []v2.PacketEvent,
+	sequence uint64,
+	clientID string,
+	provableHeight uint64,
+) (v2.PacketEvent, error) {
 	for _, event := range events {
 		if event.Packet.Sequence != sequence || event.Packet.SourceClient != clientID {
 			continue
@@ -104,7 +110,7 @@ func relayPackets(
 	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
 	defer cancel()
 
-	if err := chainClient.WaitForChain(waitCtx); err != nil {
+	if err = chainClient.WaitForChain(waitCtx); err != nil {
 		return nil, errors.Wrap(err, "waiting for chain")
 	}
 

@@ -1,4 +1,3 @@
-//nolint:dupl // the batch directions are structurally parallel by design
 package processors
 
 import (
@@ -13,6 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
+
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 

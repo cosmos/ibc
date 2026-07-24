@@ -8,6 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// Domain separation tags, matching the attestor's own (see
+// service/attestor/evm.SignABI).
 const (
 	TagStateAttestation  byte = 0x01
 	TagPacketAttestation byte = 0x02

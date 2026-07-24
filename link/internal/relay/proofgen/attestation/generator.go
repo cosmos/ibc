@@ -6,9 +6,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -42,7 +43,11 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 	}
 
 	if decodedHeight != height {
-		return nil, errors.Errorf("state attestation height %d does not match requested height %d", decodedHeight, height)
+		return nil, errors.Errorf(
+			"state attestation height %d does not match requested height %d",
+			decodedHeight,
+			height,
+		)
 	}
 
 	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
@@ -89,11 +94,19 @@ func (g *Generator) PacketProofs(
 	}
 
 	if decodedHeight != height {
-		return nil, errors.Errorf("packet attestation height %d does not match requested height %d", decodedHeight, height)
+		return nil, errors.Errorf(
+			"packet attestation height %d does not match requested height %d",
+			decodedHeight,
+			height,
+		)
 	}
 
 	if len(decodedPackets) != len(packets) {
-		return nil, errors.Errorf("packet attestation returned %d packets, expected %d", len(decodedPackets), len(packets))
+		return nil, errors.Errorf(
+			"packet attestation returned %d packets, expected %d",
+			len(decodedPackets),
+			len(packets),
+		)
 	}
 
 	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{

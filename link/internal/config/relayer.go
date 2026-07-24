@@ -38,9 +38,6 @@ type RelayerChainOverride struct {
 	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
-	// FinalityOffset blocks behind the tip considered final; nil uses the
-	// chain's native finality.
-	FinalityOffset *uint64 `yaml:"finalityOffset,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.

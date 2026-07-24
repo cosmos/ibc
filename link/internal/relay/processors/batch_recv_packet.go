@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
+
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -49,7 +50,9 @@ func NewBatchRecvPacket(
 	proofGen, ok := proofGenerators.Get(route.DestinationChainID, route.DestinationClientID)
 	if !ok {
 		return BatchRecvPacket{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q", route.DestinationClientID, route.DestinationChainID,
+			"no proof generator configured for client %q on chain %q",
+			route.DestinationClientID,
+			route.DestinationChainID,
 		)
 	}
 

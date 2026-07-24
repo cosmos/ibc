@@ -9,11 +9,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen/attestation"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -31,7 +32,12 @@ type ProofGenerator interface {
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
 	// an error if a proof cannot be generated for any packet
-	PacketProofs(ctx context.Context, height uint64, kind v2.ProofKind, packets []channeltypesv2.Packet) ([][]byte, error)
+	PacketProofs(
+		ctx context.Context,
+		height uint64,
+		kind v2.ProofKind,
+		packets []channeltypesv2.Packet,
+	) ([][]byte, error)
 }
 
 var _ ProofGenerator = (*attestation.Generator)(nil)
@@ -91,13 +97,23 @@ func NewSetFromConfig(
 			counterpartyChain, ok := clientSet.Get(clientCfg.CounterpartyChainID)
 			if !ok {
 				return nil, errors.Errorf(
-					"client %q: no configured chain client for counterparty chain %q", clientCfg.Alias, clientCfg.CounterpartyChainID,
+					"client %q: no configured chain client for counterparty chain %q",
+					clientCfg.Alias,
+					clientCfg.CounterpartyChainID,
 				)
 			}
 
-			generators[Key(clientCfg.ChainID, clientCfg.ClientID)] = attestation.New(attestors, clientCfg.AttestorSet.Threshold, counterpartyChain)
+			generators[Key(clientCfg.ChainID, clientCfg.ClientID)] = attestation.New(
+				attestors,
+				clientCfg.AttestorSet.Threshold,
+				counterpartyChain,
+			)
 		default:
-			return nil, errors.Errorf("client %q: unsupported client type %q for proof generation", clientCfg.Alias, clientCfg.Type)
+			return nil, errors.Errorf(
+				"client %q: unsupported client type %q for proof generation",
+				clientCfg.Alias,
+				clientCfg.Type,
+			)
 		}
 	}
 

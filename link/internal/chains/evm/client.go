@@ -128,7 +128,12 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 		case sendPacketID:
 			sendPacket, errParse := c.router.ParseSendPacket(*log)
 			if errParse != nil {
-				return nil, errors.Wrapf(errParse, "parsing send packet event from tx %s on chain %s", txHash, c.chainID)
+				return nil, errors.Wrapf(
+					errParse,
+					"parsing send packet event from tx %s on chain %s",
+					txHash,
+					c.chainID,
+				)
 			}
 
 			events = append(events, v2.PacketEvent{Kind: v2.KindSendPacket, Packet: toPacket(sendPacket.Packet)})

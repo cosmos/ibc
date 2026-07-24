@@ -8,6 +8,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder/evm"
+
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -48,12 +49,20 @@ func NewSetFromConfig(cfg config.Config) (*Set, error) {
 		switch chainCfg.Type() {
 		case config.ChainTypeEVM:
 			if !common.IsHexAddress(chainCfg.EVM.ICS26Router) {
-				return nil, errors.Errorf("chain %q: invalid ics26 router address %q", chainCfg.ChainID, chainCfg.EVM.ICS26Router)
+				return nil, errors.Errorf(
+					"chain %q: invalid ics26 router address %q",
+					chainCfg.ChainID,
+					chainCfg.EVM.ICS26Router,
+				)
 			}
 
 			builders[chainCfg.ChainID] = evm.New(common.HexToAddress(chainCfg.EVM.ICS26Router))
 		default:
-			return nil, errors.Errorf("chain %q: unsupported chain type %q for tx building", chainCfg.ChainID, chainCfg.Type())
+			return nil, errors.Errorf(
+				"chain %q: unsupported chain type %q for tx building",
+				chainCfg.ChainID,
+				chainCfg.Type(),
+			)
 		}
 	}
 
