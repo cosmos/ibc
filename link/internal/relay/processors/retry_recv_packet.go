@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/store"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -19,13 +19,13 @@ type ClearRecvTxStorage interface {
 // RetryRecvPacket clears a stuck or failed recv tx so the packet is
 // redelivered on the next run.
 type RetryRecvPacket struct {
-	txManager txmgr.TxManager
-	storage   ClearRecvTxStorage
-	route     Route
+	txSubmitter txsubmitter.TxSubmitter
+	storage     ClearRecvTxStorage
+	route       Route
 }
 
-func NewRetryRecvPacket(txManager txmgr.TxManager, storage ClearRecvTxStorage, route Route) RetryRecvPacket {
-	return RetryRecvPacket{txManager: txManager, storage: storage, route: route}
+func NewRetryRecvPacket(txSubmitter txsubmitter.TxSubmitter, storage ClearRecvTxStorage, route Route) RetryRecvPacket {
+	return RetryRecvPacket{txSubmitter: txSubmitter, storage: storage, route: route}
 }
 
 func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -33,7 +33,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		return nil, errors.New("transfer has no recv tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.txManager.ShouldRetry(ctx, *tr.RecvTxHash, *tr.RecvTxTime)
+	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.RecvTxHash, *tr.RecvTxTime)
 	if err != nil {
 		return nil, errors.Wrapf(err, "checking if recv tx %s should be retried", *tr.RecvTxHash)
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -24,7 +24,7 @@ type BatchTimeoutPacket struct {
 	route             Route
 	proofGen          proofgen.ProofGenerator
 	txBuilder         txbuilder.TxBuilder
-	txManager         txmgr.TxManager
+	txSubmitter       txsubmitter.TxSubmitter
 	storage           TxStorage
 }
 
@@ -33,7 +33,7 @@ func NewBatchTimeoutPacket(
 	proofGenerators ProofGenerators,
 	txBuilders TxBuilders,
 	storage TxStorage,
-	txManager txmgr.TxManager,
+	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 ) (BatchTimeoutPacket, error) {
 	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
@@ -58,7 +58,7 @@ func NewBatchTimeoutPacket(
 		route:             route,
 		proofGen:          proofGen,
 		txBuilder:         txBuilder,
-		txManager:         txManager,
+		txSubmitter:       txSubmitter,
 		storage:           storage,
 	}, nil
 }
@@ -109,7 +109,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	}
 
 	submission, err := relayPackets(
-		ctx, p.sourceChainClient, p.proofGen, p.txBuilder, p.txManager,
+		ctx, p.sourceChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
 		p.route.SourceClientID, txbuilder.KindTimeout,
 		proofHeight, events,
 	)

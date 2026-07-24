@@ -12,7 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -24,7 +24,7 @@ type BatchRecvPacket struct {
 	route                  Route
 	proofGen               proofgen.ProofGenerator
 	txBuilder              txbuilder.TxBuilder
-	txManager              txmgr.TxManager
+	txSubmitter            txsubmitter.TxSubmitter
 	storage                TxStorage
 }
 
@@ -33,7 +33,7 @@ func NewBatchRecvPacket(
 	proofGenerators ProofGenerators,
 	txBuilders TxBuilders,
 	storage TxStorage,
-	txManager txmgr.TxManager,
+	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 ) (BatchRecvPacket, error) {
 	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
@@ -64,7 +64,7 @@ func NewBatchRecvPacket(
 		route:                  route,
 		proofGen:               proofGen,
 		txBuilder:              txBuilder,
-		txManager:              txManager,
+		txSubmitter:            txSubmitter,
 		storage:                storage,
 	}, nil
 }
@@ -107,7 +107,7 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 	}
 
 	submission, err := relayPackets(
-		ctx, p.destinationChainClient, p.proofGen, p.txBuilder, p.txManager,
+		ctx, p.destinationChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
 		p.route.DestinationClientID, txbuilder.KindRecv,
 		proofHeight, events,
 	)

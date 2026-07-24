@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/store"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -20,17 +20,17 @@ type ClearTimeoutTxStorage interface {
 // RetryTimeoutPacket clears a stuck or failed timeout tx so the timeout is
 // redelivered on the next run.
 type RetryTimeoutPacket struct {
-	txManager txmgr.TxManager
-	storage   ClearTimeoutTxStorage
-	route     Route
+	txSubmitter txsubmitter.TxSubmitter
+	storage     ClearTimeoutTxStorage
+	route       Route
 }
 
 func NewRetryTimeoutPacket(
-	txManager txmgr.TxManager,
+	txSubmitter txsubmitter.TxSubmitter,
 	storage ClearTimeoutTxStorage,
 	route Route,
 ) RetryTimeoutPacket {
-	return RetryTimeoutPacket{txManager: txManager, storage: storage, route: route}
+	return RetryTimeoutPacket{txSubmitter: txSubmitter, storage: storage, route: route}
 }
 
 func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -38,7 +38,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 		return nil, errors.New("transfer has no timeout tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.txManager.ShouldRetry(ctx, *tr.TimeoutTxHash, *tr.TimeoutTxTime)
+	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.TimeoutTxHash, *tr.TimeoutTxTime)
 	if err != nil {
 		return nil, errors.Wrapf(err, "checking if timeout tx %s should be retried", *tr.TimeoutTxHash)
 	}

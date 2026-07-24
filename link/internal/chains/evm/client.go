@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"log/slog"
 	"math/big"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	ethereum "github.com/ethereum/go-ethereum"
 )
@@ -32,12 +32,6 @@ const (
 	writeAckEvent      = "WriteAcknowledgement"
 	ackPacketEvent     = "AckPacket"
 	timeoutPacketEvent = "TimeoutPacket"
-)
-
-// commitment path kinds per ICS-24
-const (
-	packetCommitmentKind byte = 1
-	packetReceiptKind    byte = 2
 )
 
 // errorAcknowledgement is the universal error acknowledgement commitment.
@@ -226,16 +220,14 @@ func blockTime(header *types.Header) time.Time {
 }
 
 func (c *Client) IsPacketReceived(ctx context.Context, destClientID string, sequence uint64) (bool, error) {
-	return c.commitmentExists(ctx, destClientID, packetReceiptKind, sequence)
+	return c.commitmentExists(ctx, destClientID, sequence, hostv2.PacketReceiptKey(destClientID, sequence))
 }
 
 func (c *Client) IsPacketCommitted(ctx context.Context, sourceClientID string, sequence uint64) (bool, error) {
-	return c.commitmentExists(ctx, sourceClientID, packetCommitmentKind, sequence)
+	return c.commitmentExists(ctx, sourceClientID, sequence, hostv2.PacketCommitmentKey(sourceClientID, sequence))
 }
 
-func (c *Client) commitmentExists(ctx context.Context, clientID string, kind byte, sequence uint64) (bool, error) {
-	path := commitmentPath(clientID, kind, sequence)
-
+func (c *Client) commitmentExists(ctx context.Context, clientID string, sequence uint64, path []byte) (bool, error) {
 	commitment, err := c.router.GetCommitment(&bind.CallOpts{Context: ctx}, crypto.Keccak256Hash(path))
 	if err != nil {
 		return false, errors.Wrapf(
@@ -249,20 +241,6 @@ func (c *Client) commitmentExists(ctx context.Context, clientID string, kind byt
 
 	// an absent commitment reads as uninitialized storage: 32 zero bytes
 	return commitment != [32]byte{}, nil
-}
-
-// commitmentPath builds the ICS-24 provable path: clientID ++ kind ++ big-endian sequence.
-func commitmentPath(clientID string, kind byte, sequence uint64) []byte {
-	var buf bytes.Buffer
-
-	buf.WriteString(clientID)
-	buf.WriteByte(kind)
-
-	sequenceBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(sequenceBytes, sequence)
-	buf.Write(sequenceBytes)
-
-	return buf.Bytes()
 }
 
 // FindRecvTx looks for the WriteAcknowledgement event because the router emits

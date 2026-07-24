@@ -28,7 +28,7 @@ const DefaultTxSubmissionDelay = 2 * time.Second
 // before ShouldRetry reports it should be cleared and resubmitted.
 const retryExpiry = 2 * time.Minute
 
-// ETHClient go-ethereum methods used by the EVM tx manager.
+// ETHClient go-ethereum methods used by the EVM tx submitter.
 type ETHClient interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
@@ -39,8 +39,8 @@ type ETHClient interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 }
 
-// TxManager signs and broadcasts transactions on one EVM chain.
-type TxManager struct {
+// TxSubmitter signs and broadcasts transactions on one EVM chain.
+type TxSubmitter struct {
 	chainID   string
 	eth       ETHClient
 	signer    signer.Signer
@@ -65,8 +65,8 @@ type ChainOptions struct {
 	GasTipCapMultiplier *float64
 }
 
-// NewFromRPC dials the chain's RPC and builds its tx manager.
-func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOptions) (*TxManager, error) {
+// NewFromRPC dials the chain's RPC and builds its tx submitter.
+func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOptions) (*TxSubmitter, error) {
 	eth, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %q", chainID)
@@ -75,7 +75,7 @@ func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOpt
 	return New(chainID, eth, chainSigner, opts)
 }
 
-func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*TxManager, error) {
+func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*TxSubmitter, error) {
 	chainIDInt, ok := new(big.Int).SetString(chainID, 10)
 	if !ok {
 		return nil, errors.Errorf("invalid evm chain id %q", chainID)
@@ -95,7 +95,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		delay = DefaultTxSubmissionDelay
 	}
 
-	return &TxManager{
+	return &TxSubmitter{
 		chainID:    chainID,
 		eth:        eth,
 		signer:     chainSigner,
@@ -104,11 +104,11 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		delay:      delay,
 		feeCapMult: opts.GasFeeCapMultiplier,
 		tipCapMult: opts.GasTipCapMultiplier,
-		logger:     slog.With("module", "txmgr", "chainID", chainID),
+		logger:     slog.With("module", "txsubmitter", "chainID", chainID),
 	}, nil
 }
 
-func (c *TxManager) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
+func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -149,7 +149,7 @@ func (c *TxManager) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submiss
 	}, nil
 }
 
-func (c *TxManager) newTx(ctx context.Context, intent v2.TxIntent) (*types.Transaction, error) {
+func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Transaction, error) {
 	if !common.IsHexAddress(intent.To) {
 		return nil, errors.Errorf("invalid to address %q", intent.To)
 	}
@@ -201,7 +201,7 @@ func (c *TxManager) newTx(ctx context.Context, intent v2.TxIntent) (*types.Trans
 	}), nil
 }
 
-func (c *TxManager) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
+func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
 	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
 	switch {
 	case errors.Is(err, ethereum.NotFound):

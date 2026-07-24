@@ -15,7 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 )
 
 func testTransfer(t *testing.T) *processors.Transfer {
@@ -82,9 +82,9 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.SourceChainID:      txbuilder.NewMockTxBuilder(t),
 			testRoute.DestinationChainID: txbuilder.NewMockTxBuilder(t),
 		},
-		TxManagers: staticTxManagers{
-			testRoute.SourceChainID:      mocks.NewMockTxManager(t),
-			testRoute.DestinationChainID: mocks.NewMockTxManager(t),
+		TxSubmitters: staticTxSubmitters{
+			testRoute.SourceChainID:      mocks.NewMockTxSubmitter(t),
+			testRoute.DestinationChainID: mocks.NewMockTxSubmitter(t),
 		},
 	}
 
@@ -115,9 +115,9 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 	return processors.NewTransfer(packets[0], slog.Default())
 }
 
-type staticTxManagers map[string]txmgr.TxManager
+type staticTxSubmitters map[string]txsubmitter.TxSubmitter
 
-func (s staticTxManagers) Get(chainID, _ string) (txmgr.TxManager, bool) {
-	txManager, ok := s[chainID]
-	return txManager, ok
+func (s staticTxSubmitters) Get(chainID, _ string) (txsubmitter.TxSubmitter, bool) {
+	txSubmitter, ok := s[chainID]
+	return txSubmitter, ok
 }

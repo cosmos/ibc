@@ -69,20 +69,20 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       TxBuilder:
-  github.com/cosmos/ibc/link/internal/txmgr:
+  github.com/cosmos/ibc/link/internal/txsubmitter:
     config:
       dir: "internal/tests/mocks"
-      filename: "txmanager.go"
+      filename: "txsubmitter.go"
       pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
-      TxManager:
-  github.com/cosmos/ibc/link/internal/txmgr/evm:
+      TxSubmitter:
+  github.com/cosmos/ibc/link/internal/txsubmitter/evm:
     config:
       dir: "internal/tests/mocks"
-      filename: "txmgrethclient.go"
+      filename: "txsubmitterethclient.go"
       pkgname: "mocks"
-      structname: "MockTxMgrETHClient"
+      structname: "MockTxSubmitterETHClient"
     interfaces:
       ETHClient:
   github.com/cosmos/ibc/link/internal/chains/evm:

@@ -10,7 +10,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -58,14 +58,14 @@ func proofKindFor(relayKind txbuilder.RelayKind) proofgen.ProofKind {
 // proofHeight, packs them into relayKind-tagged items (order-preserved, one
 // per event), asks txBuilder for the resulting transaction, waits for
 // chainClient's chain to catch up to the current time (gas estimation during
-// submission reverts otherwise), and submits it via txManager. clientID is
+// submission reverts otherwise), and submits it via txSubmitter. clientID is
 // the destination client the state proof updates.
 func relayPackets(
 	ctx context.Context,
 	chainClient chains.Client,
 	proofGen proofgen.ProofGenerator,
 	txBuilder txbuilder.TxBuilder,
-	txManager txmgr.TxManager,
+	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,
 	relayKind txbuilder.RelayKind,
 	proofHeight uint64,
@@ -118,7 +118,7 @@ func relayPackets(
 		return nil, errors.Wrap(err, "waiting for chain")
 	}
 
-	submission, err := txManager.Submit(ctx, v2.TxIntent{
+	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
 		To:   common.BytesToAddress(relayTx.To).Hex(),
 		Data: relayTx.Data,
 	})

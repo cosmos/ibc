@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/processors"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relay/pipeline"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -50,6 +49,7 @@ type fakePipeline struct {
 	mu     sync.Mutex
 	pushed []*processors.Transfer
 	accept bool
+	closed bool
 	out    chan *processors.Transfer
 }
 
@@ -79,7 +79,13 @@ func (p *fakePipeline) Poll() (*processors.Transfer, error) {
 	return t, nil
 }
 
-func (p *fakePipeline) Close() { close(p.out) }
+func (p *fakePipeline) Close() {
+	p.mu.Lock()
+	p.closed = true
+	p.mu.Unlock()
+
+	close(p.out)
+}
 
 func (p *fakePipeline) pushCount() int {
 	p.mu.Lock()
@@ -88,21 +94,21 @@ func (p *fakePipeline) pushCount() int {
 	return len(p.pushed)
 }
 
-type fakeManager struct {
+type fakePipelines struct {
 	pipeline pipeline.TransferPipeline
 	err      error
 	closed   bool
 }
 
-func (m *fakeManager) Pipeline(context.Context, *processors.Transfer) (pipeline.TransferPipeline, error) {
-	if m.err != nil {
-		return nil, m.err
+func (r *fakePipelines) Pipeline(context.Context, *processors.Transfer) (pipeline.TransferPipeline, error) {
+	if r.err != nil {
+		return nil, r.err
 	}
 
-	return m.pipeline, nil
+	return r.pipeline, nil
 }
 
-func (m *fakeManager) Close() { m.closed = true }
+func (r *fakePipelines) Close() { r.closed = true }
 
 func dispatcherStore(t *testing.T) *store.SqliteDB {
 	t.Helper()
@@ -142,7 +148,7 @@ func TestRelayDispatcher(t *testing.T) {
 		createStoredPacket(t, db, 2)
 
 		pipe := newFakePipeline(true)
-		dispatcher := NewRelayDispatcher(db, &fakeManager{pipeline: pipe}, DefaultPollInterval, slog.Default())
+		dispatcher := NewRelayDispatcher(db, &fakePipelines{pipeline: pipe}, DefaultPollInterval, slog.Default())
 
 		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
 
@@ -154,7 +160,7 @@ func TestRelayDispatcher(t *testing.T) {
 		createStoredPacket(t, db, 1)
 
 		pipe := newFakePipeline(false) // rejects: already in pipeline
-		dispatcher := NewRelayDispatcher(db, &fakeManager{pipeline: pipe}, DefaultPollInterval, slog.Default())
+		dispatcher := NewRelayDispatcher(db, &fakePipelines{pipeline: pipe}, DefaultPollInterval, slog.Default())
 
 		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
 
@@ -169,7 +175,7 @@ func TestRelayDispatcher(t *testing.T) {
 		db := dispatcherStore(t)
 		createStoredPacket(t, db, 1)
 
-		dispatcher := NewRelayDispatcher(db, &fakeManager{err: errors.New("no route")}, DefaultPollInterval, slog.Default())
+		dispatcher := NewRelayDispatcher(db, &fakePipelines{err: errors.New("no route")}, DefaultPollInterval, slog.Default())
 
 		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
 
@@ -183,25 +189,14 @@ func TestRelayDispatcher(t *testing.T) {
 		assert.Equal(t, store.RelayStatusFailed, packets[0].Status)
 	})
 
-	t.Run("runStopsAndClosesManager", func(t *testing.T) {
+	t.Run("startStopManagesItsOwnContext", func(t *testing.T) {
 		db := dispatcherStore(t)
-		manager := &fakeManager{pipeline: newFakePipeline(true)}
-		dispatcher := NewRelayDispatcher(db, manager, time.Millisecond, slog.Default())
+		pipelines := &fakePipelines{pipeline: newFakePipeline(true)}
+		dispatcher := NewRelayDispatcher(db, pipelines, time.Millisecond, slog.Default())
 
-		runCtx, cancel := context.WithCancel(ctx)
-		done := make(chan error, 1)
-		go func() { done <- dispatcher.Run(runCtx) }()
-
-		time.Sleep(20 * time.Millisecond)
-		cancel()
-
-		select {
-		case err := <-done:
-			require.ErrorIs(t, err, context.Canceled)
-			assert.True(t, manager.closed)
-		case <-time.After(5 * time.Second):
-			t.Fatal("dispatcher did not stop")
-		}
+		require.NoError(t, dispatcher.Start())
+		require.NoError(t, dispatcher.Stop(), "Stop must block until the loop has exited and the pipelines are closed")
+		assert.True(t, pipelines.closed)
 	})
 }
 
@@ -228,23 +223,23 @@ func TestPipelineDeduper(t *testing.T) {
 	})
 }
 
-func TestManager(t *testing.T) {
+func TestPipelineSet(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("memoizesPipelinesPerRoute", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 
 		pipelineCtx, cancel := context.WithCancel(ctx)
-		manager := NewManager(slog.Default(), routedConfig(), deps)
+		pipelines := NewPipelineSet(slog.Default(), routedConfig(), deps)
 		// pipeline outputs only close on cancellation; cancel before Close
-		t.Cleanup(func() { cancel(); manager.Close() })
+		t.Cleanup(func() { cancel(); pipelines.Close() })
 
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-		first, err := manager.Pipeline(pipelineCtx, tr)
+		first, err := pipelines.Pipeline(pipelineCtx, tr)
 		require.NoError(t, err)
 
-		second, err := manager.Pipeline(pipelineCtx, tr)
+		second, err := pipelines.Pipeline(pipelineCtx, tr)
 		require.NoError(t, err)
 
 		assert.Same(t, first, second)
@@ -253,12 +248,12 @@ func TestManager(t *testing.T) {
 	t.Run("rejectsUnroutedTransfers", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 
-		manager := NewManager(slog.Default(), routedConfig(), deps)
+		pipelines := NewPipelineSet(slog.Default(), routedConfig(), deps)
 
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 		tr.PacketSourceClientID = "unknown-0"
 
-		_, err := manager.Pipeline(ctx, tr)
+		_, err := pipelines.Pipeline(ctx, tr)
 
 		require.ErrorContains(t, err, "no route configured")
 	})

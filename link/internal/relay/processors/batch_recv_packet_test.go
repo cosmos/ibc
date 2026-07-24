@@ -105,8 +105,8 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
-	txManager := mocks.NewMockTxManager(t)
-	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
 		RelayerAddress: "0xrelayer",
@@ -117,7 +117,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
-		txManager,
+		txSubmitter,
 		route,
 	)
 	require.NoError(t, err)
@@ -198,8 +198,8 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
-	txManager := mocks.NewMockTxManager(t)
-	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
 		RelayerAddress: "0xrelayer",
@@ -210,7 +210,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
-		txManager,
+		txSubmitter,
 		route,
 	)
 	require.NoError(t, err)
@@ -291,8 +291,8 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]txbuilder.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
-	txManager := mocks.NewMockTxManager(t)
-	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
 		RelayerAddress: "0xrelayer",
@@ -303,7 +303,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
-		txManager,
+		txSubmitter,
 		route,
 	)
 	require.NoError(t, err)

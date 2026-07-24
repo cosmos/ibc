@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/store"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -20,13 +20,13 @@ type ClearAckTxStorage interface {
 // RetryAckPacket clears a stuck or failed ack tx so the ack is redelivered on
 // the next run.
 type RetryAckPacket struct {
-	txManager txmgr.TxManager
-	storage   ClearAckTxStorage
-	route     Route
+	txSubmitter txsubmitter.TxSubmitter
+	storage     ClearAckTxStorage
+	route       Route
 }
 
-func NewRetryAckPacket(txManager txmgr.TxManager, storage ClearAckTxStorage, route Route) RetryAckPacket {
-	return RetryAckPacket{txManager: txManager, storage: storage, route: route}
+func NewRetryAckPacket(txSubmitter txsubmitter.TxSubmitter, storage ClearAckTxStorage, route Route) RetryAckPacket {
+	return RetryAckPacket{txSubmitter: txSubmitter, storage: storage, route: route}
 }
 
 func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -34,7 +34,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
 	}
 
-	retry, err := p.txManager.ShouldRetry(ctx, *tr.AckTxHash, *tr.AckTxTime)
+	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.AckTxHash, *tr.AckTxTime)
 	if err != nil {
 		return nil, errors.Wrapf(err, "checking if ack tx %s should be retried", *tr.AckTxHash)
 	}

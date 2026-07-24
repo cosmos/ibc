@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/relay/processors"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 )
 
 const (
@@ -32,9 +32,9 @@ type Storage interface {
 	processors.TxStorage
 }
 
-// TxManagers resolves the tx manager for a (chain, signer) pair.
-type TxManagers interface {
-	Get(chainID, signerAlias string) (txmgr.TxManager, bool)
+// TxSubmitters resolves the tx submitter for a (chain, signer) pair.
+type TxSubmitters interface {
+	Get(chainID, signerAlias string) (txsubmitter.TxSubmitter, bool)
 }
 
 // Deps the external systems a pipeline relays through.
@@ -43,7 +43,7 @@ type Deps struct {
 	Chains          processors.ChainClients
 	ProofGenerators processors.ProofGenerators
 	TxBuilders      processors.TxBuilders
-	TxManagers      TxManagers
+	TxSubmitters    TxSubmitters
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -73,18 +73,18 @@ func NewPipeline(
 	route processors.Route,
 	opts Options,
 ) (*Pipeline, error) {
-	srcTxManager, ok := deps.TxManagers.Get(route.SourceChainID, opts.SourceSignerAlias)
+	srcTxSubmitter, ok := deps.TxSubmitters.Get(route.SourceChainID, opts.SourceSignerAlias)
 	if !ok {
 		return nil, errors.Errorf(
-			"no configured tx manager for source chain %s and signer %q",
+			"no configured tx submitter for source chain %s and signer %q",
 			route.SourceChainID, opts.SourceSignerAlias,
 		)
 	}
 
-	dstTxManager, ok := deps.TxManagers.Get(route.DestinationChainID, opts.DestSignerAlias)
+	dstTxSubmitter, ok := deps.TxSubmitters.Get(route.DestinationChainID, opts.DestSignerAlias)
 	if !ok {
 		return nil, errors.Errorf(
-			"no configured tx manager for destination chain %s and signer %q",
+			"no configured tx submitter for destination chain %s and signer %q",
 			route.DestinationChainID, opts.DestSignerAlias,
 		)
 	}
@@ -129,13 +129,13 @@ func NewPipeline(
 
 	// deliver timeouts in batches on the source chain
 	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
-		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxManager, route,
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
 	}
 
-	output = ConditionallyBatchProcess(
+	output = BatchProcess(
 		ctx,
 		logger,
 		batchConcurrency,
@@ -147,17 +147,17 @@ func NewPipeline(
 
 	// clear stuck or failed timeout txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxManager, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxSubmitter, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
-		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, dstTxManager, route,
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, dstTxSubmitter, route,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch recv packet processor")
 	}
 
-	output = ConditionallyBatchProcess(
+	output = BatchProcess(
 		ctx,
 		logger,
 		batchConcurrency,
@@ -169,7 +169,7 @@ func NewPipeline(
 
 	// clear stuck or failed recv txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxManager, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxSubmitter, deps.Storage, route)), output)
 
 	// extract the write ack from the recv tx on the destination chain
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
@@ -195,13 +195,13 @@ func NewPipeline(
 
 	// deliver acks in batches on the source chain
 	batchAckPacket, err := processors.NewBatchAckPacket(
-		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxManager, route,
+		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch ack packet processor")
 	}
 
-	output = ConditionallyBatchProcess(
+	output = BatchProcess(
 		ctx,
 		logger,
 		batchConcurrency,
@@ -213,7 +213,7 @@ func NewPipeline(
 
 	// clear stuck or failed ack txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxManager, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxSubmitter, deps.Storage, route)), output)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,

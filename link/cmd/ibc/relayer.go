@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -57,23 +55,13 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	graceful.AddCallback(app.Store.Close)
-
-	if app.Dispatcher != nil {
-		dispatcherCtx, cancelDispatcher := context.WithCancel(context.Background())
-
-		go func() {
-			if err := app.Dispatcher.Run(dispatcherCtx); err != nil && !errors.Is(err, context.Canceled) {
-				app.Logger.Error("Dispatcher stopped", "error", err)
-			}
-		}()
-
-		graceful.AddCallback(func() error {
-			cancelDispatcher()
-			return nil
-		})
+	if err := app.RelayerService.Start(); err != nil {
+		app.Logger.Error("Failed to start relayer dispatch loop", "error", err)
+		return err
 	}
 
+	graceful.AddCallback(app.Store.Close)
+	graceful.AddCallback(app.RelayerService.Stop)
 	graceful.AddCallback(app.Server.Stop)
 
 	// blocking
