@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/relay/processors"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 )
@@ -34,17 +34,17 @@ type Storage interface {
 	processors.TxStorage
 }
 
-// TxManagers resolves the tx manager for a (chain, signer) pair.
-type TxManagers interface {
-	Get(chainID, signerAlias string) (txmgr.TxManager, bool)
+// TxSubmitters resolves the tx submitter for a (chain, signer) pair.
+type TxSubmitters interface {
+	Get(chainID, signerAlias string) (txsubmitter.TxSubmitter, bool)
 }
 
 // Deps the external systems a pipeline relays through.
 type Deps struct {
-	Storage    Storage
-	Chains     processors.ChainClients
-	ProofAPI   proto.ProofApiServiceClient
-	TxManagers TxManagers
+	Storage      Storage
+	Chains       processors.ChainClients
+	ProofAPI     proto.ProofApiServiceClient
+	TxSubmitters TxSubmitters
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -74,18 +74,18 @@ func NewPipeline(
 	route processors.Route,
 	opts Options,
 ) (*Pipeline, error) {
-	srcTxManager, ok := deps.TxManagers.Get(route.SourceChainID, opts.SourceSignerAlias)
+	srcTxSubmitter, ok := deps.TxSubmitters.Get(route.SourceChainID, opts.SourceSignerAlias)
 	if !ok {
 		return nil, errors.Errorf(
-			"no configured tx manager for source chain %s and signer %q",
+			"no configured tx submitter for source chain %s and signer %q",
 			route.SourceChainID, opts.SourceSignerAlias,
 		)
 	}
 
-	dstTxManager, ok := deps.TxManagers.Get(route.DestinationChainID, opts.DestSignerAlias)
+	dstTxSubmitter, ok := deps.TxSubmitters.Get(route.DestinationChainID, opts.DestSignerAlias)
 	if !ok {
 		return nil, errors.Errorf(
-			"no configured tx manager for destination chain %s and signer %q",
+			"no configured tx submitter for destination chain %s and signer %q",
 			route.DestinationChainID, opts.DestSignerAlias,
 		)
 	}
@@ -138,13 +138,13 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcTxManager, route),
+			processors.NewBatchTimeoutPacket(deps.Chains, deps.Storage, deps.ProofAPI, srcTxSubmitter, route),
 		),
 	)
 
 	// clear stuck or failed timeout txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxManager, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxSubmitter, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
 	output = BatchProcess(
@@ -156,13 +156,13 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(
 			deps.Storage,
-			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstTxManager, route),
+			processors.NewBatchRecvPacket(deps.Chains, deps.Storage, deps.ProofAPI, dstTxSubmitter, route),
 		),
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxManager, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxSubmitter, deps.Storage, route)), output)
 
 	// extract the write ack from the recv tx on the destination chain
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
@@ -200,7 +200,7 @@ func NewPipeline(
 				deps.Chains,
 				deps.Storage,
 				deps.ProofAPI,
-				srcTxManager,
+				srcTxSubmitter,
 				route,
 			),
 		),
@@ -208,7 +208,7 @@ func NewPipeline(
 
 	// clear stuck or failed ack txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxManager, deps.Storage, route)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxSubmitter, deps.Storage, route)), output)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,

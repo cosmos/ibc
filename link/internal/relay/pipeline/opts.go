@@ -16,7 +16,7 @@ const (
 
 // Options the per-route pipeline settings.
 type Options struct {
-	// SourceSignerAlias and DestSignerAlias select the tx managers used to
+	// SourceSignerAlias and DestSignerAlias select the tx submitters used to
 	// submit on the route's source and destination chains.
 	SourceSignerAlias string
 	DestSignerAlias   string

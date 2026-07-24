@@ -69,8 +69,8 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			return connect.NewResponse(&proto.RelayByTxResponse{Tx: []byte{0x01}, Address: "0xrouter"}), nil
 		})
 
-	txManager := mocks.NewMockTxManager(t)
-	txManager.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
 		RelayerAddress: "0xrelayer",
@@ -78,7 +78,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	chainSet := staticChains{route.DestinationChainID: client}
 
-	p := NewBatchRecvPacket(chainSet, db, proofAPI, txManager, route)
+	p := NewBatchRecvPacket(chainSet, db, proofAPI, txSubmitter, route)
 
 	_, err = p.Process(context.Background(), []*Transfer{valid, invalid})
 	require.NoError(t, err)

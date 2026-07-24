@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/store"
-	"github.com/cosmos/ibc/link/internal/txmgr"
+	"github.com/cosmos/ibc/link/internal/txsubmitter"
 
 	proto "github.com/cosmos/ibc/link/internal/types/proofapi"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -19,26 +19,26 @@ import (
 // BatchRecvPacket delivers one recv tx on the destination chain for a batch
 // of transfers.
 type BatchRecvPacket struct {
-	chains    ChainClients
-	storage   TxStorage
-	proofAPI  proto.ProofApiServiceClient
-	txManager txmgr.TxManager
-	route     Route
+	chains      ChainClients
+	storage     TxStorage
+	proofAPI    proto.ProofApiServiceClient
+	txSubmitter txsubmitter.TxSubmitter
+	route       Route
 }
 
 func NewBatchRecvPacket(
 	chainClients ChainClients,
 	storage TxStorage,
 	proofAPI proto.ProofApiServiceClient,
-	txManager txmgr.TxManager,
+	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 ) BatchRecvPacket {
 	return BatchRecvPacket{
-		chains:    chainClients,
-		storage:   storage,
-		proofAPI:  proofAPI,
-		txManager: txManager,
-		route:     route,
+		chains:      chainClients,
+		storage:     storage,
+		proofAPI:    proofAPI,
+		txSubmitter: txSubmitter,
+		route:       route,
 	}
 }
 
@@ -96,7 +96,7 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		return nil, errors.Wrap(errWait, "waiting for chain")
 	}
 
-	submission, err := p.txManager.Submit(ctx, v2.TxIntent{
+	submission, err := p.txSubmitter.Submit(ctx, v2.TxIntent{
 		To:   resp.Msg.GetAddress(),
 		Data: resp.Msg.GetTx(),
 	})
