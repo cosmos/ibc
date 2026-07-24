@@ -176,12 +176,9 @@ func joinResponseErrors(responses []quorumResponse) string {
 	return strings.Join(msgs, "; ")
 }
 
-// latestProvableHeight finds the highest height at least threshold attestors
-// have reached. It fans LatestHeight out concurrently, then sorts the
-// responding heights descending and takes the value at index threshold-1 --
-// not the minimum across every responder, which would let a single healthy
-// but lagging attestor drag the resolved height down even when threshold
-// others already agree on something fresher.
+// latestProvableHeight finds a height every attestor in the quorum has. It fans
+// LatestHeight out concurrently and takes the minimum among the attestors
+// that answered, requiring at least threshold of them to respond.
 func latestProvableHeight(
 	ctx context.Context,
 	attestors []attestor.Attestor,
@@ -238,6 +235,10 @@ func latestProvableHeight(
 		)
 	}
 
+	// take the highest height at least threshold attestors have reached,
+	// not the raw minimum across every responder -- otherwise a single
+	// healthy but lagging attestor would drag the resolved height down even
+	// when threshold others already agree on something fresher.
 	sort.Slice(heights, func(i, j int) bool { return heights[i] > heights[j] })
 	height := heights[threshold-1]
 
