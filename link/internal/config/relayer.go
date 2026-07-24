@@ -204,6 +204,13 @@ func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
 }
 
 func (c RelayerConfig) validateRoutes() error {
+	// An empty relayer block is valid (e.g. an attestor-only process has no
+	// use for one), but configuring clients with no route to relay them is
+	// not.
+	if len(c.Clients) > 0 && len(c.Routes) == 0 {
+		return errors.New(".routesToRelay: no relayer routes configured")
+	}
+
 	routes := make(map[string]struct{})
 
 	for i, route := range c.Routes {

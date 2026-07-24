@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/pkg/errors"
-
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
@@ -37,10 +35,6 @@ type Services struct {
 func BuildRelayer(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
-
-	if len(cfg.Relayer.Routes) == 0 {
-		return nil, errors.New("no relayer routes configured")
-	}
 
 	// Storage
 	db, err := store.NewStore(ctx, cfg)

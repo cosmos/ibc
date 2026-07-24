@@ -348,6 +348,13 @@ func TestRelayerConfig(t *testing.T) {
 				},
 				errContains: ".routesToRelay duplicate route",
 			},
+			{
+				name: "no routes configured",
+				patch: func(c *Config) {
+					c.Relayer.Routes = nil
+				},
+				errContains: "no relayer routes configured",
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
