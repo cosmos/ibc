@@ -15,7 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
-func TestConditionallyBatchProcess(t *testing.T) {
+func TestBatchProcess(t *testing.T) {
 	ctx := context.Background()
 
 	collect := func(out <-chan *processors.Transfer, n int) []*processors.Transfer {
@@ -35,7 +35,7 @@ func TestConditionallyBatchProcess(t *testing.T) {
 		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return true }}
 		in := make(chan *processors.Transfer)
 
-		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 2, time.Minute, in, NewBatchProcessorMW(storage, internal))
+		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Minute, in, NewBatchProcessorMW(storage, internal))
 
 		go func() {
 			in <- testTransfer(t)
@@ -55,7 +55,7 @@ func TestConditionallyBatchProcess(t *testing.T) {
 		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return true }}
 		in := make(chan *processors.Transfer)
 
-		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 50, 50*time.Millisecond, in, NewBatchProcessorMW(storage, internal))
+		out := BatchProcess(ctx, slog.Default(), 1, 50, 50*time.Millisecond, in, NewBatchProcessorMW(storage, internal))
 
 		go func() {
 			in <- testTransfer(t)
@@ -75,7 +75,7 @@ func TestConditionallyBatchProcess(t *testing.T) {
 		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return false }}
 		in := make(chan *processors.Transfer)
 
-		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 2, time.Hour, in, NewBatchProcessorMW(storage, internal))
+		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Hour, in, NewBatchProcessorMW(storage, internal))
 
 		errored := testTransfer(t)
 		errored.ProcessingError = errors.New("poisoned")
@@ -100,7 +100,7 @@ func TestConditionallyBatchProcess(t *testing.T) {
 		slow := &blockingBatchProcessor{release: release}
 		in := make(chan *processors.Transfer)
 
-		out := ConditionallyBatchProcess(ctx, slog.Default(), 1, 1, time.Hour, in, NewBatchProcessorMW(storage, slow))
+		out := BatchProcess(ctx, slog.Default(), 1, 1, time.Hour, in, NewBatchProcessorMW(storage, slow))
 
 		// the first batch blocks in the processor; the collector must keep
 		// accepting input regardless

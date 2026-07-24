@@ -35,6 +35,11 @@ const (
 )
 
 // commitment path kinds per ICS-24
+//
+// TODO(#1281): now that cosmos/ibc#1281 has landed canonical ibc-go v2
+// packet/payload types, follow up on migrating this hand-rolled path/
+// commitment-kind construction to ibc-go's canonical commitment/path
+// helpers too, per that PR's stated scope.
 const (
 	packetCommitmentKind byte = 1
 	packetReceiptKind    byte = 2

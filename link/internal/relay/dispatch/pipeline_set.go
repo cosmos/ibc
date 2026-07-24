@@ -12,8 +12,8 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 )
 
-// Manager creates and caches one pipeline per route.
-type Manager struct {
+// PipelineSet creates and caches one pipeline per route.
+type PipelineSet struct {
 	logger *slog.Logger
 	cfg    config.Config
 	deps   pipeline.Deps
@@ -22,16 +22,16 @@ type Manager struct {
 	pipelines map[processors.Route]pipeline.TransferPipeline
 }
 
-// RouteManager identifies the pipeline a transfer is relayed through.
-type RouteManager interface {
+// Pipelines identifies the pipeline a transfer is relayed through.
+type Pipelines interface {
 	Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error)
 	Close()
 }
 
-var _ RouteManager = (*Manager)(nil)
+var _ Pipelines = (*PipelineSet)(nil)
 
-func NewManager(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) *Manager {
-	return &Manager{
+func NewPipelineSet(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) *PipelineSet {
+	return &PipelineSet{
 		logger:    logger,
 		cfg:       cfg,
 		deps:      deps,
@@ -41,7 +41,7 @@ func NewManager(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) *Man
 
 // Pipeline returns the pipeline for the transfer's route, creating it on
 // first use. Transfers whose source client has no configured route error.
-func (m *Manager) Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error) {
+func (s *PipelineSet) Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error) {
 	route := processors.Route{
 		SourceChainID:       tr.SourceChainID,
 		SourceClientID:      tr.PacketSourceClientID,
@@ -49,21 +49,21 @@ func (m *Manager) Pipeline(ctx context.Context, tr *processors.Transfer) (pipeli
 		DestinationClientID: tr.PacketDestinationClientID,
 	}
 
-	if !m.isRouted(route) {
+	if !s.isRouted(route) {
 		return nil, errors.Errorf(
 			"no route configured for client %q on chain %q",
 			route.SourceClientID, route.SourceChainID,
 		)
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if pipeline, ok := m.pipelines[route]; ok {
-		return pipeline, nil
+	if pl, ok := s.pipelines[route]; ok {
+		return pl, nil
 	}
 
-	m.logger.Info(
+	s.logger.Info(
 		"Creating pipeline",
 		"sourceChainID", route.SourceChainID,
 		"sourceClientID", route.SourceClientID,
@@ -71,24 +71,24 @@ func (m *Manager) Pipeline(ctx context.Context, tr *processors.Transfer) (pipeli
 		"destinationClientID", route.DestinationClientID,
 	)
 
-	inner, err := pipeline.NewPipeline(ctx, m.logger, m.deps, route, pipeline.OptionsFromConfig(m.cfg, route))
+	inner, err := pipeline.NewPipeline(ctx, s.logger, s.deps, route, pipeline.OptionsFromConfig(s.cfg, route))
 	if err != nil {
 		return nil, errors.Wrap(err, "creating pipeline")
 	}
 
-	pipeline := NewDeduper(inner)
-	m.pipelines[route] = pipeline
+	pl := NewDeduper(inner)
+	s.pipelines[route] = pl
 
-	return pipeline, nil
+	return pl, nil
 }
 
-func (m *Manager) isRouted(route processors.Route) bool {
-	client, ok := m.cfg.Relayer.Client(route.SourceChainID, route.SourceClientID)
+func (s *PipelineSet) isRouted(route processors.Route) bool {
+	client, ok := s.cfg.Relayer.Client(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return false
 	}
 
-	for _, r := range m.cfg.Relayer.Routes {
+	for _, r := range s.cfg.Relayer.Routes {
 		if r.SourceClient == client.Alias {
 			return true
 		}
@@ -99,11 +99,11 @@ func (m *Manager) isRouted(route processors.Route) bool {
 
 // Close closes every pipeline. The context the pipelines were created with
 // must already be canceled: pipeline outputs only close on cancellation.
-func (m *Manager) Close() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (s *PipelineSet) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	for _, pipeline := range m.pipelines {
-		pipeline.Close()
+	for _, pl := range s.pipelines {
+		pl.Close()
 	}
 }

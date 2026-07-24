@@ -129,7 +129,7 @@ func NewPipeline(
 	)
 
 	// deliver timeouts in batches on the source chain
-	output = ConditionallyBatchProcess(
+	output = BatchProcess(
 		ctx,
 		logger,
 		batchConcurrency,
@@ -147,7 +147,7 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxManager, deps.Storage, route)), output)
 
 	// deliver recvs in batches on the destination chain
-	output = ConditionallyBatchProcess(
+	output = BatchProcess(
 		ctx,
 		logger,
 		batchConcurrency,
@@ -187,7 +187,7 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
 	// deliver acks in batches on the source chain
-	output = ConditionallyBatchProcess(
+	output = BatchProcess(
 		ctx,
 		logger,
 		batchConcurrency,

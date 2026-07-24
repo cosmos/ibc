@@ -10,11 +10,11 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 )
 
-// ConditionallyBatchProcess batches the transfers the processor applies to
+// BatchProcess batches the transfers the processor applies to
 // (per ShouldProcess) and forwards everything else downstream immediately.
 // Batches are released at maxSize or after maxDuration, collected by a single
 // collector, and executed by up to concurrency processors.
-func ConditionallyBatchProcess(
+func BatchProcess(
 	ctx context.Context,
 	logger *slog.Logger,
 	concurrency int,

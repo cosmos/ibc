@@ -38,6 +38,13 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
+type staticTxManagers map[string]txmgr.TxManager
+
+func (s staticTxManagers) Get(chainID, _ string) (txmgr.TxManager, bool) {
+	txManager, ok := s[chainID]
+	return txManager, ok
+}
+
 type pipelineEnv struct {
 	store *store.SqliteDB
 }
@@ -90,11 +97,4 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 	require.Len(t, packets, 1)
 
 	return processors.NewTransfer(packets[0], slog.Default())
-}
-
-type staticTxManagers map[string]txmgr.TxManager
-
-func (s staticTxManagers) Get(chainID, _ string) (txmgr.TxManager, bool) {
-	txManager, ok := s[chainID]
-	return txManager, ok
 }

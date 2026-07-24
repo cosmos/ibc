@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/pkg/errors"
+
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
@@ -26,9 +28,6 @@ type Services struct {
 	Store   store.Store
 	Signers *signer.Set
 
-	// Dispatcher drives packet relaying
-	Dispatcher *dispatch.RelayDispatcher
-
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
 }
@@ -37,6 +36,10 @@ type Services struct {
 func BuildRelayer(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
+
+	if len(cfg.Relayer.Routes) == 0 {
+		return nil, errors.New("no relayer routes configured")
+	}
 
 	// Storage
 	db, err := store.NewStore(ctx, cfg)
@@ -56,8 +59,23 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		return nil, err
 	}
 
+	// Tx managers for pipeline batch delivery
+	txManagers, err := txmgr.NewFromConfig(cfg, signers)
+	if err != nil {
+		return nil, err
+	}
+
+	// Relaying dispatcher
+	pipelines := dispatch.NewPipelineSet(logger, cfg, pipeline.Deps{
+		Storage:    db,
+		Chains:     clientSet,
+		ProofAPI:   proofapi.NewClient(cfg.Relayer.ProofAPI),
+		TxManagers: txManagers,
+	})
+	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, dispatch.DefaultPollInterval, logger)
+
 	// Services
-	relayerService := relayer.New(cfg, db, clientSet)
+	relayerService := relayer.New(cfg, db, clientSet, dispatcher)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)
@@ -66,24 +84,6 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(relayerHandler)
 
-	// Relaying dispatcher
-	var dispatcher *dispatch.RelayDispatcher
-	if len(cfg.Relayer.Routes) > 0 {
-		txManagers, errTxManagers := txmgr.NewFromConfig(cfg, signers)
-		if errTxManagers != nil {
-			return nil, errTxManagers
-		}
-
-		pipelineManager := dispatch.NewManager(logger, cfg, pipeline.Deps{
-			Storage:    db,
-			Chains:     clientSet,
-			ProofAPI:   proofapi.NewClient(cfg.Relayer.ProofAPI),
-			TxManagers: txManagers,
-		})
-
-		dispatcher = dispatch.NewRelayDispatcher(db, pipelineManager, dispatch.DefaultPollInterval, logger)
-	}
-
 	services := &Services{
 		Context:         ctx,
 		Logger:          logger,
@@ -91,7 +91,6 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		Store:           db,
 		Signers:         signers,
 		RelayerService:  relayerService,
-		Dispatcher:      dispatcher,
 		AttestorService: nil,
 	}
 

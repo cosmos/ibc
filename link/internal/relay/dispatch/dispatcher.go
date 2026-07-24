@@ -28,45 +28,72 @@ type DispatcherStorage interface {
 // it inserts packets, the dispatcher picks them up on the next poll.
 type RelayDispatcher struct {
 	storage      DispatcherStorage
-	manager      RouteManager
+	pipelines    Pipelines
 	pollInterval time.Duration
 	logger       *slog.Logger
+
+	cancel  context.CancelFunc
+	stopped chan struct{}
 }
 
 func NewRelayDispatcher(
 	storage DispatcherStorage,
-	manager RouteManager,
+	pipelines Pipelines,
 	pollInterval time.Duration,
 	logger *slog.Logger,
 ) *RelayDispatcher {
 	return &RelayDispatcher{
 		storage:      storage,
-		manager:      manager,
+		pipelines:    pipelines,
 		pollInterval: pollInterval,
 		logger:       logger.With("module", "dispatcher"),
 	}
 }
 
-// Run submits unfinished packets on every poll until the context is canceled.
-func (d *RelayDispatcher) Run(ctx context.Context) error {
-	// fire immediately, then at the poll interval
-	ticker := time.NewTicker(time.Millisecond)
-	defer ticker.Stop()
+// Start begins the dispatch loop in its own goroutine.
+// Polls for unfinished packets until Stop is called.
+func (d *RelayDispatcher) Start() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	d.cancel = cancel
+	d.stopped = make(chan struct{})
 
-	for {
-		select {
-		case <-ctx.Done():
-			d.manager.Close()
+	go func() {
+		defer close(d.stopped)
 
-			return ctx.Err()
-		case <-ticker.C:
-			ticker.Reset(d.pollInterval)
+		// fire immediately, then at the poll interval
+		ticker := time.NewTicker(time.Millisecond)
+		defer ticker.Stop()
 
-			if err := d.SubmitWaitingUnfinishedPackets(ctx); err != nil {
-				d.logger.Error("Submitting unfinished packets", "error", err)
+		for {
+			select {
+			case <-ctx.Done():
+				d.pipelines.Close()
+
+				return
+			case <-ticker.C:
+				ticker.Reset(d.pollInterval)
+
+				if err := d.SubmitWaitingUnfinishedPackets(ctx); err != nil {
+					d.logger.Error("Submitting unfinished packets", "error", err)
+				}
 			}
 		}
+	}()
+
+	return nil
+}
+
+// Stop cancels the dispatch loop and blocks until it has exited and every
+// pipeline it created is closed.
+func (d *RelayDispatcher) Stop() error {
+	if d.cancel == nil {
+		return nil
 	}
+
+	d.cancel()
+	<-d.stopped
+
+	return nil
 }
 
 // SubmitWaitingUnfinishedPackets pushes every unfinished packet into its
@@ -100,12 +127,12 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 
 // SubmitTransfer routes the transfer to its pipeline and pushes it.
 func (d *RelayDispatcher) SubmitTransfer(ctx context.Context, tr *processors.Transfer) error {
-	pipeline, err := d.manager.Pipeline(ctx, tr)
+	pl, err := d.pipelines.Pipeline(ctx, tr)
 	if err != nil {
 		return errors.Wrap(err, "getting pipeline for transfer")
 	}
 
-	if !pipeline.Push(ctx, tr) {
+	if !pl.Push(ctx, tr) {
 		return ErrTransferAlreadyInPipeline
 	}
 
