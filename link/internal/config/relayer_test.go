@@ -273,6 +273,13 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".grpc required for remote attestors",
 			},
 			{
+				name: "attestor grpc includes a scheme",
+				patch: func(c *Config) {
+					c.Relayer.Clients[0].AttestorSet.Attestors[0].GRPC = "https://attestor.example.com:443"
+				},
+				errContains: ".grpc must be a bare host:port, not a URL",
+			},
+			{
 				name: "invalid attestor type",
 				patch: func(c *Config) {
 					c.Relayer.Clients[0].AttestorSet.Attestors[0].Type = "hybrid"
@@ -300,6 +307,27 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".attestors duplicate entry",
 			},
 			{
+				name: "route source signer with unknown alias",
+				patch: func(c *Config) {
+					c.Relayer.Routes[0].SourceSignerAlias = "ghost"
+				},
+				errContains: `references unknown signer "ghost"`,
+			},
+			{
+				name: "route dest signer with unknown alias",
+				patch: func(c *Config) {
+					c.Relayer.Routes[0].DestSignerAlias = "ghost"
+				},
+				errContains: `references unknown signer "ghost"`,
+			},
+			{
+				name: "route missing source signer",
+				patch: func(c *Config) {
+					c.Relayer.Routes[0].SourceSignerAlias = ""
+				},
+				errContains: ".sourceSignerAlias required",
+			},
+			{
 				name: "route missing sourceClient",
 				patch: func(c *Config) {
 					c.Relayer.Routes[0].SourceClient = ""
@@ -319,6 +347,13 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Routes = append(c.Relayer.Routes, c.Relayer.Routes[0])
 				},
 				errContains: ".routesToRelay duplicate route",
+			},
+			{
+				name: "no routes configured",
+				patch: func(c *Config) {
+					c.Relayer.Routes = nil
+				},
+				errContains: "no relayer routes configured",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {

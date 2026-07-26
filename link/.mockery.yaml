@@ -13,9 +13,9 @@ packages:
       ChainClients:
   github.com/cosmos/ibc/link/internal/store:
     config:
-      dir: "{{.InterfaceDir}}"
-      filename: "store.mock.go"
-      pkgname: "{{.SrcPackageName}}"
+      dir: "internal/tests/mocks"
+      filename: "store.go"
+      pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Repository:
@@ -27,6 +27,46 @@ packages:
       structname: "Mock{{.InterfaceName}}"
     interfaces:
       Client:
+  github.com/cosmos/ibc/link/internal/service/attestor:
+    config:
+      dir: "{{.InterfaceDir}}"
+      filename: "attestor.mock.go"
+      pkgname: "{{.SrcPackageName}}"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Attestor:
+  github.com/cosmos/ibc/link/internal/relay/proofgen:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "proofgen.go"
+      pkgname: "mocks"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      ProofGenerator:
+  github.com/cosmos/ibc/link/internal/relay/txbuilder:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "txbuilder.go"
+      pkgname: "mocks"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      TxBuilder:
+  github.com/cosmos/ibc/link/internal/txsubmitter:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "txsubmitter.go"
+      pkgname: "mocks"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      TxSubmitter:
+  github.com/cosmos/ibc/link/internal/txsubmitter/evm:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "txsubmitterethclient.go"
+      pkgname: "mocks"
+      structname: "MockTxSubmitterETHClient"
+    interfaces:
+      ETHClient:
   github.com/cosmos/ibc/link/internal/chains/evm:
     config:
       dir: "internal/tests/mocks"

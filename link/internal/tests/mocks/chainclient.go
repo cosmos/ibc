@@ -8,6 +8,7 @@ import (
 	"context"
 	"github.com/cosmos/ibc/link/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
+	"time"
 )
 
 // NewMockClient creates a new instance of MockClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -77,6 +78,228 @@ func (_c *MockClient_ChainID_Call) Return(s string) *MockClient_ChainID_Call {
 }
 
 func (_c *MockClient_ChainID_Call) RunAndReturn(run func() string) *MockClient_ChainID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindAckTx provides a mock function for the type MockClient
+func (_mock *MockClient) FindAckTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error) {
+	ret := _mock.Called(ctx, sourceClientID, sequence)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindAckTx")
+	}
+
+	var r0 *v2.Tx
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) (*v2.Tx, error)); ok {
+		return returnFunc(ctx, sourceClientID, sequence)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) *v2.Tx); ok {
+		r0 = returnFunc(ctx, sourceClientID, sequence)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v2.Tx)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = returnFunc(ctx, sourceClientID, sequence)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_FindAckTx_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindAckTx'
+type MockClient_FindAckTx_Call struct {
+	*mock.Call
+}
+
+// FindAckTx is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceClientID string
+//   - sequence uint64
+func (_e *MockClient_Expecter) FindAckTx(ctx any, sourceClientID any, sequence any) *MockClient_FindAckTx_Call {
+	return &MockClient_FindAckTx_Call{Call: _e.mock.On("FindAckTx", ctx, sourceClientID, sequence)}
+}
+
+func (_c *MockClient_FindAckTx_Call) Run(run func(ctx context.Context, sourceClientID string, sequence uint64)) *MockClient_FindAckTx_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_FindAckTx_Call) Return(tx *v2.Tx, err error) *MockClient_FindAckTx_Call {
+	_c.Call.Return(tx, err)
+	return _c
+}
+
+func (_c *MockClient_FindAckTx_Call) RunAndReturn(run func(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)) *MockClient_FindAckTx_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindRecvTx provides a mock function for the type MockClient
+func (_mock *MockClient) FindRecvTx(ctx context.Context, destClientID string, sequence uint64) (*v2.Tx, error) {
+	ret := _mock.Called(ctx, destClientID, sequence)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindRecvTx")
+	}
+
+	var r0 *v2.Tx
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) (*v2.Tx, error)); ok {
+		return returnFunc(ctx, destClientID, sequence)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) *v2.Tx); ok {
+		r0 = returnFunc(ctx, destClientID, sequence)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v2.Tx)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = returnFunc(ctx, destClientID, sequence)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_FindRecvTx_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindRecvTx'
+type MockClient_FindRecvTx_Call struct {
+	*mock.Call
+}
+
+// FindRecvTx is a helper method to define mock.On call
+//   - ctx context.Context
+//   - destClientID string
+//   - sequence uint64
+func (_e *MockClient_Expecter) FindRecvTx(ctx any, destClientID any, sequence any) *MockClient_FindRecvTx_Call {
+	return &MockClient_FindRecvTx_Call{Call: _e.mock.On("FindRecvTx", ctx, destClientID, sequence)}
+}
+
+func (_c *MockClient_FindRecvTx_Call) Run(run func(ctx context.Context, destClientID string, sequence uint64)) *MockClient_FindRecvTx_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_FindRecvTx_Call) Return(tx *v2.Tx, err error) *MockClient_FindRecvTx_Call {
+	_c.Call.Return(tx, err)
+	return _c
+}
+
+func (_c *MockClient_FindRecvTx_Call) RunAndReturn(run func(ctx context.Context, destClientID string, sequence uint64) (*v2.Tx, error)) *MockClient_FindRecvTx_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindTimeoutTx provides a mock function for the type MockClient
+func (_mock *MockClient) FindTimeoutTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error) {
+	ret := _mock.Called(ctx, sourceClientID, sequence)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindTimeoutTx")
+	}
+
+	var r0 *v2.Tx
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) (*v2.Tx, error)); ok {
+		return returnFunc(ctx, sourceClientID, sequence)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) *v2.Tx); ok {
+		r0 = returnFunc(ctx, sourceClientID, sequence)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v2.Tx)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = returnFunc(ctx, sourceClientID, sequence)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_FindTimeoutTx_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindTimeoutTx'
+type MockClient_FindTimeoutTx_Call struct {
+	*mock.Call
+}
+
+// FindTimeoutTx is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceClientID string
+//   - sequence uint64
+func (_e *MockClient_Expecter) FindTimeoutTx(ctx any, sourceClientID any, sequence any) *MockClient_FindTimeoutTx_Call {
+	return &MockClient_FindTimeoutTx_Call{Call: _e.mock.On("FindTimeoutTx", ctx, sourceClientID, sequence)}
+}
+
+func (_c *MockClient_FindTimeoutTx_Call) Run(run func(ctx context.Context, sourceClientID string, sequence uint64)) *MockClient_FindTimeoutTx_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_FindTimeoutTx_Call) Return(tx *v2.Tx, err error) *MockClient_FindTimeoutTx_Call {
+	_c.Call.Return(tx, err)
+	return _c
+}
+
+func (_c *MockClient_FindTimeoutTx_Call) RunAndReturn(run func(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)) *MockClient_FindTimeoutTx_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -221,6 +444,378 @@ func (_c *MockClient_GetCommitment_Call) RunAndReturn(run func(ctx context.Conte
 	return _c
 }
 
+// IsPacketCommitted provides a mock function for the type MockClient
+func (_mock *MockClient) IsPacketCommitted(ctx context.Context, sourceClientID string, sequence uint64) (bool, error) {
+	ret := _mock.Called(ctx, sourceClientID, sequence)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsPacketCommitted")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) (bool, error)); ok {
+		return returnFunc(ctx, sourceClientID, sequence)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) bool); ok {
+		r0 = returnFunc(ctx, sourceClientID, sequence)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = returnFunc(ctx, sourceClientID, sequence)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_IsPacketCommitted_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsPacketCommitted'
+type MockClient_IsPacketCommitted_Call struct {
+	*mock.Call
+}
+
+// IsPacketCommitted is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceClientID string
+//   - sequence uint64
+func (_e *MockClient_Expecter) IsPacketCommitted(ctx any, sourceClientID any, sequence any) *MockClient_IsPacketCommitted_Call {
+	return &MockClient_IsPacketCommitted_Call{Call: _e.mock.On("IsPacketCommitted", ctx, sourceClientID, sequence)}
+}
+
+func (_c *MockClient_IsPacketCommitted_Call) Run(run func(ctx context.Context, sourceClientID string, sequence uint64)) *MockClient_IsPacketCommitted_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_IsPacketCommitted_Call) Return(b bool, err error) *MockClient_IsPacketCommitted_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockClient_IsPacketCommitted_Call) RunAndReturn(run func(ctx context.Context, sourceClientID string, sequence uint64) (bool, error)) *MockClient_IsPacketCommitted_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsPacketReceived provides a mock function for the type MockClient
+func (_mock *MockClient) IsPacketReceived(ctx context.Context, destClientID string, sequence uint64) (bool, error) {
+	ret := _mock.Called(ctx, destClientID, sequence)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsPacketReceived")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) (bool, error)); ok {
+		return returnFunc(ctx, destClientID, sequence)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) bool); ok {
+		r0 = returnFunc(ctx, destClientID, sequence)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = returnFunc(ctx, destClientID, sequence)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_IsPacketReceived_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsPacketReceived'
+type MockClient_IsPacketReceived_Call struct {
+	*mock.Call
+}
+
+// IsPacketReceived is a helper method to define mock.On call
+//   - ctx context.Context
+//   - destClientID string
+//   - sequence uint64
+func (_e *MockClient_Expecter) IsPacketReceived(ctx any, destClientID any, sequence any) *MockClient_IsPacketReceived_Call {
+	return &MockClient_IsPacketReceived_Call{Call: _e.mock.On("IsPacketReceived", ctx, destClientID, sequence)}
+}
+
+func (_c *MockClient_IsPacketReceived_Call) Run(run func(ctx context.Context, destClientID string, sequence uint64)) *MockClient_IsPacketReceived_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_IsPacketReceived_Call) Return(b bool, err error) *MockClient_IsPacketReceived_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockClient_IsPacketReceived_Call) RunAndReturn(run func(ctx context.Context, destClientID string, sequence uint64) (bool, error)) *MockClient_IsPacketReceived_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsTimestampFinalized provides a mock function for the type MockClient
+func (_mock *MockClient) IsTimestampFinalized(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error) {
+	ret := _mock.Called(ctx, timestamp, finalityOffset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsTimestampFinalized")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, *uint64) (bool, error)); ok {
+		return returnFunc(ctx, timestamp, finalityOffset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, *uint64) bool); ok {
+		r0 = returnFunc(ctx, timestamp, finalityOffset)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time, *uint64) error); ok {
+		r1 = returnFunc(ctx, timestamp, finalityOffset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_IsTimestampFinalized_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsTimestampFinalized'
+type MockClient_IsTimestampFinalized_Call struct {
+	*mock.Call
+}
+
+// IsTimestampFinalized is a helper method to define mock.On call
+//   - ctx context.Context
+//   - timestamp time.Time
+//   - finalityOffset *uint64
+func (_e *MockClient_Expecter) IsTimestampFinalized(ctx any, timestamp any, finalityOffset any) *MockClient_IsTimestampFinalized_Call {
+	return &MockClient_IsTimestampFinalized_Call{Call: _e.mock.On("IsTimestampFinalized", ctx, timestamp, finalityOffset)}
+}
+
+func (_c *MockClient_IsTimestampFinalized_Call) Run(run func(ctx context.Context, timestamp time.Time, finalityOffset *uint64)) *MockClient_IsTimestampFinalized_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		var arg2 *uint64
+		if args[2] != nil {
+			arg2 = args[2].(*uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_IsTimestampFinalized_Call) Return(b bool, err error) *MockClient_IsTimestampFinalized_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockClient_IsTimestampFinalized_Call) RunAndReturn(run func(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error)) *MockClient_IsTimestampFinalized_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsTxFinalized provides a mock function for the type MockClient
+func (_mock *MockClient) IsTxFinalized(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error) {
+	ret := _mock.Called(ctx, txHash, finalityOffset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsTxFinalized")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *uint64) (bool, error)); ok {
+		return returnFunc(ctx, txHash, finalityOffset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *uint64) bool); ok {
+		r0 = returnFunc(ctx, txHash, finalityOffset)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, *uint64) error); ok {
+		r1 = returnFunc(ctx, txHash, finalityOffset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_IsTxFinalized_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsTxFinalized'
+type MockClient_IsTxFinalized_Call struct {
+	*mock.Call
+}
+
+// IsTxFinalized is a helper method to define mock.On call
+//   - ctx context.Context
+//   - txHash string
+//   - finalityOffset *uint64
+func (_e *MockClient_Expecter) IsTxFinalized(ctx any, txHash any, finalityOffset any) *MockClient_IsTxFinalized_Call {
+	return &MockClient_IsTxFinalized_Call{Call: _e.mock.On("IsTxFinalized", ctx, txHash, finalityOffset)}
+}
+
+func (_c *MockClient_IsTxFinalized_Call) Run(run func(ctx context.Context, txHash string, finalityOffset *uint64)) *MockClient_IsTxFinalized_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 *uint64
+		if args[2] != nil {
+			arg2 = args[2].(*uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_IsTxFinalized_Call) Return(b bool, err error) *MockClient_IsTxFinalized_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockClient_IsTxFinalized_Call) RunAndReturn(run func(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error)) *MockClient_IsTxFinalized_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PacketWriteAckStatus provides a mock function for the type MockClient
+func (_mock *MockClient) PacketWriteAckStatus(ctx context.Context, recvTxHash string, sequence uint64, sourceClientID string, destClientID string) (v2.WriteAckStatus, error) {
+	ret := _mock.Called(ctx, recvTxHash, sequence, sourceClientID, destClientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PacketWriteAckStatus")
+	}
+
+	var r0 v2.WriteAckStatus
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64, string, string) (v2.WriteAckStatus, error)); ok {
+		return returnFunc(ctx, recvTxHash, sequence, sourceClientID, destClientID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64, string, string) v2.WriteAckStatus); ok {
+		r0 = returnFunc(ctx, recvTxHash, sequence, sourceClientID, destClientID)
+	} else {
+		r0 = ret.Get(0).(v2.WriteAckStatus)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64, string, string) error); ok {
+		r1 = returnFunc(ctx, recvTxHash, sequence, sourceClientID, destClientID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_PacketWriteAckStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PacketWriteAckStatus'
+type MockClient_PacketWriteAckStatus_Call struct {
+	*mock.Call
+}
+
+// PacketWriteAckStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - recvTxHash string
+//   - sequence uint64
+//   - sourceClientID string
+//   - destClientID string
+func (_e *MockClient_Expecter) PacketWriteAckStatus(ctx any, recvTxHash any, sequence any, sourceClientID any, destClientID any) *MockClient_PacketWriteAckStatus_Call {
+	return &MockClient_PacketWriteAckStatus_Call{Call: _e.mock.On("PacketWriteAckStatus", ctx, recvTxHash, sequence, sourceClientID, destClientID)}
+}
+
+func (_c *MockClient_PacketWriteAckStatus_Call) Run(run func(ctx context.Context, recvTxHash string, sequence uint64, sourceClientID string, destClientID string)) *MockClient_PacketWriteAckStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_PacketWriteAckStatus_Call) Return(writeAckStatus v2.WriteAckStatus, err error) *MockClient_PacketWriteAckStatus_Call {
+	_c.Call.Return(writeAckStatus, err)
+	return _c
+}
+
+func (_c *MockClient_PacketWriteAckStatus_Call) RunAndReturn(run func(ctx context.Context, recvTxHash string, sequence uint64, sourceClientID string, destClientID string) (v2.WriteAckStatus, error)) *MockClient_PacketWriteAckStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // TxPacketEvents provides a mock function for the type MockClient
 func (_mock *MockClient) TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error) {
 	ret := _mock.Called(ctx, txHash)
@@ -285,6 +880,57 @@ func (_c *MockClient_TxPacketEvents_Call) Return(packetEvents []v2.PacketEvent, 
 }
 
 func (_c *MockClient_TxPacketEvents_Call) RunAndReturn(run func(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)) *MockClient_TxPacketEvents_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// WaitForChain provides a mock function for the type MockClient
+func (_mock *MockClient) WaitForChain(ctx context.Context) error {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WaitForChain")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockClient_WaitForChain_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WaitForChain'
+type MockClient_WaitForChain_Call struct {
+	*mock.Call
+}
+
+// WaitForChain is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockClient_Expecter) WaitForChain(ctx any) *MockClient_WaitForChain_Call {
+	return &MockClient_WaitForChain_Call{Call: _e.mock.On("WaitForChain", ctx)}
+}
+
+func (_c *MockClient_WaitForChain_Call) Run(run func(ctx context.Context)) *MockClient_WaitForChain_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_WaitForChain_Call) Return(err error) *MockClient_WaitForChain_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockClient_WaitForChain_Call) RunAndReturn(run func(ctx context.Context) error) *MockClient_WaitForChain_Call {
 	_c.Call.Return(run)
 	return _c
 }

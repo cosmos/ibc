@@ -145,6 +145,12 @@ func (s *Service) Add(id string, attestor Attestor) {
 	s.attestors[id] = attestor
 }
 
+// Get returns the attestor registered under alias
+func (s *Service) Get(alias string) (Attestor, bool) {
+	a, ok := s.attestors[alias]
+	return a, ok
+}
+
 func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {
 	a, ok := s.attestors[attestor]
 	if !ok {

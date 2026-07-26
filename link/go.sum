@@ -287,6 +287,8 @@ github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 h1:5RVFMOWjMyRy8cARdy79nAmgYw3h
 github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1/go.mod h1:ZXNYxsqcloTdSy/rNShjYzMhyjf0LaoftYK0p+A3h40=
 github.com/deepmap/oapi-codegen v1.6.0 h1:w/d1ntwh91XI0b/8ja7+u5SvA4IFfM0UNNLmiDR1gg0=
 github.com/deepmap/oapi-codegen v1.6.0/go.mod h1:ryDa9AgbELGeB+YEXE1dR53yAjHwFvE9iAUlWl9Al3M=
+github.com/deliveryhero/pipeline/v2 v2.2.0 h1:l9F+e4Q3qMu0zw7fi0JVg2FilgnGyohnwJ5d1oBqoYs=
+github.com/deliveryhero/pipeline/v2 v2.2.0/go.mod h1:GghgCAlOoG8IdwybJpe2E3LBTuR+o5wgTdm0kPv3GPU=
 github.com/desertbit/timer v0.0.0-20180107155436-c41aec40b27f/go.mod h1:xH/i4TFMt8koVQZ6WFms69WAsDWr2XsYL3Hkl7jkoLE=
 github.com/desertbit/timer v1.0.1 h1:yRpYNn5Vaaj6QXecdLMPMJsW81JLiI1eokUft5nBmeo=
 github.com/desertbit/timer v1.0.1/go.mod h1:htRrYeY5V/t4iu1xCJ5XsQvp4xve8QulXXctAzxqcwE=

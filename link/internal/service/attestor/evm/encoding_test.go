@@ -79,6 +79,34 @@ func TestDecodePacket(t *testing.T) {
 		require.ErrorContains(t, err, "unpack packet")
 		assert.Empty(t, packet)
 	})
+
+	t.Run("roundTripsThroughEncodePacket", func(t *testing.T) {
+		// ARRANGE
+		expected := channeltypesv2.Packet{
+			Sequence:          7,
+			SourceClient:      "source-client",
+			DestinationClient: "destination-client",
+			TimeoutTimestamp:  1_700_000_000,
+			Payloads: []channeltypesv2.Payload{
+				{
+					SourcePort:      "transfer",
+					DestinationPort: "transfer",
+					Version:         "ics20-1",
+					Encoding:        "application/json",
+					Value:           []byte("payload"),
+				},
+			},
+		}
+
+		// ACT
+		encoded, err := EncodePacket(expected)
+		require.NoError(t, err)
+		actual, err := DecodePacket(encoded)
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, expected, actual)
+	})
 }
 
 func TestEncodePacketAttestation(t *testing.T) {
@@ -118,6 +146,12 @@ func TestEncodePacketAttestation(t *testing.T) {
 			require.NoError(t, err)
 			assert.Len(t, actual, 128+64*len(tt.packets))
 			assert.Equal(t, expected, actual)
+
+			// decoding must recover the same height and packets
+			decodedHeight, decodedPackets, err := DecodePacketAttestation(actual)
+			require.NoError(t, err)
+			assert.Equal(t, tt.height, decodedHeight)
+			assert.Equal(t, tt.packets, decodedPackets)
 		})
 	}
 }
@@ -153,6 +187,12 @@ func TestEncodeStateAttestation(t *testing.T) {
 			require.Len(t, encoded, 64)
 			assert.Equal(t, abiWord(tt.height), encoded[:32])
 			assert.Equal(t, abiWord(tt.timestamp), encoded[32:])
+
+			// decoding must recover the same height and timestamp
+			decodedHeight, decodedTimestamp, err := DecodeStateAttestation(encoded)
+			require.NoError(t, err)
+			assert.Equal(t, tt.height, decodedHeight)
+			assert.Equal(t, tt.timestamp, decodedTimestamp)
 		})
 	}
 }
@@ -185,4 +225,15 @@ func expectedPacketAttestation(height uint64, packets []PacketCompact) []byte {
 	}
 
 	return expected
+}
+
+func TestAttestationProofEncode(t *testing.T) {
+	proof := AttestationProof{
+		AttestationData: []byte{0x01, 0x02, 0x03},
+		Signatures:      [][]byte{make([]byte, 65), make([]byte, 65)},
+	}
+
+	encoded, err := EncodeAttestationProof(proof)
+	require.NoError(t, err)
+	require.NotEmpty(t, encoded)
 }

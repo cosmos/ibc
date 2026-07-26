@@ -1,5 +1,10 @@
 server:
   listenAddr: 0.0.0.0:3000
+signers:
+  - alias: "relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "relayer-key-id"
 db:
   type: sqlite
   url: ibc.db
@@ -54,7 +59,11 @@ relayer:
             type: local
   routesToRelay:
     - sourceClient: "eth-to-base"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
       autoRelay:
         enabled: false
         lookback: 100
     - sourceClient: "base-to-eth"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
