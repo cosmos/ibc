@@ -1,0 +1,75 @@
+name: E2E
+
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - "link/**"
+      - "e2e/**"
+      - "proto/**"
+      - "Makefile"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+    branches: [main, development]
+    paths:
+      - "link/**"
+      - "e2e/**"
+      - "proto/**"
+      - "Makefile"
+      - ".github/workflows/e2e.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: e2e/go.sum
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2
+          working-directory: e2e
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - packages: ./e2etest
+          - packages: ./internal/...
+            harness: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: |
+            link/go.sum
+            e2e/go.sum
+      - if: matrix.harness
+        run: make build-link
+      - if: matrix.harness
+        run: docker info
+      - if: matrix.harness
+        run: go test -count=1 ${{ matrix.packages }}
+        working-directory: e2e
+        env:
+          IBC_BIN: ${{ github.workspace }}/link/bin/ibc
+      - if: ${{ !matrix.harness }}
+        run: go test ${{ matrix.packages }}
+        working-directory: e2e
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: |
+            link/go.sum
+            e2e/go.sum
+      - run: docker info
+      - run: make test-e2e

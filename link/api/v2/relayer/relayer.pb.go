@@ -318,8 +318,11 @@ type PacketStatus struct {
 	RecvTx         *TransactionInfo       `protobuf:"bytes,5,opt,name=recv_tx,json=recvTx,proto3" json:"recv_tx,omitempty"`
 	AckTx          *TransactionInfo       `protobuf:"bytes,6,opt,name=ack_tx,json=ackTx,proto3" json:"ack_tx,omitempty"`
 	TimeoutTx      *TransactionInfo       `protobuf:"bytes,7,opt,name=timeout_tx,json=timeoutTx,proto3" json:"timeout_tx,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// write_ack_error reports that the packet completed with an error
+	// acknowledgement written on the destination chain.
+	WriteAckError bool `protobuf:"varint,8,opt,name=write_ack_error,json=writeAckError,proto3" json:"write_ack_error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PacketStatus) Reset() {
@@ -401,6 +404,13 @@ func (x *PacketStatus) GetTimeoutTx() *TransactionInfo {
 	return nil
 }
 
+func (x *PacketStatus) GetWriteAckError() bool {
+	if x != nil {
+		return x.WriteAckError
+	}
+	return false
+}
+
 var File_relayer_proto protoreflect.FileDescriptor
 
 const file_relayer_proto_rawDesc = "" +
@@ -417,7 +427,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\x0fpacket_statuses\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\x0epacketStatuses\"E\n" +
 	"\x0fTransactionInfo\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
-	"\bchain_id\x18\x02 \x01(\tR\achainId\"\x82\x03\n" +
+	"\bchain_id\x18\x02 \x01(\tR\achainId\"\xaa\x03\n" +
 	"\fPacketStatus\x123\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x1d.ibc.v2.relayer.TransferStateR\x05state\x12'\n" +
 	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\x12(\n" +
@@ -426,7 +436,8 @@ const file_relayer_proto_rawDesc = "" +
 	"\arecv_tx\x18\x05 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x06recvTx\x126\n" +
 	"\x06ack_tx\x18\x06 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x05ackTx\x12>\n" +
 	"\n" +
-	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx*\x7f\n" +
+	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx\x12&\n" +
+	"\x0fwrite_ack_error\x18\b \x01(\bR\rwriteAckError*\x7f\n" +
 	"\rTransferState\x12\x1a\n" +
 	"\x16TRANSFER_STATE_UNKNOWN\x10\x00\x12\x1a\n" +
 	"\x16TRANSFER_STATE_PENDING\x10\x01\x12\x1b\n" +
@@ -434,7 +445,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\x15TRANSFER_STATE_FAILED\x10\x032\xa6\x01\n" +
 	"\x11RelayerApiService\x12F\n" +
 	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00\x12I\n" +
-	"\x06Status\x12\x1d.ibc.v2.relayer.StatusRequest\x1a\x1e.ibc.v2.relayer.StatusResponse\"\x00B6Z4github.com/cosmos/ibc/link/internal/types/v2/relayerb\x06proto3"
+	"\x06Status\x12\x1d.ibc.v2.relayer.StatusRequest\x1a\x1e.ibc.v2.relayer.StatusResponse\"\x00B+Z)github.com/cosmos/ibc/link/api/v2/relayerb\x06proto3"
 
 var (
 	file_relayer_proto_rawDescOnce sync.Once

@@ -7,6 +7,8 @@ import (
 	"github.com/cometbft/cometbft/crypto"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 
+	"github.com/cosmos/ibc/link/keyfile"
+
 	kms "github.com/cosmos/kms/signing/file"
 )
 
@@ -45,8 +47,8 @@ func GenerateLocalEd25519Signer() (*LocalEd25519Signer, error) {
 	return &LocalEd25519Signer{pk: pk, signer: kmsSigner}, nil
 }
 
-func (s *LocalEd25519Signer) IsLocal() bool { return true }
-func (s *LocalEd25519Signer) Type() KeyType { return EDDSA }
+func (s *LocalEd25519Signer) IsLocal() bool      { return true }
+func (s *LocalEd25519Signer) Type() keyfile.Type { return EDDSA }
 
 func (s *LocalEd25519Signer) PublicKey() []byte {
 	return s.signer.PubKey()

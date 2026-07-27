@@ -14,9 +14,10 @@ BUF ?= go run github.com/bufbuild/buf/cmd/buf@v$(BUF_VERSION)
 endif
 
 help: ## List of commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 build: ## Build the binary
+	mkdir -p bin
 	go build -o bin/ibc ./cmd/ibc/...
 
 lint: ## Lint the code
@@ -32,6 +33,17 @@ codegen-sql: ## Generate Go code based on migrations and queries
 
 codegen-proto: ## Generate Go proto bindings
 	cd ../proto && $(BUF) generate
+
+check-proto: ## Fail if Link's generated API is stale or the removed API module returns
+	@command -v buf >/dev/null || { echo "missing buf; buf is required to verify Link's generated API" >&2; exit 1; }
+	cd ../proto && buf generate
+	@status="$$(git -C .. status --porcelain --untracked-files=all -- \
+		':(glob)link/api/v2/**/*.pb.go' \
+		':(glob)link/api/v2/**/*.connect.go')"; \
+		test -z "$$status" || { echo "Link API bindings are stale — run 'make codegen-proto' and commit the result" >&2; echo "$$status" >&2; exit 1; }
+	@test ! -e ../api || { echo "the removed standalone API module still exists" >&2; exit 1; }
+	@old_api='github.com/cosmos/ibc/'api; \
+		! git -C .. grep -n -F "$$old_api" -- . || { echo "the removed API module is still referenced" >&2; exit 1; }
 
 codegen-mocks: ## Generate mocks for the code
 	go run github.com/vektra/mockery/v3@v3.7.1 --log-level ERROR
@@ -49,4 +61,6 @@ codegen-abi: ## Generate Go bindings for EVM contract ABIs
 test: ## Run tests
 	go test ./... -v
 
-.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-mocks codegen-abi
+check: build test lint check-proto ## Run Link build, tests, lint, and generation freshness
+
+.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check

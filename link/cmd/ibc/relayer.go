@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
@@ -23,7 +26,7 @@ var (
 
 var flagRelayerNoMigrate bool
 
-func relayerRun(_ *cobra.Command, _ []string) error {
+func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -37,10 +40,10 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 	if flagRelayerNoMigrate {
 		app.Logger.Info("--no-migrate flag passed, skipping migrations")
 	} else {
-		applied, err := app.Store.MigrateUp()
+		applied, migrateErr := app.Store.MigrateUp()
 		switch {
-		case err != nil:
-			return errors.Wrap(err, "failed to migrate database")
+		case migrateErr != nil:
+			return errors.Wrap(migrateErr, "failed to migrate database")
 		case applied == 0:
 			app.Logger.Info("No migrations to apply")
 		case applied > 0:
@@ -50,19 +53,35 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 
 	app.Logger.Info("Starting relayer")
 
-	if err := app.Server.Start(); err != nil {
+	address, err := app.Server.Start()
+	if err != nil {
 		app.Logger.Error("Failed to start relayer server", "error", err)
 		return err
 	}
 
 	if err := app.RelayerService.Start(); err != nil {
 		app.Logger.Error("Failed to start relayer dispatch loop", "error", err)
+		_ = app.Server.Stop()
 		return err
 	}
 
-	graceful.AddCallback(app.Store.Close)
+	connected := make([]string, 0, len(cfg.Chains))
+	for _, chain := range cfg.Chains {
+		connected = append(connected, chain.ChainID)
+	}
+	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(relayercmd.Readiness{
+		Event:           relayercmd.ReadinessEvent,
+		ChainsConnected: connected,
+		HTTP:            address.String(),
+	}); err != nil {
+		_ = app.RelayerService.Stop()
+		_ = app.Server.Stop()
+		return err
+	}
+
 	graceful.AddCallback(app.RelayerService.Stop)
 	graceful.AddCallback(app.Server.Stop)
+	graceful.AddCallback(app.Store.Close)
 
 	// blocking
 	return graceful.WaitShutdown()

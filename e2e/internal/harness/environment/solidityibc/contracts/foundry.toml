@@ -1,0 +1,17 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["node_modules"]
+remappings = [
+  "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
+  "@openzeppelin-contracts/=node_modules/@openzeppelin/contracts/",
+  "@openzeppelin-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
+  "solidity-ibc-eureka/=node_modules/@cosmos/solidity-ibc-eureka/",
+]
+auto_detect_solc = false
+solc = "0.8.28"
+evm_version = "cancun"
+bytecode_hash = "none"
+optimizer = true
+optimizer_runs = 10000
+via_ir = true

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
+
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
+
+	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
 var (
@@ -20,7 +24,7 @@ var (
 	}
 )
 
-func attestorRun(_ *cobra.Command, _ []string) error {
+func attestorRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -33,8 +37,16 @@ func attestorRun(_ *cobra.Command, _ []string) error {
 
 	app.Logger.Info("Starting attestor")
 
-	if err := app.Server.Start(); err != nil {
+	address, err := app.Server.Start()
+	if err != nil {
 		app.Logger.Error("Failed to start attestor server", "error", err)
+		return err
+	}
+	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(attestorv2.ProcessReadiness{
+		Event: attestorv2.ProcessReadinessEvent,
+		HTTP:  address.String(),
+	}); err != nil {
+		_ = app.Server.Stop()
 		return err
 	}
 

@@ -485,6 +485,7 @@ func (c SignerConfig) Validate() error {
 	return nil
 }
 
+// KeyFileFallbacks returns the paths tried for a local signer key file.
 func KeyFileFallbacks(keyPath string) []string {
 	fallbacks := []string{keyPath}
 

@@ -535,6 +535,18 @@ func TestSignerConfigValidate(t *testing.T) {
 	}
 }
 
+func TestSignerConfigValidateRequiresExactLocalFilePath(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "signer.json"), []byte("{}"), 0o600))
+
+	err := (SignerConfig{
+		Alias: "local",
+		Type:  SignerLocal,
+		File:  filepath.Join(dir, "signer"),
+	}).Validate()
+	require.Error(t, err)
+}
+
 func writeTestConfig(t *testing.T, content string) string {
 	t.Helper()
 

@@ -310,10 +310,10 @@ func TestPipelineLifecycle(t *testing.T) {
 		out := runPipeline(t, deps, fastOpts(), tr)
 
 		require.Empty(t, out.Error())
-		assert.Equal(t, store.RelayStatusCompleteWithAck, out.Status)
+		assert.Equal(t, store.RelayStatusCompleteWithWriteAckError, out.Status)
 
 		stored := env.storedPacket(t, out)
-		assert.Equal(t, store.RelayStatusCompleteWithAck, stored.Status)
+		assert.Equal(t, store.RelayStatusCompleteWithWriteAckError, stored.Status)
 		require.NotNil(t, stored.AckTxHash)
 		assert.Equal(t, ackTxHash, *stored.AckTxHash)
 	})

@@ -489,7 +489,7 @@ const file_attestor_proto_rawDesc = "" +
 	"\x12AttestationService\x12g\n" +
 	"\x10StateAttestation\x12(.ibc.v2.attestor.StateAttestationRequest\x1a).ibc.v2.attestor.StateAttestationResponse\x12j\n" +
 	"\x11PacketAttestation\x12).ibc.v2.attestor.PacketAttestationRequest\x1a*.ibc.v2.attestor.PacketAttestationResponse\x12[\n" +
-	"\fLatestHeight\x12$.ibc.v2.attestor.LatestHeightRequest\x1a%.ibc.v2.attestor.LatestHeightResponseB7Z5github.com/cosmos/ibc/link/internal/types/v2/attestorb\x06proto3"
+	"\fLatestHeight\x12$.ibc.v2.attestor.LatestHeightRequest\x1a%.ibc.v2.attestor.LatestHeightResponseB,Z*github.com/cosmos/ibc/link/api/v2/attestorb\x06proto3"
 
 var (
 	file_attestor_proto_rawDescOnce sync.Once

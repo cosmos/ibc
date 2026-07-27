@@ -1,14 +1,12 @@
 package signer
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 // LocalKey is a key stored and used locally.
@@ -18,18 +16,13 @@ type LocalKey interface {
 	StoreToFile(path string) error
 }
 
-type keyFile struct {
-	Type       KeyType `json:"type"`
-	PrivateKey string  `json:"privateKeyBase64"`
-}
-
 func KeyFilePath(homePath, keyName string) (string, error) {
 	filename := keyName + ".json"
 	path := filepath.Join(homePath, "/keys", filepath.Clean(filename))
 	return config.ExpandHome(path)
 }
 
-func GenerateLocalKey(keyType KeyType) (LocalKey, error) {
+func GenerateLocalKey(keyType keyfile.Type) (LocalKey, error) {
 	switch keyType {
 	case EDDSA:
 		return GenerateLocalEd25519Signer()
@@ -40,7 +33,7 @@ func GenerateLocalKey(keyType KeyType) (LocalKey, error) {
 	}
 }
 
-// LoadKeyFromFile loads a local key from the path with multiple fallbacks
+// LocalKeyFromFile loads a local key from the first path that resolves.
 func LocalKeyFromFile(path ...string) (LocalKey, error) {
 	var (
 		err error
@@ -58,7 +51,7 @@ func LocalKeyFromFile(path ...string) (LocalKey, error) {
 }
 
 func localKeyFromFile(path string) (LocalKey, error) {
-	keyType, privateKey, err := loadKeyFromFile(path)
+	keyType, privateKey, err := keyfile.Load(path)
 	if err != nil {
 		return nil, err
 	}
@@ -73,58 +66,6 @@ func localKeyFromFile(path string) (LocalKey, error) {
 	}
 }
 
-func storeKeyToFile(path string, keyType KeyType, privateKey []byte) error {
-	data := keyFile{
-		Type:       keyType,
-		PrivateKey: base64.StdEncoding.EncodeToString(privateKey),
-	}
-
-	bz, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	if dirErr := config.EnsureDirectory(path); dirErr != nil {
-		return dirErr
-	}
-
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return errors.Errorf("file %s already exists", path)
-		}
-
-		return err
-	}
-
-	if _, err = file.Write(bz); err != nil {
-		_ = file.Close()
-		return err
-	}
-
-	return file.Close()
-}
-
-func loadKeyFromFile(path string) (KeyType, []byte, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", nil, err
-	}
-
-	var key keyFile
-	if err = json.Unmarshal(data, &key); err != nil {
-		return "", nil, err
-	}
-
-	_, err = ParseKeyType(string(key.Type))
-	if err != nil {
-		return "", nil, err
-	}
-
-	privateKey, err := base64.StdEncoding.DecodeString(key.PrivateKey)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return key.Type, privateKey, nil
+func storeKeyToFile(path string, keyType keyfile.Type, privateKey []byte) error {
+	return keyfile.Store(path, keyType, privateKey)
 }

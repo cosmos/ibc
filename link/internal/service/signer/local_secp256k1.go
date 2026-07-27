@@ -6,6 +6,8 @@ import (
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 
+	"github.com/cosmos/ibc/link/keyfile"
+
 	kms "github.com/cosmos/kms/signing/file"
 )
 
@@ -37,8 +39,8 @@ func GenerateLocalSecp256k1Signer() (*LocalSecp256k1Signer, error) {
 	return NewLocalSecp256k1Signer(pk.Serialize())
 }
 
-func (s *LocalSecp256k1Signer) Type() KeyType { return ECDSA }
-func (s *LocalSecp256k1Signer) IsLocal() bool { return true }
+func (s *LocalSecp256k1Signer) Type() keyfile.Type { return ECDSA }
+func (s *LocalSecp256k1Signer) IsLocal() bool      { return true }
 
 func (s *LocalSecp256k1Signer) PublicKey() []byte {
 	return s.signer.PubKey()

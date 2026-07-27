@@ -34,8 +34,7 @@ var _ Store = (*SqliteDB)(nil)
 
 func DefaultSqliteConnOptions() map[string]string {
 	return map[string]string{
-		"journal_mode": "WAL", // Write-Ahead Logging mode
-		"mode":         "rwc", // read, write, create file
+		"mode": "rwc", // read, write, create file
 	}
 }
 
@@ -316,6 +315,13 @@ func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
 
 	// sqlite does not enforce foreign keys unless enabled per connection
 	query.Set("_pragma", "foreign_keys(1)")
+	// concurrent statements must wait for the single writer instead of
+	// failing immediately with SQLITE_BUSY
+	query.Add("_pragma", "busy_timeout(10000)")
+	// rollback-journal mode blocks every reader for the whole write; WAL
+	// lets the status API read while the dispatcher writes. The driver only
+	// applies pragmas through _pragma, not bare query parameters.
+	query.Add("_pragma", "journal_mode(WAL)")
 
 	for k, v := range connectionOpts {
 		query.Set(k, v)

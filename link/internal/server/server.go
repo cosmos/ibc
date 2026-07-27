@@ -55,19 +55,17 @@ func New(addr string, useReflection bool) *Server {
 }
 
 // Start starts the server. Not safe to call twice.
-func (s *Server) Start() error {
+func (s *Server) Start() (net.Addr, error) {
 	s.setupReflection()
-
-	s.logger.Info("Starting server", "address", s.server.Addr)
 
 	ln, err := net.Listen("tcp", s.server.Addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	go s.start(ln)
 
-	return nil
+	return ln.Addr(), nil
 }
 
 func (s *Server) Stop() error {

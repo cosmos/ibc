@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -12,14 +15,22 @@ import (
 var globalFlags = config.DefaultFlagSet()
 
 var rootCmd = &cobra.Command{
-	Use:   "ibc",
-	Short: "IBC Link",
+	Use:          "ibc",
+	Short:        "IBC Link",
+	SilenceUsage: true,
 }
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+	os.Exit(runMain())
+}
+
+func runMain() int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		return 1
 	}
+	return 0
 }
 
 // single init() for binding all commands to rootCmd
@@ -36,11 +47,10 @@ func init() {
 		cmdKeys,
 	)
 
-	// Config commands
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
-	cmdConfigValidate.Flags().BoolVarP(&flagConfigValidateLive, "live", "", false, "extra validation checks")
+	cmdConfigValidate.Flags().BoolVar(&flagConfigValidateLive, "live", false, "extra validation checks")
 	cmdConfigValidate.Flags().
-		BoolVarP(&flagConfigValidateStrict, "strict", "", false, "fail on unknown fields in the config file")
+		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")
 
 	// Keys commands
 	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow)

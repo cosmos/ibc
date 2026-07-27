@@ -6,14 +6,12 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/keyfile"
 )
-
-// KeyType key type supported by local Signer
-type KeyType string
 
 // Signer represents signer that can either sign digests or messages.
 type Signer interface {
-	Type() KeyType
+	Type() keyfile.Type
 	IsLocal() bool
 
 	Sign(ctx context.Context, message []byte) ([]byte, error)
@@ -27,8 +25,8 @@ type Set struct {
 
 // KeyType & SignerType enums
 const (
-	EDDSA KeyType = "eddsa"
-	ECDSA KeyType = "ecdsa"
+	EDDSA = keyfile.EDDSA
+	ECDSA = keyfile.ECDSA
 )
 
 func NewSet() *Set {
@@ -69,10 +67,6 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 	}
 }
 
-func ParseKeyType(raw string) (KeyType, error) {
-	if raw != string(EDDSA) && raw != string(ECDSA) {
-		return "", errors.Errorf("invalid key type: %s", raw)
-	}
-
-	return KeyType(raw), nil
+func ParseKeyType(raw string) (keyfile.Type, error) {
+	return keyfile.ParseType(raw)
 }

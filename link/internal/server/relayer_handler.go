@@ -10,7 +10,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/service/relayer"
 
-	proto "github.com/cosmos/ibc/link/internal/types/v2/relayer"
+	proto "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // RelayerHandler handles relayer RPC requests.
@@ -55,6 +55,8 @@ func (h *RelayerHandler) Relay(
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, relayer.ErrNotFound):
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("Relay", "error", err)
@@ -92,6 +94,7 @@ func (h *RelayerHandler) Status(
 			RecvTx:         txInfoToProto(status.RecvTx),
 			AckTx:          txInfoToProto(status.AckTx),
 			TimeoutTx:      txInfoToProto(status.TimeoutTx),
+			WriteAckError:  status.WriteAckError,
 		}
 	}
 

@@ -1,0 +1,23 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@ibc-link/solidity-ibc-contract-artifacts",
+      "dependencies": {
+        "@cosmos/solidity-ibc-eureka": "github:cosmos/solidity-ibc-eureka#39904319467b5fbdec8c34c43b66af6f1d256dba",
+        "@openzeppelin/contracts": "5.6.1",
+        "@openzeppelin/contracts-upgradeable": "5.6.1",
+      },
+    },
+  },
+  "packages": {
+    "@cosmos/solidity-ibc-eureka": ["@cosmos/solidity-ibc-eureka@github:cosmos/solidity-ibc-eureka#3990431", { "dependencies": { "@openzeppelin/contracts": "^5.6.1", "@openzeppelin/contracts-upgradeable": "^5.6.1", "@uniswap/permit2": "github:Uniswap/permit2#cc56ad0f3439c502c246fc5cfcc3db92bb8b7219" } }, "cosmos-solidity-ibc-eureka-3990431", "sha512-6almWXkS5dI9PBYm8VjTcK/M6pRNvk/b5//8ts81koFIIOIkF3Uc4nlBxkXSOA9lmtmrqVaHCJHXmSMqjxB8Jg=="],
+
+    "@openzeppelin/contracts": ["@openzeppelin/contracts@5.6.1", "", {}, "sha512-Ly6SlsVJ3mj+b18W3R8gNufB7dTICT105fJhodGAGgyC2oqnBAhqSiNDJ8V8DLY05cCz81GLI0CU5vNYA1EC/w=="],
+
+    "@openzeppelin/contracts-upgradeable": ["@openzeppelin/contracts-upgradeable@5.6.1", "", { "peerDependencies": { "@openzeppelin/contracts": "5.6.1" } }, "sha512-n4a/vfRs114lXyUdYg7pyY8LvFKWvCDF5lEcRRAVxap8g6ZEdLqm+9tmt2zTtRHcNMxTYp9y5t6KBof4tHp7Og=="],
+
+    "@uniswap/permit2": ["@uniswap/permit2@github:Uniswap/permit2#cc56ad0", {}, "Uniswap-permit2-cc56ad0", "sha512-7I5aiSPL34ZodpJeZAkzxlKDQtZVIp9WCanZ9DWc7Pw7hbVYCbVnmGOmPJa/a6UY2R0dSDfQY/IGMRP3uAZO7A=="],
+  }
+}
