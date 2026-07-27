@@ -33,11 +33,16 @@ func (e *ExitError) Error() string {
 func (e *ExitError) Unwrap() error { return e.Class }
 
 type Driver struct {
-	bin        string
-	configHome string
-	configName string
-	bindings   processBindings
+	bin         string
+	configHome  string
+	configName  string
+	bindings    processBindings
+	relayerOpts RelayerOptions
 }
+
+// ConfigureRelayer stores the identifier mappings StartRelayer adapts the
+// relayer's wire contract with. Callers set it when writing the config file.
+func (r *Driver) ConfigureRelayer(opts RelayerOptions) { r.relayerOpts = opts }
 
 func NewDriver(configPath string) (*Driver, error) {
 	if configPath == "" {

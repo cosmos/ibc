@@ -2,42 +2,58 @@ package ibclink
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
+
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 const (
 	defaultStartupTimeout = 60 * time.Second
-	// SIGKILL escalation margin after SIGTERM for graceful HTTP drain.
+	// SIGKILL escalation margin after SIGTERM for graceful shutdown.
 	stopGrace = 10 * time.Second
-	// Backstop: a status endpoint that accepts but never responds would hang an unbounded ctx forever.
+	// Backstop: an RPC endpoint that accepts but never responds would hang an unbounded ctx forever.
 	statusHTTPTimeout = 30 * time.Second
 	killTimeout       = 5 * time.Second
-	errorBodyLimit    = 512
+
+	zeroTxHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
 
+// RelayerOptions adapts harness identifiers to the relayer's wire contract.
+type RelayerOptions struct {
+	// ChainIDs maps harness Chain identifiers to the EVM chain ids (decimal)
+	// the relayer is configured with.
+	ChainIDs map[string]string
+	// ManualRoutes marks route identifiers whose packets must only be relayed
+	// on an explicit Relay call.
+	ManualRoutes map[string]bool
+}
+
 type Relayer struct {
-	readiness relayercmd.Readiness
-	httpAddr  string
-	http      *http.Client
-	h         *processHandle
+	readiness    relayercmd.Readiness
+	client       relayerv2.RelayerApiServiceClient
+	chainIDs     map[string]string
+	manualRoutes map[string]bool
+	h            *processHandle
 }
 
 func (r *Driver) StartRelayer(ctx context.Context) (*Relayer, error) {
-	return startRelayer(ctx, r)
+	return startRelayer(ctx, r, r.relayerOpts)
 }
 
 type readyResult struct {
@@ -45,7 +61,7 @@ type readyResult struct {
 	err       error
 }
 
-func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
+func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer, error) {
 	processEnv, releaseBinding, err := r.acquireProcessEnv()
 	if err != nil {
 		return nil, err
@@ -63,7 +79,8 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	cmd.Env = processEnv.variables
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// First stdout line is the readiness JSON; stderr carries human logs and must stay separate.
+	// First stdout line is the readiness JSON; stderr carries human logs and
+	// lands in relayer.log next to the config for post-mortems.
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: stdout pipe: %w", err)
@@ -72,10 +89,19 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: stderr pipe: %w", err)
 	}
+	logFile, err := os.OpenFile(
+		filepath.Join(r.configHome, "relayer.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+		0o600,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ibc relayer run: create log: %w", err)
+	}
 
-	d := &Relayer{http: &http.Client{Timeout: statusHTTPTimeout}}
+	d := &Relayer{chainIDs: opts.ChainIDs, manualRoutes: opts.ManualRoutes}
 
 	if startErr := cmd.Start(); startErr != nil {
+		_ = logFile.Close()
 		return nil, fmt.Errorf("start ibc relayer run (%s): %w", bin, startErr)
 	}
 
@@ -83,7 +109,11 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 	var drained sync.WaitGroup
 	drained.Add(2)
 	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
-	go func() { defer drained.Done(); _, _ = io.Copy(io.Discard, stderr) }()
+	go func() {
+		defer drained.Done()
+		_, _ = io.Copy(logFile, stderr)
+		_ = logFile.Close()
+	}()
 	d.h = reapProcess(cmd, processHooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
 	releaseBinding = nil
 
@@ -92,8 +122,12 @@ func startRelayer(ctx context.Context, r *Driver) (*Relayer, error) {
 		return nil, errors.Join(err, d.kill())
 	}
 	d.readiness = readiness
-	d.httpAddr = readiness.Status.HTTP
-	if err := d.probeHealth(ctx); err != nil {
+	d.client = relayerv2.NewRelayerApiServiceClient(
+		&http.Client{Timeout: statusHTTPTimeout},
+		"http://"+readiness.Status.HTTP,
+		connect.WithGRPC(),
+	)
+	if err := d.probeStatusEndpoint(ctx); err != nil {
 		return nil, errors.Join(err, d.kill())
 	}
 	return d, nil
@@ -150,96 +184,73 @@ func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (r
 
 func (d *Relayer) Ready() relayercmd.Readiness { return d.readiness }
 
-func (d *Relayer) Status(ctx context.Context, q relayercmd.StatusQuery) (*relayercmd.Status, error) {
-	u := d.apiURL(relayercmd.StatusPath)
-	vals := url.Values{}
-	if q.RouteID != "" {
-		vals.Set(relayercmd.StatusQueryRoute, q.RouteID)
-	}
-	if q.PacketID != "" {
-		vals.Set(relayercmd.StatusQueryPacket, q.PacketID)
-	}
-	u.RawQuery = vals.Encode()
+// ManualRoute reports whether packets on the route are only relayed on an
+// explicit Relay call.
+func (d *Relayer) ManualRoute(routeID string) bool { return d.manualRoutes[routeID] }
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+// Relay submits the source transaction's packets for relaying.
+func (d *Relayer) Relay(ctx context.Context, in relayercmd.RelayRequest) error {
+	chainID, err := d.wireChainID(in.SourceChainID)
 	if err != nil {
-		return nil, fmt.Errorf("ibc status: build request: %w", err)
+		return fmt.Errorf("ibc relay: %w", err)
 	}
-	var status relayercmd.Status
-	if err := d.doJSON(req, "ibc status", &status); err != nil {
-		return nil, err
+	if _, err := d.client.Relay(ctx, connect.NewRequest(&relayerv2.RelayRequest{
+		ChainId: chainID,
+		TxHash:  in.SourceTxHash,
+	})); err != nil {
+		return fmt.Errorf("ibc relay: %w", err)
 	}
-	return &status, nil
+	return nil
 }
 
-func (d *Relayer) Relay(ctx context.Context, in relayercmd.RelayRequest) (*relayercmd.RelayResult, error) {
-	u := d.apiURL(relayercmd.RelayPath)
-	body, err := json.Marshal(in)
+// PacketStatuses returns the relayer's per-packet status for one source
+// transaction. IsStatusNotFound distinguishes "never submitted" errors.
+func (d *Relayer) PacketStatuses(
+	ctx context.Context,
+	sourceChainID string,
+	sourceTxHash string,
+) ([]*relayerv2.PacketStatus, error) {
+	chainID, err := d.wireChainID(sourceChainID)
 	if err != nil {
-		return nil, fmt.Errorf("ibc relay: encode request: %w", err)
+		return nil, fmt.Errorf("ibc status: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+	response, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
+		ChainId: chainID,
+		TxHash:  sourceTxHash,
+	}))
 	if err != nil {
-		return nil, fmt.Errorf("ibc relay: build request: %w", err)
+		return nil, fmt.Errorf("ibc status: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	var result relayercmd.RelayResult
-	if err := d.doJSON(req, "ibc relay", &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return response.Msg.PacketStatuses, nil
 }
 
-// Pins the /health wire contract at startup (not a liveness wait).
-func (d *Relayer) probeHealth(ctx context.Context) error {
-	u := d.apiURL(relayercmd.HealthPath)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return fmt.Errorf("ibc relayer run: health: build request: %w", err)
-	}
-	return d.doJSON(req, "ibc relayer run: health", nil)
+// IsStatusNotFound reports whether the error says the source transaction was
+// never submitted to the relayer.
+func IsStatusNotFound(err error) bool {
+	return connect.CodeOf(err) == connect.CodeNotFound
 }
 
-func (d *Relayer) apiURL(path string) url.URL {
-	return url.URL{Scheme: "http", Host: d.httpAddr, Path: path}
+func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
+	chainID, ok := d.chainIDs[harnessChainID]
+	if !ok {
+		return "", fmt.Errorf("no configured chain id for Chain %q", harnessChainID)
+	}
+	return chainID, nil
 }
 
-func (d *Relayer) doJSON(req *http.Request, label string, out any) error {
-	resp, err := d.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("%s: %s %s: %w", label, req.Method, req.URL.String(), err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit+1))
-		if readErr != nil {
-			return fmt.Errorf(
-				"%s: %s %s -> %s: read response body: %w",
-				label,
-				req.Method,
-				req.URL.String(),
-				resp.Status,
-				readErr,
-			)
+// probeStatusEndpoint pins the RPC wire contract at startup (not a liveness
+// wait): an unknown transaction must report CodeNotFound. Drivers without a
+// chain mapping have nothing to probe.
+func (d *Relayer) probeStatusEndpoint(ctx context.Context) error {
+	for _, chainID := range d.chainIDs {
+		_, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
+			ChainId: chainID,
+			TxHash:  zeroTxHash,
+		}))
+		if err == nil || IsStatusNotFound(err) {
+			return nil
 		}
-		bodyText := "<response body omitted: exceeds limit>"
-		if len(body) <= errorBodyLimit {
-			bodyText = strings.TrimSpace(string(body))
-		}
-		return fmt.Errorf(
-			"%s: %s %s -> %s: %s",
-			label,
-			req.Method,
-			req.URL.String(),
-			resp.Status,
-			bodyText,
-		)
-	}
-	if out == nil {
-		return nil
-	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("%s: decode response: %w", label, err)
+		return fmt.Errorf("ibc relayer run: status probe: %w", err)
 	}
 	return nil
 }

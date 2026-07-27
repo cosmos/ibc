@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -20,10 +20,12 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/iftsendcallconstructor"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/link/cmd/configcmd"
 )
 
-const relayerStopTimeout = 15 * time.Second
+const (
+	relayerStopTimeout = 15 * time.Second
+	blockNudgeInterval = 500 * time.Millisecond
+)
 
 const weiPerEther int64 = 1_000_000_000_000_000_000
 
@@ -128,7 +130,7 @@ func Deploy(
 	ensureSignerBalances(t, env, signers)
 
 	dir := t.TempDir()
-	configuredSigners, err := signers.store(dir)
+	signerKeyPath, err := signers.storeRelayerKey(dir)
 	if err != nil {
 		t.Fatalf("e2etest: store signers: %v", err)
 	}
@@ -142,14 +144,11 @@ func Deploy(
 	}
 
 	deployment := deployApps(t, env, signers, routes)
-	config := buildConfig(t, env, driver, routes, deployment, configuredSigners, filepath.Join(dir, "relayer.db"))
-	data, err := config.Marshal()
-	if err != nil {
-		t.Fatalf("e2etest: encode config: %v", err)
-	}
-	if writeErr := os.WriteFile(configPath, data, 0o600); writeErr != nil {
+	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))
+	if writeErr := ibclink.WriteRelayerConfig(configPath, config); writeErr != nil {
 		t.Fatalf("e2etest: write config: %v", writeErr)
 	}
+	driver.ConfigureRelayer(options)
 
 	if migrationErr := driver.MigrateUp(t.Context()); migrationErr != nil {
 		t.Fatalf("e2etest: migrate database: %v", migrationErr)
@@ -188,11 +187,65 @@ func StartRelayer(
 		connected[id] = struct{}{}
 	}
 	for _, id := range env.Chains() {
-		if _, ok := connected[string(id)]; !ok {
+		chain, chainErr := env.Chain(id)
+		if chainErr != nil {
+			t.Fatalf("e2etest: resolve Chain %q: %v", id, chainErr)
+		}
+		if _, ok := connected[strconv.FormatUint(chain.EVMChainID(), 10)]; !ok {
 			t.Fatalf("e2etest: relayer did not connect to Chain %q", id)
 		}
 	}
+	startBlockNudger(t, env)
 	return relayer
+}
+
+// startBlockNudger keeps instamine chains producing blocks while the relayer
+// waits for "latest" minus relayFinalityOffset to cover packet heights: it
+// broadcasts empty self-transfers from the otherwise idle protocol authority.
+// Lanes whose chains produce blocks on their own don't need it.
+func startBlockNudger(t testing.TB, env *environment.Environment) {
+	t.Helper()
+	if selectedLaneName(t) != laneAnvil {
+		return
+	}
+	authority, err := evm.AccountFromHex(protocolAuthorityKeyHex)
+	if err != nil {
+		t.Fatalf("e2etest: block nudger authority: %v", err)
+	}
+	address := authority.Address()
+	accesses := make([]*environment.EVM, 0, len(env.Chains()))
+	for _, id := range env.Chains() {
+		chain, chainErr := env.Chain(id)
+		if chainErr != nil {
+			t.Fatalf("e2etest: resolve Chain %q: %v", id, chainErr)
+		}
+		evmAccess, evmErr := chain.EVM()
+		if evmErr != nil {
+			t.Fatalf("e2etest: resolve EVM access on Chain %q: %v", id, evmErr)
+		}
+		accesses = append(accesses, evmAccess)
+	}
+	ctx := t.Context()
+	for _, evmAccess := range accesses {
+		// One goroutine per chain with a bounded broadcast: a chain whose
+		// mining is paused must not wedge nudging elsewhere or hold its
+		// access lease past the next tick.
+		go func() {
+			ticker := time.NewTicker(blockNudgeInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+				nudgeCtx, cancel := context.WithTimeout(ctx, blockNudgeInterval)
+				// Best effort: a failed nudge only delays the next block.
+				_, _ = evmAccess.BroadcastTx(nudgeCtx, authority, &address, nil, nil)
+				cancel()
+			}
+		}()
+	}
 }
 
 func deployApps(
@@ -334,21 +387,30 @@ func registerIFTBridges(
 	}
 }
 
+// relayFinalityOffset treats "latest" minus one block as final everywhere:
+// the dev chains behind the harness never serve a moving "finalized" tag.
+// The instamine anvil lane needs the block nudger for heights to keep moving.
+const relayFinalityOffset = 1
+
 func buildConfig(
 	t testing.TB,
 	env *environment.Environment,
 	driver *ibclink.Driver,
 	routes []Route,
 	deployment *Deployment,
-	signers []configcmd.Signer,
+	signerKeyPath string,
 	dbPath string,
-) configcmd.Config {
+) (ibclink.RelayerConfig, ibclink.RelayerOptions) {
 	t.Helper()
-	config := configcmd.Config{
-		Chains:  make([]configcmd.Chain, 0, len(env.Chains())),
-		Signers: signers,
-		DB:      configcmd.DB{Type: configcmd.DBTypeSQLite, URL: dbPath},
-		Relayer: configcmd.Relayer{Routes: make([]configcmd.Route, 0, len(routes))},
+	config := ibclink.RelayerConfig{
+		DBPath:         dbPath,
+		SignerAlias:    relayerSignerAlias,
+		SignerKeyFile:  signerKeyPath,
+		FinalityOffset: relayFinalityOffset,
+	}
+	options := ibclink.RelayerOptions{
+		ChainIDs:     make(map[string]string, len(env.Chains())),
+		ManualRoutes: make(map[string]bool, len(routes)),
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
@@ -363,35 +425,45 @@ func buildConfig(
 		if !ok {
 			t.Fatalf("e2etest: deployment has no Chain %q", id)
 		}
-		config.Chains = append(config.Chains, configcmd.Chain{
-			ID:          string(id),
-			Type:        configcmd.ChainTypeEVM,
-			ChainID:     chain.EVMChainID(),
-			EVMSigner:   relayerSignerAlias,
+		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
+		config.Chains = append(config.Chains, ibclink.RelayerChain{
+			ChainID:     options.ChainIDs[string(id)],
+			RPC:         rpc.URL,
 			ICS26Router: apps.ICS26Router.Hex(),
-			RPC:         rpc,
 		})
 	}
 
+	connections := map[string]bool{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
 		if !ok {
 			t.Fatalf("e2etest: deployment has no route %q", route.ID)
 		}
-		compiled := configcmd.Route{
-			ID:           string(route.ID),
-			Source:       string(route.Source),
-			Destination:  string(route.Destination),
-			Type:         configcmd.RouteEVMToEVMAttested,
+		options.ManualRoutes[string(route.ID)] = route.Manual
+
+		sourceChain := options.ChainIDs[string(route.Source)]
+		destinationChain := options.ChainIDs[string(route.Destination)]
+		connection := ibclink.RelayerConnection{
+			ChainA:  sourceChain,
+			ClientA: clients.SourceClient,
+			ChainB:  destinationChain,
+			ClientB: clients.DestClient,
+		}
+		if connection.ChainB+"/"+connection.ClientB < connection.ChainA+"/"+connection.ClientA {
+			connection.ChainA, connection.ClientA, connection.ChainB, connection.ClientB = connection.ChainB, connection.ClientB, connection.ChainA, connection.ClientA
+		}
+		key := connection.ChainA + "/" + connection.ClientA
+		if !connections[key] {
+			connections[key] = true
+			config.Connections = append(config.Connections, connection)
+		}
+
+		config.Routes = append(config.Routes, ibclink.RelayerRoute{
+			SourceChain:  sourceChain,
 			SourceClient: clients.SourceClient,
-			DestClient:   clients.DestClient,
-		}
-		if route.Manual {
-			compiled.AutoRelay = &configcmd.AutoRelay{Enabled: false}
-		}
-		config.Relayer.Routes = append(config.Relayer.Routes, compiled)
+		})
 	}
-	return config
+	return config, options
 }
 
 func resolveRouteClients(env *environment.Environment, route Route) (string, string, error) {

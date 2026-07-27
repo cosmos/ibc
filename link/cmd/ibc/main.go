@@ -44,7 +44,7 @@ func init() {
 		New:      configNew,
 		Validate: ibcrelay.ConfigValidate(&globalFlags),
 	})
-	cmdRelayer := relayercmd.NewCommand(ibcrelay.RelayerRun(&globalFlags))
+	cmdRelayer := relayercmd.NewCommand(relayerRun)
 
 	rootCmd.AddCommand(
 		cmdConfig,

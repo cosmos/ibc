@@ -16,9 +16,9 @@ func TestManualRelayRejectsUnknownSourceTransaction(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	_, err := relayer.Relay(ctx, relayercmd.RelayRequest{
+	err := relayer.Relay(ctx, relayercmd.RelayRequest{
 		SourceChainID: string(e2etest.ChainA),
 		SourceTxHash:  "0x00000000000000000000000000000000000000000000000000000000deadbeef",
 	})
-	require.ErrorContains(t, err, "no packet found")
+	require.ErrorContains(t, err, "no packets found")
 }

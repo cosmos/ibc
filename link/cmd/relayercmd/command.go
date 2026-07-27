@@ -23,26 +23,8 @@ func NewCommand(handler Handler) *cobra.Command {
 	return cmd
 }
 
-// RoutePacketID constructs the stable synthetic IBC packet identifier.
-func RoutePacketID(routeID string, seq uint64) string {
-	return fmt.Sprintf("%s-%d", routeID, seq)
-}
-
-// HealthPath is the relayer health endpoint.
-const HealthPath = "/health"
-
-const (
-	// ReadinessEvent identifies the first relayer stdout event.
-	ReadinessEvent = "ready"
-	// RelayPath is the manual relay endpoint.
-	RelayPath = "/relay"
-	// StatusPath is the packet status endpoint.
-	StatusPath = "/status"
-	// StatusQueryRoute filters status by route.
-	StatusQueryRoute = "route"
-	// StatusQueryPacket filters status by packet.
-	StatusQueryPacket = "packet"
-)
+// ReadinessEvent identifies the first relayer stdout event.
+const ReadinessEvent = "ready"
 
 // Readiness is the first stdout line from relayer run.
 type Readiness struct {
@@ -85,18 +67,7 @@ type RelayRequest struct {
 	SourceTxHash  string `json:"sourceTxHash"`
 }
 
-// RelayResult reports packets discovered for a manual relay request.
-type RelayResult struct {
-	PacketIDs []string `json:"packetIds"`
-}
-
-// StatusQuery filters relayer status; the zero value asks for everything.
-type StatusQuery struct {
-	RouteID  string
-	PacketID string
-}
-
-// PacketState is the persisted synthetic packet state.
+// PacketState is the acceptance-test view of a packet's relay state.
 type PacketState string
 
 const (
@@ -110,12 +81,7 @@ const (
 	PacketErrorAck PacketState = "error_ack"
 )
 
-// Status contains the matching synthetic packets.
-type Status struct {
-	Packets []PacketStatus `json:"packets"`
-}
-
-// PacketStatus describes one synthetic packet.
+// PacketStatus describes one packet's relay state.
 type PacketStatus struct {
 	PacketID     string      `json:"packetId"`
 	RouteID      string      `json:"routeId"`
@@ -123,15 +89,4 @@ type PacketStatus struct {
 	State        PacketState `json:"state"`
 	SourceTxHash string      `json:"sourceTxHash"`
 	EffectTxHash string      `json:"effectTxHash,omitempty"`
-	Reason       string      `json:"reason,omitempty"`
-}
-
-// Packet returns a status by packet ID.
-func (s *Status) Packet(packetID string) (PacketStatus, bool) {
-	for _, packet := range s.Packets {
-		if packet.PacketID == packetID {
-			return packet, true
-		}
-	}
-	return PacketStatus{}, false
 }

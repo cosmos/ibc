@@ -48,4 +48,7 @@ message PacketStatus {
   TransactionInfo recv_tx = 5;
   TransactionInfo ack_tx = 6;
   TransactionInfo timeout_tx = 7;
+  // write_ack_error reports that the packet completed with an error
+  // acknowledgement written on the destination chain.
+  bool write_ack_error = 8;
 }

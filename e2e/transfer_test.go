@@ -69,7 +69,10 @@ func TestTransfer_ManualRelay(t *testing.T) {
 }
 
 const (
-	transferTimeout = 60 * time.Second
+	// transferTimeout must elapse in real time before the relayer times a
+	// packet out (the pipeline gates on the relayer's own clock), so it has
+	// to fit well inside the await budget.
+	transferTimeout = 15 * time.Second
 	// Advance well past transferTimeout so the timeout check wins any relay race.
 	transferTimeoutAdvance = 5 * transferTimeout
 )

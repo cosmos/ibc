@@ -334,7 +334,7 @@ func prepareAttestorWorkspace(
 		}}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,
-			Type:  "local",
+			Type:  typeLocal,
 			File:  keyPath,
 		}},
 	}
@@ -437,11 +437,12 @@ func (w *logWriter) close() {
 }
 
 type fileConfig struct {
-	Server   serverConfig   `yaml:"server"`
-	DB       dbConfig       `yaml:"db"`
-	Chains   []chainConfig  `yaml:"chains"`
-	Attestor attestorConfig `yaml:"attestor"`
-	Signers  []signerConfig `yaml:"signers"`
+	Server   serverConfig       `yaml:"server"`
+	DB       dbConfig           `yaml:"db"`
+	Chains   []chainConfig      `yaml:"chains"`
+	Attestor attestorConfig     `yaml:"attestor"`
+	Relayer  *relayerFileConfig `yaml:"relayer,omitempty"`
+	Signers  []signerConfig     `yaml:"signers"`
 }
 
 type chainConfig struct {

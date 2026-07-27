@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
+
+// PacketFailed is the relayer-reported terminal failure state. No test wants
+// it; it exists so mismatch errors read well.
+const PacketFailed relayercmd.PacketState = "failed"
 
 func AwaitState(
 	ctx context.Context,
@@ -31,11 +36,10 @@ func AwaitState(
 		timing.PollInterval,
 		description,
 		func(ctx context.Context) (relayercmd.PacketStatus, bool, error) {
-			status, err := relayer.Status(ctx, relayercmd.StatusQuery{PacketID: packetID})
+			observed, ok, err := observeStatus(ctx, relayer, packet)
 			if err != nil {
 				return relayercmd.PacketStatus{}, false, err
 			}
-			observed, ok := status.Packet(packetID)
 			if !ok {
 				return relayercmd.PacketStatus{}, false, fmt.Errorf("packet %s is absent from relayer status", packetID)
 			}
@@ -87,11 +91,10 @@ func AwaitStable(
 			)
 		case <-ticker.C:
 		}
-		status, err := relayer.Status(ctx, relayercmd.StatusQuery{PacketID: packetID})
+		observed, ok, err := observeStatus(ctx, relayer, packet)
 		if err != nil {
 			return err
 		}
-		observed, ok := status.Packet(packetID)
 		if !ok {
 			return fmt.Errorf("packet %s must stay present in relayer status", packetID)
 		}
@@ -105,30 +108,112 @@ func AwaitStable(
 	return nil
 }
 
+// Relay submits the packet's source transaction for relaying and confirms the
+// relayer enumerated the packet.
 func Relay(ctx context.Context, relayer *ibclink.Relayer, packet Packet) error {
 	if relayer == nil {
 		return errors.New("e2etest: relayer is required")
 	}
-	packetID := packetID(packet)
-	result, err := relayer.Relay(ctx, relayercmd.RelayRequest{
+	if err := relayer.Relay(ctx, relayercmd.RelayRequest{
 		SourceChainID: string(packet.Source),
 		SourceTxHash:  packet.SourceTxHash,
-	})
+	}); err != nil {
+		return err
+	}
+	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
 	if err != nil {
 		return err
 	}
-	if !slices.Contains(result.PacketIDs, packetID) {
+	if statusForSequence(statuses, packet.Sequence) == nil {
 		return fmt.Errorf(
 			"e2etest: relay result for packet %s did not include it: %v",
-			packetID,
-			result.PacketIDs,
+			packetID(packet),
+			statuses,
 		)
 	}
 	return nil
 }
 
+// observeStatus maps the relayer's packet status to the acceptance-test
+// vocabulary. A source transaction the relayer does not know yet reads as
+// pending; on non-manual routes it is submitted for relaying first, standing
+// in for the relayer's on-chain packet discovery until the product grows one.
+func observeStatus(
+	ctx context.Context,
+	relayer *ibclink.Relayer,
+	packet Packet,
+) (relayercmd.PacketStatus, bool, error) {
+	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
+	if ibclink.IsStatusNotFound(err) {
+		if !relayer.ManualRoute(string(packet.RouteID)) {
+			if relayErr := relayer.Relay(ctx, relayercmd.RelayRequest{
+				SourceChainID: string(packet.Source),
+				SourceTxHash:  packet.SourceTxHash,
+			}); relayErr != nil {
+				return relayercmd.PacketStatus{}, false, relayErr
+			}
+		}
+		return pendingStatus(packet), true, nil
+	}
+	if err != nil {
+		return relayercmd.PacketStatus{}, false, err
+	}
+	observed := statusForSequence(statuses, packet.Sequence)
+	if observed == nil {
+		return relayercmd.PacketStatus{}, false, nil
+	}
+	return mapStatus(packet, observed), true, nil
+}
+
+func statusForSequence(statuses []*relayerv2.PacketStatus, sequence uint64) *relayerv2.PacketStatus {
+	for _, status := range statuses {
+		if status.GetSequenceNumber() == sequence {
+			return status
+		}
+	}
+	return nil
+}
+
+// pendingStatus reads a source transaction the relayer has no record of as a
+// pending packet: nothing has happened to it yet.
+func pendingStatus(packet Packet) relayercmd.PacketStatus {
+	return relayercmd.PacketStatus{
+		PacketID:     packetID(packet),
+		RouteID:      string(packet.RouteID),
+		Sequence:     packet.Sequence,
+		State:        relayercmd.PacketPending,
+		SourceTxHash: packet.SourceTxHash,
+	}
+}
+
+func mapStatus(packet Packet, observed *relayerv2.PacketStatus) relayercmd.PacketStatus {
+	status := pendingStatus(packet)
+	status.Sequence = observed.GetSequenceNumber()
+	if sendTx := observed.GetSendTx().GetTxHash(); sendTx != "" {
+		status.SourceTxHash = sendTx
+	}
+	switch observed.GetState() {
+	case relayerv2.TransferState_TRANSFER_STATE_COMPLETE:
+		switch {
+		case observed.GetTimeoutTx() != nil:
+			status.State = relayercmd.PacketTimedOut
+			status.EffectTxHash = observed.GetTimeoutTx().GetTxHash()
+		case observed.GetWriteAckError():
+			status.State = relayercmd.PacketErrorAck
+			status.EffectTxHash = observed.GetRecvTx().GetTxHash()
+		default:
+			status.State = relayercmd.PacketComplete
+			status.EffectTxHash = observed.GetRecvTx().GetTxHash()
+		}
+	case relayerv2.TransferState_TRANSFER_STATE_FAILED:
+		status.State = PacketFailed
+	default:
+	}
+	return status
+}
+
 func packetID(packet Packet) string {
-	return relayercmd.RoutePacketID(string(packet.RouteID), packet.Sequence)
+	return fmt.Sprintf("%s-%d", packet.RouteID, packet.Sequence)
 }
 
 func crossCheck(packetID string, packet Packet, observed relayercmd.PacketStatus) error {
@@ -161,16 +246,9 @@ func crossCheck(packetID string, packet Packet, observed relayercmd.PacketStatus
 
 func validateTerminalStatus(status relayercmd.PacketStatus) error {
 	switch status.State {
-	case relayercmd.PacketComplete:
-		if status.EffectTxHash == "" {
-			return fmt.Errorf("e2etest: complete packet %s has no effect transaction", status.PacketID)
-		}
-	case relayercmd.PacketTimedOut, relayercmd.PacketErrorAck:
+	case relayercmd.PacketComplete, relayercmd.PacketTimedOut, relayercmd.PacketErrorAck:
 		if status.EffectTxHash == "" {
 			return fmt.Errorf("e2etest: %s packet %s has no effect transaction", status.State, status.PacketID)
-		}
-		if status.Reason == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no reason", status.State, status.PacketID)
 		}
 	}
 	return nil

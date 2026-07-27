@@ -2,14 +2,17 @@ package ibclink
 
 import (
 	"context"
-	"errors"
-	"io"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestParseReadiness(t *testing.T) {
@@ -37,50 +40,84 @@ func TestParseReadiness(t *testing.T) {
 	require.ErrorContains(t, res.err, "dbReady")
 }
 
-func TestRelayerOmitsPartialHTTPErrorBody(t *testing.T) {
-	const partialBody = "partial response must stay hidden"
-	readErr := errors.New("read failed")
-	relayer := &Relayer{
-		httpAddr: "127.0.0.1:1",
-		http: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusServiceUnavailable,
-				Status:     "503 Service Unavailable",
-				Header:     make(http.Header),
-				Body: io.NopCloser(io.MultiReader(
-					strings.NewReader(partialBody),
-					errorReader{err: readErr},
-				)),
-			}, nil
-		})},
-	}
-
-	err := relayer.probeHealth(context.Background())
-	require.ErrorIs(t, err, readErr)
-	require.NotContains(t, err.Error(), partialBody)
-	require.Contains(t, err.Error(), "read response body: read failed")
+// fakeRelayerAPI serves the relayer wire contract: Status on an unknown
+// transaction reports CodeNotFound; Relay records the submitted arguments.
+type fakeRelayerAPI struct {
+	relayerv2.UnimplementedRelayerApiServiceHandler
+	relayed  []*relayerv2.RelayRequest
+	statuses map[string][]*relayerv2.PacketStatus
 }
 
-func TestRelayerOmitsTruncatedHTTPErrorBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(strings.Repeat("x", errorBodyLimit+1)))
-	}))
-	defer server.Close()
-	relayer := &Relayer{
-		httpAddr: strings.TrimPrefix(server.URL, "http://"),
-		http:     server.Client(),
-	}
+func (f *fakeRelayerAPI) Relay(
+	_ context.Context,
+	req *connect.Request[relayerv2.RelayRequest],
+) (*connect.Response[relayerv2.RelayResponse], error) {
+	f.relayed = append(f.relayed, req.Msg)
+	return connect.NewResponse(&relayerv2.RelayResponse{}), nil
+}
 
-	err := relayer.probeHealth(context.Background())
+func (f *fakeRelayerAPI) Status(
+	_ context.Context,
+	req *connect.Request[relayerv2.StatusRequest],
+) (*connect.Response[relayerv2.StatusResponse], error) {
+	statuses, ok := f.statuses[req.Msg.ChainId+"/"+req.Msg.TxHash]
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("transaction not submitted to relayer"))
+	}
+	return connect.NewResponse(&relayerv2.StatusResponse{PacketStatuses: statuses}), nil
+}
+
+func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
+	t.Helper()
+	mux := http.NewServeMux()
+	path, handler := relayerv2.NewRelayerApiServiceHandler(api)
+	mux.Handle(path, handler)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return &Relayer{
+		client: relayerv2.NewRelayerApiServiceClient(server.Client(), server.URL, connect.WithGRPC()),
+		chainIDs: map[string]string{
+			"chain-a": "31337",
+			"chain-b": "31338",
+		},
+		manualRoutes: map[string]bool{"route-manual": true},
+	}
+}
+
+func TestRelayerProbeAcceptsNotFoundStatus(t *testing.T) {
+	relayer := testRelayer(t, &fakeRelayerAPI{})
+	require.NoError(t, relayer.probeStatusEndpoint(context.Background()))
+}
+
+func TestRelayerTranslatesChainIDs(t *testing.T) {
+	api := &fakeRelayerAPI{statuses: map[string][]*relayerv2.PacketStatus{
+		"31337/0xabc": {{SequenceNumber: 7}},
+	}}
+	relayer := testRelayer(t, api)
+	ctx := context.Background()
+
+	statuses, err := relayer.PacketStatuses(ctx, "chain-a", "0xabc")
+	require.NoError(t, err)
+	require.Len(t, statuses, 1)
+	require.Equal(t, uint64(7), statuses[0].SequenceNumber)
+
+	_, err = relayer.PacketStatuses(ctx, "chain-a", "0xother")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "response body omitted")
+	require.True(t, IsStatusNotFound(err))
+
+	_, err = relayer.PacketStatuses(ctx, "chain-c", "0xabc")
+	require.Error(t, err)
+	require.False(t, IsStatusNotFound(err))
+	require.ErrorContains(t, err, "no configured chain id")
+
+	require.NoError(t, relayer.Relay(ctx, relayercmd.RelayRequest{
+		SourceChainID: "chain-b",
+		SourceTxHash:  "0xdef",
+	}))
+	require.Len(t, api.relayed, 1)
+	require.Equal(t, "31338", api.relayed[0].ChainId)
+	require.Equal(t, "0xdef", api.relayed[0].TxHash)
+
+	require.True(t, relayer.ManualRoute("route-manual"))
+	require.False(t, relayer.ManualRoute("route-auto"))
 }
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
-
-type errorReader struct{ err error }
-
-func (r errorReader) Read([]byte) (int, error) { return 0, r.err }

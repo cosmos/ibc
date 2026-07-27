@@ -21,36 +21,16 @@ func TestCommandRunsInjectedRunHandler(t *testing.T) {
 }
 
 func TestTransportJSONSerialization(t *testing.T) {
-	tests := []struct {
-		name  string
-		value any
-		want  string
-	}{
-		{
-			name: "readiness",
-			value: Readiness{
-				Event: ReadinessEvent, ConfigLoaded: true, DBReady: true,
-				ChainsConnected: []string{"chain-a"}, RelayerSubscribed: true,
-				Status: ReadinessStatus{HTTP: "127.0.0.1:1234"},
-			},
-			want: `{"event":"ready","configLoaded":true,"dbReady":true,"chainsConnected":["chain-a"],"relayerSubscribed":true,"status":{"http":"127.0.0.1:1234"}}`,
-		},
-		{name: "relay", value: RelayResult{PacketIDs: []string{"route-ift-1"}}, want: `{"packetIds":["route-ift-1"]}`},
-		{
-			name: "status omits empty terminal fields",
-			value: Status{Packets: []PacketStatus{{
-				PacketID: "route-ift-1", RouteID: "route", Sequence: 1,
-				State: PacketPending, SourceTxHash: "0xsource",
-			}}},
-			want: `{"packets":[{"packetId":"route-ift-1","routeId":"route","sequence":1,"state":"pending","sourceTxHash":"0xsource"}]}`,
-		},
+	readiness := Readiness{
+		Event: ReadinessEvent, ConfigLoaded: true, DBReady: true,
+		ChainsConnected: []string{"chain-a"}, RelayerSubscribed: true,
+		Status: ReadinessStatus{HTTP: "127.0.0.1:1234"},
 	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			encoded, err := json.Marshal(test.value)
-			require.NoError(t, err)
-			require.JSONEq(t, test.want, string(encoded))
-		})
-	}
+	encoded, err := json.Marshal(readiness)
+	require.NoError(t, err)
+	require.JSONEq(
+		t,
+		`{"event":"ready","configLoaded":true,"dbReady":true,"chainsConnected":["chain-a"],"relayerSubscribed":true,"status":{"http":"127.0.0.1:1234"}}`,
+		string(encoded),
+	)
 }

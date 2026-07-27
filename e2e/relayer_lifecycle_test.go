@@ -60,12 +60,11 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := chainB.Mining()
 	require.NoError(t, err)
-	dst, err := chainB.EVM()
-	require.NoError(t, err)
 
 	// Keep destination mining paused across restart so delivery cannot finish before the new Relayer is up.
+	var transfer *e2etest.TransferPacket
 	require.NoError(t, mining.WithPaused(ctx, func() error {
-		transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(888_000)})
+		transfer, err = transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(888_000)})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyEscrowed(ctx))
 
@@ -73,17 +72,25 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 		require.NoError(t, relayer.Stop(ctx))
 		relayer = e2etest.StartRelayer(t, driver, env)
 
-		require.NoError(t, dst.WaitNextPendingTx(ctx))
-		require.NoError(t, mining.Mine(ctx, 1))
-		_, err = e2etest.AwaitState(
+		// The restarted relayer still tracks the packet from its store.
+		require.NoError(t, e2etest.AwaitStable(
 			ctx,
 			relayer,
 			transfer.Packet(),
-			relayercmd.PacketComplete,
+			relayercmd.PacketPending,
 			chainB.Timing(),
-		)
-		require.NoError(t, err)
-		require.NoError(t, transfer.VerifyDelivered(ctx))
+		))
+		require.NoError(t, transfer.VerifyNotMinted(ctx))
 		return nil
 	}))
+
+	_, err = e2etest.AwaitState(
+		ctx,
+		relayer,
+		transfer.Packet(),
+		relayercmd.PacketComplete,
+		chainB.Timing(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
 }

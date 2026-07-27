@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
@@ -73,6 +74,9 @@ type PacketStatus struct {
 	RecvTx         *TxInfo
 	AckTx          *TxInfo
 	TimeoutTx      *TxInfo
+	// WriteAckError reports that the packet completed with an error
+	// acknowledgement written on the destination chain.
+	WriteAckError bool
 }
 
 // New Service constructor. dispatcher may be nil for a service that only
@@ -124,6 +128,10 @@ func (s *Service) Relay(ctx context.Context, chainID, txHash string) error {
 
 	events, err := client.TxPacketEvents(ctx, hashBytes)
 	if err != nil {
+		if errors.Is(err, ethereum.NotFound) {
+			return errors.Wrapf(ErrNotFound, "no packets found: transaction %s on chain %s", txHash, chainID)
+		}
+
 		return errors.Wrap(err, "extracting packet events")
 	}
 
@@ -215,6 +223,7 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 			RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
 			AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
 			TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
+			WriteAckError:  packet.Status == store.RelayStatusCompleteWithWriteAckError,
 		}
 	}
 

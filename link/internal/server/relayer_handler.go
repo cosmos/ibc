@@ -55,6 +55,8 @@ func (h *RelayerHandler) Relay(
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, relayer.ErrNotFound):
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	case err != nil:
 		// todo: move to interceptor
 		h.logger.Error("Relay", "error", err)
@@ -92,6 +94,7 @@ func (h *RelayerHandler) Status(
 			RecvTx:         txInfoToProto(status.RecvTx),
 			AckTx:          txInfoToProto(status.AckTx),
 			TimeoutTx:      txInfoToProto(status.TimeoutTx),
+			WriteAckError:  status.WriteAckError,
 		}
 	}
 

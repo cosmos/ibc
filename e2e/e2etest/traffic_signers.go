@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -94,17 +93,13 @@ func (s Signers) validate() error {
 	}
 }
 
-func (s Signers) store(dir string) ([]configcmd.Signer, error) {
-	appPath := filepath.Join(dir, "keys", applicationSignerAlias+".json")
+// storeRelayerKey writes the relayer's signing key file and returns its path.
+// The relayer signs relay transactions and local attestations with it; the
+// application signer never enters the relayer process.
+func (s Signers) storeRelayerKey(dir string) (string, error) {
 	relayerPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
-	if err := keyfile.Store(appPath, keyfile.ECDSA, crypto.FromECDSA(s.application.key)); err != nil {
-		return nil, fmt.Errorf("store application signer: %w", err)
-	}
 	if err := keyfile.Store(relayerPath, keyfile.ECDSA, crypto.FromECDSA(s.relayer.key)); err != nil {
-		return nil, fmt.Errorf("store relayer signer: %w", err)
+		return "", fmt.Errorf("store relayer signer: %w", err)
 	}
-	return []configcmd.Signer{
-		{Alias: applicationSignerAlias, Type: configcmd.SignerTypeLocal, File: appPath},
-		{Alias: relayerSignerAlias, Type: configcmd.SignerTypeLocal, File: relayerPath},
-	}, nil
+	return relayerPath, nil
 }
