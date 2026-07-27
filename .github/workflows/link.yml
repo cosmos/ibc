@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [link, e2e, e2e/internal/harness]
+        module: [link, e2e]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -55,25 +55,26 @@ jobs:
           - module: link
             packages: ./...
           - module: e2e
-            packages: ./e2etest ./internal/...
-          - module: e2e/internal/harness
-            packages: ./...
+            packages: ./e2etest
+          - module: e2e
+            packages: ./internal/...
+            harness: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache-dependency-path: ${{ matrix.module }}/go.sum
-      - if: matrix.module == 'e2e/internal/harness'
+      - if: matrix.harness
         run: make build-link
-      - if: matrix.module == 'e2e/internal/harness'
+      - if: matrix.harness
         run: docker info
-      - if: matrix.module == 'e2e/internal/harness'
+      - if: matrix.harness
         run: go test -count=1 ${{ matrix.packages }}
         working-directory: ${{ matrix.module }}
         env:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
-      - if: matrix.module != 'e2e/internal/harness'
+      - if: ${{ !matrix.harness }}
         run: go test ${{ matrix.packages }}
         working-directory: ${{ matrix.module }}
 
@@ -87,6 +88,5 @@ jobs:
           cache-dependency-path: |
             link/go.sum
             e2e/go.sum
-            e2e/internal/harness/go.sum
       - run: docker info
       - run: make test-e2e

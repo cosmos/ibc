@@ -25,21 +25,19 @@ doctor-e2e-tools: ## Check the generation and lint tools used by repository e2e 
 	@command -v golangci-lint >/dev/null || { echo "missing golangci-lint; it is required for e2e checks" >&2; exit 1; }
 
 test-harness: build-link ## Run harness tests, including Docker-backed integrations when available
-	go -C $(HARNESS_DIR) test ./...
+	go -C $(E2E_DIR) test ./internal/...
 
 test-unit: ## Run pure-Go e2e selection and helper tests; no chains
-	go -C $(E2E_DIR) test ./e2etest ./internal/...
+	go -C $(E2E_DIR) test ./e2etest
 
 test-e2e: build-link ## Run e2e tests (E2E_FLAGS=... E2E_LANE=...)
 	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . -timeout 60m $(E2E_FLAGS)
 
-lint-e2e: ## Lint the e2e and harness modules
+lint-e2e: ## Lint the e2e module, harness included
 	cd $(E2E_DIR) && golangci-lint run
-	cd $(HARNESS_DIR) && golangci-lint run
 
-lint-fix-e2e: ## Lint the e2e and harness modules and fix errors
+lint-fix-e2e: ## Lint the e2e module, harness included, and fix errors
 	cd $(E2E_DIR) && golangci-lint run --fix
-	cd $(HARNESS_DIR) && golangci-lint run --fix
 
 clean-e2e-dry-run: ## Preview e2e processes and Docker resources
 	$(E2E_DIR)/scripts/clean.sh --dry-run

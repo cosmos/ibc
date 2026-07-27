@@ -1,10 +1,10 @@
 # E2E Harness Development Guide for AI Agents
 
-This repository-internal module is the black-box e2e harness. Its Link adapter observes the `ibc` binary only through
+This internal package tree of the e2e module is the black-box e2e harness. Its Link adapter observes the `ibc` binary only through
 its public wire surface — CLI commands with JSON output, config YAML, and the status API — and
 corroborates outcomes by reading chain state with its own clients.
 
-- **The wall:** this module never imports `link/internal/...` or the stub's guts. It may import
+- **The wall:** the harness never imports `link/internal/...` or the stub's guts. It may import
   public Link command transport types, generated RPC clients, and the signer-keyfile package, while
   behavior remains observable only through the executable and HTTP surface.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
@@ -15,5 +15,5 @@ corroborates outcomes by reading chain state with its own clients.
   with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and it dumps its
   `--state` file — what makes StopNode/StartNode fault injection survive restarts). Don't
   reintroduce a shell-wrapped entrypoint.
-- Lint with `make lint-e2e` from the repository root; the harness uses `e2e/internal/harness/.golangci.yml`, which
-  mirrors the root config minus exported-doc mandates (everything here is internal surface).
+- Lint with `make lint-e2e` from the repository root; the harness is covered by `e2e/.golangci.yml`,
+  which mirrors the root config minus exported-doc mandates (everything here is internal surface).
