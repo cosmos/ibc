@@ -1,5 +1,5 @@
 // Package e2etest selects and starts reusable Environment configurations and
-// provides the temporary Link traffic machinery used by the acceptance tests.
+// provides the traffic bindings the acceptance tests drive against IBC Link.
 package e2etest
 
 import (

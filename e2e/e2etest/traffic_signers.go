@@ -20,8 +20,8 @@ const (
 	relayerSignerAlias     = "e2etest-relayer"
 )
 
-// Signers are the two independent local identities used by the temporary
-// acceptance path. Their credentials remain private to this package.
+// Signers are the two independent local identities used by the acceptance
+// tests. Their credentials remain private to this package.
 type Signers struct {
 	application localSigner
 	relayer     localSigner
