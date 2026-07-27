@@ -4,21 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
-
-func TestCommandRunsInjectedRunHandler(t *testing.T) {
-	called := false
-	cmd := NewCommand(func(_ *cobra.Command, _ []string) error {
-		called = true
-		return nil
-	})
-	cmd.SetArgs([]string{"run"})
-
-	require.NoError(t, cmd.Execute())
-	require.True(t, called)
-}
 
 func TestTransportJSONSerialization(t *testing.T) {
 	readiness := Readiness{

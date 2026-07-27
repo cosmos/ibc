@@ -11,6 +11,19 @@ import (
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
+var (
+	cmdRelayer = &cobra.Command{
+		Use:   "relayer",
+		Short: "Relayer commands",
+	}
+
+	cmdRelayerRun = &cobra.Command{
+		Use:   "run",
+		Short: "Run the relayer",
+		RunE:  relayerRun,
+	}
+)
+
 func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {

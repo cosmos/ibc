@@ -1,27 +1,7 @@
-// Package relayercmd owns the relayer command's CLI and transport contract.
+// Package relayercmd owns the relayer command's wire contract.
 package relayercmd
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
-
-// Handler implements a relayer subcommand.
-type Handler func(*cobra.Command, []string) error
-
-// NewCommand constructs the relayer command with its behavior injected by the executable.
-func NewCommand(handler Handler) *cobra.Command {
-	cmd := &cobra.Command{Use: "relayer", Short: "Relayer commands"}
-	run := &cobra.Command{
-		Use:          "run",
-		Short:        "Run the relayer",
-		SilenceUsage: true,
-		RunE:         handler,
-	}
-	cmd.AddCommand(run)
-	return cmd
-}
+import "fmt"
 
 // ReadinessEvent identifies the first relayer stdout event.
 const ReadinessEvent = "ready"

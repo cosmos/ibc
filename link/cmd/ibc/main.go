@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
@@ -38,7 +37,6 @@ func runMain() int {
 func init() {
 	// setup global flags
 	config.DeclarePersistentFlags(rootCmd, &globalFlags)
-	cmdRelayer := relayercmd.NewCommand(relayerRun)
 
 	rootCmd.AddCommand(
 		cmdConfig,
@@ -57,6 +55,9 @@ func init() {
 	// Keys commands
 	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow)
 	cmdKeysShow.Flags().BoolVarP(&flagKeysShowPrivate, "private", "", false, "show private key")
+
+	// Relayer commands
+	cmdRelayer.AddCommand(cmdRelayerRun)
 
 	// Attestor commands
 	cmdAttestor.AddCommand(cmdAttestorRun)
