@@ -24,6 +24,8 @@ var (
 	}
 )
 
+var flagRelayerNoMigrate bool
+
 func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
@@ -35,14 +37,18 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	applied, err := app.Store.MigrateUp()
-	switch {
-	case err != nil:
-		return errors.Wrap(err, "failed to migrate database")
-	case applied == 0:
-		app.Logger.Info("No migrations to apply")
-	default:
-		app.Logger.Info("Migrated database", "migrations_applied", applied)
+	if flagRelayerNoMigrate {
+		app.Logger.Info("--no-migrate flag passed, skipping migrations")
+	} else {
+		applied, migrateErr := app.Store.MigrateUp()
+		switch {
+		case migrateErr != nil:
+			return errors.Wrap(migrateErr, "failed to migrate database")
+		case applied == 0:
+			app.Logger.Info("No migrations to apply")
+		case applied > 0:
+			app.Logger.Info("Migrated database", "migrations_applied", applied)
+		}
 	}
 
 	app.Logger.Info("Starting relayer")
