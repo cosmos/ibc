@@ -1,4 +1,4 @@
-name: Link and E2E
+name: E2E
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - "e2e/**"
       - "proto/**"
       - "Makefile"
-      - ".github/workflows/link.yml"
+      - ".github/workflows/e2e.yml"
   pull_request:
     branches: [main, development]
     paths:
@@ -16,67 +16,50 @@ on:
       - "e2e/**"
       - "proto/**"
       - "Makefile"
-      - ".github/workflows/link.yml"
+      - ".github/workflows/e2e.yml"
 
 jobs:
-  generated:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: link/go.mod
-          cache: false
-      - run: go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-      - run: make check-proto
-        working-directory: link
-
   lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        module: [link, e2e]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: ${{ matrix.module }}/go.mod
-          cache-dependency-path: ${{ matrix.module }}/go.sum
+          go-version-file: e2e/go.mod
+          cache-dependency-path: e2e/go.sum
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12.2
-          working-directory: ${{ matrix.module }}
+          working-directory: e2e
 
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - module: link
-            packages: ./...
-          - module: e2e
-            packages: ./e2etest
-          - module: e2e
-            packages: ./internal/...
+          - packages: ./e2etest
+          - packages: ./internal/...
             harness: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: ${{ matrix.module }}/go.mod
-          cache-dependency-path: ${{ matrix.module }}/go.sum
+          go-version-file: e2e/go.mod
+          cache-dependency-path: |
+            link/go.sum
+            e2e/go.sum
       - if: matrix.harness
         run: make build-link
       - if: matrix.harness
         run: docker info
       - if: matrix.harness
         run: go test -count=1 ${{ matrix.packages }}
-        working-directory: ${{ matrix.module }}
+        working-directory: e2e
         env:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
       - if: ${{ !matrix.harness }}
         run: go test ${{ matrix.packages }}
-        working-directory: ${{ matrix.module }}
+        working-directory: e2e
 
   e2e:
     runs-on: ubuntu-latest
