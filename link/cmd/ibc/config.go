@@ -11,20 +11,29 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
+// set in init()
 var (
-	flagConfigValidateLive   bool
-	flagConfigValidateStrict bool
+	// if true, perform extra validation checks like connecting to RPC,
+	// checking EVM addresses, etc.
+	flagConfigValidateLive bool
 
+	// if true, fail on unknown fields in the config file
+	flagConfigValidateStrict bool
+)
+
+var (
 	cmdConfig = &cobra.Command{
 		Use:              "config",
 		Short:            "Config commands",
 		PersistentPreRun: printConfigHome,
 	}
+
 	cmdConfigNew = &cobra.Command{
 		Use:   "new",
 		Short: "Create new config file",
 		RunE:  configNew,
 	}
+
 	cmdConfigValidate = &cobra.Command{
 		Use:   "validate",
 		Short: "Validate the config",
@@ -58,14 +67,19 @@ func configValidate(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return errors.Wrap(err, "setup home with config")
 	}
+
 	if flagConfigValidateLive {
 		if err := store.ValidateConfigLive(cfg); err != nil {
 			return errors.Wrap(err, "config live validation")
 		}
 	}
+
+	// todo: it still logs store's log, we need to add config.logging{} params
+	// to truly suppress logging (in followup PRs)
 	if !globalFlags.Quiet {
 		return config.PrintJSON(map[string]any{"status": "valid"})
 	}
+
 	return nil
 }
 
