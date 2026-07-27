@@ -28,17 +28,9 @@ const ReadinessEvent = "ready"
 
 // Readiness is the first stdout line from relayer run.
 type Readiness struct {
-	Event             string          `json:"event"`
-	ConfigLoaded      bool            `json:"configLoaded"`
-	DBReady           bool            `json:"dbReady"`
-	ChainsConnected   []string        `json:"chainsConnected"`
-	RelayerSubscribed bool            `json:"relayerSubscribed"`
-	Status            ReadinessStatus `json:"status"`
-}
-
-// ReadinessStatus contains relayer service endpoints.
-type ReadinessStatus struct {
-	HTTP string `json:"http"`
+	Event           string   `json:"event"`
+	ChainsConnected []string `json:"chainsConnected"`
+	HTTP            string   `json:"http"`
 }
 
 // Validate checks the readiness event contract.
@@ -46,17 +38,8 @@ func (r Readiness) Validate() error {
 	if r.Event != ReadinessEvent {
 		return fmt.Errorf("event = %q, want %q", r.Event, ReadinessEvent)
 	}
-	if !r.ConfigLoaded {
-		return fmt.Errorf("configLoaded is false")
-	}
-	if !r.DBReady {
-		return fmt.Errorf("dbReady is false")
-	}
-	if !r.RelayerSubscribed {
-		return fmt.Errorf("relayerSubscribed is false")
-	}
-	if r.Status.HTTP == "" {
-		return fmt.Errorf("status.http is empty")
+	if r.HTTP == "" {
+		return fmt.Errorf("http is empty")
 	}
 	return nil
 }

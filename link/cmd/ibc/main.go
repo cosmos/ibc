@@ -8,10 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/cmd/configcmd"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/ibcrelay"
 )
 
 // global globalFlags, loaded in config.DeclarePersistentFlags()
@@ -40,10 +38,6 @@ func runMain() int {
 func init() {
 	// setup global flags
 	config.DeclarePersistentFlags(rootCmd, &globalFlags)
-	cmdConfig := configcmd.NewCommand(configcmd.Handlers{
-		New:      configNew,
-		Validate: ibcrelay.ConfigValidate(&globalFlags),
-	})
 	cmdRelayer := relayercmd.NewCommand(relayerRun)
 
 	rootCmd.AddCommand(
@@ -54,6 +48,11 @@ func init() {
 		cmdMigrate,
 		cmdKeys,
 	)
+
+	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
+	cmdConfigValidate.Flags().BoolVar(&flagConfigValidateLive, "live", false, "extra validation checks")
+	cmdConfigValidate.Flags().
+		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")
 
 	// Keys commands
 	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow)

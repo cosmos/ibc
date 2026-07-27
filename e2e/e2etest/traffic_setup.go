@@ -428,7 +428,7 @@ func buildConfig(
 		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
 		config.Chains = append(config.Chains, ibclink.RelayerChain{
 			ChainID:     options.ChainIDs[string(id)],
-			RPC:         rpc.URL,
+			RPC:         rpc,
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}

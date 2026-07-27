@@ -124,7 +124,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	d.readiness = readiness
 	d.client = relayerv2.NewRelayerApiServiceClient(
 		&http.Client{Timeout: statusHTTPTimeout},
-		"http://"+readiness.Status.HTTP,
+		"http://"+readiness.HTTP,
 		connect.WithGRPC(),
 	)
 	if err := d.probeStatusEndpoint(ctx); err != nil {

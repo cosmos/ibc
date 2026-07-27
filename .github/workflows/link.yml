@@ -46,9 +46,6 @@ jobs:
         with:
           version: v2.12.2
           working-directory: ${{ matrix.module }}
-      - if: matrix.module == 'link'
-        run: make lint-ibcrelay-tests
-        working-directory: link
 
   test:
     runs-on: ubuntu-latest

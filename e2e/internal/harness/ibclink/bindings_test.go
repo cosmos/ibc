@@ -21,8 +21,8 @@ func TestChainRPCBindingKeepsEndpointOutOfConfiguration(t *testing.T) {
 
 	rpc, err := driver.ChainRPC(chainID)
 	require.NoError(t, err)
-	require.NotContains(t, rpc.URL, endpoint)
-	require.Equal(t, "${"+chainRPCEnvName(chainID)+"}", rpc.URL)
+	require.NotContains(t, rpc, endpoint)
+	require.Equal(t, "${"+chainRPCEnvName(chainID)+"}", rpc)
 
 	var env []string
 	err = driver.withProcessEnv(func(got processEnvironment) error {
@@ -43,7 +43,7 @@ func TestChainRPCBindingPropagatesResolverFailureWithoutEndpointData(t *testing.
 
 	rpc, err := driver.ChainRPC("chain-a")
 	require.NoError(t, err)
-	require.NotEmpty(t, rpc.URL)
+	require.NotEmpty(t, rpc)
 	err = driver.withProcessEnv(func(processEnvironment) error { return nil })
 	require.ErrorIs(t, err, closed)
 }
@@ -67,7 +67,7 @@ func TestChainRPCBindingsInstallOnce(t *testing.T) {
 
 	rpc, err := driver.ChainRPC("chain-a")
 	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(rpc.URL, "${"+chainRPCEnvPrefix))
+	require.True(t, strings.HasPrefix(rpc, "${"+chainRPCEnvPrefix))
 	_, err = driver.ChainRPC("chain-b")
 	require.ErrorContains(t, err, `no RPC binding for Chain "chain-b"`)
 }

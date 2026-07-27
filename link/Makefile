@@ -26,9 +26,6 @@ lint: ## Lint the code
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
 
-lint-ibcrelay-tests: ## Lint the temporary IBC relayer tests without changing Link's general test-lint policy
-	golangci-lint run --tests ./internal/ibcrelay/...
-
 codegen: codegen-sql codegen-proto codegen-abi codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
@@ -64,6 +61,6 @@ codegen-abi: ## Generate Go bindings for EVM contract ABIs
 test: ## Run tests
 	go test ./... -v
 
-check: build test lint lint-ibcrelay-tests check-proto ## Run Link build, tests, lint, and generation freshness
+check: build test lint check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build lint lint-fix lint-ibcrelay-tests test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check
+.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check

@@ -103,6 +103,13 @@ func RequireAnvilLane(t testing.TB) {
 	}
 }
 
+func RequireAnvilNodeLifecycle(t testing.TB) {
+	t.Helper()
+	if selectedLaneName(t) == laneBesu {
+		t.Skip("requires Anvil node lifecycle control")
+	}
+}
+
 func selectedLaneName(t testing.TB) string {
 	t.Helper()
 	name := normalizeLaneName(rawLaneName())

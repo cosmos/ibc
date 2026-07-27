@@ -65,3 +65,6 @@ linters:
           disabled: true
   exclusions:
     generated: lax
+    rules:
+      - path: (.+)_test\.go
+        linters: [goconst]

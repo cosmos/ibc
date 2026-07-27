@@ -6,7 +6,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 ## Acceptance coverage
 
-The root package covers configuration validation, protocol-stack deployment, ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
+The root package covers protocol-stack deployment, ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
 ## Running the acceptance tests
 
@@ -18,7 +18,7 @@ make build-link
 make test-e2e
 ```
 
-`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. Link explicitly composes temporary handlers for config validation and Relayer execution into this binary (`link/internal/ibcrelay`); the Relayer submits recv, ack, and timeout transactions with empty proofs, which the dummy light client accepts.
+`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer submits recv, ack, and timeout transactions with empty proofs, which the dummy light client accepts.
 
 The same tests can select different Chain declarations:
 
@@ -59,13 +59,11 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 `e2etest.NewSigners` creates separate application and relayer identities for the test. Managed Chains fund them through their resolved funding capability; an attached Chain must fund the returned public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary Link configuration.
 
-Tests assess required controls before startup and then request the resolved capability:
+Tests that need manual mining run only in the instant-Anvil lane:
 
 ```go
 selected := e2etest.SelectedSuite(t)
-e2etest.RequireCapabilities(t, selected, environment.Requirements{
-    MiningControl: []environment.ChainID{e2etest.ChainB},
-})
+e2etest.RequireAnvilLane(t)
 env := e2etest.Start(t, selected)
 
 chainB, err := env.Chain(e2etest.ChainB)
@@ -74,7 +72,7 @@ mining, err := chainB.Mining()
 require.NoError(t, err)
 ```
 
-An invalid selection fails; an interchangeable selection that cannot guarantee a requirement skips before acquisition. Startup failures always fail.
+An invalid lane fails; a test pinned to another lane skips before acquisition. Startup failures always fail.
 
 ## Extending the graph
 

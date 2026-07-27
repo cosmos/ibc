@@ -51,12 +51,9 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		connected = append(connected, chain.ChainID)
 	}
 	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(relayercmd.Readiness{
-		Event:             relayercmd.ReadinessEvent,
-		ConfigLoaded:      true,
-		DBReady:           true,
-		ChainsConnected:   connected,
-		RelayerSubscribed: true,
-		Status:            relayercmd.ReadinessStatus{HTTP: address.String()},
+		Event:           relayercmd.ReadinessEvent,
+		ChainsConnected: connected,
+		HTTP:            address.String(),
 	}); err != nil {
 		_ = app.RelayerService.Stop()
 		_ = app.Server.Stop()

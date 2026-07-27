@@ -2,6 +2,7 @@ package environment
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 )
@@ -43,15 +44,8 @@ func (r Runtime) evmAccount(id AuthorityID) (evm.Account, error) {
 }
 
 func (r Runtime) snapshot() Runtime {
-	snapshot := Runtime{
-		Endpoints:   make(map[EndpointBindingID]EndpointBinding, len(r.Endpoints)),
-		Authorities: make(map[AuthorityID]EVMAuthority, len(r.Authorities)),
+	return Runtime{
+		Endpoints:   maps.Clone(r.Endpoints),
+		Authorities: maps.Clone(r.Authorities),
 	}
-	for id, binding := range r.Endpoints {
-		snapshot.Endpoints[id] = binding
-	}
-	for id, binding := range r.Authorities {
-		snapshot.Authorities[id] = binding
-	}
-	return snapshot
 }

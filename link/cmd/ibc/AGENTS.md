@@ -1,10 +1,11 @@
 # CLI development (located in cmd/ibc/)
 
 1. Use a single `init()` function in main.go to wire all subcommands. Never create init() per CLI file.
-2. Commands implemented in this package should be variables and start with a `cmd*` prefix. The config,
-   relayer, and test-app families are constructed by importable command packages because their handlers
-   are selected at the composition root. Examples for commands that remain here:
+2. Commands implemented in this package should be variables and start with a `cmd*` prefix. The relayer
+   family is constructed by an importable command package because its transport types are shared with
+   the e2e harness. Examples for commands that remain here:
  - `ibc attestor run` corresponds to `var cmdAttestorRun = ...`;
+ - `ibc config validate` corresponds to `var cmdConfigValidate = ...`;
  - `ibc migrate up` corresponds to `var cmdMigrateUp = ...`;
 3. Command implementations in this package should use `func commandName(cmd *cobra.Command, args []string) error`.
    Importable command packages may pass command-owned option structs to injected handlers so flags stay

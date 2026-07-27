@@ -8,10 +8,31 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/store"
+)
+
+var (
+	flagConfigValidateLive   bool
+	flagConfigValidateStrict bool
+
+	cmdConfig = &cobra.Command{
+		Use:              "config",
+		Short:            "Config commands",
+		PersistentPreRun: printConfigHome,
+	}
+	cmdConfigNew = &cobra.Command{
+		Use:   "new",
+		Short: "Create new config file",
+		RunE:  configNew,
+	}
+	cmdConfigValidate = &cobra.Command{
+		Use:   "validate",
+		Short: "Validate the config",
+		RunE:  configValidate,
+	}
 )
 
 func configNew(_ *cobra.Command, _ []string) error {
-	printConfigHome(nil, nil)
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
 		return err
@@ -29,6 +50,22 @@ func configNew(_ *cobra.Command, _ []string) error {
 
 	fmt.Printf("Config file created at %s\n", configPath)
 
+	return nil
+}
+
+func configValidate(_ *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return errors.Wrap(err, "setup home with config")
+	}
+	if flagConfigValidateLive {
+		if err := store.ValidateConfigLive(cfg); err != nil {
+			return errors.Wrap(err, "config live validation")
+		}
+	}
+	if !globalFlags.Quiet {
+		return config.PrintJSON(map[string]any{"status": "valid"})
+	}
 	return nil
 }
 
@@ -59,7 +96,7 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
 	}
 
-	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig(), false)
+	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig(), flagConfigValidateStrict)
 	if err != nil {
 		return config.Config{}, err
 	}

@@ -22,15 +22,13 @@ func TestCommandRunsInjectedRunHandler(t *testing.T) {
 
 func TestTransportJSONSerialization(t *testing.T) {
 	readiness := Readiness{
-		Event: ReadinessEvent, ConfigLoaded: true, DBReady: true,
-		ChainsConnected: []string{"chain-a"}, RelayerSubscribed: true,
-		Status: ReadinessStatus{HTTP: "127.0.0.1:1234"},
+		Event: ReadinessEvent, ChainsConnected: []string{"chain-a"}, HTTP: "127.0.0.1:1234",
 	}
 	encoded, err := json.Marshal(readiness)
 	require.NoError(t, err)
 	require.JSONEq(
 		t,
-		`{"event":"ready","configLoaded":true,"dbReady":true,"chainsConnected":["chain-a"],"relayerSubscribed":true,"status":{"http":"127.0.0.1:1234"}}`,
+		`{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:1234"}`,
 		string(encoded),
 	)
 }

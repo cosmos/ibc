@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-
-	"github.com/cosmos/ibc/link/cmd/configcmd"
 )
 
 const chainRPCEnvPrefix = "IBC_LINK_CHAIN_RPC_"
@@ -68,16 +66,16 @@ func (r *Driver) BindChainRPCs(
 }
 
 // ChainRPC returns the configuration reference for a bound Chain.
-func (r *Driver) ChainRPC(chainID string) (configcmd.RPC, error) {
+func (r *Driver) ChainRPC(chainID string) (string, error) {
 	bindings := r.bindings.snapshot()
 	if bindings == nil {
-		return configcmd.RPC{}, fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
+		return "", fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
 	}
 	binding, ok := bindings.chainRPC[chainID]
 	if !ok {
-		return configcmd.RPC{}, fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
+		return "", fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
 	}
-	return configcmd.RPC{URL: "${" + binding.envName + "}"}, nil
+	return "${" + binding.envName + "}", nil
 }
 
 func (r *Driver) withProcessEnv(use func(processEnvironment) error) error {

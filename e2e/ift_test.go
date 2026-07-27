@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
@@ -49,11 +48,8 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 }
 
 func TestIFTTimeout_Refund(t *testing.T) {
-	selected := e2etest.SelectedSuite(t)
-	e2etest.RequireCapabilities(t, selected, environment.Requirements{
-		MiningControl: []environment.ChainID{e2etest.ChainB},
-	})
-	env := e2etest.Start(t, selected)
+	e2etest.RequireAnvilLane(t)
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)

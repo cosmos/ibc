@@ -8,7 +8,6 @@ require (
 	github.com/cometbft/cometbft v0.39.3
 	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260618122836-39904319467b
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
@@ -356,7 +355,7 @@ require (
 	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
-	gopkg.in/yaml.v3 v3.0.1
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

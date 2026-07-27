@@ -16,28 +16,25 @@ import (
 )
 
 func TestParseReadiness(t *testing.T) {
-	valid := `{"event":"ready","configLoaded":true,"dbReady":true,` +
-		`"chainsConnected":["chain-a"],"relayerSubscribed":true,"status":{"http":"127.0.0.1:4242"}}` + "\n"
+	valid := `{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}` + "\n"
 	res := parseReadiness(valid)
 	require.NoError(t, res.err)
-	require.Equal(t, "127.0.0.1:4242", res.readiness.Status.HTTP)
+	require.Equal(t, "127.0.0.1:4242", res.readiness.HTTP)
 	require.Equal(t, []string{"chain-a"}, res.readiness.ChainsConnected)
 
 	res = parseReadiness("plain log line, not json\n")
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "not readiness JSON")
 
-	wrongEvent := `{"event":"started","configLoaded":true,"dbReady":true,"relayerSubscribed":true,` +
-		`"status":{"http":"127.0.0.1:4242"}}`
+	wrongEvent := `{"event":"started","http":"127.0.0.1:4242"}`
 	res = parseReadiness(wrongEvent)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "invalid readiness")
 
-	notReady := `{"event":"ready","configLoaded":true,"dbReady":false,"relayerSubscribed":true,` +
-		`"status":{"http":"127.0.0.1:4242"}}`
+	notReady := `{"event":"ready"}`
 	res = parseReadiness(notReady)
 	require.Error(t, res.err)
-	require.ErrorContains(t, res.err, "dbReady")
+	require.ErrorContains(t, res.err, "http")
 }
 
 // fakeRelayerAPI serves the relayer wire contract: Status on an unknown

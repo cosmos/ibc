@@ -7,15 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-
-	"github.com/cosmos/ibc/link/cmd/configcmd"
 )
 
-var (
-	ErrConfigInvalid  = errors.New("ibc: config invalid")
-	ErrRPCUnreachable = errors.New("ibc: rpc unreachable")
-	ErrInternal       = errors.New("ibc: internal error")
-)
+var ErrInternal = errors.New("ibc: internal error")
 
 type ExitError struct {
 	Code   int
@@ -53,39 +47,6 @@ func NewDriver(configPath string) (*Driver, error) {
 		configHome: filepath.Dir(configPath),
 		configName: filepath.Base(configPath),
 	}, nil
-}
-
-func (r *Driver) ValidateConfig(ctx context.Context, live bool) (*configcmd.ValidateResult, error) {
-	args := append([]string{"config", "validate"}, r.configArgs()...)
-	if live {
-		args = append(args, "--live")
-	}
-	res, err := r.exec(ctx, r.bin, "config validate", args...)
-	if err != nil {
-		return nil, err
-	}
-
-	var out configcmd.ValidateResult
-	decoded := json.Unmarshal(res.stdout, &out) == nil
-
-	if res.code == 0 {
-		if !decoded {
-			return nil, fmt.Errorf(
-				"ibc config validate: exit 0 but stdout is not a ValidateResult: %q",
-				string(res.stdout),
-			)
-		}
-		return &out, nil
-	}
-	var parsed *configcmd.ValidateResult
-	if decoded {
-		parsed = &out
-	}
-	class := ErrConfigInvalid
-	if decoded && out.Valid {
-		class = ErrRPCUnreachable
-	}
-	return parsed, &ExitError{Code: res.code, Class: class, Stderr: snippet(res.stderr)}
 }
 
 func (r *Driver) MigrateUp(ctx context.Context) error {

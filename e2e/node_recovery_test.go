@@ -9,15 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
+	e2etest.RequireAnvilNodeLifecycle(t)
 	selected := e2etest.SelectedSuite(t)
-	e2etest.RequireCapabilities(t, selected, environment.Requirements{
-		NodeLifecycle: []environment.ChainID{e2etest.ChainB},
-	})
 	env := e2etest.Start(t, selected)
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)

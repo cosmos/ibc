@@ -18,7 +18,7 @@ func TestSnippetTailTruncates(t *testing.T) {
 }
 
 func TestExitErrorUnwrapsToClass(t *testing.T) {
-	err := &ExitError{Code: 1, Class: ErrConfigInvalid, Stderr: "bad yaml"}
-	require.ErrorIs(t, err, ErrConfigInvalid)
+	err := &ExitError{Code: 1, Class: ErrInternal, Stderr: "bad yaml"}
+	require.ErrorIs(t, err, ErrInternal)
 	require.ErrorContains(t, err, "bad yaml")
 }

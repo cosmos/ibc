@@ -24,7 +24,7 @@ func TestBindIBCLinkFollowsEnvironmentLifetime(t *testing.T) {
 	require.NoError(t, env.BindIBCLink(driver))
 	rpc, err := driver.ChainRPC("managed")
 	require.NoError(t, err)
-	require.Contains(t, rpc.URL, "${IBC_LINK_CHAIN_RPC_")
+	require.Contains(t, rpc, "${IBC_LINK_CHAIN_RPC_")
 
 	require.NoError(t, env.Close(t.Context()))
 	_, err = driver.ChainRPC("managed")
@@ -49,8 +49,7 @@ printf '{"valid":true}\n'
 
 	commandDone := make(chan error, 1)
 	go func() {
-		_, validateErr := driver.ValidateConfig(t.Context(), false)
-		commandDone <- validateErr
+		commandDone <- driver.MigrateUp(t.Context())
 	}()
 	waitForProcessBindingMarker(t, started)
 	closeDone := closeEnvironmentAsync(env)
@@ -60,7 +59,7 @@ printf '{"valid":true}\n'
 	require.NoError(t, <-closeDone)
 
 	require.NoError(t, os.Remove(started))
-	_, err = driver.ValidateConfig(t.Context(), false)
+	err = driver.MigrateUp(t.Context())
 	require.ErrorIs(t, err, ErrEnvironmentClosed)
 	_, statErr := os.Stat(started)
 	require.ErrorIs(t, statErr, os.ErrNotExist, "closed Environment must prevent process launch")
@@ -83,8 +82,7 @@ printf '{"valid":true}\n'
 
 	commandDone := make(chan error, 1)
 	go func() {
-		_, validateErr := driver.ValidateConfig(t.Context(), false)
-		commandDone <- validateErr
+		commandDone <- driver.MigrateUp(t.Context())
 	}()
 	waitForProcessBindingMarker(t, started)
 
@@ -162,7 +160,7 @@ exit 1
 		require.NoError(t, err)
 		require.NoError(t, env.BindIBCLink(driver))
 
-		_, err = driver.ValidateConfig(t.Context(), false)
+		err = driver.MigrateUp(t.Context())
 		require.Error(t, err)
 		require.Contains(t, err.Error(), endpoint)
 	})
@@ -277,9 +275,7 @@ func runBoundRelayerHelper() error {
 		time.Sleep(10 * time.Millisecond)
 	}
 	fmt.Printf(
-		"{\"event\":\"ready\",\"configLoaded\":true,\"dbReady\":true,"+
-			"\"chainsConnected\":[\"managed\"],\"relayerSubscribed\":true,"+
-			"\"status\":{\"http\":%q}}\n",
+		"{\"event\":\"ready\",\"chainsConnected\":[\"managed\"],\"http\":%q}\n",
 		listener.Addr().String(),
 	)
 
