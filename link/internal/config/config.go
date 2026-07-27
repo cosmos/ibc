@@ -475,12 +475,40 @@ func (c SignerConfig) Validate() error {
 			return errors.Wrap(err, ".file")
 		}
 
-		if err := fileExists(path); err != nil {
+		fallbacks := KeyFileFallbacks(path)
+
+		if err := fileExistsInAny(fallbacks...); err != nil {
 			return errors.Wrapf(err, ".file %s", path)
 		}
 	}
 
 	return nil
+}
+
+// KeyFileFallbacks returns the paths tried for a local signer key file.
+func KeyFileFallbacks(keyPath string) []string {
+	fallbacks := []string{keyPath}
+
+	// absolute path, no fallbacks needed
+	if filepath.IsAbs(keyPath) {
+		return fallbacks
+	}
+
+	// forgot to add .json extension
+	if !strings.HasSuffix(keyPath, ".json") {
+		keyPath = fmt.Sprintf("%s.json", keyPath)
+
+		fallbacks = append(fallbacks, keyPath)
+	}
+
+	// forgot to add keys/ directory
+	if !strings.Contains(keyPath, "keys/") {
+		keyPath = filepath.Join("keys", keyPath)
+
+		fallbacks = append(fallbacks, keyPath)
+	}
+
+	return fallbacks
 }
 
 // PrintJSON prints anything as JSON to stdout.
@@ -501,6 +529,16 @@ func dbTypeFromURL(raw string) string {
 	}
 
 	return DBTypeSQLite
+}
+
+func fileExistsInAny(path ...string) error {
+	for _, p := range path {
+		if err := fileExists(p); err == nil {
+			return nil
+		}
+	}
+
+	return errors.New("file not found")
 }
 
 func fileExists(path string) error {

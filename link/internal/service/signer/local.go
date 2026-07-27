@@ -33,8 +33,24 @@ func GenerateLocalKey(keyType keyfile.Type) (LocalKey, error) {
 	}
 }
 
-// LocalKeyFromFile loads a local key from the explicitly named path.
-func LocalKeyFromFile(path string) (LocalKey, error) {
+// LocalKeyFromFile loads a local key from the first path that resolves.
+func LocalKeyFromFile(path ...string) (LocalKey, error) {
+	var (
+		err error
+		key LocalKey
+	)
+
+	for _, tryPath := range path {
+		key, err = localKeyFromFile(tryPath)
+		if err == nil {
+			return key, nil
+		}
+	}
+
+	return nil, err
+}
+
+func localKeyFromFile(path string) (LocalKey, error) {
 	keyType, privateKey, err := keyfile.Load(path)
 	if err != nil {
 		return nil, err

@@ -52,7 +52,7 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", errors.Wrap(err, "expand local signer file")
 		}
 
-		s, err := LocalKeyFromFile(path)
+		s, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
 
 		return s, cfg.Alias, err
 	case config.SignerRemote:
