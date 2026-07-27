@@ -44,6 +44,7 @@ const (
 	attestorStartupTimeout = 30 * time.Second
 	probeRequestTimeout    = 500 * time.Millisecond
 	attestorStopGrace      = 12 * time.Second
+	logFlushGrace          = 2 * time.Second
 	startupLogTailBytes    = 4096
 )
 
@@ -212,6 +213,14 @@ func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
 	select {
 	case result := <-p.readiness:
 		if result.err != nil {
+			// The child's stderr reaches the log only once cmd.Wait drains the
+			// exec pipe; wait for the reaper so the tail shows why a dying
+			// child failed. Bounded because stdout EOF does not prove exit.
+			select {
+			case <-p.handle.doneCh():
+			case <-ctx.Done():
+			case <-time.After(logFlushGrace):
+			}
 			if errors.Is(result.err, io.EOF) {
 				return "", fmt.Errorf(
 					"IBC Link attestor exited before readiness: %w; logs: %s",
