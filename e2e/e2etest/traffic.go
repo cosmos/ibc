@@ -13,6 +13,7 @@ type RouteID string
 type Packet struct {
 	RouteID      RouteID
 	Source       environment.ChainID
+	SourceClient string
 	SourceTxHash string
 	Sequence     uint64
 }

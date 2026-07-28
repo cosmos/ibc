@@ -117,7 +117,7 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet Packet) error {
 	if err != nil {
 		return err
 	}
-	if statusForSequence(statuses, packet.Sequence) == nil {
+	if statusForPacket(statuses, packet) == nil {
 		return fmt.Errorf(
 			"e2etest: relay result for packet %s did not include it: %v",
 			packetID(packet),
@@ -149,16 +149,16 @@ func observeStatus(
 	if err != nil {
 		return nil, 0, false, err
 	}
-	observed := statusForSequence(statuses, packet.Sequence)
+	observed := statusForPacket(statuses, packet)
 	if observed == nil {
 		return nil, 0, false, nil
 	}
 	return observed, observed.GetState(), true, nil
 }
 
-func statusForSequence(statuses []*relayerv2.PacketStatus, sequence uint64) *relayerv2.PacketStatus {
+func statusForPacket(statuses []*relayerv2.PacketStatus, packet Packet) *relayerv2.PacketStatus {
 	for _, status := range statuses {
-		if status.GetSequenceNumber() == sequence {
+		if status.GetSourceClientId() == packet.SourceClient && status.GetSequenceNumber() == packet.Sequence {
 			return status
 		}
 	}

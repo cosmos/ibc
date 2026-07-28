@@ -336,14 +336,7 @@ func TestMapPacketState(t *testing.T) {
 		assert.Equal(t, StatePending, mapPacketState(status), string(status))
 	}
 
-	succeeded := []store.RelayStatus{
-		store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithWriteAckSuccess,
-	}
-	for _, status := range succeeded {
-		assert.Equal(t, StateSucceeded, mapPacketState(status), string(status))
-	}
-
+	assert.Equal(t, StateSucceeded, mapPacketState(store.RelayStatusCompleteWithAck))
 	assert.Equal(t, StateTimedOut, mapPacketState(store.RelayStatusCompleteWithTimeout))
 	assert.Equal(t, StateRejected, mapPacketState(store.RelayStatusCompleteWithWriteAckError))
 	assert.Equal(t, StateRelayFailed, mapPacketState(store.RelayStatusFailed))

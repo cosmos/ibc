@@ -88,6 +88,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 		packet: Packet{
 			RouteID:      i.routeID,
 			Source:       i.source.chain.ID(),
+			SourceClient: i.sourceClient,
 			SourceTxHash: txHash,
 			Sequence:     sequence,
 		},

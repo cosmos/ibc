@@ -261,8 +261,7 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 
 func mapPacketState(status store.RelayStatus) PacketState {
 	switch status {
-	case store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithWriteAckSuccess:
+	case store.RelayStatusCompleteWithAck:
 		return StateSucceeded
 	case store.RelayStatusCompleteWithTimeout:
 		return StateTimedOut
