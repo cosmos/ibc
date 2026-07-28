@@ -26,9 +26,10 @@ const (
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
-	Clients        []ClientConfig         `yaml:"clients"`
-	Routes         []RouteConfig          `yaml:"routesToRelay"`
+	DispatchPollInterval *time.Duration         `yaml:"dispatchPollInterval,omitempty"`
+	ChainOverrides       []RelayerChainOverride `yaml:"chainOverrides"`
+	Clients              []ClientConfig         `yaml:"clients"`
+	Routes               []RouteConfig          `yaml:"routesToRelay"`
 }
 
 // RelayerChainOverride relay settings for one chain.
@@ -125,6 +126,9 @@ func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
+	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
+		return errors.New(".dispatchPollInterval must be positive")
+	}
 	if err := c.validateChainOverrides(); err != nil {
 		return err
 	}

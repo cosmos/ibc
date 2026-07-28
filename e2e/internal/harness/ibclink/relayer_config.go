@@ -94,7 +94,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			Type:  typeLocal,
 			File:  cfg.SignerKeyFile,
 		}},
-		Relayer: &relayerFileConfig{},
+		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},
 	}
 	for _, chain := range cfg.Chains {
 		file.Chains = append(file.Chains, chainConfig{
@@ -109,7 +109,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		// in the batch buffer for the whole window.
 		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
 			ChainID:            chain.ChainID,
-			PacketBatchTimeout: "1s",
+			PacketBatchTimeout: "100ms",
 		})
 		// Attestations must not share a signer alias; every per-chain alias
 		// still loads the same key file.
@@ -181,9 +181,10 @@ func localAttestorName(chainID string) string {
 const typeLocal = "local"
 
 type relayerFileConfig struct {
-	ChainOverrides []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
-	Clients        []clientFileConfig        `yaml:"clients"`
-	Routes         []routeFileConfig         `yaml:"routesToRelay"`
+	DispatchPollInterval string                    `yaml:"dispatchPollInterval,omitempty"`
+	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
+	Clients              []clientFileConfig        `yaml:"clients"`
+	Routes               []routeFileConfig         `yaml:"routesToRelay"`
 }
 
 type chainOverrideFileConfig struct {
