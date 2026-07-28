@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -156,6 +157,24 @@ func TestRelay(t *testing.T) {
 		require.ErrorContains(t, err, "client for chain")
 		require.ErrorIs(t, err, ErrNotFound)
 		require.NotErrorIs(t, err, ErrInvalidInput)
+	})
+
+	t.Run("unknownTransaction", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		client := mocks.NewMockClient(t)
+		clients := NewMockChainClients(t)
+		service := New(relayerConfig(), NewMockStore(t), clients, nil)
+
+		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
+		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, ethereum.NotFound).Once()
+
+		// ACT
+		err := service.Relay(ctx, chainIDEth, txHashLower)
+
+		// ASSERT
+		require.ErrorIs(t, err, ErrNotFound)
+		require.ErrorContains(t, err, "no packets found")
 	})
 
 	t.Run("extractionError", func(t *testing.T) {

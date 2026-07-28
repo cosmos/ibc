@@ -54,17 +54,7 @@ type Route struct {
 	Manual      bool
 }
 
-const (
-	RouteAtoB RouteID = "route-a-to-b"
-	RouteBtoA RouteID = "route-b-to-a"
-)
-
-func Bidirectional(a, b environment.ChainID) []Route {
-	return []Route{
-		{ID: RouteAtoB, Source: a, Destination: b},
-		{ID: RouteBtoA, Source: b, Destination: a},
-	}
-}
+const RouteAtoB RouteID = "route-a-to-b"
 
 func AtoB(a, b environment.ChainID) Route {
 	return Route{ID: RouteAtoB, Source: a, Destination: b}

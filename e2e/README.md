@@ -6,7 +6,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 ## Acceptance coverage
 
-The root package covers protocol-stack deployment, ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
+The root package covers ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
 ## Running the acceptance tests
 

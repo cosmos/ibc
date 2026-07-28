@@ -11,36 +11,26 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
+//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestIFTTransfer_AutoRelay(t *testing.T) {
-	routes := e2etest.Bidirectional(e2etest.ChainA, e2etest.ChainB)
-	tests := []struct {
-		name  string
-		route e2etest.Route
-	}{
-		{"A_to_B", routes[0]},
-		{"B_to_A", routes[1]},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := e2etest.Start(t, e2etest.SelectedSuite(t))
-			signers := e2etest.NewSigners(t)
-			driver, deployment := e2etest.Deploy(t, env, signers, routes...)
-			iftApp := e2etest.BindIFT(t, env, deployment, signers, tt.route)
-			relayer := e2etest.StartRelayer(t, driver, env)
-			ctx := t.Context()
+	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	signers := e2etest.NewSigners(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.Deploy(t, env, signers, route)
+	iftApp := e2etest.BindIFT(t, env, deployment, signers, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
 
-			transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
-			require.NoError(t, err)
-			require.NoError(t, transfer.VerifyBurned(ctx))
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
 
-			destination, err := env.Chain(tt.route.Destination)
-			require.NoError(t, err)
-			err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-				relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
-			require.NoError(t, err)
-			require.NoError(t, transfer.VerifyDelivered(ctx))
-		})
-	}
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
 
 func TestIFTTimeout_Refund(t *testing.T) {

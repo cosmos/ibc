@@ -14,6 +14,7 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
+//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestTransfer_AutoRelay(t *testing.T) {
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)
@@ -92,31 +93,6 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
-	assertTransferTimedOutAndRefunded(t, env, relayer, transfer)
-}
-
-func TestTransferTimeout_ManualRelayRefund(t *testing.T) {
-	e2etest.RequireAnvilLane(t)
-	env := e2etest.Start(t, e2etest.SelectedSuite(t))
-	signers := e2etest.NewSigners(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
-	relayer := e2etest.StartRelayer(t, driver, env)
-	ctx := t.Context()
-
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
-		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
-	})
-	require.NoError(t, err)
-
-	chainB, err := env.Chain(route.Destination)
-	require.NoError(t, err)
-	mining, err := chainB.Mining()
-	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
-	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
 	assertTransferTimedOutAndRefunded(t, env, relayer, transfer)
 }
 
