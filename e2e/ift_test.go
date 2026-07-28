@@ -13,6 +13,7 @@ import (
 
 //nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestIFTTransfer_AutoRelay(t *testing.T) {
+	t.Parallel()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
@@ -34,6 +35,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 }
 
 func TestIFTTimeout_Refund(t *testing.T) {
+	t.Parallel()
 	e2etest.RequireAnvilLane(t)
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)

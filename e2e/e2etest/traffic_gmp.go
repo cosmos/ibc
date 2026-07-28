@@ -103,13 +103,9 @@ func (c *GMPCall) VerifyExecuted(ctx context.Context) error {
 	)
 }
 
-func (c *GMPCall) VerifyTargetUnchanged(ctx context.Context) error {
-	return c.verifyCount(ctx, c.before, "unchanged")
-}
-
 // VerifyRejected checks that the target state did not change after an error acknowledgement.
 func (c *GMPCall) VerifyRejected(ctx context.Context) error {
-	return c.VerifyTargetUnchanged(ctx)
+	return c.verifyCount(ctx, c.before, "unchanged")
 }
 
 func (g *GMP) count(ctx context.Context) (*big.Int, error) {

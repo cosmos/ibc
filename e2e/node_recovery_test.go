@@ -14,6 +14,7 @@ import (
 )
 
 func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
+	t.Parallel()
 	e2etest.RequireAnvilNodeLifecycle(t)
 	selected := e2etest.SelectedSuite(t)
 	env := e2etest.Start(t, selected)

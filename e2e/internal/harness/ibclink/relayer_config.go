@@ -94,6 +94,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			Type:  typeLocal,
 			File:  cfg.SignerKeyFile,
 		}},
+		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},
 	}
 	for _, chain := range cfg.Chains {
@@ -104,12 +105,15 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				ICS26Router: chain.ICS26Router,
 			},
 		})
-		// The default batch timeouts (10s recv/ack, 1m timeout) are tuned for
-		// mainnet traffic volumes; harness packets travel alone and would sit
-		// in the batch buffer for the whole window.
+		// The relayer's batching and pacing defaults are mainnet-shaped. A
+		// batch size of one flushes each harness packet on arrival, and the
+		// submission delay paces only consecutive transactions on one chain
+		// (retries and multi-route traffic); it must stay non-zero because
+		// zero is coerced back to the mainnet default.
 		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
-			ChainID:            chain.ChainID,
-			PacketBatchTimeout: "100ms",
+			ChainID:           chain.ChainID,
+			TxSubmissionDelay: "10ms",
+			PacketBatchSize:   1,
 		})
 		// Attestations must not share a signer alias; every per-chain alias
 		// still loads the same key file.
@@ -188,8 +192,9 @@ type relayerFileConfig struct {
 }
 
 type chainOverrideFileConfig struct {
-	ChainID            string `yaml:"chainId"`
-	PacketBatchTimeout string `yaml:"packetBatchTimeout"`
+	ChainID           string `yaml:"chainId"`
+	TxSubmissionDelay string `yaml:"txSubmissionDelay"`
+	PacketBatchSize   int    `yaml:"packetBatchSize"`
 }
 
 type clientFileConfig struct {

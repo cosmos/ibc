@@ -355,10 +355,9 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 	)
 
 	outOfBand, err := anvil.Start(t.Context(), anvil.Spec{
-		ID:        "out-of-band-attached",
-		ChainID:   attachedChainID,
-		LogPath:   filepath.Join(t.TempDir(), "out-of-band-anvil.log"),
-		StatePath: filepath.Join(t.TempDir(), "out-of-band-anvil-state.json"),
+		ID:      "out-of-band-attached",
+		ChainID: attachedChainID,
+		LogPath: filepath.Join(t.TempDir(), "out-of-band-anvil.log"),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, outOfBand.Stop()) })
@@ -577,10 +576,9 @@ func requireIBCLinkBinary(t *testing.T) {
 func startOutOfBandAnvil(t *testing.T, id string, chainID uint64) *anvil.Chain {
 	t.Helper()
 	chain, err := anvil.Start(t.Context(), anvil.Spec{
-		ID:        id,
-		ChainID:   chainID,
-		LogPath:   filepath.Join(t.TempDir(), id+".log"),
-		StatePath: filepath.Join(t.TempDir(), id+"-state.json"),
+		ID:      id,
+		ChainID: chainID,
+		LogPath: filepath.Join(t.TempDir(), id+".log"),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, chain.Stop()) })

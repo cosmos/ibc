@@ -12,6 +12,7 @@ import (
 )
 
 func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
+	t.Parallel()
 	e2etest.RequireAnvilLane(t)
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)

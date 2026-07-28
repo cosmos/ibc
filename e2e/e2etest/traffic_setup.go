@@ -54,14 +54,14 @@ type Route struct {
 	Manual      bool
 }
 
-const RouteAtoB RouteID = "route-a-to-b"
+const routeAtoB RouteID = "route-a-to-b"
 
 func AtoB(a, b environment.ChainID) Route {
-	return Route{ID: RouteAtoB, Source: a, Destination: b}
+	return Route{ID: routeAtoB, Source: a, Destination: b}
 }
 
 func ManualAtoB(a, b environment.ChainID) Route {
-	return Route{ID: RouteAtoB, Source: a, Destination: b, Manual: true}
+	return Route{ID: routeAtoB, Source: a, Destination: b, Manual: true}
 }
 
 // ChainDeployment holds per-chain application contracts deployed for traffic.
@@ -317,7 +317,7 @@ func deployApps(
 }
 
 // registerIFTBridges points each route end's IFT at the counterparty IFT so
-// cross-chain mints authenticate. Bidirectional routes share end registrations.
+// cross-chain mints authenticate.
 func registerIFTBridges(
 	t testing.TB,
 	env *environment.Environment,
@@ -327,7 +327,6 @@ func registerIFTBridges(
 	routes []Route,
 ) {
 	t.Helper()
-	registered := map[string]bool{}
 	for _, route := range routes {
 		clients := deployment.routes[route.ID]
 		ends := []struct {
@@ -339,12 +338,6 @@ func registerIFTBridges(
 			{chain: route.Destination, client: clients.DestClient, counterparty: route.Source},
 		}
 		for _, end := range ends {
-			key := string(end.chain) + "|" + end.client
-			if registered[key] {
-				continue
-			}
-			registered[key] = true
-
 			chain, err := env.Chain(end.chain)
 			if err != nil {
 				t.Fatalf("e2etest: resolve Chain %q: %v", end.chain, err)

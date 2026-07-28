@@ -11,6 +11,7 @@ import (
 )
 
 func TestGMPCall_AutoRelay(t *testing.T) {
+	t.Parallel()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
@@ -33,6 +34,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 var invalidGMPPayload = []byte{0xde, 0xad, 0xbe, 0xef}
 
 func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
+	t.Parallel()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
