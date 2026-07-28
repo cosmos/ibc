@@ -18,8 +18,6 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
-
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
@@ -193,15 +191,17 @@ func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
 // explicit Relay call.
 func (d *Relayer) ManualRoute(routeID string) bool { return d.manualRoutes[routeID] }
 
-// Relay submits the source transaction's packets for relaying.
-func (d *Relayer) Relay(ctx context.Context, in relayercmd.RelayRequest) error {
-	chainID, err := d.wireChainID(in.SourceChainID)
+// Relay submits the source transaction's packets for relaying. The source
+// Chain is named by its harness identifier and translated to the relayer's
+// wire chain id here.
+func (d *Relayer) Relay(ctx context.Context, sourceChainID, sourceTxHash string) error {
+	chainID, err := d.wireChainID(sourceChainID)
 	if err != nil {
 		return fmt.Errorf("ibc relay: %w", err)
 	}
 	if _, err := d.client.Relay(ctx, connect.NewRequest(&relayerv2.RelayRequest{
-		ChainId: chainID,
-		TxHash:  in.SourceTxHash,
+		SourceChainId: chainID,
+		TxHash:        sourceTxHash,
 	})); err != nil {
 		return fmt.Errorf("ibc relay: %w", err)
 	}
@@ -220,8 +220,8 @@ func (d *Relayer) PacketStatuses(
 		return nil, fmt.Errorf("ibc status: %w", err)
 	}
 	response, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
-		ChainId: chainID,
-		TxHash:  sourceTxHash,
+		SourceChainId: chainID,
+		TxHash:        sourceTxHash,
 	}))
 	if err != nil {
 		return nil, fmt.Errorf("ibc status: %w", err)
@@ -249,8 +249,8 @@ func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
 func (d *Relayer) probeStatusEndpoint(ctx context.Context) error {
 	for _, chainID := range d.chainIDs {
 		_, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
-			ChainId: chainID,
-			TxHash:  zeroTxHash,
+			SourceChainId: chainID,
+			TxHash:        zeroTxHash,
 		}))
 		if err == nil || IsStatusNotFound(err) {
 			return nil

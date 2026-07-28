@@ -9,7 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
@@ -46,13 +47,8 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	_, err = chainB.Height(ctx)
 	require.NoError(t, err, "after node restart the destination must be reachable again")
 
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		relayercmd.PacketComplete,
-		chainB.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, chainB.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyEscrowed(ctx))

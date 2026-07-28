@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestRelayerRestart_ResumesPendingPacket(t *testing.T) {
@@ -31,13 +32,8 @@ func TestRelayerRestart_ResumesPendingPacket(t *testing.T) {
 	relayer = e2etest.StartRelayer(t, driver, env)
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		relayercmd.PacketComplete,
-		destination.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
@@ -69,24 +65,14 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 		relayer = e2etest.StartRelayer(t, driver, env)
 
 		// The restarted relayer still tracks the packet from its store.
-		require.NoError(t, e2etest.AwaitStable(
-			ctx,
-			relayer,
-			transfer.Packet(),
-			relayercmd.PacketPending,
-			chainB.Timing(),
-		))
+		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
+			relayerv2.PacketState_PACKET_STATE_PENDING, chainB.Timing()))
 		require.NoError(t, transfer.VerifyNotMinted(ctx))
 		return nil
 	}))
 
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		relayercmd.PacketComplete,
-		chainB.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, chainB.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }

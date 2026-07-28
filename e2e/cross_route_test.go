@@ -8,7 +8,8 @@ import (
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // crossRouteSuite shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.
@@ -48,9 +49,11 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 
 	destination, err := env.Chain("chain-a")
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, bToA.Packet(), relayercmd.PacketComplete, destination.Timing())
+	err = e2etest.AwaitState(ctx, relayer, bToA.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, cToA.Packet(), relayercmd.PacketComplete, destination.Timing())
+	err = e2etest.AwaitState(ctx, relayer, cToA.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, bToA.VerifyDelivered(ctx))
 	require.NoError(t, cToA.VerifyDelivered(ctx))

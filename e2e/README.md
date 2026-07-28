@@ -46,9 +46,8 @@ func TestTransfer_AutoRelay(t *testing.T) {
     require.NoError(t, err)
     destination, err := env.Chain(route.Destination)
     require.NoError(t, err)
-    _, err = e2etest.AwaitState(
-        t.Context(), relayer, transfer.Packet(), relayercmd.PacketComplete, destination.Timing(),
-    )
+    err = e2etest.AwaitState(t.Context(), relayer, transfer.Packet(),
+        relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyDelivered(t.Context()))
     require.NoError(t, transfer.VerifyEscrowed(t.Context()))

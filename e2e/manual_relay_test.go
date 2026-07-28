@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
 )
 
 func TestManualRelayRejectsUnknownSourceTransaction(t *testing.T) {
@@ -16,9 +15,10 @@ func TestManualRelayRejectsUnknownSourceTransaction(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	err := relayer.Relay(ctx, relayercmd.RelayRequest{
-		SourceChainID: string(e2etest.ChainA),
-		SourceTxHash:  "0x00000000000000000000000000000000000000000000000000000000deadbeef",
-	})
+	err := relayer.Relay(
+		ctx,
+		string(e2etest.ChainA),
+		"0x00000000000000000000000000000000000000000000000000000000deadbeef",
+	)
 	require.ErrorContains(t, err, "no packets found")
 }

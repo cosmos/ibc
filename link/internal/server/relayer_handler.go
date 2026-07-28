@@ -49,9 +49,9 @@ func (h *RelayerHandler) Relay(
 	ctx context.Context,
 	req *connect.Request[proto.RelayRequest],
 ) (*connect.Response[proto.RelayResponse], error) {
-	h.logger.Info("Relay", "chainID", req.Msg.ChainId, "txHash", req.Msg.TxHash)
+	h.logger.Info("Relay", "sourceChainID", req.Msg.SourceChainId, "txHash", req.Msg.TxHash)
 
-	err := h.srv.Relay(ctx, req.Msg.ChainId, req.Msg.TxHash)
+	err := h.srv.Relay(ctx, req.Msg.SourceChainId, req.Msg.TxHash)
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -70,9 +70,9 @@ func (h *RelayerHandler) Status(
 	ctx context.Context,
 	req *connect.Request[proto.StatusRequest],
 ) (*connect.Response[proto.StatusResponse], error) {
-	h.logger.Info("Status", "chainID", req.Msg.ChainId, "txHash", req.Msg.TxHash)
+	h.logger.Info("Status", "sourceChainID", req.Msg.SourceChainId, "txHash", req.Msg.TxHash)
 
-	statuses, err := h.srv.Status(ctx, req.Msg.ChainId, req.Msg.TxHash)
+	statuses, err := h.srv.Status(ctx, req.Msg.SourceChainId, req.Msg.TxHash)
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -94,23 +94,26 @@ func (h *RelayerHandler) Status(
 			RecvTx:         txInfoToProto(status.RecvTx),
 			AckTx:          txInfoToProto(status.AckTx),
 			TimeoutTx:      txInfoToProto(status.TimeoutTx),
-			WriteAckError:  status.WriteAckError,
 		}
 	}
 
 	return connect.NewResponse(&proto.StatusResponse{PacketStatuses: packetStatuses}), nil
 }
 
-func packetStateToProto(state relayer.PacketState) proto.TransferState {
+func packetStateToProto(state relayer.PacketState) proto.PacketState {
 	switch state {
 	case relayer.StatePending:
-		return proto.TransferState_TRANSFER_STATE_PENDING
-	case relayer.StateComplete:
-		return proto.TransferState_TRANSFER_STATE_COMPLETE
-	case relayer.StateFailed:
-		return proto.TransferState_TRANSFER_STATE_FAILED
+		return proto.PacketState_PACKET_STATE_PENDING
+	case relayer.StateSucceeded:
+		return proto.PacketState_PACKET_STATE_SUCCEEDED
+	case relayer.StateTimedOut:
+		return proto.PacketState_PACKET_STATE_TIMED_OUT
+	case relayer.StateRejected:
+		return proto.PacketState_PACKET_STATE_REJECTED
+	case relayer.StateRelayFailed:
+		return proto.PacketState_PACKET_STATE_RELAY_FAILED
 	default:
-		return proto.TransferState_TRANSFER_STATE_UNKNOWN
+		return proto.PacketState_PACKET_STATE_UNSPECIFIED
 	}
 }
 

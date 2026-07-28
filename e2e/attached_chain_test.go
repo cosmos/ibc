@@ -11,7 +11,8 @@ import (
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // externalChainID differs from managedChainID so live validate exercises chain-id on a second node.
@@ -73,13 +74,8 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 
 		attached, chainErr := env.Chain(e2etest.ChainB)
 		require.NoError(t, chainErr)
-		_, awaitErr := e2etest.AwaitState(
-			rctx,
-			relayer,
-			transfer.Packet(),
-			relayercmd.PacketComplete,
-			attached.Timing(),
-		)
+		awaitErr := e2etest.AwaitState(rctx, relayer, transfer.Packet(),
+			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, attached.Timing())
 		require.NoError(t, awaitErr)
 		require.NoError(t, transfer.VerifyDelivered(rctx))
 		require.NoError(t, transfer.VerifyEscrowed(rctx))
