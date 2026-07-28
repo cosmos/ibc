@@ -79,9 +79,10 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	graceful.AddCallback(app.RelayerService.Stop)
-	graceful.AddCallback(app.Server.Stop)
+	// executes from last to first
 	graceful.AddCallback(app.Store.Close)
+	graceful.AddCallback(app.Server.Stop)
+	graceful.AddCallback(app.RelayerService.Stop)
 
 	// blocking
 	return graceful.WaitShutdown()
