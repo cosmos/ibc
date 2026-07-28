@@ -30,7 +30,7 @@ type Driver struct {
 	bin         string
 	configHome  string
 	configName  string
-	bindings    processBindings
+	bindings    *processBindingSet
 	relayerOpts RelayerOptions
 }
 

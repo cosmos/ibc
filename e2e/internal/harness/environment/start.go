@@ -351,21 +351,18 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 	if spec.BlockInterval > 0 {
 		timing = blockTiming(spec.BlockInterval)
 	}
-	capabilities := deriveChainCapabilities(spec)
 	resolved := &Chain{
 		id:         spec.ID,
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
 		timing:     timing,
 		impl:       adapter,
+		node:       &NodeLifecycle{controller: adapter},
+		funding:    &Funding{controller: adapter},
 	}
-	if capabilities.miningControl {
+	if spec.BlockInterval == 0 {
 		resolved.mining = &Mining{controller: adapter}
 	}
-	if capabilities.nodeLifecycle {
-		resolved.node = &NodeLifecycle{controller: adapter}
-	}
-	resolved.funding = &Funding{controller: adapter}
 	return chainAcquisition{
 		chain:       resolved,
 		description: fmt.Sprintf("stop Chain %q", spec.ID),

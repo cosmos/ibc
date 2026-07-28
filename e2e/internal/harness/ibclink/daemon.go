@@ -76,7 +76,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	bin := r.bin
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
-	cmd.Env = processEnv.variables
+	cmd.Env = processEnv
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// First stdout line is the readiness JSON; stderr carries human logs and
