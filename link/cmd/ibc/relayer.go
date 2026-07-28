@@ -6,9 +6,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 var (
@@ -69,8 +70,8 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 	for _, chain := range cfg.Chains {
 		connected = append(connected, chain.ChainID)
 	}
-	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(relayercmd.Readiness{
-		Event:           relayercmd.ReadinessEvent,
+	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(relayerv2.ProcessReadiness{
+		Event:           relayerv2.ProcessReadinessEvent,
 		ChainsConnected: connected,
 		HTTP:            address.String(),
 	}); err != nil {

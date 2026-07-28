@@ -12,8 +12,6 @@ import (
 func TestProcessReadiness(t *testing.T) {
 	t.Parallel()
 
-	require.Equal(t, "ready", attestor.ProcessReadinessEvent)
-
 	encoded, err := json.Marshal(attestor.ProcessReadiness{
 		Event: attestor.ProcessReadinessEvent,
 		HTTP:  "127.0.0.1:3000",

@@ -1,29 +1,6 @@
 // Package relayercmd owns the relayer command's wire contract.
 package relayercmd
 
-import "fmt"
-
-// ReadinessEvent identifies the first relayer stdout event.
-const ReadinessEvent = "ready"
-
-// Readiness is the first stdout line from relayer run.
-type Readiness struct {
-	Event           string   `json:"event"`
-	ChainsConnected []string `json:"chainsConnected"`
-	HTTP            string   `json:"http"`
-}
-
-// Validate checks the readiness event contract.
-func (r Readiness) Validate() error {
-	if r.Event != ReadinessEvent {
-		return fmt.Errorf("event = %q, want %q", r.Event, ReadinessEvent)
-	}
-	if r.HTTP == "" {
-		return fmt.Errorf("http is empty")
-	}
-	return nil
-}
-
 // RelayRequest identifies source traffic for manual relay.
 type RelayRequest struct {
 	SourceChainID string `json:"sourceChainId"`
