@@ -8,6 +8,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 var flagKeysShowPrivate bool
@@ -104,6 +105,10 @@ func keysShow(_ *cobra.Command, args []string) error {
 		"type":      key.Type(),
 		"path":      keyPath,
 		"publicKey": toHex(key.PublicKey()),
+	}
+
+	if key.Type() == keyfile.ECDSA {
+		kv["evmAddress"] = signer.PublicKeyToEVMAddress(key.PublicKey())
 	}
 
 	if flagKeysShowPrivate {

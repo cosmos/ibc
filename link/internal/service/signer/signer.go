@@ -3,6 +3,7 @@ package signer
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
@@ -69,4 +70,13 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 
 func ParseKeyType(raw string) (keyfile.Type, error) {
 	return keyfile.ParseType(raw)
+}
+
+func PublicKeyToEVMAddress(pk []byte) string {
+	publicKey, err := crypto.DecompressPubkey(pk)
+	if err != nil {
+		return ""
+	}
+
+	return crypto.PubkeyToAddress(*publicKey).Hex()
 }
