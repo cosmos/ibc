@@ -23,6 +23,7 @@ const (
 )
 
 func TestAttachedChainRemainsCallerOwned(t *testing.T) {
+	t.Parallel()
 	e2etest.RequireAnvilLane(t)
 	ctx := t.Context()
 

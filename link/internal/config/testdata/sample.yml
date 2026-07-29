@@ -18,6 +18,7 @@ chains:
       rpc: https://base-rpc.example.com
       ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 relayer:
+  dispatchPollInterval: 3s
   chainOverrides:
     - chainId: "1"
       evm:

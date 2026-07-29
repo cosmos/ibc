@@ -6,7 +6,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 ## Acceptance coverage
 
-The root package covers protocol-stack deployment, ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, invalid manual relay requests, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
+The root package covers ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
 ## Running the acceptance tests
 
@@ -29,12 +29,15 @@ The same tests can select different Chain declarations:
 
 `-e2e.lane` in `E2E_FLAGS` overrides `E2E_LANE`. Tests pinned to instant Anvil call `e2etest.RequireAnvilLane(t)` so a matrix runs them only in that lane. After a hard crash, use `make clean-e2e-dry-run` and then `make clean-e2e`.
 
+Every test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
+
 ## Writing a test
 
 The setup sequence is deliberately explicit:
 
 ```go
 func TestTransfer_AutoRelay(t *testing.T) {
+    t.Parallel()
     env := e2etest.Start(t, e2etest.SelectedSuite(t))
     signers := e2etest.NewSigners(t)
     route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)

@@ -24,6 +24,7 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "https://ethereum-rpc.example.com", config.Chains[0].EVM.RPC)
 		assert.Equal(t, ChainTypeEVM, config.Chains[0].Type())
 
+		assert.Equal(t, 3*time.Second, *config.Relayer.DispatchPollInterval)
 		require.Len(t, config.Relayer.ChainOverrides, 2)
 		chain := config.Relayer.ChainOverrides[0]
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
@@ -176,6 +177,14 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.ChainOverrides[0].PacketBatchSize = &size
 				},
 				errContains: ".packetBatchSize must be positive",
+			},
+			{
+				name: "non-positive dispatch poll interval",
+				patch: func(c *Config) {
+					interval := time.Duration(0)
+					c.Relayer.DispatchPollInterval = &interval
+				},
+				errContains: ".dispatchPollInterval must be positive",
 			},
 			{
 				name: "negative tx submission delay",

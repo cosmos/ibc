@@ -96,7 +96,11 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		TxBuilders:      txBuilders,
 		TxSubmitters:    txSubmitters,
 	})
-	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, dispatch.DefaultPollInterval, logger)
+	pollInterval := dispatch.DefaultPollInterval
+	if cfg.Relayer.DispatchPollInterval != nil {
+		pollInterval = *cfg.Relayer.DispatchPollInterval
+	}
+	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, pollInterval, logger)
 
 	// Services
 	relayerService := relayer.New(cfg, db, clientSet, dispatcher)
