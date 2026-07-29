@@ -18,6 +18,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # 2. Shared runtime between local docker and docker on CI
 FROM alpine:3.24.1 AS runtime
 
+ENV HOME=/home/ibc
+
+RUN mkdir -p "$HOME" && chown 65532:65532 "$HOME"
+
+WORKDIR $HOME
+
 EXPOSE 3000
 
 USER 65532:65532
