@@ -8,17 +8,13 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"path"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 
@@ -36,12 +32,11 @@ const (
 
 	anvilGasLimit     = 50_000_000
 	anvilReadyTimeout = 30 * time.Second
-	// Terminal shutdown leaves time for Anvil to flush its --state file.
-	anvilStopGrace   = 5 * time.Second
+	// Escalate a hung SIGTERM quickly; discarded containers have nothing to flush.
+	anvilStopGrace   = time.Second
 	anvilStopTimeout = 15 * time.Second
 	anvilLogTimeout  = 10 * time.Second
 
-	containerStateDir     = "/anvil-state"
 	anvilStartupTailBytes = 4096
 	pollInterval          = 50 * time.Millisecond
 )
@@ -52,8 +47,6 @@ type Spec struct {
 	LogPath string
 	RunID   string
 	Image   string
-	// StatePath stores chain state on graceful container shutdown; empty derives it from LogPath.
-	StatePath string
 
 	// BlockTime > 0 seals blocks via --block-time (whole seconds; rounded, rejected if it rounds
 	// to zero); 0 keeps Anvil in instant/automine mode.
@@ -97,19 +90,14 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 	if spec.ChainID == 0 {
 		return nil, fmt.Errorf("anvil chain %s: EVM chain id is required", spec.ID)
 	}
-	var err error
-	if spec.StatePath == "" {
-		spec.StatePath, err = deriveStatePath(spec)
-		if err != nil {
-			return nil, err
-		}
+	if spec.Image == "" {
+		spec.Image = DockerImage()
 	}
-	spec, stateContainerPath, mountSpec, err := normalizeDockerSpec(spec)
-	if err != nil {
-		return nil, err
+	if spec.RunID == "" {
+		spec.RunID = fmt.Sprintf("manual-%d-%d", os.Getpid(), time.Now().UnixNano())
 	}
 
-	container, rpcURL, ec, err := launchAnvil(ctx, spec, stateContainerPath, mountSpec)
+	container, rpcURL, ec, err := launchAnvil(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -123,17 +111,12 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 	}, nil
 }
 
-func launchAnvil(
-	ctx context.Context,
-	spec Spec,
-	stateContainerPath, mountSpec string,
-) (testcontainers.Container, string, *evm.EVMClient, error) {
+func launchAnvil(ctx context.Context, spec Spec) (testcontainers.Container, string, *evm.EVMClient, error) {
 	args := []string{
 		"--port", "8545",
 		"--host", "0.0.0.0",
 		"--chain-id", strconv.FormatUint(spec.ChainID, 10),
 		"--gas-limit", strconv.Itoa(anvilGasLimit),
-		"--state", stateContainerPath,
 		// Managed chains use explicit signers. Keeping Anvil's deterministic accounts disabled
 		// avoids creating ambient identities, and quiet mode keeps its mnemonic out of diagnostics.
 		"--accounts", "0",
@@ -160,11 +143,6 @@ func launchAnvil(
 		Labels:       container.Labels(spec.RunID),
 		HostConfigModifier: func(config *containertypes.HostConfig) {
 			container.BindPortsToLoopback(config, "8545/tcp")
-			config.Mounts = append(config.Mounts, mount.Mount{
-				Type:   mount.TypeBind,
-				Source: mountSpec,
-				Target: containerStateDir,
-			})
 		},
 	}
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -295,26 +273,6 @@ func (ac *Chain) EnsureEOABalance(ctx context.Context, address common.Address, m
 	})
 }
 
-func normalizeDockerSpec(spec Spec) (Spec, string, string, error) {
-	if spec.Image == "" {
-		spec.Image = DockerImage()
-	}
-	if spec.RunID == "" {
-		spec.RunID = fmt.Sprintf("manual-%d-%d", os.Getpid(), time.Now().UnixNano())
-	}
-	statePath, err := filepath.Abs(spec.StatePath)
-	if err != nil {
-		return Spec{}, "", "", fmt.Errorf("absolute anvil state path (chain %s): %w", spec.ID, err)
-	}
-	stateDir := filepath.Dir(statePath)
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		return Spec{}, "", "", fmt.Errorf("create anvil state dir %s: %w", stateDir, err)
-	}
-	spec.StatePath = statePath
-	containerPath := path.Join(containerStateDir, filepath.Base(statePath))
-	return spec, containerPath, stateDir, nil
-}
-
 func containerName(spec Spec) string {
 	return container.NamePrefix(spec.RunID, spec.ID) + "-anvil"
 }
@@ -348,16 +306,6 @@ func cleanupFailedStart(container testcontainers.Container) error {
 	ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
 	defer cancel()
 	return container.Terminate(ctx, testcontainers.StopTimeout(anvilStopGrace))
-}
-
-func deriveStatePath(spec Spec) (string, error) {
-	if spec.LogPath == "" {
-		return "", fmt.Errorf(
-			"anvil (chain %s): spec needs StatePath or LogPath (the --state file is derived from LogPath)",
-			spec.ID,
-		)
-	}
-	return strings.TrimSuffix(spec.LogPath, ".log") + ".state.json", nil
 }
 
 func (ac *Chain) CollectLogs(ctx context.Context) map[string]string {

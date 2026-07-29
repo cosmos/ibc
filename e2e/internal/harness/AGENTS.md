@@ -12,8 +12,8 @@ corroborates outcomes by reading chain state with its own clients.
   stability observation lives with the e2e-only bindings that interpret those effects.
 - **Docker discipline.** Containers/networks carry the `ibc-link-e2e=true` and
   `ibc-link-run=<runid>` labels and the `ibc-link-e2e-` name prefix, with pinned images. Anvil runs
-  with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and it dumps its
-  `--state` file — what makes StopNode/StartNode fault injection survive restarts). Don't
-  reintroduce a shell-wrapped entrypoint.
+  with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and shutdown is prompt
+  instead of waiting out the kill grace). Don't reintroduce a shell-wrapped entrypoint.
+  StopNode/StartNode fault injection is docker pause/unpause; chain state stays in memory.
 - Lint with `make lint-e2e` from the repository root; the harness is covered by `e2e/.golangci.yml`,
   which mirrors the root config minus exported-doc mandates (everything here is internal surface).

@@ -27,6 +27,7 @@ func crossRouteSuite() e2etest.Suite {
 }
 
 func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
+	t.Parallel()
 	e2etest.RequireAnvilLane(t)
 	env := e2etest.Start(t, crossRouteSuite())
 	signers := e2etest.NewSigners(t)

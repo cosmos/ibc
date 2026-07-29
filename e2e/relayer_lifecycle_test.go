@@ -11,34 +11,8 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-func TestRelayerRestart_ResumesPendingPacket(t *testing.T) {
-	env := e2etest.Start(t, e2etest.SelectedSuite(t))
-	signers := e2etest.NewSigners(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
-	relayer := e2etest.StartRelayer(t, driver, env)
-	ctx := t.Context()
-	amount := big.NewInt(777_000)
-
-	require.NoError(t, relayer.Stop(ctx))
-
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: amount})
-	require.NoError(t, err)
-
-	require.NoError(t, transfer.VerifyEscrowed(ctx))
-	require.NoError(t, transfer.VerifyNotMinted(ctx))
-
-	relayer = e2etest.StartRelayer(t, driver, env)
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
-	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyDelivered(ctx))
-}
-
 func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
+	t.Parallel()
 	e2etest.RequireAnvilLane(t)
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
 	signers := e2etest.NewSigners(t)

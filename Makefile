@@ -31,7 +31,8 @@ test-unit: ## Run pure-Go e2e selection and helper tests; no chains
 	go -C $(E2E_DIR) test ./e2etest
 
 test-e2e: build-link ## Run e2e tests (E2E_FLAGS=... E2E_LANE=...)
-	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . -timeout 60m $(E2E_FLAGS)
+	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
+	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . -timeout 60m -parallel 4 $(E2E_FLAGS)
 
 lint-e2e: ## Lint the e2e module, harness included
 	cd $(E2E_DIR) && golangci-lint run
