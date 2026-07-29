@@ -6,7 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestGMPCall_AutoRelay(t *testing.T) {
@@ -31,13 +32,8 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 			require.NoError(t, err)
 			destination, err := env.Chain(tt.route.Destination)
 			require.NoError(t, err)
-			_, err = e2etest.AwaitState(
-				ctx,
-				relayer,
-				call.Packet(),
-				relayercmd.PacketComplete,
-				destination.Timing(),
-			)
+			err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+				relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 			require.NoError(t, err)
 			require.NoError(t, call.VerifyExecuted(ctx))
 		})
@@ -58,22 +54,12 @@ func TestGMPCall_ManualRelay(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	require.NoError(t, e2etest.AwaitStable(
-		ctx,
-		relayer,
-		call.Packet(),
-		relayercmd.PacketPending,
-		destination.Timing(),
-	))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, call.Packet(),
+		relayerv2.PacketState_PACKET_STATE_PENDING, destination.Timing()))
 	require.NoError(t, call.VerifyTargetUnchanged(ctx))
 	require.NoError(t, e2etest.Relay(ctx, relayer, call.Packet()))
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		call.Packet(),
-		relayercmd.PacketComplete,
-		destination.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyExecuted(ctx))
 }
@@ -94,13 +80,8 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	require.NoError(t, err)
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		call.Packet(),
-		relayercmd.PacketErrorAck,
-		destination.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+		relayerv2.PacketState_PACKET_STATE_REJECTED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyRejected(ctx))
 }

@@ -53,10 +53,15 @@ type PacketState int
 
 // Packet states
 const (
-	StateUnknown PacketState = iota
+	StateUnspecified PacketState = iota
 	StatePending
-	StateComplete
-	StateFailed
+	StateSucceeded
+	// StateTimedOut completed with a timeout refund on the source chain.
+	StateTimedOut
+	// StateRejected completed with an error acknowledgement on the source chain.
+	StateRejected
+	// StateRelayFailed cannot be processed because of a permanent error.
+	StateRelayFailed
 )
 
 // TxInfo a transaction on a chain.
@@ -74,9 +79,6 @@ type PacketStatus struct {
 	RecvTx         *TxInfo
 	AckTx          *TxInfo
 	TimeoutTx      *TxInfo
-	// WriteAckError reports that the packet completed with an error
-	// acknowledgement written on the destination chain.
-	WriteAckError bool
 }
 
 // New Service constructor. dispatcher may be nil for a service that only
@@ -223,7 +225,6 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 			RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
 			AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
 			TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
-			WriteAckError:  packet.Status == store.RelayStatusCompleteWithWriteAckError,
 		}
 	}
 
@@ -260,13 +261,14 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 
 func mapPacketState(status store.RelayStatus) PacketState {
 	switch status {
-	case store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithTimeout,
-		store.RelayStatusCompleteWithWriteAckSuccess,
-		store.RelayStatusCompleteWithWriteAckError:
-		return StateComplete
+	case store.RelayStatusCompleteWithAck:
+		return StateSucceeded
+	case store.RelayStatusCompleteWithTimeout:
+		return StateTimedOut
+	case store.RelayStatusCompleteWithWriteAckError:
+		return StateRejected
 	case store.RelayStatusFailed:
-		return StateFailed
+		return StateRelayFailed
 	default:
 		return StatePending
 	}

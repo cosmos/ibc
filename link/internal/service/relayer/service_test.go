@@ -266,6 +266,7 @@ func TestStatus(t *testing.T) {
 		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
 
 		recvTxHash := "0xrecv"
+		ackTxHash := "0xack"
 		packets := []store.Packet{
 			{
 				Status:               store.RelayStatusDeliverRecvPacket,
@@ -283,6 +284,8 @@ func TestStatus(t *testing.T) {
 				SourceChainID:        chainIDEth,
 				DestinationChainID:   chainIDBase,
 				SourceTxHash:         txHashLower,
+				RecvTxHash:           &recvTxHash,
+				AckTxHash:            &ackTxHash,
 			},
 		}
 
@@ -306,8 +309,9 @@ func TestStatus(t *testing.T) {
 		assert.Nil(t, first.AckTx)
 		assert.Nil(t, first.TimeoutTx)
 
-		assert.Equal(t, StateComplete, statuses[1].State)
-		assert.Nil(t, statuses[1].RecvTx)
+		assert.Equal(t, StateSucceeded, statuses[1].State)
+		require.NotNil(t, statuses[1].RecvTx)
+		require.NotNil(t, statuses[1].AckTx)
 	})
 }
 
@@ -332,15 +336,8 @@ func TestMapPacketState(t *testing.T) {
 		assert.Equal(t, StatePending, mapPacketState(status), string(status))
 	}
 
-	complete := []store.RelayStatus{
-		store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithWriteAckSuccess,
-		store.RelayStatusCompleteWithWriteAckError,
-		store.RelayStatusCompleteWithTimeout,
-	}
-	for _, status := range complete {
-		assert.Equal(t, StateComplete, mapPacketState(status), string(status))
-	}
-
-	assert.Equal(t, StateFailed, mapPacketState(store.RelayStatusFailed))
+	assert.Equal(t, StateSucceeded, mapPacketState(store.RelayStatusCompleteWithAck))
+	assert.Equal(t, StateTimedOut, mapPacketState(store.RelayStatusCompleteWithTimeout))
+	assert.Equal(t, StateRejected, mapPacketState(store.RelayStatusCompleteWithWriteAckError))
+	assert.Equal(t, StateRelayFailed, mapPacketState(store.RelayStatusFailed))
 }

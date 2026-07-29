@@ -218,7 +218,6 @@ SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id
 WHERE status NOT IN (
     'COMPLETE_WITH_ACK',
     'COMPLETE_WITH_TIMEOUT',
-    'COMPLETE_WITH_WRITE_ACK_SUCCESS',
     'COMPLETE_WITH_WRITE_ACK_ERROR',
     'FAILED'
 )

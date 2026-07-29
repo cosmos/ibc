@@ -41,10 +41,10 @@ const (
 
 // RelayerApiServiceClient is a client for the ibc.v2.relayer.RelayerApiService service.
 type RelayerApiServiceClient interface {
-	// Relay will track the status of a transfer, and submit the transactions
-	// required to complete the transfer via the bridging protocol.
+	// Relay tracks the packets emitted by a source transaction and submits the
+	// transactions required to complete them.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
-	// Status returns per-packet transfer status for a transaction previously
+	// Status returns per-packet relay status for a transaction previously
 	// submitted via Relay.
 	Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)
 }
@@ -93,10 +93,10 @@ func (c *relayerApiServiceClient) Status(ctx context.Context, req *connect.Reque
 
 // RelayerApiServiceHandler is an implementation of the ibc.v2.relayer.RelayerApiService service.
 type RelayerApiServiceHandler interface {
-	// Relay will track the status of a transfer, and submit the transactions
-	// required to complete the transfer via the bridging protocol.
+	// Relay tracks the packets emitted by a source transaction and submits the
+	// transactions required to complete them.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
-	// Status returns per-packet transfer status for a transaction previously
+	// Status returns per-packet relay status for a transaction previously
 	// submitted via Relay.
 	Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)
 }

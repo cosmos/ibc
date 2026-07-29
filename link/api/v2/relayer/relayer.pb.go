@@ -21,62 +21,74 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type TransferState int32
+type PacketState int32
 
 const (
-	TransferState_TRANSFER_STATE_UNKNOWN  TransferState = 0
-	TransferState_TRANSFER_STATE_PENDING  TransferState = 1
-	TransferState_TRANSFER_STATE_COMPLETE TransferState = 2
-	TransferState_TRANSFER_STATE_FAILED   TransferState = 3
+	PacketState_PACKET_STATE_UNSPECIFIED PacketState = 0
+	// The relayer is still processing the packet.
+	PacketState_PACKET_STATE_PENDING PacketState = 1
+	// The packet completed with a successful acknowledgement on the source
+	// chain.
+	PacketState_PACKET_STATE_SUCCEEDED PacketState = 2
+	// The packet completed with a timeout refund on the source chain.
+	PacketState_PACKET_STATE_TIMED_OUT PacketState = 3
+	// The packet completed with an error acknowledgement on the source chain.
+	PacketState_PACKET_STATE_REJECTED PacketState = 4
+	// A permanent error prevents the relayer from processing the packet.
+	PacketState_PACKET_STATE_RELAY_FAILED PacketState = 5
 )
 
-// Enum value maps for TransferState.
+// Enum value maps for PacketState.
 var (
-	TransferState_name = map[int32]string{
-		0: "TRANSFER_STATE_UNKNOWN",
-		1: "TRANSFER_STATE_PENDING",
-		2: "TRANSFER_STATE_COMPLETE",
-		3: "TRANSFER_STATE_FAILED",
+	PacketState_name = map[int32]string{
+		0: "PACKET_STATE_UNSPECIFIED",
+		1: "PACKET_STATE_PENDING",
+		2: "PACKET_STATE_SUCCEEDED",
+		3: "PACKET_STATE_TIMED_OUT",
+		4: "PACKET_STATE_REJECTED",
+		5: "PACKET_STATE_RELAY_FAILED",
 	}
-	TransferState_value = map[string]int32{
-		"TRANSFER_STATE_UNKNOWN":  0,
-		"TRANSFER_STATE_PENDING":  1,
-		"TRANSFER_STATE_COMPLETE": 2,
-		"TRANSFER_STATE_FAILED":   3,
+	PacketState_value = map[string]int32{
+		"PACKET_STATE_UNSPECIFIED":  0,
+		"PACKET_STATE_PENDING":      1,
+		"PACKET_STATE_SUCCEEDED":    2,
+		"PACKET_STATE_TIMED_OUT":    3,
+		"PACKET_STATE_REJECTED":     4,
+		"PACKET_STATE_RELAY_FAILED": 5,
 	}
 )
 
-func (x TransferState) Enum() *TransferState {
-	p := new(TransferState)
+func (x PacketState) Enum() *PacketState {
+	p := new(PacketState)
 	*p = x
 	return p
 }
 
-func (x TransferState) String() string {
+func (x PacketState) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (TransferState) Descriptor() protoreflect.EnumDescriptor {
+func (PacketState) Descriptor() protoreflect.EnumDescriptor {
 	return file_relayer_proto_enumTypes[0].Descriptor()
 }
 
-func (TransferState) Type() protoreflect.EnumType {
+func (PacketState) Type() protoreflect.EnumType {
 	return &file_relayer_proto_enumTypes[0]
 }
 
-func (x TransferState) Number() protoreflect.EnumNumber {
+func (x PacketState) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use TransferState.Descriptor instead.
-func (TransferState) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use PacketState.Descriptor instead.
+func (PacketState) EnumDescriptor() ([]byte, []int) {
 	return file_relayer_proto_rawDescGZIP(), []int{0}
 }
 
 type RelayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
-	ChainId       string                 `protobuf:"bytes,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	SourceChainId string                 `protobuf:"bytes,2,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -118,9 +130,9 @@ func (x *RelayRequest) GetTxHash() string {
 	return ""
 }
 
-func (x *RelayRequest) GetChainId() string {
+func (x *RelayRequest) GetSourceChainId() string {
 	if x != nil {
-		return x.ChainId
+		return x.SourceChainId
 	}
 	return ""
 }
@@ -164,7 +176,7 @@ func (*RelayResponse) Descriptor() ([]byte, []int) {
 type StatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
-	ChainId       string                 `protobuf:"bytes,2,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	SourceChainId string                 `protobuf:"bytes,2,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -206,9 +218,9 @@ func (x *StatusRequest) GetTxHash() string {
 	return ""
 }
 
-func (x *StatusRequest) GetChainId() string {
+func (x *StatusRequest) GetSourceChainId() string {
 	if x != nil {
-		return x.ChainId
+		return x.SourceChainId
 	}
 	return ""
 }
@@ -310,17 +322,22 @@ func (x *TransactionInfo) GetChainId() string {
 }
 
 type PacketStatus struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	State          TransferState          `protobuf:"varint,1,opt,name=state,proto3,enum=ibc.v2.relayer.TransferState" json:"state,omitempty"`
-	SequenceNumber uint64                 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
-	SourceClientId string                 `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3" json:"source_client_id,omitempty"`
-	SendTx         *TransactionInfo       `protobuf:"bytes,4,opt,name=send_tx,json=sendTx,proto3" json:"send_tx,omitempty"`
-	RecvTx         *TransactionInfo       `protobuf:"bytes,5,opt,name=recv_tx,json=recvTx,proto3" json:"recv_tx,omitempty"`
-	AckTx          *TransactionInfo       `protobuf:"bytes,6,opt,name=ack_tx,json=ackTx,proto3" json:"ack_tx,omitempty"`
-	TimeoutTx      *TransactionInfo       `protobuf:"bytes,7,opt,name=timeout_tx,json=timeoutTx,proto3" json:"timeout_tx,omitempty"`
-	// write_ack_error reports that the packet completed with an error
-	// acknowledgement written on the destination chain.
-	WriteAckError bool `protobuf:"varint,8,opt,name=write_ack_error,json=writeAckError,proto3" json:"write_ack_error,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	State PacketState            `protobuf:"varint,1,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState" json:"state,omitempty"`
+	// Together with source_client_id, identifies the packet.
+	SequenceNumber uint64 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
+	// Together with sequence_number, identifies the packet.
+	SourceClientId string `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3" json:"source_client_id,omitempty"`
+	// The source-chain SendPacket transaction. Always present.
+	SendTx *TransactionInfo `protobuf:"bytes,4,opt,name=send_tx,json=sendTx,proto3" json:"send_tx,omitempty"`
+	// The destination-chain receive transaction, once submitted or discovered.
+	RecvTx *TransactionInfo `protobuf:"bytes,5,opt,name=recv_tx,json=recvTx,proto3" json:"recv_tx,omitempty"`
+	// The source-chain acknowledgement transaction. Present for succeeded and
+	// rejected packets, and may be present while pending.
+	AckTx *TransactionInfo `protobuf:"bytes,6,opt,name=ack_tx,json=ackTx,proto3" json:"ack_tx,omitempty"`
+	// The source-chain timeout transaction. Present for timed-out packets, and
+	// may be present while pending.
+	TimeoutTx     *TransactionInfo `protobuf:"bytes,7,opt,name=timeout_tx,json=timeoutTx,proto3" json:"timeout_tx,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -355,11 +372,11 @@ func (*PacketStatus) Descriptor() ([]byte, []int) {
 	return file_relayer_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *PacketStatus) GetState() TransferState {
+func (x *PacketStatus) GetState() PacketState {
 	if x != nil {
 		return x.State
 	}
-	return TransferState_TRANSFER_STATE_UNKNOWN
+	return PacketState_PACKET_STATE_UNSPECIFIED
 }
 
 func (x *PacketStatus) GetSequenceNumber() uint64 {
@@ -404,45 +421,39 @@ func (x *PacketStatus) GetTimeoutTx() *TransactionInfo {
 	return nil
 }
 
-func (x *PacketStatus) GetWriteAckError() bool {
-	if x != nil {
-		return x.WriteAckError
-	}
-	return false
-}
-
 var File_relayer_proto protoreflect.FileDescriptor
 
 const file_relayer_proto_rawDesc = "" +
 	"\n" +
-	"\rrelayer.proto\x12\x0eibc.v2.relayer\"B\n" +
+	"\rrelayer.proto\x12\x0eibc.v2.relayer\"O\n" +
 	"\fRelayRequest\x12\x17\n" +
-	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
-	"\bchain_id\x18\x02 \x01(\tR\achainId\"\x0f\n" +
-	"\rRelayResponse\"C\n" +
+	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12&\n" +
+	"\x0fsource_chain_id\x18\x02 \x01(\tR\rsourceChainId\"\x0f\n" +
+	"\rRelayResponse\"P\n" +
 	"\rStatusRequest\x12\x17\n" +
-	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
-	"\bchain_id\x18\x02 \x01(\tR\achainId\"W\n" +
+	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12&\n" +
+	"\x0fsource_chain_id\x18\x02 \x01(\tR\rsourceChainId\"W\n" +
 	"\x0eStatusResponse\x12E\n" +
 	"\x0fpacket_statuses\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\x0epacketStatuses\"E\n" +
 	"\x0fTransactionInfo\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
-	"\bchain_id\x18\x02 \x01(\tR\achainId\"\xaa\x03\n" +
-	"\fPacketStatus\x123\n" +
-	"\x05state\x18\x01 \x01(\x0e2\x1d.ibc.v2.relayer.TransferStateR\x05state\x12'\n" +
+	"\bchain_id\x18\x02 \x01(\tR\achainId\"\x80\x03\n" +
+	"\fPacketStatus\x121\n" +
+	"\x05state\x18\x01 \x01(\x0e2\x1b.ibc.v2.relayer.PacketStateR\x05state\x12'\n" +
 	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\x12(\n" +
 	"\x10source_client_id\x18\x03 \x01(\tR\x0esourceClientId\x128\n" +
 	"\asend_tx\x18\x04 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x06sendTx\x128\n" +
 	"\arecv_tx\x18\x05 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x06recvTx\x126\n" +
 	"\x06ack_tx\x18\x06 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x05ackTx\x12>\n" +
 	"\n" +
-	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx\x12&\n" +
-	"\x0fwrite_ack_error\x18\b \x01(\bR\rwriteAckError*\x7f\n" +
-	"\rTransferState\x12\x1a\n" +
-	"\x16TRANSFER_STATE_UNKNOWN\x10\x00\x12\x1a\n" +
-	"\x16TRANSFER_STATE_PENDING\x10\x01\x12\x1b\n" +
-	"\x17TRANSFER_STATE_COMPLETE\x10\x02\x12\x19\n" +
-	"\x15TRANSFER_STATE_FAILED\x10\x032\xa6\x01\n" +
+	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx*\xb7\x01\n" +
+	"\vPacketState\x12\x1c\n" +
+	"\x18PACKET_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14PACKET_STATE_PENDING\x10\x01\x12\x1a\n" +
+	"\x16PACKET_STATE_SUCCEEDED\x10\x02\x12\x1a\n" +
+	"\x16PACKET_STATE_TIMED_OUT\x10\x03\x12\x19\n" +
+	"\x15PACKET_STATE_REJECTED\x10\x04\x12\x1d\n" +
+	"\x19PACKET_STATE_RELAY_FAILED\x10\x052\xa6\x01\n" +
 	"\x11RelayerApiService\x12F\n" +
 	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00\x12I\n" +
 	"\x06Status\x12\x1d.ibc.v2.relayer.StatusRequest\x1a\x1e.ibc.v2.relayer.StatusResponse\"\x00B+Z)github.com/cosmos/ibc/link/api/v2/relayerb\x06proto3"
@@ -462,7 +473,7 @@ func file_relayer_proto_rawDescGZIP() []byte {
 var file_relayer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_relayer_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_relayer_proto_goTypes = []any{
-	(TransferState)(0),      // 0: ibc.v2.relayer.TransferState
+	(PacketState)(0),        // 0: ibc.v2.relayer.PacketState
 	(*RelayRequest)(nil),    // 1: ibc.v2.relayer.RelayRequest
 	(*RelayResponse)(nil),   // 2: ibc.v2.relayer.RelayResponse
 	(*StatusRequest)(nil),   // 3: ibc.v2.relayer.StatusRequest
@@ -472,7 +483,7 @@ var file_relayer_proto_goTypes = []any{
 }
 var file_relayer_proto_depIdxs = []int32{
 	6, // 0: ibc.v2.relayer.StatusResponse.packet_statuses:type_name -> ibc.v2.relayer.PacketStatus
-	0, // 1: ibc.v2.relayer.PacketStatus.state:type_name -> ibc.v2.relayer.TransferState
+	0, // 1: ibc.v2.relayer.PacketStatus.state:type_name -> ibc.v2.relayer.PacketState
 	5, // 2: ibc.v2.relayer.PacketStatus.send_tx:type_name -> ibc.v2.relayer.TransactionInfo
 	5, // 3: ibc.v2.relayer.PacketStatus.recv_tx:type_name -> ibc.v2.relayer.TransactionInfo
 	5, // 4: ibc.v2.relayer.PacketStatus.ack_tx:type_name -> ibc.v2.relayer.TransactionInfo

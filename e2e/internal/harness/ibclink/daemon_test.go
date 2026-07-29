@@ -10,8 +10,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
-
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
@@ -57,7 +55,7 @@ func (f *fakeRelayerAPI) Status(
 	_ context.Context,
 	req *connect.Request[relayerv2.StatusRequest],
 ) (*connect.Response[relayerv2.StatusResponse], error) {
-	statuses, ok := f.statuses[req.Msg.ChainId+"/"+req.Msg.TxHash]
+	statuses, ok := f.statuses[req.Msg.SourceChainId+"/"+req.Msg.TxHash]
 	if !ok {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("transaction not submitted to relayer"))
 	}
@@ -107,12 +105,9 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.False(t, IsStatusNotFound(err))
 	require.ErrorContains(t, err, "no configured chain id")
 
-	require.NoError(t, relayer.Relay(ctx, relayercmd.RelayRequest{
-		SourceChainID: "chain-b",
-		SourceTxHash:  "0xdef",
-	}))
+	require.NoError(t, relayer.Relay(ctx, "chain-b", "0xdef"))
 	require.Len(t, api.relayed, 1)
-	require.Equal(t, "31338", api.relayed[0].ChainId)
+	require.Equal(t, "31338", api.relayed[0].SourceChainId)
 	require.Equal(t, "0xdef", api.relayed[0].TxHash)
 
 	require.True(t, relayer.ManualRoute("route-manual"))

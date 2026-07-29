@@ -170,6 +170,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferPacket, error) 
 		packet: Packet{
 			RouteID:      p.app.routeID,
 			Source:       p.app.source.chain.ID(),
+			SourceClient: p.app.sourceClient,
 			SourceTxHash: txHash,
 			Sequence:     sequence,
 		},

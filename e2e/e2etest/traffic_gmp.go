@@ -81,6 +81,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		packet: Packet{
 			RouteID:      g.routeID,
 			Source:       g.source.chain.ID(),
+			SourceClient: g.sourceClient,
 			SourceTxHash: txHash,
 			Sequence:     sequence,
 		},

@@ -10,7 +10,8 @@ import (
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestTransfer_AutoRelay(t *testing.T) {
@@ -28,7 +29,8 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(), relayercmd.PacketComplete, destination.Timing())
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
@@ -48,22 +50,12 @@ func TestTransfer_ManualRelay(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	require.NoError(t, e2etest.AwaitStable(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		relayercmd.PacketPending,
-		destination.Timing(),
-	))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_PENDING, destination.Timing()))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		relayercmd.PacketComplete,
-		destination.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
@@ -139,13 +131,8 @@ func assertTransferTimedOutAndRefunded(
 	packet := transfer.Packet()
 	source, err := env.Chain(packet.Source)
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		packet,
-		relayercmd.PacketTimedOut,
-		source.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, packet,
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))

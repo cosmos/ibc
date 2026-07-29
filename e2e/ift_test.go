@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/link/cmd/relayercmd"
+
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestIFTTransfer_AutoRelay(t *testing.T) {
@@ -34,13 +35,8 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 			destination, err := env.Chain(tt.route.Destination)
 			require.NoError(t, err)
-			_, err = e2etest.AwaitState(
-				ctx,
-				relayer,
-				transfer.Packet(),
-				relayercmd.PacketComplete,
-				destination.Timing(),
-			)
+			err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+				relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 			require.NoError(t, err)
 			require.NoError(t, transfer.VerifyDelivered(ctx))
 		})
@@ -74,13 +70,8 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 	source, err := env.Chain(route.Source)
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(
-		ctx,
-		relayer,
-		transfer.Packet(),
-		relayercmd.PacketTimedOut,
-		source.Timing(),
-	)
+	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
