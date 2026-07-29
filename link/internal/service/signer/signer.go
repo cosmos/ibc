@@ -2,6 +2,8 @@ package signer
 
 import (
 	"context"
+	"encoding/hex"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -79,4 +81,8 @@ func PublicKeyToEVMAddress(pk []byte) string {
 	}
 
 	return crypto.PubkeyToAddress(*publicKey).Hex()
+}
+
+func DecodeHex(raw string) ([]byte, error) {
+	return hex.DecodeString(strings.TrimPrefix(raw, "0x"))
 }

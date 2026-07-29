@@ -51,13 +51,13 @@ func (p CheckSendFinality) Process(ctx context.Context, tr *Transfer) (*Transfer
 func (p CheckSendFinality) Cancel(tr *Transfer, err error) {
 	if errors.Is(err, ErrSendNotFinalized) {
 		if time.Since(tr.SourceTxTime) > nodeLagWarningAfter {
-			tr.GetLogger().Warn("Send tx not finalized after 30 minutes, is the node lagging?", "error", err)
+			tr.GetLogger().Warn("Send tx not finalized after 30 minutes, is the node lagging?", "err", err)
 		}
 
 		return
 	}
 
-	tr.GetLogger().Error("Checking send tx finality", "error", err)
+	tr.GetLogger().Error("Checking send tx finality", "err", err)
 }
 
 func (p CheckSendFinality) ShouldProcess(tr *Transfer) bool {

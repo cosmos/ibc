@@ -60,7 +60,7 @@ func (p CheckRecvPacketDelivery) Process(ctx context.Context, tr *Transfer) (*Tr
 }
 
 func (p CheckRecvPacketDelivery) Cancel(tr *Transfer, err error) {
-	tr.GetLogger().Error("Checking recv packet delivery", "error", err)
+	tr.GetLogger().Error("Checking recv packet delivery", "err", err)
 }
 
 func (p CheckRecvPacketDelivery) ShouldProcess(tr *Transfer) bool {

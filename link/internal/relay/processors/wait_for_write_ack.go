@@ -61,7 +61,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	case errors.Is(err, v2.ErrWriteAckDecoding):
 		// non-standard acknowledgement formats cannot be classified; record
 		// the ack with an unknown status
-		tr.GetLogger().Warn("Could not decode write ack, status is unknown", "error", err)
+		tr.GetLogger().Warn("Could not decode write ack, status is unknown", "err", err)
 		ackStatus = v2.WriteAckStatusUnknown
 	case err != nil:
 		return nil, errors.Wrapf(err, "finding write ack in recv tx %s", recvTxHash)
@@ -97,7 +97,7 @@ func (p WaitForWriteAck) Cancel(tr *Transfer, err error) {
 		return
 	}
 
-	tr.GetLogger().Error("Waiting for write ack", "error", err)
+	tr.GetLogger().Error("Waiting for write ack", "err", err)
 }
 
 func (p WaitForWriteAck) ShouldProcess(tr *Transfer) bool {

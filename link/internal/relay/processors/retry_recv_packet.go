@@ -58,7 +58,7 @@ func (p RetryRecvPacket) Cancel(tr *Transfer, err error) {
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "recv")
 	default:
-		tr.GetLogger().Error("Checking relay tx retry", "kind", "recv", "error", err)
+		tr.GetLogger().Error("Checking relay tx retry", "kind", "recv", "err", err)
 	}
 }
 

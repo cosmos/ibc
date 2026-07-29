@@ -42,13 +42,13 @@ func (p CheckTimeoutFinality) Cancel(tr *Transfer, err error) {
 	if errors.Is(err, ErrTimeoutNotFinalized) {
 		if time.Since(tr.PacketTimeoutTimestamp) > nodeLagWarningAfter {
 			tr.GetLogger().
-				Warn("Timeout timestamp not finalized 30 minutes past timeout, is the node lagging?", "error", err)
+				Warn("Timeout timestamp not finalized 30 minutes past timeout, is the node lagging?", "err", err)
 		}
 
 		return
 	}
 
-	tr.GetLogger().Error("Checking timeout finality", "error", err)
+	tr.GetLogger().Error("Checking timeout finality", "err", err)
 }
 
 func (p CheckTimeoutFinality) ShouldProcess(tr *Transfer) bool {
