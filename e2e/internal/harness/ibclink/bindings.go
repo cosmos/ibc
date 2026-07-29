@@ -7,7 +7,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 )
 
 const chainRPCEnvPrefix = "IBC_LINK_CHAIN_RPC_"
@@ -17,20 +16,11 @@ type chainRPCBinding struct {
 	resolve func() (string, error)
 }
 
+// processBindingSet pairs endpoint resolvers with the lifecycle borrow that
+// keeps their resources alive. Installed once during setup, immutable after.
 type processBindingSet struct {
 	chainRPC     map[string]chainRPCBinding
 	acquireLease func() (release func(), err error)
-}
-
-// processBindings publishes one immutable binding set. Taking one snapshot
-// keeps its endpoint resolvers and lifecycle borrow inseparable.
-type processBindings struct {
-	mu  sync.RWMutex
-	set *processBindingSet
-}
-
-type processEnvironment struct {
-	variables []string
 }
 
 // BindChainRPCs binds resolved Chain endpoints without exposing their values.
@@ -56,76 +46,53 @@ func (r *Driver) BindChainRPCs(
 		}
 	}
 
-	r.bindings.mu.Lock()
-	defer r.bindings.mu.Unlock()
-	if r.bindings.set != nil {
+	if r.bindings != nil {
 		return errors.New("ibclink: Chain RPC bindings are already installed")
 	}
-	r.bindings.set = &processBindingSet{chainRPC: chainRPC, acquireLease: acquire}
+	r.bindings = &processBindingSet{chainRPC: chainRPC, acquireLease: acquire}
 	return nil
 }
 
 // ChainRPC returns the configuration reference for a bound Chain.
 func (r *Driver) ChainRPC(chainID string) (string, error) {
-	bindings := r.bindings.snapshot()
-	if bindings == nil {
+	if r.bindings == nil {
 		return "", fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
 	}
-	binding, ok := bindings.chainRPC[chainID]
+	binding, ok := r.bindings.chainRPC[chainID]
 	if !ok {
 		return "", fmt.Errorf("ibclink: no RPC binding for Chain %q", chainID)
 	}
 	return "${" + binding.envName + "}", nil
 }
 
-func (r *Driver) withProcessEnv(use func(processEnvironment) error) error {
-	env, release, err := r.acquireProcessEnv()
-	if err != nil {
-		return err
+// acquireProcessEnv resolves the child-process environment while borrowing
+// the binding lease; the caller must invoke release when the process no
+// longer needs the bound resources.
+func (r *Driver) acquireProcessEnv() ([]string, func(), error) {
+	if r.bindings == nil {
+		return nil, func() {}, nil
 	}
-	defer release()
-	return use(env)
-}
-
-func (r *Driver) acquireProcessEnv() (processEnvironment, func(), error) {
-	bindings := r.bindings.snapshot()
-	release, err := bindings.acquire()
+	release, err := r.bindings.acquireLease()
 	if err != nil {
-		return processEnvironment{}, nil, err
+		return nil, nil, err
 	}
-	env, err := bindings.resolveProcessEnv()
+	if release == nil {
+		return nil, nil, errors.New("ibclink: process binding lease returned no release function")
+	}
+	env, err := r.bindings.resolveProcessEnv()
 	if err != nil {
 		release()
-		return processEnvironment{}, nil, err
+		return nil, nil, err
 	}
 	return env, release, nil
 }
 
-func (r *processBindings) snapshot() *processBindingSet {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.set
-}
-
-func (b *processBindingSet) acquire() (func(), error) {
-	if b == nil {
-		return func() {}, nil
-	}
-	release, err := b.acquireLease()
-	if err != nil {
-		return nil, err
-	}
-	if release == nil {
-		return nil, errors.New("ibclink: process binding lease returned no release function")
-	}
-	return release, nil
-}
-
 // resolveProcessEnv runs while the binding lease is held. Environment-backed
-// resolvers rely on that borrow to keep their resources alive.
-func (b *processBindingSet) resolveProcessEnv() (processEnvironment, error) {
-	if b == nil || len(b.chainRPC) == 0 {
-		return processEnvironment{}, nil
+// resolvers rely on that borrow to keep their resources alive. A nil result
+// makes exec inherit the parent environment.
+func (b *processBindingSet) resolveProcessEnv() ([]string, error) {
+	if len(b.chainRPC) == 0 {
+		return nil, nil
 	}
 
 	chainIDs := make([]string, 0, len(b.chainRPC))
@@ -134,14 +101,14 @@ func (b *processBindingSet) resolveProcessEnv() (processEnvironment, error) {
 	}
 	slices.Sort(chainIDs)
 
-	env := processEnvironment{variables: os.Environ()}
+	env := os.Environ()
 	for _, chainID := range chainIDs {
 		binding := b.chainRPC[chainID]
 		value, err := resolveChainRPC(chainID, binding)
 		if err != nil {
-			return processEnvironment{}, err
+			return nil, err
 		}
-		env.variables = append(env.variables, binding.envName+"="+value)
+		env = append(env, binding.envName+"="+value)
 	}
 	return env, nil
 }
