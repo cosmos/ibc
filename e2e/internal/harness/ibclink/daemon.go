@@ -45,7 +45,7 @@ type RelayerOptions struct {
 }
 
 type Relayer struct {
-	readiness    relayercmd.Readiness
+	readiness    relayerv2.ProcessReadiness
 	client       relayerv2.RelayerApiServiceClient
 	chainIDs     map[string]string
 	manualRoutes map[string]bool
@@ -57,7 +57,7 @@ func (r *Driver) StartRelayer(ctx context.Context) (*Relayer, error) {
 }
 
 type readyResult struct {
-	readiness relayercmd.Readiness
+	readiness relayerv2.ProcessReadiness
 	err       error
 }
 
@@ -154,35 +154,40 @@ func drainStdout(rc io.Reader, readyCh chan<- readyResult) {
 }
 
 func parseReadiness(line string) readyResult {
-	var r relayercmd.Readiness
+	var r relayerv2.ProcessReadiness
 	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &r); err != nil {
 		return readyResult{
 			err: fmt.Errorf("first stdout line is not readiness JSON (%q): %w", strings.TrimSpace(line), err),
 		}
 	}
-	if err := r.Validate(); err != nil {
-		return readyResult{err: fmt.Errorf("invalid readiness: %w", err)}
+	if r.Event != relayerv2.ProcessReadinessEvent {
+		return readyResult{
+			err: fmt.Errorf("invalid readiness: event = %q, want %q", r.Event, relayerv2.ProcessReadinessEvent),
+		}
+	}
+	if r.HTTP == "" {
+		return readyResult{err: errors.New("invalid readiness: http is empty")}
 	}
 	return readyResult{readiness: r}
 }
 
-func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayercmd.Readiness, error) {
+func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayerv2.ProcessReadiness, error) {
 	timer := time.NewTimer(defaultStartupTimeout)
 	defer timer.Stop()
 	select {
 	case res := <-readyCh:
 		if res.err != nil {
-			return relayercmd.Readiness{}, fmt.Errorf("ibc relayer run: %w", res.err)
+			return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: %w", res.err)
 		}
 		return res.readiness, nil
 	case <-timer.C:
-		return relayercmd.Readiness{}, fmt.Errorf("ibc relayer run: not ready within %s", defaultStartupTimeout)
+		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: not ready within %s", defaultStartupTimeout)
 	case <-ctx.Done():
-		return relayercmd.Readiness{}, fmt.Errorf("ibc relayer run: startup canceled: %w", ctx.Err())
+		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: startup canceled: %w", ctx.Err())
 	}
 }
 
-func (d *Relayer) Ready() relayercmd.Readiness { return d.readiness }
+func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
 
 // ManualRoute reports whether packets on the route are only relayed on an
 // explicit Relay call.
