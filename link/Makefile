@@ -20,6 +20,9 @@ build: ## Build the binary
 	mkdir -p bin
 	go build -o bin/ibc ./cmd/ibc/...
 
+docker-build: ## Build the local Docker image
+	docker build --target target-builder -t ibc:latest .
+
 lint: ## Lint the code
 	golangci-lint run
 
@@ -63,4 +66,4 @@ test: ## Run tests
 
 check: build test lint check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check
+.PHONY: help build docker-build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check
