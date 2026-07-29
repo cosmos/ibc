@@ -48,6 +48,7 @@ func init() {
 	)
 
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
+	cmdConfigNew.Flags().BoolVar(&flagConfigNewOut, "out", false, "output the config to stdout")
 	cmdConfigValidate.Flags().BoolVar(&flagConfigValidateLive, "live", false, "extra validation checks")
 	cmdConfigValidate.Flags().
 		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")

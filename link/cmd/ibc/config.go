@@ -19,6 +19,9 @@ var (
 
 	// if true, fail on unknown fields in the config file
 	flagConfigValidateStrict bool
+
+	// if true, output the config file to stdout
+	flagConfigNewOut bool
 )
 
 var (
@@ -29,9 +32,10 @@ var (
 	}
 
 	cmdConfigNew = &cobra.Command{
-		Use:   "new",
-		Short: "Create new config file",
-		RunE:  configNew,
+		Use:     "new",
+		Aliases: []string{"create", "init"},
+		Short:   "Create new config file",
+		RunE:    configNew,
 	}
 
 	cmdConfigValidate = &cobra.Command{
@@ -47,13 +51,17 @@ func configNew(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	cfg := config.DefaultConfig()
+
+	if flagConfigNewOut {
+		return config.PrintYAML(cfg)
+	}
+
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf("config file %s already exists", configPath)
 	}
 
-	config := config.DefaultConfig()
-
-	if err := config.StoreToFile(configPath); err != nil {
+	if err := cfg.StoreToFile(configPath); err != nil {
 		return errors.Wrap(err, "unable to write file")
 	}
 
