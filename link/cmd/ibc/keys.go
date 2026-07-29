@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 
 	"github.com/spf13/cobra"
@@ -100,13 +101,15 @@ func keysShow(_ *cobra.Command, args []string) error {
 	}
 
 	kv := map[string]any{
-		"keyPath":   keyPath,
-		"keyType":   key.Type(),
+		"type":      key.Type(),
+		"path":      keyPath,
 		"publicKey": toHex(key.PublicKey()),
 	}
 
 	if flagKeysShowPrivate {
-		kv["privateKey"] = toHex(key.PrivateKey())
+		pk := key.PrivateKey()
+		kv["privateKey"] = toHex(pk)
+		kv["privateKeyBase64"] = toBase64(pk)
 	}
 
 	return config.PrintJSON(kv)
@@ -114,4 +117,8 @@ func keysShow(_ *cobra.Command, args []string) error {
 
 func toHex(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
+}
+
+func toBase64(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }
