@@ -50,7 +50,7 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 	}
 
 	if err := p.storage.UpdatePacketStatus(ctx, tr.Key(), tr.Status); err != nil {
-		tr.GetLogger().Error("Updating transfer to terminal status", "status", tr.Status, "error", err)
+		tr.GetLogger().Error("Updating transfer to terminal status", "status", tr.Status, "err", err)
 		tr.ProcessingError = errors.Wrapf(err, "updating transfer status to %s", tr.Status)
 
 		return tr, nil
@@ -62,5 +62,5 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 }
 
 func (p StateFinisher) Cancel(tr *Transfer, err error) {
-	tr.GetLogger().Error("Finishing transfer state", "error", err)
+	tr.GetLogger().Error("Finishing transfer state", "err", err)
 }

@@ -59,7 +59,7 @@ func (h *RelayerHandler) Relay(
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	case err != nil:
 		// todo: move to interceptor
-		h.logger.Error("Relay", "error", err)
+		h.logger.Error("Relay", "err", err)
 		return nil, errInternal
 	}
 
@@ -80,7 +80,7 @@ func (h *RelayerHandler) Status(
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	case err != nil:
 		// todo: move to interceptor
-		h.logger.Error("Status", "error", err)
+		h.logger.Error("Status", "err", err)
 		return nil, errInternal
 	}
 

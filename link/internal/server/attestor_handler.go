@@ -62,7 +62,7 @@ func (h *AttestorHandler) LatestHeight(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
-		h.logger.Error("LatestAttestableHeight", "error", err)
+		h.logger.Error("LatestAttestableHeight", "err", err)
 		return nil, errInternal
 	}
 
@@ -83,7 +83,7 @@ func (h *AttestorHandler) StateAttestation(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
-		h.logger.Error("StateAttestation", "error", err)
+		h.logger.Error("StateAttestation", "err", err)
 		return nil, errInternal
 	}
 
@@ -111,7 +111,7 @@ func (h *AttestorHandler) PacketAttestation(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
-		h.logger.Error("PacketAttestation", "error", err)
+		h.logger.Error("PacketAttestation", "err", err)
 		return nil, errInternal
 	}
 

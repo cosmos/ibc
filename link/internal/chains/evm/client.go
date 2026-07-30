@@ -298,7 +298,7 @@ func (c *Client) findPacketTx(ctx context.Context, eventName, clientID string, s
 	// prefer missing sender info over failing the lookup
 	sender, err := c.txSender(ctx, log.TxHash)
 	if err != nil {
-		c.logger.Error("Found packet tx but could not determine its sender", "txHash", log.TxHash, "error", err)
+		c.logger.Error("Found packet tx but could not determine its sender", "txHash", log.TxHash, "err", err)
 	}
 
 	return &v2.Tx{

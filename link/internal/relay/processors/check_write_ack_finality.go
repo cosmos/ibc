@@ -50,13 +50,13 @@ func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Tran
 func (p CheckWriteAckFinality) Cancel(tr *Transfer, err error) {
 	if errors.Is(err, ErrWriteAckNotFinalized) {
 		if tr.WriteAckTxTime != nil && time.Since(*tr.WriteAckTxTime) > nodeLagWarningAfter {
-			tr.GetLogger().Warn("Write ack tx not finalized after 30 minutes, is the node lagging?", "error", err)
+			tr.GetLogger().Warn("Write ack tx not finalized after 30 minutes, is the node lagging?", "err", err)
 		}
 
 		return
 	}
 
-	tr.GetLogger().Error("Checking write ack finality", "error", err)
+	tr.GetLogger().Error("Checking write ack finality", "err", err)
 }
 
 func (p CheckWriteAckFinality) ShouldProcess(tr *Transfer) bool {

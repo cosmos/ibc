@@ -1,15 +1,22 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
-var flagKeysShowPrivate bool
+var (
+	flagKeysShowPrivate      bool
+	flagKeysImportPrivateKey string
+)
 
 var (
 	cmdKeys = &cobra.Command{
@@ -23,6 +30,14 @@ var (
 		Long:  "Saves key into <ibc-home>/keys/<name> or prints to stdout if name is not provided",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE:  keysNew,
+	}
+
+	cmdKeysImport = &cobra.Command{
+		Use:   "import [type] [name]",
+		Short: "Import a signing key",
+		Long:  "Import a private key into <ibc-home>/keys/<name>",
+		Args:  cobra.ExactArgs(2),
+		RunE:  keysImport,
 	}
 
 	cmdKeysShow = &cobra.Command{
@@ -57,11 +72,7 @@ func keysNew(_ *cobra.Command, args []string) error {
 
 	if !saveKey {
 		// for ephemeral keys we print the key to stdout including the private key
-		return config.PrintJSON(map[string]any{
-			"keyType":    keyType,
-			"publicKey":  toHex(key.PublicKey()),
-			"privateKey": toHex(key.PrivateKey()),
-		})
+		return printKey(key, true, nil)
 	}
 
 	keyPath, err := signer.KeyFilePath(globalFlags.Home, args[1])
@@ -74,10 +85,8 @@ func keysNew(_ *cobra.Command, args []string) error {
 	}
 
 	// note that we don't print the private key here to avoid leaking it to the user
-	return config.PrintJSON(map[string]any{
-		"keyType":   keyType,
-		"keyPath":   keyPath,
-		"publicKey": toHex(key.PublicKey()),
+	return printKey(key, false, map[string]any{
+		"path": keyPath,
 	})
 }
 
@@ -99,14 +108,88 @@ func keysShow(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	return printKey(key, flagKeysShowPrivate, map[string]any{
+		"path": keyPath,
+	})
+}
+
+func keysImport(_ *cobra.Command, args []string) error {
+	globalFlags.SkipConfigValidation()
+
+	if _, err := setupHomeWithConfig(); err != nil {
+		return err
+	}
+
+	keyType, err := signer.ParseKeyType(args[0])
+	switch {
+	case err != nil:
+		return err
+	case keyType == keyfile.EDDSA:
+		return fmt.Errorf("importing eddsa keys is not supported")
+	}
+
+	keyPath, err := signer.KeyFilePath(globalFlags.Home, args[1])
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(keyPath)
+	switch {
+	case err == nil:
+		return fmt.Errorf("key already exists: %s", keyPath)
+	case !os.IsNotExist(err):
+		return err
+	}
+
+	if flagKeysImportPrivateKey == "" {
+		return fmt.Errorf("--private-key is required")
+	}
+
+	privateKey, err := signer.DecodeHex(flagKeysImportPrivateKey)
+	if err != nil {
+		return fmt.Errorf("decode private key: %w", err)
+	}
+
+	key, err := signer.NewLocalSecp256k1Signer(privateKey)
+	if err != nil {
+		return fmt.Errorf("create ecdsa key: %w", err)
+	}
+
+	if err := key.StoreToFile(keyPath); err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("key already exists: %s", keyPath)
+		}
+		return err
+	}
+
+	return printKey(key, false, map[string]any{
+		"path": keyPath,
+	})
+}
+
+func printKey(key signer.LocalKey, showPrivate bool, extra map[string]any) error {
 	kv := map[string]any{
-		"keyPath":   keyPath,
-		"keyType":   key.Type(),
+		"type":      key.Type(),
 		"publicKey": toHex(key.PublicKey()),
 	}
 
-	if flagKeysShowPrivate {
-		kv["privateKey"] = toHex(key.PrivateKey())
+	if key.Type() == keyfile.ECDSA {
+		addr, err := signer.PublicKeyToEVMAddress(key.PublicKey())
+		if err != nil {
+			return err
+		}
+
+		kv["evmAddress"] = addr
+	}
+
+	if showPrivate {
+		pk := key.PrivateKey()
+		kv["privateKey"] = toHex(pk)
+		kv["privateKeyBase64"] = toBase64(pk)
+	}
+
+	for k, v := range extra {
+		kv[k] = v
 	}
 
 	return config.PrintJSON(kv)
@@ -114,4 +197,8 @@ func keysShow(_ *cobra.Command, args []string) error {
 
 func toHex(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
+}
+
+func toBase64(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }

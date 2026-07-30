@@ -39,7 +39,7 @@ func attestorRun(cmd *cobra.Command, _ []string) error {
 
 	address, err := app.Server.Start()
 	if err != nil {
-		app.Logger.Error("Failed to start attestor server", "error", err)
+		app.Logger.Error("Failed to start attestor server", "err", err)
 		return err
 	}
 	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(attestorv2.ProcessReadiness{

@@ -523,6 +523,18 @@ func PrintJSON(v any) error {
 	return nil
 }
 
+// PrintYAML prints anything as YAML to stdout.
+func PrintYAML(v any) error {
+	bz, err := yaml.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
+}
+
 func dbTypeFromURL(raw string) string {
 	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
 		return DBTypePostgres

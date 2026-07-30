@@ -57,7 +57,7 @@ func (p RetryAckPacket) Cancel(tr *Transfer, err error) {
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "ack")
 	default:
-		tr.GetLogger().Error("Checking relay tx retry", "kind", "ack", "error", err)
+		tr.GetLogger().Error("Checking relay tx retry", "kind", "ack", "err", err)
 	}
 }
 

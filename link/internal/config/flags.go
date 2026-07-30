@@ -11,10 +11,11 @@ import (
 // FlagSet composed set of cli args parsed into a nice struct.
 type FlagSet struct {
 	// Home IBC home directory where files are stored
-	Home   string
-	Config string
-	DB     string
-	Quiet  bool
+	Home    string
+	Config  string
+	DB      string
+	Quiet   bool
+	LogJSON bool
 
 	skipConfigValidation bool
 }
@@ -39,6 +40,7 @@ func DeclarePersistentFlags(cmd *cobra.Command, flags *FlagSet) {
 	pf.StringVarP(&flags.Config, "config", "", flags.Config, "Config file relative to home")
 	pf.StringVarP(&flags.DB, "db", "", flags.DB, "Database URL override")
 	pf.BoolVarP(&flags.Quiet, "quiet", "q", flags.Quiet, "Quiet mode")
+	pf.BoolVarP(&flags.LogJSON, "log-json", "", flags.LogJSON, "Enable JSON logging")
 }
 
 func (fs *FlagSet) ConfigPath() (string, error) {

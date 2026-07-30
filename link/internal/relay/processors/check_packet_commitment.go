@@ -54,7 +54,7 @@ func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Tran
 		tx, errFind := client.FindAckTx(gctx, tr.PacketSourceClientID, tr.PacketSequenceNumber)
 		if errFind != nil {
 			if !errors.Is(errFind, v2.ErrTxNotFound) && !errors.Is(errFind, context.Canceled) {
-				tr.GetLogger().Warn("Finding ack tx after missing packet commitment", "error", errFind)
+				tr.GetLogger().Warn("Finding ack tx after missing packet commitment", "err", errFind)
 			}
 
 			// do not cancel the timeout lookup
@@ -70,7 +70,7 @@ func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Tran
 		tx, errFind := client.FindTimeoutTx(gctx, tr.PacketSourceClientID, tr.PacketSequenceNumber)
 		if errFind != nil {
 			if !errors.Is(errFind, v2.ErrTxNotFound) && !errors.Is(errFind, context.Canceled) {
-				tr.GetLogger().Warn("Finding timeout tx after missing packet commitment", "error", errFind)
+				tr.GetLogger().Warn("Finding timeout tx after missing packet commitment", "err", errFind)
 			}
 
 			// do not cancel the ack lookup
@@ -122,7 +122,7 @@ func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Tran
 }
 
 func (p CheckPacketCommitment) Cancel(tr *Transfer, err error) {
-	tr.GetLogger().Error("Checking packet commitment", "error", err)
+	tr.GetLogger().Error("Checking packet commitment", "err", err)
 }
 
 func (p CheckPacketCommitment) ShouldProcess(tr *Transfer) bool {

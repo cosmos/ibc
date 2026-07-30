@@ -74,7 +74,7 @@ func (d *RelayDispatcher) Start() error {
 				ticker.Reset(d.pollInterval)
 
 				if err := d.SubmitWaitingUnfinishedPackets(ctx); err != nil {
-					d.logger.Error("Submitting unfinished packets", "error", err)
+					d.logger.Error("Submitting unfinished packets", "err", err)
 				}
 			}
 		}
@@ -114,10 +114,10 @@ func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) er
 		case errors.Is(err, ErrTransferAlreadyInPipeline):
 			continue
 		case err != nil:
-			tr.GetLogger().Error("Submitting transfer failed, marking packet failed", "error", err)
+			tr.GetLogger().Error("Submitting transfer failed, marking packet failed", "err", err)
 
 			if errUpdate := d.storage.UpdatePacketStatus(ctx, tr.Key(), store.RelayStatusFailed); errUpdate != nil {
-				tr.GetLogger().Error("Marking packet failed", "error", errUpdate)
+				tr.GetLogger().Error("Marking packet failed", "err", errUpdate)
 			}
 		}
 	}

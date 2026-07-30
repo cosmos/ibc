@@ -167,7 +167,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 
 func (p BatchAckPacket) Cancel(transfers []*Transfer, err error) {
 	for _, tr := range transfers {
-		tr.GetLogger().Error("Delivering batch ack tx", "error", err)
+		tr.GetLogger().Error("Delivering batch ack tx", "err", err)
 	}
 }
 
