@@ -44,9 +44,8 @@ db:
 ## `chains`
 
 Chains the attestor and relayer can reference by `chainId`. Declare every
-chain used elsewhere in the config here first — `relayer.clients[].chainId`,
-`relayer.chainOverrides[].chainId`, and `attestor.attestations[].chainId` are
-all validated against this list.
+chain used elsewhere in the config here first. `relayer.clients[].chainId`
+and `relayer.chainOverrides[].chainId` are validated against this list.
 
 | Field     | Type   | Description |
 |-----------|--------|-------------|
@@ -122,20 +121,21 @@ as its own entry, referencing back.
 | `grpc` | string | Required for `remote`. Bare `host:port` (not a URL — a `://` here is rejected at validation). |
 
 ```yaml
-clients:
-  - alias: "eth-to-base"
-    clientId: "base-0"
-    chainId: "1"
-    counterpartyChainId: "8453"
-    counterpartyClientId: "ethereum-0"
-    type: "attestation"
-    attestorSet:
-      counterpartyChainFinalityOffset: 1
-      threshold: 1
-      attestors:
-        - name: "attestor-base"   # watches chain 8453, this client's counterparty
-          type: remote
-          grpc: attestor.example.com:3000
+relayer:
+  clients:
+    - alias: "eth-to-base"
+      clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 1
+        attestors:
+          - name: "attestor-base"   # watches chain 8453, this client's counterparty
+            type: remote
+            grpc: attestor.example.com:3000
 ```
 
 ### `relayer.routesToRelay[]`
@@ -148,7 +148,6 @@ lifecycle (recv, ack, timeout) using the given signer aliases.
 | `sourceClient`      | string | Must match a `clients[].alias`. |
 | `sourceSignerAlias` | string | Signer submitting txs on the source chain (e.g. the ack). |
 | `destSignerAlias`   | string | Signer submitting txs on the destination chain (e.g. the recv). |
-| `autoRelay`         | object | `enabled` (bool, default true) and `lookback` (uint64, blocks back from latest to scan for packets). |
 
 ---
 
