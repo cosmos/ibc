@@ -122,20 +122,21 @@ as its own entry, referencing back.
 | `grpc` | string | Required for `remote`. Bare `host:port` (not a URL — a `://` here is rejected at validation). |
 
 ```yaml
-clients:
-  - alias: "eth-to-base"
-    clientId: "base-0"
-    chainId: "1"
-    counterpartyChainId: "8453"
-    counterpartyClientId: "ethereum-0"
-    type: "attestation"
-    attestorSet:
-      counterpartyChainFinalityOffset: 1
-      threshold: 1
-      attestors:
-        - name: "attestor-base"   # watches chain 8453, this client's counterparty
-          type: remote
-          grpc: attestor.example.com:3000
+relayer:
+  clients:
+    - alias: "eth-to-base"
+      clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 1
+        attestors:
+          - name: "attestor-base"   # watches chain 8453, this client's counterparty
+            type: remote
+            grpc: attestor.example.com:3000
 ```
 
 ### `relayer.routesToRelay[]`
