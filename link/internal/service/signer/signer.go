@@ -74,13 +74,13 @@ func ParseKeyType(raw string) (keyfile.Type, error) {
 	return keyfile.ParseType(raw)
 }
 
-func PublicKeyToEVMAddress(pk []byte) string {
+func PublicKeyToEVMAddress(pk []byte) (string, error) {
 	publicKey, err := crypto.DecompressPubkey(pk)
 	if err != nil {
-		return ""
+		return "", err
 	}
 
-	return crypto.PubkeyToAddress(*publicKey).Hex()
+	return crypto.PubkeyToAddress(*publicKey).Hex(), nil
 }
 
 func DecodeHex(raw string) ([]byte, error) {
