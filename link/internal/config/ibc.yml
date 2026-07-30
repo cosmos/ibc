@@ -36,6 +36,7 @@ relayer:
       counterpartyChainId: "8453"
       counterpartyClientId: "ethereum-0"
       type: "attestation"
+      # the attestors referenced here must attest to the counterparty chain (chain id "8453")
       attestorSet:
         counterpartyChainFinalityOffset: 1
         threshold: 1
@@ -49,6 +50,7 @@ relayer:
       counterpartyChainId: "1"
       counterpartyClientId: "base-0"
       type: "attestation"
+      # the attestors referenced here must attest to the counterparty chain (chain id "1")
       attestorSet:
         counterpartyChainFinalityOffset: 1
         threshold: 1

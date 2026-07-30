@@ -11,9 +11,24 @@ make build
 # create a new config at ~/.ibc/ibc.yml
 ./bin/ibc config new
 
-# migrate the database
+# migrate the database (skip if running migrations on relayer startup.
+# `relayer run` migrates on startup automatically unless passed --no-migrate)
 ./bin/ibc migrate up
+
+# generate a new local signing key, or import an existing private key
+./bin/ibc keys new ecdsa <name>
+./bin/ibc keys import ecdsa <name> --private-key <hex>
+
+# run the relayer and/or attestor after populating config
+./bin/ibc relayer run
+./bin/ibc attestor run
 ```
+
+## Configuration
+
+See [`docs/configuration.md`](docs/configuration.md) for the full config
+reference, or [`internal/config/ibc.yml`](internal/config/ibc.yml) for a
+worked example.
 
 ## E2E
 
