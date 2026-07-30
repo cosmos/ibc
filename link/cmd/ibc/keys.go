@@ -174,7 +174,12 @@ func printKey(key signer.LocalKey, showPrivate bool, extra map[string]any) error
 	}
 
 	if key.Type() == keyfile.ECDSA {
-		kv["evmAddress"] = signer.PublicKeyToEVMAddress(key.PublicKey())
+		addr, err := signer.PublicKeyToEVMAddress(key.PublicKey())
+		if err != nil {
+			return err
+		}
+
+		kv["evmAddress"] = addr
 	}
 
 	if showPrivate {
