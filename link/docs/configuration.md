@@ -149,7 +149,6 @@ lifecycle (recv, ack, timeout) using the given signer aliases.
 | `sourceClient`      | string | Must match a `clients[].alias`. |
 | `sourceSignerAlias` | string | Signer submitting txs on the source chain (e.g. the ack). |
 | `destSignerAlias`   | string | Signer submitting txs on the destination chain (e.g. the recv). |
-| `autoRelay`         | object | `enabled` (bool, default true) and `lookback` (uint64, blocks back from latest to scan for packets). |
 
 ---
 
