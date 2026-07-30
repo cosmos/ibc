@@ -44,9 +44,8 @@ db:
 ## `chains`
 
 Chains the attestor and relayer can reference by `chainId`. Declare every
-chain used elsewhere in the config here first — `relayer.clients[].chainId`,
-`relayer.chainOverrides[].chainId`, and `attestor.attestations[].chainId` are
-all validated against this list.
+chain used elsewhere in the config here first. `relayer.clients[].chainId`
+and `relayer.chainOverrides[].chainId` are validated against this list.
 
 | Field     | Type   | Description |
 |-----------|--------|-------------|
