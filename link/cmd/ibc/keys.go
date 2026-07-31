@@ -116,6 +116,9 @@ func keysList(_ *cobra.Command, args []string) error {
 	}
 	entries, err := os.ReadDir(keyPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 
