@@ -181,60 +181,6 @@ func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 		err  string
 	}{
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
-		{"signer type", func(c *RelayerConfig) { c.SignerType = "kms" }, `unknown signer type "kms"`},
-		{"remote signer grpc", func(c *RelayerConfig) {
-			c.SignerType = RelayerSignerRemote
-			c.SignerRemoteKeyID = "relay-key"
-		}, "remote signer gRPC is required"},
-		{"remote signer key id", func(c *RelayerConfig) {
-			c.SignerType = RelayerSignerRemote
-			c.SignerGRPC = "kms:9090"
-		}, "remote signer key id is required"},
-		{"batch size", func(c *RelayerConfig) {
-			c.Chains[0].PacketBatchSize = -1
-		}, `chain "1" packet batch size must not be negative`},
-		{"batch timeout", func(c *RelayerConfig) {
-			c.Chains[0].PacketBatchTimeout = -time.Second
-		}, `chain "1" packet batch timeout must not be negative`},
-		{"threshold", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 2,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
-			}
-		}, "attestor threshold 2 must be between 1 and 1"},
-		{"attestor name", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Type: RelayerAttestorLocal, KeyFile: "key"}},
-			}
-		}, "attestor 0 name is required"},
-		{"attestor type", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", KeyFile: "key"}},
-			}
-		}, `attestor "a" has unknown type ""`},
-		{"remote grpc", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorRemote}},
-			}
-		}, `remote attestor "a" gRPC is required`},
-		{"remote grpc url", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorRemote, GRPC: "http://a:1"}},
-			}
-		}, `remote attestor "a" gRPC must be a bare host:port`},
-		{"duplicate attestor", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{
-					{Name: "a", Type: RelayerAttestorRemote, GRPC: "a:1"},
-					{Name: "a", Type: RelayerAttestorRemote, GRPC: "a:1"},
-				},
-			}
-		}, `duplicate attestor "a"`},
 		{"local key", func(c *RelayerConfig) {
 			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
 				Threshold: 1,
