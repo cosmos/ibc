@@ -121,6 +121,23 @@ func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
 	require.EqualValues(t, 1, connection.A().MinRequiredSignatures())
 	require.EqualValues(t, 1, connection.B().MinRequiredSignatures())
 
+	endpoint := serviceA.Endpoint()
+	require.NotEmpty(t, endpoint)
+	require.NotContains(t, endpoint, "://")
+	height, err := serviceA.LatestHeight(t.Context())
+	require.NoError(t, err)
+	require.NotZero(t, height)
+
+	require.NoError(t, serviceA.Restart(t.Context()))
+	require.Equal(t, endpoint, serviceA.Endpoint())
+	restartedHeight, err := serviceA.LatestHeight(t.Context())
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, restartedHeight, height)
+
+	require.NoError(t, serviceA.Stop(t.Context()))
+	_, err = serviceA.LatestHeight(t.Context())
+	require.Error(t, err)
+
 	require.NoError(t, env.Close(t.Context()))
 }
 
