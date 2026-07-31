@@ -488,7 +488,9 @@ type attestationConfig struct {
 }
 
 type signerConfig struct {
-	Alias string `yaml:"alias"`
-	Type  string `yaml:"type"`
-	File  string `yaml:"file"`
+	Alias       string `yaml:"alias"`
+	Type        string `yaml:"type"`
+	File        string `yaml:"file,omitempty"`
+	GRPC        string `yaml:"grpc,omitempty"`
+	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }

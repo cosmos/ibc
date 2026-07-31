@@ -111,6 +111,19 @@ func Deploy(
 	routes ...Route,
 ) (*ibclink.Driver, *Deployment) {
 	t.Helper()
+	return DeployWithRelayerConfig(t, env, signers, nil, routes...)
+}
+
+// DeployWithRelayerConfig is Deploy with a hook that adjusts the resolved
+// relayer configuration before it is written.
+func DeployWithRelayerConfig(
+	t testing.TB,
+	env *environment.Environment,
+	signers Signers,
+	configure func(*ibclink.RelayerConfig),
+	routes ...Route,
+) (*ibclink.Driver, *Deployment) {
+	t.Helper()
 	if env == nil {
 		t.Fatal("e2etest: Environment is required")
 	}
@@ -120,10 +133,7 @@ func Deploy(
 	ensureSignerBalances(t, env, signers)
 
 	dir := t.TempDir()
-	signerKeyPath, err := signers.storeRelayerKey(dir)
-	if err != nil {
-		t.Fatalf("e2etest: store signers: %v", err)
-	}
+	signerKeyPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
 	configPath := filepath.Join(dir, "ibc-link.config.yaml")
 	driver, err := ibclink.NewDriver(configPath)
 	if err != nil {
@@ -135,6 +145,14 @@ func Deploy(
 
 	deployment := deployApps(t, env, signers, routes)
 	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))
+	if configure != nil {
+		configure(&config)
+	}
+	if config.SignerType == "" || config.SignerType == ibclink.RelayerSignerLocal {
+		if err := signers.storeRelayerKey(config.SignerKeyFile); err != nil {
+			t.Fatalf("e2etest: store signers: %v", err)
+		}
+	}
 	if writeErr := ibclink.WriteRelayerConfig(configPath, config); writeErr != nil {
 		t.Fatalf("e2etest: write config: %v", writeErr)
 	}
