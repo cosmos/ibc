@@ -78,7 +78,9 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// First stdout line is the readiness JSON; stderr carries human logs and
-	// lands in relayer.log next to the config for post-mortems.
+	// lands in relayer.log next to the config for post-mortems. A bounded tail
+	// is kept in memory because startup failures (config rejections above all)
+	// only explain themselves on stderr, and the log file dies with TempDir.
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: stdout pipe: %w", err)
@@ -95,11 +97,12 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: create log: %w", err)
 	}
+	logs := &logWriter{file: logFile}
 
 	d := &Relayer{chainIDs: opts.ChainIDs, manualRoutes: opts.ManualRoutes}
 
 	if startErr := cmd.Start(); startErr != nil {
-		_ = logFile.Close()
+		logs.close()
 		return nil, fmt.Errorf("start ibc relayer run (%s): %w", bin, startErr)
 	}
 
@@ -109,15 +112,20 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
 	go func() {
 		defer drained.Done()
-		_, _ = io.Copy(logFile, stderr)
-		_ = logFile.Close()
+		_, _ = io.Copy(logs, stderr)
+		logs.close()
 	}()
 	d.h = reapProcess(cmd, processHooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
 	releaseBinding = nil
 
 	readiness, err := d.awaitReady(ctx, readyCh)
 	if err != nil {
-		return nil, errors.Join(err, d.kill())
+		// kill waits for the stderr drain, so the tail is complete.
+		killErr := d.kill()
+		return nil, errors.Join(
+			fmt.Errorf("%w; logs: %s", err, strings.TrimSpace(string(logs.tailSnapshot()))),
+			killErr,
+		)
 	}
 	d.readiness = readiness
 	d.client = relayerv2.NewRelayerApiServiceClient(

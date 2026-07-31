@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -77,6 +79,26 @@ func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
 		},
 		manualRoutes: map[string]bool{"route-manual": true},
 	}
+}
+
+// The relayer explains startup failures (config rejections above all) only on
+// stderr; the error must carry that tail because the log file dies with the
+// test's TempDir.
+func TestStartRelayerSurfacesStartupLogs(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "ibc-fail")
+	require.NoError(t, os.WriteFile(
+		script,
+		[]byte("#!/bin/sh\necho '.signers[0].grpc required for remote signer' >&2\nexit 1\n"),
+		0o700,
+	))
+	t.Setenv(binEnv, script)
+
+	driver, err := NewDriver(filepath.Join(t.TempDir(), "ibc.yml"))
+	require.NoError(t, err)
+	_, err = driver.StartRelayer(t.Context())
+	require.Error(t, err)
+	require.ErrorContains(t, err, "no readiness line")
+	require.ErrorContains(t, err, ".signers[0].grpc required for remote signer")
 }
 
 func TestRelayerProbeAcceptsNotFoundStatus(t *testing.T) {
