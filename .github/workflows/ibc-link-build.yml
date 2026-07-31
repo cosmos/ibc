@@ -68,7 +68,7 @@ jobs:
           cd "dist/${{ matrix.artifact }}"
           shasum -a 256 ibc > ibc.sha256
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: link/dist/${{ matrix.artifact }}
@@ -119,21 +119,21 @@ jobs:
         with:
           ref: ${{ env.BUILD_SHA }}
       - name: Download Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ibc-linux-${{ matrix.goarch }}
           path: image
       - name: Prepare image context
         run: chmod +x image/ibc
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build & Push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: image
           file: link/Dockerfile
@@ -151,9 +151,9 @@ jobs:
     env:
       IMAGE_TAG: ${{ needs.image-metadata.outputs.image_tag }}
     steps:
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
