@@ -305,9 +305,6 @@ const (
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"
 	RelayerAttestorRemote = "remote"
-
-	// typeLocal is shared with the standalone attestor configuration.
-	typeLocal = RelayerSignerLocal
 )
 
 type relayerFileConfig struct {

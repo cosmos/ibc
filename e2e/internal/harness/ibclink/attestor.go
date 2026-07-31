@@ -75,7 +75,6 @@ type readinessResult struct {
 type AttestorProcess struct {
 	signerAddress common.Address
 	address       string
-	endpoint      string
 	name          string
 	client        attestorv2.AttestationServiceClient
 	out           *logWriter
@@ -171,7 +170,7 @@ func (p *AttestorProcess) LatestHeight(ctx context.Context) (uint64, error) {
 		connect.NewRequest(&attestorv2.LatestHeightRequest{Attestor: p.name}),
 	)
 	if err != nil {
-		return 0, fmt.Errorf("call latest attestable height at %s: %w", p.endpoint, err)
+		return 0, fmt.Errorf("call latest attestable height at %s: %w", p.address, err)
 	}
 	return response.Msg.Height, nil
 }
@@ -190,10 +189,9 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		return err
 	}
 	p.address = address
-	p.endpoint = "http://" + address
 	p.client = attestorv2.NewAttestationServiceClient(
 		&http.Client{Timeout: probeRequestTimeout},
-		p.endpoint,
+		"http://"+address,
 	)
 
 	ticker := time.NewTicker(50 * time.Millisecond)
@@ -214,7 +212,7 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		case <-startupCtx.Done():
 			return fmt.Errorf(
 				"IBC Link attestor was not ready at %s: %w (last probe: %s); logs: %s",
-				p.endpoint,
+				p.address,
 				startupCtx.Err(),
 				lastProbeErr.Error(),
 				p.logTail(),
@@ -358,7 +356,7 @@ func prepareAttestorWorkspace(
 		}}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,
-			Type:  typeLocal,
+			Type:  RelayerSignerLocal,
 			File:  keyPath,
 		}},
 	}
