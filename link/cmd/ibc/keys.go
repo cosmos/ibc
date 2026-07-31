@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -54,7 +53,6 @@ var (
 		Use:   "list",
 		Short: "List all registered keys",
 		Long:  "Lists every key from <ibc-home>/keys/",
-		Args:  cobra.ExactArgs(0),
 		RunE:  keysList,
 	}
 )
@@ -100,44 +98,6 @@ func keysNew(_ *cobra.Command, args []string) error {
 	})
 }
 
-func keysList(_ *cobra.Command, _ []string) error {
-	globalFlags.SkipConfigValidation()
-
-	_, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-
-	var keys []string
-
-	keyPath, err := config.ExpandHome(filepath.Join(globalFlags.Home, "keys"))
-	if err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(keyPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	for _, entry := range entries {
-		// Look for files with json suffix and try to load them as keys
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			keyLocation := filepath.Join(keyPath, entry.Name())
-			_, err := signer.LocalKeyFromFile(keyLocation)
-			if err != nil {
-				continue
-			}
-			keys = append(keys, strings.TrimSuffix(entry.Name(), ".json"))
-		}
-	}
-
-	_, _ = fmt.Println(strings.Join(keys, "\n"))
-	return nil
-}
-
 func keysShow(_ *cobra.Command, args []string) error {
 	globalFlags.SkipConfigValidation()
 
@@ -159,6 +119,37 @@ func keysShow(_ *cobra.Command, args []string) error {
 	return printKey(key, flagKeysShowPrivate, map[string]any{
 		"path": keyPath,
 	})
+}
+
+func keysList(_ *cobra.Command, _ []string) error {
+	globalFlags.SkipConfigValidation()
+
+	_, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+
+	keyPath, err := config.ExpandHome(filepath.Join(globalFlags.Home, "keys"))
+	if err != nil {
+		return err
+	}
+
+	keys, err := signer.LocalKeysFromDirectory(keyPath)
+	if err != nil {
+		return err
+	}
+
+	out := make([]map[string]any, 0, len(keys))
+
+	for _, key := range keys {
+		out = append(out, map[string]any{
+			"name": key.Name(),
+			"type": key.Type(),
+			"path": key.Path,
+		})
+	}
+
+	return config.PrintJSON(out)
 }
 
 func keysImport(_ *cobra.Command, args []string) error {

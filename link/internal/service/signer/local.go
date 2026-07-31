@@ -1,7 +1,9 @@
 package signer
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -14,6 +16,12 @@ type LocalKey interface {
 	Signer
 	PrivateKey() []byte
 	StoreToFile(path string) error
+}
+
+// PersistedLocalKey is a local key loaded from disk.
+type PersistedLocalKey struct {
+	LocalKey
+	Path string
 }
 
 func KeyFilePath(homePath, keyName string) (string, error) {
@@ -50,6 +58,37 @@ func LocalKeyFromFile(path ...string) (LocalKey, error) {
 	return nil, err
 }
 
+func LocalKeysFromDirectory(keysDirectory string) ([]PersistedLocalKey, error) {
+	keys := []PersistedLocalKey{}
+
+	entries, err := os.ReadDir(keysDirectory)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return keys, nil
+		}
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		path := filepath.Join(keysDirectory, entry.Name())
+		key, err := LocalKeyFromFile(path)
+		if err != nil {
+			continue
+		}
+
+		keys = append(keys, PersistedLocalKey{
+			LocalKey: key,
+			Path:     path,
+		})
+	}
+
+	return keys, nil
+}
+
 func localKeyFromFile(path string) (LocalKey, error) {
 	keyType, privateKey, err := keyfile.Load(path)
 	if err != nil {
@@ -68,4 +107,8 @@ func localKeyFromFile(path string) (LocalKey, error) {
 
 func storeKeyToFile(path string, keyType keyfile.Type, privateKey []byte) error {
 	return keyfile.Store(path, keyType, privateKey)
+}
+
+func (k *PersistedLocalKey) Name() string {
+	return strings.TrimSuffix(filepath.Base(k.Path), ".json")
 }
