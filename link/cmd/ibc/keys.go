@@ -125,14 +125,13 @@ func keysList(_ *cobra.Command, args []string) error {
 			keyLocation := filepath.Join(keyPath, entry.Name())
 			_, err := signer.LocalKeyFromFile(keyLocation)
 			if err != nil {
-				_, _ = fmt.Fprintln(os.Stderr, "Failed to load key file at %s, skipping.", keyLocation)
 				continue
 			}
 			keys = append(keys, strings.TrimSuffix(entry.Name(), ".json"))
 		}
 	}
 
-	_, _ = fmt.Fprintln(os.Stdout, strings.Join(keys, "\n"))
+	_, _ = fmt.Println(strings.Join(keys, "\n"))
 	return nil
 }
 
