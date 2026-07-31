@@ -57,6 +57,7 @@ var (
 	}
 )
 
+//nolint:goconst // cli usage
 func keysNew(_ *cobra.Command, args []string) error {
 	globalFlags.SkipConfigValidation()
 
