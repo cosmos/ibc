@@ -100,7 +100,7 @@ func keysNew(_ *cobra.Command, args []string) error {
 	})
 }
 
-func keysList(_ *cobra.Command, args []string) error {
+func keysList(_ *cobra.Command, _ []string) error {
 	globalFlags.SkipConfigValidation()
 
 	_, err := setupHomeWithConfig()
