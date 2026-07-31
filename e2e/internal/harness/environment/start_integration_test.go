@@ -128,8 +128,8 @@ func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
 	require.NoError(t, err)
 	require.NotZero(t, height)
 
+	// Restart itself fails unless the child announces the original endpoint.
 	require.NoError(t, serviceA.Restart(t.Context()))
-	require.Equal(t, endpoint, serviceA.Endpoint())
 	restartedHeight, err := serviceA.LatestHeight(t.Context())
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, restartedHeight, height)

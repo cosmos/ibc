@@ -539,9 +539,10 @@ func acquireAttestor(
 	return attestorAcquisition{
 		attestor:    attestor,
 		description: fmt.Sprintf("stop Attestor %q", declaration.ID),
-		// Stop the Attestor rather than the initial process so a restarted
-		// process is the one released at Close.
-		release: attestor.Stop,
+		// Cleanup runs after the lease is closed, so it takes the unleased
+		// stop; stopping through the Attestor rather than the initial process
+		// keeps a restarted process the one released at Close.
+		release: attestor.stopProcess,
 	}, nil
 }
 
