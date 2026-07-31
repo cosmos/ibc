@@ -17,8 +17,8 @@ import (
 var globalFlags = config.DefaultFlagSet()
 
 var rootCmd = &cobra.Command{
-	Use:          "ibc",
-	Short:        "IBC Link",
+	Use:   "ibc",
+	Short: "IBC Link",
 }
 
 func main() {
@@ -59,7 +59,7 @@ func init() {
 		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")
 
 	// Keys commands
-	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport)
+	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport, cmdKeysList)
 	cmdKeysShow.Flags().BoolVarP(&flagKeysShowPrivate, "private", "", false, "show private key")
 	cmdKeysImport.Flags().StringVar(&flagKeysImportPrivateKey, "private-key", "", "hex-encoded private key")
 
