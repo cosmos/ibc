@@ -17,8 +17,8 @@ import (
 var globalFlags = config.DefaultFlagSet()
 
 var rootCmd = &cobra.Command{
-	Use:          "ibc",
-	Short:        "IBC Link",
+	Use:   "ibc",
+	Short: "IBC Link",
 }
 
 func main() {
