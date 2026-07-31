@@ -19,7 +19,6 @@ var globalFlags = config.DefaultFlagSet()
 var rootCmd = &cobra.Command{
 	Use:          "ibc",
 	Short:        "IBC Link",
-	SilenceUsage: true,
 }
 
 func main() {
