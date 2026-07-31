@@ -2,6 +2,7 @@ package ibclink
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -88,14 +89,13 @@ signers:
 }
 
 func TestBuildRelayerConfigOverrides(t *testing.T) {
-	batchSize := 7
 	cfg := testRelayerConfig()
 	cfg.SignerType = RelayerSignerRemote
 	cfg.SignerKeyFile = ""
 	cfg.SignerGRPC = "kms:9090"
 	cfg.SignerRemoteKeyID = "relay-key"
-	cfg.Chains[0].PacketBatchSize = &batchSize
-	cfg.Chains[0].PacketBatchTimeout = "250ms"
+	cfg.Chains[0].PacketBatchSize = 7
+	cfg.Chains[0].PacketBatchTimeout = 250 * time.Millisecond
 	cfg.Connections[0].AttestorSetA = &RelayerAttestorSet{
 		Threshold: 2,
 		Attestors: []RelayerAttestor{
@@ -174,70 +174,29 @@ func TestMixedAttestorSetsEmitOnlyReferencedLocals(t *testing.T) {
 	}, file.Signers[1])
 }
 
-func TestBuildRelayerConfigRejectsInvalidOverrides(t *testing.T) {
-	zero := 0
+func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name string
 		edit func(*RelayerConfig)
 		err  string
 	}{
-		{"signer type", func(c *RelayerConfig) { c.SignerType = "other" }, "unknown signer type"},
-		{
-			"remote signer grpc",
-			func(c *RelayerConfig) { c.SignerType = RelayerSignerRemote },
-			"remote signer gRPC is required",
-		},
-		{
-			"remote signer key",
-			func(c *RelayerConfig) {
-				c.SignerType, c.SignerGRPC = RelayerSignerRemote, "kms:9090"
-			},
-			"remote signer key id is required",
-		},
-		{
-			"batch size",
-			func(c *RelayerConfig) { c.Chains[0].PacketBatchSize = &zero },
-			"packet batch size must be positive",
-		},
-		{
-			"batch timeout",
-			func(c *RelayerConfig) { c.Chains[0].PacketBatchTimeout = "0s" },
-			"packet batch timeout must be a positive duration",
-		},
-		{"threshold", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 2,
-				Attestors: []RelayerAttestor{{
-					Name: "a", Type: RelayerAttestorLocal, KeyFile: "key",
-				}},
-			}
-		}, "attestor threshold 2"},
+		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
 		{"local key", func(c *RelayerConfig) {
 			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
 				Threshold: 1,
 				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal}},
 			}
 		}, "local attestor \"a\" key file is required"},
-		{"remote grpc", func(c *RelayerConfig) {
+		{"local conflict", func(c *RelayerConfig) {
 			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
 				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorRemote}},
+				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
 			}
-		}, "remote attestor \"a\" gRPC is required"},
-		{"remote grpc URL", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
+			c.Connections[0].AttestorSetB = &RelayerAttestorSet{
 				Threshold: 1,
-				Attestors: []RelayerAttestor{{
-					Name: "a", Type: RelayerAttestorRemote, GRPC: "http://a:80",
-				}},
+				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
 			}
-		}, "gRPC must be a bare host:port"},
-		{"attestor type", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: "other"}},
-			}
-		}, "unknown type"},
+		}, "local attestor \"a\" has conflicting chain or key file"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

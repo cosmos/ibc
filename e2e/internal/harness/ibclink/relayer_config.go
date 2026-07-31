@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -39,8 +38,8 @@ type RelayerChain struct {
 	ChainID            string
 	RPC                string
 	ICS26Router        string
-	PacketBatchSize    *int
-	PacketBatchTimeout string
+	PacketBatchSize    int
+	PacketBatchTimeout time.Duration
 }
 
 // RelayerConnection is a reciprocal on-chain client pair. Clients are the
@@ -105,14 +104,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		return fileConfig{}, errors.New("db path is required")
 	case cfg.SignerAlias == "":
 		return fileConfig{}, errors.New("signer alias is required")
-	case signerType != RelayerSignerLocal && signerType != RelayerSignerRemote:
-		return fileConfig{}, fmt.Errorf("unknown signer type %q", signerType)
 	case signerType == RelayerSignerLocal && cfg.SignerKeyFile == "":
 		return fileConfig{}, errors.New("signer key file is required")
-	case signerType == RelayerSignerRemote && cfg.SignerGRPC == "":
-		return fileConfig{}, errors.New("remote signer gRPC is required")
-	case signerType == RelayerSignerRemote && cfg.SignerRemoteKeyID == "":
-		return fileConfig{}, errors.New("remote signer key id is required")
 	case len(cfg.Chains) == 0:
 		return fileConfig{}, errors.New("at least one chain is required")
 	case len(cfg.Connections) == 0:
@@ -121,12 +114,17 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		return fileConfig{}, errors.New("at least one route is required")
 	}
 
+	processSigner := signerConfig{Alias: cfg.SignerAlias, Type: signerType}
+	if signerType == RelayerSignerRemote {
+		processSigner.GRPC = cfg.SignerGRPC
+		processSigner.RemoteKeyID = cfg.SignerRemoteKeyID
+	} else {
+		processSigner.File = cfg.SignerKeyFile
+	}
 	file := fileConfig{
-		Server: serverConfig{ListenAddress: "127.0.0.1:0"},
-		DB:     dbConfig{Type: "sqlite", URL: cfg.DBPath},
-		Signers: []signerConfig{newSignerConfig(
-			cfg.SignerAlias, signerType, cfg.SignerKeyFile, cfg.SignerGRPC, cfg.SignerRemoteKeyID,
-		)},
+		Server:  serverConfig{ListenAddress: "127.0.0.1:0"},
+		DB:      dbConfig{Type: "sqlite", URL: cfg.DBPath},
+		Signers: []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},
 	}
@@ -138,21 +136,13 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, chain := range cfg.Chains {
-		batchSize := 1
-		if chain.PacketBatchSize != nil {
-			if *chain.PacketBatchSize <= 0 {
-				return fileConfig{}, fmt.Errorf("chain %q packet batch size must be positive", chain.ChainID)
-			}
-			batchSize = *chain.PacketBatchSize
+		batchSize := chain.PacketBatchSize
+		if batchSize == 0 {
+			batchSize = 1
 		}
-		if chain.PacketBatchTimeout != "" {
-			timeout, err := time.ParseDuration(chain.PacketBatchTimeout)
-			if err != nil || timeout <= 0 {
-				return fileConfig{}, fmt.Errorf(
-					"chain %q packet batch timeout must be a positive duration",
-					chain.ChainID,
-				)
-			}
+		batchTimeout := ""
+		if chain.PacketBatchTimeout != 0 {
+			batchTimeout = chain.PacketBatchTimeout.String()
 		}
 		file.Chains = append(file.Chains, chainConfig{
 			ChainID: chain.ChainID,
@@ -170,20 +160,22 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			ChainID:            chain.ChainID,
 			TxSubmissionDelay:  "10ms",
 			PacketBatchSize:    batchSize,
-			PacketBatchTimeout: chain.PacketBatchTimeout,
+			PacketBatchTimeout: batchTimeout,
 		})
 		if explicitAttestors {
 			continue
 		}
 		// Attestations must not share a signer alias; every per-chain alias
 		// still loads the same key file.
-		addLocalAttestor(&file, cfg, chain.ChainID, localAttestorName(chain.ChainID), "")
+		addLocalAttestor(
+			&file, processSigner, cfg.FinalityOffset,
+			chain.ChainID, localAttestorName(chain.ChainID), "",
+		)
 	}
 
 	clients := make(map[string]string, 2*len(cfg.Connections))
 	type localAttestor struct{ chainID, keyFile string }
 	locals := make(map[string]localAttestor)
-	localOrder := make([]string, 0)
 	for _, connection := range cfg.Connections {
 		for _, end := range []struct {
 			chain, client, counterpartyChain, counterpartyClient string
@@ -212,16 +204,20 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 						keyFile = end.set.Attestors[i].KeyFile
 					}
 					local := localAttestor{end.counterpartyChain, keyFile}
-					if previous, ok := locals[entry.Name]; ok && previous != local {
-						return fileConfig{}, fmt.Errorf(
-							"local attestor %q has conflicting chain or key file",
-							entry.Name,
-						)
+					if previous, ok := locals[entry.Name]; ok {
+						if previous != local {
+							return fileConfig{}, fmt.Errorf(
+								"local attestor %q has conflicting chain or key file",
+								entry.Name,
+							)
+						}
+						continue
 					}
-					if _, ok := locals[entry.Name]; !ok {
-						locals[entry.Name] = local
-						localOrder = append(localOrder, entry.Name)
-					}
+					locals[entry.Name] = local
+					addLocalAttestor(
+						&file, processSigner, cfg.FinalityOffset,
+						local.chainID, entry.Name, local.keyFile,
+					)
 				}
 			}
 			file.Relayer.Clients = append(file.Relayer.Clients, clientFileConfig{
@@ -236,11 +232,6 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			clients[end.chain+"/"+end.client] = end.client
 		}
 	}
-	for _, name := range localOrder {
-		local := locals[name]
-		addLocalAttestor(&file, cfg, local.chainID, name, local.keyFile)
-	}
-
 	for _, route := range cfg.Routes {
 		alias, ok := clients[route.SourceChain+"/"+route.SourceClient]
 		if !ok {
@@ -259,29 +250,20 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-func newSignerConfig(alias, signerType, file, grpc, remoteKeyID string) signerConfig {
-	if signerType == RelayerSignerRemote {
-		return signerConfig{Alias: alias, Type: signerType, GRPC: grpc, RemoteKeyID: remoteKeyID}
-	}
-	return signerConfig{Alias: alias, Type: signerType, File: file}
-}
-
-func addLocalAttestor(file *fileConfig, cfg RelayerConfig, chainID, name, keyFile string) {
+func addLocalAttestor(
+	file *fileConfig,
+	signer signerConfig,
+	finalityOffset uint64,
+	chainID, name, keyFile string,
+) {
 	alias := name + "-signer"
-	switch {
-	case keyFile != "":
-		file.Signers = append(file.Signers, newSignerConfig(alias, RelayerSignerLocal, keyFile, "", ""))
-	case cfg.SignerType == RelayerSignerRemote:
-		file.Signers = append(file.Signers, newSignerConfig(
-			alias, RelayerSignerRemote, "", cfg.SignerGRPC, cfg.SignerRemoteKeyID,
-		))
-	default:
-		file.Signers = append(file.Signers, newSignerConfig(
-			alias, RelayerSignerLocal, cfg.SignerKeyFile, "", "",
-		))
+	if keyFile != "" {
+		signer = signerConfig{Type: RelayerSignerLocal, File: keyFile}
 	}
+	signer.Alias = alias
+	file.Signers = append(file.Signers, signer)
 	file.Attestor.Attestations = append(file.Attestor.Attestations, attestationConfig{
-		ChainID: chainID, Name: name, Signer: alias, FinalityOffset: uint(cfg.FinalityOffset),
+		ChainID: chainID, Name: name, Signer: alias, FinalityOffset: uint(finalityOffset),
 	})
 }
 
@@ -299,45 +281,20 @@ func buildAttestorSet(
 			}},
 		}, nil
 	}
-	if set.Threshold < 1 || set.Threshold > len(set.Attestors) {
-		return attestorSetFileConfig{}, fmt.Errorf(
-			"attestor threshold %d must be between 1 and %d",
-			set.Threshold,
-			len(set.Attestors),
-		)
-	}
 	result := attestorSetFileConfig{
 		CounterpartyChainFinalityOffset: finalityOffset,
 		Threshold:                       set.Threshold,
 	}
-	seen := make(map[attestorEntryFileConfig]struct{}, len(set.Attestors))
-	for i, attestor := range set.Attestors {
+	for _, attestor := range set.Attestors {
 		entry := attestorEntryFileConfig{Name: attestor.Name, Type: attestor.Type, GRPC: attestor.GRPC}
-		switch {
-		case attestor.Name == "":
-			return attestorSetFileConfig{}, fmt.Errorf("attestor %d name is required", i)
-		case attestor.Type != RelayerAttestorLocal && attestor.Type != RelayerAttestorRemote:
-			return attestorSetFileConfig{}, fmt.Errorf(
-				"attestor %q has unknown type %q", attestor.Name, attestor.Type,
-			)
-		case attestor.Type == RelayerAttestorLocal && attestor.KeyFile == "":
-			return attestorSetFileConfig{}, fmt.Errorf(
-				"local attestor %q key file is required", attestor.Name,
-			)
-		case attestor.Type == RelayerAttestorRemote && attestor.GRPC == "":
-			return attestorSetFileConfig{}, fmt.Errorf("remote attestor %q gRPC is required", attestor.Name)
-		case attestor.Type == RelayerAttestorRemote && strings.Contains(attestor.GRPC, "://"):
-			return attestorSetFileConfig{}, fmt.Errorf(
-				"remote attestor %q gRPC must be a bare host:port", attestor.Name,
-			)
-		}
 		if attestor.Type == RelayerAttestorLocal {
+			if attestor.KeyFile == "" {
+				return attestorSetFileConfig{}, fmt.Errorf(
+					"local attestor %q key file is required", attestor.Name,
+				)
+			}
 			entry.GRPC = ""
 		}
-		if _, ok := seen[entry]; ok {
-			return attestorSetFileConfig{}, fmt.Errorf("duplicate attestor %q", attestor.Name)
-		}
-		seen[entry] = struct{}{}
 		result.Attestors = append(result.Attestors, entry)
 	}
 	return result, nil
