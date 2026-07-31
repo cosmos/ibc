@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -47,6 +49,14 @@ var (
 		Args:  cobra.ExactArgs(1),
 		RunE:  keysShow,
 	}
+
+	cmdKeysList = &cobra.Command{
+		Use:   "list",
+		Short: "List all registered keys",
+		Long:  "Lists every key from <ibc-home>/keys/",
+		Args:  cobra.ExactArgs(0),
+		RunE:  keysList,
+	}
 )
 
 //nolint:goconst // cli usage
@@ -88,6 +98,42 @@ func keysNew(_ *cobra.Command, args []string) error {
 	return printKey(key, false, map[string]any{
 		"path": keyPath,
 	})
+}
+
+func keysList(_ *cobra.Command, args []string) error {
+	globalFlags.SkipConfigValidation()
+
+	_, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+
+	var keys []string
+
+	keyPath, err := config.ExpandHome(filepath.Join(globalFlags.Home, "keys"))
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(keyPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		// Look for files with json suffix and try to load them as keys
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			keyLocation := filepath.Join(keyPath, entry.Name())
+			_, err := signer.LocalKeyFromFile(keyLocation)
+			if err != nil {
+				_, _ = fmt.Fprintln(os.Stderr, "Failed to load key file at %s, skipping.", keyLocation)
+				continue
+			}
+			keys = append(keys, strings.TrimSuffix(entry.Name(), ".json"))
+		}
+	}
+
+	_, _ = fmt.Fprintln(os.Stdout, strings.Join(keys, "\n"))
+	return nil
 }
 
 func keysShow(_ *cobra.Command, args []string) error {
