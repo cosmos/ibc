@@ -140,10 +140,6 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		if batchSize == 0 {
 			batchSize = 1
 		}
-		batchTimeout := ""
-		if chain.PacketBatchTimeout != 0 {
-			batchTimeout = chain.PacketBatchTimeout.String()
-		}
 		file.Chains = append(file.Chains, chainConfig{
 			ChainID: chain.ChainID,
 			EVM: evmChainConfig{
@@ -160,7 +156,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			ChainID:            chain.ChainID,
 			TxSubmissionDelay:  "10ms",
 			PacketBatchSize:    batchSize,
-			PacketBatchTimeout: batchTimeout,
+			PacketBatchTimeout: chain.PacketBatchTimeout,
 		})
 		if explicitAttestors {
 			continue
@@ -322,10 +318,10 @@ type relayerFileConfig struct {
 }
 
 type chainOverrideFileConfig struct {
-	ChainID            string `yaml:"chainId"`
-	TxSubmissionDelay  string `yaml:"txSubmissionDelay"`
-	PacketBatchSize    int    `yaml:"packetBatchSize"`
-	PacketBatchTimeout string `yaml:"packetBatchTimeout,omitempty"`
+	ChainID            string        `yaml:"chainId"`
+	TxSubmissionDelay  string        `yaml:"txSubmissionDelay"`
+	PacketBatchSize    int           `yaml:"packetBatchSize"`
+	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
 }
 
 type clientFileConfig struct {

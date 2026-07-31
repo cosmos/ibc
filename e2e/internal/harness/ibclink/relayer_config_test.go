@@ -111,7 +111,8 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
 	require.Equal(t, chainOverrideFileConfig{
-		ChainID: "1", TxSubmissionDelay: "10ms", PacketBatchSize: 7, PacketBatchTimeout: "250ms",
+		ChainID: "1", TxSubmissionDelay: "10ms", PacketBatchSize: 7,
+		PacketBatchTimeout: 250 * time.Millisecond,
 	}, file.Relayer.ChainOverrides[0])
 	require.Equal(t, []signerConfig{
 		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},
