@@ -12,6 +12,9 @@ CONTRACT_BINDINGS := $(addprefix $(HARNESS_DIR)/environment/solidityibc/,\
 build-link: ## Build the Link binary
 	$(MAKE) -C link build
 
+install-link: ## Install the Link binary
+	$(MAKE) -C link install
+
 doctor-e2e: ## Check the runtime dependencies used by e2e tests
 	@command -v go >/dev/null || { echo "missing go" >&2; exit 1; }
 	@command -v docker >/dev/null || { echo "missing docker; Docker is required for e2e lanes" >&2; exit 1; }
