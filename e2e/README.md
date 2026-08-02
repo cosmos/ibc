@@ -38,7 +38,9 @@ The setup sequence is deliberately explicit:
 ```go
 func TestTransfer_AutoRelay(t *testing.T) {
     t.Parallel()
-    env := e2etest.Start(t, e2etest.SelectedSuite(t))
+    spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+    runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+    env := e2etest.Start(t, spec, runtime)
     signers := e2etest.NewSigners(t)
     route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
     driver, deployment := e2etest.Deploy(t, env, signers, route)
@@ -64,9 +66,10 @@ func TestTransfer_AutoRelay(t *testing.T) {
 Tests that need manual mining run only in the instant-Anvil lane:
 
 ```go
-selected := e2etest.SelectedSuite(t)
 e2etest.RequireAnvilLane(t)
-env := e2etest.Start(t, selected)
+spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+env := e2etest.Start(t, spec, runtime)
 
 chainB, err := env.Chain(e2etest.ChainB)
 require.NoError(t, err)
@@ -78,6 +81,4 @@ An invalid lane fails; a test pinned to another lane skips before acquisition. S
 
 ## Extending the graph
 
-`e2etest.Suite` contains only an `environment.Spec` and its process-local runtime bindings. `SelectedSuite(t)` supplies the ordinary two-Chain selection for the chosen lane, while exceptional graphs use `e2etest.SuiteFor` directly. Temporary route configuration also lives in `e2etest`, but belongs to each test's explicit setup rather than the Environment selection.
-
-A reusable Environment constructor belongs in `e2etest` only when multiple tests need the same resource graph. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+Build the graph explicitly: `dummyClientMeshSpec` is this package's narrow fixture for a permissive dummy-client mesh, including custom managed or attached Chain declarations that intentionally need every pair connected. It is not a public or general spec composer. For attested, sparse, or other protocol graphs, write the complete `environment.Spec` literal and a matching `environment.Runtime` with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
