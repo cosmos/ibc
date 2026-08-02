@@ -18,8 +18,10 @@ type RelayerConfig struct {
 	SignerAlias string
 	// SignerType defaults to RelayerSignerLocal. A remote transaction signer is
 	// shared by both ends of every route.
-	SignerType        string
-	SignerGRPC        string
+	SignerType string
+	SignerGRPC string
+	// SignerRemoteKeyID is the opaque remote KMS key selector sent to GetKey
+	// and Sign. It is distinct from the signer alias and address.
 	SignerRemoteKeyID string
 	// SignerKeyFile backs the default local signer and legacy local attestors.
 	SignerKeyFile string
@@ -59,8 +61,9 @@ type RelayerAttestorSet struct {
 	Attestors []RelayerAttestor
 }
 
-// RelayerAttestor is either an in-process attestor backed by KeyFile or a
-// remote attestor reached at a bare gRPC host:port.
+// RelayerAttestor describes an explicit attestor: a local entry runs in the
+// relayer and provisions its signer from KeyFile; a remote entry is reached at
+// a bare gRPC host:port.
 type RelayerAttestor struct {
 	Name    string
 	Type    string

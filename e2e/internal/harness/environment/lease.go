@@ -5,8 +5,9 @@ import (
 	"sync"
 )
 
-// environmentLease linearizes resolved operations and bound child processes
-// with Environment cleanup.
+// environmentLease prevents resolved operations and bound child processes from
+// racing Environment.Close. Close rejects new uses and drains active uses
+// before cleanup.
 type environmentLease struct {
 	mu      sync.Mutex
 	closed  bool
