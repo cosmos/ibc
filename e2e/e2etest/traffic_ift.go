@@ -40,11 +40,7 @@ type IFT struct {
 	destIFT      common.Address
 	sourceRouter common.Address
 	sourceClient string
-	// batcher is the deployed IFTBatchTransferShim on the source Chain, used
-	// by SendBatch. It is funded with IFT balance at deploy time, since it
-	// becomes msg.sender (and therefore the account debited) for every
-	// iftTransfer call it makes.
-	batcher common.Address
+	batcher      common.Address
 }
 
 type IFTPacket struct {
@@ -108,12 +104,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 	}, nil
 }
 
-// SendBatch emits multiple IFT transfers from a single source transaction via
-// the deployed batcher: IFTBaseUpgradeable does not support Multicall, and a
-// loop of Send calls would create independent transactions instead of one.
-// The batcher becomes msg.sender inside IFT for every call it makes, so the
-// aggregate burn this batch produces is checked against the batcher's own
-// balance, not the caller's — see IFTBatch.VerifyBurned.
+// SendBatch emits multiple IFT transfers from a single source transaction
 func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
 	batcherBefore, err := i.balance(ctx, i.source.evm, i.sourceIFT, i.batcher)
 	if err != nil {
