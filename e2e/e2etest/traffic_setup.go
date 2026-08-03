@@ -113,6 +113,19 @@ func Deploy(
 	routes ...Route,
 ) (*ibclink.Driver, *Deployment) {
 	t.Helper()
+	return DeployWithRelayerConfig(t, env, signers, nil, routes...)
+}
+
+// DeployWithRelayerConfig is Deploy with a hook that adjusts the resolved
+// relayer configuration after environment Attestors are assigned.
+func DeployWithRelayerConfig(
+	t testing.TB,
+	env *environment.Environment,
+	signers Signers,
+	configure func(*ibclink.RelayerConfig),
+	routes ...Route,
+) (*ibclink.Driver, *Deployment) {
+	t.Helper()
 	if env == nil {
 		t.Fatal("e2etest: Environment is required")
 	}
@@ -122,10 +135,7 @@ func Deploy(
 	ensureSignerBalances(t, env, signers)
 
 	dir := t.TempDir()
-	signerKeyPath, err := signers.storeRelayerKey(dir)
-	if err != nil {
-		t.Fatalf("e2etest: store signers: %v", err)
-	}
+	signerKeyPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
 	configPath := filepath.Join(dir, "ibc-link.config.yaml")
 	driver, err := ibclink.NewDriver(configPath)
 	if err != nil {
@@ -137,6 +147,14 @@ func Deploy(
 
 	deployment := deployApps(t, env, signers, routes)
 	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))
+	if configure != nil {
+		configure(&config)
+	}
+	if config.SignerType == "" || config.SignerType == ibclink.RelayerSignerLocal {
+		if err := signers.storeRelayerKey(config.SignerKeyFile); err != nil {
+			t.Fatalf("e2etest: store signers: %v", err)
+		}
+	}
 	if writeErr := ibclink.WriteRelayerConfig(configPath, config); writeErr != nil {
 		t.Fatalf("e2etest: write config: %v", writeErr)
 	}
@@ -429,6 +447,25 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
+	attestorIDs := env.Attestors()
+	attestorSets := make(map[string]*ibclink.RelayerAttestorSet, len(attestorIDs))
+	for _, id := range attestorIDs {
+		attestor, err := env.Attestor(id)
+		if err != nil {
+			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
+		}
+		client := attestor.IBCClient()
+		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
+		key := chainID + "/" + string(client.Locator())
+		set := attestorSets[key]
+		if set == nil {
+			set = &ibclink.RelayerAttestorSet{Threshold: int(client.MinRequiredSignatures())}
+			attestorSets[key] = set
+		}
+		set.Attestors = append(set.Attestors, ibclink.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		})
+	}
 
 	connections := map[string]bool{}
 	for _, route := range routes {
@@ -452,6 +489,8 @@ func buildConfig(
 		key := connection.ChainA + "/" + connection.ClientA
 		if !connections[key] {
 			connections[key] = true
+			connection.AttestorSetA = attestorSets[key]
+			connection.AttestorSetB = attestorSets[connection.ChainB+"/"+connection.ClientB]
 			config.Connections = append(config.Connections, connection)
 		}
 

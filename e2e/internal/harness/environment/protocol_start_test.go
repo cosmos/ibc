@@ -6,10 +6,100 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 )
+
+func TestEnvironmentCloseWaitsForLeasedAttestorUse(t *testing.T) {
+	lease := &environmentLease{}
+	attestor := &Attestor{id: "attestor-a"}
+	attestor.bindLease(lease)
+	cleanupStarted := make(chan struct{})
+	env := &Environment{
+		effects: &effectJournal{effects: []cleanupEffect{{
+			description: "stop Attestor attestor-a",
+			release: func(context.Context) error {
+				close(cleanupStarted)
+				return nil
+			},
+		}}},
+		lease: lease,
+	}
+
+	useStarted := make(chan struct{})
+	releaseUse := make(chan struct{})
+	var releaseUseOnce sync.Once
+	useDone := make(chan error, 1)
+	useFinished := make(chan struct{})
+	closeDone := make(chan error, 1)
+	closeFinished := make(chan struct{})
+	closeStarted := false
+	go func() {
+		useDone <- attestor.use(func() error {
+			close(useStarted)
+			<-releaseUse
+			return nil
+		})
+		close(useFinished)
+	}()
+	defer func() {
+		releaseUseOnce.Do(func() { close(releaseUse) })
+		select {
+		case <-useFinished:
+		case <-time.After(time.Second):
+			t.Error("leased Attestor use did not finish")
+		}
+		if closeStarted {
+			select {
+			case <-closeFinished:
+			case <-time.After(time.Second):
+				t.Error("Environment.Close did not finish")
+			}
+		}
+	}()
+
+	select {
+	case <-useStarted:
+	case <-time.After(time.Second):
+		t.Fatal("leased Attestor use did not start")
+	}
+	closeStarted = true
+	go func() {
+		closeDone <- env.Close(context.Background())
+		close(closeFinished)
+	}()
+
+	require.Eventually(t, func() bool {
+		return errors.Is(attestor.use(func() error { return nil }), ErrEnvironmentClosed)
+	}, time.Second, time.Millisecond)
+	select {
+	case <-cleanupStarted:
+		t.Fatal("Attestor cleanup started before the leased use finished")
+	default:
+	}
+
+	releaseUseOnce.Do(func() { close(releaseUse) })
+	select {
+	case err := <-useDone:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("leased Attestor use did not finish")
+	}
+	select {
+	case err := <-closeDone:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("Environment.Close did not finish")
+	}
+	select {
+	case <-cleanupStarted:
+	default:
+		t.Fatal("Attestor cleanup did not run")
+	}
+	require.ErrorIs(t, attestor.use(func() error { return nil }), ErrEnvironmentClosed)
+}
 
 func TestStartRealizesMixedProtocolGraphWithInjectedDrivers(t *testing.T) {
 	spec := mixedProtocolSpec()

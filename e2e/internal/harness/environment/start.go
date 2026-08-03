@@ -93,6 +93,9 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 	if startErr != nil {
 		return nil, abortStart(ctx, startErr, ws, effects)
 	}
+	for _, attestor := range attestors {
+		attestor.bindLease(lease)
+	}
 
 	return &Environment{
 		chains:      chains,

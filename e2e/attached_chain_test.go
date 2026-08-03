@@ -47,7 +47,7 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 	require.NoError(t, oob.EnsureEOABalance(ctx, addresses.Relayer, e2etest.RequiredSignerBalance()))
 	require.NoError(t, oob.EnsureEOABalance(ctx, e2etest.ProtocolAuthorityAddress(), e2etest.RequiredSignerBalance()))
 
-	suite := e2etest.SuiteFor(environment.Spec{Chains: []environment.ChainSpec{
+	spec := dummyClientMeshSpec([]environment.ChainSpec{
 		environment.ManagedAnvil{ID: e2etest.ChainA, EVMChainID: managedChainID},
 		environment.AttachedEVM{
 			ID: e2etest.ChainB, EVMChainID: externalChainID, Endpoint: externalEndpoint,
@@ -57,13 +57,16 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 				PollInterval:     100 * time.Millisecond,
 			},
 		},
-	}}, environment.Runtime{Endpoints: map[environment.EndpointBindingID]environment.EndpointBinding{
-		externalEndpoint: {RPCURL: oob.RPCURL()},
-	}})
+	})
+	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{
+		Endpoints: map[environment.EndpointBindingID]environment.EndpointBinding{
+			externalEndpoint: {RPCURL: oob.RPCURL()},
+		},
+	})
 
 	// Subtest teardown must finish before the out-of-band liveness probe below, or the check is vacuous.
 	t.Run("environment", func(t *testing.T) {
-		env := e2etest.Start(t, suite)
+		env := e2etest.Start(t, spec, runtime)
 		route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 		driver, deployment := e2etest.Deploy(t, env, signers, route)
 		transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)

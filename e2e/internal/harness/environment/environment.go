@@ -107,6 +107,17 @@ func (e *Environment) Attestor(id AttestorID) (*Attestor, error) {
 	return attestor, nil
 }
 
+// Attestors returns the resolved Attestor identities in stable order. The
+// returned slice is owned by the caller.
+func (e *Environment) Attestors() []AttestorID {
+	ids := make([]AttestorID, 0, len(e.attestors))
+	for id := range e.attestors {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
 // Close releases acquired effects in reverse acquisition order, then removes
 // the private workspace. Successful effects are never repeated. If cleanup
 // fails or ctx expires, a later call retries only unfinished effects.

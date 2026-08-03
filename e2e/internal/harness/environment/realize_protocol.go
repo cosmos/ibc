@@ -502,7 +502,7 @@ func acquireAttestor(
 	if err != nil {
 		return attestorAcquisition{}, err
 	}
-	process, err := ibclink.StartAttestor(ctx, ibclink.AttestorLaunch{
+	launch := ibclink.AttestorLaunch{
 		BinaryPath:    ibclink.ResolvedBin(),
 		WorkDir:       filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
 		Name:          string(declaration.ID),
@@ -510,7 +510,8 @@ func acquireAttestor(
 		PrivateKeyHex: runtime.Authorities[declaration.Authority].PrivateKeyHex,
 		RPCURL:        dependencies.observed.chain.rpcURL,
 		ICS26Router:   string(dependencies.observed.locator),
-	})
+	}
+	process, err := ibclink.StartAttestor(ctx, launch)
 	if err != nil {
 		if process != nil {
 			return attestorAcquisition{
@@ -526,15 +527,22 @@ func acquireAttestor(
 			release:     process.Stop,
 		}, fmt.Errorf("Attestor signer address does not match its runtime authority")
 	}
+	attestor := &Attestor{
+		id:       declaration.ID,
+		client:   dependencies.client,
+		observed: dependencies.observed,
+		signer:   EVMAddress(process.SignerAddress().Hex()),
+		endpoint: process.Endpoint(),
+		process:  process,
+		launch:   launch,
+	}
 	return attestorAcquisition{
-		attestor: &Attestor{
-			id:       declaration.ID,
-			client:   dependencies.client,
-			observed: dependencies.observed,
-			signer:   EVMAddress(process.SignerAddress().Hex()),
-		},
+		attestor:    attestor,
 		description: fmt.Sprintf("stop Attestor %q", declaration.ID),
-		release:     process.Stop,
+		// Cleanup runs after the lease is closed, so it takes the unleased
+		// stop; stopping through the Attestor rather than the initial process
+		// keeps a restarted process the one released at Close.
+		release: attestor.stopProcess,
 	}, nil
 }
 
