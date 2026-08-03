@@ -169,7 +169,13 @@ func (p *IFTPacket) awaitPendingCleared(ctx context.Context) error {
 		timing.PollInterval,
 		fmt.Sprintf("IFT packet %s pending transfer cleared", p.packet.reference()),
 		func(ctx context.Context) (struct{}, bool, error) {
-			_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packet.Sequence)
+			_, err := p.app.pendingTransfer(
+				ctx,
+				p.app.source.evm,
+				p.app.sourceIFT,
+				p.app.sourceClient,
+				p.packet.Sequence,
+			)
 			switch {
 			case err == nil:
 				return struct{}{}, false, fmt.Errorf("pending transfer still present")

@@ -12,7 +12,6 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))

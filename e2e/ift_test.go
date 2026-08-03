@@ -16,7 +16,6 @@ import (
 // destination mint reverts on it, forcing an error acknowledgement.
 var zeroAddressReceiver = (common.Address{}).Hex()
 
-//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
 	env := e2etest.Start(t, e2etest.SelectedSuite(t))
