@@ -113,6 +113,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 
 	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))
 	destinationsBefore := make([]*big.Int, len(requests))
+	seenReceivers := make(map[common.Address]struct{}, len(requests))
 	total := big.NewInt(0)
 	for k, request := range requests {
 		amount, err := validAmount(request.Amount)
@@ -123,6 +124,14 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		if err != nil {
 			return nil, err
 		}
+		if _, duplicate := seenReceivers[receiver]; duplicate {
+			return nil, fmt.Errorf(
+				"e2etest: IFT batch on route %q has duplicate receiver %s: "+
+					"per-packet VerifyDelivered assumes each receiver appears once in the batch",
+				i.routeID, receiver.Hex(),
+			)
+		}
+		seenReceivers[receiver] = struct{}{}
 		destinationBefore, err := i.balance(ctx, i.destination.evm, i.destIFT, receiver)
 		if err != nil {
 			return nil, err
