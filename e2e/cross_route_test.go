@@ -52,10 +52,10 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 
 	destination, err := env.Chain("chain-a")
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, bToA.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, bToA.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, cToA.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, cToA.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, bToA.VerifyDelivered(ctx))

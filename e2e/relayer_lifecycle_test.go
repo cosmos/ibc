@@ -48,7 +48,7 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 		return nil
 	}))
 
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, chainB.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

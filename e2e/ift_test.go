@@ -17,6 +17,100 @@ import (
 // destination mint reverts on it, forcing an error acknowledgement.
 var zeroAddressReceiver = (common.Address{}).Hex()
 
+const (
+	attestedClientAID  environment.ClientID    = "attested-client-a"
+	attestedClientBID  environment.ClientID    = "attested-client-b"
+	attestorAID        environment.AttestorID  = "attestor-a"
+	attestorBID        environment.AttestorID  = "attestor-b"
+	attestorAAuthority environment.AuthorityID = "attestor-a-authority"
+	attestorBAuthority environment.AuthorityID = "attestor-b-authority"
+)
+
+func TestAttestedIFTTransfer_AutoRelay(t *testing.T) {
+	t.Parallel()
+	spec := environment.Spec{
+		Chains: e2etest.ChainSpecsForConfiguredLane(t),
+		IBCInstances: []environment.IBCInstanceSpec{
+			environment.NewIBCInstance{
+				ID:        "attested-ibc-a",
+				Chain:     e2etest.ChainA,
+				Authority: e2etest.ProtocolAuthorityID,
+			},
+			environment.NewIBCInstance{
+				ID:        "attested-ibc-b",
+				Chain:     e2etest.ChainB,
+				Authority: e2etest.ProtocolAuthorityID,
+			},
+		},
+		Connections: []environment.ConnectionSpec{{
+			ID: "attested-connection",
+			A: environment.NewClient{
+				ID:                    attestedClientAID,
+				IBCInstance:           "attested-ibc-a",
+				Authority:             e2etest.ProtocolAuthorityID,
+				MinRequiredSignatures: 1,
+			},
+			B: environment.NewClient{
+				ID:                    attestedClientBID,
+				IBCInstance:           "attested-ibc-b",
+				Authority:             e2etest.ProtocolAuthorityID,
+				MinRequiredSignatures: 1,
+			},
+		}},
+		Attestors: []environment.AttestorSpec{
+			{ID: attestorAID, Client: attestedClientAID, Authority: attestorAAuthority},
+			{ID: attestorBID, Client: attestedClientBID, Authority: attestorBAuthority},
+		},
+	}
+	runtime := e2etest.RuntimeWithProtocolDeployer(
+		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
+			attestorAAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000006"},
+			attestorBAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000007"},
+		}},
+	)
+	env := e2etest.Start(t, spec, runtime)
+	signers := e2etest.NewSigners(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	attestorA, err := env.Attestor(attestorAID)
+	require.NoError(t, err)
+	attestorB, err := env.Attestor(attestorBID)
+	require.NoError(t, err)
+	driver, deployment := e2etest.Deploy(t, env, signers, route)
+	iftApp := e2etest.BindIFT(t, env, deployment, signers, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+
+	source, err := env.Chain(route.Source)
+	require.NoError(t, err)
+	sourceEVM, err := source.EVM()
+	require.NoError(t, err)
+	sendReceipt, err := sourceEVM.TransactionReceipt(ctx, common.HexToHash(transfer.Packet().SourceTxHash))
+	require.NoError(t, err)
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	receiveReceipt, err := destinationEVM.TransactionReceipt(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
+	require.NoError(t, err)
+
+	destinationState := attestedClientState(t, destinationEVM, attestorB.IBCClient().LightClientAddress())
+	sourceState := attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
+	// The receive proof advanced the destination client through the send block.
+	require.GreaterOrEqual(t, destinationState.LatestHeight, sendReceipt.BlockNumber.Uint64())
+	// The acknowledgement proof advanced the source client through the receive block.
+	require.GreaterOrEqual(t, sourceState.LatestHeight, receiveReceipt.BlockNumber.Uint64())
+}
+
+//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
@@ -36,7 +130,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -75,7 +169,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 	source, err := env.Chain(route.Source)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
@@ -107,7 +201,7 @@ func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
@@ -137,7 +231,7 @@ func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
@@ -175,7 +269,7 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
 	for _, transfer := range transfers {
-		err := e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		_, err := e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -221,7 +315,7 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
 	for _, packet := range packets {
-		err = e2etest.AwaitState(ctx, relayer, packet,
+		_, err = e2etest.AwaitState(ctx, relayer, packet,
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 		require.NoError(t, err)
 	}

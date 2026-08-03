@@ -118,6 +118,16 @@ func (e *EVM) BroadcastTx(
 	return receipt, err
 }
 
+func (e *EVM) TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	var receipt *types.Receipt
+	err := e.use(func(client *chainevm.EVMClient) error {
+		var err error
+		receipt, err = client.Client().TransactionReceipt(ctx, hash)
+		return err
+	})
+	return receipt, err
+}
+
 func (e *EVM) transactionWait() chainevm.TransactionWait {
 	return chainevm.TransactionWait{
 		Timeout:      e.chain.timing.CompletionBudget,

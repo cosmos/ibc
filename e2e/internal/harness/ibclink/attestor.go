@@ -1,9 +1,4 @@
 // Package ibclink manages IBC Link processes as black boxes.
-//
-// Readiness means that the process loaded its private configuration and serves
-// LatestHeight for the configured attestor. The current Link
-// implementation returns a synthetic timestamp from that RPC; this package
-// therefore does not claim that the process can produce or submit attestations.
 package ibclink
 
 import (

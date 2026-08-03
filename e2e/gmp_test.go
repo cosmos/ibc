@@ -27,7 +27,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 	require.NoError(t, err)
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyExecuted(ctx))
@@ -52,7 +52,7 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	require.NoError(t, err)
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyRejected(ctx))
