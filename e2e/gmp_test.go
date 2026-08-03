@@ -69,7 +69,7 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	require.NoError(t, err)
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 
