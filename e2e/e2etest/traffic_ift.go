@@ -9,6 +9,7 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -152,11 +153,37 @@ func (p *IFTPacket) VerifyNotMinted(ctx context.Context) error {
 	return nil
 }
 
-// VerifyRefunded waits for the source sender balance to be restored after timeout.
+// VerifyRefunded waits for the source sender balance to be restored after the transfer completes.
 func (p *IFTPacket) VerifyRefunded(ctx context.Context) error {
-	if err := awaitPacketTimeout(ctx, p.app.source, p.app.sourceRouter, p.app.sourceClient, p.packet); err != nil {
+	if err := p.awaitPendingCleared(ctx); err != nil {
 		return err
 	}
+	return p.awaitSourceRefund(ctx)
+}
+
+func (p *IFTPacket) awaitPendingCleared(ctx context.Context) error {
+	timing := p.app.source.chain.Timing()
+	_, err := await(
+		ctx,
+		timing.CompletionBudget,
+		timing.PollInterval,
+		fmt.Sprintf("IFT packet %s pending transfer cleared", p.packet.reference()),
+		func(ctx context.Context) (struct{}, bool, error) {
+			_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packet.Sequence)
+			switch {
+			case err == nil:
+				return struct{}{}, false, fmt.Errorf("pending transfer still present")
+			case isIFTPendingTransferNotFound(err):
+				return struct{}{}, true, nil
+			default:
+				return struct{}{}, false, err
+			}
+		},
+	)
+	return err
+}
+
+func (p *IFTPacket) awaitSourceRefund(ctx context.Context) error {
 	return awaitBalance(
 		ctx,
 		p.app.source.chain,
@@ -166,6 +193,52 @@ func (p *IFTPacket) VerifyRefunded(ctx context.Context) error {
 		},
 		p.sourceBefore,
 	)
+}
+
+// VerifyPending checks that a pending-transfer record exists on the source
+// IFT contract for this packet's sequence, with the expected sender and amount.
+func (p *IFTPacket) VerifyPending(ctx context.Context) error {
+	record, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packet.Sequence)
+	if err != nil {
+		return fmt.Errorf("e2etest: IFT packet %s pending transfer: %w", p.packet.reference(), err)
+	}
+	if record.Sender != p.app.sender.Address() {
+		return fmt.Errorf(
+			"e2etest: IFT packet %s pending transfer sender: got %s, want %s",
+			p.packet.reference(),
+			record.Sender.Hex(),
+			p.app.sender.Address().Hex(),
+		)
+	}
+	if record.Amount.Cmp(p.amount) != 0 {
+		return fmt.Errorf(
+			"e2etest: IFT packet %s pending transfer amount: got %s, want %s",
+			p.packet.reference(),
+			record.Amount,
+			p.amount,
+		)
+	}
+	return nil
+}
+
+// VerifyPendingCleared checks that no pending-transfer record exists for
+// this packet's sequence on the source IFT contract.
+func (p *IFTPacket) VerifyPendingCleared(ctx context.Context) error {
+	_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packet.Sequence)
+	if err == nil {
+		return fmt.Errorf(
+			"e2etest: IFT packet %s pending transfer still present, want cleared",
+			p.packet.reference(),
+		)
+	}
+	if !isIFTPendingTransferNotFound(err) {
+		return fmt.Errorf(
+			"e2etest: IFT packet %s pending transfer lookup: want IFTPendingTransferNotFound, got: %w",
+			p.packet.reference(),
+			err,
+		)
+	}
+	return nil
 }
 
 func (i *IFT) receiver(value string) (common.Address, error) {
@@ -201,4 +274,37 @@ func (i *IFT) balance(
 		return nil, fmt.Errorf("e2etest: query IFT balance of %s: %w", holder.Hex(), err)
 	}
 	return balance, nil
+}
+
+func (i *IFT) pendingTransfer(
+	ctx context.Context,
+	client *environment.EVM,
+	contract common.Address,
+	clientID string,
+	sequence uint64,
+) (ift.IIFTMsgsPendingTransfer, error) {
+	var record ift.IIFTMsgsPendingTransfer
+	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := ift.NewContractCaller(contract, caller)
+		if err != nil {
+			return fmt.Errorf("e2etest: bind IFT %s: %w", contract, err)
+		}
+		record, err = bound.GetPendingTransfer(&bind.CallOpts{Context: ctx}, clientID, sequence)
+		return err
+	})
+	if err != nil {
+		return ift.IIFTMsgsPendingTransfer{}, err
+	}
+	return record, nil
+}
+
+func isIFTPendingTransferNotFound(err error) bool {
+	revertData, ok := ethclient.RevertErrorData(err)
+	if !ok || len(revertData) < 4 {
+		return false
+	}
+	var selector [4]byte
+	copy(selector[:], revertData)
+	contractErr, lookupErr := iftABI.ErrorByID(selector)
+	return lookupErr == nil && contractErr.Name == "IFTPendingTransferNotFound"
 }

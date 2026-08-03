@@ -52,6 +52,8 @@ type Route struct {
 	Source      environment.ChainID
 	Destination environment.ChainID
 	Manual      bool
+	// SkipDestinationIFTBridge leaves the destination end's IFT bridge unregistered.
+	SkipDestinationIFTBridge bool
 }
 
 const routeAtoB RouteID = "route-a-to-b"
@@ -330,14 +332,18 @@ func registerIFTBridges(
 	for _, route := range routes {
 		clients := deployment.routes[route.ID]
 		ends := []struct {
-			chain        environment.ChainID
-			client       string
-			counterparty environment.ChainID
+			chain         environment.ChainID
+			client        string
+			counterparty  environment.ChainID
+			isDestination bool
 		}{
 			{chain: route.Source, client: clients.SourceClient, counterparty: route.Destination},
-			{chain: route.Destination, client: clients.DestClient, counterparty: route.Source},
+			{chain: route.Destination, client: clients.DestClient, counterparty: route.Source, isDestination: true},
 		}
 		for _, end := range ends {
+			if end.isDestination && route.SkipDestinationIFTBridge {
+				continue
+			}
 			chain, err := env.Chain(end.chain)
 			if err != nil {
 				t.Fatalf("e2etest: resolve Chain %q: %v", end.chain, err)
