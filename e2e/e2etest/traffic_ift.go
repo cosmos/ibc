@@ -106,9 +106,9 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 
 // SendBatch emits multiple IFT transfers from a single source transaction
 func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
-	batcherBefore, err := i.balance(ctx, i.source.evm, i.sourceIFT, i.batcher)
-	if err != nil {
-		return nil, err
+	batcherBefore, balanceErr := i.balance(ctx, i.source.evm, i.sourceIFT, i.batcher)
+	if balanceErr != nil {
+		return nil, balanceErr
 	}
 
 	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))

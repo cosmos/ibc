@@ -103,7 +103,7 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
 	for _, packet := range batch.Packets() {
-		err := e2etest.AwaitState(ctx, relayer, packet.Packet(),
+		err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 		require.NoError(t, err)
 		require.NoError(t, packet.VerifyDelivered(ctx))
