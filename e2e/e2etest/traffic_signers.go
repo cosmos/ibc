@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -93,13 +92,12 @@ func (s Signers) validate() error {
 	}
 }
 
-// storeRelayerKey writes the relayer's signing key file and returns its path.
+// storeRelayerKey writes the relayer's signing key file.
 // The relayer signs relay transactions and local attestations with it; the
 // application signer never enters the relayer process.
-func (s Signers) storeRelayerKey(dir string) (string, error) {
-	relayerPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
-	if err := keyfile.Store(relayerPath, keyfile.ECDSA, crypto.FromECDSA(s.relayer.key)); err != nil {
-		return "", fmt.Errorf("store relayer signer: %w", err)
+func (s Signers) storeRelayerKey(path string) error {
+	if err := keyfile.Store(path, keyfile.ECDSA, crypto.FromECDSA(s.relayer.key)); err != nil {
+		return fmt.Errorf("store relayer signer: %w", err)
 	}
-	return relayerPath, nil
+	return nil
 }
