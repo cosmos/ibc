@@ -115,7 +115,7 @@ func Deploy(
 }
 
 // DeployWithRelayerConfig is Deploy with a hook that adjusts the resolved
-// relayer configuration before it is written.
+// relayer configuration after environment Attestors are assigned.
 func DeployWithRelayerConfig(
 	t testing.TB,
 	env *environment.Environment,
@@ -433,6 +433,25 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
+	attestorIDs := env.Attestors()
+	attestorSets := make(map[string]*ibclink.RelayerAttestorSet, len(attestorIDs))
+	for _, id := range attestorIDs {
+		attestor, err := env.Attestor(id)
+		if err != nil {
+			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
+		}
+		client := attestor.IBCClient()
+		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
+		key := chainID + "/" + string(client.Locator())
+		set := attestorSets[key]
+		if set == nil {
+			set = &ibclink.RelayerAttestorSet{Threshold: int(client.MinRequiredSignatures())}
+			attestorSets[key] = set
+		}
+		set.Attestors = append(set.Attestors, ibclink.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		})
+	}
 
 	connections := map[string]bool{}
 	for _, route := range routes {
@@ -456,6 +475,8 @@ func buildConfig(
 		key := connection.ChainA + "/" + connection.ClientA
 		if !connections[key] {
 			connections[key] = true
+			connection.AttestorSetA = attestorSets[key]
+			connection.AttestorSetB = attestorSets[connection.ChainB+"/"+connection.ClientB]
 			config.Connections = append(config.Connections, connection)
 		}
 
