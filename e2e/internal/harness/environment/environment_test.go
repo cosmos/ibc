@@ -19,3 +19,17 @@ func TestEnvironmentChainsReturnsStableCallerOwnedIDs(t *testing.T) {
 	ids[0] = "changed-by-caller"
 	require.Equal(t, []ChainID{"alpha", "bravo", "charlie"}, env.Chains())
 }
+
+func TestEnvironmentAttestorsReturnsStableCallerOwnedIDs(t *testing.T) {
+	env := &Environment{attestors: map[AttestorID]*Attestor{
+		"charlie": {},
+		"alpha":   {},
+		"bravo":   {},
+	}}
+
+	ids := env.Attestors()
+	require.Equal(t, []AttestorID{"alpha", "bravo", "charlie"}, ids)
+
+	ids[0] = "changed-by-caller"
+	require.Equal(t, []AttestorID{"alpha", "bravo", "charlie"}, env.Attestors())
+}
