@@ -12,9 +12,13 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/iftbatchtransfershim"
 )
 
-var iftABI = mustABI(ift.ContractMetaData)
+var (
+	iftABI          = mustABI(ift.ContractMetaData)
+	iftBatchShimABI = mustABI(iftbatchtransfershim.IFTBatchTransferShimMetaData)
+)
 
 type IFTRequest struct {
 	// Amount must be positive and fit in a uint256. Send takes its own copy.
@@ -36,6 +40,11 @@ type IFT struct {
 	destIFT      common.Address
 	sourceRouter common.Address
 	sourceClient string
+	// batcher is the deployed IFTBatchTransferShim on the source Chain, used
+	// by SendBatch. It is funded with IFT balance at deploy time, since it
+	// becomes msg.sender (and therefore the account debited) for every
+	// iftTransfer call it makes.
+	batcher common.Address
 }
 
 type IFTPacket struct {
@@ -97,6 +106,118 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 		sourceBefore:      sourceBefore,
 		destinationBefore: destinationBefore,
 	}, nil
+}
+
+// SendBatch emits multiple IFT transfers from a single source transaction via
+// the deployed batcher: IFTBaseUpgradeable does not support Multicall, and a
+// loop of Send calls would create independent transactions instead of one.
+// The batcher becomes msg.sender inside IFT for every call it makes, so the
+// aggregate burn this batch produces is checked against the batcher's own
+// balance, not the caller's — see IFTBatch.VerifyBurned.
+func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
+	batcherBefore, err := i.balance(ctx, i.source.evm, i.sourceIFT, i.batcher)
+	if err != nil {
+		return nil, err
+	}
+
+	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))
+	destinationsBefore := make([]*big.Int, len(requests))
+	total := big.NewInt(0)
+	for k, request := range requests {
+		amount, err := validAmount(request.Amount)
+		if err != nil {
+			return nil, err
+		}
+		receiver, err := i.receiver(request.Receiver)
+		if err != nil {
+			return nil, err
+		}
+		destinationBefore, err := i.balance(ctx, i.destination.evm, i.destIFT, receiver)
+		if err != nil {
+			return nil, err
+		}
+		timeoutTimestamp, err := destinationTimeout(ctx, i.destination, request.Timeout)
+		if err != nil {
+			return nil, err
+		}
+		transfers[k] = iftbatchtransfershim.IFTBatchTransferShimTransfer{
+			Receiver:         receiver.Hex(),
+			Amount:           amount,
+			TimeoutTimestamp: timeoutTimestamp,
+		}
+		destinationsBefore[k] = destinationBefore
+		total.Add(total, amount)
+	}
+
+	data, err := iftBatchShimABI.Pack("batchIftTransfer", i.sourceIFT, i.sourceClient, transfers)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: pack IFT batchIftTransfer: %w", err)
+	}
+	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: send IFT batch on route %q: %w", i.routeID, err)
+	}
+	sequences, err := sendPacketSequences(i.sourceRouter, receipt)
+	if err != nil {
+		return nil, err
+	}
+	if len(sequences) != len(requests) {
+		return nil, fmt.Errorf(
+			"e2etest: IFT batch on route %q emitted %d packets, want %d",
+			i.routeID,
+			len(sequences),
+			len(requests),
+		)
+	}
+
+	packets := make([]*IFTPacket, len(requests))
+	for k, sequence := range sequences {
+		packets[k] = &IFTPacket{
+			app: i,
+			packet: Packet{
+				RouteID:      i.routeID,
+				Source:       i.source.chain.ID(),
+				SourceClient: i.sourceClient,
+				SourceTxHash: receipt.TxHash.Hex(),
+				Sequence:     sequence,
+			},
+			receiver:          common.HexToAddress(transfers[k].Receiver),
+			amount:            transfers[k].Amount,
+			sourceBefore:      batcherBefore,
+			destinationBefore: destinationsBefore[k],
+		}
+	}
+	return &IFTBatch{app: i, packets: packets, batcherBefore: batcherBefore, total: total}, nil
+}
+
+// IFTBatch is the result of a SendBatch call: several IFT packets emitted
+// from a single source transaction.
+type IFTBatch struct {
+	app           *IFT
+	packets       []*IFTPacket
+	batcherBefore *big.Int
+	total         *big.Int
+}
+
+func (b *IFTBatch) Packets() []*IFTPacket { return b.packets }
+
+// VerifyBurned checks that the batcher's balance decreased by the sum of the
+// batch's amounts.
+func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
+	want := new(big.Int).Sub(b.batcherBefore, b.total)
+	got, err := b.app.balance(ctx, b.app.source.evm, b.app.sourceIFT, b.app.batcher)
+	if err != nil {
+		return err
+	}
+	if got.Cmp(want) != 0 {
+		return fmt.Errorf(
+			"e2etest: IFT batch batcher %s burned balance: got %s, want %s",
+			b.app.batcher.Hex(),
+			got,
+			want,
+		)
+	}
+	return nil
 }
 
 func (p *IFTPacket) Packet() Packet { return p.packet }

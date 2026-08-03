@@ -56,6 +56,7 @@ func BindIFT(
 		destIFT:      destinationApps.IFT,
 		sourceRouter: sourceApps.ICS26Router,
 		sourceClient: clients.SourceClient,
+		batcher:      sourceApps.IFTBatchShim,
 	}
 }
 
