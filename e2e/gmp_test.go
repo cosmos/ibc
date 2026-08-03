@@ -6,13 +6,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestGMPCall_AutoRelay(t *testing.T) {
 	t.Parallel()
-	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
@@ -35,7 +38,9 @@ var invalidGMPPayload = []byte{0xde, 0xad, 0xbe, 0xef}
 
 func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	t.Parallel()
-	env := e2etest.Start(t, e2etest.SelectedSuite(t))
+	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
