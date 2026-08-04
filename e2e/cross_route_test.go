@@ -12,24 +12,26 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-// crossRouteSuite shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.
-func crossRouteSuite() e2etest.Suite {
+// crossRouteSpec shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.
+func crossRouteSpec() environment.Spec {
 	const (
 		chainA environment.ChainID = "chain-a"
 		chainB environment.ChainID = "chain-b"
 		chainC environment.ChainID = "chain-c"
 	)
-	return e2etest.SuiteFor(environment.Spec{Chains: []environment.ChainSpec{
+	return dummyClientMeshSpec([]environment.ChainSpec{
 		environment.ManagedAnvil{ID: chainA, EVMChainID: 31637},
 		environment.ManagedAnvil{ID: chainB, EVMChainID: 31638},
 		environment.ManagedAnvil{ID: chainC, EVMChainID: 31639},
-	}}, environment.Runtime{})
+	})
 }
 
 func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	t.Parallel()
 	e2etest.RequireAnvilLane(t)
-	env := e2etest.Start(t, crossRouteSuite())
+	spec := crossRouteSpec()
+	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
 	routes := []e2etest.Route{
 		{ID: "b-to-a", Source: "chain-b", Destination: "chain-a"},

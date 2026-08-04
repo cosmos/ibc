@@ -59,6 +59,9 @@ type AttestorLaunch struct {
 	PrivateKeyHex string
 	RPCURL        string
 	ICS26Router   string
+	// ListenAddress defaults to an ephemeral loopback port. Restarts pass the
+	// previously announced address so a running relayer config stays valid.
+	ListenAddress string
 }
 
 type readinessResult struct {
@@ -71,7 +74,7 @@ type readinessResult struct {
 // containing workspace and decides when its files are removed.
 type AttestorProcess struct {
 	signerAddress common.Address
-	endpoint      string
+	address       string
 	name          string
 	client        attestorv2.AttestationServiceClient
 	out           *logWriter
@@ -91,7 +94,11 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 		return nil, fmt.Errorf("start IBC Link attestor: absolute binary path: %w", err)
 	}
 
-	paths, err := prepareAttestorWorkspace(launch, key, "127.0.0.1:0")
+	listenAddress := launch.ListenAddress
+	if listenAddress == "" {
+		listenAddress = "127.0.0.1:0"
+	}
+	paths, err := prepareAttestorWorkspace(launch, key, listenAddress)
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +158,19 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 // loaded by the child process.
 func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
-func (p *AttestorProcess) latestAttestableHeight(ctx context.Context) (uint64, error) {
+// Endpoint is the attestor's announced listen address as a bare host:port,
+// the form Link relayer configuration requires for remote attestors.
+func (p *AttestorProcess) Endpoint() string { return p.address }
+
+// LatestHeight queries the attestor's LatestHeight RPC for its configured
+// attestation.
+func (p *AttestorProcess) LatestHeight(ctx context.Context) (uint64, error) {
 	response, err := p.client.LatestHeight(
 		ctx,
 		connect.NewRequest(&attestorv2.LatestHeightRequest{Attestor: p.name}),
 	)
 	if err != nil {
-		return 0, fmt.Errorf("call latest attestable height at %s: %w", p.endpoint, err)
+		return 0, fmt.Errorf("call latest attestable height at %s: %w", p.address, err)
 	}
 	return response.Msg.Height, nil
 }
@@ -175,10 +188,10 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.endpoint = "http://" + address
+	p.address = address
 	p.client = attestorv2.NewAttestationServiceClient(
 		&http.Client{Timeout: probeRequestTimeout},
-		p.endpoint,
+		"http://"+address,
 	)
 
 	ticker := time.NewTicker(50 * time.Millisecond)
@@ -186,7 +199,7 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 	var lastProbeErr error
 	for {
 		probeCtx, probeCancel := context.WithTimeout(startupCtx, probeRequestTimeout)
-		_, probeErr := p.latestAttestableHeight(probeCtx)
+		_, probeErr := p.LatestHeight(probeCtx)
 		probeCancel()
 		if probeErr == nil {
 			return nil
@@ -199,7 +212,7 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		case <-startupCtx.Done():
 			return fmt.Errorf(
 				"IBC Link attestor was not ready at %s: %w (last probe: %s); logs: %s",
-				p.endpoint,
+				p.address,
 				startupCtx.Err(),
 				lastProbeErr.Error(),
 				p.logTail(),
@@ -343,7 +356,7 @@ func prepareAttestorWorkspace(
 		}}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,
-			Type:  typeLocal,
+			Type:  RelayerSignerLocal,
 			File:  keyPath,
 		}},
 	}
@@ -488,7 +501,9 @@ type attestationConfig struct {
 }
 
 type signerConfig struct {
-	Alias string `yaml:"alias"`
-	Type  string `yaml:"type"`
-	File  string `yaml:"file"`
+	Alias       string `yaml:"alias"`
+	Type        string `yaml:"type"`
+	File        string `yaml:"file,omitempty"`
+	GRPC        string `yaml:"grpc,omitempty"`
+	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }

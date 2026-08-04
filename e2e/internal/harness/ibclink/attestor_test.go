@@ -45,7 +45,7 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141"), process.SignerAddress())
-	height, err := process.latestAttestableHeight(ctx)
+	height, err := process.LatestHeight(ctx)
 	require.NoError(t, err)
 	require.Equal(t, uint64(4242), height)
 
