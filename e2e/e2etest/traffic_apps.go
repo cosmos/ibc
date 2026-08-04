@@ -86,6 +86,8 @@ func BindGMP(
 		sourceRouter: sourceApps.ICS26Router,
 		counter:      destinationApps.Counter,
 		sourceClient: clients.SourceClient,
+		destClient:   clients.DestClient,
+		destGMP:      destinationApps.ICS27GMP,
 		defaultCall:  defaultCall,
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
 
 var gmpABI = mustABI(ics27gmp.ContractMetaData)
@@ -18,6 +19,10 @@ var gmpABI = mustABI(ics27gmp.ContractMetaData)
 type GMPRequest struct {
 	// Payload defaults to Counter.increment(). Call takes its own copy.
 	Payload []byte
+	// Receiver defaults to the bound Counter's address.
+	Receiver string
+	// Salt defaults to empty, matching sendCall's default account identifier.
+	Salt []byte
 }
 
 // GMP binds ICS27 GMP and its default Counter target on a single directed route.
@@ -30,6 +35,8 @@ type GMP struct {
 	sourceRouter common.Address
 	counter      common.Address
 	sourceClient string
+	destClient   string
+	destGMP      common.Address
 	defaultCall  []byte
 }
 
@@ -45,6 +52,10 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		payload = g.defaultCall
 	}
 	payload = append([]byte(nil), payload...)
+	receiver := request.Receiver
+	if receiver == "" {
+		receiver = g.counter.Hex()
+	}
 	before, err := g.count(ctx)
 	if err != nil {
 		return nil, err
@@ -55,8 +66,8 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 	}
 	msg := ics27gmp.IICS27GMPMsgsSendCallMsg{
 		SourceClient:     g.sourceClient,
-		Receiver:         g.counter.Hex(),
-		Salt:             nil,
+		Receiver:         receiver,
+		Salt:             request.Salt,
 		Payload:          payload,
 		TimeoutTimestamp: timeoutTimestamp,
 		Memo:             "",
@@ -122,6 +133,121 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 		return nil, fmt.Errorf("e2etest: query Counter %s: %w", g.counter, err)
 	}
 	return count, nil
+}
+
+// AccountIdentifier builds the ICS27 account identifier that onRecvPacket
+// constructs on the destination chain for a call sent by sender with salt:
+// AccountIdentifier{ClientId: destinationClient, Sender: sender.Hex(), Salt: salt}.
+// sender.Hex() is EIP-55 checksummed, matching Strings.toChecksumHexString(_msgSender())
+// used by ICS27GMP.sendCall on the source chain.
+func (g *GMP) AccountIdentifier(sender common.Address, salt []byte) ics27gmp.IICS27GMPMsgsAccountIdentifier {
+	return ics27gmp.IICS27GMPMsgsAccountIdentifier{
+		ClientId: g.destClient,
+		Sender:   sender.Hex(),
+		Salt:     salt,
+	}
+}
+
+// AccountAddress derives the ICS27 account address for id via the destination
+// ICS27GMP contract's getOrComputeAccountAddress view, rather than
+// reimplementing its CREATE2 derivation. Safe to call before the account
+// contract is deployed.
+func (g *GMP) AccountAddress(
+	ctx context.Context,
+	id ics27gmp.IICS27GMPMsgsAccountIdentifier,
+) (common.Address, error) {
+	var address common.Address
+	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := ics27gmp.NewContractCaller(g.destGMP, caller)
+		if err != nil {
+			return fmt.Errorf("e2etest: bind ICS27GMP %s: %w", g.destGMP, err)
+		}
+		address, err = bound.GetOrComputeAccountAddress(&bind.CallOpts{Context: ctx}, id)
+		return err
+	})
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: compute ICS27 account address: %w", err)
+	}
+	return address, nil
+}
+
+// StoredAccountIdentifier reads back the account identifier the destination
+// ICS27GMP contract recorded for account.
+func (g *GMP) StoredAccountIdentifier(
+	ctx context.Context,
+	account common.Address,
+) (ics27gmp.IICS27GMPMsgsAccountIdentifier, error) {
+	var id ics27gmp.IICS27GMPMsgsAccountIdentifier
+	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := ics27gmp.NewContractCaller(g.destGMP, caller)
+		if err != nil {
+			return fmt.Errorf("e2etest: bind ICS27GMP %s: %w", g.destGMP, err)
+		}
+		id, err = bound.GetAccountIdentifier(&bind.CallOpts{Context: ctx}, account)
+		return err
+	})
+	if err != nil {
+		return ics27gmp.IICS27GMPMsgsAccountIdentifier{}, fmt.Errorf(
+			"e2etest: query ICS27 account identifier for %s: %w", account, err,
+		)
+	}
+	return id, nil
+}
+
+// ERC20BalanceOf queries an ERC20 token balance on the destination chain.
+func (g *GMP) ERC20BalanceOf(ctx context.Context, token, holder common.Address) (*big.Int, error) {
+	var balance *big.Int
+	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := testerc20.NewTestERC20Caller(token, caller)
+		if err != nil {
+			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", token, err)
+		}
+		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: query TestERC20 %s balance of %s: %w", token, holder, err)
+	}
+	return balance, nil
+}
+
+// FundERC20 mints amount of token to holder on the destination chain. holder
+// need not have any code deployed yet: minting only writes a balance entry.
+func (g *GMP) FundERC20(ctx context.Context, token, holder common.Address, amount *big.Int) error {
+	data, err := tokenABI.Pack("mint", holder, amount)
+	if err != nil {
+		return fmt.Errorf("e2etest: pack TestERC20.mint: %w", err)
+	}
+	if _, err := g.destination.evm.BroadcastTx(ctx, g.sender, &token, data, nil); err != nil {
+		return fmt.Errorf("e2etest: fund %s with TestERC20 %s: %w", holder, token, err)
+	}
+	return nil
+}
+
+// AwaitERC20Balance waits until token's holder balance equals want.
+func (g *GMP) AwaitERC20Balance(
+	ctx context.Context,
+	token, holder common.Address,
+	want *big.Int,
+	description string,
+) error {
+	return awaitBalance(
+		ctx,
+		g.destination.chain,
+		description,
+		func(ctx context.Context) (*big.Int, error) { return g.ERC20BalanceOf(ctx, token, holder) },
+		want,
+	)
+}
+
+// PackERC20Transfer ABI-encodes an erc20.transfer(to, amount) call, for use as
+// a GMPRequest.Payload delivered to an ICS27 account.
+func PackERC20Transfer(to common.Address, amount *big.Int) ([]byte, error) {
+	data, err := tokenABI.Pack("transfer", to, amount)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: pack TestERC20.transfer: %w", err)
+	}
+	return data, nil
 }
 
 func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) error {

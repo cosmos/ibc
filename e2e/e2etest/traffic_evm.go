@@ -32,6 +32,16 @@ func mustBinding[T any](binding T, err error) T {
 	return binding
 }
 
+// NewAddress generates a fresh, unfunded EVM address for use as a test
+// recipient (e.g. an ERC20 transfer target).
+func NewAddress() (common.Address, error) {
+	account, err := evm.NewAccount()
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: generate address: %w", err)
+	}
+	return account.Address(), nil
+}
+
 func deployContract(
 	ctx context.Context,
 	client *environment.EVM,
