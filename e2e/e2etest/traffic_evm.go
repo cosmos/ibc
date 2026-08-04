@@ -13,6 +13,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 
 	ethereum "github.com/ethereum/go-ethereum"
 )
@@ -30,6 +31,37 @@ func mustBinding[T any](binding T, err error) T {
 		panic(fmt.Sprintf("e2etest: construct generated contract binding: %v", err))
 	}
 	return binding
+}
+
+// NewAddress generates a fresh, unfunded EVM address for use as a test
+// recipient (e.g. an ERC20 transfer target).
+func NewAddress() (common.Address, error) {
+	account, err := evm.NewAccount()
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: generate address: %w", err)
+	}
+	return account.Address(), nil
+}
+
+// erc20BalanceOf queries a TestERC20 contract's balance for holder.
+func erc20BalanceOf(
+	ctx context.Context,
+	client *environment.EVM,
+	contract, holder common.Address,
+) (*big.Int, error) {
+	var balance *big.Int
+	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := testerc20.NewTestERC20Caller(contract, caller)
+		if err != nil {
+			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", contract, err)
+		}
+		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: query TestERC20 %s balance of %s: %w", contract, holder, err)
+	}
+	return balance, nil
 }
 
 func deployContract(
