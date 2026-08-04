@@ -416,3 +416,22 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 		return 0, false, nil
 	}
 }
+
+// sendPacketSequences returns every SendPacket sequence emitted by the router
+// in one receipt, in log order
+func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
+	definition := ics26ABI.Events[eventSendPacket]
+	var sequences []uint64
+	for _, log := range receipt.Logs {
+		if log.Address != router || len(log.Topics) == 0 || log.Topics[0] != definition.ID {
+			continue
+		}
+		event, err := parser.ParseSendPacket(*log)
+		if err != nil {
+			return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
+		}
+		sequences = append(sequences, event.Packet.Sequence)
+	}
+	return sequences, nil
+}

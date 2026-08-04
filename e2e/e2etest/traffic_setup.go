@@ -17,6 +17,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/iftbatchtransfershim"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/iftsendcallconstructor"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
@@ -71,6 +72,7 @@ type ChainDeployment struct {
 	Token         common.Address
 	Counter       common.Address
 	IFT           common.Address
+	IFTBatchShim  common.Address
 	ICS20Transfer common.Address
 	ICS27GMP      common.Address
 	ICS26Router   common.Address
@@ -311,10 +313,22 @@ func deployApps(
 		}
 		callConstructors[id] = callConstructor
 
+		iftBatchShim, err := deployIFTBatchShim(
+			t.Context(),
+			evmAccess,
+			signers.application.account,
+			iftToken,
+			initialTokenSupply,
+		)
+		if err != nil {
+			t.Fatalf("e2etest: deploy IFT batch transfer shim on Chain %q: %v", id, err)
+		}
+
 		deployment.chains[id] = ChainDeployment{
 			Token:         token,
 			Counter:       counterAddr,
 			IFT:           iftToken,
+			IFTBatchShim:  iftBatchShim,
 			ICS20Transfer: ics20,
 			ICS27GMP:      ics27,
 			ICS26Router:   router,
@@ -573,6 +587,29 @@ func deployIFTToken(
 		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: mint IFT supply: %w", err)
 	}
 	return token, callConstructor, nil
+}
+
+// deployIFTBatchShim deploys the IFT batch-transfer shim and funds it with
+// IFT balance
+func deployIFTBatchShim(
+	ctx context.Context,
+	client *environment.EVM,
+	sender evm.Account,
+	iftToken common.Address,
+	amount *big.Int,
+) (common.Address, error) {
+	shim, err := deployContract(ctx, client, sender, iftbatchtransfershim.IFTBatchTransferShimMetaData)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: deploy IFT batch transfer shim: %w", err)
+	}
+	mint, err := iftABI.Pack("mint", shim, amount)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: pack IFT mint for batch shim: %w", err)
+	}
+	if _, err := client.BroadcastTx(ctx, sender, &iftToken, mint, nil); err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: mint IFT supply to batch shim: %w", err)
+	}
+	return shim, nil
 }
 
 func ensureSignerBalances(t testing.TB, env *environment.Environment, signers Signers) {
