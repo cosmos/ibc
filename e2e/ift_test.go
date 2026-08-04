@@ -2,13 +2,16 @@ package e2e_test
 
 import (
 	"math/big"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
@@ -237,4 +240,94 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 		gotSequences[status.SequenceNumber] = struct{}{}
 	}
 	require.Equal(t, wantSequences, gotSequences)
+}
+
+// TestIFTTransfer_BatchedRecvAck sends 10 IFT transfers as 10 separate source
+// transactions, relays all 10 concurrently, and asserts the relayer batches
+// their recv and ack transactions rather than submitting one of each per
+// packet. The batching assertions are timing-robust: they check that fewer
+// tx were used than packets and that at least one tx carried multiple
+// packets, never that everything landed in a single tx, since that would
+// race the dispatch poll interval and flake.
+func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
+	t.Parallel()
+	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	env := e2etest.Start(t, spec, runtime)
+	signers := e2etest.NewSigners(t)
+	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, signers, func(cfg *ibclink.RelayerConfig) {
+		for i := range cfg.Chains {
+			cfg.Chains[i].PacketBatchSize = 10
+			cfg.Chains[i].PacketBatchTimeout = 2 * time.Second
+		}
+	}, route)
+	iftApp := e2etest.BindIFT(t, env, deployment, signers, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	const packetCount = 10
+	packets := make([]*e2etest.IFTPacket, packetCount)
+	for i := range packets {
+		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))})
+		require.NoError(t, err)
+		require.NoError(t, transfer.VerifyBurned(ctx))
+		packets[i] = transfer
+	}
+
+	relayErrs := make([]error, packetCount)
+	var wg sync.WaitGroup
+	for i, packet := range packets {
+		wg.Add(1)
+		go func(i int, packet *e2etest.IFTPacket) {
+			defer wg.Done()
+			relayErrs[i] = e2etest.Relay(ctx, relayer, packet.Packet())
+		}(i, packet)
+	}
+	wg.Wait()
+	for i, err := range relayErrs {
+		require.NoErrorf(t, err, "relay call for packet %d (seq %d) failed", i, packets[i].Packet().Sequence)
+	}
+
+	for i, packet := range packets {
+		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), packet.Packet().SourceTxHash)
+		require.NoError(t, err)
+		require.Lenf(t, statuses, 1, "packet %d status should only include its own transaction", i)
+		require.Equal(t, packet.Packet().Sequence, statuses[0].SequenceNumber)
+	}
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	recvTxCounts := make(map[string]int, packetCount)
+	ackTxCounts := make(map[string]int, packetCount)
+	for _, packet := range packets {
+		err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
+			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		require.NoError(t, err)
+		require.NoError(t, packet.VerifyDelivered(ctx))
+
+		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), packet.Packet().SourceTxHash)
+		require.NoError(t, err)
+		require.Len(t, statuses, 1)
+		recvTxCounts[statuses[0].GetRecvTx().GetTxHash()]++
+		ackTxCounts[statuses[0].GetAckTx().GetTxHash()]++
+	}
+
+	require.Lessf(t, len(recvTxCounts), packetCount,
+		"expected batched recv, got one recv tx per packet: %v", recvTxCounts)
+	require.Lessf(t, len(ackTxCounts), packetCount,
+		"expected batched ack, got one ack tx per packet: %v", ackTxCounts)
+	require.Truef(t, hasBatchedTx(recvTxCounts), "no recv tx carried multiple packets: %v", recvTxCounts)
+	require.Truef(t, hasBatchedTx(ackTxCounts), "no ack tx carried multiple packets: %v", ackTxCounts)
+}
+
+// hasBatchedTx reports whether any transaction hash in counts covers more
+// than one packet.
+func hasBatchedTx(counts map[string]int) bool {
+	for _, count := range counts {
+		if count >= 2 {
+			return true
+		}
+	}
+	return false
 }
