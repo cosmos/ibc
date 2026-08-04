@@ -319,6 +319,7 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 		recvTxCounts[statuses[0].GetRecvTx().GetTxHash()]++
 		ackTxCounts[statuses[0].GetAckTx().GetTxHash()]++
 	}
+	require.NoError(t, packets[packetCount-1].VerifyBurned(ctx), "successful acks must not refund")
 
 	require.Lessf(t, len(recvTxCounts), packetCount,
 		"expected batched recv, got one recv tx per packet: %v", recvTxCounts)
@@ -344,6 +345,7 @@ func hasBatchedTx(counts map[string]int) bool {
 // in batches
 func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	t.Parallel()
+	e2etest.RequireAnvilLane(t)
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
