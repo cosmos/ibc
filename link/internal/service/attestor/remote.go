@@ -24,6 +24,8 @@ type RemoteAttestor struct {
 
 var _ Attestor = &RemoteAttestor{}
 
+const remoteRequestTimeout = 5 * time.Second
+
 func NewRemoteFromURL(chainID, name, alias, grpcURL string) *RemoteAttestor {
 	var (
 		httpClient  = newConnectHTTPClient()
@@ -44,6 +46,9 @@ func NewRemote(chainID, name, alias string, client proto.AttestationServiceClien
 }
 
 func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
+	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
+	defer cancel()
+
 	req := &proto.LatestHeightRequest{
 		Attestor: a.name,
 	}
@@ -57,6 +62,9 @@ func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 }
 
 func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
+	defer cancel()
+
 	req := &proto.StateAttestationRequest{
 		Attestor: a.name,
 		Height:   height,
@@ -71,6 +79,9 @@ func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (A
 }
 
 func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
+	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
+	defer cancel()
+
 	ct, err := CommitmentTypeToProto(req.CommitmentType)
 	if err != nil {
 		return Attestation{}, err
