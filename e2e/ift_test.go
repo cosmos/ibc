@@ -25,8 +25,12 @@ const (
 	attestedClientBID  environment.ClientID    = "attested-client-b"
 	attestorAID        environment.AttestorID  = "attestor-a"
 	attestorBID        environment.AttestorID  = "attestor-b"
+	attestorCID        environment.AttestorID  = "attestor-c"
+	attestorDID        environment.AttestorID  = "attestor-d"
 	attestorAAuthority environment.AuthorityID = "attestor-a-authority"
 	attestorBAuthority environment.AuthorityID = "attestor-b-authority"
+	attestorCAuthority environment.AuthorityID = "attestor-c-authority"
+	attestorDAuthority environment.AuthorityID = "attestor-d-authority"
 )
 
 func TestAttestedIFTTransfer_AutoRelay(t *testing.T) {
@@ -98,19 +102,132 @@ func TestAttestedIFTTransfer_AutoRelay(t *testing.T) {
 	require.NoError(t, err)
 	sourceEVM, err := source.EVM()
 	require.NoError(t, err)
-	sendReceipt, err := sourceEVM.TransactionReceipt(ctx, common.HexToHash(transfer.Packet().SourceTxHash))
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	requireAttestedIFTClientHeights(t, sourceEVM, destinationEVM,
+		attestorA.IBCClient().LightClientAddress(), attestorB.IBCClient().LightClientAddress(),
+		transfer, status.GetRecvTx().GetTxHash())
+}
+
+func TestAttestedIFTTransfer_MultiAttestorQuorum(t *testing.T) {
+	t.Parallel()
+	spec := environment.Spec{
+		Chains: e2etest.ChainSpecsForConfiguredLane(t),
+		IBCInstances: []environment.IBCInstanceSpec{
+			environment.NewIBCInstance{
+				ID:        "attested-quorum-ibc-a",
+				Chain:     e2etest.ChainA,
+				Authority: e2etest.ProtocolAuthorityID,
+			},
+			environment.NewIBCInstance{
+				ID:        "attested-quorum-ibc-b",
+				Chain:     e2etest.ChainB,
+				Authority: e2etest.ProtocolAuthorityID,
+			},
+		},
+		Connections: []environment.ConnectionSpec{{
+			ID: "attested-quorum-connection",
+			A: environment.NewClient{
+				ID: attestedClientAID, IBCInstance: "attested-quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
+				MinRequiredSignatures: 1,
+			},
+			B: environment.NewClient{
+				ID: attestedClientBID, IBCInstance: "attested-quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
+				MinRequiredSignatures: 2,
+			},
+		}},
+		Attestors: []environment.AttestorSpec{
+			{ID: attestorAID, Client: attestedClientAID, Authority: attestorAAuthority},
+			{ID: attestorBID, Client: attestedClientBID, Authority: attestorBAuthority},
+			{ID: attestorCID, Client: attestedClientBID, Authority: attestorCAuthority},
+			{ID: attestorDID, Client: attestedClientBID, Authority: attestorDAuthority},
+		},
+	}
+	runtime := e2etest.RuntimeWithProtocolDeployer(
+		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
+			attestorAAuthority: {
+				PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000006",
+			},
+			attestorBAuthority: {
+				PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000007",
+			},
+			attestorCAuthority: {
+				PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000008",
+			},
+			attestorDAuthority: {
+				PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000009",
+			},
+		}},
+	)
+	env := e2etest.Start(t, spec, runtime)
+	signers := e2etest.NewSigners(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	sourceAttestor, err := env.Attestor(attestorAID)
+	require.NoError(t, err)
+	destinationAttestorB, err := env.Attestor(attestorBID)
+	require.NoError(t, err)
+	destinationAttestorC, err := env.Attestor(attestorCID)
+	require.NoError(t, err)
+	destinationAttestorD, err := env.Attestor(attestorDID)
+	require.NoError(t, err)
+	driver, deployment := e2etest.Deploy(t, env, signers, route)
+	iftApp := e2etest.BindIFT(t, env, deployment, signers, route)
+	ctx := t.Context()
+	// Keep every endpoint in Link's config while starting it with one attestor unavailable.
+	require.NoError(t, destinationAttestorD.Stop(ctx))
+	relayer := e2etest.StartRelayer(t, driver, env)
+
+	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
 	destinationEVM, err := destination.EVM()
 	require.NoError(t, err)
-	receiveReceipt, err := destinationEVM.TransactionReceipt(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
-	require.NoError(t, err)
+	destinationClient := destinationAttestorB.IBCClient()
+	require.ElementsMatch(t, []environment.EVMAddress{
+		destinationAttestorB.SignerAddress(),
+		destinationAttestorC.SignerAddress(),
+		destinationAttestorD.SignerAddress(),
+	}, destinationClient.AttestorAddresses())
+	require.Equal(t, uint8(2), destinationClient.MinRequiredSignatures())
 
-	destinationState := attestedClientState(t, destinationEVM, attestorB.IBCClient().LightClientAddress())
-	sourceState := attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
-	// The receive proof advanced the destination client through the send block.
-	require.GreaterOrEqual(t, destinationState.LatestHeight, sendReceipt.BlockNumber.Uint64())
-	// The acknowledgement proof advanced the source client through the receive block.
-	require.GreaterOrEqual(t, sourceState.LatestHeight, receiveReceipt.BlockNumber.Uint64())
+	// Two live attestors satisfy the destination client's quorum.
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+
+	source, err := env.Chain(route.Source)
+	require.NoError(t, err)
+	sourceEVM, err := source.EVM()
+	require.NoError(t, err)
+	sendBlock := requireAttestedIFTClientHeights(t, sourceEVM, destinationEVM,
+		sourceAttestor.IBCClient().LightClientAddress(), destinationClient.LightClientAddress(),
+		transfer, status.GetRecvTx().GetTxHash())
+	destinationAttestorBHeight, err := destinationAttestorB.LatestHeight(ctx)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, destinationAttestorBHeight, sendBlock)
+	destinationAttestorCHeight, err := destinationAttestorC.LatestHeight(ctx)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, destinationAttestorCHeight, sendBlock)
+
+	// One live attestor cannot satisfy the destination client's quorum.
+	require.NoError(t, destinationAttestorC.Stop(ctx))
+	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
+	require.NoError(t, err)
+	require.NoError(t, pending.VerifyBurned(ctx))
+	require.NoError(t, e2etest.Relay(ctx, relayer, pending.Packet()))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.Packet(),
+		relayerv2.PacketState_PACKET_STATE_PENDING, destination.Timing()))
+	require.NoError(t, pending.VerifyNotMinted(ctx))
+
+	// Restoring a second attestor lets the pending transfer complete.
+	require.NoError(t, destinationAttestorC.Restart(ctx))
+	_, err = e2etest.AwaitState(ctx, relayer, pending.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+	require.NoError(t, err)
+	require.NoError(t, pending.VerifyDelivered(ctx))
 }
 
 func TestIFTTransfer_AutoRelay(t *testing.T) {
@@ -401,7 +518,7 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	recvTxCounts := make(map[string]int, packetCount)
 	ackTxCounts := make(map[string]int, packetCount)
 	for _, packet := range packets {
-		err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
+		_, err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 		require.NoError(t, err)
 		require.NoError(t, packet.VerifyDelivered(ctx))
@@ -485,7 +602,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	require.NoError(t, err)
 	timeoutTxCounts := make(map[string]int, packetCount)
 	for _, packet := range packets {
-		err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
+		_, err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
 		require.NoError(t, err)
 		require.NoError(t, packet.VerifyNotMinted(ctx))

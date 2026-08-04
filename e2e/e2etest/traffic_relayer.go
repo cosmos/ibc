@@ -59,8 +59,8 @@ func AwaitState(
 	)
 }
 
-// AwaitStable requires the packet to remain in one state across the Chain's
-// settle window after that state is first observed.
+// AwaitStable requires the packet to remain in one state across the
+// environment's end-to-end settle window after that state is first observed.
 func AwaitStable(
 	ctx context.Context,
 	relayer *ibclink.Relayer,

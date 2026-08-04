@@ -132,9 +132,10 @@ func (c AttachedEVM) validateChain() error {
 	return c.Timing.validate(c.ID)
 }
 
-// Timing describes the behavior workflows need in order to wait for an
-// attached Chain without assuming Anvil or Besu defaults. BlockInterval may be
-// zero for instant mining; all wait budgets must be positive.
+// Timing describes the end-to-end wait behavior workflows need without
+// assuming Anvil or Besu defaults. SettleWindow must cover chain progress and
+// harness-managed relayer and attestor delays. BlockInterval may be zero for
+// instant mining; all wait budgets must be positive.
 type Timing struct {
 	BlockInterval    time.Duration
 	CompletionBudget time.Duration
