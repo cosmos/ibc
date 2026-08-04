@@ -41,6 +41,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyPendingCleared(ctx))
+	require.NoError(t, transfer.VerifyBurned(ctx), "a successful ack must not also refund")
 }
 
 func TestIFTTimeout_Refund(t *testing.T) {
@@ -180,4 +181,5 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 		require.NoError(t, transfer.VerifyDelivered(ctx))
 		require.NoError(t, transfer.VerifyPendingCleared(ctx))
 	}
+	require.NoError(t, transfers[len(transfers)-1].VerifyBurned(ctx), "successful acks must not also refund")
 }

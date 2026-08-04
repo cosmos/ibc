@@ -40,12 +40,13 @@ type IFT struct {
 }
 
 type IFTPacket struct {
-	app               *IFT
-	packet            Packet
-	receiver          common.Address
-	amount            *big.Int
-	sourceBefore      *big.Int
-	destinationBefore *big.Int
+	app                     *IFT
+	packet                  Packet
+	receiver                common.Address
+	amount                  *big.Int
+	sourceBefore            *big.Int
+	destinationBefore       *big.Int
+	destinationSupplyBefore *big.Int
 }
 
 func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) {
@@ -62,6 +63,10 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 		return nil, err
 	}
 	destinationBefore, err := i.balance(ctx, i.destination.evm, i.destIFT, receiver)
+	if err != nil {
+		return nil, err
+	}
+	destinationSupplyBefore, err := i.totalSupply(ctx, i.destination.evm, i.destIFT)
 	if err != nil {
 		return nil, err
 	}
@@ -93,10 +98,11 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 			SourceTxHash: txHash,
 			Sequence:     sequence,
 		},
-		receiver:          receiver,
-		amount:            amount,
-		sourceBefore:      sourceBefore,
-		destinationBefore: destinationBefore,
+		receiver:                receiver,
+		amount:                  amount,
+		sourceBefore:            sourceBefore,
+		destinationBefore:       destinationBefore,
+		destinationSupplyBefore: destinationSupplyBefore,
 	}, nil
 }
 
@@ -148,6 +154,18 @@ func (p *IFTPacket) VerifyNotMinted(ctx context.Context) error {
 			p.receiver.Hex(),
 			got,
 			p.destinationBefore,
+		)
+	}
+	supply, err := p.app.totalSupply(ctx, p.app.destination.evm, p.app.destIFT)
+	if err != nil {
+		return err
+	}
+	if supply.Cmp(p.destinationSupplyBefore) != 0 {
+		return fmt.Errorf(
+			"e2etest: IFT packet %s destination total supply: got %s, want %s",
+			p.packet.reference(),
+			supply,
+			p.destinationSupplyBefore,
 		)
 	}
 	return nil
@@ -280,6 +298,26 @@ func (i *IFT) balance(
 		return nil, fmt.Errorf("e2etest: query IFT balance of %s: %w", holder.Hex(), err)
 	}
 	return balance, nil
+}
+
+func (i *IFT) totalSupply(
+	ctx context.Context,
+	client *environment.EVM,
+	contract common.Address,
+) (*big.Int, error) {
+	var supply *big.Int
+	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := ift.NewContractCaller(contract, caller)
+		if err != nil {
+			return fmt.Errorf("e2etest: bind IFT %s: %w", contract, err)
+		}
+		supply, err = bound.TotalSupply(&bind.CallOpts{Context: ctx})
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: query IFT total supply: %w", err)
+	}
+	return supply, nil
 }
 
 func (i *IFT) pendingTransfer(
