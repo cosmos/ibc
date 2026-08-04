@@ -20,7 +20,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	gmp := e2etest.BindGMPCounter(t, env, deployment, signers, route)
+	gmp := e2etest.BindGMP(t, env, deployment, signers, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -96,7 +96,7 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	signers := e2etest.NewSigners(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	gmp := e2etest.BindGMPCounter(t, env, deployment, signers, route)
+	gmp := e2etest.BindGMP(t, env, deployment, signers, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 

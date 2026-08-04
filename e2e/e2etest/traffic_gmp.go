@@ -2,7 +2,6 @@ package e2etest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -18,18 +17,15 @@ import (
 var gmpABI = mustABI(ics27gmp.ContractMetaData)
 
 type GMPRequest struct {
-	// Payload is the calldata delivered to Receiver. Call takes its own copy.
-	// Required, except through GMPCounter.Call, which defaults it to Counter.increment().
+	// Payload defaults to Counter.increment(). Call takes its own copy.
 	Payload []byte
-	// Receiver is the destination-chain contract address invoked through the
-	// ICS27 account. Required, except through GMPCounter.Call, which defaults
-	// it to the bound Counter's address.
+	// Receiver defaults to the bound Counter's address.
 	Receiver string
 	// Salt defaults to empty, matching sendCall's default account identifier.
 	Salt []byte
 }
 
-// GMP binds ICS27 GMP on a single directed route.
+// GMP binds ICS27 GMP and its default Counter target on a single directed route.
 type GMP struct {
 	routeID      RouteID
 	source       endpoint
@@ -37,31 +33,40 @@ type GMP struct {
 	sender       evm.Account
 	sourceGMP    common.Address
 	sourceRouter common.Address
+	counter      common.Address
 	sourceClient string
 	destClient   string
 	destGMP      common.Address
+	defaultCall  []byte
 }
 
 type GMPCall struct {
 	app    *GMP
 	packet Packet
+	before *big.Int
 }
 
 func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
-	if request.Receiver == "" {
-		return nil, errors.New("e2etest: GMPRequest.Receiver is required")
+	payload := request.Payload
+	if len(payload) == 0 {
+		payload = g.defaultCall
 	}
-	if len(request.Payload) == 0 {
-		return nil, errors.New("e2etest: GMPRequest.Payload is required")
+	payload = append([]byte(nil), payload...)
+	receiver := request.Receiver
+	if receiver == "" {
+		receiver = g.counter.Hex()
 	}
-	payload := append([]byte(nil), request.Payload...)
+	before, err := g.count(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeoutTimestamp, err := destinationTimeout(ctx, g.destination, 0)
 	if err != nil {
 		return nil, err
 	}
 	msg := ics27gmp.IICS27GMPMsgsSendCallMsg{
 		SourceClient:     g.sourceClient,
-		Receiver:         request.Receiver,
+		Receiver:         receiver,
 		Salt:             request.Salt,
 		Payload:          payload,
 		TimeoutTimestamp: timeoutTimestamp,
@@ -91,54 +96,14 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 			SourceTxHash: txHash,
 			Sequence:     sequence,
 		},
+		before: before,
 	}, nil
 }
 
 func (c *GMPCall) Packet() Packet { return c.packet }
 
-// GMPCounter composes GMP with a Counter target on the destination chain,
-// adding Counter-specific request defaults and verification. Keeping this
-// separate from GMP means VerifyExecuted/VerifyRejected can never be called
-// against a GMPCall whose receiver isn't the bound Counter.
-type GMPCounter struct {
-	*GMP
-	counter     common.Address
-	defaultCall []byte
-}
-
-type GMPCounterCall struct {
-	*GMPCall
-	app    *GMPCounter
-	before *big.Int
-}
-
-func (g *GMPCounter) Call(ctx context.Context, request GMPRequest) (*GMPCounterCall, error) {
-	switch request.Receiver {
-	case "":
-		request.Receiver = g.counter.Hex()
-	case g.counter.Hex():
-	default:
-		return nil, fmt.Errorf(
-			"e2etest: GMPCounter is bound to Counter %s; use the base GMP for receiver %s",
-			g.counter, request.Receiver,
-		)
-	}
-	if len(request.Payload) == 0 {
-		request.Payload = g.defaultCall
-	}
-	before, err := g.count(ctx)
-	if err != nil {
-		return nil, err
-	}
-	call, err := g.GMP.Call(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-	return &GMPCounterCall{GMPCall: call, app: g, before: before}, nil
-}
-
 // VerifyExecuted waits for the destination Counter to change exactly once.
-func (c *GMPCounterCall) VerifyExecuted(ctx context.Context) error {
+func (c *GMPCall) VerifyExecuted(ctx context.Context) error {
 	want := new(big.Int).Add(c.before, big.NewInt(1))
 	return awaitBalance(
 		ctx,
@@ -150,11 +115,11 @@ func (c *GMPCounterCall) VerifyExecuted(ctx context.Context) error {
 }
 
 // VerifyRejected checks that the target state did not change after an error acknowledgement.
-func (c *GMPCounterCall) VerifyRejected(ctx context.Context) error {
+func (c *GMPCall) VerifyRejected(ctx context.Context) error {
 	return c.verifyCount(ctx, c.before, "unchanged")
 }
 
-func (g *GMPCounter) count(ctx context.Context) (*big.Int, error) {
+func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 	var count *big.Int
 	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := counter.NewCounterCaller(g.counter, caller)
@@ -168,24 +133,6 @@ func (g *GMPCounter) count(ctx context.Context) (*big.Int, error) {
 		return nil, fmt.Errorf("e2etest: query Counter %s: %w", g.counter, err)
 	}
 	return count, nil
-}
-
-func (c *GMPCounterCall) verifyCount(ctx context.Context, want *big.Int, state string) error {
-	got, err := c.app.count(ctx)
-	if err != nil {
-		return err
-	}
-	if got.Cmp(want) != 0 {
-		return fmt.Errorf(
-			"e2etest: GMP packet %s target %s %s count: got %s, want %s",
-			c.packet.reference(),
-			c.app.counter.Hex(),
-			state,
-			got,
-			want,
-		)
-	}
-	return nil
 }
 
 // AccountIdentifier builds the ICS27 account identifier that onRecvPacket
@@ -295,4 +242,22 @@ func PackERC20Transfer(to common.Address, amount *big.Int) ([]byte, error) {
 		return nil, fmt.Errorf("e2etest: pack TestERC20.transfer: %w", err)
 	}
 	return data, nil
+}
+
+func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) error {
+	got, err := c.app.count(ctx)
+	if err != nil {
+		return err
+	}
+	if got.Cmp(want) != 0 {
+		return fmt.Errorf(
+			"e2etest: GMP packet %s target %s %s count: got %s, want %s",
+			c.packet.reference(),
+			c.app.counter.Hex(),
+			state,
+			got,
+			want,
+		)
+	}
+	return nil
 }

@@ -73,6 +73,10 @@ func BindGMP(
 	if err != nil {
 		t.Fatalf("e2etest: bind GMP on route %q: %v", route.ID, err)
 	}
+	defaultCall, err := mustABI(counter.CounterMetaData).Pack("increment")
+	if err != nil {
+		t.Fatalf("e2etest: pack Counter.increment(): %v", err)
+	}
 	return &GMP{
 		routeID:      route.ID,
 		source:       sourceEndpoint,
@@ -80,36 +84,11 @@ func BindGMP(
 		sender:       signers.application.account,
 		sourceGMP:    sourceApps.ICS27GMP,
 		sourceRouter: sourceApps.ICS26Router,
+		counter:      destinationApps.Counter,
 		sourceClient: clients.SourceClient,
 		destClient:   clients.DestClient,
 		destGMP:      destinationApps.ICS27GMP,
-	}
-}
-
-// BindGMPCounter binds ICS27 GMP to a Counter target on the destination
-// chain, adding Counter-specific request defaults and verification on top of
-// the base GMP.
-func BindGMPCounter(
-	t testing.TB,
-	env *environment.Environment,
-	deployment *Deployment,
-	signers Signers,
-	route Route,
-) *GMPCounter {
-	t.Helper()
-	gmp := BindGMP(t, env, deployment, signers, route)
-	destinationApps, ok := deployment.Chain(route.Destination)
-	if !ok {
-		t.Fatalf("e2etest: deployment has no destination Chain %q", route.Destination)
-	}
-	defaultCall, err := mustABI(counter.CounterMetaData).Pack("increment")
-	if err != nil {
-		t.Fatalf("e2etest: pack Counter.increment(): %v", err)
-	}
-	return &GMPCounter{
-		GMP:         gmp,
-		counter:     destinationApps.Counter,
-		defaultCall: defaultCall,
+		defaultCall:  defaultCall,
 	}
 }
 
