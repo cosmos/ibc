@@ -78,9 +78,7 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 
 	stored, err := gmp.StoredAccountIdentifier(ctx, account)
 	require.NoError(t, err)
-	require.Equal(t, id.ClientId, stored.ClientId)
-	require.Equal(t, id.Sender, stored.Sender)
-	require.Equal(t, id.Salt, stored.Salt)
+	require.Equal(t, id, stored)
 }
 
 // invalidGMPPayload does not match Counter's call surface, so delivery produces an error acknowledgement.
