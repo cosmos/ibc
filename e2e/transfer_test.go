@@ -13,7 +13,6 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
