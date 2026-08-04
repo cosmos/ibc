@@ -11,7 +11,6 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
 
 var gmpABI = mustABI(ics27gmp.ContractMetaData)
@@ -198,19 +197,7 @@ func (g *GMP) StoredAccountIdentifier(
 
 // ERC20BalanceOf queries the bound TestERC20's balance on the destination chain.
 func (g *GMP) ERC20BalanceOf(ctx context.Context, holder common.Address) (*big.Int, error) {
-	var balance *big.Int
-	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
-		bound, err := testerc20.NewTestERC20Caller(g.destToken, caller)
-		if err != nil {
-			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", g.destToken, err)
-		}
-		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("e2etest: query TestERC20 %s balance of %s: %w", g.destToken, holder, err)
-	}
-	return balance, nil
+	return erc20BalanceOf(ctx, g.destination.evm, g.destToken, holder)
 }
 
 // FundERC20 mints amount of the bound TestERC20 to holder on the destination
