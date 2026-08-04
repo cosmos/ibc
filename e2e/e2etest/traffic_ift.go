@@ -190,11 +190,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 }
 
 // IFTBatch is the result of a SendBatch call: several IFT packets emitted
-// from a single source transaction. It exposes only packet identities and
-// batch-level verification: an atomic batch has no observable intermediate
-// per-packet source balances, so burn/refund accounting only makes sense in
-// aggregate — unlike IFTPacket, which is only ever meaningful for a single
-// Send.
+// from a single source transaction.
 type IFTBatch struct {
 	app           *IFT
 	packets       []*IFTPacket
@@ -210,10 +206,6 @@ func (b *IFTBatch) Packets() []Packet {
 	return packets
 }
 
-// VerifyDelivered checks every packet's destination delivery. Unlike source
-// burn, this is valid per packet even for a batch: each receiver's mint is
-// independently observable, and SendBatch rejects duplicate receivers so
-// every packet's expected destination balance is unambiguous.
 func (b *IFTBatch) VerifyDelivered(ctx context.Context) error {
 	for _, packet := range b.packets {
 		if err := packet.VerifyDelivered(ctx); err != nil {
