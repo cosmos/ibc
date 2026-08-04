@@ -31,7 +31,7 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -59,7 +59,7 @@ func TestTransfer_ManualRelay(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_PENDING, destination.Timing()))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -104,7 +104,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 
 	source, err := env.Chain(route.Source)
 	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))

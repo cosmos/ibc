@@ -12,20 +12,22 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
+// AwaitState waits for the packet to reach want. If want is pending and the
+// relayer has not indexed the source transaction, it returns (nil, nil).
 func AwaitState(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
 	packet Packet,
 	want relayerv2.PacketState,
 	timing environment.Timing,
-) error {
+) (*relayerv2.PacketStatus, error) {
 	if relayer == nil {
-		return errors.New("e2etest: relayer is required")
+		return nil, errors.New("e2etest: relayer is required")
 	}
 	packetID := packetID(packet)
 
 	description := fmt.Sprintf("packet %s to report status %q", packetID, want)
-	_, err := await(
+	return await(
 		ctx,
 		timing.CompletionBudget,
 		timing.PollInterval,
@@ -55,7 +57,6 @@ func AwaitState(
 			return observed, true, nil
 		},
 	)
-	return err
 }
 
 // AwaitStable requires the packet to remain in one state across the Chain's
@@ -69,7 +70,7 @@ func AwaitStable(
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, timing.CompletionBudget)
 	defer cancel()
-	if err := AwaitState(ctx, relayer, packet, want, timing); err != nil {
+	if _, err := AwaitState(ctx, relayer, packet, want, timing); err != nil {
 		return err
 	}
 

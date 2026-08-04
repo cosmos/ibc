@@ -45,7 +45,7 @@ func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	// The relayer only submits to a chain whose clock is current and only
 	// counts blocks behind the tip as final, so delivery completes once the
 	// destination produces blocks again.
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, chainB.Timing())
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

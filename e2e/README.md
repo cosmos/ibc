@@ -1,12 +1,12 @@
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets: each Chain runs the real Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP) behind a permissive dummy light client that accepts every packet without proof verification, so the transport is real while attestation stays out of scope.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets. Most use a permissive dummy light client that accepts packets without proof verification; `TestAttestedIFTTransfer_AutoRelay` instead uses attestation clients and managed attestors.
 
 `internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack and dummy light clients. `e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
 ## Acceptance coverage
 
-The root package covers ICS20 transfer, ICS27 GMP, and IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
+The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, an attested IFT relay, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
 ## Running the acceptance tests
 
@@ -18,7 +18,7 @@ make build-link
 make test-e2e
 ```
 
-`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer submits recv, ack, and timeout transactions with empty proofs, which the dummy light client accepts.
+`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. In dummy-client tests, the real Link Relayer submits recv, ack, and timeout transactions with empty proofs, which the dummy light client accepts.
 
 The same tests can select different Chain declarations:
 
@@ -51,7 +51,7 @@ func TestTransfer_AutoRelay(t *testing.T) {
     require.NoError(t, err)
     destination, err := env.Chain(route.Destination)
     require.NoError(t, err)
-    err = e2etest.AwaitState(t.Context(), relayer, transfer.Packet(),
+    _, err = e2etest.AwaitState(t.Context(), relayer, transfer.Packet(),
         relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyDelivered(t.Context()))
