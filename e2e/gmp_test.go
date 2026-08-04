@@ -31,7 +31,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
-	require.NoError(t, call.VerifyExecuted(ctx))
+	require.NoError(t, call.VerifyCounterExecuted(ctx))
 }
 
 // TestGMPCall_ICS27AccountTransfer sends a GMP call whose payload is an
@@ -48,9 +48,7 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	destApps, ok := deployment.Chain(route.Destination)
-	require.True(t, ok)
-	token := destApps.Token
+	token := gmp.Token()
 	applicationSigner := signers.Addresses().Application
 
 	salt := []byte("ics27-account-transfer")
@@ -62,7 +60,7 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	target, err := e2etest.NewAddress()
 	require.NoError(t, err)
 
-	require.NoError(t, gmp.FundERC20(ctx, token, account, amount))
+	require.NoError(t, gmp.FundERC20(ctx, account, amount))
 
 	payload, err := e2etest.PackERC20Transfer(target, amount)
 	require.NoError(t, err)
@@ -75,8 +73,8 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 	require.NoError(t, err)
 
-	require.NoError(t, gmp.AwaitERC20Balance(ctx, token, account, big.NewInt(0), "ICS27 account drained"))
-	require.NoError(t, gmp.AwaitERC20Balance(ctx, token, target, amount, "ICS27 account transfer target credited"))
+	require.NoError(t, gmp.AwaitERC20Balance(ctx, account, big.NewInt(0), "ICS27 account drained"))
+	require.NoError(t, gmp.AwaitERC20Balance(ctx, target, amount, "ICS27 account transfer target credited"))
 
 	stored, err := gmp.StoredAccountIdentifier(ctx, account)
 	require.NoError(t, err)
@@ -107,5 +105,5 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	err = e2etest.AwaitState(ctx, relayer, call.Packet(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED, destination.Timing())
 	require.NoError(t, err)
-	require.NoError(t, call.VerifyRejected(ctx))
+	require.NoError(t, call.VerifyCounterRejected(ctx))
 }

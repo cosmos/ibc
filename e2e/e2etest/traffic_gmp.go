@@ -25,7 +25,8 @@ type GMPRequest struct {
 	Salt []byte
 }
 
-// GMP binds ICS27 GMP and its default Counter target on a single directed route.
+// GMP binds ICS27 GMP and its default Counter and TestERC20 targets on a
+// single directed route.
 type GMP struct {
 	routeID      RouteID
 	source       endpoint
@@ -37,8 +38,12 @@ type GMP struct {
 	sourceClient string
 	destClient   string
 	destGMP      common.Address
+	destToken    common.Address
 	defaultCall  []byte
 }
+
+// Token returns the destination-chain TestERC20 bound to this GMP.
+func (g *GMP) Token() common.Address { return g.destToken }
 
 type GMPCall struct {
 	app    *GMP
@@ -102,8 +107,9 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 
 func (c *GMPCall) Packet() Packet { return c.packet }
 
-// VerifyExecuted waits for the destination Counter to change exactly once.
-func (c *GMPCall) VerifyExecuted(ctx context.Context) error {
+// VerifyCounterExecuted waits for the destination Counter to change exactly
+// once. Only meaningful when the call's receiver was the bound Counter.
+func (c *GMPCall) VerifyCounterExecuted(ctx context.Context) error {
 	want := new(big.Int).Add(c.before, big.NewInt(1))
 	return awaitBalance(
 		ctx,
@@ -114,8 +120,10 @@ func (c *GMPCall) VerifyExecuted(ctx context.Context) error {
 	)
 }
 
-// VerifyRejected checks that the target state did not change after an error acknowledgement.
-func (c *GMPCall) VerifyRejected(ctx context.Context) error {
+// VerifyCounterRejected checks that the destination Counter did not change
+// after an error acknowledgement. Only meaningful when the call's receiver
+// was the bound Counter.
+func (c *GMPCall) VerifyCounterRejected(ctx context.Context) error {
 	return c.verifyCount(ctx, c.before, "unchanged")
 }
 
@@ -188,40 +196,41 @@ func (g *GMP) StoredAccountIdentifier(
 	return id, nil
 }
 
-// ERC20BalanceOf queries an ERC20 token balance on the destination chain.
-func (g *GMP) ERC20BalanceOf(ctx context.Context, token, holder common.Address) (*big.Int, error) {
+// ERC20BalanceOf queries the bound TestERC20's balance on the destination chain.
+func (g *GMP) ERC20BalanceOf(ctx context.Context, holder common.Address) (*big.Int, error) {
 	var balance *big.Int
 	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
-		bound, err := testerc20.NewTestERC20Caller(token, caller)
+		bound, err := testerc20.NewTestERC20Caller(g.destToken, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", token, err)
+			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", g.destToken, err)
 		}
 		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: query TestERC20 %s balance of %s: %w", token, holder, err)
+		return nil, fmt.Errorf("e2etest: query TestERC20 %s balance of %s: %w", g.destToken, holder, err)
 	}
 	return balance, nil
 }
 
-// FundERC20 mints amount of token to holder on the destination chain. holder
-// need not have any code deployed yet: minting only writes a balance entry.
-func (g *GMP) FundERC20(ctx context.Context, token, holder common.Address, amount *big.Int) error {
+// FundERC20 mints amount of the bound TestERC20 to holder on the destination
+// chain. holder need not have any code deployed yet: minting only writes a
+// balance entry.
+func (g *GMP) FundERC20(ctx context.Context, holder common.Address, amount *big.Int) error {
 	data, err := tokenABI.Pack("mint", holder, amount)
 	if err != nil {
 		return fmt.Errorf("e2etest: pack TestERC20.mint: %w", err)
 	}
-	if _, err := g.destination.evm.BroadcastTx(ctx, g.sender, &token, data, nil); err != nil {
-		return fmt.Errorf("e2etest: fund %s with TestERC20 %s: %w", holder, token, err)
+	if _, err := g.destination.evm.BroadcastTx(ctx, g.sender, &g.destToken, data, nil); err != nil {
+		return fmt.Errorf("e2etest: fund %s with TestERC20 %s: %w", holder, g.destToken, err)
 	}
 	return nil
 }
 
-// AwaitERC20Balance waits until token's holder balance equals want.
+// AwaitERC20Balance waits until the bound TestERC20's holder balance equals want.
 func (g *GMP) AwaitERC20Balance(
 	ctx context.Context,
-	token, holder common.Address,
+	holder common.Address,
 	want *big.Int,
 	description string,
 ) error {
@@ -229,7 +238,7 @@ func (g *GMP) AwaitERC20Balance(
 		ctx,
 		g.destination.chain,
 		description,
-		func(ctx context.Context) (*big.Int, error) { return g.ERC20BalanceOf(ctx, token, holder) },
+		func(ctx context.Context) (*big.Int, error) { return g.ERC20BalanceOf(ctx, holder) },
 		want,
 	)
 }
