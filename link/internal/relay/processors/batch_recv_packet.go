@@ -95,7 +95,12 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 			continue
 		}
 
-		event, errEvent := findPacketEvent(txEvents, tr.PacketSequenceNumber, tr.PacketSourceClientID, proofHeight)
+		event, errEvent := findPacketEventAtOrBeforeHeight(
+			txEvents,
+			tr.PacketSequenceNumber,
+			tr.PacketSourceClientID,
+			proofHeight,
+		)
 		if errEvent != nil {
 			tr.ProcessingError = errors.Wrapf(errEvent, "tx %s", tr.SourceTxHash)
 
