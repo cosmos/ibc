@@ -23,10 +23,6 @@ done
 
 note() { printf 'clean-e2e: %s\n' "$*"; }
 
-binary_name="${IBC_BIN:-ibc}"
-binary_name="${binary_name##*/}"
-binary_pattern="$(printf '%s' "$binary_name" | sed 's#[][(){}.^$*+?|\\/]#\\&#g')"
-
 sweep() {
 	local label="$1" pattern="$2" pids
 	pids="$(pgrep -f "$pattern" || true)"
@@ -48,15 +44,14 @@ sweep() {
 	kill -9 $pids 2>/dev/null || true
 }
 
-# Match the configured SUT running `relayer run`, scoped to the
+# Match Link running `relayer run`, scoped to the
 # harness's compiled config (ibc-link.config.yaml, always in --config of a harness-spawned daemon) so a
-# developer's own unrelated `ibc relayer run` is never signaled. Binary is anchored at a path separator
-# or start of the cmdline so an unrelated `…ibc` suffix can't false-match.
-sweep "e2e relayer daemons" "(^|/)$binary_pattern relayer run .*ibc-link\\.config\\.yaml"
+# developer's own unrelated `ibc relayer run` is never signaled.
+sweep "e2e relayer daemons" '(^|[[:space:]])relayer[[:space:]]+run[[:space:]].*ibc-link\.config\.yaml'
 
 # Match harness-spawned attestors by their --home path, which is always nested
 # under the harness-private ibc-environment-private-* workspace.
-sweep "e2e attestor daemons" "(^|/)$binary_pattern attestor run .*--home [^[:space:]]*/ibc-environment-private-[^[:space:]]+"
+sweep "e2e attestor daemons" '(^|[[:space:]])attestor[[:space:]]+run[[:space:]].*--home[[:space:]]+[^[:space:]]*/ibc-environment-private-[^[:space:]]+'
 
 docker_sweep() {
 	if ! command -v docker >/dev/null; then

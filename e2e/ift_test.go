@@ -110,7 +110,6 @@ func TestAttestedIFTTransfer_AutoRelay(t *testing.T) {
 	require.GreaterOrEqual(t, sourceState.LatestHeight, receiveReceipt.BlockNumber.Uint64())
 }
 
-//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
