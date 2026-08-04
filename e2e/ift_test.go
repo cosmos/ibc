@@ -90,27 +90,28 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	}
 	batch, err := iftApp.SendBatch(ctx, requests)
 	require.NoError(t, err)
-	require.Len(t, batch.Packets(), packetCount)
+	packets := batch.Packets()
+	require.Len(t, packets, packetCount)
 
 	wantSequences := make(map[uint64]struct{}, packetCount)
-	for _, packet := range batch.Packets() {
-		wantSequences[packet.Packet().Sequence] = struct{}{}
+	for _, packet := range packets {
+		wantSequences[packet.Sequence] = struct{}{}
 	}
 	require.Len(t, wantSequences, packetCount, "packets must have distinct sequences")
 
-	require.NoError(t, e2etest.Relay(ctx, relayer, batch.Packets()[0].Packet()))
+	require.NoError(t, e2etest.Relay(ctx, relayer, packets[0]))
 
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	for _, packet := range batch.Packets() {
-		err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
+	for _, packet := range packets {
+		err = e2etest.AwaitState(ctx, relayer, packet,
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
 		require.NoError(t, err)
-		require.NoError(t, packet.VerifyDelivered(ctx))
 	}
+	require.NoError(t, batch.VerifyDelivered(ctx))
 	require.NoError(t, batch.VerifyBurned(ctx))
 
-	statuses, err := relayer.PacketStatuses(ctx, string(route.Source), batch.Packets()[0].Packet().SourceTxHash)
+	statuses, err := relayer.PacketStatuses(ctx, string(route.Source), packets[0].SourceTxHash)
 	require.NoError(t, err)
 	require.Len(t, statuses, packetCount)
 	gotSequences := make(map[uint64]struct{}, packetCount)
