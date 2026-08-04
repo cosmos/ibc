@@ -137,9 +137,6 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 
 // AccountIdentifier builds the ICS27 account identifier that onRecvPacket
 // constructs on the destination chain for a call sent by sender with salt:
-// AccountIdentifier{ClientId: destinationClient, Sender: sender.Hex(), Salt: salt}.
-// sender.Hex() is EIP-55 checksummed, matching Strings.toChecksumHexString(_msgSender())
-// used by ICS27GMP.sendCall on the source chain.
 func (g *GMP) AccountIdentifier(sender common.Address, salt []byte) ics27gmp.IICS27GMPMsgsAccountIdentifier {
 	return ics27gmp.IICS27GMPMsgsAccountIdentifier{
 		ClientId: g.destClient,
@@ -148,10 +145,7 @@ func (g *GMP) AccountIdentifier(sender common.Address, salt []byte) ics27gmp.IIC
 	}
 }
 
-// AccountAddress derives the ICS27 account address for id via the destination
-// ICS27GMP contract's getOrComputeAccountAddress view, rather than
-// reimplementing its CREATE2 derivation. Safe to call before the account
-// contract is deployed.
+// AccountAddress derives the ICS27 account address for id
 func (g *GMP) AccountAddress(
 	ctx context.Context,
 	id ics27gmp.IICS27GMPMsgsAccountIdentifier,
