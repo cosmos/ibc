@@ -35,8 +35,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 }
 
 // TestGMPCall_ICS27AccountTransfer sends a GMP call whose payload is an
-// erc20.transfer executed by the destination ICS27 account: it drains a
-// pre-funded, precomputed account into a fresh target address.
+// erc20.transfer executed by the destination ICS27 account.
 func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
