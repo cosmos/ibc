@@ -342,12 +342,14 @@ func hasBatchedTx(counts map[string]int) bool {
 	return false
 }
 
-// TestIFTTransfer_BatchedRecvAckTimeout sends fewer IFT transfers than the
-// configured PacketBatchSize, so the batch can only be released by
-// PacketBatchTimeout elapsing rather than filling up. Both packets are
-// submitted well within that timeout, so the relayer should still flush them
-// together as a single recv tx and a single ack tx once the timeout fires.
-func TestIFTTransfer_BatchedRecvAckTimeout(t *testing.T) {
+// TestIFTTransfer_BatchedTimeout sends more IFT transfers than the
+// configured PacketBatchSize with a short packet timeout, expires them all
+// on the destination chain, then relays every one of them concurrently so
+// the relayer discovers them in roughly the same pass. It asserts the
+// resulting timeout submissions on the source chain are batched: fewer
+// timeout tx than packets, with at least one timeout tx covering multiple
+// packets.
+func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
@@ -359,38 +361,58 @@ func TestIFTTransfer_BatchedRecvAckTimeout(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	const packetCount = batchTestPacketBatchSize - 1
+	const packetCount = batchTestPacketBatchSize + 1
 	packets := make([]*e2etest.IFTPacket, packetCount)
 	for i := range packets {
-		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))})
+		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+			Amount:  big.NewInt(int64(1_000_000 + i)),
+			Timeout: transferTimeout,
+		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
 		packets[i] = transfer
 	}
 
-	for _, packet := range packets {
-		require.NoError(t, e2etest.Relay(ctx, relayer, packet.Packet()))
-	}
-
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	recvTxCounts := make(map[string]int, packetCount)
-	ackTxCounts := make(map[string]int, packetCount)
+	mining, err := destination.Mining()
+	require.NoError(t, err)
+	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
+
+	relayErrs := make([]error, packetCount)
+	var wg sync.WaitGroup
+	for i, packet := range packets {
+		wg.Add(1)
+		go func(i int, packet *e2etest.IFTPacket) {
+			defer wg.Done()
+			relayErrs[i] = e2etest.Relay(ctx, relayer, packet.Packet())
+		}(i, packet)
+	}
+	wg.Wait()
+	for i, err := range relayErrs {
+		require.NoErrorf(t, err, "relay call for packet %d (seq %d) failed", i, packets[i].Packet().Sequence)
+	}
+
+	source, err := env.Chain(route.Source)
+	require.NoError(t, err)
+	timeoutTxCounts := make(map[string]int, packetCount)
 	for _, packet := range packets {
 		err = e2etest.AwaitState(ctx, relayer, packet.Packet(),
-			relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+			relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
 		require.NoError(t, err)
-		require.NoError(t, packet.VerifyDelivered(ctx))
+		require.NoError(t, packet.VerifyNotMinted(ctx))
 
 		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), packet.Packet().SourceTxHash)
 		require.NoError(t, err)
 		require.Len(t, statuses, 1)
-		recvTxCounts[statuses[0].GetRecvTx().GetTxHash()]++
-		ackTxCounts[statuses[0].GetAckTx().GetTxHash()]++
+		timeoutTxCounts[statuses[0].GetTimeoutTx().GetTxHash()]++
 	}
+	// all packets share one sender, so their refunds can only be checked in
+	// aggregate once every packet has timed out — packets[0] was sent first,
+	// so its pre-send snapshot is the true pre-batch baseline balance.
+	require.NoError(t, packets[0].VerifyRefunded(ctx))
 
-	require.Lenf(t, recvTxCounts, 1,
-		"expected the batch timeout to flush both packets in one recv tx: %v", recvTxCounts)
-	require.Lenf(t, ackTxCounts, 1,
-		"expected the batch timeout to flush both packets in one ack tx: %v", ackTxCounts)
+	require.Lessf(t, len(timeoutTxCounts), packetCount,
+		"expected batched timeouts, got one timeout tx per packet: %v", timeoutTxCounts)
+	require.Truef(t, hasBatchedTx(timeoutTxCounts), "no timeout tx carried multiple packets: %v", timeoutTxCounts)
 }
