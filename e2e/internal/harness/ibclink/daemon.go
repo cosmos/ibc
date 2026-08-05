@@ -22,6 +22,9 @@ import (
 )
 
 const (
+	// HarnessFinalityOffset treats "latest" minus one block as final on dev chains.
+	HarnessFinalityOffset = 1
+
 	defaultStartupTimeout = 60 * time.Second
 	// SIGKILL escalation margin after SIGTERM for graceful shutdown.
 	stopGrace = 10 * time.Second
@@ -32,6 +35,12 @@ const (
 	zeroTxHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
 
+type WaitPolicy struct {
+	CompletionBudget time.Duration
+	StatusPoll       time.Duration
+	StabilityWindow  time.Duration
+}
+
 // RelayerOptions adapts harness identifiers to the relayer's wire contract.
 type RelayerOptions struct {
 	// ChainIDs maps harness Chain identifiers to the EVM chain ids (decimal)
@@ -40,6 +49,8 @@ type RelayerOptions struct {
 	// ManualRoutes marks route identifiers whose packets must only be relayed
 	// on an explicit Relay call.
 	ManualRoutes map[string]bool
+	// WaitPolicies maps route identifiers to their end-to-end packet wait policy.
+	WaitPolicies map[string]WaitPolicy
 }
 
 type Relayer struct {
@@ -47,6 +58,7 @@ type Relayer struct {
 	client       relayerv2.RelayerApiServiceClient
 	chainIDs     map[string]string
 	manualRoutes map[string]bool
+	waitPolicies map[string]WaitPolicy
 	h            *processHandle
 }
 
@@ -99,7 +111,11 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	}
 	logs := &logWriter{file: logFile}
 
-	d := &Relayer{chainIDs: opts.ChainIDs, manualRoutes: opts.ManualRoutes}
+	d := &Relayer{
+		chainIDs:     opts.ChainIDs,
+		manualRoutes: opts.ManualRoutes,
+		waitPolicies: opts.WaitPolicies,
+	}
 
 	if startErr := cmd.Start(); startErr != nil {
 		logs.close()
@@ -198,6 +214,12 @@ func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
 // ManualRoute reports whether packets on the route are only relayed on an
 // explicit Relay call.
 func (d *Relayer) ManualRoute(routeID string) bool { return d.manualRoutes[routeID] }
+
+// WaitPolicy returns the configured packet wait policy for routeID.
+func (d *Relayer) WaitPolicy(routeID string) (WaitPolicy, bool) {
+	policy, ok := d.waitPolicies[routeID]
+	return policy, ok
+}
 
 // Relay submits the source transaction's packets for relaying. The source
 // Chain is named by its harness identifier and translated to the relayer's

@@ -14,7 +14,7 @@ import (
 
 func TestTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -28,17 +28,15 @@ func TestTransfer_AutoRelay(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
 
 func TestTransfer_ManualRelay(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -52,14 +50,12 @@ func TestTransfer_ManualRelay(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
 	require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_PENDING, destination.Timing()))
+		relayerv2.PacketState_PACKET_STATE_PENDING))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
@@ -76,8 +72,8 @@ const (
 
 func TestTransferTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	e2etest.RequireAnvilLane(t)
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -101,10 +97,8 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	source, err := env.Chain(route.Source)
-	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))

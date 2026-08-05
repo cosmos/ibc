@@ -53,13 +53,10 @@ type ChainSpec interface {
 	validateChain() error
 }
 
-// ManagedAnvil declares an environment-owned Anvil Chain. A zero
-// BlockInterval selects the launcher's instant-mining behavior; positive
-// intervals must use the launcher's whole-second granularity.
+// ManagedAnvil declares an environment-owned Anvil Chain.
 type ManagedAnvil struct {
-	ID            ChainID
-	EVMChainID    uint64
-	BlockInterval time.Duration
+	ID         ChainID
+	EVMChainID uint64
 }
 
 func (ManagedAnvil) chainSpec() {}
@@ -73,12 +70,6 @@ func (c ManagedAnvil) validateChain() error {
 	}
 	if c.EVMChainID == 0 {
 		return errorsf("chain %q: EVM chain id must be greater than zero", c.ID)
-	}
-	if c.BlockInterval < 0 {
-		return errorsf("chain %q: block interval must not be negative", c.ID)
-	}
-	if c.BlockInterval > 0 && c.BlockInterval%time.Second != 0 {
-		return errorsf("chain %q: block interval must be a whole number of seconds", c.ID)
 	}
 	return nil
 }
@@ -132,14 +123,12 @@ func (c AttachedEVM) validateChain() error {
 	return c.Timing.validate(c.ID)
 }
 
-// Timing describes the end-to-end wait behavior workflows need without
-// assuming Anvil or Besu defaults. SettleWindow must cover chain progress and
-// harness-managed relayer and attestor delays. BlockInterval may be zero for
-// instant mining; all wait budgets must be positive.
+// Timing describes endpoint wait behavior without assuming Anvil or Besu
+// defaults. BlockInterval may be zero for attached chains whose cadence is
+// unknown; all wait budgets must be positive.
 type Timing struct {
 	BlockInterval    time.Duration
 	CompletionBudget time.Duration
-	SettleWindow     time.Duration
 	PollInterval     time.Duration
 }
 
@@ -149,9 +138,6 @@ func (t Timing) validate(id ChainID) error {
 	}
 	if t.CompletionBudget <= 0 {
 		return errorsf("chain %q timing: completion budget must be greater than zero", id)
-	}
-	if t.SettleWindow <= 0 {
-		return errorsf("chain %q timing: settle window must be greater than zero", id)
 	}
 	if t.PollInterval <= 0 {
 		return errorsf("chain %q timing: poll interval must be greater than zero", id)

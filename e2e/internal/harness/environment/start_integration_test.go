@@ -389,7 +389,6 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 			Endpoint:   attachedRPC,
 			Timing: environment.Timing{
 				CompletionBudget: 30 * time.Second,
-				SettleWindow:     time.Second,
 				PollInterval:     100 * time.Millisecond,
 			},
 		},
@@ -408,6 +407,7 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 
 	_, err = managed.Height(t.Context())
 	require.NoError(t, err, "managed Chain is ready")
+	require.Equal(t, time.Second, managed.Timing().BlockInterval)
 	_, err = attached.Height(t.Context())
 	require.NoError(t, err, "attached Chain is ready")
 
@@ -456,6 +456,10 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 	headerAfterRestart, err := evmClient.HeaderByNumber(t.Context(), nil)
 	require.NoError(t, err, "an EVM handle created before restart must resolve the replacement client")
 	require.GreaterOrEqual(t, headerAfterRestart.Number.Uint64(), headerBeforeRestart.Number.Uint64())
+	require.Eventually(t, func() bool {
+		height, heightErr := managed.Height(t.Context())
+		return heightErr == nil && height > headerAfterRestart.Number.Uint64()
+	}, 3*time.Second, 50*time.Millisecond, "restarted managed Anvil must resume idle progress")
 
 	funding, err = attached.Funding()
 	require.Nil(t, funding)
@@ -604,7 +608,6 @@ func startOutOfBandAnvil(t *testing.T, id string, chainID uint64) *anvil.Chain {
 func attachedTiming() environment.Timing {
 	return environment.Timing{
 		CompletionBudget: 30 * time.Second,
-		SettleWindow:     time.Second,
 		PollInterval:     100 * time.Millisecond,
 	}
 }

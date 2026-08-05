@@ -12,23 +12,19 @@ import (
 )
 
 // crossRouteSpec shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.
-func crossRouteSpec() environment.Spec {
+func crossRouteSpec(t testing.TB) environment.Spec {
+	t.Helper()
 	const (
 		chainA environment.ChainID = "chain-a"
 		chainB environment.ChainID = "chain-b"
 		chainC environment.ChainID = "chain-c"
 	)
-	return dummyClientMeshSpec([]environment.ChainSpec{
-		environment.ManagedAnvil{ID: chainA, EVMChainID: 31637},
-		environment.ManagedAnvil{ID: chainB, EVMChainID: 31638},
-		environment.ManagedAnvil{ID: chainC, EVMChainID: 31639},
-	})
+	return dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, chainA, chainB, chainC))
 }
 
 func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	t.Parallel()
-	e2etest.RequireAnvilLane(t)
-	spec := crossRouteSpec()
+	spec := crossRouteSpec(t)
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -49,13 +45,11 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, cToA.VerifyEscrowed(ctx))
 
-	destination, err := env.Chain("chain-a")
-	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, bToA.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, cToA.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, bToA.VerifyDelivered(ctx))
 	require.NoError(t, cToA.VerifyDelivered(ctx))

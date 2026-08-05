@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
@@ -18,21 +17,44 @@ func AwaitState(
 	relayer *ibclink.Relayer,
 	packet Packet,
 	want relayerv2.PacketState,
-	timing environment.Timing,
 ) (*relayerv2.PacketStatus, error) {
 	if relayer == nil {
 		return nil, errors.New("e2etest: relayer is required")
 	}
+	policy, err := packetWaitPolicy(relayer, packet)
+	if err != nil {
+		return nil, err
+	}
+	return awaitPacketState(
+		ctx,
+		packet,
+		want,
+		policy,
+		func(ctx context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
+			return observeStatus(ctx, relayer, packet)
+		},
+	)
+}
+
+type packetStatusObserver func(context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error)
+
+func awaitPacketState(
+	ctx context.Context,
+	packet Packet,
+	want relayerv2.PacketState,
+	policy ibclink.WaitPolicy,
+	observe packetStatusObserver,
+) (*relayerv2.PacketStatus, error) {
 	packetID := packetID(packet)
 
 	description := fmt.Sprintf("packet %s to report status %q", packetID, want)
 	return await(
 		ctx,
-		timing.CompletionBudget,
-		timing.PollInterval,
+		policy.CompletionBudget,
+		policy.StatusPoll,
 		description,
 		func(ctx context.Context) (*relayerv2.PacketStatus, bool, error) {
-			observed, state, ok, err := observeStatus(ctx, relayer, packet)
+			observed, state, ok, err := observe(ctx)
 			if err != nil {
 				return nil, false, err
 			}
@@ -58,36 +80,50 @@ func AwaitState(
 	)
 }
 
-// AwaitStable requires the packet to remain in one state across the
-// environment's end-to-end settle window after that state is first observed.
+// AwaitStable requires the packet to remain in one state across its route's
+// stability window after that state is first observed.
 func AwaitStable(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
 	packet Packet,
 	want relayerv2.PacketState,
-	timing environment.Timing,
 ) error {
-	ctx, cancel := context.WithTimeout(ctx, timing.CompletionBudget)
-	defer cancel()
-	if _, err := AwaitState(ctx, relayer, packet, want, timing); err != nil {
+	if relayer == nil {
+		return errors.New("e2etest: relayer is required")
+	}
+	policy, err := packetWaitPolicy(relayer, packet)
+	if err != nil {
 		return err
 	}
+	observe := func(ctx context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
+		return observeStatus(ctx, relayer, packet)
+	}
+	return awaitStablePacketState(ctx, packet, want, policy, observe)
+}
 
+func awaitStablePacketState(
+	ctx context.Context,
+	packet Packet,
+	want relayerv2.PacketState,
+	policy ibclink.WaitPolicy,
+	observe packetStatusObserver,
+) error {
+	if _, err := awaitPacketState(ctx, packet, want, policy, observe); err != nil {
+		return err
+	}
+	return watchPacketState(ctx, packet, want, policy, observe)
+}
+
+func watchPacketState(
+	ctx context.Context,
+	packet Packet,
+	want relayerv2.PacketState,
+	policy ibclink.WaitPolicy,
+	observe packetStatusObserver,
+) error {
 	packetID := packetID(packet)
-	ticker := time.NewTicker(timing.PollInterval)
-	defer ticker.Stop()
-	for range settleObservations(timing) {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf(
-				"context canceled while watching packet %s stay %q: %w",
-				packetID,
-				want,
-				ctx.Err(),
-			)
-		case <-ticker.C:
-		}
-		observed, state, ok, err := observeStatus(ctx, relayer, packet)
+	check := func() error {
+		observed, state, ok, err := observe(ctx)
 		if err != nil {
 			return err
 		}
@@ -100,8 +136,56 @@ func AwaitStable(
 		if err := verifySourceTx(packetID, packet, observed); err != nil {
 			return err
 		}
+		return validateTerminalStatus(packetID, state, observed)
 	}
-	return nil
+	cancellationError := func() error {
+		return fmt.Errorf(
+			"context canceled while watching packet %s stay %q: %w",
+			packetID,
+			want,
+			ctx.Err(),
+		)
+	}
+	ticker := time.NewTicker(policy.StatusPoll)
+	defer ticker.Stop()
+	timer := time.NewTimer(policy.StabilityWindow)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return cancellationError()
+		case <-timer.C:
+			if ctx.Err() != nil {
+				return cancellationError()
+			}
+			if err := check(); err != nil {
+				return err
+			}
+			if ctx.Err() != nil {
+				return cancellationError()
+			}
+			return nil
+		case <-ticker.C:
+		}
+		if err := check(); err != nil {
+			return err
+		}
+	}
+}
+
+func packetWaitPolicy(relayer *ibclink.Relayer, packet Packet) (ibclink.WaitPolicy, error) {
+	if packet.RouteID == "" {
+		return ibclink.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
+	}
+	policy, ok := relayer.WaitPolicy(string(packet.RouteID))
+	if !ok {
+		return ibclink.WaitPolicy{}, fmt.Errorf(
+			"e2etest: packet %s has no wait policy for route %q",
+			packetID(packet),
+			packet.RouteID,
+		)
+	}
+	return policy, nil
 }
 
 // Relay submits the packet's source transaction for relaying and confirms the
@@ -205,12 +289,4 @@ func validateTerminalStatus(
 		}
 	}
 	return nil
-}
-
-func settleObservations(timing environment.Timing) int {
-	count := int((timing.SettleWindow + timing.PollInterval - 1) / timing.PollInterval)
-	if count < 1 {
-		return 1
-	}
-	return count
 }

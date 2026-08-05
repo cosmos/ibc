@@ -346,7 +346,7 @@ func prepareAttestorWorkspace(
 			ChainID:        spec.ChainID,
 			Name:           spec.Name,
 			Signer:         signerAlias,
-			FinalityOffset: 1,
+			FinalityOffset: HarnessFinalityOffset,
 		}}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,

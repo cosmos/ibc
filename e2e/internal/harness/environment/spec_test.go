@@ -314,12 +314,6 @@ func TestSpecValidateDoesNotMutate(t *testing.T) {
 	require.Equal(t, want, spec)
 }
 
-func TestSpecValidateRejectsUnrepresentableAnvilTiming(t *testing.T) {
-	spec := validSpec()
-	spec.Chains[0] = ManagedAnvil{ID: "chain-a", EVMChainID: 31337, BlockInterval: 1500 * time.Millisecond}
-	require.ErrorContains(t, spec.validate(), "block interval must be a whole number of seconds")
-}
-
 func TestSpecSnapshotOwnsCollections(t *testing.T) {
 	spec := validSpec()
 	snapshot := spec.snapshot()
@@ -346,7 +340,6 @@ func validSpec() Spec {
 				Timing: Timing{
 					BlockInterval:    2 * time.Second,
 					CompletionBudget: 40 * time.Second,
-					SettleWindow:     4 * time.Second,
 					PollInterval:     250 * time.Millisecond,
 				},
 			},
