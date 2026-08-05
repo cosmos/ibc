@@ -64,6 +64,12 @@ codegen-abi: ## Generate Go bindings for EVM contract ABIs
 		--type Contract \
 		--out internal/chains/evm/contracts/ics26router/ics26router.go
 
+# not part of `codegen`: needs bun, forge, and jq on top of the go toolchain
+codegen-bindings: ## Regenerate the vendored AccessManager binding from the deploy forge workspace (requires bun, forge, jq)
+	bun install --cwd internal/deploy/evm/forgeproject --frozen-lockfile
+	forge build --root internal/deploy/evm/forgeproject
+	scripts/generate-contract-bindings.sh
+
 test: ## Run tests
 	go test ./... -v
 
@@ -72,4 +78,4 @@ test-deploy: ## Run deployment e2e smoke tests (requires forge, bun, anvil)
 
 check: build test lint check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build install docker-build lint lint-fix test test-deploy codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check
+.PHONY: help build install docker-build lint lint-fix test test-deploy codegen codegen-sql codegen-proto codegen-abi codegen-bindings codegen-mocks check-proto check
