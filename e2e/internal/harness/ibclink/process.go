@@ -26,8 +26,8 @@ type result struct {
 	code   int
 }
 
-func (r *Driver) exec(ctx context.Context, bin, label string, args ...string) (*result, error) {
-	ctx, cancel := context.WithTimeout(ctx, defaultCommandTimeout)
+func (r *Driver) exec(ctx context.Context, bin, label string, timeout time.Duration, args ...string) (*result, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	processEnv, release, err := r.acquireProcessEnv()
 	if err != nil {

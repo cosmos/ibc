@@ -8,8 +8,11 @@ import { ERC1967Proxy } from "@openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy
 import { AccessManager } from "@openzeppelin-contracts/access/manager/AccessManager.sol";
 
 // Deploys AccessManager + ICS26Router (implementation from prebuilt
-// bytecode) behind an initialized ERC1967 proxy. The deployer key stays the
-// AccessManager admin; role hardening is a follow-up performed off-script.
+// bytecode) behind an initialized ERC1967 proxy, then binds the relaying
+// selectors (IBC_PUBLIC_SELECTORS, packed 4-byte selectors computed by the
+// driver from the router ABI) to PUBLIC_ROLE so any relayer EOA can submit
+// packets. The deployer key stays the AccessManager admin; role hardening is
+// a follow-up performed off-script.
 contract DeployCore is Script {
     using stdJson for string;
 
@@ -17,18 +20,33 @@ contract DeployCore is Script {
 
     function run() public returns (string memory) {
         uint256 key = vm.envUint("IBC_DEPLOYER_KEY");
+        bytes memory packed = vm.envBytes("IBC_PUBLIC_SELECTORS");
+        require(packed.length > 0 && packed.length % 4 == 0, "IBC_PUBLIC_SELECTORS must be packed 4-byte selectors");
+
         vm.startBroadcast(key);
         AccessManager am = new AccessManager(vm.addr(key));
         address routerLogic = _deployArtifact(ARTIFACT_ROUTER);
         address router = address(
             new ERC1967Proxy(routerLogic, abi.encodeWithSignature("initialize(address)", address(am)))
         );
+        am.setTargetFunctionRole(router, _selectors(packed), am.PUBLIC_ROLE());
         vm.stopBroadcast();
 
         string memory json = "json";
         json.serialize("accessManager", Strings.toHexString(address(am)));
         json.serialize("ics26RouterImplementation", Strings.toHexString(routerLogic));
         return json.serialize("ics26Router", Strings.toHexString(router));
+    }
+
+    function _selectors(bytes memory packed) internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](packed.length / 4);
+        for (uint256 i = 0; i < selectors.length; i++) {
+            bytes4 sel;
+            assembly {
+                sel := mload(add(add(packed, 0x20), mul(i, 4)))
+            }
+            selectors[i] = sel;
+        }
     }
 
     function _deployArtifact(string memory path) internal returns (address addr) {

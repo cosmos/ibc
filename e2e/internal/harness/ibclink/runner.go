@@ -51,7 +51,7 @@ func NewDriver(configPath string) (*Driver, error) {
 
 func (r *Driver) MigrateUp(ctx context.Context) error {
 	args := append([]string{"migrate", "up"}, r.configArgs()...)
-	res, err := r.exec(ctx, r.bin, "migrate up", args...)
+	res, err := r.exec(ctx, r.bin, "migrate up", defaultCommandTimeout, args...)
 	if err != nil {
 		return err
 	}

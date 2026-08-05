@@ -96,7 +96,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 
 	listenAddress := launch.ListenAddress
 	if listenAddress == "" {
-		listenAddress = "127.0.0.1:0"
+		listenAddress = loopbackAnyPort
 	}
 	paths, err := prepareAttestorWorkspace(launch, key, listenAddress)
 	if err != nil {
@@ -338,7 +338,7 @@ func prepareAttestorWorkspace(
 	config := fileConfig{
 		Server: serverConfig{ListenAddress: listenAddress},
 		DB: dbConfig{
-			Type: "sqlite",
+			Type: dbTypeSQLite,
 			URL:  filepath.Join(dir, "ibc.db"),
 		},
 		Chains: []chainConfig{{
@@ -458,6 +458,12 @@ func (w *logWriter) close() {
 	}
 }
 
+// Shared config-literal defaults for harness-written Link config files.
+const (
+	loopbackAnyPort = "127.0.0.1:0"
+	dbTypeSQLite    = "sqlite"
+)
+
 type fileConfig struct {
 	Server   serverConfig       `yaml:"server"`
 	DB       dbConfig           `yaml:"db"`
@@ -468,8 +474,9 @@ type fileConfig struct {
 }
 
 type chainConfig struct {
-	ChainID string         `yaml:"chainId"`
-	EVM     evmChainConfig `yaml:"evm"`
+	ChainID  string         `yaml:"chainId"`
+	EVM      evmChainConfig `yaml:"evm"`
+	Deployer string         `yaml:"deployer,omitempty"`
 }
 
 type evmChainConfig struct {

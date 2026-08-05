@@ -114,10 +114,14 @@ func checksumAddress(addr string) string {
 	return common.HexToAddress(addr).Hex()
 }
 
-// ProvisionCore deploys AccessManager + ICS26Router proxy via forge, then
-// opens public relaying on the router in Go.
+// ProvisionCore deploys AccessManager + ICS26Router proxy via forge; the
+// script also opens the relaying selectors to PUBLIC_ROLE.
 func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy.CoreRef, error) {
 	if err := d.requireSigner(); err != nil {
+		return deploy.CoreRef{}, err
+	}
+	selectors, err := publicRelayingSelectorsHex()
+	if err != nil {
 		return deploy.CoreRef{}, err
 	}
 	returns, txs, err := d.ws.RunScript(ctx, ScriptOptions{
@@ -126,6 +130,7 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 		RPCURL:        d.rpcURL,
 		ChainID:       d.chainID.String(),
 		PrivateKeyHex: d.keyHex(),
+		Env:           map[string]string{"IBC_PUBLIC_SELECTORS": selectors},
 	})
 	if err != nil {
 		return deploy.CoreRef{}, err
@@ -133,10 +138,6 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	router, am := returns["ics26Router"], returns["accessManager"]
 	if router == "" || am == "" {
 		return deploy.CoreRef{}, fmt.Errorf("forge returned incomplete core addresses: %v", returns)
-	}
-	routerAddr, amAddr := common.HexToAddress(router), common.HexToAddress(am)
-	if err := d.openPublicRelaying(ctx, amAddr, routerAddr); err != nil {
-		return deploy.CoreRef{}, err
 	}
 	txHashes := map[string]string{}
 	for i, h := range txs {

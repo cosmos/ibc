@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"strings"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/cosmos/ibc/link/internal/deploy"
-	"github.com/cosmos/ibc/link/internal/deploy/evm/accessmanager"
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
 )
 
@@ -133,36 +131,23 @@ func (d *Driver) Head(ctx context.Context) (uint64, uint64, error) {
 	return header.Number.Uint64(), header.Time, nil
 }
 
-// openPublicRelaying binds the relaying selectors on the router to
-// AccessManager's PUBLIC_ROLE.
-func (d *Driver) openPublicRelaying(ctx context.Context, am, router common.Address) error {
+// publicRelayingSelectorsHex packs the relaying method selectors into one
+// 0x-prefixed hex string for the core deploy script, which binds them to
+// AccessManager's PUBLIC_ROLE inside the deployment broadcast.
+func publicRelayingSelectorsHex() (string, error) {
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	if err != nil {
-		return err
+		return "", err
 	}
-	selectors := make([][4]byte, 0, len(publicRelayingMethods))
+	packed := make([]byte, 0, 4*len(publicRelayingMethods))
 	for _, name := range publicRelayingMethods {
 		method, ok := routerABI.Methods[name]
 		if !ok {
-			return fmt.Errorf("router ABI has no method %q", name)
+			return "", fmt.Errorf("router ABI has no method %q", name)
 		}
-		var sel [4]byte
-		copy(sel[:], method.ID)
-		selectors = append(selectors, sel)
+		packed = append(packed, method.ID[:4]...)
 	}
-	manager, err := accessmanager.NewAccessManager(am, d.backend)
-	if err != nil {
-		return err
-	}
-	opts, err := d.transactOpts(ctx)
-	if err != nil {
-		return err
-	}
-	tx, err := manager.SetTargetFunctionRole(opts, router, selectors, math.MaxUint64)
-	if err != nil {
-		return fmt.Errorf("open public relaying: %w", err)
-	}
-	return d.awaitMined(ctx, "open public relaying", tx)
+	return "0x" + common.Bytes2Hex(packed), nil
 }
 
 // Discover reconstructs a manifest from an existing router: authority from

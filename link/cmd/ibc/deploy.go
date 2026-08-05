@@ -246,7 +246,9 @@ func clientSpec(
 			return deploy.ClientSpec{}, errors.Wrap(err, "fetch counterparty head for initial trusted state")
 		}
 		if height == 0 {
-			height = h
+			// a fresh chain's head is genesis (0), which clients reject as
+			// an initial trusted height
+			height = max(h, 1)
 		}
 		if timestamp == 0 {
 			timestamp = ts

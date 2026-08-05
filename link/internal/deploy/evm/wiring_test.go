@@ -1,14 +1,18 @@
 package evm
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -17,7 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/deploy"
-	"github.com/cosmos/ibc/link/internal/deploy/evm/accessmanager"
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
 )
 
@@ -52,6 +55,32 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 	return d, sim, addr
 }
 
+// deployAccessManagerFixture deploys the OZ AccessManager from the staged
+// testdata artifact (`make codegen-bindings` regenerates it from the deploy
+// forge workspace), so no generated Go binding is needed.
+func deployAccessManagerFixture(t *testing.T, d *Driver, admin common.Address) common.Address {
+	t.Helper()
+	bz, err := os.ReadFile("testdata/access_manager.json")
+	require.NoError(t, err)
+	var artifact struct {
+		ABI      json.RawMessage `json:"abi"`
+		Bytecode struct {
+			Object string `json:"object"`
+		} `json:"bytecode"`
+	}
+	require.NoError(t, json.Unmarshal(bz, &artifact))
+	parsed, err := abi.JSON(bytes.NewReader(artifact.ABI))
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	opts, err := d.transactOpts(ctx)
+	require.NoError(t, err)
+	addr, tx, _, err := bind.DeployContract(opts, parsed, common.FromHex(artifact.Bytecode.Object), d.backend, admin)
+	require.NoError(t, err)
+	require.NoError(t, d.awaitMined(ctx, "access manager", tx))
+	return addr
+}
+
 // deployCoreFixture mirrors what the forge DeployCore script produces.
 func deployCoreFixture(t *testing.T, d *Driver, admin common.Address) common.Address {
 	t.Helper()
@@ -59,9 +88,7 @@ func deployCoreFixture(t *testing.T, d *Driver, admin common.Address) common.Add
 	opts, err := d.transactOpts(ctx)
 	require.NoError(t, err)
 
-	amAddr, tx, _, err := accessmanager.DeployAccessManager(opts, d.backend, admin)
-	require.NoError(t, err)
-	require.NoError(t, d.awaitMined(ctx, "am", tx))
+	amAddr := deployAccessManagerFixture(t, d, admin)
 
 	implAddr, tx, _, err := ics26router.DeployContract(opts, d.backend)
 	require.NoError(t, err)
@@ -137,25 +164,15 @@ func TestRegisterDiscoverVerify(t *testing.T) {
 	require.NotEmpty(t, report.Failed())
 }
 
-func TestOpenPublicRelaying(t *testing.T) {
-	d, _, admin := newSimDriver(t)
-	ctx := context.Background()
-	router := deployCoreFixture(t, d, admin)
-
-	m, err := d.Discover(ctx, router.Hex())
+// The PUBLIC_ROLE grant itself now happens inside DeployCore.s.sol and is
+// asserted end-to-end by the e2e module's deploy test; this only pins the
+// selector packing the script consumes.
+func TestPublicRelayingSelectorsHex(t *testing.T) {
+	packed, err := publicRelayingSelectorsHex()
 	require.NoError(t, err)
-	am := common.HexToAddress(m.TargetData["accessManager"])
+	require.Len(t, packed, 2+8*len(publicRelayingMethods))
 
-	require.NoError(t, d.openPublicRelaying(ctx, am, router))
-
-	// an unrelated address must be able to call recvPacket immediately
-	manager, err := accessmanager.NewAccessManager(am, d.backend)
-	require.NoError(t, err)
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
-	var sel [4]byte
-	copy(sel[:], routerABI.Methods["recvPacket"].ID)
-	perm, err := manager.CanCall(&bind.CallOpts{Context: ctx}, common.HexToAddress("0x1000000000000000000000000000000000000001"), router, sel)
-	require.NoError(t, err)
-	require.True(t, perm.Immediate)
+	require.Equal(t, "0x"+common.Bytes2Hex(routerABI.Methods["recvPacket"].ID[:4]), packed[:10])
 }
