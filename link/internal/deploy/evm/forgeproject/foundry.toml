@@ -1,0 +1,14 @@
+# Compiles only the deploy scripts plus OpenZeppelin. Eureka contracts are
+# staged as prebuilt bytecode under release-bytecode/ (written by
+# workspace.go from the pinned go-abigen artifacts) and deployed via
+# vm.getCode + CREATE.
+[profile.default]
+  auto_detect_solc = false
+  evm_version = "cancun"
+  optimizer = true
+  optimizer_runs = 200
+  out = "out"
+  script = "scripts"
+  src = "contracts"
+  solc = "0.8.28"
+  fs_permissions = [{ access = "read-write", path = "./" }]

@@ -47,10 +47,11 @@ Chains the attestor and relayer can reference by `chainId`. Declare every
 chain used elsewhere in the config here first. `relayer.clients[].chainId`
 and `relayer.chainOverrides[].chainId` are validated against this list.
 
-| Field     | Type   | Description |
-|-----------|--------|-------------|
-| `chainId` | string | Unique chain identifier (e.g. `"11155111"` for an EVM chain ID). |
-| `evm`     | object | EVM-specific connection details. Currently the only supported chain type. |
+| Field      | Type   | Description |
+|------------|--------|-------------|
+| `chainId`  | string | Unique chain identifier (e.g. `"11155111"` for an EVM chain ID). |
+| `evm`      | object | EVM-specific connection details. Currently the only supported chain type. |
+| `deployer` | string | Optional. Signer alias (from `signers`) used by `ibc deploy` to sign deployment transactions on this chain. Must be a local ECDSA signer. |
 
 ### `chains[].evm`
 
@@ -202,3 +203,31 @@ attestor:
       name: attestation-a
       signer: my-local-signer
 ```
+
+## Deployment
+
+`ibc deploy` provisions IBC on a chain and records what it deployed. Two
+pieces tie into the rest of the config:
+
+- `chains[].deployer` — the signer alias `ibc deploy` uses to sign
+  deployment transactions on that chain. Must reference a `local` ECDSA
+  signer in `signers` (deployment tooling needs the raw key, not just a
+  remote signing call). Overridable per-invocation with `--deployer`.
+  `deploy status`, `deploy import`, and `deploy render-config` are
+  read-only and work without a configured deployer.
+- `--manifest-dir` (default `deployments`, relative to `--home`) — where
+  `ibc deploy` writes one JSON manifest per chain recording what was
+  deployed (router address, registered clients, provenance). Manifests are
+  machine-generated: `ibc deploy` reads and rewrites them on every run to
+  stay idempotent, so hand edits are lost and can desync the recorded state
+  from what's actually on chain.
+
+Once a manifest exists, `ibc deploy render-config` projects it into
+`chains[].evm` and `relayer.clients[]` blocks you can paste into this file
+(attestor names in the generated `attestorSet` are left blank — fill them in
+to match your `attestor.attestations[].name` values).
+
+`deploy import` scans event logs from block 0 to rediscover registered
+clients, which some public RPC providers reject or truncate for exceeding
+their `eth_getLogs` range limit; against those, prefer an archive node or a
+provider without a log-range cap.

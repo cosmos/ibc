@@ -103,6 +103,9 @@ const (
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+
+	// Deployer optional signer alias used by `ibc deploy` for this chain.
+	Deployer string `yaml:"deployer,omitempty"`
 }
 
 // Type returns the chain type implied by the configured settings.
@@ -222,6 +225,15 @@ func (c Config) crossValidate() error {
 				i,
 				attestation.Signer,
 			)
+		}
+	}
+
+	for _, chain := range c.Chains {
+		if chain.Deployer == "" {
+			continue
+		}
+		if _, exists := signerSet[chain.Deployer]; !exists {
+			return errors.Errorf(".chains[%s].deployer references unknown signer: %q", chain.ChainID, chain.Deployer)
 		}
 	}
 

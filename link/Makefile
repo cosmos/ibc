@@ -67,6 +67,9 @@ codegen-abi: ## Generate Go bindings for EVM contract ABIs
 test: ## Run tests
 	go test ./... -v
 
+test-deploy: ## Run deployment e2e smoke tests (requires forge, bun, anvil)
+	IBC_DEPLOY_E2E=1 go test ./internal/deploy/... -run TestDeployE2E -v -timeout 10m
+
 check: build test lint check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build install docker-build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check
+.PHONY: help build install docker-build lint lint-fix test test-deploy codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check

@@ -22,6 +22,12 @@ make build
 # run the relayer and/or attestor after populating config
 ./bin/ibc relayer run
 ./bin/ibc attestor run
+
+# deploy IBC between two configured chains (idempotent; rerun to repair)
+./bin/ibc deploy connect <chainA> <chainB> --attestors 0x... --yes
+
+# then project the results into relayer config
+./bin/ibc deploy render-config
 ```
 
 ## Configuration
