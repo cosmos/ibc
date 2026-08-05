@@ -12,9 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// deployCommandTimeout is generous because the first `ibc deploy` call in a
-// fresh home does a network `bun install` and a `forge build` before
-// submitting any transaction.
+// deployCommandTimeout bounds the sequential deployment transactions a
+// single `ibc deploy` call submits and mines.
 const deployCommandTimeout = 10 * time.Minute
 
 // placeholderRouter satisfies chains[].evm.ics26Router's required-non-empty

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -40,18 +39,6 @@ type deployManifest struct {
 	TargetData map[string]string `json:"targetData"`
 }
 
-// requireDeployTools skips when the deploy driver's shell-outs are missing.
-// anvil is already a prerequisite of the whole e2e suite; forge and bun are
-// deploy-specific.
-func requireDeployTools(t testing.TB) {
-	t.Helper()
-	for _, tool := range []string{"forge", "bun"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("%s not on PATH; the deploy driver shells out to it", tool)
-		}
-	}
-}
-
 // TestDeployConnect drives `ibc deploy` as a black box: two bare managed
 // chains (no protocol resources — the deploy CLI provisions IBC itself),
 // a temporary CLI home with an imported deployer key, and assertions against
@@ -59,7 +46,6 @@ func requireDeployTools(t testing.TB) {
 func TestDeployConnect(t *testing.T) {
 	t.Parallel()
 	e2etest.RequireAnvilLane(t)
-	requireDeployTools(t)
 
 	spec := environment.Spec{Chains: e2etest.ChainSpecsForConfiguredLane(t)}
 	env := e2etest.Start(t, spec, environment.Runtime{})
@@ -129,7 +115,7 @@ func TestDeployConnect(t *testing.T) {
 	require.NotEmpty(t, manifestA.Core.Router)
 	require.NotEmpty(t, manifestB.Core.Router)
 
-	// the core deploy script binds the relaying selectors to PUBLIC_ROLE;
+	// core provisioning binds the relaying selectors to PUBLIC_ROLE;
 	// prove an unrelated address can call recvPacket on each router. The
 	// driver's ChainRPC values are env-var templates only the CLI process
 	// expands, so dial the chains' real RPC URLs.
