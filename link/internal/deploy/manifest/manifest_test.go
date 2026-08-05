@@ -23,7 +23,6 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0xabc", got.Core.Router)
 	require.Equal(t, 1, got.SchemaVersion)
-	require.False(t, got.Provenance.UpdatedAt.IsZero())
 
 	c, ok := got.Client("link-2")
 	require.True(t, ok)

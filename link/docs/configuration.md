@@ -217,7 +217,7 @@ pieces tie into the rest of the config:
   read-only and work without a configured deployer.
 - `--manifest-dir` (default `deployments`, relative to `--home`) — where
   `ibc deploy` writes one JSON manifest per chain recording what was
-  deployed (router address, registered clients, provenance). Manifests are
+  deployed (router address, registered clients). Manifests are
   machine-generated: `ibc deploy` reads and rewrites them on every run to
   stay idempotent, so hand edits are lost and can desync the recorded state
   from what's actually on chain.

@@ -63,7 +63,7 @@ func RunSteps(ctx context.Context, log *slog.Logger, dryRun bool, steps []Step) 
 
 // CoreSteps provisions the core routing stack on one chain and records it in
 // the chain's manifest.
-func CoreSteps(t Target, dir, chainID, deployer string) []Step {
+func CoreSteps(t Target, dir, chainID string) []Step {
 	return []Step{{
 		Name: fmt.Sprintf("core stack on chain %s", chainID),
 		Done: func(ctx context.Context) (bool, error) {
@@ -89,14 +89,6 @@ func CoreSteps(t Target, dir, chainID, deployer string) []Step {
 			}
 			m.Core.Router = ref.Router
 			m.TargetData = ref.TargetData
-			m.Provenance.Deployer = deployer
-			m.Provenance.ContractsVersion = t.ContractsVersion()
-			if m.Provenance.TxHashes == nil {
-				m.Provenance.TxHashes = map[string]string{}
-			}
-			for k, v := range ref.TxHashes {
-				m.Provenance.TxHashes[k] = v
-			}
 			return m.Save(dir)
 		},
 	}}
@@ -157,12 +149,6 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			}
 			if _, regErr := t.RegisterClient(ctx, m.Core.Router, spec, ref); regErr != nil {
 				return regErr
-			}
-			if ref.TxHash != "" {
-				if m.Provenance.TxHashes == nil {
-					m.Provenance.TxHashes = map[string]string{}
-				}
-				m.Provenance.TxHashes["client-"+spec.ClientID] = ref.TxHash
 			}
 			client, err := specToClient(spec, ref.Address)
 			if err != nil {

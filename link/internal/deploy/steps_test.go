@@ -24,7 +24,7 @@ func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error)
 }
 func (f *fakeTarget) ProvisionClient(context.Context, ClientSpec) (ClientRef, error) {
 	f.provisions++
-	return ClientRef{Address: "0xclient", TxHash: "0xtxhash"}, nil
+	return ClientRef{Address: "0xclient"}, nil
 }
 func (f *fakeTarget) RegisterClient(_ context.Context, _ string, spec ClientSpec, ref ClientRef) (string, error) {
 	f.registers++
@@ -46,7 +46,6 @@ func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error)
 	return Report{}, nil
 }
 func (f *fakeTarget) SupportedClientTypes() []string { return []string{ClientTypeAttestation} }
-func (f *fakeTarget) ContractsVersion() string       { return "test" }
 
 func newFakeTarget() *fakeTarget {
 	return &fakeTarget{hasCode: map[string]bool{}, registered: map[string]string{}}
@@ -66,7 +65,7 @@ func TestCoreStepsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
 
-	res, err := RunSteps(context.Background(), slog.Default(), false, CoreSteps(target, dir, "1", "0xdeployer"))
+	res, err := RunSteps(context.Background(), slog.Default(), false, CoreSteps(target, dir, "1"))
 	require.NoError(t, err)
 	require.Equal(t, "executed", res[0].Action)
 	require.Equal(t, 1, target.provisions)
@@ -78,7 +77,7 @@ func TestCoreStepsIdempotent(t *testing.T) {
 
 	// second run skips: manifest has the router and the chain has its code
 	target.hasCode["0xrouter"] = true
-	res, err = RunSteps(context.Background(), slog.Default(), false, CoreSteps(target, dir, "1", "0xdeployer"))
+	res, err = RunSteps(context.Background(), slog.Default(), false, CoreSteps(target, dir, "1"))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
 	require.Equal(t, 1, target.provisions)
@@ -112,7 +111,6 @@ func TestClientStepsIdempotent(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "0xclient", c.Address)
 	require.Equal(t, "2", c.CounterpartyChainID)
-	require.Equal(t, "0xtxhash", m.Provenance.TxHashes["client-link-2"])
 
 	// second run skips: client already registered on-chain
 	res, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))

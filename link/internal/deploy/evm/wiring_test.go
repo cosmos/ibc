@@ -58,7 +58,6 @@ func TestProvisionRegisterDiscoverVerify(t *testing.T) {
 	require.NotEmpty(t, router)
 	require.NotEmpty(t, core.TargetData["accessManager"])
 	require.NotEmpty(t, core.TargetData["ics26RouterImplementation"])
-	require.Len(t, core.TxHashes, 4)
 
 	// not registered yet
 	_, registered, err := d.ClientRegistered(ctx, router, "link-2")
@@ -80,7 +79,6 @@ func TestProvisionRegisterDiscoverVerify(t *testing.T) {
 	ref, err := d.ProvisionClient(ctx, spec)
 	require.NoError(t, err)
 	require.NotEmpty(t, ref.Address)
-	require.NotEmpty(t, ref.TxHash)
 
 	id, err := d.RegisterClient(ctx, router, spec, ref)
 	require.NoError(t, err)

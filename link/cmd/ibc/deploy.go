@@ -125,16 +125,16 @@ func deployerKeyHex(cfg config.Config, alias string) (string, error) {
 
 // newTarget builds the deploy target for a chain based on its configured
 // type. When needSigner is false, the target is built read-only: no local
-// deployer key is resolved, and the returned deployer address is "".
+// deployer key is resolved.
 func newTarget(
 	ctx context.Context,
 	cfg config.Config,
 	chainID, deployerFlag string,
 	needSigner bool,
-) (deploy.Target, string, error) {
+) (deploy.Target, error) {
 	chain, ok := cfg.Chain(chainID)
 	if !ok {
-		return nil, "", errors.Errorf("chain %q not declared in config", chainID)
+		return nil, errors.Errorf("chain %q not declared in config", chainID)
 	}
 	var keyHex string
 	if needSigner {
@@ -142,22 +142,18 @@ func newTarget(
 		var err error
 		keyHex, err = deployerKeyHex(cfg, alias)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 	switch chain.Type() {
 	case config.ChainTypeEVM:
-		driver, err := evm.New(ctx, evm.Options{
+		return evm.New(ctx, evm.Options{
 			ChainID:        chainID,
 			RPCURL:         chain.EVM.RPC,
 			DeployerKeyHex: keyHex,
 		})
-		if err != nil {
-			return nil, "", err
-		}
-		return driver, driver.DeployerAddress(), nil
 	default:
-		return nil, "", errors.Errorf("chain %q has no supported deployment target", chainID)
+		return nil, errors.Errorf("chain %q has no supported deployment target", chainID)
 	}
 }
 
@@ -213,11 +209,11 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" {
 		return errors.New("--chain is required")
 	}
-	target, deployer, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
-	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain, deployer))
+	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
 }
 
 // clientSpec assembles the ClientSpec for --chain tracking --counterparty,
@@ -278,11 +274,11 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" || flagDeployCounterparty == "" {
 		return errors.New("--chain and --counterparty are required")
 	}
-	target, _, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
-	counterpartyTarget, _, err := newTarget(cmd.Context(), cfg, flagDeployCounterparty, flagDeployDeployer, false)
+	counterpartyTarget, err := newTarget(cmd.Context(), cfg, flagDeployCounterparty, flagDeployDeployer, false)
 	if err != nil {
 		return errors.Wrapf(err, "counterparty chain %s", flagDeployCounterparty)
 	}
@@ -299,11 +295,11 @@ func deployConnect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	chainA, chainB := args[0], args[1]
-	targetA, deployerA, err := newTarget(cmd.Context(), cfg, chainA, flagDeployDeployer, true)
+	targetA, err := newTarget(cmd.Context(), cfg, chainA, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
-	targetB, deployerB, err := newTarget(cmd.Context(), cfg, chainB, flagDeployDeployer, true)
+	targetB, err := newTarget(cmd.Context(), cfg, chainB, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
@@ -321,8 +317,8 @@ func deployConnect(cmd *cobra.Command, args []string) error {
 	specB.ClientID, specB.CounterpartyClientID = deploy.DefaultClientID(chainA), deploy.DefaultClientID(chainB)
 
 	var steps []deploy.Step
-	steps = append(steps, deploy.CoreSteps(targetA, flagDeployManifestDir, chainA, deployerA)...)
-	steps = append(steps, deploy.CoreSteps(targetB, flagDeployManifestDir, chainB, deployerB)...)
+	steps = append(steps, deploy.CoreSteps(targetA, flagDeployManifestDir, chainA)...)
+	steps = append(steps, deploy.CoreSteps(targetB, flagDeployManifestDir, chainB)...)
 	steps = append(steps, deploy.ClientSteps(targetA, flagDeployManifestDir, chainA, specA)...)
 	steps = append(steps, deploy.ClientSteps(targetB, flagDeployManifestDir, chainB, specB)...)
 	return planThenRun(cmd.Context(), steps)
@@ -331,7 +327,7 @@ func deployConnect(cmd *cobra.Command, args []string) error {
 // mergeManifests folds discovered chain state into an existing manifest.
 // discovered is the base for chain-derived facts (router, targetData,
 // client addresses, counterparty client ids) since it reflects what's
-// actually on chain; existing supplies provenance and per-client metadata
+// actually on chain; existing supplies per-client metadata
 // (CounterpartyChainID/Params/Type) that Discover cannot reconstruct,
 // wherever discovered left them empty.
 func mergeManifests(existing, discovered *manifest.Manifest) *manifest.Manifest {
@@ -339,11 +335,6 @@ func mergeManifests(existing, discovered *manifest.Manifest) *manifest.Manifest 
 		return discovered
 	}
 	merged := *discovered
-	merged.Provenance.Deployer = existing.Provenance.Deployer
-	merged.Provenance.ContractsVersion = existing.Provenance.ContractsVersion
-	merged.Provenance.TxHashes = existing.Provenance.TxHashes
-	merged.Provenance.CreatedAt = existing.Provenance.CreatedAt
-
 	merged.Clients = nil
 	for _, c := range discovered.Clients {
 		if old, ok := existing.Client(c.ClientID); ok {
@@ -370,7 +361,7 @@ func deployImport(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" || flagDeployRouter == "" {
 		return errors.New("--chain and --router are required")
 	}
-	target, _, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, false)
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, false)
 	if err != nil {
 		return err
 	}
@@ -453,7 +444,7 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 		}
 		// record per-chain failures (undeclared chain, unreachable RPC)
 		// instead of aborting the whole sweep
-		target, _, err := newTarget(cmd.Context(), cfg, chainID, flagDeployDeployer, false)
+		target, err := newTarget(cmd.Context(), cfg, chainID, flagDeployDeployer, false)
 		if err != nil {
 			out[chainID] = statusError(err)
 			failed = true

@@ -38,13 +38,11 @@ type ClientSpec struct {
 type CoreRef struct {
 	Router     string
 	TargetData map[string]string
-	TxHashes   map[string]string
 }
 
 // ClientRef is the result of provisioning a light client contract.
 type ClientRef struct {
 	Address string
-	TxHash  string
 }
 
 // Check statuses.
@@ -95,6 +93,4 @@ type Target interface {
 	Discover(ctx context.Context, router string) (*manifest.Manifest, error)
 	Verify(ctx context.Context, m *manifest.Manifest) (Report, error)
 	SupportedClientTypes() []string
-	// ContractsVersion identifies the pinned contract artifacts, for provenance.
-	ContractsVersion() string
 }

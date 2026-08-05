@@ -177,7 +177,6 @@ func (d *Driver) Discover(ctx context.Context, router string) (*manifest.Manifes
 	m := manifest.New(d.chainID.String(), "evm")
 	m.Core.Router = routerAddr.Hex()
 	m.TargetData = map[string]string{"accessManager": authority.Hex()}
-	m.Provenance.ContractsVersion = contractsVersion
 
 	iter, err := contract.FilterICS02ClientAdded(&bind.FilterOpts{Context: ctx})
 	if err != nil {

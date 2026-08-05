@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 const schemaVersion = 1
@@ -19,7 +18,6 @@ type Manifest struct {
 	Core          Core              `json:"core"`
 	Clients       []Client          `json:"clients"`
 	TargetData    map[string]string `json:"targetData,omitempty"`
-	Provenance    Provenance        `json:"provenance"`
 }
 
 // Core holds the ICS26 routing endpoint. The address format is target-specific.
@@ -35,15 +33,6 @@ type Client struct {
 	CounterpartyChainID  string         `json:"counterpartyChainId"`
 	CounterpartyClientID string         `json:"counterpartyClientId"`
 	Params               map[string]any `json:"params,omitempty"`
-}
-
-// Provenance records who deployed what, when.
-type Provenance struct {
-	Deployer         string            `json:"deployer,omitempty"`
-	ContractsVersion string            `json:"contractsVersion,omitempty"`
-	TxHashes         map[string]string `json:"txHashes,omitempty"`
-	CreatedAt        time.Time         `json:"createdAt"`
-	UpdatedAt        time.Time         `json:"updatedAt"`
 }
 
 func New(chainID, target string) *Manifest {
@@ -70,17 +59,11 @@ func Load(dir, chainID string) (*Manifest, error) {
 	return &m, nil
 }
 
-// Save writes the manifest atomically and stamps Provenance timestamps.
+// Save writes the manifest atomically.
 func (m *Manifest) Save(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	if m.Provenance.CreatedAt.IsZero() {
-		m.Provenance.CreatedAt = now
-	}
-	m.Provenance.UpdatedAt = now
-
 	bz, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err

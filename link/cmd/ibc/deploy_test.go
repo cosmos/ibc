@@ -20,12 +20,9 @@ func TestResolveDeployerAlias(t *testing.T) {
 }
 
 func TestMergeManifests(t *testing.T) {
-	// existing carries provenance and metadata Discover can't reconstruct
+	// existing carries per-client metadata Discover can't reconstruct
 	existing := manifest.New("1", "evm")
 	existing.Core.Router = "0xoldrouter"
-	existing.Provenance.Deployer = "0xdeployer"
-	existing.Provenance.ContractsVersion = "v1.2.3"
-	existing.Provenance.TxHashes = map[string]string{"core": "0xcoretx"}
 	existing.UpsertClient(manifest.Client{
 		ClientID:             "link-2",
 		Type:                 "attestation",
@@ -51,11 +48,6 @@ func TestMergeManifests(t *testing.T) {
 	// chain-derived facts come from discovered
 	require.Equal(t, "0xnewrouter", merged.Core.Router)
 	require.Equal(t, "0xam", merged.TargetData["accessManager"])
-
-	// provenance is preserved from existing
-	require.Equal(t, "0xdeployer", merged.Provenance.Deployer)
-	require.Equal(t, "v1.2.3", merged.Provenance.ContractsVersion)
-	require.Equal(t, "0xcoretx", merged.Provenance.TxHashes["core"])
 
 	// client keeps discovered's live address, but existing's metadata
 	c, ok := merged.Client("link-2")

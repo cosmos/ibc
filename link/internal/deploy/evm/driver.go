@@ -7,9 +7,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	_ "embed"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"strings"
@@ -25,11 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/link/internal/deploy"
-)
 
-// contractsVersion identifies the pinned contract artifacts. Keep in sync
-// with the go-abigen version in go.mod.
-const contractsVersion = "go-abigen v0.0.0-20260618122836-39904319467b"
+	_ "embed"
+)
 
 // accessManagerJSON is the OpenZeppelin AccessManager v5.6.1 foundry
 // artifact (abi + creation bytecode; solc 0.8.28, optimizer 200 runs). To
@@ -91,17 +89,6 @@ func (d *Driver) SupportedClientTypes() []string {
 	return []string{deploy.ClientTypeAttestation}
 }
 
-func (d *Driver) ContractsVersion() string { return contractsVersion }
-
-// DeployerAddress returns the deployer key's address for provenance, or ""
-// for a read-only driver.
-func (d *Driver) DeployerAddress() string {
-	if d.key == nil {
-		return ""
-	}
-	return crypto.PubkeyToAddress(d.key.PublicKey).Hex()
-}
-
 // requireSigner errors if called on a driver built without a deployer
 // signer; every mutating operation must call it first.
 func (d *Driver) requireSigner() error {
@@ -152,16 +139,16 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("deploy AccessManager: %w", err)
 	}
-	if err := d.awaitMined(ctx, "deploy AccessManager", amTx); err != nil {
-		return deploy.CoreRef{}, err
+	if mineErr := d.awaitMined(ctx, "deploy AccessManager", amTx); mineErr != nil {
+		return deploy.CoreRef{}, mineErr
 	}
 
 	implAddr, implTx, _, err := ics26router.DeployContract(opts, d.backend)
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("deploy ICS26Router implementation: %w", err)
 	}
-	if err := d.awaitMined(ctx, "deploy ICS26Router implementation", implTx); err != nil {
-		return deploy.CoreRef{}, err
+	if mineErr := d.awaitMined(ctx, "deploy ICS26Router implementation", implTx); mineErr != nil {
+		return deploy.CoreRef{}, mineErr
 	}
 
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
@@ -176,8 +163,8 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("deploy ICS26Router proxy: %w", err)
 	}
-	if err := d.awaitMined(ctx, "deploy ICS26Router proxy", routerTx); err != nil {
-		return deploy.CoreRef{}, err
+	if mineErr := d.awaitMined(ctx, "deploy ICS26Router proxy", routerTx); mineErr != nil {
+		return deploy.CoreRef{}, mineErr
 	}
 
 	// OZ AccessManager PUBLIC_ROLE is type(uint64).max
@@ -185,8 +172,8 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("setTargetFunctionRole: %w", err)
 	}
-	if err := d.awaitMined(ctx, "setTargetFunctionRole", roleTx); err != nil {
-		return deploy.CoreRef{}, err
+	if mineErr := d.awaitMined(ctx, "setTargetFunctionRole", roleTx); mineErr != nil {
+		return deploy.CoreRef{}, mineErr
 	}
 
 	return deploy.CoreRef{
@@ -194,12 +181,6 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 		TargetData: map[string]string{
 			"accessManager":             amAddr.Hex(),
 			"ics26RouterImplementation": implAddr.Hex(),
-		},
-		TxHashes: map[string]string{
-			"core-0": amTx.Hash().Hex(),
-			"core-1": implTx.Hash().Hex(),
-			"core-2": routerTx.Hash().Hex(),
-			"core-3": roleTx.Hash().Hex(),
 		},
 	}, nil
 }
@@ -237,7 +218,7 @@ func (d *Driver) ProvisionClient(ctx context.Context, spec deploy.ClientSpec) (d
 	if err := d.awaitMined(ctx, "deploy attestation client", tx); err != nil {
 		return deploy.ClientRef{}, err
 	}
-	return deploy.ClientRef{Address: addr.Hex(), TxHash: tx.Hash().Hex()}, nil
+	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
 // attestationArgs validates attestation params and converts the attestor
@@ -276,7 +257,8 @@ func (d *Driver) transactOpts(ctx context.Context) (*bind.TransactOpts, error) {
 	return opts, nil
 }
 
-// awaitMined waits for tx and errors on revert.
+// awaitMined waits for tx and errors on revert. Mined transactions are
+// logged with their hash; manifests record only addresses.
 func (d *Driver) awaitMined(ctx context.Context, label string, tx *types.Transaction) error {
 	receipt, err := bind.WaitMined(ctx, d.backend, tx)
 	if err != nil {
@@ -285,5 +267,11 @@ func (d *Driver) awaitMined(ctx context.Context, label string, tx *types.Transac
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		return fmt.Errorf("%s: transaction %s reverted", label, tx.Hash())
 	}
+	slog.Info("transaction mined",
+		"label", label,
+		"tx", tx.Hash().Hex(),
+		"block", receipt.BlockNumber,
+		"chain", d.chainID,
+	)
 	return nil
 }
