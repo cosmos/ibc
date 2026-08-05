@@ -328,7 +328,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstClient.EXPECT().IsTimestampFinalized(mock.Anything, mock.Anything, (*uint64)(nil)).Return(true, nil).Once()
 
 		// timeout delivery on the source chain
-		mockRelay(env.srcClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
+		timeoutEvent := sendPacketEvent(42)
+		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
+		mockRelay(env.srcClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
