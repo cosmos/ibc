@@ -131,23 +131,22 @@ func (d *Driver) Head(ctx context.Context) (uint64, uint64, error) {
 	return header.Number.Uint64(), header.Time, nil
 }
 
-// publicRelayingSelectorsHex packs the relaying method selectors into one
-// 0x-prefixed hex string for the core deploy script, which binds them to
-// AccessManager's PUBLIC_ROLE inside the deployment broadcast.
-func publicRelayingSelectorsHex() (string, error) {
+// publicRelayingSelectors resolves the relaying method selectors that
+// ProvisionCore binds to AccessManager's PUBLIC_ROLE.
+func publicRelayingSelectors() ([][4]byte, error) {
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	packed := make([]byte, 0, 4*len(publicRelayingMethods))
+	selectors := make([][4]byte, 0, len(publicRelayingMethods))
 	for _, name := range publicRelayingMethods {
 		method, ok := routerABI.Methods[name]
 		if !ok {
-			return "", fmt.Errorf("router ABI has no method %q", name)
+			return nil, fmt.Errorf("router ABI has no method %q", name)
 		}
-		packed = append(packed, method.ID[:4]...)
+		selectors = append(selectors, [4]byte(method.ID))
 	}
-	return "0x" + common.Bytes2Hex(packed), nil
+	return selectors, nil
 }
 
 // Discover reconstructs a manifest from an existing router: authority from

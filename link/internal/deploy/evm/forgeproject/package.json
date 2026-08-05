@@ -1,9 +1,0 @@
-{
-  "name": "ibc-link-deploy",
-  "private": true,
-  "description": "Forge workspace for ibc deploy. Eureka contracts arrive as prebuilt bytecode; only OpenZeppelin and forge-std compile from source.",
-  "dependencies": {
-    "@openzeppelin/contracts": "5.6.1",
-    "forge-std": "github:foundry-rs/forge-std#v1.15.0"
-  }
-}

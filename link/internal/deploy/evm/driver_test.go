@@ -11,36 +11,34 @@ import (
 	"github.com/cosmos/ibc/link/internal/deploy"
 )
 
-func TestChecksumAddress(t *testing.T) {
-	lower := "0x00000000000000000000000000000000000000aa"
-	want := common.HexToAddress(lower).Hex()
-	require.Equal(t, want, checksumAddress(lower))
-
-	// already-checksummed input is unchanged
-	require.Equal(t, want, checksumAddress(want))
-}
-
-func TestAttestationEnv(t *testing.T) {
-	env, err := attestationEnv(deploy.AttestationParams{
+func TestAttestationArgs(t *testing.T) {
+	attestors, err := attestationArgs(deploy.AttestationParams{
 		Attestors:        []string{"0x00000000000000000000000000000000000000aa", "0x00000000000000000000000000000000000000bb"},
 		Threshold:        2,
 		InitialHeight:    42,
 		InitialTimestamp: 1700000000,
 	})
 	require.NoError(t, err)
-	require.Equal(t, "0x00000000000000000000000000000000000000aa,0x00000000000000000000000000000000000000bb", env["IBC_ATTESTORS"])
-	require.Equal(t, "2", env["IBC_THRESHOLD"])
-	require.Equal(t, "42", env["IBC_HEIGHT"])
-	require.Equal(t, "1700000000", env["IBC_TIMESTAMP"])
+	require.Equal(t, []common.Address{
+		common.HexToAddress("0x00000000000000000000000000000000000000aa"),
+		common.HexToAddress("0x00000000000000000000000000000000000000bb"),
+	}, attestors)
 
-	_, err = attestationEnv(deploy.AttestationParams{Threshold: 1, InitialHeight: 1, InitialTimestamp: 1})
+	_, err = attestationArgs(deploy.AttestationParams{Threshold: 1, InitialHeight: 1, InitialTimestamp: 1})
 	require.ErrorContains(t, err, "attestors")
 
-	_, err = attestationEnv(deploy.AttestationParams{Attestors: []string{"nothex"}, Threshold: 1, InitialHeight: 1, InitialTimestamp: 1})
+	_, err = attestationArgs(deploy.AttestationParams{Attestors: []string{"nothex"}, Threshold: 1, InitialHeight: 1, InitialTimestamp: 1})
 	require.ErrorContains(t, err, "invalid attestor address")
 
-	_, err = attestationEnv(deploy.AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000aa"}, Threshold: 2, InitialHeight: 1, InitialTimestamp: 1})
+	_, err = attestationArgs(deploy.AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000aa"}, Threshold: 2, InitialHeight: 1, InitialTimestamp: 1})
 	require.ErrorContains(t, err, "threshold")
+}
+
+func TestAccessManagerArtifact(t *testing.T) {
+	amABI, bin, err := accessManagerArtifact()
+	require.NoError(t, err)
+	require.NotEmpty(t, bin)
+	require.Contains(t, amABI.Methods, "setTargetFunctionRole")
 }
 
 func TestReadOnlyDriverGuards(t *testing.T) {

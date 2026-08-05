@@ -150,7 +150,6 @@ func newTarget(
 		driver, err := evm.New(ctx, evm.Options{
 			ChainID:        chainID,
 			RPCURL:         chain.EVM.RPC,
-			Home:           ".", // process cwd is --home (setupHomeWithConfig)
 			DeployerKeyHex: keyHex,
 		})
 		if err != nil {

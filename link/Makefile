@@ -64,17 +64,9 @@ codegen-abi: ## Generate Go bindings for EVM contract ABIs
 		--type Contract \
 		--out internal/chains/evm/contracts/ics26router/ics26router.go
 
-# not part of `codegen`: needs bun, forge, and jq on top of the go toolchain
-codegen-bindings: ## Restage the AccessManager test artifact from the deploy forge workspace (requires bun, forge, jq)
-	bun install --cwd internal/deploy/evm/forgeproject --frozen-lockfile
-	forge build --root internal/deploy/evm/forgeproject
-	jq '{abi: .abi, bytecode: {object: .bytecode.object}}' \
-		internal/deploy/evm/forgeproject/out/AccessManager.sol/AccessManager.json \
-		> internal/deploy/evm/testdata/access_manager.json
-
 test: ## Run tests
 	go test ./... -v
 
 check: build test lint check-proto ## Run Link build, tests, lint, and generation freshness
 
-.PHONY: help build install docker-build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-bindings codegen-mocks check-proto check
+.PHONY: help build install docker-build lint lint-fix test codegen codegen-sql codegen-proto codegen-abi codegen-mocks check-proto check
