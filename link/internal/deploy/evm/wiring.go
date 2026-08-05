@@ -29,7 +29,7 @@ func newTestDriver(chainID *big.Int, b backend, key *ecdsa.PrivateKey) *Driver {
 var evmMerklePrefix = [][]byte{{}}
 
 // publicRelayingMethods are opened to PUBLIC_ROLE so any relayer EOA can
-// submit packets and client updates (mirrors the e2e harness).
+// submit packets and client updates.
 var publicRelayingMethods = []string{
 	"recvPacket",
 	"ackPacket",
