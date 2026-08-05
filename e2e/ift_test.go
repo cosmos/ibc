@@ -230,6 +230,139 @@ func TestAttestedIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.NoError(t, pending.VerifyDelivered(ctx))
 }
 
+func TestAttestedIFTTimeout_Refund(t *testing.T) {
+	t.Parallel()
+	e2etest.RequireAnvilLane(t)
+	spec := environment.Spec{
+		Chains: e2etest.ChainSpecsForConfiguredLane(t),
+		IBCInstances: []environment.IBCInstanceSpec{
+			environment.NewIBCInstance{
+				ID:        "attested-timeout-ibc-a",
+				Chain:     e2etest.ChainA,
+				Authority: e2etest.ProtocolAuthorityID,
+			},
+			environment.NewIBCInstance{
+				ID:        "attested-timeout-ibc-b",
+				Chain:     e2etest.ChainB,
+				Authority: e2etest.ProtocolAuthorityID,
+			},
+		},
+		Connections: []environment.ConnectionSpec{{
+			ID: "attested-timeout-connection",
+			A: environment.NewClient{
+				ID:                    attestedClientAID,
+				IBCInstance:           "attested-timeout-ibc-a",
+				Authority:             e2etest.ProtocolAuthorityID,
+				MinRequiredSignatures: 1,
+			},
+			B: environment.NewClient{
+				ID:                    attestedClientBID,
+				IBCInstance:           "attested-timeout-ibc-b",
+				Authority:             e2etest.ProtocolAuthorityID,
+				MinRequiredSignatures: 1,
+			},
+		}},
+		Attestors: []environment.AttestorSpec{
+			{ID: attestorAID, Client: attestedClientAID, Authority: attestorAAuthority},
+			{ID: attestorBID, Client: attestedClientBID, Authority: attestorBAuthority},
+		},
+	}
+	runtime := e2etest.RuntimeWithProtocolDeployer(
+		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
+			attestorAAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000006"},
+			attestorBAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000007"},
+		}},
+	)
+	env := e2etest.Start(t, spec, runtime)
+	signers := e2etest.NewSigners(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	attestorA, err := env.Attestor(attestorAID)
+	require.NoError(t, err)
+	driver, deployment := e2etest.Deploy(t, env, signers, route)
+	iftApp := e2etest.BindIFT(t, env, deployment, signers, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	source, err := env.Chain(route.Source)
+	require.NoError(t, err)
+	sourceEVM, err := source.EVM()
+	require.NoError(t, err)
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	destinationMining, err := destination.Mining()
+	require.NoError(t, err)
+	sourceMining, err := source.Mining()
+	require.NoError(t, err)
+
+	// First prove the ordinary attested timeout path.
+	require.NoError(t, relayer.Stop(ctx))
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+		Amount:  big.NewInt(3_000_000),
+		Timeout: transferTimeout,
+	})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
+	require.NoError(t, transfer.VerifyPending(ctx))
+	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, destinationMining.Mine(ctx, 1))
+	destinationHeight, err := destination.Height(ctx)
+	require.NoError(t, err)
+	destinationAnchor := destinationHeight - 1
+	anchorHeader, err := destinationEVM.HeaderByNumber(ctx, new(big.Int).SetUint64(destinationAnchor))
+	require.NoError(t, err)
+	require.Greater(t, anchorHeader.Time, transfer.TimeoutTimestamp())
+	relayer = e2etest.StartRelayer(t, driver, env)
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyRefunded(ctx))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
+	require.NoError(t, transfer.VerifyPendingCleared(ctx))
+	sourceState := attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
+	require.GreaterOrEqual(t, sourceState.LatestHeight, destinationAnchor)
+
+	// Then keep the destination fixed while the source moves far ahead. Timeout
+	// still uses the finalized destination anchor rather than the source height.
+	require.NoError(t, relayer.Stop(ctx))
+	asymmetricTransfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+		Amount:  big.NewInt(4_000_000),
+		Timeout: transferTimeout,
+	})
+	require.NoError(t, err)
+	require.NoError(t, asymmetricTransfer.VerifyBurned(ctx))
+	require.NoError(t, asymmetricTransfer.VerifyPending(ctx))
+	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, destinationMining.Mine(ctx, 1))
+	destinationHeight, err = destination.Height(ctx)
+	require.NoError(t, err)
+	destinationAnchor = destinationHeight - 1
+	anchorHeader, err = destinationEVM.HeaderByNumber(ctx, new(big.Int).SetUint64(destinationAnchor))
+	require.NoError(t, err)
+	require.Greater(t, anchorHeader.Time, asymmetricTransfer.TimeoutTimestamp())
+
+	require.NoError(t, destinationMining.WithPaused(ctx, func() error {
+		require.NoError(t, sourceMining.Mine(ctx, 50))
+		sourceHeight, heightErr := source.Height(ctx)
+		require.NoError(t, heightErr)
+		pausedDestinationHeight, heightErr := destination.Height(ctx)
+		require.NoError(t, heightErr)
+		require.GreaterOrEqual(t, sourceHeight, pausedDestinationHeight+40)
+
+		relayer = e2etest.StartRelayer(t, driver, env)
+		_, awaitErr := e2etest.AwaitState(ctx, relayer, asymmetricTransfer.Packet(),
+			relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
+		require.NoError(t, awaitErr)
+		require.NoError(t, asymmetricTransfer.VerifyRefunded(ctx))
+		require.NoError(t, asymmetricTransfer.VerifyNotMinted(ctx))
+		require.NoError(t, asymmetricTransfer.VerifyPendingCleared(ctx))
+		sourceState = attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
+		require.GreaterOrEqual(t, sourceState.LatestHeight, destinationAnchor)
+		return nil
+	}))
+}
+
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))

@@ -4,7 +4,8 @@ This module contains one root repository-level acceptance package: linear Go tes
 `internal/harness` surface. Tests relay real IBC packets through the real Link relayer and
 Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP), usually with a permissive dummy light
 client; the attested IFT tests use attestation clients and managed attestors, including quorum loss
-and recovery.
+and recovery. `TestAttestedIFTTimeout_Refund` runs only on instant Anvil because it controls mining
+explicitly.
 
 - Run everything from the repository root: `make test-e2e` for the complete acceptance package, or
   `make test-e2e E2E_FLAGS='-run TestTransfer_AutoRelay -count=1'` for one focused loop. Lanes:

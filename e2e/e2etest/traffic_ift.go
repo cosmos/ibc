@@ -52,6 +52,7 @@ type IFTPacket struct {
 	sourceBefore            *big.Int
 	destinationBefore       *big.Int
 	destinationSupplyBefore *big.Int
+	timeoutTimestamp        uint64
 }
 
 func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) {
@@ -108,6 +109,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 		sourceBefore:            sourceBefore,
 		destinationBefore:       destinationBefore,
 		destinationSupplyBefore: destinationSupplyBefore,
+		timeoutTimestamp:        timeoutTimestamp,
 	}, nil
 }
 
@@ -242,6 +244,8 @@ func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
 }
 
 func (p *IFTPacket) Packet() Packet { return p.packet }
+
+func (p *IFTPacket) TimeoutTimestamp() uint64 { return p.timeoutTimestamp }
 
 // VerifyBurned checks that the submitted amount left the source sender balance.
 func (p *IFTPacket) VerifyBurned(ctx context.Context) error {
