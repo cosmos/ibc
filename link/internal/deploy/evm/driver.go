@@ -210,7 +210,13 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 		return deploy.ClientRef{}, err
 	}
 	addr, tx, _, err := attestation.DeployContract(
-		opts, d.backend, attestors, params.Threshold, params.InitialHeight, params.InitialTimestamp, common.HexToAddress(router),
+		opts,
+		d.backend,
+		attestors,
+		params.Threshold,
+		params.InitialHeight,
+		params.InitialTimestamp,
+		common.HexToAddress(router),
 	)
 	if err != nil {
 		return deploy.ClientRef{}, fmt.Errorf("deploy attestation client: %w", err)
