@@ -98,7 +98,7 @@ func init() {
 		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
 	for _, c := range []*cobra.Command{cmdDeployClient, cmdDeployConnect} {
 		c.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
-		c.Flags().StringSliceVar(&flagDeployAttestors, "attestors", nil, "comma separated attestation client addresses <0x123,0x456,...>")
+		c.Flags().StringSliceVar(&flagDeployAttestors, "attestors", nil, "comma separated attestor addresses <0x123,0x456,...>")
 		c.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
 	}
 	cmdDeployClient.Flags().StringVar(&flagDeployClientID, "client-id", "", "client id (default link-<counterparty>)")
