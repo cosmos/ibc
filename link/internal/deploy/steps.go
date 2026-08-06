@@ -143,7 +143,7 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			if m == nil || m.Core.Router == "" {
 				return fmt.Errorf("no core deployment recorded for chain %s: run `ibc deploy core` first", chainID)
 			}
-			ref, err := t.ProvisionClient(ctx, spec)
+			ref, err := t.ProvisionClient(ctx, m.Core.Router, spec)
 			if err != nil {
 				return err
 			}

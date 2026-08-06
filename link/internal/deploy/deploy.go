@@ -78,7 +78,7 @@ func (r Report) Failed() []Check {
 // wiring and reads.
 type Target interface {
 	ProvisionCore(ctx context.Context, p CoreParams) (CoreRef, error)
-	ProvisionClient(ctx context.Context, spec ClientSpec) (ClientRef, error)
+	ProvisionClient(ctx context.Context, router string, spec ClientSpec) (ClientRef, error)
 	// RegisterClient registers a provisioned client on the router and returns
 	// the registered client ID.
 	RegisterClient(ctx context.Context, router string, spec ClientSpec, client ClientRef) (string, error)

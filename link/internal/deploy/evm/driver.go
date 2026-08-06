@@ -186,7 +186,7 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 }
 
 // ProvisionClient deploys a light client contract.
-func (d *Driver) ProvisionClient(ctx context.Context, spec deploy.ClientSpec) (deploy.ClientRef, error) {
+func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy.ClientSpec) (deploy.ClientRef, error) {
 	if err := d.requireSigner(); err != nil {
 		return deploy.ClientRef{}, err
 	}
@@ -210,7 +210,7 @@ func (d *Driver) ProvisionClient(ctx context.Context, spec deploy.ClientSpec) (d
 		return deploy.ClientRef{}, err
 	}
 	addr, tx, _, err := attestation.DeployContract(
-		opts, d.backend, attestors, params.Threshold, params.InitialHeight, params.InitialTimestamp, common.Address{},
+		opts, d.backend, attestors, params.Threshold, params.InitialHeight, params.InitialTimestamp, common.HexToAddress(router),
 	)
 	if err != nil {
 		return deploy.ClientRef{}, fmt.Errorf("deploy attestation client: %w", err)

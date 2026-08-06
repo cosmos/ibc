@@ -22,19 +22,23 @@ func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error)
 	f.provisions++
 	return CoreRef{Router: "0xrouter", TargetData: map[string]string{"accessManager": "0xam"}}, nil
 }
-func (f *fakeTarget) ProvisionClient(context.Context, ClientSpec) (ClientRef, error) {
+
+func (f *fakeTarget) ProvisionClient(context.Context, string, ClientSpec) (ClientRef, error) {
 	f.provisions++
 	return ClientRef{Address: "0xclient"}, nil
 }
+
 func (f *fakeTarget) RegisterClient(_ context.Context, _ string, spec ClientSpec, ref ClientRef) (string, error) {
 	f.registers++
 	f.registered[spec.ClientID] = ref.Address
 	return spec.ClientID, nil
 }
+
 func (f *fakeTarget) ClientRegistered(_ context.Context, _, clientID string) (string, bool, error) {
 	addr, ok := f.registered[clientID]
 	return addr, ok, nil
 }
+
 func (f *fakeTarget) HasCode(_ context.Context, address string) (bool, error) {
 	return f.hasCode[address], nil
 }

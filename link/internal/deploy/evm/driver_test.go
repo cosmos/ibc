@@ -45,6 +45,6 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 	d := &Driver{chainID: big.NewInt(1)}
 	_, err := d.ProvisionCore(context.Background(), deploy.CoreParams{})
 	require.ErrorContains(t, err, "no deployer signer configured")
-	_, err = d.ProvisionClient(context.Background(), deploy.ClientSpec{Type: deploy.ClientTypeAttestation, Params: deploy.AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000aa"}, Threshold: 1, InitialHeight: 1, InitialTimestamp: 1}})
+	_, err = d.ProvisionClient(context.Background(), common.Address{}.Hex(), deploy.ClientSpec{Type: deploy.ClientTypeAttestation, Params: deploy.AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000aa"}, Threshold: 1, InitialHeight: 1, InitialTimestamp: 1}})
 	require.ErrorContains(t, err, "no deployer signer configured")
 }

@@ -76,7 +76,7 @@ func TestProvisionRegisterVerify(t *testing.T) {
 			InitialTimestamp: 500,
 		},
 	}
-	ref, err := d.ProvisionClient(ctx, spec)
+	ref, err := d.ProvisionClient(ctx, core.Router, spec)
 	require.NoError(t, err)
 	require.NotEmpty(t, ref.Address)
 
