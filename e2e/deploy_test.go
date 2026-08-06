@@ -133,6 +133,18 @@ func TestDeployConnect(t *testing.T) {
 
 	_, err = driver.Deploy(ctx, "status")
 	require.NoError(t, err)
+
+	// render-config pairs the two manifests into relayer config sections
+	rendered, err := driver.Deploy(ctx, "render-config", chainAID, chainBID)
+	require.NoError(t, err)
+	for _, want := range []string{
+		"clientId: link-" + chainAID,
+		"clientId: link-" + chainBID,
+		"counterpartyClientId: link-" + chainAID,
+		"counterpartyClientId: link-" + chainBID,
+	} {
+		require.Contains(t, string(rendered), want)
+	}
 }
 
 func decodeStepResults(t testing.TB, stdout []byte) []deployStepResult {

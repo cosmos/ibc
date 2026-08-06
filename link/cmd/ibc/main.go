@@ -85,7 +85,7 @@ func init() {
 	// Deploy commands
 	cmdDeploy.AddCommand(
 		cmdDeployCore, cmdDeployClient, cmdDeployConnect,
-		cmdDeployStatus,
+		cmdDeployStatus, cmdDeployRenderConfig,
 	)
 	dpf := cmdDeploy.PersistentFlags()
 	dpf.StringVar(&flagDeployManifestDir, "manifest-dir", "deployments", "manifest directory relative to home")

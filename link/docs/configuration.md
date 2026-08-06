@@ -213,7 +213,8 @@ pieces tie into the rest of the config:
   deployment transactions on that chain. Must reference a `local` ECDSA
   signer in `signers` (deployment tooling needs the raw key, not just a
   remote signing call). Overridable per-invocation with `--deployer`.
-  `deploy status` is read-only and works without a configured deployer.
+  `deploy status` and `deploy render-config` are read-only and work without
+  a configured deployer.
 - `--manifest-dir` (default `deployments`, relative to `--home`) — where
   `ibc deploy` writes one JSON manifest per chain recording what was
   deployed (router address, registered clients). Manifests are

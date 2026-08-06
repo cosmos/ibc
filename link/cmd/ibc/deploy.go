@@ -68,6 +68,13 @@ var (
 		Short: "Verify recorded deployments against live chain state",
 		RunE:  deployStatus,
 	}
+
+	cmdDeployRenderConfig = &cobra.Command{
+		Use:   "render-config [chainA] [chainB]",
+		Short: "Project two deployment manifests into config sections for relaying between them (stdout)",
+		Args:  cobra.ExactArgs(2),
+		RunE:  deployRenderConfig,
+	}
 )
 
 // resolveDeployerAlias prefers the --deployer flag over the chain's config.
@@ -404,4 +411,84 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 		return errors.New("verification failed")
 	}
 	return nil
+}
+
+// renderedDeployment is the subset of the config schema render-config emits,
+// so the output can be merged into ibc.yml without zero-valued sections.
+type renderedDeployment struct {
+	Relayer struct {
+		Clients []config.ClientConfig `yaml:"clients"`
+	} `yaml:"relayer"`
+}
+
+func renderedClient(m *manifest.Manifest, c manifest.Client) config.ClientConfig {
+	client := config.ClientConfig{
+		Alias:                m.ChainID + "-" + c.ClientID,
+		ClientID:             c.ClientID,
+		ChainID:              m.ChainID,
+		CounterpartyChainID:  c.CounterpartyChainID,
+		CounterpartyClientID: c.CounterpartyClientID,
+		Type:                 config.ClientType(c.Type),
+	}
+	if c.Type == deploy.ClientTypeAttestation {
+		// render-config only sees Load()ed manifests, so JSON numbers are
+		// float64. Attestor names cannot be derived from the addresses in
+		// params; the operator fills them in to match attestor config.
+		threshold, _ := c.Params["threshold"].(float64)
+		client.AttestorSet = &config.AttestorSetConfig{Threshold: int(threshold)}
+	}
+	return client
+}
+
+// renderRelayConfig projects two deployment manifests into the config
+// sections needed to relay between them for every mutual client pair.
+func renderRelayConfig(a, b *manifest.Manifest) (renderedDeployment, error) {
+	var out renderedDeployment
+	for _, ca := range a.Clients {
+		if ca.CounterpartyChainID != b.ChainID {
+			continue
+		}
+		cb, ok := b.Client(ca.CounterpartyClientID)
+		if !ok || cb.CounterpartyChainID != a.ChainID || cb.CounterpartyClientID != ca.ClientID {
+			continue
+		}
+		out.Relayer.Clients = append(out.Relayer.Clients, renderedClient(a, ca), renderedClient(b, cb))
+	}
+	if len(out.Relayer.Clients) == 0 {
+		return renderedDeployment{}, errors.Errorf(
+			"no mutual client pair between chains %s and %s: deploy clients in both directions first (`ibc deploy connect %s %s`)",
+			a.ChainID,
+			b.ChainID,
+			a.ChainID,
+			b.ChainID,
+		)
+	}
+	return out, nil
+}
+
+func deployRenderConfig(_ *cobra.Command, args []string) error {
+	// discard the config: rendering needs only manifests, but loading chdirs
+	// to --home, which the relative --manifest-dir default depends on
+	if _, err := setupHomeWithConfig(); err != nil {
+		return err
+	}
+	manifests := make([]*manifest.Manifest, len(args))
+	for i, chainID := range args {
+		m, loadErr := manifest.Load(flagDeployManifestDir, chainID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if m == nil {
+			return errors.Errorf(
+				"no manifest for chain %s in %s: run `ibc deploy` against it first",
+				chainID, flagDeployManifestDir,
+			)
+		}
+		manifests[i] = m
+	}
+	out, err := renderRelayConfig(manifests[0], manifests[1])
+	if err != nil {
+		return err
+	}
+	return config.PrintYAML(out)
 }
