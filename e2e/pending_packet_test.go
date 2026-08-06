@@ -21,7 +21,7 @@ func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	transferApp := e2etest.BindTransfer(t, env, deployment, sender, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 

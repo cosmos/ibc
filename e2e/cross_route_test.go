@@ -34,8 +34,8 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 		{ID: "c-to-a", Source: "chain-c", Destination: "chain-a"},
 	}
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, routes...)
-	bToAApp := e2etest.BindTransfer(t, env, deployment, sender, routes[0])
-	cToAApp := e2etest.BindTransfer(t, env, deployment, sender, routes[1])
+	bToAApp := e2etest.NewTransfer(t, env, deployment, sender, routes[0])
+	cToAApp := e2etest.NewTransfer(t, env, deployment, sender, routes[1])
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 

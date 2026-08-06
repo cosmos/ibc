@@ -9,9 +9,9 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
 )
 
-// BindTransfer binds a Transfer app. The sender must be the signer that
-// deployed the apps: it holds the minted token supply.
-func BindTransfer(
+// NewTransfer constructs the Transfer app for a route. The sender must be the
+// signer that deployed the apps: it holds the minted token supply.
+func NewTransfer(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
@@ -19,9 +19,9 @@ func BindTransfer(
 	route Route,
 ) *Transfer {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := bindDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := bindRoute(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: bind Transfer on route %q", route.ID)
+	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
+	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
+	require.NoError(t, err, "e2etest: resolve endpoints for Transfer on route %q", route.ID)
 	return &Transfer{
 		routeID:      route.ID,
 		source:       sourceEndpoint,
@@ -36,9 +36,9 @@ func BindTransfer(
 	}
 }
 
-// BindIFT binds an IFT app. The sender must be the signer that deployed the
-// apps: it holds the minted token supply.
-func BindIFT(
+// NewIFT constructs the IFT app for a route. The sender must be the signer
+// that deployed the apps: it holds the minted token supply.
+func NewIFT(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
@@ -46,9 +46,9 @@ func BindIFT(
 	route Route,
 ) *IFT {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := bindDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := bindRoute(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: bind IFT on route %q", route.ID)
+	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
+	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
+	require.NoError(t, err, "e2etest: resolve endpoints for IFT on route %q", route.ID)
 	return &IFT{
 		routeID:      route.ID,
 		source:       sourceEndpoint,
@@ -62,9 +62,9 @@ func BindIFT(
 	}
 }
 
-// BindGMP binds a GMP app. The sender must be the signer that deployed the
-// apps: it holds the minted token supply.
-func BindGMP(
+// NewGMP constructs the GMP app for a route. The sender must be the signer
+// that deployed the apps: it holds the minted token supply.
+func NewGMP(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
@@ -72,9 +72,9 @@ func BindGMP(
 	route Route,
 ) *GMP {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := bindDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := bindRoute(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: bind GMP on route %q", route.ID)
+	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
+	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
+	require.NoError(t, err, "e2etest: resolve endpoints for GMP on route %q", route.ID)
 	defaultCall, err := mustABI(counter.CounterMetaData).Pack("increment")
 	require.NoError(t, err, "e2etest: pack Counter.increment()")
 	return &GMP{
@@ -93,7 +93,7 @@ func BindGMP(
 	}
 }
 
-func bindDeploymentRoute(
+func resolveDeploymentRoute(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,

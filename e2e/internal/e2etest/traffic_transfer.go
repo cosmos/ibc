@@ -44,7 +44,7 @@ type TransferRequest struct {
 	Timeout time.Duration
 }
 
-// Transfer binds ICS20 Transfer on a single directed route.
+// Transfer drives ICS20 Transfer on a single directed route.
 type Transfer struct {
 	routeID      RouteID
 	source       endpoint

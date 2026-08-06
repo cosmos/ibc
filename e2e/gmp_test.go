@@ -20,7 +20,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.BindGMP(t, env, deployment, sender, route)
+	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -43,7 +43,7 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.BindGMP(t, env, deployment, sender, route)
+	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -88,7 +88,7 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.BindGMP(t, env, deployment, sender, route)
+	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 

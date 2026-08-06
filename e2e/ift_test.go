@@ -83,7 +83,7 @@ func TestAttestedIFTTransfer_AutoRelay(t *testing.T) {
 	attestorB, err := env.Attestor(attestorBID)
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -172,7 +172,7 @@ func TestAttestedIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	destinationAttestorD, err := env.Attestor(attestorDID)
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	ctx := t.Context()
 	// Keep every endpoint in Link's config while starting it with one attestor unavailable.
 	require.NoError(t, destinationAttestorD.Stop(ctx))
@@ -280,7 +280,7 @@ func TestAttestedIFTTimeout_Refund(t *testing.T) {
 	attestorA, err := env.Attestor(attestorAID)
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -373,7 +373,7 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -400,7 +400,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -439,7 +439,7 @@ func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -471,7 +471,7 @@ func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	route.SkipDestinationIFTBridge = true
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -500,7 +500,7 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -539,7 +539,7 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -608,7 +608,7 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, withBatchOverride, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -690,7 +690,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, withBatchOverride, route)
-	iftApp := e2etest.BindIFT(t, env, deployment, sender, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
