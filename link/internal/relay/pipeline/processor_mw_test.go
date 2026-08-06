@@ -6,12 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/relay/processors"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -20,47 +19,47 @@ type fakeProcessor struct {
 	shouldProcess bool
 	processErr    error
 	processed     []*processors.Transfer
-	cancelled     []*processors.Transfer
+	canceled      []*processors.Transfer
 }
 
 func (p *fakeProcessor) ShouldProcess(*processors.Transfer) bool { return p.shouldProcess }
 func (p *fakeProcessor) Status() store.RelayStatus               { return store.RelayStatusDeliverRecvPacket }
 
 func (p *fakeProcessor) Process(_ context.Context, t *processors.Transfer) (*processors.Transfer, error) {
+	p.processed = append(p.processed, t)
+
 	if p.processErr != nil {
 		return nil, p.processErr
 	}
 
-	p.processed = append(p.processed, t)
-
 	return t, nil
 }
 
-func (p *fakeProcessor) Cancel(t *processors.Transfer, _ error) { p.cancelled = append(p.cancelled, t) }
+func (p *fakeProcessor) Cancel(t *processors.Transfer, _ error) { p.canceled = append(p.canceled, t) }
 
 // fakeBatchProcessor mirrors fakeProcessor for batches.
 type fakeBatchProcessor struct {
 	shouldProcess func(*processors.Transfer) bool
 	processErr    error
 	processed     [][]*processors.Transfer
-	cancelled     [][]*processors.Transfer
+	canceled      [][]*processors.Transfer
 }
 
 func (p *fakeBatchProcessor) ShouldProcess(t *processors.Transfer) bool { return p.shouldProcess(t) }
 func (p *fakeBatchProcessor) Status() store.RelayStatus                 { return store.RelayStatusDeliverRecvPacket }
 
 func (p *fakeBatchProcessor) Process(_ context.Context, batch []*processors.Transfer) ([]*processors.Transfer, error) {
+	p.processed = append(p.processed, batch)
+
 	if p.processErr != nil {
 		return nil, p.processErr
 	}
-
-	p.processed = append(p.processed, batch)
 
 	return batch, nil
 }
 
 func (p *fakeBatchProcessor) Cancel(batch []*processors.Transfer, _ error) {
-	p.cancelled = append(p.cancelled, batch)
+	p.canceled = append(p.canceled, batch)
 }
 
 type statusRecorder struct {
@@ -163,7 +162,7 @@ func TestProcessorMW(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, out.Error())
 		assert.Empty(t, internal.processed)
-		assert.Len(t, internal.cancelled, 1)
+		assert.Len(t, internal.canceled, 1)
 	})
 
 	t.Run("processorErrorPoisonsButFlows", func(t *testing.T) {
@@ -177,7 +176,8 @@ func TestProcessorMW(t *testing.T) {
 		require.NoError(t, err)
 		assert.Same(t, tr, out)
 		assert.Equal(t, "boom", out.Error())
-		assert.Len(t, internal.cancelled, 1)
+		assert.Equal(t, []*processors.Transfer{tr}, internal.processed)
+		assert.Len(t, internal.canceled, 1)
 	})
 }
 
@@ -212,6 +212,8 @@ func TestBatchProcessorMW(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, out, 1)
 		assert.NotEmpty(t, tr.Error())
+		require.Len(t, internal.canceled, 1)
+		assert.Equal(t, []*processors.Transfer{tr}, internal.canceled[0])
 		// the transfer whose status update failed must not be processed
 		require.Len(t, internal.processed, 1)
 		assert.Empty(t, internal.processed[0])
@@ -234,5 +236,9 @@ func TestBatchProcessorMW(t *testing.T) {
 		assert.Len(t, out, 2)
 		assert.Equal(t, "boom", applies.Error())
 		assert.Empty(t, skipped.Error())
+		require.Len(t, internal.processed, 1)
+		assert.Equal(t, []*processors.Transfer{applies}, internal.processed[0])
+		require.Len(t, internal.canceled, 1)
+		assert.Equal(t, []*processors.Transfer{applies}, internal.canceled[0])
 	})
 }

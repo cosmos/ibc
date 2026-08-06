@@ -5,11 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 )
 
 // Fixtures from solidity-ibc-eureka commit 8a110d3b2463d5703935a3bd170abd95ac42fff6:

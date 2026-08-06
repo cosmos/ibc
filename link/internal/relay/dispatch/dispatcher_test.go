@@ -39,7 +39,9 @@ func routedConfig() config.Config {
 					Type:                 config.ClientTypeAttestation,
 				},
 			},
-			Routes: []config.RouteConfig{{SourceClient: "test-route", SourceSignerAlias: "test-signer", DestSignerAlias: "test-signer"}},
+			Routes: []config.RouteConfig{
+				{SourceClient: "test-route", SourceSignerAlias: "test-signer", DestSignerAlias: "test-signer"},
+			},
 		},
 	}
 }
@@ -175,7 +177,12 @@ func TestRelayDispatcher(t *testing.T) {
 		db := dispatcherStore(t)
 		createStoredPacket(t, db, 1)
 
-		dispatcher := NewRelayDispatcher(db, &fakePipelines{err: errors.New("no route")}, DefaultPollInterval, slog.Default())
+		dispatcher := NewRelayDispatcher(
+			db,
+			&fakePipelines{err: errors.New("no route")},
+			DefaultPollInterval,
+			slog.Default(),
+		)
 
 		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
 

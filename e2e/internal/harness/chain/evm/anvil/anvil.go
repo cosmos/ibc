@@ -18,12 +18,12 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 
+	containertypes "github.com/moby/moby/api/types/container"
+
+	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
-
-	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	containertypes "github.com/moby/moby/api/types/container"
 )
 
 const (

@@ -14,10 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/service/signer"
-
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 	ethereum "github.com/ethereum/go-ethereum"
+
+	"github.com/cosmos/ibc/link/internal/service/signer"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 // DefaultTxSubmissionDelay the minimum delay between submissions on one chain

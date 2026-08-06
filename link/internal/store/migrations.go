@@ -12,9 +12,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
-
 	migrate "github.com/rubenv/sql-migrate"
+
+	"github.com/cosmos/ibc/link/internal/config"
 )
 
 const migrationTemplate = `-- +migrate Up

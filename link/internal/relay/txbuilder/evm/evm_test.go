@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -18,7 +19,13 @@ func testPacket() ics26router.IICS26RouterMsgsPacket {
 		DestClient:       "ethereum-0",
 		TimeoutTimestamp: 1234567890,
 		Payloads: []ics26router.IICS26RouterMsgsPayload{
-			{SourcePort: "transfer", DestPort: "transfer", Version: "ics20-1", Encoding: "application/x-solidity-abi", Value: []byte{0xde, 0xad}},
+			{
+				SourcePort: "transfer",
+				DestPort:   "transfer",
+				Version:    "ics20-1",
+				Encoding:   "application/x-solidity-abi",
+				Value:      []byte{0xde, 0xad},
+			},
 		},
 	}
 }
@@ -82,7 +89,13 @@ func TestBuildRelayTxs(t *testing.T) {
 	packet := channeltypesv2.Packet{
 		Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890,
 		Payloads: []channeltypesv2.Payload{
-			{SourcePort: "transfer", DestinationPort: "transfer", Version: "ics20-1", Encoding: "application/x-solidity-abi", Value: []byte{0xde, 0xad}},
+			{
+				SourcePort:      "transfer",
+				DestinationPort: "transfer",
+				Version:         "ics20-1",
+				Encoding:        "application/x-solidity-abi",
+				Value:           []byte{0xde, 0xad},
+			},
 		},
 	}
 	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}

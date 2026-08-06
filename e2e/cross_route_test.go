@@ -6,10 +6,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
 // crossRouteSpec shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.

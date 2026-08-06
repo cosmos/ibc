@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	kms "github.com/cosmos/kms/signing/file"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	kms "github.com/cosmos/kms/signing/file"
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
@@ -298,9 +299,17 @@ func TestLocal(t *testing.T) {
 		validPacket := sampleEvmPacket(t)
 		decodedPacket, err := attestorevm.DecodePacket(validPacket)
 		require.NoError(t, err)
-		pathHash := [32]byte(crypto.Keccak256Hash(hostv2.PacketCommitmentKey(decodedPacket.SourceClient, decodedPacket.Sequence)))
-		ackPathHash := [32]byte(crypto.Keccak256Hash(hostv2.PacketAcknowledgementKey(decodedPacket.DestinationClient, decodedPacket.Sequence)))
-		receiptPathHash := [32]byte(crypto.Keccak256Hash(hostv2.PacketReceiptKey(decodedPacket.DestinationClient, decodedPacket.Sequence)))
+		pathHash := [32]byte(
+			crypto.Keccak256Hash(hostv2.PacketCommitmentKey(decodedPacket.SourceClient, decodedPacket.Sequence)),
+		)
+		ackPathHash := [32]byte(
+			crypto.Keccak256Hash(
+				hostv2.PacketAcknowledgementKey(decodedPacket.DestinationClient, decodedPacket.Sequence),
+			),
+		)
+		receiptPathHash := [32]byte(
+			crypto.Keccak256Hash(hostv2.PacketReceiptKey(decodedPacket.DestinationClient, decodedPacket.Sequence)),
+		)
 		packetCommitment := [32]byte(channeltypesv2.CommitPacket(decodedPacket))
 
 		for _, tt := range []struct {

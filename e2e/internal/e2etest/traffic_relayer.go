@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // AwaitState waits for the packet to reach want. If want is pending and the

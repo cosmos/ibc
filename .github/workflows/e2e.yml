@@ -8,6 +8,7 @@ on:
       - "e2e/**"
       - "proto/**"
       - "Makefile"
+      - ".golangci.yml"
       - ".github/workflows/e2e.yml"
   pull_request:
     branches: [main, development]
@@ -16,6 +17,7 @@ on:
       - "e2e/**"
       - "proto/**"
       - "Makefile"
+      - ".golangci.yml"
       - ".github/workflows/e2e.yml"
 
 jobs:
@@ -34,12 +36,6 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - packages: ./e2etest
-          - packages: ./internal/...
-            harness: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -48,18 +44,12 @@ jobs:
           cache-dependency-path: |
             link/go.sum
             e2e/go.sum
-      - if: matrix.harness
-        run: make build-link
-      - if: matrix.harness
-        run: docker info
-      - if: matrix.harness
-        run: go test -count=1 ${{ matrix.packages }}
+      - run: make build-link
+      - run: docker info
+      - run: go test -count=1 ./internal/...
         working-directory: e2e
         env:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
-      - if: ${{ !matrix.harness }}
-        run: go test ${{ matrix.packages }}
-        working-directory: e2e
 
   e2e:
     runs-on: ubuntu-latest

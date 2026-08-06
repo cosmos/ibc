@@ -1,10 +1,13 @@
+# Shared lint config for all modules in this repo (link, e2e).
+# golangci-lint walks up parent directories, so `golangci-lint run` from any
+# module dir finds this. It takes the strictest setting from each module.
 # https://github.com/golangci/golangci-lint/blob/6b274d25c1e38f136ab75ac9b9e4785fc22f9421/.golangci.reference.yml
 version: "2"
 
 run:
   go: "1.26"
   timeout: 30m
-  tests: false
+  tests: true
 
 issues:
   max-same-issues: 50
@@ -18,7 +21,7 @@ formatters:
     gci:
       sections:
         - "standard"
-        - "prefix(github.com/cosmos/ibc/link)"
+        - "localmodule"
         - "default"
         - "alias"
         - "blank" # e.g. sql drivers
@@ -73,3 +76,11 @@ linters:
             - disable-checks-on-methods
   exclusions:
     generated: lax
+    rules:
+      # repeated literals in tests are usually clearer inline than as constants
+      - path: _test\.go
+        linters: [goconst]
+      # the e2e helpers are private test infrastructure, not public API
+      - path: ^e2e/internal/
+        linters: [revive]
+        text: "exported:"

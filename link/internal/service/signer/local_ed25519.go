@@ -7,9 +7,9 @@ import (
 	"github.com/cometbft/cometbft/crypto"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 
-	"github.com/cosmos/ibc/link/keyfile"
-
 	kms "github.com/cosmos/kms/signing/file"
+
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 // LocalEd25519Signer signs with a local Ed25519 key.

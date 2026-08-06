@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
@@ -91,7 +92,11 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			capturedTxIDs = append(capturedTxIDs, txHash)
 
 			return []v2.PacketEvent{
-				{Height: 100, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 1, SourceClient: route.SourceClientID}},
+				{
+					Height: 100,
+					Kind:   v2.KindSendPacket,
+					Packet: channeltypesv2.Packet{Sequence: 1, SourceClient: route.SourceClientID},
+				},
 			}, nil
 		}).Once()
 
@@ -184,7 +189,11 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	sourceChainClient := mocks.NewMockClient(t)
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, healthyTxID).Return([]v2.PacketEvent{
-		{Height: 100, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 1, SourceClient: route.SourceClientID}},
+		{
+			Height: 100,
+			Kind:   v2.KindSendPacket,
+			Packet: channeltypesv2.Packet{Sequence: 1, SourceClient: route.SourceClientID},
+		},
 	}, nil).Once()
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
 
@@ -218,7 +227,11 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	_, err = p.Process(context.Background(), []*Transfer{healthy, failing})
 	require.NoError(t, err, "the batch as a whole must not fail just because one tx's events failed to fetch")
 
-	require.NotNil(t, failing.ProcessingError, "the transfer whose tx failed to fetch must be excluded and retried later")
+	require.NotNil(
+		t,
+		failing.ProcessingError,
+		"the transfer whose tx failed to fetch must be excluded and retried later",
+	)
 	require.Nil(t, healthy.ProcessingError, "the transfer whose tx fetched fine must still be relayed")
 	require.NotNil(t, healthy.RecvTxHash)
 }
@@ -275,10 +288,18 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	sourceChainClient := mocks.NewMockClient(t)
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, provableTxID).Return([]v2.PacketEvent{
-		{Height: 100, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 1, SourceClient: route.SourceClientID}},
+		{
+			Height: 100,
+			Kind:   v2.KindSendPacket,
+			Packet: channeltypesv2.Packet{Sequence: 1, SourceClient: route.SourceClientID},
+		},
 	}, nil).Once()
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, tooRecentTxID).Return([]v2.PacketEvent{
-		{Height: 150, Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 2, SourceClient: route.SourceClientID}},
+		{
+			Height: 150,
+			Kind:   v2.KindSendPacket,
+			Packet: channeltypesv2.Packet{Sequence: 2, SourceClient: route.SourceClientID},
+		},
 	}, nil).Once()
 
 	proofGen := mocks.NewMockProofGenerator(t)
@@ -314,7 +335,11 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	require.Nil(t, provable.ProcessingError)
 	require.NotNil(t, provable.RecvTxHash)
 
-	require.NotNil(t, tooRecent.ProcessingError, "the too-recent packet must be excluded and retried once attestors catch up")
+	require.NotNil(
+		t,
+		tooRecent.ProcessingError,
+		"the too-recent packet must be excluded and retried once attestors catch up",
+	)
 	require.Nil(t, tooRecent.RecvTxHash)
 }
 
