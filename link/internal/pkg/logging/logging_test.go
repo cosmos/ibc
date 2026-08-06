@@ -6,9 +6,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	pkgerrors "github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReplaceErrorAttr(t *testing.T) {

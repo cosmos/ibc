@@ -1,8 +1,9 @@
 package e2etest
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -21,15 +22,11 @@ func TestRuntimeWithProtocolDeployer(t *testing.T) {
 	got.Endpoints["new"] = environment.EndpointBinding{RPCURL: "http://new.test"}
 	got.Authorities["new"] = environment.EVMAuthority{PrivateKeyHex: "new-key"}
 
-	if got.Authorities[ProtocolAuthorityID].PrivateKeyHex != protocolAuthorityKeyHex {
-		t.Fatalf("protocol authority = %#v", got.Authorities[ProtocolAuthorityID])
-	}
-	if input.Authorities[ProtocolAuthorityID].PrivateKeyHex != "old" || input.Authorities["new"].PrivateKeyHex != "" {
-		t.Fatalf("input authorities mutated: %#v", input.Authorities)
-	}
-	if input.Endpoints["new"].RPCURL != "" || got.Endpoints["rpc"] != input.Endpoints["rpc"] {
-		t.Fatalf("endpoint maps not cloned: input %#v, output %#v", input.Endpoints, got.Endpoints)
-	}
+	require.Equal(t, protocolAuthorityKeyHex, got.Authorities[ProtocolAuthorityID].PrivateKeyHex)
+	require.Equal(t, "old", input.Authorities[ProtocolAuthorityID].PrivateKeyHex)
+	require.Empty(t, input.Authorities["new"].PrivateKeyHex)
+	require.Empty(t, input.Endpoints["new"].RPCURL)
+	require.Equal(t, input.Endpoints["rpc"], got.Endpoints["rpc"])
 }
 
 func TestChainSpecsForConfiguredLane(t *testing.T) {
@@ -65,9 +62,7 @@ func TestChainSpecsForConfiguredLane(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			*laneFlag = tt.flag
 			t.Setenv(laneEnv, tt.env)
-			if got := ChainSpecsForConfiguredLane(t); !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("ChainSpecsForConfiguredLane() = %#v, want %#v", got, tt.want)
-			}
+			require.Equal(t, tt.want, ChainSpecsForConfiguredLane(t))
 		})
 	}
 }

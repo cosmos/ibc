@@ -6,14 +6,13 @@ import (
 	"testing"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	ethereum "github.com/ethereum/go-ethereum"
 
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"

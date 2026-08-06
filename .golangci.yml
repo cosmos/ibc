@@ -19,11 +19,12 @@ formatters:
     generated: lax
   settings:
     gci:
+      # this order matches gci's fixed default output order; localmodule is not
+      # used because it would split first-party imports across modules (e2e vs link)
       sections:
         - "standard"
-        - "localmodule"
         - "default"
-        - "alias"
+        - "prefix(github.com/cosmos/ibc)"
         - "blank" # e.g. sql drivers
     gofmt:
       rewrite-rules:
@@ -53,6 +54,7 @@ linters:
     - revive
     - errcheck
     - errorlint
+    - testifylint
 
   settings:
     dogsled:
@@ -77,9 +79,10 @@ linters:
   exclusions:
     generated: lax
     rules:
-      # repeated literals in tests are usually clearer inline than as constants
+      # repeated literals and near-identical cases in tests are usually clearer
+      # inline than forced behind an abstraction
       - path: _test\.go
-        linters: [goconst]
+        linters: [goconst, dupl]
       # the e2e helpers are private test infrastructure, not public API
       - path: ^e2e/internal/
         linters: [revive]

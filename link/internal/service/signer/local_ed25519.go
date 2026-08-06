@@ -6,7 +6,6 @@ import (
 
 	"github.com/cometbft/cometbft/crypto"
 	"github.com/cometbft/cometbft/crypto/ed25519"
-
 	kms "github.com/cosmos/kms/signing/file"
 
 	"github.com/cosmos/ibc/link/keyfile"

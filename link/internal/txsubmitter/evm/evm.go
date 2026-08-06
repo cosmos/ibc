@@ -8,13 +8,12 @@ import (
 	"sync"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
-
-	ethereum "github.com/ethereum/go-ethereum"
 
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"

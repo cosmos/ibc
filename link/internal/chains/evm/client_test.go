@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -14,8 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	ethereum "github.com/ethereum/go-ethereum"
 
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"

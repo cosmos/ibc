@@ -30,9 +30,6 @@ doctor-e2e-tools: ## Check the generation and lint tools used by repository e2e 
 test-harness: build-link ## Run harness tests, including Docker-backed integrations when available
 	go -C $(E2E_DIR) test ./internal/...
 
-test-unit: ## Run pure-Go e2e selection and helper tests; no chains
-	go -C $(E2E_DIR) test ./internal/e2etest
-
 test-e2e: build-link ## Run e2e tests (E2E_FLAGS=... E2E_LANE=...)
 	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
 	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . -timeout 60m -parallel 4 $(E2E_FLAGS)
@@ -82,5 +79,5 @@ check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps tes
 
 check: check-link check-e2e ## Run Link and repository e2e checks
 
-.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-unit test-e2e lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e \
+.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e \
 	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-link check-e2e check

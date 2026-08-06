@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,13 +50,13 @@ func TestEnvironmentCloseWaitsForLeasedAttestorUse(t *testing.T) {
 		select {
 		case <-useFinished:
 		case <-time.After(time.Second):
-			t.Error("leased Attestor use did not finish")
+			assert.Fail(t, "leased Attestor use did not finish")
 		}
 		if closeStarted {
 			select {
 			case <-closeFinished:
 			case <-time.After(time.Second):
-				t.Error("Environment.Close did not finish")
+				assert.Fail(t, "Environment.Close did not finish")
 			}
 		}
 	}()
@@ -63,7 +64,7 @@ func TestEnvironmentCloseWaitsForLeasedAttestorUse(t *testing.T) {
 	select {
 	case <-useStarted:
 	case <-time.After(time.Second):
-		t.Fatal("leased Attestor use did not start")
+		require.FailNow(t, "leased Attestor use did not start")
 	}
 	closeStarted = true
 	go func() {
@@ -76,7 +77,7 @@ func TestEnvironmentCloseWaitsForLeasedAttestorUse(t *testing.T) {
 	}, time.Second, time.Millisecond)
 	select {
 	case <-cleanupStarted:
-		t.Fatal("Attestor cleanup started before the leased use finished")
+		require.FailNow(t, "Attestor cleanup started before the leased use finished")
 	default:
 	}
 
@@ -85,18 +86,18 @@ func TestEnvironmentCloseWaitsForLeasedAttestorUse(t *testing.T) {
 	case err := <-useDone:
 		require.NoError(t, err)
 	case <-time.After(time.Second):
-		t.Fatal("leased Attestor use did not finish")
+		require.FailNow(t, "leased Attestor use did not finish")
 	}
 	select {
 	case err := <-closeDone:
 		require.NoError(t, err)
 	case <-time.After(time.Second):
-		t.Fatal("Environment.Close did not finish")
+		require.FailNow(t, "Environment.Close did not finish")
 	}
 	select {
 	case <-cleanupStarted:
 	default:
-		t.Fatal("Attestor cleanup did not run")
+		require.FailNow(t, "Attestor cleanup did not run")
 	}
 	require.ErrorIs(t, attestor.use(func() error { return nil }), ErrEnvironmentClosed)
 }

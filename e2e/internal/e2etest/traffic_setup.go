@@ -2,7 +2,6 @@ package e2etest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"path/filepath"
@@ -13,6 +12,8 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -128,24 +129,16 @@ func DeployWithRelayerConfig(
 	routes ...Route,
 ) (*ibclink.Driver, *Deployment) {
 	t.Helper()
-	if env == nil {
-		t.Fatal("e2etest: Environment is required")
-	}
-	if err := signers.validate(); err != nil {
-		t.Fatalf("e2etest: invalid signers: %v", err)
-	}
+	require.NotNil(t, env, "e2etest: Environment is required")
+	require.NoError(t, signers.validate(), "e2etest: invalid signers")
 	ensureSignerBalances(t, env, signers)
 
 	dir := t.TempDir()
 	signerKeyPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
 	configPath := filepath.Join(dir, "ibc-link.config.yaml")
 	driver, err := ibclink.NewDriver(configPath)
-	if err != nil {
-		t.Fatalf("e2etest: create driver: %v", err)
-	}
-	if bindErr := env.BindIBCLink(driver); bindErr != nil {
-		t.Fatalf("e2etest: bind IBC Link process: %v", bindErr)
-	}
+	require.NoError(t, err, "e2etest: create driver")
+	require.NoError(t, env.BindIBCLink(driver), "e2etest: bind IBC Link process")
 
 	deployment := deployApps(t, env, signers, routes)
 	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))
@@ -153,18 +146,12 @@ func DeployWithRelayerConfig(
 		configure(&config)
 	}
 	if config.SignerType == "" || config.SignerType == ibclink.RelayerSignerLocal {
-		if err := signers.storeRelayerKey(config.SignerKeyFile); err != nil {
-			t.Fatalf("e2etest: store signers: %v", err)
-		}
+		require.NoError(t, signers.storeRelayerKey(config.SignerKeyFile), "e2etest: store signers")
 	}
-	if writeErr := ibclink.WriteRelayerConfig(configPath, config); writeErr != nil {
-		t.Fatalf("e2etest: write config: %v", writeErr)
-	}
+	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write config")
 	driver.ConfigureRelayer(options)
 
-	if migrationErr := driver.MigrateUp(t.Context()); migrationErr != nil {
-		t.Fatalf("e2etest: migrate database: %v", migrationErr)
-	}
+	require.NoError(t, driver.MigrateUp(t.Context()), "e2etest: migrate database")
 	return driver, deployment
 }
 
@@ -175,23 +162,15 @@ func StartRelayer(
 	env *environment.Environment,
 ) *ibclink.Relayer {
 	t.Helper()
-	if driver == nil {
-		t.Fatal("e2etest: driver is required")
-	}
-	if env == nil {
-		t.Fatal("e2etest: Environment is required")
-	}
+	require.NotNil(t, driver, "e2etest: driver is required")
+	require.NotNil(t, env, "e2etest: Environment is required")
 
 	relayer, err := driver.StartRelayer(t.Context())
-	if err != nil {
-		t.Fatalf("e2etest: start relayer: %v", err)
-	}
+	require.NoError(t, err, "e2etest: start relayer")
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), relayerStopTimeout)
 		defer cancel()
-		if err := relayer.Stop(ctx); err != nil {
-			t.Errorf("e2etest: stop relayer: %v", err)
-		}
+		assert.NoError(t, relayer.Stop(ctx), "e2etest: stop relayer")
 	})
 
 	connected := make(map[string]struct{}, len(relayer.Ready().ChainsConnected))
@@ -200,12 +179,14 @@ func StartRelayer(
 	}
 	for _, id := range env.Chains() {
 		chain, chainErr := env.Chain(id)
-		if chainErr != nil {
-			t.Fatalf("e2etest: resolve Chain %q: %v", id, chainErr)
-		}
-		if _, ok := connected[strconv.FormatUint(chain.EVMChainID(), 10)]; !ok {
-			t.Fatalf("e2etest: relayer did not connect to Chain %q", id)
-		}
+		require.NoError(t, chainErr, "e2etest: resolve Chain %q", id)
+		require.Contains(
+			t,
+			connected,
+			strconv.FormatUint(chain.EVMChainID(), 10),
+			"e2etest: relayer did not connect to Chain %q",
+			id,
+		)
 	}
 	startBlockNudger(t, env)
 	return relayer
@@ -221,20 +202,14 @@ func startBlockNudger(t testing.TB, env *environment.Environment) {
 		return
 	}
 	authority, err := evm.AccountFromHex(protocolAuthorityKeyHex)
-	if err != nil {
-		t.Fatalf("e2etest: block nudger authority: %v", err)
-	}
+	require.NoError(t, err, "e2etest: block nudger authority")
 	address := authority.Address()
 	accesses := make([]*environment.EVM, 0, len(env.Chains()))
 	for _, id := range env.Chains() {
 		chain, chainErr := env.Chain(id)
-		if chainErr != nil {
-			t.Fatalf("e2etest: resolve Chain %q: %v", id, chainErr)
-		}
+		require.NoError(t, chainErr, "e2etest: resolve Chain %q", id)
 		evmAccess, evmErr := chain.EVM()
-		if evmErr != nil {
-			t.Fatalf("e2etest: resolve EVM access on Chain %q: %v", id, evmErr)
-		}
+		require.NoError(t, evmErr, "e2etest: resolve EVM access on Chain %q", id)
 		accesses = append(accesses, evmAccess)
 	}
 	ctx := t.Context()
@@ -275,42 +250,33 @@ func deployApps(
 
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
-		if err != nil {
-			t.Fatalf("e2etest: resolve Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		instance, err := env.IBCInstanceForChain(id)
-		if err != nil {
-			t.Fatalf("e2etest: resolve IBC Instance on Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve IBC Instance on Chain %q", id)
 		evmAccess, err := chain.EVM()
-		if err != nil {
-			t.Fatalf("e2etest: resolve EVM access on Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve EVM access on Chain %q", id)
 
 		ics20 := common.HexToAddress(string(instance.ICS20TransferAddress()))
 		ics27 := common.HexToAddress(string(instance.ICS27GMPAddress()))
 		router := common.HexToAddress(string(instance.Locator()))
-		if ics20 == (common.Address{}) || ics27 == (common.Address{}) || router == (common.Address{}) {
-			t.Fatalf("e2etest: Chain %q is missing the ICS20/ICS27 app stack", id)
-		}
+		require.False(
+			t,
+			ics20 == (common.Address{}) || ics27 == (common.Address{}) || router == (common.Address{}),
+			"e2etest: Chain %q is missing the ICS20/ICS27 app stack",
+			id,
+		)
 
 		token, err := deployAndMintToken(t.Context(), evmAccess, signers.application.account)
-		if err != nil {
-			t.Fatalf("e2etest: deploy TestERC20 on Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: deploy TestERC20 on Chain %q", id)
 		counterAddr, err := deployContract(
 			t.Context(),
 			evmAccess,
 			signers.application.account,
 			counter.CounterMetaData,
 		)
-		if err != nil {
-			t.Fatalf("e2etest: deploy Counter on Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: deploy Counter on Chain %q", id)
 		iftToken, callConstructor, err := deployIFTToken(t.Context(), evmAccess, signers.application.account, ics27)
-		if err != nil {
-			t.Fatalf("e2etest: deploy IFT on Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: deploy IFT on Chain %q", id)
 		callConstructors[id] = callConstructor
 
 		iftBatchShim, err := deployIFTBatchShim(
@@ -320,9 +286,7 @@ func deployApps(
 			iftToken,
 			initialTokenSupply,
 		)
-		if err != nil {
-			t.Fatalf("e2etest: deploy IFT batch transfer shim on Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: deploy IFT batch transfer shim on Chain %q", id)
 
 		deployment.chains[id] = ChainDeployment{
 			Token:         token,
@@ -337,9 +301,7 @@ func deployApps(
 
 	for _, route := range routes {
 		sourceClient, destClient, err := resolveRouteClients(env, route)
-		if err != nil {
-			t.Fatalf("e2etest: resolve clients for route %q: %v", route.ID, err)
-		}
+		require.NoError(t, err, "e2etest: resolve clients for route %q", route.ID)
 		deployment.routes[route.ID] = RouteClients{
 			SourceClient: sourceClient,
 			DestClient:   destClient,
@@ -377,13 +339,9 @@ func registerIFTBridges(
 				continue
 			}
 			chain, err := env.Chain(end.chain)
-			if err != nil {
-				t.Fatalf("e2etest: resolve Chain %q: %v", end.chain, err)
-			}
+			require.NoError(t, err, "e2etest: resolve Chain %q", end.chain)
 			evmAccess, err := chain.EVM()
-			if err != nil {
-				t.Fatalf("e2etest: resolve EVM access on Chain %q: %v", end.chain, err)
-			}
+			require.NoError(t, err, "e2etest: resolve EVM access on Chain %q", end.chain)
 			iftToken := deployment.chains[end.chain].IFT
 			counterpartyIFT := deployment.chains[end.counterparty].IFT
 			data, err := iftABI.Pack(
@@ -392,18 +350,21 @@ func registerIFTBridges(
 				counterpartyIFT.Hex(),
 				callConstructors[end.chain],
 			)
-			if err != nil {
-				t.Fatalf("e2etest: pack IFT registerIFTBridge: %v", err)
-			}
-			if _, err := evmAccess.BroadcastTx(
+			require.NoError(t, err, "e2etest: pack IFT registerIFTBridge")
+			_, err = evmAccess.BroadcastTx(
 				t.Context(),
 				signers.application.account,
 				&iftToken,
 				data,
 				nil,
-			); err != nil {
-				t.Fatalf("e2etest: register IFT bridge for client %q on Chain %q: %v", end.client, end.chain, err)
-			}
+			)
+			require.NoError(
+				t,
+				err,
+				"e2etest: register IFT bridge for client %q on Chain %q",
+				end.client,
+				end.chain,
+			)
 		}
 	}
 }
@@ -435,17 +396,11 @@ func buildConfig(
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
-		if err != nil {
-			t.Fatalf("e2etest: resolve Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		rpc, err := driver.ChainRPC(string(id))
-		if err != nil {
-			t.Fatalf("e2etest: resolve Chain %q process binding: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve Chain %q process binding", id)
 		apps, ok := deployment.Chain(id)
-		if !ok {
-			t.Fatalf("e2etest: deployment has no Chain %q", id)
-		}
+		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
 		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
 		config.Chains = append(config.Chains, ibclink.RelayerChain{
 			ChainID:     options.ChainIDs[string(id)],
@@ -457,9 +412,7 @@ func buildConfig(
 	attestorSets := make(map[string]*ibclink.RelayerAttestorSet, len(attestorIDs))
 	for _, id := range attestorIDs {
 		attestor, err := env.Attestor(id)
-		if err != nil {
-			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
 		client := attestor.IBCClient()
 		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
 		key := chainID + "/" + string(client.Locator())
@@ -476,9 +429,7 @@ func buildConfig(
 	connections := map[string]bool{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
-		if !ok {
-			t.Fatalf("e2etest: deployment has no route %q", route.ID)
-		}
+		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
 		options.ManualRoutes[string(route.ID)] = route.Manual
 
 		sourceChain := options.ChainIDs[string(route.Source)]
@@ -625,40 +576,43 @@ func ensureSignerBalances(t testing.TB, env *environment.Environment, signers Si
 	minimum := RequiredSignerBalance()
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
-		if err != nil {
-			t.Fatalf("e2etest: resolve Chain %q: %v", id, err)
-		}
+		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		funding, err := chain.Funding()
 		if err == nil {
 			for _, actor := range actors {
-				if fundErr := funding.EnsureEOABalance(t.Context(), actor.address, minimum); fundErr != nil {
-					t.Fatalf("e2etest: fund %s signer on Chain %q: %v", actor.role, id, fundErr)
-				}
+				require.NoError(
+					t,
+					funding.EnsureEOABalance(t.Context(), actor.address, minimum),
+					"e2etest: fund %s signer on Chain %q",
+					actor.role,
+					id,
+				)
 			}
 			continue
 		}
-		if !errors.Is(err, environment.ErrCapabilityUnavailable) {
-			t.Fatalf("e2etest: resolve funding on Chain %q: %v", id, err)
-		}
+		require.ErrorIs(t, err, environment.ErrCapabilityUnavailable, "e2etest: resolve funding on Chain %q", id)
 		evmAccess, evmErr := chain.EVM()
-		if evmErr != nil {
-			t.Fatalf("e2etest: resolve EVM access on attached Chain %q: %v", id, evmErr)
-		}
+		require.NoError(t, evmErr, "e2etest: resolve EVM access on attached Chain %q", id)
 		for _, actor := range actors {
 			balance, balanceErr := evmAccess.BalanceAt(t.Context(), actor.address, nil)
-			if balanceErr != nil {
-				t.Fatalf("e2etest: query %s signer balance on attached Chain %q: %v", actor.role, id, balanceErr)
-			}
-			if balance.Cmp(minimum) < 0 {
-				t.Fatalf(
-					"e2etest: %s signer %s on attached Chain %q has balance %s, need at least %s; provision it out of band",
-					actor.role,
-					actor.address,
-					id,
-					balance,
-					minimum,
-				)
-			}
+			require.NoError(
+				t,
+				balanceErr,
+				"e2etest: query %s signer balance on attached Chain %q",
+				actor.role,
+				id,
+			)
+			require.GreaterOrEqual(
+				t,
+				balance.Cmp(minimum),
+				0,
+				"e2etest: %s signer %s on attached Chain %q has balance %s, need at least %s; provision it out of band",
+				actor.role,
+				actor.address,
+				id,
+				balance,
+				minimum,
+			)
 		}
 	}
 }

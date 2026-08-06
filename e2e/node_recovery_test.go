@@ -8,10 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
-
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestRelayerRecoversAfterNodeRestart(t *testing.T) {

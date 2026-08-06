@@ -8,12 +8,11 @@ import (
 	"os"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-
-	ethereum "github.com/ethereum/go-ethereum"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
 )

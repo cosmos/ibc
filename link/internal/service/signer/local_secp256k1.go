@@ -4,9 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-
 	kms "github.com/cosmos/kms/signing/file"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 
 	"github.com/cosmos/ibc/link/keyfile"
 )

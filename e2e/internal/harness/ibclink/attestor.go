@@ -20,12 +20,12 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cosmos/ibc/link/keyfile"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 const (

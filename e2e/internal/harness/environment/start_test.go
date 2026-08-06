@@ -352,7 +352,7 @@ func TestStartAcquiresIndependentChainsConcurrently(t *testing.T) {
 		case id := <-started:
 			seen[id] = true
 		case <-time.After(time.Second):
-			t.Fatal("both independent Chain acquisitions did not start concurrently")
+			require.FailNow(t, "both independent Chain acquisitions did not start concurrently")
 		}
 	}
 	close(release)

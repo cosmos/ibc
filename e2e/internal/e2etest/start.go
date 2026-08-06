@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -105,7 +108,9 @@ func selectedLaneName(t testing.TB) string {
 	case laneAnvil, laneAnvilInterval, laneBesu:
 		return name
 	default:
-		t.Fatalf(
+		require.FailNowf(
+			t,
+			"unknown e2e lane",
 			"unknown e2e lane %q; set %s or -e2e.lane to anvil, anvil-interval, or besu",
 			rawLaneName(),
 			laneEnv,
@@ -132,15 +137,11 @@ func normalizeLaneName(name string) string {
 func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *environment.Environment {
 	t.Helper()
 	env, err := environment.Start(t.Context(), spec, runtime)
-	if err != nil {
-		t.Fatalf("e2etest: start Environment: %v", err)
-	}
+	require.NoError(t, err, "e2etest: start Environment")
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
-		if err := env.Close(ctx); err != nil {
-			t.Errorf("e2etest: close Environment: %v", err)
-		}
+		assert.NoError(t, env.Close(ctx), "e2etest: close Environment")
 	})
 	return env
 }

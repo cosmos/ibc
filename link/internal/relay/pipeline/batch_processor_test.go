@@ -114,7 +114,7 @@ func TestBatchProcess(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			t.Fatal("collector stalled while a batch was processing")
+			require.FailNow(t, "collector stalled while a batch was processing")
 		}
 
 		close(release)

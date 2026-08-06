@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
