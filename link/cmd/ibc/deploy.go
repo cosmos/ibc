@@ -255,13 +255,16 @@ func clientSpec(
 		CounterpartyChainID:  counterpartyChainID,
 		CounterpartyClientID: counterpartyClientID,
 	}
-	if flagDeployClientType == deploy.ClientTypeAttestation {
+	switch flagDeployClientType {
+	case deploy.ClientTypeAttestation:
 		spec.Params = deploy.AttestationParams{
 			Attestors:        flagDeployAttestors,
 			Threshold:        flagDeployThreshold,
 			InitialHeight:    height,
 			InitialTimestamp: timestamp,
 		}
+	default:
+		return deploy.ClientSpec{}, fmt.Errorf("cannot construct client spec for unknown client type %s", flagDeployClientType)
 	}
 	return spec, nil
 }

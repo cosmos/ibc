@@ -90,12 +90,12 @@ func init() {
 	dpf := cmdDeploy.PersistentFlags()
 	dpf.StringVar(&flagDeployManifestDir, "manifest-dir", "deployments", "manifest directory relative to home")
 	dpf.StringVar(&flagDeployDeployer, "deployer", "", "signer alias override for deployment transactions")
-	dpf.StringVar(&flagDeployChain, "chain", "", "chain id")
+	dpf.StringVar(&flagDeployChain, "chain", "", "chain ID for the chain being deployed to")
 	dpf.BoolVar(&flagDeployDryRun, "dry-run", false, "print the step plan without submitting transactions")
 	dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")
 
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployCounterparty, "counterparty", "", "counterparty chain id the client tracks")
+		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
 	for _, c := range []*cobra.Command{cmdDeployClient, cmdDeployConnect} {
 		c.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
 		c.Flags().StringSliceVar(&flagDeployAttestors, "attestors", nil, "attestor addresses (attestation clients)")
