@@ -24,7 +24,10 @@ make build
 ./bin/ibc attestor run
 
 # deploy IBC between two configured chains (idempotent; rerun to repair)
-./bin/ibc deploy connect <chainA> <chainB> --attestors 0x... --yes
+./bin/ibc deploy core --chain <chainA> --yes
+./bin/ibc deploy core --chain <chainB> --yes
+./bin/ibc deploy client --chain <chainA> --counterparty-chain <chainB> --yes
+./bin/ibc deploy client --chain <chainB> --counterparty-chain <chainA> --yes
 ```
 
 ## Configuration

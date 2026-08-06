@@ -120,11 +120,11 @@ func TestClientStepsIdempotent(t *testing.T) {
 	require.Equal(t, 1, target.registers)
 }
 
-// TestClientStepsSyncsManifestOnSkip covers `deploy import` -> `deploy
-// connect` and crash-between-RegisterClient-and-Save: the client is already
-// registered on-chain but the manifest has no entry for it. The precheck
-// must repair the manifest even though it reports the step as satisfied.
-func TestClientStepsSyncsManifestOnSkip(t *testing.T) {
+// A client registered on-chain with no manifest entry (a deployment that
+// died between RegisterClient and Save) cannot have its deployed parameters
+// recovered reliably, so the precheck fails rather than trusting the
+// rerun's spec.
+func TestClientStepsUnrecordedClientError(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
 	target.hasCode["0xrouter"] = true
@@ -140,21 +140,19 @@ func TestClientStepsSyncsManifestOnSkip(t *testing.T) {
 		CounterpartyClientID: "link-1",
 		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
 	}
-	// simulate already registered on-chain (e.g. via `deploy import`),
-	// without ever calling RegisterClient through this engine.
+	// registered on-chain without this engine ever recording it
 	target.registered[spec.ClientID] = "0xlive"
 
-	res, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
-	require.NoError(t, err)
-	require.Equal(t, "skipped", res[0].Action)
+	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
+	require.ErrorContains(t, err, "registered on-chain but missing from the manifest")
+	require.ErrorContains(t, err, "--client-id")
 	require.Equal(t, 0, target.registers)
 
+	// the manifest is left untouched
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
-	c, ok := m.Client("link-2")
-	require.True(t, ok)
-	require.Equal(t, "0xlive", c.Address)
-	require.Equal(t, "2", c.CounterpartyChainID)
+	_, ok := m.Client("link-2")
+	require.False(t, ok)
 }
 
 func TestClientStepsParamsMismatch(t *testing.T) {
@@ -175,4 +173,78 @@ func TestClientStepsParamsMismatch(t *testing.T) {
 	}
 	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
 	require.ErrorContains(t, err, "does not match client type")
+}
+
+// A rerun whose spec conflicts with the recorded deployment on identity
+// fields must fail loudly: on-chain client params are constructor-fixed, so
+// skipping cannot satisfy the new spec and rewriting the manifest would
+// desync it from the chain.
+func TestClientStepsDivergentSpecError(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.hasCode["0xrouter"] = true
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	require.NoError(t, m.Save(dir))
+
+	spec := ClientSpec{
+		ClientID:             "link-1-2",
+		Type:                 ClientTypeAttestation,
+		CounterpartyChainID:  "2",
+		CounterpartyClientID: "link-1-2",
+		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
+	}
+	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+
+	divergent := spec
+	divergent.Params = AttestationParams{Attestors: []string{"0xb", "0xc"}, Threshold: 2, InitialHeight: 5, InitialTimestamp: 500}
+	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", divergent))
+	require.ErrorContains(t, err, "already deployed with different values")
+	require.ErrorContains(t, err, "attestors")
+	require.ErrorContains(t, err, `["0xb","0xc"]`)
+	require.ErrorContains(t, err, "--client-id")
+
+	// manifest must still describe the deployed contract
+	m, loadErr := manifest.Load(dir, "1")
+	require.NoError(t, loadErr)
+	c, _ := m.Client("link-1-2")
+	require.Equal(t, []any{"0xa"}, c.Params["attestors"].([]any))
+}
+
+// initialHeight/initialTimestamp default from the live counterparty head and
+// change every invocation; they are launch-time trusted state, not client
+// identity, so a rerun differing only in them skips cleanly and leaves the
+// deploy-time values in the manifest.
+func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.hasCode["0xrouter"] = true
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	require.NoError(t, m.Save(dir))
+
+	spec := ClientSpec{
+		ClientID:             "link-1-2",
+		Type:                 ClientTypeAttestation,
+		CounterpartyChainID:  "2",
+		CounterpartyClientID: "link-1-2",
+		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
+	}
+	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+
+	drifted := spec
+	drifted.Params = AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 99, InitialTimestamp: 9999}
+	res, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", drifted))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	c, _ := m.Client("link-1-2")
+	require.Equal(t, float64(5), c.Params["initialHeight"])
+	require.Equal(t, float64(500), c.Params["initialTimestamp"])
 }

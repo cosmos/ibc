@@ -221,4 +221,26 @@ pieces tie into the rest of the config:
   machine-generated: `ibc deploy` reads and rewrites them on every run to
   stay idempotent, so hand edits are lost and can desync the recorded state
   from what's actually on chain.
+- attestor sets — `--attestors` values may be attestation names, signer
+  aliases, or raw addresses; aliases resolve through local key files (remote
+  signers error — pass their address directly), and any value matching no
+  alias passes through as an address, validated by the chain's deployment
+  driver. When the flag is omitted,
+  the set for a client tracking chain X defaults to every
+  `attestor.attestations[]` entry with `chainId: X`. Reusing one attestor
+  set for both directions of a connection is discouraged — configure
+  distinct sets per tracked chain.
+
+A connection is two mirrored `deploy client` invocations (one per chain,
+each tracking the other). Both default to the same client id
+(`link-<chainA>-<chainB>`; ids are per-chain namespaces, so the shared name
+is unambiguous) and so pair up without explicit id flags. Rerunning with
+the same id continues a completed or partially-deployed connection;
+rerunning with different attestors/threshold under the same id fails —
+deployed client parameters are constructor-fixed — with the differences
+listed, as does a client registered on-chain but missing from the manifest
+(a deployment interrupted before its record was written; the deployed
+parameters cannot be recovered from chain). In either case, pass a new
+`--client-id` (and matching `--counterparty-client-id`) to deploy a new
+client pair.
 

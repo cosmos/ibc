@@ -84,7 +84,7 @@ func init() {
 
 	// Deploy commands
 	cmdDeploy.AddCommand(
-		cmdDeployCore, cmdDeployClient, cmdDeployConnect,
+		cmdDeployCore, cmdDeployClient,
 		cmdDeployStatus, cmdDeployRenderConfig,
 	)
 	dpf := cmdDeploy.PersistentFlags()
@@ -96,15 +96,15 @@ func init() {
 
 	cmdDeployClient.Flags().
 		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
-	for _, c := range []*cobra.Command{cmdDeployClient, cmdDeployConnect} {
-		c.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
-		c.Flags().
-			StringSliceVar(&flagDeployAttestors, "attestors", nil, "comma separated attestor addresses <0x123,0x456,...>")
-		c.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
-	}
-	cmdDeployClient.Flags().StringVar(&flagDeployClientID, "client-id", "", "client id (default link-<counterparty>)")
+	cmdDeployClient.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default link-<chain>)")
+		StringSliceVar(&flagDeployAttestors, "attestors", nil,
+			"attestors for the new client: addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
+	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
+	cmdDeployClient.Flags().
+		StringVar(&flagDeployClientID, "client-id", "", "client id (default link-<chainA>-<chainB>)")
+	cmdDeployClient.Flags().
+		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default link-<chainA>-<chainB>)")
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
 )
@@ -108,22 +109,38 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			if err != nil || !registered {
 				return false, err
 			}
-			// The manifest is a local record of chain state, not the source
-			// of truth for it. If the client is already registered on-chain
-			// but the manifest doesn't reflect that (e.g. after `deploy
-			// import` left counterparty fields empty, or a crash between
-			// RegisterClient and m.Save), sync it here. This is repair, not
-			// deployment, so it also runs under --dry-run.
-			candidate, err := specToClient(spec, address)
-			if err != nil {
-				return false, err
+			existing, ok := m.Client(spec.ClientID)
+			if !ok {
+				// a deployment that died between RegisterClient and Save: the
+				// client exists on-chain but its constructor parameters were
+				// never recorded and cannot be recovered reliably, so the
+				// rerun's spec must not be trusted as its record
+				return false, fmt.Errorf(
+					"client %q is registered on-chain but missing from the manifest on chain %s "+
+						"(likely an interrupted deployment); pass a new --client-id to deploy a new client",
+					spec.ClientID, chainID,
+				)
 			}
-			existing, _ := m.Client(spec.ClientID)
-			candidate = mergeClientDefaults(existing, candidate)
-			if !clientsEqual(existing, candidate) {
-				m.UpsertClient(candidate)
-				if err := m.Save(dir); err != nil {
-					return false, err
+			// On-chain client params are constructor-fixed: a spec that
+			// disagrees with the recorded deployment cannot be satisfied by
+			// skipping, and rewriting the manifest would desync it from the
+			// chain. initialHeight/initialTimestamp are launch-time trusted
+			// state (defaults track the live counterparty head), not client
+			// identity, so they are not compared.
+			if diffs := clientConflicts(existing, spec); len(diffs) > 0 {
+				return false, fmt.Errorf(
+					"client %q on chain %s is already deployed with different values (%s); "+
+						"pass a new --client-id to deploy another client pair",
+					spec.ClientID, chainID, strings.Join(diffs, "; "),
+				)
+			}
+			slog.Info("client already registered, continuing",
+				"client", spec.ClientID, "chain", chainID, "address", address)
+			if existing.Address != address {
+				existing.Address = address
+				m.UpsertClient(existing)
+				if saveErr := m.Save(dir); saveErr != nil {
+					return false, saveErr
 				}
 			}
 			return true, nil
@@ -191,32 +208,25 @@ func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
 	return client, nil
 }
 
-// mergeClientDefaults fills candidate's empty fields from existing, so a
-// precheck sync doesn't blank out fields the spec doesn't carry.
-func mergeClientDefaults(existing, candidate manifest.Client) manifest.Client {
-	if candidate.Type == "" {
-		candidate.Type = existing.Type
+// clientConflicts reports the identity fields on which spec disagrees with
+// an already-recorded deployment. Values are compared via their JSON
+// encoding so native spec types (uint8, []string) match their file
+// round-tripped forms (float64, []any).
+func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
+	var diffs []string
+	conflict := func(field string, deployed, requested any) {
+		db, errD := json.Marshal(deployed)
+		rb, errR := json.Marshal(requested)
+		if errD != nil || errR != nil || string(db) != string(rb) {
+			diffs = append(diffs, fmt.Sprintf("%s: deployed %s, requested %s", field, db, rb))
+		}
 	}
-	if candidate.CounterpartyChainID == "" {
-		candidate.CounterpartyChainID = existing.CounterpartyChainID
+	conflict("type", existing.Type, spec.Type)
+	conflict("counterpartyChainId", existing.CounterpartyChainID, spec.CounterpartyChainID)
+	conflict("counterpartyClientId", existing.CounterpartyClientID, spec.CounterpartyClientID)
+	if p, ok := spec.Params.(AttestationParams); ok && spec.Type == ClientTypeAttestation {
+		conflict("attestors", existing.Params["attestors"], p.Attestors)
+		conflict("threshold", existing.Params["threshold"], p.Threshold)
 	}
-	if candidate.CounterpartyClientID == "" {
-		candidate.CounterpartyClientID = existing.CounterpartyClientID
-	}
-	if candidate.Params == nil {
-		candidate.Params = existing.Params
-	}
-	return candidate
-}
-
-// clientsEqual compares via their JSON encoding so a candidate built from
-// native Go types (e.g. uint8 params) compares equal to one round-tripped
-// through the manifest file (where params decode as float64).
-func clientsEqual(a, b manifest.Client) bool {
-	ab, errA := json.Marshal(a)
-	bb, errB := json.Marshal(b)
-	if errA != nil || errB != nil {
-		return false
-	}
-	return string(ab) == string(bb)
+	return diffs
 }

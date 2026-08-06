@@ -56,13 +56,6 @@ var (
 		RunE:  deployClient,
 	}
 
-	cmdDeployConnect = &cobra.Command{
-		Use:   "connect [chainA] [chainB]",
-		Short: "Deploy core stacks and clients in both directions between two chains",
-		Args:  cobra.ExactArgs(2),
-		RunE:  deployConnect,
-	}
-
 	cmdDeployStatus = &cobra.Command{
 		Use:   useStatus,
 		Short: "Verify recorded deployments against live chain state",
@@ -214,19 +207,40 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 // defaulting trusted state from the counterparty chain head.
 func clientSpec(
 	ctx context.Context,
+	cfg config.Config,
 	counterpartyTarget deploy.Target,
 	chainID, counterpartyChainID string,
 ) (deploy.ClientSpec, error) {
+	// both ids default to one shared name: client ids are per-chain
+	// namespaces, so the same name on each side unambiguously identifies
+	// the connection, and the mirrored `deploy client` invocation derives
+	// the identical pair
 	clientID := flagDeployClientID
 	if clientID == "" {
-		clientID = deploy.DefaultClientID(counterpartyChainID)
+		clientID = defaultClientID(chainID, counterpartyChainID)
 	}
 	if !deploy.ValidClientID(clientID) {
 		return deploy.ClientSpec{}, errors.Errorf("invalid client id %q", clientID)
 	}
 	counterpartyClientID := flagDeployCounterpartyCID
 	if counterpartyClientID == "" {
-		counterpartyClientID = deploy.DefaultClientID(chainID)
+		counterpartyClientID = defaultClientID(chainID, counterpartyChainID)
+	}
+	var attestors []string
+	if len(flagDeployAttestors) > 0 {
+		for _, token := range flagDeployAttestors {
+			address, err := resolveAttestorToken(cfg, token)
+			if err != nil {
+				return deploy.ClientSpec{}, err
+			}
+			attestors = append(attestors, address)
+		}
+	} else {
+		var err error
+		attestors, err = attestorsForChain(cfg, counterpartyChainID)
+		if err != nil {
+			return deploy.ClientSpec{}, err
+		}
 	}
 	height, timestamp := flagDeployHeight, flagDeployTimestamp
 	if height == 0 || timestamp == 0 {
@@ -252,7 +266,7 @@ func clientSpec(
 	switch flagDeployClientType {
 	case deploy.ClientTypeAttestation:
 		spec.Params = deploy.AttestationParams{
-			Attestors:        flagDeployAttestors,
+			Attestors:        attestors,
 			Threshold:        flagDeployThreshold,
 			InitialHeight:    height,
 			InitialTimestamp: timestamp,
@@ -264,6 +278,14 @@ func clientSpec(
 		)
 	}
 	return spec, nil
+}
+
+// defaultClientID derives the shared client id for a chain pair, stable
+// regardless of argument order.
+func defaultClientID(a, b string) string {
+	ids := []string{a, b}
+	sort.Strings(ids)
+	return "link-" + ids[0] + "-" + ids[1]
 }
 
 func deployClient(cmd *cobra.Command, _ []string) error {
@@ -282,46 +304,11 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return errors.Wrapf(err, "counterparty chain %s", flagDeployCounterparty)
 	}
-	spec, err := clientSpec(cmd.Context(), counterpartyTarget, flagDeployChain, flagDeployCounterparty)
+	spec, err := clientSpec(cmd.Context(), cfg, counterpartyTarget, flagDeployChain, flagDeployCounterparty)
 	if err != nil {
 		return err
 	}
 	return planThenRun(cmd.Context(), deploy.ClientSteps(target, flagDeployManifestDir, flagDeployChain, spec))
-}
-
-func deployConnect(cmd *cobra.Command, args []string) error {
-	cfg, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-	chainA, chainB := args[0], args[1]
-	targetA, err := newTarget(cmd.Context(), cfg, chainA, flagDeployDeployer, true)
-	if err != nil {
-		return err
-	}
-	targetB, err := newTarget(cmd.Context(), cfg, chainB, flagDeployDeployer, true)
-	if err != nil {
-		return err
-	}
-
-	specA, err := clientSpec(cmd.Context(), targetB, chainA, chainB) // on A, tracking B
-	if err != nil {
-		return err
-	}
-	specB, err := clientSpec(cmd.Context(), targetA, chainB, chainA) // on B, tracking A
-	if err != nil {
-		return err
-	}
-	// connect derives both IDs; per-direction overrides only apply to `deploy client`
-	specA.ClientID, specA.CounterpartyClientID = deploy.DefaultClientID(chainB), deploy.DefaultClientID(chainA)
-	specB.ClientID, specB.CounterpartyClientID = deploy.DefaultClientID(chainA), deploy.DefaultClientID(chainB)
-
-	var steps []deploy.Step
-	steps = append(steps, deploy.CoreSteps(targetA, flagDeployManifestDir, chainA)...)
-	steps = append(steps, deploy.CoreSteps(targetB, flagDeployManifestDir, chainB)...)
-	steps = append(steps, deploy.ClientSteps(targetA, flagDeployManifestDir, chainA, specA)...)
-	steps = append(steps, deploy.ClientSteps(targetB, flagDeployManifestDir, chainB, specB)...)
-	return planThenRun(cmd.Context(), steps)
 }
 
 // statusChains resolves which chains status reports on: an explicit --chain
@@ -456,7 +443,7 @@ func renderRelayConfig(a, b *manifest.Manifest) (renderedDeployment, error) {
 	}
 	if len(out.Relayer.Clients) == 0 {
 		return renderedDeployment{}, errors.Errorf(
-			"no mutual client pair between chains %s and %s: deploy clients in both directions first (`ibc deploy connect %s %s`)",
+			"no mutual client pair between chains %s and %s: run `ibc deploy client` on each chain first (chains %s and %s)",
 			a.ChainID,
 			b.ChainID,
 			a.ChainID,

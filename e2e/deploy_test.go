@@ -39,11 +39,11 @@ type deployManifest struct {
 	TargetData map[string]string `json:"targetData"`
 }
 
-// TestDeployConnect drives `ibc deploy` as a black box: two bare managed
+// TestDeployConnection drives `ibc deploy` as a black box: two bare managed
 // chains (no protocol resources — the deploy CLI provisions IBC itself),
 // a temporary CLI home with an imported deployer key, and assertions against
 // the CLI's JSON step output and the manifests it writes.
-func TestDeployConnect(t *testing.T) {
+func TestDeployConnection(t *testing.T) {
 	t.Parallel()
 	e2etest.RequireAnvilLane(t)
 
@@ -95,18 +95,43 @@ func TestDeployConnect(t *testing.T) {
 	ctx := t.Context()
 	require.NoError(t, driver.KeysImportECDSA(ctx, deployerAlias, deployerHex))
 
-	connectArgs := []string{
-		"connect", chainAID, chainBID,
-		"--attestors", deployerAddress.Hex(),
-		"--yes",
+	// the connection is four separate idempotent commands: core on each
+	// chain, then a client on each chain tracking the other. Both client
+	// invocations derive the same shared client id.
+	sharedClientID := "link-" + chainAID + "-" + chainBID
+	deployCommands := [][]string{
+		{"core", "--chain", chainAID, "--yes"},
+		{"core", "--chain", chainBID, "--yes"},
+		{
+			"client",
+			"--chain",
+			chainAID,
+			"--counterparty-chain",
+			chainBID,
+			"--attestors",
+			deployerAddress.Hex(),
+			"--yes",
+		},
+		{
+			"client",
+			"--chain",
+			chainBID,
+			"--counterparty-chain",
+			chainAID,
+			"--attestors",
+			deployerAddress.Hex(),
+			"--yes",
+		},
 	}
 
-	stdout, err := driver.Deploy(ctx, connectArgs...)
-	require.NoError(t, err)
-	results := decodeStepResults(t, stdout)
-	require.NotEmpty(t, results)
-	for _, r := range results {
-		require.Equalf(t, "executed", r.Action, "step %q", r.Name)
+	for _, args := range deployCommands {
+		stdout, deployErr := driver.Deploy(ctx, args...)
+		require.NoErrorf(t, deployErr, "deploy %v", args)
+		results := decodeStepResults(t, stdout)
+		require.NotEmpty(t, results)
+		for _, r := range results {
+			require.Equalf(t, "executed", r.Action, "step %q", r.Name)
+		}
 	}
 
 	manifestDir := filepath.Join(home, "deployments")
@@ -122,13 +147,15 @@ func TestDeployConnect(t *testing.T) {
 	assertPublicRelaying(ctx, t, chainA.RPCURL(), manifestA)
 	assertPublicRelaying(ctx, t, chainB.RPCURL(), manifestB)
 
-	// Idempotency: rerunning the identical connect skips every step.
-	stdout, err = driver.Deploy(ctx, connectArgs...)
-	require.NoError(t, err)
-	rerun := decodeStepResults(t, stdout)
-	require.NotEmpty(t, rerun)
-	for _, r := range rerun {
-		require.Equalf(t, "skipped", r.Action, "step %q", r.Name)
+	// Idempotency: rerunning every identical command skips its step.
+	for _, args := range deployCommands {
+		stdout, deployErr := driver.Deploy(ctx, args...)
+		require.NoErrorf(t, deployErr, "rerun %v", args)
+		rerun := decodeStepResults(t, stdout)
+		require.NotEmpty(t, rerun)
+		for _, r := range rerun {
+			require.Equalf(t, "skipped", r.Action, "step %q", r.Name)
+		}
 	}
 
 	_, err = driver.Deploy(ctx, "status")
@@ -138,10 +165,8 @@ func TestDeployConnect(t *testing.T) {
 	rendered, err := driver.Deploy(ctx, "render-config", chainAID, chainBID)
 	require.NoError(t, err)
 	for _, want := range []string{
-		"clientId: link-" + chainAID,
-		"clientId: link-" + chainBID,
-		"counterpartyClientId: link-" + chainAID,
-		"counterpartyClientId: link-" + chainBID,
+		"clientId: " + sharedClientID,
+		"counterpartyClientId: " + sharedClientID,
 	} {
 		require.Contains(t, string(rendered), want)
 	}
