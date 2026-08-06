@@ -63,6 +63,7 @@ type Report struct {
 	Checks []Check `json:"checks"`
 }
 
+// Failed returns the checks that did not pass.
 func (r Report) Failed() []Check {
 	var failed []Check
 	for _, c := range r.Checks {
@@ -77,7 +78,10 @@ func (r Report) Failed() []Check {
 // Provision* verbs use the target's idiomatic tooling; the rest are IBC
 // wiring and reads.
 type Target interface {
+	// ProvisionCore deploys the core routing stack.
 	ProvisionCore(ctx context.Context, p CoreParams) (CoreRef, error)
+	// ProvisionClient deploys a light client governed by router, without
+	// registering it.
 	ProvisionClient(ctx context.Context, router string, spec ClientSpec) (ClientRef, error)
 	// RegisterClient registers a provisioned client on the router and returns
 	// the registered client ID.
@@ -89,6 +93,10 @@ type Target interface {
 	HasCode(ctx context.Context, address string) (bool, error)
 	// Head returns the chain's current height and timestamp (seconds).
 	Head(ctx context.Context) (height, timestamp uint64, err error)
+	// Verify checks a manifest's recorded deployment against live chain
+	// state.
 	Verify(ctx context.Context, m *manifest.Manifest) (Report, error)
+	// SupportedClientTypes lists the client type names ProvisionClient
+	// accepts in ClientSpec.Type.
 	SupportedClientTypes() []string
 }

@@ -102,9 +102,9 @@ func init() {
 			"attestors for the new client: addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
 	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployClientID, "client-id", "", "client id (default link-<chainA>-<chainB>)")
+		StringVar(&flagDeployClientID, "client-id", "", "client id (default: link-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default link-<chainA>-<chainB>)")
+		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default: link-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().

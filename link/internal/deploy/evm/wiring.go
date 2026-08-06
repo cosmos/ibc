@@ -63,13 +63,28 @@ func (d *Driver) ClientRegistered(ctx context.Context, router, clientID string) 
 		return "", false, err
 	}
 	address, err := contract.GetClient(&bind.CallOpts{Context: ctx}, clientID)
-	if err != nil {
-		if isClientNotFound(err) {
-			return "", false, nil
+	if err == nil {
+		return address.Hex(), true, nil
+	}
+	switch classifyGetClientError(err) {
+	case clientNotFound:
+		return "", false, nil
+	case unstructuredRevert:
+		// IBCClientNotFound is getClient's only revert on a healthy router,
+		// but a provider that strips revert data hides the selector. Probe
+		// the router before concluding the client is absent, so a lookup
+		// against a broken router stops here instead of spending gas on a
+		// client deployment whose registration then fails.
+		if _, probeErr := contract.GetNextClientSeq(&bind.CallOpts{Context: ctx}); probeErr != nil {
+			return "", false, fmt.Errorf(
+				"router %s failed a health probe after an unstructured revert from getClient (%w): %w",
+				router, err, probeErr,
+			)
 		}
+		return "", false, nil
+	default:
 		return "", false, err
 	}
-	return address.Hex(), true, nil
 }
 
 // clientNotFoundSelector is the 4-byte selector of the router's
@@ -86,21 +101,43 @@ var clientNotFoundSelector = func() string {
 	return "0x" + common.Bytes2Hex(e.ID[:4])
 }()
 
-// isClientNotFound detects the router's IBCClientNotFound revert. When the
-// error carries structured revert data, only that error's selector matches;
-// otherwise falls back to substring detection.
-func isClientNotFound(err error) bool {
+// getClientError classifies a getClient failure.
+type getClientError int
+
+const (
+	// otherError is a transport failure or a structured revert with a
+	// different selector; callers propagate it.
+	otherError getClientError = iota
+	// clientNotFound is a definitive IBCClientNotFound revert.
+	clientNotFound
+	// unstructuredRevert is a revert whose data the provider stripped, so
+	// IBCClientNotFound cannot be distinguished from any other revert.
+	unstructuredRevert
+)
+
+// classifyGetClientError inspects a getClient error: structured revert data
+// is matched against the IBCClientNotFound selector; reverts without data
+// are ambiguous and reported as such for the caller to disambiguate.
+func classifyGetClientError(err error) getClientError {
 	if err == nil {
-		return false
+		return otherError
 	}
 	var dataErr interface{ ErrorData() any }
 	if errors.As(err, &dataErr) {
-		if data, ok := dataErr.ErrorData().(string); ok && clientNotFoundSelector != "" {
-			return strings.HasPrefix(strings.ToLower(data), clientNotFoundSelector)
+		if data, ok := dataErr.ErrorData().(string); ok && data != "" && clientNotFoundSelector != "" {
+			if strings.HasPrefix(strings.ToLower(data), clientNotFoundSelector) {
+				return clientNotFound
+			}
+			return otherError
 		}
 	}
-	return strings.Contains(err.Error(), "IBCClientNotFound") ||
-		strings.Contains(err.Error(), "execution reverted")
+	if strings.Contains(err.Error(), "IBCClientNotFound") {
+		return clientNotFound
+	}
+	if strings.Contains(err.Error(), "execution reverted") {
+		return unstructuredRevert
+	}
+	return otherError
 }
 
 func (d *Driver) HasCode(ctx context.Context, address string) (bool, error) {

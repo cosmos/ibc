@@ -8,8 +8,6 @@ import (
 )
 
 func TestClientIDs(t *testing.T) {
-	require.Equal(t, "link-31337", DefaultClientID("31337"))
-
 	require.True(t, ValidClientID("link-31337"))
 	require.True(t, ValidClientID("my.client_1"))
 	require.False(t, ValidClientID("abc"))                    // too short

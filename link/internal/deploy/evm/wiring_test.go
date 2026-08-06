@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -124,4 +125,37 @@ func TestPublicRelayingSelectors(t *testing.T) {
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
 	require.Equal(t, [4]byte(routerABI.Methods["recvPacket"].ID), selectors[0])
+}
+
+// fakeRPCError mimics go-ethereum's rpc.jsonError: a message plus optional
+// structured revert data.
+type fakeRPCError struct{ msg, data string }
+
+func (e fakeRPCError) Error() string  { return e.msg }
+func (e fakeRPCError) ErrorData() any { return e.data }
+
+func TestClassifyGetClientError(t *testing.T) {
+	require.Equal(t, clientNotFound,
+		classifyGetClientError(fakeRPCError{"execution reverted", clientNotFoundSelector + "aa"}))
+	require.Equal(t, otherError,
+		classifyGetClientError(fakeRPCError{"execution reverted", "0xdeadbeef"}))
+	require.Equal(t, unstructuredRevert, classifyGetClientError(errors.New("execution reverted")))
+	require.Equal(t, clientNotFound, classifyGetClientError(errors.New("rpc: IBCClientNotFound()")))
+	require.Equal(t, otherError, classifyGetClientError(errors.New("connection refused")))
+	require.Equal(t, otherError, classifyGetClientError(nil))
+}
+
+// A getClient revert against a contract that is not a router must surface an
+// error at the precheck, never read as "client absent" (which would spend
+// gas deploying a client whose registration then fails).
+func TestClientRegisteredNonRouter(t *testing.T) {
+	d, _, _ := newSimDriver(t)
+	ctx := context.Background()
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+
+	// the AccessManager is a healthy contract that is not a router
+	_, registered, err := d.ClientRegistered(ctx, core.TargetData["accessManager"], "link-x")
+	require.Error(t, err)
+	require.False(t, registered)
 }

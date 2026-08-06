@@ -11,7 +11,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
 )
 
-// Step is one idempotent deployment phase. A nil Done means never
+// Step is one idempotent deployment step. A nil Done means never
 // pre-satisfied.
 type Step struct {
 	Name string

@@ -203,7 +203,7 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
 }
 
-// clientSpec assembles the ClientSpec for --chain tracking --counterparty,
+// clientSpec assembles the ClientSpec for --chain tracking --counterparty-chain,
 // defaulting trusted state from the counterparty chain head.
 func clientSpec(
 	ctx context.Context,
@@ -294,7 +294,7 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if flagDeployChain == "" || flagDeployCounterparty == "" {
-		return errors.New("--chain and --counterparty are required")
+		return errors.New("--chain and --counterparty-chain are required")
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
