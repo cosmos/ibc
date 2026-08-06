@@ -89,8 +89,6 @@ type Target interface {
 	HasCode(ctx context.Context, address string) (bool, error)
 	// Head returns the chain's current height and timestamp (seconds).
 	Head(ctx context.Context) (height, timestamp uint64, err error)
-	// Discover reconstructs a manifest from an existing router.
-	Discover(ctx context.Context, router string) (*manifest.Manifest, error)
 	Verify(ctx context.Context, m *manifest.Manifest) (Report, error)
 	SupportedClientTypes() []string
 }

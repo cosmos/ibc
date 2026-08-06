@@ -149,66 +149,6 @@ func publicRelayingSelectors() ([][4]byte, error) {
 	return selectors, nil
 }
 
-// Discover reconstructs a manifest from an existing router: authority from
-// the contract, clients from ICS02ClientAdded events (current address
-// re-resolved via getClient). The counterparty chain ID is not recorded
-// on-chain and is left empty for later runs to fill.
-//
-// The event filter scans from block 0, which many public RPC providers cap
-// eth_getLogs to reject on. Upgrade path: accept a from-block hint (e.g. the
-// router's deployment block) or chunk the scan into provider-sized ranges.
-func (d *Driver) Discover(ctx context.Context, router string) (*manifest.Manifest, error) {
-	routerAddr := common.HexToAddress(router)
-	if ok, err := d.HasCode(ctx, router); err != nil || !ok {
-		if err == nil {
-			err = fmt.Errorf("no contract code at %s", router)
-		}
-		return nil, err
-	}
-	contract, err := ics26router.NewContract(routerAddr, d.backend)
-	if err != nil {
-		return nil, err
-	}
-	authority, err := contract.Authority(&bind.CallOpts{Context: ctx})
-	if err != nil {
-		return nil, fmt.Errorf("query router authority: %w", err)
-	}
-
-	m := manifest.New(d.chainID.String(), "evm")
-	m.Core.Router = routerAddr.Hex()
-	m.TargetData = map[string]string{"accessManager": authority.Hex()}
-
-	iter, err := contract.FilterICS02ClientAdded(&bind.FilterOpts{Context: ctx})
-	if err != nil {
-		return nil, fmt.Errorf("filter client-added events: %w", err)
-	}
-	defer func() { _ = iter.Close() }()
-	for iter.Next() {
-		ev := iter.Event
-		current, registered, err := d.ClientRegistered(ctx, router, ev.ClientId)
-		if err != nil {
-			return nil, err
-		}
-		if !registered {
-			continue
-		}
-		cp, err := contract.GetCounterparty(&bind.CallOpts{Context: ctx}, ev.ClientId)
-		if err != nil {
-			return nil, fmt.Errorf("query counterparty for %q: %w", ev.ClientId, err)
-		}
-		m.UpsertClient(manifest.Client{
-			ClientID:             ev.ClientId,
-			Type:                 deploy.ClientTypeAttestation,
-			Address:              current,
-			CounterpartyClientID: cp.ClientId,
-		})
-	}
-	if err := iter.Error(); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // Verify checks the manifest against live chain state.
 func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Report, error) {
 	var report deploy.Report

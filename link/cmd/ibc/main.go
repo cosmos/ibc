@@ -85,7 +85,7 @@ func init() {
 	// Deploy commands
 	cmdDeploy.AddCommand(
 		cmdDeployCore, cmdDeployClient, cmdDeployConnect,
-		cmdDeployImport, cmdDeployStatus, cmdDeployRenderConfig,
+		cmdDeployStatus,
 	)
 	dpf := cmdDeploy.PersistentFlags()
 	dpf.StringVar(&flagDeployManifestDir, "manifest-dir", "deployments", "manifest directory relative to home")
@@ -108,5 +108,4 @@ func init() {
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
-	cmdDeployImport.Flags().StringVar(&flagDeployRouter, "router", "", "router address to discover from")
 }

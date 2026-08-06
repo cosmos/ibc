@@ -36,7 +36,6 @@ var (
 	flagDeployThreshold       uint8
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
-	flagDeployRouter          string
 )
 
 var (
@@ -64,22 +63,10 @@ var (
 		RunE:  deployConnect,
 	}
 
-	cmdDeployImport = &cobra.Command{
-		Use:   "import",
-		Short: "Generate a manifest by discovering state from an existing router",
-		RunE:  deployImport,
-	}
-
 	cmdDeployStatus = &cobra.Command{
 		Use:   useStatus,
 		Short: "Verify recorded deployments against live chain state",
 		RunE:  deployStatus,
-	}
-
-	cmdDeployRenderConfig = &cobra.Command{
-		Use:   "render-config",
-		Short: "Project manifests into relayer config sections (stdout)",
-		RunE:  deployRenderConfig,
 	}
 )
 
@@ -264,7 +251,10 @@ func clientSpec(
 			InitialTimestamp: timestamp,
 		}
 	default:
-		return deploy.ClientSpec{}, fmt.Errorf("cannot construct client spec for unknown client type %s", flagDeployClientType)
+		return deploy.ClientSpec{}, fmt.Errorf(
+			"cannot construct client spec for unknown client type %s",
+			flagDeployClientType,
+		)
 	}
 	return spec, nil
 }
@@ -325,63 +315,6 @@ func deployConnect(cmd *cobra.Command, args []string) error {
 	steps = append(steps, deploy.ClientSteps(targetA, flagDeployManifestDir, chainA, specA)...)
 	steps = append(steps, deploy.ClientSteps(targetB, flagDeployManifestDir, chainB, specB)...)
 	return planThenRun(cmd.Context(), steps)
-}
-
-// mergeManifests folds discovered chain state into an existing manifest.
-// discovered is the base for chain-derived facts (router, targetData,
-// client addresses, counterparty client ids) since it reflects what's
-// actually on chain; existing supplies per-client metadata
-// (CounterpartyChainID/Params/Type) that Discover cannot reconstruct,
-// wherever discovered left them empty.
-func mergeManifests(existing, discovered *manifest.Manifest) *manifest.Manifest {
-	if existing == nil {
-		return discovered
-	}
-	merged := *discovered
-	merged.Clients = nil
-	for _, c := range discovered.Clients {
-		if old, ok := existing.Client(c.ClientID); ok {
-			if c.CounterpartyChainID == "" {
-				c.CounterpartyChainID = old.CounterpartyChainID
-			}
-			if c.Params == nil {
-				c.Params = old.Params
-			}
-			if c.Type == "" {
-				c.Type = old.Type
-			}
-		}
-		merged.Clients = append(merged.Clients, c)
-	}
-	return &merged
-}
-
-func deployImport(cmd *cobra.Command, _ []string) error {
-	cfg, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-	if flagDeployChain == "" || flagDeployRouter == "" {
-		return errors.New("--chain and --router are required")
-	}
-	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, false)
-	if err != nil {
-		return err
-	}
-	discovered, err := target.Discover(cmd.Context(), flagDeployRouter)
-	if err != nil {
-		return err
-	}
-	discovered.ChainID = flagDeployChain
-	existing, err := manifest.Load(flagDeployManifestDir, flagDeployChain)
-	if err != nil {
-		return err
-	}
-	m := mergeManifests(existing, discovered)
-	if err := m.Save(flagDeployManifestDir); err != nil {
-		return err
-	}
-	return config.PrintJSON(m)
 }
 
 // statusChains resolves which chains status reports on: an explicit --chain
@@ -471,73 +404,4 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 		return errors.New("verification failed")
 	}
 	return nil
-}
-
-// renderedDeployment is the subset of config.Config that `deploy
-// render-config` actually populates. config.Config itself isn't used as the
-// output type: printed as YAML it would also emit every zero-valued field
-// (server:, db:, signers: [], etc.), which would corrupt a working config
-// if merged in as printed.
-type renderedDeployment struct {
-	Chains  []config.ChainConfig `yaml:"chains"`
-	Relayer struct {
-		Clients []config.ClientConfig `yaml:"clients"`
-	} `yaml:"relayer"`
-}
-
-// renderDeploymentConfig projects manifests into the existing config schema.
-func renderDeploymentConfig(cfg config.Config, manifests []*manifest.Manifest) renderedDeployment {
-	var out renderedDeployment
-	for _, m := range manifests {
-		chain := config.ChainConfig{ChainID: m.ChainID, EVM: &config.EVMChainConfig{ICS26Router: m.Core.Router}}
-		if declared, ok := cfg.Chain(m.ChainID); ok && declared.EVM != nil {
-			chain.EVM.RPC = declared.EVM.RPC
-		}
-		out.Chains = append(out.Chains, chain)
-
-		for _, c := range m.Clients {
-			client := config.ClientConfig{
-				Alias:                m.ChainID + "-" + c.ClientID,
-				ClientID:             c.ClientID,
-				ChainID:              m.ChainID,
-				CounterpartyChainID:  c.CounterpartyChainID,
-				CounterpartyClientID: c.CounterpartyClientID,
-				Type:                 config.ClientType(c.Type),
-			}
-			if c.Type == deploy.ClientTypeAttestation {
-				set := &config.AttestorSetConfig{}
-				if threshold, ok := c.Params["threshold"].(float64); ok {
-					set.Threshold = int(threshold)
-				}
-				// attestor names cannot be derived from addresses; user fills them in
-				client.AttestorSet = set
-			}
-			out.Relayer.Clients = append(out.Relayer.Clients, client)
-		}
-	}
-	return out
-}
-
-func deployRenderConfig(_ *cobra.Command, _ []string) error {
-	cfg, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-	var manifests []*manifest.Manifest
-	for _, chain := range cfg.Chains {
-		if flagDeployChain != "" && chain.ChainID != flagDeployChain {
-			continue
-		}
-		m, err := manifest.Load(flagDeployManifestDir, chain.ChainID)
-		if err != nil {
-			return err
-		}
-		if m != nil {
-			manifests = append(manifests, m)
-		}
-	}
-	if len(manifests) == 0 {
-		return errors.New("no manifests found; run `ibc deploy core` or `ibc deploy import` first")
-	}
-	return config.PrintYAML(renderDeploymentConfig(cfg, manifests))
 }

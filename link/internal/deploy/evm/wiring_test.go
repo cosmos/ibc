@@ -48,7 +48,7 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 	return d, sim, addr
 }
 
-func TestProvisionRegisterDiscoverVerify(t *testing.T) {
+func TestProvisionRegisterVerify(t *testing.T) {
 	d, _, _ := newSimDriver(t)
 	ctx := context.Background()
 
@@ -93,16 +93,15 @@ func TestProvisionRegisterDiscoverVerify(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	m, err := d.Discover(ctx, router)
-	require.NoError(t, err)
-	require.Equal(t, router, m.Core.Router)
-	require.Equal(t, core.TargetData["accessManager"], m.TargetData["accessManager"])
-	c, found := m.Client("link-2")
-	require.True(t, found)
-	require.Equal(t, ref.Address, c.Address)
-	require.Equal(t, "link-1", c.CounterpartyClientID)
-
-	m.ChainID = "1337"
+	m := manifest.New("1337", "evm")
+	m.Core.Router = router
+	m.TargetData = core.TargetData
+	m.UpsertClient(manifest.Client{
+		ClientID:             "link-2",
+		Type:                 deploy.ClientTypeAttestation,
+		Address:              ref.Address,
+		CounterpartyClientID: "link-1",
+	})
 	report, err := d.Verify(ctx, m)
 	require.NoError(t, err)
 	require.Empty(t, report.Failed())

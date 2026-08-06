@@ -213,8 +213,7 @@ pieces tie into the rest of the config:
   deployment transactions on that chain. Must reference a `local` ECDSA
   signer in `signers` (deployment tooling needs the raw key, not just a
   remote signing call). Overridable per-invocation with `--deployer`.
-  `deploy status`, `deploy import`, and `deploy render-config` are
-  read-only and work without a configured deployer.
+  `deploy status` is read-only and works without a configured deployer.
 - `--manifest-dir` (default `deployments`, relative to `--home`) — where
   `ibc deploy` writes one JSON manifest per chain recording what was
   deployed (router address, registered clients). Manifests are
@@ -222,12 +221,3 @@ pieces tie into the rest of the config:
   stay idempotent, so hand edits are lost and can desync the recorded state
   from what's actually on chain.
 
-Once a manifest exists, `ibc deploy render-config` projects it into
-`chains[].evm` and `relayer.clients[]` blocks you can paste into this file
-(attestor names in the generated `attestorSet` are left blank — fill them in
-to match your `attestor.attestations[].name` values).
-
-`deploy import` scans event logs from block 0 to rediscover registered
-clients, which some public RPC providers reject or truncate for exceeding
-their `eth_getLogs` range limit; against those, prefer an archive node or a
-provider without a log-range cap.

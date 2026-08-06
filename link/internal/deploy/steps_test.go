@@ -39,9 +39,6 @@ func (f *fakeTarget) HasCode(_ context.Context, address string) (bool, error) {
 	return f.hasCode[address], nil
 }
 func (f *fakeTarget) Head(context.Context) (uint64, uint64, error) { return 10, 1000, nil }
-func (f *fakeTarget) Discover(context.Context, string) (*manifest.Manifest, error) {
-	return nil, nil
-}
 func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error) {
 	return Report{}, nil
 }
