@@ -2,10 +2,8 @@ package evm
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
@@ -15,15 +13,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/deploy"
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
 )
-
-// newTestDriver builds a Driver on an injected backend, without RPC or forge.
-// Only exercised from _test.go files, which golangci-lint's unused check
-// (run.tests: false) can't see.
-//
-//nolint:unused
-func newTestDriver(chainID *big.Int, b backend, key *ecdsa.PrivateKey) *Driver {
-	return &Driver{chainID: chainID, backend: b, key: key}
-}
 
 // evmMerklePrefix is the empty prefix EVM counterparties use.
 var evmMerklePrefix = [][]byte{{}}

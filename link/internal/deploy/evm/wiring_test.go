@@ -44,7 +44,7 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 		}
 	}()
 
-	d := newTestDriver(big.NewInt(simChainID), sim.Client(), key)
+	d := &Driver{chainID: big.NewInt(simChainID), backend: sim.Client(), key: key}
 	return d, sim, addr
 }
 
