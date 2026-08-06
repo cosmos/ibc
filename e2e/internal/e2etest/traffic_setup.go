@@ -111,11 +111,12 @@ func (d *Deployment) RouteClients(id RouteID) (RouteClients, bool) {
 func Deploy(
 	t testing.TB,
 	env *environment.Environment,
-	signers Signers,
+	deployer Signer,
+	relayer Signer,
 	routes ...Route,
 ) (*ibclink.Driver, *Deployment) {
 	t.Helper()
-	return DeployWithRelayerConfig(t, env, signers, nil, routes...)
+	return DeployWithRelayerConfig(t, env, deployer, relayer, nil, routes...)
 }
 
 // DeployWithRelayerConfig is Deploy with a hook that adjusts the resolved
@@ -123,14 +124,16 @@ func Deploy(
 func DeployWithRelayerConfig(
 	t testing.TB,
 	env *environment.Environment,
-	signers Signers,
+	deployer Signer,
+	relayer Signer,
 	configure func(*ibclink.RelayerConfig),
 	routes ...Route,
 ) (*ibclink.Driver, *Deployment) {
 	t.Helper()
 	require.NotNil(t, env, "e2etest: Environment is required")
-	require.NoError(t, signers.validate(), "e2etest: invalid signers")
-	ensureSignerBalances(t, env, signers)
+	require.NotNil(t, deployer.key, "e2etest: deployer signer is required")
+	require.NotNil(t, relayer.key, "e2etest: relayer signer is required")
+	ensureSignerBalances(t, env, deployer, relayer)
 
 	dir := t.TempDir()
 	signerKeyPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
@@ -139,13 +142,13 @@ func DeployWithRelayerConfig(
 	require.NoError(t, err, "e2etest: create driver")
 	require.NoError(t, env.BindIBCLink(driver), "e2etest: bind IBC Link process")
 
-	deployment := deployApps(t, env, signers, routes)
+	deployment := deployApps(t, env, deployer, routes)
 	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))
 	if configure != nil {
 		configure(&config)
 	}
 	if config.SignerType == "" || config.SignerType == ibclink.RelayerSignerLocal {
-		require.NoError(t, signers.storeRelayerKey(config.SignerKeyFile), "e2etest: store signers")
+		require.NoError(t, relayer.storeKey(config.SignerKeyFile), "e2etest: store relayer signer key")
 	}
 	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write config")
 	if err := driver.ConfigureRelayer(options); err != nil {
@@ -195,7 +198,7 @@ func StartRelayer(
 func deployApps(
 	t testing.TB,
 	env *environment.Environment,
-	signers Signers,
+	deployer Signer,
 	routes []Route,
 ) *Deployment {
 	t.Helper()
@@ -223,23 +226,23 @@ func deployApps(
 			id,
 		)
 
-		token, err := deployAndMintToken(t.Context(), evmAccess, signers.application.account)
+		token, err := deployAndMintToken(t.Context(), evmAccess, deployer.account)
 		require.NoError(t, err, "e2etest: deploy TestERC20 on Chain %q", id)
 		counterAddr, err := deployContract(
 			t.Context(),
 			evmAccess,
-			signers.application.account,
+			deployer.account,
 			counter.CounterMetaData,
 		)
 		require.NoError(t, err, "e2etest: deploy Counter on Chain %q", id)
-		iftToken, callConstructor, err := deployIFTToken(t.Context(), evmAccess, signers.application.account, ics27)
+		iftToken, callConstructor, err := deployIFTToken(t.Context(), evmAccess, deployer.account, ics27)
 		require.NoError(t, err, "e2etest: deploy IFT on Chain %q", id)
 		callConstructors[id] = callConstructor
 
 		iftBatchShim, err := deployIFTBatchShim(
 			t.Context(),
 			evmAccess,
-			signers.application.account,
+			deployer.account,
 			iftToken,
 			initialTokenSupply,
 		)
@@ -265,7 +268,7 @@ func deployApps(
 		}
 	}
 
-	registerIFTBridges(t, env, signers, deployment, callConstructors, routes)
+	registerIFTBridges(t, env, deployer, deployment, callConstructors, routes)
 	return deployment
 }
 
@@ -274,7 +277,7 @@ func deployApps(
 func registerIFTBridges(
 	t testing.TB,
 	env *environment.Environment,
-	signers Signers,
+	deployer Signer,
 	deployment *Deployment,
 	callConstructors map[environment.ChainID]common.Address,
 	routes []Route,
@@ -310,7 +313,7 @@ func registerIFTBridges(
 			require.NoError(t, err, "e2etest: pack IFT registerIFTBridge")
 			_, err = evmAccess.BroadcastTx(
 				t.Context(),
-				signers.application.account,
+				deployer.account,
 				&iftToken,
 				data,
 				nil,
@@ -476,7 +479,7 @@ func deployAndMintToken(
 
 // deployIFTToken deploys the IFT token (a UUPS implementation behind an
 // ERC1967 proxy) plus its send-call constructor, and mints the initial supply
-// to the application signer.
+// to the sender.
 func deployIFTToken(
 	ctx context.Context,
 	client *environment.EVM,
@@ -537,28 +540,20 @@ func deployIFTBatchShim(
 	return shim, nil
 }
 
-func ensureSignerBalances(t testing.TB, env *environment.Environment, signers Signers) {
+func ensureSignerBalances(t testing.TB, env *environment.Environment, signers ...Signer) {
 	t.Helper()
-	addresses := signers.Addresses()
-	actors := []struct {
-		role    string
-		address common.Address
-	}{
-		{role: "application", address: addresses.Application},
-		{role: "relayer", address: addresses.Relayer},
-	}
 	minimum := RequiredSignerBalance()
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
 		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		funding, err := chain.Funding()
 		if err == nil {
-			for _, actor := range actors {
+			for _, signer := range signers {
 				require.NoError(
 					t,
-					funding.EnsureEOABalance(t.Context(), actor.address, minimum),
-					"e2etest: fund %s signer on Chain %q",
-					actor.role,
+					funding.EnsureEOABalance(t.Context(), signer.Address(), minimum),
+					"e2etest: fund signer %s on Chain %q",
+					signer.Address(),
 					id,
 				)
 			}
@@ -567,22 +562,21 @@ func ensureSignerBalances(t testing.TB, env *environment.Environment, signers Si
 		require.ErrorIs(t, err, environment.ErrCapabilityUnavailable, "e2etest: resolve funding on Chain %q", id)
 		evmAccess, evmErr := chain.EVM()
 		require.NoError(t, evmErr, "e2etest: resolve EVM access on attached Chain %q", id)
-		for _, actor := range actors {
-			balance, balanceErr := evmAccess.BalanceAt(t.Context(), actor.address, nil)
+		for _, signer := range signers {
+			balance, balanceErr := evmAccess.BalanceAt(t.Context(), signer.Address(), nil)
 			require.NoError(
 				t,
 				balanceErr,
-				"e2etest: query %s signer balance on attached Chain %q",
-				actor.role,
+				"e2etest: query signer %s balance on attached Chain %q",
+				signer.Address(),
 				id,
 			)
 			require.GreaterOrEqual(
 				t,
 				balance.Cmp(minimum),
 				0,
-				"e2etest: %s signer %s on attached Chain %q has balance %s, need at least %s; provision it out of band",
-				actor.role,
-				actor.address,
+				"e2etest: signer %s on attached Chain %q has balance %s, need at least %s; provision it out of band",
+				signer.Address(),
 				id,
 				balance,
 				minimum,

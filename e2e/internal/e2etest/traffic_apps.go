@@ -9,11 +9,13 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
 )
 
+// BindTransfer binds a Transfer app. The sender must be the signer that
+// deployed the apps: it holds the minted token supply.
 func BindTransfer(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
-	signers Signers,
+	sender Signer,
 	route Route,
 ) *Transfer {
 	t.Helper()
@@ -24,7 +26,7 @@ func BindTransfer(
 		routeID:      route.ID,
 		source:       sourceEndpoint,
 		destination:  destinationEndpoint,
-		sender:       signers.application.account,
+		sender:       sender.account,
 		sourceToken:  sourceApps.Token,
 		sourceICS20:  sourceApps.ICS20Transfer,
 		sourceRouter: sourceApps.ICS26Router,
@@ -34,11 +36,13 @@ func BindTransfer(
 	}
 }
 
+// BindIFT binds an IFT app. The sender must be the signer that deployed the
+// apps: it holds the minted token supply.
 func BindIFT(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
-	signers Signers,
+	sender Signer,
 	route Route,
 ) *IFT {
 	t.Helper()
@@ -49,7 +53,7 @@ func BindIFT(
 		routeID:      route.ID,
 		source:       sourceEndpoint,
 		destination:  destinationEndpoint,
-		sender:       signers.application.account,
+		sender:       sender.account,
 		sourceIFT:    sourceApps.IFT,
 		destIFT:      destinationApps.IFT,
 		sourceRouter: sourceApps.ICS26Router,
@@ -58,11 +62,13 @@ func BindIFT(
 	}
 }
 
+// BindGMP binds a GMP app. The sender must be the signer that deployed the
+// apps: it holds the minted token supply.
 func BindGMP(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
-	signers Signers,
+	sender Signer,
 	route Route,
 ) *GMP {
 	t.Helper()
@@ -75,7 +81,7 @@ func BindGMP(
 		routeID:      route.ID,
 		source:       sourceEndpoint,
 		destination:  destinationEndpoint,
-		sender:       signers.application.account,
+		sender:       sender.account,
 		sourceGMP:    sourceApps.ICS27GMP,
 		sourceRouter: sourceApps.ICS26Router,
 		counter:      destinationApps.Counter,
