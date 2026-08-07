@@ -344,7 +344,6 @@ func prepareAttestorWorkspace(
 			},
 		}},
 		Attestors: []attestorFileConfig{{
-			Alias:          spec.Name,
 			Name:           spec.Name,
 			ChainID:        spec.ChainID,
 			Type:           RelayerAttestorLocal,
@@ -484,7 +483,6 @@ type dbConfig struct {
 }
 
 type attestorFileConfig struct {
-	Alias   string `yaml:"alias"`
 	Name    string `yaml:"name"`
 	ChainID string `yaml:"chainId"`
 	Type    string `yaml:"type"`

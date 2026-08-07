@@ -11,8 +11,8 @@ import (
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box
-// binary. Clients without an explicit attestor set use the legacy local
-// attestor watching their counterparty chain.
+// binary. If Attestors is empty, one default local attestor per configured
+// chain is used, watching that chain.
 type RelayerConfig struct {
 	DBPath      string
 	SignerAlias string
@@ -23,7 +23,7 @@ type RelayerConfig struct {
 	// SignerRemoteKeyID is the opaque remote KMS key selector sent to GetKey
 	// and Sign. It is distinct from the signer alias and address.
 	SignerRemoteKeyID string
-	// SignerKeyFile backs the default local signer and legacy local attestors.
+	// SignerKeyFile backs the default local signer and default local attestors.
 	SignerKeyFile string
 	// FinalityOffset applies to local attestations and pipeline finality
 	// checks: heights up to "latest" minus the offset count as final. The dev
@@ -32,6 +32,14 @@ type RelayerConfig struct {
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
 	Routes         []RelayerRoute
+	// Attestors is the flat, top-level list of every attestor the relayer may
+	// draw on to satisfy a client end's on-chain quorum. There's no
+	// per-connection reference here, unlike the old attestorSet shape: which
+	// attestors end up authorized for which client end is resolved live
+	// against on-chain state at relayer startup, exactly like the real
+	// system -- the harness only needs to describe candidates, not wire them
+	// to specific connections.
+	Attestors []RelayerAttestor
 }
 
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
@@ -47,28 +55,22 @@ type RelayerChain struct {
 // RelayerConnection is a reciprocal on-chain client pair. Clients are the
 // registered client identifiers (locators).
 type RelayerConnection struct {
-	ChainA       string
-	ClientA      string
-	AttestorSetA *RelayerAttestorSet
-	ChainB       string
-	ClientB      string
-	AttestorSetB *RelayerAttestorSet
+	ChainA  string
+	ClientA string
+	ChainB  string
+	ClientB string
 }
 
-// RelayerAttestorSet replaces the legacy single local attestor for one client.
-type RelayerAttestorSet struct {
-	Threshold int
-	Attestors []RelayerAttestor
-}
-
-// RelayerAttestor describes an explicit attestor: a local entry runs in the
-// relayer and provisions its signer from KeyFile; a remote entry is reached at
-// a bare gRPC host:port.
+// RelayerAttestor describes one candidate attestor: a local entry runs in the
+// relayer and provisions its signer from KeyFile, watching ChainID; a remote
+// entry is reached at a bare gRPC host:port and its watched chain is
+// discovered live via its Info RPC (ChainID is ignored for remote entries).
 type RelayerAttestor struct {
 	Name    string
 	Type    string
-	GRPC    string
-	KeyFile string
+	ChainID string // local only
+	GRPC    string // remote only
+	KeyFile string // local only
 }
 
 // RelayerRoute relays the full packet lifecycle for packets sent through
@@ -135,12 +137,6 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},
 	}
-	explicitAttestors := false
-	for _, connection := range cfg.Connections {
-		explicitAttestors = explicitAttestors ||
-			connection.AttestorSetA != nil ||
-			connection.AttestorSetB != nil
-	}
 
 	for _, chain := range cfg.Chains {
 		batchSize := chain.PacketBatchSize
@@ -165,99 +161,32 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			PacketBatchSize:    batchSize,
 			PacketBatchTimeout: chain.PacketBatchTimeout,
 		})
-		if explicitAttestors {
-			continue
+	}
+
+	if len(cfg.Attestors) == 0 {
+		for _, chain := range cfg.Chains {
+			addDefaultLocalAttestor(&file, processSigner, cfg.FinalityOffset, chain.ChainID)
 		}
-		// Attestations must not share a signer alias; every per-chain alias
-		// still loads the same key file.
-		if err := addLocalAttestor(
-			&file, processSigner, cfg.FinalityOffset,
-			chain.ChainID, localAttestorName(chain.ChainID), "",
-		); err != nil {
-			return fileConfig{}, err
+	} else {
+		for _, attestor := range cfg.Attestors {
+			if err := declareAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
+				return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
+			}
 		}
 	}
 
 	sourceClients := make(map[string]struct{}, 2*len(cfg.Connections))
-	// declared tracks every attestor alias declared so far in the unified
-	// top-level attestors[] list -- local and remote share one namespace now,
-	// so both kinds need to be checked for alias reuse/conflicts together.
-	type declaredAttestor struct {
-		isLocal bool
-		chainID string
-		keyFile string // local only
-		grpc    string // remote only
-	}
-	declared := make(map[string]declaredAttestor)
 	for _, connection := range cfg.Connections {
 		ends := make(map[string]clientEndFileConfig, 2)
-		for _, end := range []struct {
-			chain, client, counterpartyChain, counterpartyClient string
-			set                                                  *RelayerAttestorSet
-		}{
-			{
-				connection.ChainA, connection.ClientA, connection.ChainB,
-				connection.ClientB, connection.AttestorSetA,
-			},
-			{
-				connection.ChainB, connection.ClientB, connection.ChainA,
-				connection.ClientA, connection.AttestorSetB,
-			},
+		for _, end := range []struct{ chain, client string }{
+			{connection.ChainA, connection.ClientA},
+			{connection.ChainB, connection.ClientB},
 		} {
-			set, err := buildAttestorAliases(end.set, cfg.FinalityOffset, end.counterpartyChain)
-			if err != nil {
-				return fileConfig{}, fmt.Errorf("client %q on chain %q: %w", end.client, end.chain, err)
-			}
-			if explicitAttestors {
-				for i, alias := range set.Attestors {
-					var explicitEntry *RelayerAttestor
-					if end.set != nil {
-						explicitEntry = &end.set.Attestors[i]
-					}
-
-					var candidate declaredAttestor
-					if explicitEntry == nil || explicitEntry.Type == RelayerAttestorLocal {
-						keyFile := ""
-						if explicitEntry != nil {
-							keyFile = explicitEntry.KeyFile
-						}
-						candidate = declaredAttestor{isLocal: true, chainID: end.counterpartyChain, keyFile: keyFile}
-					} else {
-						candidate = declaredAttestor{chainID: end.counterpartyChain, grpc: explicitEntry.GRPC}
-					}
-
-					if previous, ok := declared[alias]; ok {
-						if previous != candidate {
-							return fileConfig{}, fmt.Errorf(
-								"attestor %q has conflicting chain, key file, or grpc address",
-								alias,
-							)
-						}
-						continue
-					}
-					declared[alias] = candidate
-
-					if candidate.isLocal {
-						if err := addLocalAttestor(
-							&file, processSigner, cfg.FinalityOffset,
-							candidate.chainID, alias, candidate.keyFile,
-						); err != nil {
-							return fileConfig{}, err
-						}
-						continue
-					}
-					file.Attestors = append(file.Attestors, attestorFileConfig{
-						Alias: alias, Name: alias, ChainID: candidate.chainID,
-						Type: RelayerAttestorRemote, GRPC: candidate.grpc,
-					})
-				}
-			}
 			ends[end.chain+"/"+end.client] = clientEndFileConfig{
-				ChainID:     end.chain,
-				Signer:      cfg.SignerAlias,
-				ClientID:    end.client,
-				Type:        "attestation",
-				AttestorSet: set,
+				ChainID:  end.chain,
+				Signer:   cfg.SignerAlias,
+				ClientID: end.client,
+				Type:     "attestation",
 			}
 			sourceClients[end.chain+"/"+end.client] = struct{}{}
 		}
@@ -279,60 +208,56 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-// addLocalAttestor declares a local attestor in the unified top-level
-// attestors list and its backing signer. alias also serves as the
-// attestor's self-reported name -- this harness has no need for them to
-// differ.
-func addLocalAttestor(
-	file *fileConfig,
-	signer signerConfig,
-	finalityOffset uint64,
-	chainID, alias, keyFile string,
-) error {
-	signerAlias := alias + "-signer"
-	if keyFile != "" {
-		signer = signerConfig{Type: RelayerSignerLocal, File: keyFile}
+// declareAttestor declares one explicitly-configured candidate attestor (and,
+// for local ones, its own dedicated signer) in the unified top-level
+// attestors list. Local entries always bring their own key file -- unlike
+// the implicit default (addDefaultLocalAttestor), an explicitly-declared
+// local attestor never borrows the process signer, so tests that configure
+// more than one local attestor don't end up with two indistinguishable
+// signing identities.
+func declareAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
+	switch attestor.Type {
+	case RelayerAttestorRemote:
+		file.Attestors = append(file.Attestors, attestorFileConfig{
+			Name: attestor.Name, Type: RelayerAttestorRemote, GRPC: attestor.GRPC,
+		})
+		return nil
+	case RelayerAttestorLocal:
+		switch {
+		case attestor.ChainID == "":
+			return errors.New("chainId is required for local attestors")
+		case attestor.KeyFile == "":
+			return errors.New("key file is required for local attestors")
+		}
+
+		signerAlias := attestor.Name + "-signer"
+		file.Signers = append(file.Signers, signerConfig{
+			Alias: signerAlias, Type: RelayerSignerLocal, File: attestor.KeyFile,
+		})
+		file.Attestors = append(file.Attestors, attestorFileConfig{
+			Name: attestor.Name, ChainID: attestor.ChainID, Type: RelayerAttestorLocal,
+			Signer: signerAlias, FinalityOffset: uint(finalityOffset),
+		})
+		return nil
+	default:
+		return fmt.Errorf("unsupported attestor type %q", attestor.Type)
 	}
+}
+
+// addDefaultLocalAttestor declares the implicit default local attestor for a
+// chain, backed by the relayer process's own signer -- used only when the
+// test author configures no explicit attestors at all.
+func addDefaultLocalAttestor(file *fileConfig, processSigner signerConfig, finalityOffset uint64, chainID string) {
+	name := localAttestorName(chainID)
+	signerAlias := name + "-signer"
+
+	signer := processSigner
 	signer.Alias = signerAlias
 	file.Signers = append(file.Signers, signer)
 	file.Attestors = append(file.Attestors, attestorFileConfig{
-		Alias: alias, Name: alias, ChainID: chainID, Type: RelayerAttestorLocal,
+		Name: name, ChainID: chainID, Type: RelayerAttestorLocal,
 		Signer: signerAlias, FinalityOffset: uint(finalityOffset),
 	})
-	return nil
-}
-
-// buildAttestorAliases resolves one client end's attestor set to the
-// aliases its attestorSet should reference. Remote aliases are declared
-// directly (they carry everything needed inline); local aliases are
-// declared by the caller via addLocalAttestor once resolved, since a local
-// attestor's signer must be provisioned exactly once even when referenced
-// by both ends of a connection.
-func buildAttestorAliases(
-	set *RelayerAttestorSet,
-	finalityOffset uint64,
-	counterpartyChain string,
-) (attestorSetFileConfig, error) {
-	if set == nil {
-		return attestorSetFileConfig{
-			CounterpartyChainFinalityOffset: finalityOffset,
-			Threshold:                       1,
-			Attestors:                       []string{localAttestorName(counterpartyChain)},
-		}, nil
-	}
-	result := attestorSetFileConfig{
-		CounterpartyChainFinalityOffset: finalityOffset,
-		Threshold:                       set.Threshold,
-	}
-	for _, attestor := range set.Attestors {
-		if attestor.Type == RelayerAttestorLocal && attestor.KeyFile == "" {
-			return attestorSetFileConfig{}, fmt.Errorf(
-				"local attestor %q key file is required", attestor.Name,
-			)
-		}
-		result.Attestors = append(result.Attestors, attestor.Name)
-	}
-	return result, nil
 }
 
 func localAttestorName(chainID string) string {
@@ -366,15 +291,8 @@ type connectionFileConfig struct {
 }
 
 type clientEndFileConfig struct {
-	ChainID     string                `yaml:"chainId"`
-	Signer      string                `yaml:"signer"`
-	ClientID    string                `yaml:"clientId"`
-	Type        string                `yaml:"type"`
-	AttestorSet attestorSetFileConfig `yaml:"attestorSet"`
-}
-
-type attestorSetFileConfig struct {
-	Threshold                       int      `yaml:"threshold"`
-	CounterpartyChainFinalityOffset uint64   `yaml:"counterpartyChainFinalityOffset"`
-	Attestors                       []string `yaml:"attestors"`
+	ChainID  string `yaml:"chainId"`
+	Signer   string `yaml:"signer"`
+	ClientID string `yaml:"clientId"`
+	Type     string `yaml:"type"`
 }

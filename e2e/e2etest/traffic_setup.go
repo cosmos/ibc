@@ -453,23 +453,22 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
-	attestorIDs := env.Attestors()
-	attestorSets := make(map[string]*ibclink.RelayerAttestorSet, len(attestorIDs))
-	for _, id := range attestorIDs {
+	// Attestors is a flat, deduped candidate list -- which ones end up
+	// authorized for which client end is resolved live against on-chain
+	// state at relayer startup, so there's no per-connection wiring here.
+	declaredAttestors := map[string]bool{}
+	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)
 		if err != nil {
 			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
 		}
-		client := attestor.IBCClient()
-		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
-		key := chainID + "/" + string(client.Locator())
-		set := attestorSets[key]
-		if set == nil {
-			set = &ibclink.RelayerAttestorSet{Threshold: int(client.MinRequiredSignatures())}
-			attestorSets[key] = set
+		name := string(attestor.ID())
+		if declaredAttestors[name] {
+			continue
 		}
-		set.Attestors = append(set.Attestors, ibclink.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		declaredAttestors[name] = true
+		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
+			Name: name, Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
 		})
 	}
 
@@ -495,8 +494,6 @@ func buildConfig(
 		key := connection.ChainA + "/" + connection.ClientA
 		if !connections[key] {
 			connections[key] = true
-			connection.AttestorSetA = attestorSets[key]
-			connection.AttestorSetB = attestorSets[connection.ChainB+"/"+connection.ClientB]
 			config.Connections = append(config.Connections, connection)
 		}
 

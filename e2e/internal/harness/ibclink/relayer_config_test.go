@@ -43,30 +43,18 @@ relayer:
             signer: tx
             clientId: client-1
             type: attestation
-            attestorSet:
-                threshold: 1
-                counterpartyChainFinalityOffset: 3
-                attestors:
-                    - local-attestor-2
           clientB:
             chainId: "2"
             signer: tx
             clientId: client-2
             type: attestation
-            attestorSet:
-                threshold: 1
-                counterpartyChainFinalityOffset: 3
-                attestors:
-                    - local-attestor-1
 attestors:
-    - alias: local-attestor-1
-      name: local-attestor-1
+    - name: local-attestor-1
       chainId: "1"
       type: local
       signer: local-attestor-1-signer
       finalityOffset: 3
-    - alias: local-attestor-2
-      name: local-attestor-2
+    - name: local-attestor-2
       chainId: "2"
       type: local
       signer: local-attestor-2-signer
@@ -92,16 +80,10 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg.SignerRemoteKeyID = "relay-key"
 	cfg.Chains[0].PacketBatchSize = 7
 	cfg.Chains[0].PacketBatchTimeout = 250 * time.Millisecond
-	cfg.Connections[0].AttestorSetA = &RelayerAttestorSet{
-		Threshold: 2,
-		Attestors: []RelayerAttestor{
-			{Name: "alice", Type: RelayerAttestorLocal, KeyFile: "/tmp/alice.key"},
-			{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
-		},
-	}
-	cfg.Connections[0].AttestorSetB = &RelayerAttestorSet{
-		Threshold: 1,
-		Attestors: []RelayerAttestor{{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"}},
+	cfg.Attestors = []RelayerAttestor{
+		{Name: "alice", Type: RelayerAttestorLocal, ChainID: "2", KeyFile: "/tmp/alice.key"},
+		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
+		{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
 	}
 
 	file, err := buildRelayerFileConfig(cfg)
@@ -115,19 +97,15 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 		{Alias: "alice-signer", Type: RelayerSignerLocal, File: "/tmp/alice.key"},
 	}, file.Signers)
 	require.Equal(t, []attestorFileConfig{
-		{
-			Alias: "alice", Name: "alice", ChainID: "2", Type: RelayerAttestorLocal,
-			Signer: "alice-signer", FinalityOffset: 3,
-		},
-		{Alias: "bob", Name: "bob", ChainID: "2", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
-		{Alias: "carol", Name: "carol", ChainID: "1", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
+		{Name: "alice", ChainID: "2", Type: RelayerAttestorLocal, Signer: "alice-signer", FinalityOffset: 3},
+		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
+		{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
 	}, file.Attestors)
-	require.Equal(t, []string{"alice", "bob"}, file.Relayer.Connections[0].ClientA.AttestorSet.Attestors)
 	require.Equal(t, cfg.SignerAlias, file.Relayer.Connections[0].ClientA.Signer)
 	require.Equal(t, cfg.SignerAlias, file.Relayer.Connections[0].ClientB.Signer)
 }
 
-func TestRemoteSignerBacksLegacyAttestors(t *testing.T) {
+func TestRemoteSignerBacksDefaultLocalAttestors(t *testing.T) {
 	cfg := testRelayerConfig()
 	cfg.SignerType = RelayerSignerRemote
 	cfg.SignerKeyFile = ""
@@ -149,35 +127,23 @@ func TestRemoteSignerBacksLegacyAttestors(t *testing.T) {
 	}, file.Signers)
 }
 
-func TestMixedAttestorSetsEmitOnlyReferencedAttestors(t *testing.T) {
+func TestExplicitAttestorsSuppressDefaultLocalAttestors(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.SignerType = RelayerSignerRemote
-	cfg.SignerKeyFile = ""
-	cfg.SignerGRPC = "kms:9090"
-	cfg.SignerRemoteKeyID = "relay-key"
-	cfg.Connections[0].AttestorSetA = &RelayerAttestorSet{
-		Threshold: 1,
-		Attestors: []RelayerAttestor{{
-			Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080",
-		}},
-	}
+	cfg.Attestors = []RelayerAttestor{{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"}}
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	// The connection's explicit remote set means no default local attestor is
-	// declared for chain 2 (nothing references it), but chain 1 still falls
-	// back to its implicit local default since clientB left no explicit set.
+	// Once any attestor is explicitly declared, no default local attestors
+	// are auto-added for any chain -- unlike the old attestorSet shape,
+	// defaulting is a property of the whole config now, not any one
+	// connection end, since which attestors end up authorized for which
+	// client end is resolved live against on-chain state, not declared here.
 	require.Equal(t, []attestorFileConfig{
-		{Alias: "remote", Name: "remote", ChainID: "2", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
-		{
-			Alias: "local-attestor-1", Name: "local-attestor-1", ChainID: "1", Type: RelayerAttestorLocal,
-			Signer: "local-attestor-1-signer", FinalityOffset: 3,
-		},
+		{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
 	}, file.Attestors)
-	require.Equal(t, signerConfig{
-		Alias: "local-attestor-1-signer", Type: RelayerSignerRemote,
-		GRPC: "kms:9090", RemoteKeyID: "relay-key",
-	}, file.Signers[1])
+	require.Equal(t, []signerConfig{
+		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
+	}, file.Signers)
 }
 
 func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
@@ -187,22 +153,15 @@ func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 		err  string
 	}{
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
-		{"local key", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal}},
-			}
-		}, "local attestor \"a\" key file is required"},
-		{"local conflict", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
-			}
-			c.Connections[0].AttestorSetB = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
-			}
-		}, "attestor \"a\" has conflicting chain, key file, or grpc address"},
+		{"attestor key required", func(c *RelayerConfig) {
+			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, ChainID: "1"}}
+		}, "key file is required for local attestors"},
+		{"attestor chainId required", func(c *RelayerConfig) {
+			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}}
+		}, "chainId is required for local attestors"},
+		{"unsupported attestor type", func(c *RelayerConfig) {
+			c.Attestors = []RelayerAttestor{{Name: "a", Type: "hybrid"}}
+		}, `unsupported attestor type "hybrid"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
