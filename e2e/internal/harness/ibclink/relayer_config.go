@@ -72,7 +72,11 @@ type RelayerAttestor struct {
 }
 
 // RelayerRoute relays the full packet lifecycle for packets sent through
-// SourceClient on SourceChain.
+// SourceClient on SourceChain. Every configured connection is always relayed
+// bidirectionally now (there is no per-direction opt-in in the file format
+// this harness writes), so this is validation-only: it documents which
+// client the test author expects to be relayable and catches typos, but no
+// longer affects the emitted YAML.
 type RelayerRoute struct {
 	SourceChain  string
 	SourceClient string
@@ -166,16 +170,27 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		}
 		// Attestations must not share a signer alias; every per-chain alias
 		// still loads the same key file.
-		addLocalAttestor(
+		if err := addLocalAttestor(
 			&file, processSigner, cfg.FinalityOffset,
 			chain.ChainID, localAttestorName(chain.ChainID), "",
-		)
+		); err != nil {
+			return fileConfig{}, err
+		}
 	}
 
-	clients := make(map[string]string, 2*len(cfg.Connections))
-	type localAttestor struct{ chainID, keyFile string }
-	locals := make(map[string]localAttestor)
+	sourceClients := make(map[string]struct{}, 2*len(cfg.Connections))
+	// declared tracks every attestor alias declared so far in the unified
+	// top-level attestors[] list -- local and remote share one namespace now,
+	// so both kinds need to be checked for alias reuse/conflicts together.
+	type declaredAttestor struct {
+		isLocal bool
+		chainID string
+		keyFile string // local only
+		grpc    string // remote only
+	}
+	declared := make(map[string]declaredAttestor)
 	for _, connection := range cfg.Connections {
+		ends := make(map[string]clientEndFileConfig, 2)
 		for _, end := range []struct {
 			chain, client, counterpartyChain, counterpartyClient string
 			set                                                  *RelayerAttestorSet
@@ -189,84 +204,111 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				connection.ClientA, connection.AttestorSetB,
 			},
 		} {
-			set, err := buildAttestorSet(end.set, cfg.FinalityOffset, end.counterpartyChain)
+			set, err := buildAttestorAliases(end.set, cfg.FinalityOffset, end.counterpartyChain)
 			if err != nil {
 				return fileConfig{}, fmt.Errorf("client %q on chain %q: %w", end.client, end.chain, err)
 			}
 			if explicitAttestors {
-				for i, entry := range set.Attestors {
-					if entry.Type != RelayerAttestorLocal {
-						continue
-					}
-					keyFile := ""
+				for i, alias := range set.Attestors {
+					var explicitEntry *RelayerAttestor
 					if end.set != nil {
-						keyFile = end.set.Attestors[i].KeyFile
+						explicitEntry = &end.set.Attestors[i]
 					}
-					local := localAttestor{end.counterpartyChain, keyFile}
-					if previous, ok := locals[entry.Name]; ok {
-						if previous != local {
+
+					var candidate declaredAttestor
+					if explicitEntry == nil || explicitEntry.Type == RelayerAttestorLocal {
+						keyFile := ""
+						if explicitEntry != nil {
+							keyFile = explicitEntry.KeyFile
+						}
+						candidate = declaredAttestor{isLocal: true, chainID: end.counterpartyChain, keyFile: keyFile}
+					} else {
+						candidate = declaredAttestor{chainID: end.counterpartyChain, grpc: explicitEntry.GRPC}
+					}
+
+					if previous, ok := declared[alias]; ok {
+						if previous != candidate {
 							return fileConfig{}, fmt.Errorf(
-								"local attestor %q has conflicting chain or key file",
-								entry.Name,
+								"attestor %q has conflicting chain, key file, or grpc address",
+								alias,
 							)
 						}
 						continue
 					}
-					locals[entry.Name] = local
-					addLocalAttestor(
-						&file, processSigner, cfg.FinalityOffset,
-						local.chainID, entry.Name, local.keyFile,
-					)
+					declared[alias] = candidate
+
+					if candidate.isLocal {
+						if err := addLocalAttestor(
+							&file, processSigner, cfg.FinalityOffset,
+							candidate.chainID, alias, candidate.keyFile,
+						); err != nil {
+							return fileConfig{}, err
+						}
+						continue
+					}
+					file.Attestors = append(file.Attestors, attestorFileConfig{
+						Alias: alias, Name: alias, ChainID: candidate.chainID,
+						Type: RelayerAttestorRemote, GRPC: candidate.grpc,
+					})
 				}
 			}
-			file.Relayer.Clients = append(file.Relayer.Clients, clientFileConfig{
-				Alias:                end.client,
-				ClientID:             end.client,
-				ChainID:              end.chain,
-				CounterpartyChainID:  end.counterpartyChain,
-				CounterpartyClientID: end.counterpartyClient,
-				Type:                 "attestation",
-				AttestorSet:          set,
-			})
-			clients[end.chain+"/"+end.client] = end.client
+			ends[end.chain+"/"+end.client] = clientEndFileConfig{
+				ChainID:     end.chain,
+				Signer:      cfg.SignerAlias,
+				ClientID:    end.client,
+				Type:        "attestation",
+				AttestorSet: set,
+			}
+			sourceClients[end.chain+"/"+end.client] = struct{}{}
 		}
+		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
+			Alias:   connection.ClientA + "-" + connection.ClientB,
+			ClientA: ends[connection.ChainA+"/"+connection.ClientA],
+			ClientB: ends[connection.ChainB+"/"+connection.ClientB],
+		})
 	}
 	for _, route := range cfg.Routes {
-		alias, ok := clients[route.SourceChain+"/"+route.SourceClient]
-		if !ok {
+		if _, ok := sourceClients[route.SourceChain+"/"+route.SourceClient]; !ok {
 			return fileConfig{}, fmt.Errorf(
 				"route source client %q on chain %q is not part of any connection",
 				route.SourceClient,
 				route.SourceChain,
 			)
 		}
-		file.Relayer.Routes = append(file.Relayer.Routes, routeFileConfig{
-			SourceClient:      alias,
-			SourceSignerAlias: cfg.SignerAlias,
-			DestSignerAlias:   cfg.SignerAlias,
-		})
 	}
 	return file, nil
 }
 
+// addLocalAttestor declares a local attestor in the unified top-level
+// attestors list and its backing signer. alias also serves as the
+// attestor's self-reported name -- this harness has no need for them to
+// differ.
 func addLocalAttestor(
 	file *fileConfig,
 	signer signerConfig,
 	finalityOffset uint64,
-	chainID, name, keyFile string,
-) {
-	alias := name + "-signer"
+	chainID, alias, keyFile string,
+) error {
+	signerAlias := alias + "-signer"
 	if keyFile != "" {
 		signer = signerConfig{Type: RelayerSignerLocal, File: keyFile}
 	}
-	signer.Alias = alias
+	signer.Alias = signerAlias
 	file.Signers = append(file.Signers, signer)
-	file.Attestor.Attestations = append(file.Attestor.Attestations, attestationConfig{
-		ChainID: chainID, Name: name, Signer: alias, FinalityOffset: uint(finalityOffset),
+	file.Attestors = append(file.Attestors, attestorFileConfig{
+		Alias: alias, Name: alias, ChainID: chainID, Type: RelayerAttestorLocal,
+		Signer: signerAlias, FinalityOffset: uint(finalityOffset),
 	})
+	return nil
 }
 
-func buildAttestorSet(
+// buildAttestorAliases resolves one client end's attestor set to the
+// aliases its attestorSet should reference. Remote aliases are declared
+// directly (they carry everything needed inline); local aliases are
+// declared by the caller via addLocalAttestor once resolved, since a local
+// attestor's signer must be provisioned exactly once even when referenced
+// by both ends of a connection.
+func buildAttestorAliases(
 	set *RelayerAttestorSet,
 	finalityOffset uint64,
 	counterpartyChain string,
@@ -275,9 +317,7 @@ func buildAttestorSet(
 		return attestorSetFileConfig{
 			CounterpartyChainFinalityOffset: finalityOffset,
 			Threshold:                       1,
-			Attestors: []attestorEntryFileConfig{{
-				Name: localAttestorName(counterpartyChain), Type: RelayerAttestorLocal,
-			}},
+			Attestors:                       []string{localAttestorName(counterpartyChain)},
 		}, nil
 	}
 	result := attestorSetFileConfig{
@@ -285,16 +325,12 @@ func buildAttestorSet(
 		Threshold:                       set.Threshold,
 	}
 	for _, attestor := range set.Attestors {
-		entry := attestorEntryFileConfig{Name: attestor.Name, Type: attestor.Type, GRPC: attestor.GRPC}
-		if attestor.Type == RelayerAttestorLocal {
-			if attestor.KeyFile == "" {
-				return attestorSetFileConfig{}, fmt.Errorf(
-					"local attestor %q key file is required", attestor.Name,
-				)
-			}
-			entry.GRPC = ""
+		if attestor.Type == RelayerAttestorLocal && attestor.KeyFile == "" {
+			return attestorSetFileConfig{}, fmt.Errorf(
+				"local attestor %q key file is required", attestor.Name,
+			)
 		}
-		result.Attestors = append(result.Attestors, entry)
+		result.Attestors = append(result.Attestors, attestor.Name)
 	}
 	return result, nil
 }
@@ -313,8 +349,7 @@ const (
 type relayerFileConfig struct {
 	DispatchPollInterval string                    `yaml:"dispatchPollInterval,omitempty"`
 	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
-	Clients              []clientFileConfig        `yaml:"clients"`
-	Routes               []routeFileConfig         `yaml:"routesToRelay"`
+	Connections          []connectionFileConfig    `yaml:"connections"`
 }
 
 type chainOverrideFileConfig struct {
@@ -324,30 +359,22 @@ type chainOverrideFileConfig struct {
 	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
 }
 
-type clientFileConfig struct {
-	Alias                string                `yaml:"alias"`
-	ClientID             string                `yaml:"clientId"`
-	ChainID              string                `yaml:"chainId"`
-	CounterpartyChainID  string                `yaml:"counterpartyChainId"`
-	CounterpartyClientID string                `yaml:"counterpartyClientId"`
-	Type                 string                `yaml:"type"`
-	AttestorSet          attestorSetFileConfig `yaml:"attestorSet"`
+type connectionFileConfig struct {
+	Alias   string              `yaml:"alias"`
+	ClientA clientEndFileConfig `yaml:"clientA"`
+	ClientB clientEndFileConfig `yaml:"clientB"`
+}
+
+type clientEndFileConfig struct {
+	ChainID     string                `yaml:"chainId"`
+	Signer      string                `yaml:"signer"`
+	ClientID    string                `yaml:"clientId"`
+	Type        string                `yaml:"type"`
+	AttestorSet attestorSetFileConfig `yaml:"attestorSet"`
 }
 
 type attestorSetFileConfig struct {
-	CounterpartyChainFinalityOffset uint64                    `yaml:"counterpartyChainFinalityOffset"`
-	Threshold                       int                       `yaml:"threshold"`
-	Attestors                       []attestorEntryFileConfig `yaml:"attestors"`
-}
-
-type attestorEntryFileConfig struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
-	GRPC string `yaml:"grpc,omitempty"`
-}
-
-type routeFileConfig struct {
-	SourceClient      string `yaml:"sourceClient"`
-	SourceSignerAlias string `yaml:"sourceSignerAlias"`
-	DestSignerAlias   string `yaml:"destSignerAlias"`
+	Threshold                       int      `yaml:"threshold"`
+	CounterpartyChainFinalityOffset uint64   `yaml:"counterpartyChainFinalityOffset"`
+	Attestors                       []string `yaml:"attestors"`
 }

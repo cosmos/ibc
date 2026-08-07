@@ -343,12 +343,14 @@ func prepareAttestorWorkspace(
 				ICS26Router: spec.ICS26Router,
 			},
 		}},
-		Attestor: attestorConfig{Attestations: []attestationConfig{{
-			ChainID:        spec.ChainID,
+		Attestors: []attestorFileConfig{{
+			Alias:          spec.Name,
 			Name:           spec.Name,
+			ChainID:        spec.ChainID,
+			Type:           RelayerAttestorLocal,
 			Signer:         signerAlias,
 			FinalityOffset: 1,
-		}}},
+		}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,
 			Type:  RelayerSignerLocal,
@@ -454,12 +456,12 @@ func (w *logWriter) close() {
 }
 
 type fileConfig struct {
-	Server   serverConfig       `yaml:"server"`
-	DB       dbConfig           `yaml:"db"`
-	Chains   []chainConfig      `yaml:"chains"`
-	Attestor attestorConfig     `yaml:"attestor"`
-	Relayer  *relayerFileConfig `yaml:"relayer,omitempty"`
-	Signers  []signerConfig     `yaml:"signers"`
+	Server    serverConfig         `yaml:"server"`
+	DB        dbConfig             `yaml:"db"`
+	Chains    []chainConfig        `yaml:"chains"`
+	Relayer   *relayerFileConfig   `yaml:"relayer,omitempty"`
+	Attestors []attestorFileConfig `yaml:"attestors"`
+	Signers   []signerConfig       `yaml:"signers"`
 }
 
 type chainConfig struct {
@@ -481,18 +483,17 @@ type dbConfig struct {
 	URL  string `yaml:"url"`
 }
 
-type attestorConfig struct {
-	Attestations []attestationConfig `yaml:"attestations"`
-}
-
-type attestationConfig struct {
-	ChainID string `yaml:"chainId"`
+type attestorFileConfig struct {
+	Alias   string `yaml:"alias"`
 	Name    string `yaml:"name"`
-	Signer  string `yaml:"signer"`
+	ChainID string `yaml:"chainId"`
+	Type    string `yaml:"type"`
+	Signer  string `yaml:"signer,omitempty"`
 
 	// FinalityOffset is kept at 1 ("latest" minus one block) because the dev
 	// chains behind the harness do not expose the "finalized" block tag.
-	FinalityOffset uint `yaml:"finalityOffset"`
+	FinalityOffset uint   `yaml:"finalityOffset,omitempty"`
+	GRPC           string `yaml:"grpc,omitempty"`
 }
 
 type signerConfig struct {

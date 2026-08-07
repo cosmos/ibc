@@ -169,8 +169,8 @@ func runAttestorHelper() error {
 	if decodeErr := yaml.Unmarshal(configData, &config); decodeErr != nil {
 		return fmt.Errorf("helper decode config: %w", decodeErr)
 	}
-	if len(config.Attestor.Attestations) != 1 || config.Attestor.Attestations[0].Name != "attestor-a" {
-		return fmt.Errorf("helper received unexpected attestor config: %+v", config.Attestor)
+	if len(config.Attestors) != 1 || config.Attestors[0].Name != "attestor-a" {
+		return fmt.Errorf("helper received unexpected attestor config: %+v", config.Attestors)
 	}
 	if len(config.Signers) != 1 || config.Signers[0].Alias != signerAlias {
 		return fmt.Errorf("helper received unexpected signer config: %+v", config.Signers)
