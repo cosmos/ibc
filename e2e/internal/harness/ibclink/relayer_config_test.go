@@ -133,11 +133,7 @@ func TestExplicitAttestorsSuppressDefaultLocalAttestors(t *testing.T) {
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	// Once any attestor is explicitly declared, no default local attestors
-	// are auto-added for any chain -- unlike the old attestorSet shape,
-	// defaulting is a property of the whole config now, not any one
-	// connection end, since which attestors end up authorized for which
-	// client end is resolved live against on-chain state, not declared here.
+	// Explicit attestors suppress defaults for every chain, not just the ones referenced.
 	require.Equal(t, []attestorFileConfig{
 		{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
 	}, file.Attestors)

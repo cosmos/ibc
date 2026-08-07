@@ -71,9 +71,8 @@ type Client interface {
 	// registered as clientID's on-chain counterparty.
 	GetCounterparty(ctx context.Context, clientID string) (string, error)
 
-	// GetAttestationSet returns the attestor addresses and minimum required
-	// signature count registered on-chain for clientID's attestation light
-	// client.
+	// GetAttestationSet returns clientID's on-chain attestor addresses and
+	// minimum required signature count.
 	GetAttestationSet(ctx context.Context, clientID string) (addresses []string, minRequiredSigs uint8, err error)
 }
 

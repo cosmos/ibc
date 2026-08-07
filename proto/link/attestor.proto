@@ -59,10 +59,8 @@ message InfoRequest { string attestor = 1; }
 message InfoResponse {
   // The chain this attestor watches.
   string chain_id = 1;
-  // The attestor's signing address, used only to cross-check against
-  // on-chain registered attestor sets -- never used for dispatch.
+  // The attestor's signing address.
   string address = 2;
-  // The finality offset this attestor applies when producing attestations.
   uint64 finality_offset = 3;
 }
 

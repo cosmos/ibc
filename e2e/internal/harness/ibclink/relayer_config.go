@@ -11,8 +11,7 @@ import (
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box
-// binary. If Attestors is empty, one default local attestor per configured
-// chain is used, watching that chain.
+// binary. If Attestors is empty, one default local attestor per chain is used.
 type RelayerConfig struct {
 	DBPath      string
 	SignerAlias string
@@ -32,13 +31,8 @@ type RelayerConfig struct {
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
 	Routes         []RelayerRoute
-	// Attestors is the flat, top-level list of every attestor the relayer may
-	// draw on to satisfy a client end's on-chain quorum. There's no
-	// per-connection reference here, unlike the old attestorSet shape: which
-	// attestors end up authorized for which client end is resolved live
-	// against on-chain state at relayer startup, exactly like the real
-	// system -- the harness only needs to describe candidates, not wire them
-	// to specific connections.
+	// Attestors is the flat, top-level candidate list; which ones end up
+	// authorized for which client end is resolved live at relayer startup.
 	Attestors []RelayerAttestor
 }
 
@@ -61,10 +55,9 @@ type RelayerConnection struct {
 	ClientB string
 }
 
-// RelayerAttestor describes one candidate attestor: a local entry runs in the
-// relayer and provisions its signer from KeyFile, watching ChainID; a remote
-// entry is reached at a bare gRPC host:port and its watched chain is
-// discovered live via its Info RPC (ChainID is ignored for remote entries).
+// RelayerAttestor describes one candidate attestor: a local entry runs in
+// the relayer and provisions its signer from KeyFile, watching ChainID; a
+// remote entry is reached at a bare gRPC host:port (ChainID is ignored).
 type RelayerAttestor struct {
 	Name    string
 	Type    string
@@ -208,13 +201,10 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-// declareAttestor declares one explicitly-configured candidate attestor (and,
-// for local ones, its own dedicated signer) in the unified top-level
-// attestors list. Local entries always bring their own key file -- unlike
-// the implicit default (addDefaultLocalAttestor), an explicitly-declared
-// local attestor never borrows the process signer, so tests that configure
-// more than one local attestor don't end up with two indistinguishable
-// signing identities.
+// declareAttestor declares one explicitly-configured candidate attestor.
+// Local entries always bring their own key file, unlike the implicit
+// default (addDefaultLocalAttestor), so multiple local attestors don't
+// share a signing identity.
 func declareAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
 	case RelayerAttestorRemote:
@@ -244,9 +234,8 @@ func declareAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAt
 	}
 }
 
-// addDefaultLocalAttestor declares the implicit default local attestor for a
-// chain, backed by the relayer process's own signer -- used only when the
-// test author configures no explicit attestors at all.
+// addDefaultLocalAttestor declares the default local attestor for a chain,
+// backed by the relayer process's own signer.
 func addDefaultLocalAttestor(file *fileConfig, processSigner signerConfig, finalityOffset uint64, chainID string) {
 	name := localAttestorName(chainID)
 	signerAlias := name + "-signer"

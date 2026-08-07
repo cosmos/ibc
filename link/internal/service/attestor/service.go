@@ -35,12 +35,9 @@ type Attestor interface {
 	// IsLocal returns true if the attestor is local.
 	IsLocal() bool
 
-	// Address is the attestor's signing address, used only to cross-check
-	// against on-chain registered attestor sets -- never for dispatch.
+	// Address is the attestor's signing address.
 	Address() string
 
-	// FinalityOffset is the finality offset this attestor applies when
-	// producing attestations.
 	FinalityOffset() uint64
 
 	LatestHeight(ctx context.Context) (uint64, error)
@@ -48,8 +45,7 @@ type Attestor interface {
 	PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error)
 }
 
-// Info identifies one attestor: the chain it watches, its signing address,
-// and the finality offset it applies.
+// Info identifies one attestor.
 type Info struct {
 	ChainID        string
 	Address        string

@@ -428,10 +428,8 @@ type InfoResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The chain this attestor watches.
 	ChainId string `protobuf:"bytes,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
-	// The attestor's signing address, used only to cross-check against
-	// on-chain registered attestor sets -- never used for dispatch.
-	Address string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	// The finality offset this attestor applies when producing attestations.
+	// The attestor's signing address.
+	Address        string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
 	FinalityOffset uint64 `protobuf:"varint,3,opt,name=finality_offset,json=finalityOffset,proto3" json:"finality_offset,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

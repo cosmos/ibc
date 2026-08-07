@@ -74,11 +74,8 @@ func (s *Set) Get(chainID, clientID string) (ProofGenerator, bool) {
 
 // NewSetFromConfig resolves a ProofGenerator for every client end of every
 // configured connection. localAttestors is this process's own attestor
-// service when running in dual mode (nil otherwise). Resolution -- querying
-// each client end's on-chain attestation set and matching it against the
-// top-level attestors[] list -- happens once, here, at construction time; the
-// resulting ProofGenerator's runtime methods never re-query on-chain state or
-// re-probe attestor endpoints.
+// service when running in dual mode (nil otherwise). Quorum resolution
+// happens once, here; ProofGenerator never re-queries on-chain state.
 func NewSetFromConfig(
 	ctx context.Context,
 	cfg config.Config,
@@ -186,13 +183,8 @@ func addGenerator(
 }
 
 // resolveConfiguredAttestors resolves every top-level attestors[] entry to
-// its live identity (chain, address, finality offset) once, up front --
-// which client ends they end up authorized for is decided per-connection in
-// addGenerator by matching against on-chain state. An entry that can't be
-// resolved right now (unreachable endpoint, misconfigured local wiring) is
-// logged and excluded rather than failing the whole set: it simply won't
-// count toward any client end's quorum, the same as if it weren't configured
-// at all.
+// its live identity (chain, address, finality offset). An entry that can't
+// be resolved is logged and excluded rather than failing the whole set.
 func resolveConfiguredAttestors(
 	ctx context.Context,
 	entries config.Attestors,
@@ -213,9 +205,8 @@ func resolveConfiguredAttestors(
 	return resolved
 }
 
-// resolveAttestor resolves one configured attestor entry to the
-// attestor.Attestor abstraction, live: local entries via the already-running
-// Service, remote entries via a one-off Info RPC call.
+// resolveAttestor resolves one configured attestor entry live: local
+// entries via the running Service, remote entries via an Info RPC call.
 func resolveAttestor(
 	ctx context.Context,
 	entry config.AttestorConfig,

@@ -58,18 +58,11 @@ type Attestors []AttestorConfig
 // AttestorConfig describes one attestor, either run by this process
 // (type: local) or reachable over gRPC (type: remote).
 type AttestorConfig struct {
-	// Name identifies the attestor: for type: local it must be unique among
-	// this process's own local entries (this process's Service dispatches by
-	// it); for type: remote it's whatever name that attestor's own operator
-	// assigned it -- not required unique across different remote attestors,
-	// since a caller always dials a specific grpc endpoint and asks it for a
-	// specific name, never looks a name up across endpoints.
-	Name string `yaml:"name"`
-
-	// ChainID is the chain this attestor watches. Required for type: local
-	// (needed to stand up the local attestor); not used for type: remote --
-	// discovered live via its Info RPC instead.
+	// ChainID is the chain this attestor watches.
 	ChainID string `yaml:"chainId,omitempty"`
+
+	// Name is the attestor's own self-reported identity. Not required unique.
+	Name string `yaml:"name"`
 
 	Type AttestorType `yaml:"type"`
 
@@ -415,12 +408,7 @@ func DBConfigFromURL(url string) (DBConfig, error) {
 	return db, db.Validate()
 }
 
-// Validate validates the attestors list. Allows empty. Name uniqueness is
-// only enforced among type: local entries -- these all resolve through this
-// process's own Service and must not collide there. Remote entries are
-// exempt: two different remote attestors may legitimately share a name,
-// since dispatch is always scoped to (that remote's own grpc endpoint,
-// name), never looked up across endpoints.
+// Validate validates the attestors list. Allows empty.
 func (a Attestors) Validate() error {
 	localNames := make(map[string]struct{})
 	for i, attestor := range a {
@@ -466,7 +454,7 @@ func (c AttestorConfig) Validate() error {
 		case strings.Contains(c.GRPC, "://"):
 			return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
 		case c.ChainID != "":
-			return errors.New(".chainId must not be set for remote attestors -- discovered live via Info")
+			return errors.New(".chainId must not be set for remote attestors")
 		case c.Signer != "":
 			return errors.New(".signer must not be set for remote attestors")
 		case c.FinalityOffset != 0:

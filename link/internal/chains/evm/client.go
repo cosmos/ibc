@@ -210,10 +210,8 @@ func (c *Client) GetCounterparty(ctx context.Context, clientID string) (string, 
 	return info.ClientId, nil
 }
 
-// GetAttestationSet returns the attestor addresses and minimum required
-// signature count registered on-chain for clientID's attestation light
-// client. The light client's own contract address is resolved from the
-// router first, since it's a separate deployed contract from the router.
+// GetAttestationSet returns clientID's on-chain attestor addresses and
+// minimum required signature count.
 func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]string, uint8, error) {
 	lightClientAddr, err := c.router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
 	if err != nil {

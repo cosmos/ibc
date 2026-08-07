@@ -31,9 +31,7 @@ func testConnection() config.ConnectionConfig {
 	}
 }
 
-// localCandidate builds a mock Attestor registered under the Service under
-// alias, watching watchedChainID with address and finalityOffset -- used as
-// a top-level attestors[] candidate resolved via the local Service path.
+// localCandidate builds a mock Attestor registered under the Service.
 func localCandidate(t *testing.T, alias, watchedChainID, address string, finalityOffset uint64) attestor.Attestor {
 	t.Helper()
 
@@ -50,9 +48,7 @@ func TestNewSetFromConfig(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("quorumSatisfiedByLocalAttestor", func(t *testing.T) {
-		// ARRANGE -- a connection is resolved in both directions, so both
-		// client ends' on-chain sets and a matching candidate for each are
-		// needed for the whole set to build without error.
+		// ARRANGE -- both directions need a matching candidate to succeed.
 		conn := testConnection()
 
 		chainA := mocks.NewMockClient(t)
@@ -66,12 +62,9 @@ func TestNewSetFromConfig(t *testing.T) {
 			conn.ClientB.ChainID: chainB,
 		})
 
-		// watches chainB, authorized for chainA's generator (whose
-		// counterparty is chainB) -- chainA's own on-chain set is what it
-		// expects from its counterparty's attestors, so it must match this
-		// candidate's address.
+		// authorized for chainA's generator
 		watchesB := localCandidate(t, "watches-b", conn.ClientB.ChainID, "0xAAA", 3)
-		// watches chainA, authorized for chainB's generator
+		// authorized for chainB's generator
 		watchesA := localCandidate(t, "watches-a", conn.ClientA.ChainID, "0xBBB", 7)
 
 		localAttestors, err := attestor.New([]attestor.Attestor{watchesB, watchesA})
@@ -145,8 +138,7 @@ func TestNewSetFromConfig(t *testing.T) {
 			conn.ClientB.ChainID: counterpartyChain,
 		})
 
-		// candidate watches the right chain but signs with an address that
-		// was never registered on-chain -- it must not count toward quorum.
+		// address not registered on-chain
 		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xdeadbeef", 0)
 		localAttestors, err := attestor.New([]attestor.Attestor{candidate})
 		require.NoError(t, err)
@@ -177,8 +169,7 @@ func TestNewSetFromConfig(t *testing.T) {
 			conn.ClientB.ChainID: counterpartyChain,
 		})
 
-		// candidate's address matches on-chain, but it watches an unrelated
-		// chain -- it must not be treated as authoritative for this end.
+		// wrong chain, despite matching address
 		candidate := localCandidate(t, "watcher", "some-other-chain", "0xaaa", 0)
 		localAttestors, err := attestor.New([]attestor.Attestor{candidate})
 		require.NoError(t, err)
@@ -219,9 +210,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		cfg := config.Config{
 			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
 			Attestors: config.Attestors{
-				// declared as local but no matching entry in the running
-				// Service -- resolution logs and skips it rather than
-				// failing the whole set.
+				// no matching entry in the running Service
 				{Name: "ghost", Type: config.AttestorTypeLocal, ChainID: conn.ClientB.ChainID, Signer: "s"},
 				{Name: "watches-b", Type: config.AttestorTypeLocal, ChainID: conn.ClientB.ChainID, Signer: "s"},
 				{Name: "watches-a", Type: config.AttestorTypeLocal, ChainID: conn.ClientA.ChainID, Signer: "s"},

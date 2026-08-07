@@ -55,10 +55,8 @@ type ConnectionConfig struct {
 }
 
 // ClientEnd one side of a connection: a light client on chainId,
-// tracking the connection's other end as its counterparty. The attestor
-// quorum required to relay to this end is resolved live from the light
-// client's own on-chain attestation set, not declared here -- see
-// internal/relay/proofgen.
+// tracking the connection's other end as its counterparty. Attestor quorum
+// is resolved live on-chain, not declared here -- see internal/relay/proofgen.
 type ClientEnd struct {
 	ChainID  string     `yaml:"chainId"`
 	Signer   string     `yaml:"signer"`

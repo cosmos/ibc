@@ -30,10 +30,8 @@ relayer:
 
   # each connection is relayed bidirectionally: clientA's counterparty is
   # simply clientB, and vice versa -- no separate counterparty fields to
-  # keep in sync. There's no attestorSet here: the relayer resolves the
-  # attestor quorum required for each client end live, by querying that
-  # client's on-chain attestation set and matching it against the top-level
-  # attestors[] list below -- see attestors[] for how that resolution works.
+  # keep in sync. Attestor quorum is resolved live against attestors[]
+  # below, not declared here.
   connections:
     - alias: "eth-base"
       clientA:
@@ -55,23 +53,12 @@ relayer:
 
 # attestors is the unified list of every attestor in play -- both the ones
 # this process runs itself (type: local) and the ones it queries over gRPC
-# (type: remote). `ibc attestor run` serves only the type: local subset.
+# (type: remote). `ibc attestor run` serves only the type: local subset;
+# `ibc relayer run` additionally resolves each client end's attestor quorum
+# live against this list and the chain's own on-chain attestation set.
 #
-# `ibc relayer run` resolves each client end's attestor quorum live: it
-# queries the client's on-chain attestation set (the authoritative addresses
-# and required signature count), then for each entry here asks the attestor
-# itself (locally, or via its Info RPC for remote) what chain it watches and
-# what address it signs with, and keeps only the entries that both watch the
-# right chain and hold an address the chain has actually registered. There's
-# no attestorSet/threshold to declare or keep in sync -- the chain is the
-# single source of truth for both.
-#
-# NOTE: `name` is how the relayer identifies which attestor to ask for at a
-# given endpoint (local: within this process; remote: at that grpc target).
-# It only needs to be unique among this process's own type: local entries --
-# two different remote attestors are free to use the same name, since a
-# caller always asks a specific endpoint for a specific name, never looks a
-# name up across endpoints.
+# NOTE: `name` only needs to be unique among this process's own type: local
+# entries -- remote attestors may share a name with each other.
 attestors:
   - name: "attestor-base"
     type: remote

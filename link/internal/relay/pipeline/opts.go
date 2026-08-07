@@ -34,9 +34,8 @@ type Options struct {
 
 // OptionsFromConfig maps chain overrides onto pipeline options: recv batching
 // follows the destination chain, ack and timeout batching and the ack relay
-// flags follow the source chain. Finality offsets are read from the already-
-// resolved proofGenerators (each generator's offset reflects the attestors
-// matched for its counterparty chain), not from config directly.
+// flags follow the source chain. Finality offsets come from proofGenerators,
+// not config.
 func OptionsFromConfig(cfg config.Config, proofGenerators processors.ProofGenerators, route processors.Route) Options {
 	opts := Options{
 		RecvBatchSize:       DefaultBatchSize,

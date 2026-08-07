@@ -13,9 +13,7 @@ import (
 )
 
 // RemoteAttestor provides attestation data from a remote gRPC service.
-// Used in one-way A->B relaying path. Constructed only after resolution has
-// already learned its address/finality offset via Info -- fully resolved and
-// immutable once built.
+// Used in one-way A->B relaying path.
 type RemoteAttestor struct {
 	chainID        string
 	name           string
@@ -53,10 +51,7 @@ func NewRemote(
 	}
 }
 
-// QueryInfo queries a remote attestor endpoint's Info RPC for the attestor
-// identified by name, without constructing a full RemoteAttestor -- used
-// during quorum resolution before it's known whether this candidate should
-// be kept.
+// QueryInfo queries a remote attestor's Info RPC by name.
 func QueryInfo(ctx context.Context, grpcURL, name string) (chainID, address string, finalityOffset uint64, err error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()

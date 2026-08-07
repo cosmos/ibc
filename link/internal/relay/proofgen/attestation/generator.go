@@ -38,8 +38,6 @@ func New(
 	}
 }
 
-// FinalityOffset is the finality offset resolved from this generator's
-// matched attestors -- the max reported by any of them.
 func (g *Generator) FinalityOffset() uint64 {
 	return g.finalityOffset
 }

@@ -18,12 +18,8 @@ import (
 const relayerStopTimeout = 15 * time.Second
 
 // TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum proves the
-// relayer's startup-time attestor quorum resolution (internal/relay/proofgen
-// in the link module) actually blocks a misconfigured relayer rather than
-// starting up degraded: clientA's on-chain attestation set requires 2
-// signatures, backed by two real, independently-keyed attestor processes. A
-// relayer config that only knows about one of them must fail to start; the
-// same config with both configured must start cleanly.
+// relayer's startup-time attestor quorum resolution blocks a misconfigured
+// relayer rather than starting up degraded.
 func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T) {
 	requireDocker(t)
 	requireIBCLinkBinary(t)
@@ -44,9 +40,7 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 		signerA2     environment.AuthorityID   = "quorum-signer-a2"
 		signerB      environment.AuthorityID   = "quorum-signer-b"
 	)
-	// Distinct, deterministic identities -- not Anvil's provider-default
-	// funded accounts, and distinct from testDeployerPrivateKeyHex's suffix
-	// so this test's on-chain attestor sets are unambiguous.
+	// Distinct, deterministic identities -- not Anvil's default funded accounts.
 	const (
 		signerA1Key = "0000000000000000000000000000000000000000000000000000000000000011"
 		signerA2Key = "0000000000000000000000000000000000000000000000000000000000000012"
@@ -71,8 +65,7 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 				ID: clientB, IBCInstance: instanceB, Authority: deployer, MinRequiredSignatures: 1,
 			},
 		}},
-		// attestorA1/attestorA2 both back clientA (which requires 2 sigs);
-		// attestorB alone backs clientB (which requires only 1).
+		// attestorA1/attestorA2 back clientA (requires 2); attestorB backs clientB (requires 1).
 		Attestors: []environment.AttestorSpec{
 			{ID: attestorA1, Client: clientA, Authority: signerA1},
 			{ID: attestorA2, Client: clientA, Authority: signerA2},
@@ -113,10 +106,8 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 	chainAID := strconv.FormatUint(resolvedChainA.EVMChainID(), 10)
 	chainBID := strconv.FormatUint(resolvedChainB.EVMChainID(), 10)
 
-	// buildRelayerDriver writes and migrates a fresh relayer config wired to
-	// this same connection/chain pair; includeSecondAttestorA controls
-	// whether the config knows about both of clientA's real attestors or
-	// just one.
+	// includeSecondAttestorA controls whether the config knows about both of
+	// clientA's attestors or just one.
 	buildRelayerDriver := func(t *testing.T, includeSecondAttestorA bool) *ibclink.Driver {
 		t.Helper()
 

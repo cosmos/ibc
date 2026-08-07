@@ -114,23 +114,10 @@ separate counterparty fields to keep in sync, unlike the old `clients[]` +
 `clientA` and `clientB` must be on different chains.
 
 There's no `attestorSet` here — for `attestation` clients, the relayer
-resolves the required attestor quorum *live* at startup (and on every
-`--live` config validate) rather than from a static declaration:
-
-1. It queries `clientId`'s own on-chain attestation light client for the
-   authoritative registered attestor addresses and minimum required
-   signature count.
-2. For every entry in the top-level `attestors[]` list, it asks that
-   attestor (in-process for `type: local`, over its `Info` RPC for
-   `type: remote`) which chain it watches and which address it signs with.
-3. It keeps only the entries that watch this end's counterparty chain *and*
-   whose address is actually in the on-chain registered set, then requires
-   at least the on-chain minimum count of them.
-
-This removes a class of config drift that a static `attestorSet` couldn't
-catch: a declared threshold or attestor reference that disagreed with what
-the chain actually enforces used to surface only when a relay attempt failed
-on submission; now it's caught at startup instead.
+resolves the required attestor quorum live at startup: it queries
+`clientId`'s on-chain attestation light client for the registered attestor
+addresses and required signature count, then matches those against the
+top-level `attestors[]` list (querying each one's chain and address, live).
 
 ```yaml
 relayer:
@@ -154,13 +141,9 @@ relayer:
           lookback: 100
 ```
 
-`ibc config validate --live` additionally queries each connection's two
-chains' routers to confirm the on-chain registered counterparty actually
-matches `clientA`/`clientB`, in both directions — catching a config that
-names two clients as counterparties when the chains themselves disagree —
-and runs the same attestor-quorum resolution described above, so a `--live`
-pass means the relayer will actually be able to build its proof generators
-on real startup, not just that the YAML shape is well-formed.
+`ibc config validate --live` additionally confirms each connection's
+on-chain registered counterparty matches `clientA`/`clientB`, and runs the
+same attestor-quorum resolution described above.
 
 ---
 
