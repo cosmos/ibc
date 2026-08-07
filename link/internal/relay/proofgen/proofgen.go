@@ -78,7 +78,7 @@ func NewSetFromConfig(
 
 	for _, conn := range cfg.Relayer.Connections {
 		for _, end := range []struct {
-			self, counterparty config.ClientEndConfig
+			self, counterparty config.ClientConfig
 		}{
 			{conn.ClientA, conn.ClientB},
 			{conn.ClientB, conn.ClientA},
@@ -98,7 +98,7 @@ func addGenerator(
 	generators map[string]ProofGenerator,
 	cfg config.Config,
 	connAlias string,
-	self, counterparty config.ClientEndConfig,
+	self, counterparty config.ClientConfig,
 	clientSet *chains.ClientSet,
 	localAttestors *attestor.Service,
 ) error {

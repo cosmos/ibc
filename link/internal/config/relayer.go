@@ -49,14 +49,14 @@ type RelayerEVMConfig struct {
 // relays, in both directions. ClientA's counterparty is simply ClientB (and
 // vice versa) -- there are no separate counterparty pointers to keep in sync.
 type ConnectionConfig struct {
-	Alias   string          `yaml:"alias"`
-	ClientA ClientEndConfig `yaml:"clientA"`
-	ClientB ClientEndConfig `yaml:"clientB"`
+	Alias   string       `yaml:"alias"`
+	ClientA ClientConfig `yaml:"clientA"`
+	ClientB ClientConfig `yaml:"clientB"`
 }
 
-// ClientEndConfig one side of a connection: a light client on chainId,
+// ClientConfig one side of a connection: a light client on chainId,
 // tracking the connection's other end as its counterparty.
-type ClientEndConfig struct {
+type ClientConfig struct {
 	ChainID  string     `yaml:"chainId"`
 	Signer   string     `yaml:"signer"`
 	ClientID string     `yaml:"clientId"`
@@ -100,7 +100,7 @@ func (c RelayerConfig) ChainOverride(chainID string) (RelayerChainOverride, bool
 // ClientEnd returns the client end matching (chainID, clientID) in any
 // configured connection, along with counterparty, the other end of that same
 // connection.
-func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty ClientEndConfig, ok bool) {
+func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty ClientConfig, ok bool) {
 	for _, conn := range c.Connections {
 		switch {
 		case conn.ClientA.ChainID == chainID && conn.ClientA.ClientID == clientID:
@@ -110,7 +110,7 @@ func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty Cl
 		}
 	}
 
-	return ClientEndConfig{}, ClientEndConfig{}, false
+	return ClientConfig{}, ClientConfig{}, false
 }
 
 // ConnectionByAlias returns the connection config for the given alias.
@@ -167,7 +167,7 @@ func (c RelayerConfig) validateConnections() error {
 		}
 		aliases[conn.Alias] = struct{}{}
 
-		for _, end := range []ClientEndConfig{conn.ClientA, conn.ClientB} {
+		for _, end := range []ClientConfig{conn.ClientA, conn.ClientB} {
 			key := end.ChainID + "/" + end.ClientID
 			if _, ok := clientEnds[key]; ok {
 				return errors.Errorf(".connections duplicate client %q on chain %q", end.ClientID, end.ChainID)
@@ -198,7 +198,7 @@ func (c ConnectionConfig) Validate() error {
 	return nil
 }
 
-func (c ClientEndConfig) Validate() error {
+func (c ClientConfig) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errors.New(".chainId required")

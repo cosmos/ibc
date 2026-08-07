@@ -41,12 +41,12 @@ func relayerConfig() config.Config {
 		Relayer: config.RelayerConfig{
 			Connections: []config.ConnectionConfig{
 				{
-					ClientA: config.ClientEndConfig{
+					ClientA: config.ClientConfig{
 						ClientID: "base-0",
 						ChainID:  chainIDEth,
 						Type:     config.ClientTypeAttestation,
 					},
-					ClientB: config.ClientEndConfig{
+					ClientB: config.ClientConfig{
 						ChainID: chainIDBase,
 						Type:    config.ClientTypeAttestation,
 					},

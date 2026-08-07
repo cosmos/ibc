@@ -13,11 +13,11 @@ import (
 func testConnection() config.ConnectionConfig {
 	return config.ConnectionConfig{
 		Alias: "eth-base",
-		ClientA: config.ClientEndConfig{
+		ClientA: config.ClientConfig{
 			ChainID:  "1",
 			ClientID: "base-0",
 		},
-		ClientB: config.ClientEndConfig{
+		ClientB: config.ClientConfig{
 			ChainID:  "8453",
 			ClientID: "ethereum-0",
 		},

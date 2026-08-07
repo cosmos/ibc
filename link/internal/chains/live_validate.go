@@ -24,7 +24,7 @@ func ValidateConnectionsLive(ctx context.Context, cfg config.Config, clients *Cl
 func validateConnectionLive(ctx context.Context, conn config.ConnectionConfig, clients *ClientSet) error {
 	for _, end := range []struct {
 		label              string
-		self, counterparty config.ClientEndConfig
+		self, counterparty config.ClientConfig
 	}{
 		{"clientA", conn.ClientA, conn.ClientB},
 		{"clientB", conn.ClientB, conn.ClientA},

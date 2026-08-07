@@ -50,8 +50,8 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
-// Attestors is the unified top-level list of attestors, used both by the
-// relayer (to resolve who to query) and the attestor binary (to know what it
+// Attestors is the list of attestors, used both by the relayer
+// (to resolve who to query) and the attestor binary (to know what it
 // serves locally).
 type Attestors []AttestorConfig
 
@@ -59,9 +59,7 @@ type Attestors []AttestorConfig
 // (type: local) or reachable over gRPC (type: remote).
 type AttestorConfig struct {
 	// Alias is this config's unique local handle for the attestor, referenced
-	// by relayer.connections[].clientA/clientB.attestorSet.attestors[].
-	// Distinct from Name because Name is self-reported and may collide across
-	// a local and a remote attestor that happen to share an identity.
+	// by the relayer
 	Alias string `yaml:"alias"`
 
 	// Name is the attestor's own self-reported identity. Not required unique.
@@ -258,7 +256,7 @@ func (c Config) crossValidate() error {
 
 type namedClientEnd struct {
 	label string
-	cfg   ClientEndConfig
+	cfg   ClientConfig
 }
 
 func connectionEnds(conn ConnectionConfig) []namedClientEnd {
@@ -279,7 +277,7 @@ func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
 	var pairs []ChainSignerPair
 
 	for _, conn := range c.Relayer.Connections {
-		for _, end := range []ClientEndConfig{conn.ClientA, conn.ClientB} {
+		for _, end := range []ClientConfig{conn.ClientA, conn.ClientB} {
 			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
 			if _, dup := seen[pair]; dup {
 				continue

@@ -23,14 +23,14 @@ func TestOptionsFromConfigFinalityOffsets(t *testing.T) {
 				Connections: []config.ConnectionConfig{
 					{
 						Alias: "client-a-b",
-						ClientA: config.ClientEndConfig{
+						ClientA: config.ClientConfig{
 							ClientID:    "client-a",
 							ChainID:     "chain-a",
 							Signer:      "a-signer",
 							Type:        config.ClientTypeAttestation,
 							AttestorSet: &config.AttestorSetConfig{CounterpartyChainFinalityOffset: 5},
 						},
-						ClientB: config.ClientEndConfig{
+						ClientB: config.ClientConfig{
 							ClientID:    "client-b",
 							ChainID:     "chain-b",
 							Signer:      "b-signer",
@@ -63,8 +63,8 @@ func TestOptionsFromConfigFinalityOffsets(t *testing.T) {
 				Connections: []config.ConnectionConfig{
 					{
 						Alias:   "client-a-b",
-						ClientA: config.ClientEndConfig{ClientID: "client-a", ChainID: "chain-a"},
-						ClientB: config.ClientEndConfig{ClientID: "client-b", ChainID: "chain-b"},
+						ClientA: config.ClientConfig{ClientID: "client-a", ChainID: "chain-a"},
+						ClientB: config.ClientConfig{ClientID: "client-b", ChainID: "chain-b"},
 					},
 				},
 			},
