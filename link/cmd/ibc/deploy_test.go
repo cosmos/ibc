@@ -16,7 +16,7 @@ func TestResolveDeployerAlias(t *testing.T) {
 	require.Equal(t, "cfg-alias", resolveDeployerAlias(chain, ""))
 
 	chain.Deployer = ""
-	require.Equal(t, "", resolveDeployerAlias(chain, ""))
+	require.Empty(t, resolveDeployerAlias(chain, ""))
 }
 
 func TestStatusChains(t *testing.T) {

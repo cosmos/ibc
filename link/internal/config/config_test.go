@@ -549,11 +549,16 @@ func TestSignerConfigValidateRequiresExactLocalFilePath(t *testing.T) {
 
 func TestChainDeployerCrossValidation(t *testing.T) {
 	base := DefaultConfig()
-	base.Chains = []ChainConfig{{
-		ChainID:  "1",
-		Deployer: "missing",
-		EVM:      &EVMChainConfig{RPC: "http://localhost:8545", ICS26Router: "0x0000000000000000000000000000000000000001"},
-	}}
+	base.Chains = []ChainConfig{
+		{
+			ChainID:  "1",
+			Deployer: "missing",
+			EVM: &EVMChainConfig{
+				RPC:         "http://localhost:8545",
+				ICS26Router: "0x0000000000000000000000000000000000000001",
+			},
+		},
+	}
 
 	err := base.Validate()
 	require.ErrorContains(t, err, "deployer references unknown signer")

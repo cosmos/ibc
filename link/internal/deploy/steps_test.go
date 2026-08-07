@@ -98,7 +98,12 @@ func TestClientStepsIdempotent(t *testing.T) {
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "link-1",
-		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
+		Params: AttestationParams{
+			Attestors:        []string{"0xa"},
+			Threshold:        1,
+			InitialHeight:    5,
+			InitialTimestamp: 500,
+		},
 	}
 
 	res, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
@@ -138,7 +143,12 @@ func TestClientStepsUnrecordedClientError(t *testing.T) {
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "link-1",
-		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
+		Params: AttestationParams{
+			Attestors:        []string{"0xa"},
+			Threshold:        1,
+			InitialHeight:    5,
+			InitialTimestamp: 500,
+		},
 	}
 	// registered on-chain without this engine ever recording it
 	target.registered[spec.ClientID] = "0xlive"
@@ -193,13 +203,23 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "link-1-2",
-		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
+		Params: AttestationParams{
+			Attestors:        []string{"0xa"},
+			Threshold:        1,
+			InitialHeight:    5,
+			InitialTimestamp: 500,
+		},
 	}
 	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
 	require.NoError(t, err)
 
 	divergent := spec
-	divergent.Params = AttestationParams{Attestors: []string{"0xb", "0xc"}, Threshold: 2, InitialHeight: 5, InitialTimestamp: 500}
+	divergent.Params = AttestationParams{
+		Attestors:        []string{"0xb", "0xc"},
+		Threshold:        2,
+		InitialHeight:    5,
+		InitialTimestamp: 500,
+	}
 	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", divergent))
 	require.ErrorContains(t, err, "already deployed with different values")
 	require.ErrorContains(t, err, "attestors")
@@ -231,13 +251,23 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "link-1-2",
-		Params:               AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 5, InitialTimestamp: 500},
+		Params: AttestationParams{
+			Attestors:        []string{"0xa"},
+			Threshold:        1,
+			InitialHeight:    5,
+			InitialTimestamp: 500,
+		},
 	}
 	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
 	require.NoError(t, err)
 
 	drifted := spec
-	drifted.Params = AttestationParams{Attestors: []string{"0xa"}, Threshold: 1, InitialHeight: 99, InitialTimestamp: 9999}
+	drifted.Params = AttestationParams{
+		Attestors:        []string{"0xa"},
+		Threshold:        1,
+		InitialHeight:    99,
+		InitialTimestamp: 9999,
+	}
 	res, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", drifted))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
@@ -245,6 +275,6 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
 	c, _ := m.Client("link-1-2")
-	require.Equal(t, float64(5), c.Params["initialHeight"])
-	require.Equal(t, float64(500), c.Params["initialTimestamp"])
+	require.InDelta(t, 5, c.Params["initialHeight"], 0)
+	require.InDelta(t, 500, c.Params["initialTimestamp"], 0)
 }

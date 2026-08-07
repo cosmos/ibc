@@ -10,16 +10,15 @@ import (
 	"testing"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-
-	ethereum "github.com/ethereum/go-ethereum"
 )
 
 // deployStepResult mirrors link/internal/deploy.StepResult, which e2e cannot
@@ -45,9 +44,10 @@ type deployManifest struct {
 // the CLI's JSON step output and the manifests it writes.
 func TestDeployConnection(t *testing.T) {
 	t.Parallel()
-	e2etest.RequireAnvilLane(t)
 
-	spec := environment.Spec{Chains: e2etest.ChainSpecsForConfiguredLane(t)}
+	spec := environment.Spec{
+		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	}
 	env := e2etest.Start(t, spec, environment.Runtime{})
 
 	chainA, err := env.Chain(e2etest.ChainA)

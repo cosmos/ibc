@@ -16,7 +16,15 @@ func TestRoundTrip(t *testing.T) {
 	m = New("1", "evm")
 	m.Core.Router = "0xabc"
 	m.TargetData = map[string]string{"accessManager": "0xdef"}
-	m.UpsertClient(Client{ClientID: "link-2", Type: "attestation", Address: "0x1", CounterpartyChainID: "2", CounterpartyClientID: "link-1"})
+	m.UpsertClient(
+		Client{
+			ClientID:             "link-2",
+			Type:                 "attestation",
+			Address:              "0x1",
+			CounterpartyChainID:  "2",
+			CounterpartyClientID: "link-1",
+		},
+	)
 	require.NoError(t, m.Save(dir))
 
 	got, err := Load(dir, "1")

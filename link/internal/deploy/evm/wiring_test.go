@@ -29,7 +29,7 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 	sim := simulated.NewBackend(types.GenesisAlloc{
 		addr: {Balance: new(big.Int).Lsh(big.NewInt(1), 100)},
 	})
-	t.Cleanup(func() { sim.Close() })
+	t.Cleanup(func() { _ = sim.Close() })
 
 	// auto-mine so bind.WaitMined returns
 	stop := make(chan struct{})
@@ -109,7 +109,9 @@ func TestProvisionRegisterVerify(t *testing.T) {
 
 	// verification catches drift
 	broken := *m
-	broken.Clients = []manifest.Client{{ClientID: "link-2", Address: "0x0000000000000000000000000000000000000123", CounterpartyClientID: "link-1"}}
+	broken.Clients = []manifest.Client{
+		{ClientID: "link-2", Address: "0x0000000000000000000000000000000000000123", CounterpartyClientID: "link-1"},
+	}
 	report, err = d.Verify(ctx, &broken)
 	require.NoError(t, err)
 	require.NotEmpty(t, report.Failed())
