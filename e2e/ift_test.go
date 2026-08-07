@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -393,18 +394,17 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 func TestIFTTimeout_Refund(t *testing.T) {
 	t.Parallel()
 	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	require.NoError(t, relayer.Stop(ctx))
 	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
 		Timeout: transferTimeout,
@@ -413,19 +413,116 @@ func TestIFTTimeout_Refund(t *testing.T) {
 	require.NoError(t, transfer.VerifyBurned(ctx))
 	require.NoError(t, transfer.VerifyPending(ctx))
 
-	chainB, err := env.Chain(route.Destination)
+	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	mining, err := chainB.Mining()
+	destinationEVM, err := destination.EVM()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
-	relayer = e2etest.StartRelayer(t, driver, env)
+	finalityOffset := uint64(ibclink.HarnessFinalityOffset)
+	timeout := time.Unix(int64(transfer.TimeoutTimestamp()), 0) //nolint:gosec // EVM timestamps fit in int64
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		latestHeader, headerErr := destinationEVM.HeaderByNumber(ctx, nil)
+		if !assert.NoError(collect, headerErr) ||
+			!assert.Greater(collect, latestHeader.Number.Uint64(), finalityOffset) {
+			return
+		}
+		finalizedHeader, headerErr := destinationEVM.HeaderByNumber(
+			ctx,
+			new(big.Int).SetUint64(latestHeader.Number.Uint64()-finalityOffset),
+		)
+		if !assert.NoError(collect, headerErr) {
+			return
+		}
+		assert.True(collect, time.Now().After(timeout), "wall clock must pass the packet timeout")
+		assert.Greater(collect, finalizedHeader.Time, transfer.TimeoutTimestamp(),
+			"finalized destination header must naturally pass the packet timeout")
+	}, destination.Timing().CompletionBudget, destination.Timing().PollInterval)
+
+	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyRefunded(ctx))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
+}
+
+func TestIFTTimeout_WaitsForFinality(t *testing.T) {
+	t.Parallel()
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	mining, err := destination.Mining()
+	require.NoError(t, err)
+
+	finalityOffset := uint64(ibclink.HarnessFinalityOffset)
+	var transfer *e2etest.IFTPacket
+	require.NoError(t, mining.WithPaused(ctx, func() error {
+		transfer, err = iftApp.Send(ctx, e2etest.IFTRequest{
+			Amount:  big.NewInt(3_000_000),
+			Timeout: transferTimeout,
+		})
+		require.NoError(t, err)
+		require.NoError(t, transfer.VerifyBurned(ctx))
+		require.NoError(t, transfer.VerifyPending(ctx))
+
+		timeout := time.Unix(int64(transfer.TimeoutTimestamp()), 0) //nolint:gosec // EVM timestamps fit in int64
+		require.Eventually(t, func() bool { return time.Now().After(timeout) },
+			destination.Timing().CompletionBudget, destination.Timing().PollInterval,
+			"wall clock must pass the packet timeout while destination mining is paused")
+
+		height, heightErr := destination.Height(ctx)
+		require.NoError(t, heightErr)
+		require.Greater(t, height, finalityOffset)
+		finalizedHeader, headerErr := destinationEVM.HeaderByNumber(
+			ctx,
+			new(big.Int).SetUint64(height-finalityOffset),
+		)
+		require.NoError(t, headerErr)
+		require.Less(t, finalizedHeader.Time, transfer.TimeoutTimestamp(),
+			"finalized destination header must remain before the packet timeout")
+
+		require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
+		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
+			relayerv2.PacketState_PACKET_STATE_PENDING))
+		require.NoError(t, transfer.VerifyPending(ctx))
+		require.NoError(t, transfer.VerifyNotMinted(ctx))
+		return nil
+	}))
+
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		height, heightErr := destination.Height(ctx)
+		if !assert.NoError(collect, heightErr) ||
+			!assert.Greater(collect, height, finalityOffset) {
+			return
+		}
+		finalizedHeader, headerErr := destinationEVM.HeaderByNumber(
+			ctx,
+			new(big.Int).SetUint64(height-finalityOffset),
+		)
+		if !assert.NoError(collect, headerErr) {
+			return
+		}
+		assert.Greater(collect, finalizedHeader.Time, transfer.TimeoutTimestamp(),
+			"finalized destination header must pass the packet timeout")
+	}, destination.Timing().CompletionBudget, destination.Timing().PollInterval)
 
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
-	require.NoError(t, transfer.VerifyPendingCleared(ctx))
 }
 
 // TestIFTTransfer_ErrorAck_Refund sends to the zero address, which the

@@ -203,7 +203,13 @@ func (e *EVMClient) buildSignedTx(
 		val.Set(value)
 	}
 
-	est, err := e.client.EstimateGas(ctx, ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data})
+	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
+	est, err := e.client.EstimateGas(ctx, msg)
+	if err != nil {
+		// Besu can reject otherwise-valid short-lived transactions because its
+		// pending estimate uses a future timestamp. Retry against latest.
+		est, err = e.client.EstimateGasAtBlock(ctx, msg, nil)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("estimate gas: %w", err)
 	}
