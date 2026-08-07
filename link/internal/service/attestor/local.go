@@ -24,6 +24,7 @@ import (
 type LocalAttestor struct {
 	chainID        string
 	name           string
+	alias          string
 	finalityOffset uint
 
 	client chains.Client
@@ -34,8 +35,10 @@ type LocalAttestor struct {
 
 var _ Attestor = &LocalAttestor{}
 
-func NewLocal(cfg config.AttestationConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
+func NewLocal(cfg config.AttestorConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
 	switch {
+	case cfg.Alias == "":
+		return nil, fmt.Errorf("alias required")
 	case cfg.ChainID == "":
 		return nil, fmt.Errorf("chainID required")
 	case cfg.Name == "":
@@ -56,6 +59,7 @@ func NewLocal(cfg config.AttestationConfig, client chains.Client, backingSigner 
 	return &LocalAttestor{
 		chainID:        cfg.ChainID,
 		name:           cfg.Name,
+		alias:          cfg.Alias,
 		finalityOffset: cfg.FinalityOffset,
 
 		client: client,
@@ -252,9 +256,8 @@ func (a *LocalAttestor) packetCompact(
 	}, nil
 }
 
-// name and alias are identical for local attestors
 func (a *LocalAttestor) Name() string    { return a.name }
-func (a *LocalAttestor) Alias() string   { return a.name }
+func (a *LocalAttestor) Alias() string   { return a.alias }
 func (a *LocalAttestor) ChainID() string { return a.chainID }
 func (a *LocalAttestor) IsLocal() bool   { return true }
 

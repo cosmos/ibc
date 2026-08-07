@@ -169,7 +169,7 @@ func (s *Service) packetsFromEvents(chainID, txHash string, events []v2.PacketEv
 			continue
 		}
 
-		client, ok := s.cfg.Relayer.Client(chainID, event.Packet.SourceClient)
+		_, counterparty, ok := s.cfg.Relayer.ClientEnd(chainID, event.Packet.SourceClient)
 		if !ok {
 			s.logger.Warn(
 				"Skipping packet from unconfigured client",
@@ -184,7 +184,7 @@ func (s *Service) packetsFromEvents(chainID, txHash string, events []v2.PacketEv
 		packets = append(packets, store.CreatePacket{
 			Status:                    store.RelayStatusPending,
 			SourceChainID:             chainID,
-			DestinationChainID:        client.CounterpartyChainID,
+			DestinationChainID:        counterparty.ChainID,
 			SourceTxHash:              txHash,
 			SourceTxTime:              event.BlockTime,
 			PacketSequenceNumber:      event.Packet.Sequence,

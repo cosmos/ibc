@@ -82,16 +82,18 @@ var (
 	ErrReceiptExists      = errors.New("receipt exists")
 )
 
-// NewFromConfig creates a new attestor service from the configuration.
-// Because config represents our local binary, ALL attestors are local.
+// NewFromConfig creates a new attestor service from the configuration,
+// serving only the type: local entries in the unified attestors[] list --
+// type: remote entries are meaningful only to a relayer that queries them.
 func NewFromConfig(cfg config.Config, clients *chains.ClientSet, signers *signer.Set) (*Service, error) {
-	if len(cfg.Attestor.Attestations) == 0 {
+	locals := cfg.Attestors.Locals()
+	if len(locals) == 0 {
 		return nil, ErrNoAttestations
 	}
 
-	attestorsSpecs := make([]Attestor, 0, len(cfg.Attestor.Attestations))
+	attestorsSpecs := make([]Attestor, 0, len(locals))
 
-	add := func(spec config.AttestationConfig) error {
+	add := func(spec config.AttestorConfig) error {
 		client, ok := clients.Get(spec.ChainID)
 		if !ok {
 			return fmt.Errorf("client not found for chain %s", spec.ChainID)
@@ -112,9 +114,9 @@ func NewFromConfig(cfg config.Config, clients *chains.ClientSet, signers *signer
 		return nil
 	}
 
-	for _, spec := range cfg.Attestor.Attestations {
+	for _, spec := range locals {
 		if err := add(spec); err != nil {
-			return nil, fmt.Errorf("attestor %s: %w", spec.Name, err)
+			return nil, fmt.Errorf("attestor %s: %w", spec.Alias, err)
 		}
 	}
 

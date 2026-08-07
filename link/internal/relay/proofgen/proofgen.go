@@ -66,65 +66,88 @@ func (s *Set) Get(chainID, clientID string) (ProofGenerator, bool) {
 	return generator, ok
 }
 
-// NewSetFromConfig resolves every configured client's attestor set. localAttestors
-// is this process's own attestor service when running in dual mode (nil
-// otherwise)
+// NewSetFromConfig resolves a ProofGenerator for every client end of every
+// configured connection. localAttestors is this process's own attestor
+// service when running in dual mode (nil otherwise)
 func NewSetFromConfig(
 	cfg config.Config,
 	clientSet *chains.ClientSet,
 	localAttestors *attestor.Service,
 ) (*Set, error) {
-	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Clients))
+	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Connections)*2)
 
-	for _, clientCfg := range cfg.Relayer.Clients {
-		switch clientCfg.Type {
-		case config.ClientTypeAttestation:
-			if clientCfg.AttestorSet == nil {
-				return nil, errors.Errorf("client %q: attestorSet required for attestation clients", clientCfg.Alias)
+	for _, conn := range cfg.Relayer.Connections {
+		for _, end := range []struct {
+			self, counterparty config.ClientEndConfig
+		}{
+			{conn.ClientA, conn.ClientB},
+			{conn.ClientB, conn.ClientA},
+		} {
+			if err := addGenerator(generators, cfg, conn.Alias, end.self, end.counterparty, clientSet, localAttestors); err != nil {
+				return nil, err
 			}
-
-			attestors := make([]attestor.Attestor, 0, len(clientCfg.AttestorSet.Attestors))
-
-			for _, entry := range clientCfg.AttestorSet.Attestors {
-				a, err := resolveAttestor(entry, clientCfg.CounterpartyChainID, localAttestors)
-				if err != nil {
-					return nil, errors.Wrapf(err, "client %q attestor %q", clientCfg.Alias, entry.Name)
-				}
-
-				attestors = append(attestors, a)
-			}
-
-			counterpartyChain, ok := clientSet.Get(clientCfg.CounterpartyChainID)
-			if !ok {
-				return nil, errors.Errorf(
-					"client %q: no configured chain client for counterparty chain %q",
-					clientCfg.Alias,
-					clientCfg.CounterpartyChainID,
-				)
-			}
-
-			generators[Key(clientCfg.ChainID, clientCfg.ClientID)] = attestation.New(
-				attestors,
-				clientCfg.AttestorSet.Threshold,
-				counterpartyChain,
-			)
-		default:
-			return nil, errors.Errorf(
-				"client %q: unsupported client type %q for proof generation",
-				clientCfg.Alias,
-				clientCfg.Type,
-			)
 		}
 	}
 
 	return NewSet(generators), nil
 }
 
-// resolveAttestor resolves one configured attestor-set entry to the
-// attestor.Attestor abstraction. watchedChainID is the chain
-// the attestor is expected to be attesting
+func addGenerator(
+	generators map[string]ProofGenerator,
+	cfg config.Config,
+	connAlias string,
+	self, counterparty config.ClientEndConfig,
+	clientSet *chains.ClientSet,
+	localAttestors *attestor.Service,
+) error {
+	switch self.Type {
+	case config.ClientTypeAttestation:
+		if self.AttestorSet == nil {
+			return errors.Errorf("connection %q: attestorSet required for attestation clients", connAlias)
+		}
+
+		attestors := make([]attestor.Attestor, 0, len(self.AttestorSet.Attestors))
+
+		for _, alias := range self.AttestorSet.Attestors {
+			entry, ok := cfg.Attestors.ByAlias(alias)
+			if !ok {
+				return errors.Errorf("connection %q: attestor %q not declared in top-level attestors", connAlias, alias)
+			}
+
+			a, err := resolveAttestor(entry, counterparty.ChainID, localAttestors)
+			if err != nil {
+				return errors.Wrapf(err, "connection %q attestor %q", connAlias, alias)
+			}
+
+			attestors = append(attestors, a)
+		}
+
+		counterpartyChain, ok := clientSet.Get(counterparty.ChainID)
+		if !ok {
+			return errors.Errorf(
+				"connection %q: no configured chain client for counterparty chain %q",
+				connAlias, counterparty.ChainID,
+			)
+		}
+
+		generators[Key(self.ChainID, self.ClientID)] = attestation.New(
+			attestors,
+			self.AttestorSet.Threshold,
+			counterpartyChain,
+		)
+	default:
+		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, self.Type)
+	}
+
+	return nil
+}
+
+// resolveAttestor resolves one configured attestor alias to the
+// attestor.Attestor abstraction. watchedChainID is the sibling ClientEnd's
+// chain ID within the same connection -- the chain this attestor is expected
+// to be attesting.
 func resolveAttestor(
-	entry config.AttestorEntry,
+	entry config.AttestorConfig,
 	watchedChainID string,
 	localAttestors *attestor.Service,
 ) (attestor.Attestor, error) {
@@ -135,15 +158,15 @@ func resolveAttestor(
 		}
 
 		// TODO: Support TLS
-		return attestor.NewRemoteFromURL(watchedChainID, entry.Name, entry.Name, "http://"+entry.GRPC), nil
+		return attestor.NewRemoteFromURL(watchedChainID, entry.Name, entry.Alias, "http://"+entry.GRPC), nil
 	case config.AttestorTypeLocal:
 		if localAttestors == nil {
-			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)
+			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Alias)
 		}
 
-		a, ok := localAttestors.Get(entry.Name)
+		a, ok := localAttestors.Get(entry.Alias)
 		if !ok {
-			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)
+			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Alias)
 		}
 
 		return a, nil
