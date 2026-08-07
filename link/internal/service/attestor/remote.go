@@ -27,44 +27,40 @@ var _ Attestor = &RemoteAttestor{}
 
 const remoteRequestTimeout = 5 * time.Second
 
-func NewRemoteFromURL(chainID, name, address string, finalityOffset uint64, grpcURL string) *RemoteAttestor {
+func NewRemoteFromURL(grpcURL, name string) *RemoteAttestor {
 	var (
 		httpClient  = newConnectHTTPClient()
 		protoClient = proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
 	)
 
-	return NewRemote(chainID, name, address, finalityOffset, protoClient)
+	return NewRemote(name, protoClient)
 }
 
-func NewRemote(
-	chainID, name, address string,
-	finalityOffset uint64,
-	client proto.AttestationServiceClient,
-) *RemoteAttestor {
+func NewRemote(name string, client proto.AttestationServiceClient) *RemoteAttestor {
 	return &RemoteAttestor{
-		chainID:        chainID,
-		name:           name,
-		address:        address,
-		finalityOffset: finalityOffset,
-		client:         client,
-		logger:         slog.With("module", "attestor", "name", attestorFQN("remote", chainID, name)),
+		name:   name,
+		client: client,
+		logger: slog.With("module", "attestor", "name", name),
 	}
 }
 
-// QueryInfo queries a remote attestor's Info RPC by name.
-func QueryInfo(ctx context.Context, grpcURL, name string) (chainID, address string, finalityOffset uint64, err error) {
+// QueryInfo queries this attestor's Info RPC and populates its chain,
+// address, and finality offset.
+func (a *RemoteAttestor) QueryInfo(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
-	httpClient := newConnectHTTPClient()
-	protoClient := proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
-
-	res, err := protoClient.Info(ctx, connect.NewRequest(&proto.InfoRequest{Attestor: name}))
+	res, err := a.client.Info(ctx, connect.NewRequest(&proto.InfoRequest{Attestor: a.name}))
 	if err != nil {
-		return "", "", 0, err
+		return err
 	}
 
-	return res.Msg.ChainId, res.Msg.Address, res.Msg.FinalityOffset, nil
+	a.chainID = res.Msg.ChainId
+	a.address = res.Msg.Address
+	a.finalityOffset = res.Msg.FinalityOffset
+	a.logger = slog.With("module", "attestor", "name", attestorFQN("remote", a.chainID, a.name))
+
+	return nil
 }
 
 func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {

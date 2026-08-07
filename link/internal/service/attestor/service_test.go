@@ -75,9 +75,9 @@ func TestService(t *testing.T) {
 			"carol": 30,
 		}}
 		service, err := New([]Attestor{
-			NewRemote("ethereum", "alice", "0xEthAlice", 0, client),
-			NewRemote("cosmos", "bob", "0xCosmosBob", 0, client),
-			NewRemote("solana", "carol", "0xSolanaCarol", 0, client),
+			NewRemote("alice", client),
+			NewRemote("bob", client),
+			NewRemote("carol", client),
 		})
 		require.NoError(t, err)
 
@@ -114,9 +114,9 @@ func TestService(t *testing.T) {
 		ctx := context.Background()
 		client := attestationClient{heights: map[string]uint64{"bob": 20}}
 		service, err := New([]Attestor{
-			NewRemote("ethereum", "alice", "0xEthAlice", 0, client),
-			NewRemote("cosmos", "bob", "0xCosmosBob", 0, client),
-			NewRemote("solana", "carol", "0xSolanaCarol", 0, client),
+			NewRemote("alice", client),
+			NewRemote("bob", client),
+			NewRemote("carol", client),
 			stubLocalAttestor(t, "ethereum", "dave", sampleSigner),
 		})
 		require.NoError(t, err)

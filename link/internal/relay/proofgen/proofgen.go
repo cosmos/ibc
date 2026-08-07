@@ -219,14 +219,12 @@ func resolveAttestor(
 		}
 
 		// TODO: Support TLS
-		grpcURL := "http://" + entry.GRPC
-
-		chainID, address, finalityOffset, err := attestor.QueryInfo(ctx, grpcURL, entry.Name)
-		if err != nil {
+		a := attestor.NewRemoteFromURL("http://"+entry.GRPC, entry.Name)
+		if err := a.QueryInfo(ctx); err != nil {
 			return nil, errors.Wrap(err, "querying attestor info")
 		}
 
-		return attestor.NewRemoteFromURL(chainID, entry.Name, address, finalityOffset, grpcURL), nil
+		return a, nil
 	case config.AttestorTypeLocal:
 		if localAttestors == nil {
 			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)

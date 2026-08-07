@@ -13,7 +13,7 @@ import (
 
 func TestRemoteAttestorRequestTimeout(t *testing.T) {
 	client := timeoutAttestationClient{t: t}
-	remote := NewRemote("chain", "name", "0xaddress", 0, client)
+	remote := NewRemote("name", client)
 
 	_, err := remote.LatestHeight(context.Background())
 	require.NoError(t, err)
@@ -23,6 +23,7 @@ func TestRemoteAttestorRequestTimeout(t *testing.T) {
 		CommitmentType: CommitmentTypePacket,
 	})
 	require.NoError(t, err)
+	require.NoError(t, remote.QueryInfo(context.Background()))
 }
 
 type timeoutAttestationClient struct {
