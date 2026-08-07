@@ -322,7 +322,10 @@ func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
 	for _, conn := range c.Relayer.Connections {
 		for _, end := range connectionEnds(conn) {
 			if _, exists := signerSet[end.cfg.Signer]; !exists {
-				return errors.Errorf("connection %q %s references unknown signer %q", conn.Alias, end.label, end.cfg.Signer)
+				return errors.Errorf(
+					"connection %q %s references unknown signer %q",
+					conn.Alias, end.label, end.cfg.Signer,
+				)
 			}
 		}
 	}

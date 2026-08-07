@@ -83,7 +83,9 @@ func NewSetFromConfig(
 			{conn.ClientA, conn.ClientB},
 			{conn.ClientB, conn.ClientA},
 		} {
-			if err := addGenerator(generators, cfg, conn.Alias, end.self, end.counterparty, clientSet, localAttestors); err != nil {
+			if err := addGenerator(
+				generators, cfg, conn.Alias, end.self, end.counterparty, clientSet, localAttestors,
+			); err != nil {
 				return nil, err
 			}
 		}

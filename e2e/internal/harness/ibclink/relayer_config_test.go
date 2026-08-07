@@ -115,7 +115,10 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 		{Alias: "alice-signer", Type: RelayerSignerLocal, File: "/tmp/alice.key"},
 	}, file.Signers)
 	require.Equal(t, []attestorFileConfig{
-		{Alias: "alice", Name: "alice", ChainID: "2", Type: RelayerAttestorLocal, Signer: "alice-signer", FinalityOffset: 3},
+		{
+			Alias: "alice", Name: "alice", ChainID: "2", Type: RelayerAttestorLocal,
+			Signer: "alice-signer", FinalityOffset: 3,
+		},
 		{Alias: "bob", Name: "bob", ChainID: "2", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
 		{Alias: "carol", Name: "carol", ChainID: "1", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
 	}, file.Attestors)
@@ -166,7 +169,10 @@ func TestMixedAttestorSetsEmitOnlyReferencedAttestors(t *testing.T) {
 	// back to its implicit local default since clientB left no explicit set.
 	require.Equal(t, []attestorFileConfig{
 		{Alias: "remote", Name: "remote", ChainID: "2", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
-		{Alias: "local-attestor-1", Name: "local-attestor-1", ChainID: "1", Type: RelayerAttestorLocal, Signer: "local-attestor-1-signer", FinalityOffset: 3},
+		{
+			Alias: "local-attestor-1", Name: "local-attestor-1", ChainID: "1", Type: RelayerAttestorLocal,
+			Signer: "local-attestor-1-signer", FinalityOffset: 3,
+		},
 	}, file.Attestors)
 	require.Equal(t, signerConfig{
 		Alias: "local-attestor-1-signer", Type: RelayerSignerRemote,
