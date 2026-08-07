@@ -70,7 +70,7 @@ jobs:
 
   e2e:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: github.event_name == 'schedule' || needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     env:
       E2E_MODE: ${{ github.event_name == 'schedule' && 'production' || 'complete' }}
