@@ -245,7 +245,7 @@ func requireCloseBlocked(t *testing.T, done <-chan error) {
 	t.Helper()
 	select {
 	case err := <-done:
-		t.Fatalf("Environment.Close returned while a bound process was starting: %v", err)
+		require.FailNow(t, "Environment.Close returned while a bound process was starting", "%v", err)
 	case <-time.After(100 * time.Millisecond):
 	}
 }

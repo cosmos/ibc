@@ -9,11 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
-
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // zeroAddressReceiver is a well-formed but invalid IFT receiver: the

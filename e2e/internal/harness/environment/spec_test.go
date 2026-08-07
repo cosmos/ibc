@@ -1,7 +1,6 @@
 package environment
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -312,7 +311,7 @@ func TestSpecValidateDoesNotMutate(t *testing.T) {
 	spec := validSpec()
 	want := validSpec()
 	require.NoError(t, spec.validate())
-	require.True(t, reflect.DeepEqual(want, spec))
+	require.Equal(t, want, spec)
 }
 
 func TestSpecValidateRejectsUnrepresentableAnvilTiming(t *testing.T) {

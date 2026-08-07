@@ -2,9 +2,10 @@ package e2e_test
 
 import (
 	"fmt"
-	"reflect"
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -95,9 +96,7 @@ func TestDummyClientMeshSpec(t *testing.T) {
 			dummyClientConnection("chain-b", "chain-c"),
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("dummyClientMeshSpec() = %#v, want %#v", got, want)
-	}
+	require.Equal(t, want, got)
 }
 
 func dummyClientConnection(a, b environment.ChainID) environment.ConnectionSpec {

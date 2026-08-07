@@ -29,6 +29,7 @@ func TestRelayerConfig(t *testing.T) {
 		chain := config.Relayer.ChainOverrides[0]
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
+		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)

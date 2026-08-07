@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 // externalChainID differs from managedChainID so live validate exercises chain-id on a second node.
@@ -34,9 +34,7 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		if stopErr := oob.Stop(); stopErr != nil {
-			t.Errorf("stop external Anvil: %v", stopErr)
-		}
+		assert.NoError(t, oob.Stop(), "stop external Anvil")
 	})
 
 	startHeight, err := oob.Height(ctx)

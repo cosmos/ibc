@@ -3,25 +3,38 @@ name: E2E
 on:
   push:
     branches: [main, development]
-    paths:
-      - "link/**"
-      - "e2e/**"
-      - "proto/**"
-      - "Makefile"
-      - ".golangci.yml"
-      - ".github/workflows/e2e.yml"
   pull_request:
     branches: [main, development]
-    paths:
-      - "link/**"
-      - "e2e/**"
-      - "proto/**"
-      - "Makefile"
-      - ".golangci.yml"
-      - ".github/workflows/e2e.yml"
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      lint: ${{ steps.filter.outputs.lint }}
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            lint:
+              - "e2e/**"
+              - ".golangci.yml"
+              - ".github/workflows/e2e.yml"
+            code:
+              - "link/**"
+              - "e2e/**"
+              - "proto/**"
+              - "Makefile"
+              - ".github/workflows/e2e.yml"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +48,8 @@ jobs:
           working-directory: e2e
 
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +67,8 @@ jobs:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

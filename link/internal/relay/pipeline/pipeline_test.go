@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
@@ -231,7 +230,7 @@ func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer)
 
 		return result.transfer
 	case <-time.After(15 * time.Second):
-		t.Fatal("pipeline did not emit the transfer in time")
+		require.FailNow(t, "pipeline did not emit the transfer in time")
 
 		return nil
 	}
@@ -398,7 +397,7 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
-		assert.ErrorIs(t, out.ProcessingError, processors.ErrSendNotFinalized)
+		require.ErrorIs(t, out.ProcessingError, processors.ErrSendNotFinalized)
 
 		// the packet stays unfinished for the next run
 		unfinished, err := env.store.ListUnfinishedPackets(context.Background())
@@ -431,7 +430,7 @@ func TestPipelinePushRespectsContextCancellation(t *testing.T) {
 
 	select {
 	case <-done:
-		t.Fatal("Push returned before the input was read or the context was canceled")
+		require.FailNow(t, "Push returned before the input was read or the context was canceled")
 	case <-time.After(50 * time.Millisecond):
 	}
 
@@ -441,6 +440,6 @@ func TestPipelinePushRespectsContextCancellation(t *testing.T) {
 	case pushed := <-done:
 		assert.False(t, pushed, "Push must report failure when canceled before the send lands")
 	case <-time.After(time.Second):
-		t.Fatal("Push did not return after its context was canceled; it is still blocked on the full buffer")
+		require.FailNow(t, "Push did not return after its context was canceled; it is still blocked on the full buffer")
 	}
 }

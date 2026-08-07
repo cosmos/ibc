@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
@@ -132,8 +131,8 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	require.Len(t, capturedTxIDs, 1, "only the valid tx hash should be included")
 
-	require.NotNil(t, invalid.ProcessingError)
-	require.Nil(t, valid.ProcessingError)
+	require.Error(t, invalid.ProcessingError)
+	require.NoError(t, valid.ProcessingError)
 	require.NotNil(t, valid.RecvTxHash)
 }
 
@@ -227,12 +226,12 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	_, err = p.Process(context.Background(), []*Transfer{healthy, failing})
 	require.NoError(t, err, "the batch as a whole must not fail just because one tx's events failed to fetch")
 
-	require.NotNil(
+	require.Error(
 		t,
 		failing.ProcessingError,
 		"the transfer whose tx failed to fetch must be excluded and retried later",
 	)
-	require.Nil(t, healthy.ProcessingError, "the transfer whose tx fetched fine must still be relayed")
+	require.NoError(t, healthy.ProcessingError, "the transfer whose tx fetched fine must still be relayed")
 	require.NotNil(t, healthy.RecvTxHash)
 }
 
@@ -332,10 +331,10 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	_, err = p.Process(context.Background(), []*Transfer{provable, tooRecent})
 	require.NoError(t, err, "the batch as a whole must not fail just because one packet isn't provable yet")
 
-	require.Nil(t, provable.ProcessingError)
+	require.NoError(t, provable.ProcessingError)
 	require.NotNil(t, provable.RecvTxHash)
 
-	require.NotNil(
+	require.Error(
 		t,
 		tooRecent.ProcessingError,
 		"the too-recent packet must be excluded and retried once attestors catch up",

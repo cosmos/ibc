@@ -583,7 +583,7 @@ func requireIBCLinkBinary(t *testing.T) {
 	}
 	if info.Mode()&0o111 == 0 {
 		if os.Getenv("IBC_BIN") != "" {
-			t.Fatalf("explicit IBC_BIN is not executable: %s", path)
+			require.FailNow(t, "explicit IBC_BIN is not executable: "+path)
 		}
 		t.Skipf("IBC Link binary is not executable: %s; run `make -C link build`", path)
 	}

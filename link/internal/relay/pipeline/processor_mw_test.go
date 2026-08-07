@@ -214,9 +214,9 @@ func TestBatchProcessorMW(t *testing.T) {
 		assert.NotEmpty(t, tr.Error())
 		require.Len(t, internal.canceled, 1)
 		assert.Equal(t, []*processors.Transfer{tr}, internal.canceled[0])
-		// the transfer whose status update failed must not be processed
-		require.Len(t, internal.processed, 1)
-		assert.Empty(t, internal.processed[0])
+		// the transfer whose status update failed must not be processed,
+		// and an all-failed batch must not reach the processor at all
+		assert.Empty(t, internal.processed)
 	})
 
 	t.Run("processErrorPoisonsProcessedOnly", func(t *testing.T) {

@@ -6,9 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/pkg/errors"
-
 	pgx "github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
 )

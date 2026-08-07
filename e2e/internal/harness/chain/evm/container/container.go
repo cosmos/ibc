@@ -6,9 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/moby/moby/api/types/network"
-
 	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 )
 
 var nameRe = regexp.MustCompile(`[^a-z0-9_.-]+`)

@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cosmos/ibc/link/keyfile"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 const (
@@ -71,13 +72,9 @@ func (s Signers) GoString() string {
 func newLocalSigner(t testing.TB, role string) localSigner {
 	t.Helper()
 	key, err := crypto.GenerateKey()
-	if err != nil {
-		t.Fatalf("e2etest: generate %s signer: %v", role, err)
-	}
+	require.NoError(t, err, "e2etest: generate %s signer", role)
 	account, err := evm.AccountFromHex(hex.EncodeToString(crypto.FromECDSA(key)))
-	if err != nil {
-		t.Fatalf("e2etest: create %s account: %v", role, err)
-	}
+	require.NoError(t, err, "e2etest: create %s account", role)
 	return localSigner{key: key, account: account}
 }
 

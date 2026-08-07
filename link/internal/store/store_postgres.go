@@ -6,12 +6,11 @@ import (
 	"log/slog"
 	"time"
 
+	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pkg/errors"
-
-	pgx "github.com/jackc/pgx/v5"
 	migrate "github.com/rubenv/sql-migrate"
 
 	"github.com/cosmos/ibc/link/internal/config"
