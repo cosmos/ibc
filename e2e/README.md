@@ -57,10 +57,11 @@ func TestTransfer_AutoRelay(t *testing.T) {
     spec := dummyClientMeshSpec(chains)
     runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
     env := e2etest.Start(t, spec, runtime)
-    signers := e2etest.NewSigners(t)
+    sender := e2etest.NewSigner(t)
+    relayerSigner := e2etest.NewSigner(t)
     route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-    driver, deployment := e2etest.Deploy(t, env, signers, route)
-    transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
+    driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+    transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
     relayer := e2etest.StartRelayer(t, driver, env)
 
     transfer, err := transferApp.Send(t.Context(), e2etest.TransferRequest{Amount: big.NewInt(1_000)})
@@ -73,9 +74,9 @@ func TestTransfer_AutoRelay(t *testing.T) {
 }
 ```
 
-`Environment` owns Chain clients and protocol resources. A route-bound `e2etest` application binding hides only application ABI, transaction, event, and state mechanics. The test keeps deployment, relayer status, fault injection, manual relay, and application assertions visibly ordered; there is no second aggregate beside the Environment.
+`Environment` owns Chain clients and protocol resources. A route-scoped `e2etest` application hides only application ABI, transaction, event, and state mechanics. The test keeps deployment, relayer status, fault injection, manual relay, and application assertions visibly ordered; there is no second aggregate beside the Environment.
 
-`e2etest.NewSigners` creates separate application and relayer identities for the test. Managed Chains fund them through their resolved funding capability; an attached Chain must fund the returned public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary Link configuration.
+`e2etest.NewSigner` creates an independent identity; tests create one per role and pass them explicitly — `Deploy` takes the deployer and relayer signers, the app constructors take the sender (the signer that deployed the apps). Managed Chains fund them through their resolved funding capability; an attached Chain must fund the public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary Link configuration.
 
 Declare capabilities instead of naming a provider. For example, a controlled-mining test uses:
 
