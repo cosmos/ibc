@@ -61,8 +61,21 @@ func TestRenderRelayConfig(t *testing.T) {
 		Params: map[string]any{"threshold": float64(2)},
 	})
 
-	out, err := renderRelayConfig(a, b)
+	cfg := config.Config{Chains: []config.ChainConfig{
+		{ChainID: "1", EVM: &config.EVMChainConfig{RPC: "http://a", ICS26Router: "0xstale"}},
+	}}
+	out, err := renderRelayConfig(cfg, a, b)
 	require.NoError(t, err)
+
+	// chain 1 is declared: its config is copied, router updated, rpc kept
+	require.Len(t, out.Chains, 2)
+	require.Equal(t, "1", out.Chains[0].ChainID)
+	require.Equal(t, "0xrouterA", out.Chains[0].EVM.ICS26Router)
+	require.Equal(t, "http://a", out.Chains[0].EVM.RPC)
+	// chain 2 is undeclared: minimal entry with just the router
+	require.Equal(t, "2", out.Chains[1].ChainID)
+	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
+	require.Empty(t, out.Chains[1].EVM.RPC)
 
 	require.Len(t, out.Relayer.Clients, 2)
 	ca := out.Relayer.Clients[0]
@@ -78,7 +91,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	// no mutual pair: B has no client tracking A back
 	empty := manifest.New("2", "evm")
 	empty.Core.Router = "0xrouterB"
-	_, err = renderRelayConfig(a, empty)
+	_, err = renderRelayConfig(cfg, a, empty)
 	require.ErrorContains(t, err, "no mutual client pair")
 
 	// mismatched back-reference: B's client points at a different A client
@@ -88,6 +101,6 @@ func TestRenderRelayConfig(t *testing.T) {
 		ClientID: "link-1", Type: "attestation",
 		CounterpartyChainID: "1", CounterpartyClientID: "link-other",
 	})
-	_, err = renderRelayConfig(a, mismatched)
+	_, err = renderRelayConfig(cfg, a, mismatched)
 	require.ErrorContains(t, err, "no mutual client pair")
 }

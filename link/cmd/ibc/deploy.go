@@ -403,9 +403,24 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 // renderedDeployment is the subset of the config schema render-config emits,
 // so the output can be merged into ibc.yml without zero-valued sections.
 type renderedDeployment struct {
+	Chains  []config.ChainConfig `yaml:"chains"`
 	Relayer struct {
 		Clients []config.ClientConfig `yaml:"clients"`
 	} `yaml:"relayer"`
+}
+
+// renderedChain copies the operated-on chain's config (if declared) and sets
+// its router to the deployed address, so the emitted chains[] entry is
+// ready to relay against.
+func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
+	chain, _ := cfg.Chain(m.ChainID)
+	chain.ChainID = m.ChainID
+	evm := config.EVMChainConfig{ICS26Router: m.Core.Router}
+	if chain.EVM != nil {
+		evm.RPC = chain.EVM.RPC
+	}
+	chain.EVM = &evm
+	return chain
 }
 
 func renderedClient(m *manifest.Manifest, c manifest.Client) config.ClientConfig {
@@ -429,8 +444,9 @@ func renderedClient(m *manifest.Manifest, c manifest.Client) config.ClientConfig
 
 // renderRelayConfig projects two deployment manifests into the config
 // sections needed to relay between them for every mutual client pair.
-func renderRelayConfig(a, b *manifest.Manifest) (renderedDeployment, error) {
+func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, error) {
 	var out renderedDeployment
+	out.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
 	for _, ca := range a.Clients {
 		if ca.CounterpartyChainID != b.ChainID {
 			continue
@@ -454,9 +470,8 @@ func renderRelayConfig(a, b *manifest.Manifest) (renderedDeployment, error) {
 }
 
 func deployRenderConfig(_ *cobra.Command, args []string) error {
-	// discard the config: rendering needs only manifests, but loading chdirs
-	// to --home, which the relative --manifest-dir default depends on
-	if _, err := setupHomeWithConfig(); err != nil {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
 		return err
 	}
 	manifests := make([]*manifest.Manifest, len(args))
@@ -473,7 +488,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		}
 		manifests[i] = m
 	}
-	out, err := renderRelayConfig(manifests[0], manifests[1])
+	out, err := renderRelayConfig(cfg, manifests[0], manifests[1])
 	if err != nil {
 		return err
 	}
