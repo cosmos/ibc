@@ -17,5 +17,7 @@ func TestProcessReadiness(t *testing.T) {
 		HTTP:  "127.0.0.1:3000",
 	})
 	require.NoError(t, err)
+	// the e2e harness reads readiness as one exact stdout line; the encoding must stay compact
+	//nolint:testifylint // JSONEq would not catch a switch to indented output
 	require.Equal(t, `{"event":"ready","http":"127.0.0.1:3000"}`, string(encoded))
 }

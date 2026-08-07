@@ -15,5 +15,5 @@ corroborates outcomes by reading chain state with its own clients.
   with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and shutdown is prompt
   instead of waiting out the kill grace). Don't reintroduce a shell-wrapped entrypoint.
   StopNode/StartNode fault injection is docker pause/unpause; chain state stays in memory.
-- Lint with `make lint-e2e` from the repository root; the harness is covered by `e2e/.golangci.yml`,
-  which mirrors the root config minus exported-doc mandates (everything here is internal surface).
+- Lint with `make lint-e2e` from the repository root; the shared root `.golangci.yml` covers the
+  harness and excludes exported-doc mandates for this internal test surface.

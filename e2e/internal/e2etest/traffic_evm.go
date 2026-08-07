@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,8 +15,6 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
-
-	ethereum "github.com/ethereum/go-ethereum"
 )
 
 func mustABI(metadata *bind.MetaData) abi.ABI {

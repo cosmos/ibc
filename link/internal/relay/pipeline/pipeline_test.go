@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/relay/processors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -15,7 +13,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
@@ -141,7 +139,11 @@ func sendPacketEvent(sequence uint64) v2.PacketEvent {
 	return v2.PacketEvent{
 		Height: 100,
 		Kind:   v2.KindSendPacket,
-		Packet: channeltypesv2.Packet{Sequence: sequence, SourceClient: testRoute.SourceClientID, DestinationClient: testRoute.DestinationClientID},
+		Packet: channeltypesv2.Packet{
+			Sequence:          sequence,
+			SourceClient:      testRoute.SourceClientID,
+			DestinationClient: testRoute.DestinationClientID,
+		},
 	}
 }
 
@@ -210,20 +212,25 @@ func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer)
 	require.NoError(t, err)
 	require.True(t, p.Push(ctx, tr))
 
-	done := make(chan *processors.Transfer, 1)
+	type pollResult struct {
+		transfer *processors.Transfer
+		err      error
+	}
+
+	done := make(chan pollResult, 1)
 	go func() {
 		out, err := p.Poll()
-		require.NoError(t, err)
-		done <- out
+		done <- pollResult{transfer: out, err: err}
 	}()
 
 	select {
-	case out := <-done:
+	case result := <-done:
 		p.Close()
+		require.NoError(t, result.err)
 
-		return out
+		return result.transfer
 	case <-time.After(15 * time.Second):
-		t.Fatal("pipeline did not emit the transfer in time")
+		require.FailNow(t, "pipeline did not emit the transfer in time")
 
 		return nil
 	}
@@ -237,8 +244,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
 		// packet not yet received, commitment present, send finalized
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Times(2)
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// recv delivery
@@ -252,8 +265,10 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// success write ack: relayed back to the source chain like any other ack
-		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
-			Return(chainsWriteAckSuccess(), nil).Once()
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckSuccess(), nil).
+			Once()
 		env.dstClient.EXPECT().IsTxFinalized(mock.Anything, recvTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// ack delivery on the source chain
@@ -282,8 +297,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Times(2)
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// recv delivery
@@ -295,8 +316,10 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// error write ack: relayed back to the source chain
-		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
-			Return(chainsWriteAckError(), nil).Once()
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckError(), nil).
+			Once()
 		env.dstClient.EXPECT().IsTxFinalized(mock.Anything, recvTxHash, (*uint64)(nil)).Return(true, nil).Once()
 
 		// ack delivery on the source chain
@@ -322,10 +345,19 @@ func TestPipelineLifecycle(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(-time.Hour))
 
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Once()
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Once()
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(true, nil).Once()
-		env.dstClient.EXPECT().IsTimestampFinalized(mock.Anything, mock.Anything, (*uint64)(nil)).Return(true, nil).Once()
+		env.dstClient.EXPECT().
+			IsTimestampFinalized(mock.Anything, mock.Anything, (*uint64)(nil)).
+			Return(true, nil).
+			Once()
 
 		// timeout delivery on the source chain
 		timeoutEvent := sendPacketEvent(42)
@@ -353,13 +385,19 @@ func TestPipelineLifecycle(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Once()
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Once()
 		env.srcClient.EXPECT().IsTxFinalized(mock.Anything, tr.SourceTxHash, (*uint64)(nil)).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
-		assert.ErrorIs(t, out.ProcessingError, processors.ErrSendNotFinalized)
+		require.ErrorIs(t, out.ProcessingError, processors.ErrSendNotFinalized)
 
 		// the packet stays unfinished for the next run
 		unfinished, err := env.store.ListUnfinishedPackets(context.Background())
@@ -370,25 +408,6 @@ func TestPipelineLifecycle(t *testing.T) {
 
 func chainsWriteAckSuccess() v2.WriteAckStatus { return v2.WriteAckStatusSuccess }
 func chainsWriteAckError() v2.WriteAckStatus   { return v2.WriteAckStatusError }
-
-// routedConfig a config whose clients and routes cover testRoute.
-func routedConfig() config.Config {
-	return config.Config{
-		Relayer: config.RelayerConfig{
-			Clients: []config.ClientConfig{
-				{
-					Alias:                "test-route",
-					ClientID:             testRoute.SourceClientID,
-					ChainID:              testRoute.SourceChainID,
-					CounterpartyChainID:  testRoute.DestinationChainID,
-					CounterpartyClientID: testRoute.DestinationClientID,
-					Type:                 config.ClientTypeAttestation,
-				},
-			},
-			Routes: []config.RouteConfig{{SourceClient: "test-route"}},
-		},
-	}
-}
 
 type staticTxSubmitters map[string]txsubmitter.TxSubmitter
 
@@ -411,7 +430,7 @@ func TestPipelinePushRespectsContextCancellation(t *testing.T) {
 
 	select {
 	case <-done:
-		t.Fatal("Push returned before the input was read or the context was canceled")
+		require.FailNow(t, "Push returned before the input was read or the context was canceled")
 	case <-time.After(50 * time.Millisecond):
 	}
 
@@ -421,6 +440,6 @@ func TestPipelinePushRespectsContextCancellation(t *testing.T) {
 	case pushed := <-done:
 		assert.False(t, pushed, "Push must report failure when canceled before the send lands")
 	case <-time.After(time.Second):
-		t.Fatal("Push did not return after its context was canceled; it is still blocked on the full buffer")
+		require.FailNow(t, "Push did not return after its context was canceled; it is still blocked on the full buffer")
 	}
 }

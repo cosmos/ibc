@@ -24,9 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/link/keyfile"
-
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 const (
@@ -347,7 +346,7 @@ func prepareAttestorWorkspace(
 			ChainID:        spec.ChainID,
 			Name:           spec.Name,
 			Signer:         signerAlias,
-			FinalityOffset: 1,
+			FinalityOffset: HarnessFinalityOffset,
 		}}},
 		Signers: []signerConfig{{
 			Alias: signerAlias,

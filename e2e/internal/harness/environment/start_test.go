@@ -118,6 +118,18 @@ func TestStartRejectsUnauthorizedNewClientBeforeAcquisition(t *testing.T) {
 	require.False(t, called)
 }
 
+func TestValidateChecksSpecAndRuntime(t *testing.T) {
+	require.NoError(t, Validate(mixedProtocolSpec(), mixedProtocolRuntime()))
+
+	badSpec := mixedProtocolSpec()
+	badSpec.Chains = append(badSpec.Chains, ManagedAnvil{ID: "chain-a", EVMChainID: 31339})
+	require.ErrorContains(t, Validate(badSpec, mixedProtocolRuntime()), `duplicate Chain id "chain-a"`)
+
+	badRuntime := mixedProtocolRuntime()
+	delete(badRuntime.Endpoints, "chain-b-rpc")
+	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `no runtime endpoint binding for "chain-b-rpc"`)
+}
+
 func TestProductionPrerequisitesRequireExecutableAttestorBinary(t *testing.T) {
 	spec := Spec{Attestors: []AttestorSpec{{ID: "attestor-a"}}}
 	path := filepath.Join(t.TempDir(), "ibc")
@@ -352,7 +364,7 @@ func TestStartAcquiresIndependentChainsConcurrently(t *testing.T) {
 		case id := <-started:
 			seen[id] = true
 		case <-time.After(time.Second):
-			t.Fatal("both independent Chain acquisitions did not start concurrently")
+			require.FailNow(t, "both independent Chain acquisitions did not start concurrently")
 		}
 	}
 	close(release)
@@ -408,7 +420,7 @@ func fakeAcquisition(
 			id:         id,
 			evmChainID: 1,
 			rpcURL:     "http://rpc.example.invalid",
-			timing:     instantTiming(),
+			timing:     blockTiming(time.Second),
 			impl:       impl,
 		},
 		description: "release Chain " + string(id),
@@ -433,6 +445,6 @@ func (fakeEVMRuntimeChain) WithEVMClient(use func(*chainevm.EVMClient) error) er
 func testTiming() Timing {
 	return Timing{
 		BlockInterval: time.Second, CompletionBudget: 20 * time.Second,
-		SettleWindow: 2 * time.Second, PollInterval: 100 * time.Millisecond,
+		PollInterval: 100 * time.Millisecond,
 	}
 }

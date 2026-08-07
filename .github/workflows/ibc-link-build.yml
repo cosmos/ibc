@@ -48,10 +48,10 @@ jobs:
       run:
         working-directory: link
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.BUILD_SHA }}
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
@@ -115,7 +115,7 @@ jobs:
       matrix:
         goarch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.BUILD_SHA }}
       - name: Download Binary

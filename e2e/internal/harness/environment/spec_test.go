@@ -1,7 +1,6 @@
 package environment
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -312,13 +311,7 @@ func TestSpecValidateDoesNotMutate(t *testing.T) {
 	spec := validSpec()
 	want := validSpec()
 	require.NoError(t, spec.validate())
-	require.True(t, reflect.DeepEqual(want, spec))
-}
-
-func TestSpecValidateRejectsUnrepresentableAnvilTiming(t *testing.T) {
-	spec := validSpec()
-	spec.Chains[0] = ManagedAnvil{ID: "chain-a", EVMChainID: 31337, BlockInterval: 1500 * time.Millisecond}
-	require.ErrorContains(t, spec.validate(), "block interval must be a whole number of seconds")
+	require.Equal(t, want, spec)
 }
 
 func TestSpecSnapshotOwnsCollections(t *testing.T) {
@@ -347,7 +340,6 @@ func validSpec() Spec {
 				Timing: Timing{
 					BlockInterval:    2 * time.Second,
 					CompletionBudget: 40 * time.Second,
-					SettleWindow:     4 * time.Second,
 					PollInterval:     250 * time.Millisecond,
 				},
 			},

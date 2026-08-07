@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/cosmos/ibc/link/internal/store"
-	)
+)
 
 func TestTransferIsComplete(t *testing.T) {
 	base := func() *Transfer {

@@ -31,7 +31,7 @@ type IFTRequest struct {
 	Timeout time.Duration
 }
 
-// IFT binds the Interchain Fungible Token pair on a single directed route.
+// IFT drives the Interchain Fungible Token pair on a single directed route.
 type IFT struct {
 	routeID      RouteID
 	source       endpoint

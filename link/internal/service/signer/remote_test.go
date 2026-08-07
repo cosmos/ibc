@@ -5,11 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/internal/tests/mocks"
 )
 
 func TestRemote(t *testing.T) {
