@@ -39,12 +39,17 @@ func relayerConfig() config.Config {
 			},
 		},
 		Relayer: config.RelayerConfig{
-			Clients: []config.ClientConfig{
+			Connections: []config.ConnectionConfig{
 				{
-					ClientID:            "base-0",
-					ChainID:             chainIDEth,
-					CounterpartyChainID: chainIDBase,
-					Type:                config.ClientTypeAttestation,
+					ClientA: config.ClientEndConfig{
+						ClientID: "base-0",
+						ChainID:  chainIDEth,
+						Type:     config.ClientTypeAttestation,
+					},
+					ClientB: config.ClientEndConfig{
+						ChainID: chainIDBase,
+						Type:    config.ClientTypeAttestation,
+					},
 				},
 			},
 		},

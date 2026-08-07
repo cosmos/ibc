@@ -20,28 +20,24 @@ func TestOptionsFromConfigFinalityOffsets(t *testing.T) {
 	t.Run("eachClientsOwnCounterpartyMarginGatesItsCounterpartyChain", func(t *testing.T) {
 		cfg := config.Config{
 			Relayer: config.RelayerConfig{
-				Clients: []config.ClientConfig{
+				Connections: []config.ConnectionConfig{
 					{
-						Alias:                "client-a",
-						ClientID:             "client-a",
-						ChainID:              "chain-a",
-						CounterpartyChainID:  "chain-b",
-						CounterpartyClientID: "client-b",
-						Type:                 config.ClientTypeAttestation,
-						AttestorSet:          &config.AttestorSetConfig{CounterpartyChainFinalityOffset: 5},
+						Alias: "client-a-b",
+						ClientA: config.ClientEndConfig{
+							ClientID:    "client-a",
+							ChainID:     "chain-a",
+							Signer:      "a-signer",
+							Type:        config.ClientTypeAttestation,
+							AttestorSet: &config.AttestorSetConfig{CounterpartyChainFinalityOffset: 5},
+						},
+						ClientB: config.ClientEndConfig{
+							ClientID:    "client-b",
+							ChainID:     "chain-b",
+							Signer:      "b-signer",
+							Type:        config.ClientTypeAttestation,
+							AttestorSet: &config.AttestorSetConfig{CounterpartyChainFinalityOffset: 9},
+						},
 					},
-					{
-						Alias:                "client-b",
-						ClientID:             "client-b",
-						ChainID:              "chain-b",
-						CounterpartyChainID:  "chain-a",
-						CounterpartyClientID: "client-a",
-						Type:                 config.ClientTypeAttestation,
-						AttestorSet:          &config.AttestorSetConfig{CounterpartyChainFinalityOffset: 9},
-					},
-				},
-				Routes: []config.RouteConfig{
-					{SourceClient: "client-a", SourceSignerAlias: "a-signer", DestSignerAlias: "b-signer"},
 				},
 			},
 		}
@@ -64,9 +60,12 @@ func TestOptionsFromConfigFinalityOffsets(t *testing.T) {
 	t.Run("noAttestorSetLeavesOffsetsUnset", func(t *testing.T) {
 		cfg := config.Config{
 			Relayer: config.RelayerConfig{
-				Clients: []config.ClientConfig{
-					{Alias: "client-a", ClientID: "client-a", ChainID: "chain-a"},
-					{Alias: "client-b", ClientID: "client-b", ChainID: "chain-b"},
+				Connections: []config.ConnectionConfig{
+					{
+						Alias:   "client-a-b",
+						ClientA: config.ClientEndConfig{ClientID: "client-a", ChainID: "chain-a"},
+						ClientB: config.ClientEndConfig{ClientID: "client-b", ChainID: "chain-b"},
+					},
 				},
 			},
 		}

@@ -100,7 +100,9 @@ func TestLocal(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ACT
-				cfg := config.AttestationConfig{
+				attestorAlias := tt.attestorName + "-alias"
+				cfg := config.AttestorConfig{
+					Alias:   attestorAlias,
 					ChainID: tt.chainID,
 					Name:    tt.attestorName,
 				}
@@ -115,11 +117,19 @@ func TestLocal(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, attestor)
 				assert.Equal(t, tt.attestorName, attestor.Name())
-				assert.Equal(t, tt.attestorName, attestor.Alias())
+				assert.Equal(t, attestorAlias, attestor.Alias())
 				assert.Equal(t, tt.chainID, attestor.ChainID())
 				assert.True(t, attestor.IsLocal())
 			})
 		}
+
+		t.Run("emptyAlias", func(t *testing.T) {
+			_, err := NewLocal(config.AttestorConfig{
+				ChainID: "chain-1",
+				Name:    "alice",
+			}, stubChainClient(t, "chain-1"), ecdsaSigner)
+			require.ErrorContains(t, err, "alias required")
+		})
 	})
 
 	t.Run("LatestAttestableHeight", func(t *testing.T) {
@@ -173,7 +183,8 @@ func TestLocal(t *testing.T) {
 					Return(tt.header, tt.rpcErr).
 					Once()
 
-				attestor, err := NewLocal(config.AttestationConfig{
+				attestor, err := NewLocal(config.AttestorConfig{
+					Alias:          "alice",
 					ChainID:        "chain-1",
 					Name:           "alice",
 					FinalityOffset: tt.finalityOffset,
@@ -216,7 +227,8 @@ func TestLocal(t *testing.T) {
 				}, nil).
 				Once()
 
-			attestor, err := NewLocal(config.AttestationConfig{
+			attestor, err := NewLocal(config.AttestorConfig{
+				Alias:   "alice",
 				ChainID: "chain-1",
 				Name:    "alice",
 			}, client, ecdsaSigner)
@@ -252,7 +264,7 @@ func TestLocal(t *testing.T) {
 				Once()
 
 			attestor, err := NewLocal(
-				config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+				config.AttestorConfig{Alias: "alice", ChainID: "chain-1", Name: "alice"},
 				client,
 				ecdsaSigner,
 			)
@@ -279,7 +291,7 @@ func TestLocal(t *testing.T) {
 				Once()
 
 			attestor, err := NewLocal(
-				config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+				config.AttestorConfig{Alias: "alice", ChainID: "chain-1", Name: "alice"},
 				client,
 				ecdsaSigner,
 			)
@@ -422,7 +434,7 @@ func TestLocal(t *testing.T) {
 						Once()
 				}
 				attestor, err := NewLocal(
-					config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+					config.AttestorConfig{Alias: "alice", ChainID: "chain-1", Name: "alice"},
 					client,
 					ecdsaSigner,
 				)
@@ -458,7 +470,7 @@ func TestLocal(t *testing.T) {
 				Once()
 
 			attestor, err := NewLocal(
-				config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+				config.AttestorConfig{Alias: "alice", ChainID: "chain-1", Name: "alice"},
 				client,
 				ecdsaSigner,
 			)
@@ -546,7 +558,7 @@ func TestLocal(t *testing.T) {
 						Return(tt.commitment, nil).
 						Once()
 					attestor, err := NewLocal(
-						config.AttestationConfig{ChainID: "chain-1", Name: "alice"},
+						config.AttestorConfig{Alias: "alice", ChainID: "chain-1", Name: "alice"},
 						client,
 						ecdsaSigner,
 					)

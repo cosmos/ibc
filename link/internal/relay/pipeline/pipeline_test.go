@@ -371,21 +371,25 @@ func TestPipelineLifecycle(t *testing.T) {
 func chainsWriteAckSuccess() v2.WriteAckStatus { return v2.WriteAckStatusSuccess }
 func chainsWriteAckError() v2.WriteAckStatus   { return v2.WriteAckStatusError }
 
-// routedConfig a config whose clients and routes cover testRoute.
+// routedConfig a config whose connection covers testRoute.
 func routedConfig() config.Config {
 	return config.Config{
 		Relayer: config.RelayerConfig{
-			Clients: []config.ClientConfig{
+			Connections: []config.ConnectionConfig{
 				{
-					Alias:                "test-route",
-					ClientID:             testRoute.SourceClientID,
-					ChainID:              testRoute.SourceChainID,
-					CounterpartyChainID:  testRoute.DestinationChainID,
-					CounterpartyClientID: testRoute.DestinationClientID,
-					Type:                 config.ClientTypeAttestation,
+					Alias: "test-route",
+					ClientA: config.ClientEndConfig{
+						ClientID: testRoute.SourceClientID,
+						ChainID:  testRoute.SourceChainID,
+						Type:     config.ClientTypeAttestation,
+					},
+					ClientB: config.ClientEndConfig{
+						ClientID: testRoute.DestinationClientID,
+						ChainID:  testRoute.DestinationChainID,
+						Type:     config.ClientTypeAttestation,
+					},
 				},
 			},
-			Routes: []config.RouteConfig{{SourceClient: "test-route"}},
 		},
 	}
 }

@@ -23,8 +23,8 @@ func TestService(t *testing.T) {
 	t.Run("duplicateAliases", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			must(NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubChainClient(t, "1"), sampleSigner)),
-			must(NewLocal(config.AttestationConfig{ChainID: "2", Name: "alice"}, stubChainClient(t, "2"), sampleSigner)),
+			must(NewLocal(config.AttestorConfig{Alias: "alice", ChainID: "1", Name: "alice"}, stubChainClient(t, "1"), sampleSigner)),
+			must(NewLocal(config.AttestorConfig{Alias: "alice", ChainID: "2", Name: "alice"}, stubChainClient(t, "2"), sampleSigner)),
 		}
 
 		// ACT
@@ -187,7 +187,7 @@ func stubLocalAttestor(t *testing.T, chainID, name string, backingSigner signer.
 		Once()
 
 	attestor, err := NewLocal(
-		config.AttestationConfig{ChainID: chainID, Name: name},
+		config.AttestorConfig{Alias: name, ChainID: chainID, Name: name},
 		client,
 		backingSigner,
 	)

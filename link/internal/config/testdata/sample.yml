@@ -5,6 +5,10 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "relayer-key-id"
+  - alias: "attestor-dan-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-key-id"
 db:
   type: sqlite
   url: ibc.db
@@ -28,43 +32,48 @@ relayer:
       packetBatchSize: 20
       packetBatchTimeout: 10s
     - chainId: "8453"
-  clients:
-    - alias: "eth-to-base"
-      clientId: "base-0"
-      chainId: "1"
-      counterpartyChainId: "8453"
-      counterpartyClientId: "ethereum-0"
-      type: "attestation"
-      attestorSet:
-        counterpartyChainFinalityOffset: 1
-        threshold: 2
-        attestors:
-          - name: "attestor-alice-base"
-            type: remote
-            grpc: attestor-alice.example.com:3000
-          - name: "attestor-bob-base"
-            type: remote
-            grpc: attestor-bob.example.com:3000
-          - name: "attestor-dan-base"
-            type: local
-    - alias: "base-to-eth"
-      clientId: "ethereum-0"
-      chainId: "8453"
-      counterpartyChainId: "1"
-      counterpartyClientId: "base-0"
-      type: "attestation"
-      attestorSet:
-        threshold: 1
-        attestors:
-          - name: "attestor-dan-ethereum"
-            type: local
-  routesToRelay:
-    - sourceClient: "eth-to-base"
-      sourceSignerAlias: "relayer-key"
-      destSignerAlias: "relayer-key"
-      autoRelay:
-        enabled: false
-        lookback: 100
-    - sourceClient: "base-to-eth"
-      sourceSignerAlias: "relayer-key"
-      destSignerAlias: "relayer-key"
+  connections:
+    - alias: "eth-base"
+      clientA:
+        chainId: "1"
+        signer: "relayer-key"
+        clientId: "base-0"
+        type: "attestation"
+        attestorSet:
+          threshold: 2
+          counterpartyChainFinalityOffset: 1
+          attestors: ["attestor-alice-base", "attestor-bob-base", "attestor-dan-base"]
+        autoRelay:
+          enabled: false
+          lookback: 100
+      clientB:
+        chainId: "8453"
+        signer: "relayer-key"
+        clientId: "ethereum-0"
+        type: "attestation"
+        attestorSet:
+          threshold: 1
+          counterpartyChainFinalityOffset: 1
+          attestors: ["attestor-dan-ethereum"]
+attestors:
+  - alias: "attestor-alice-base"
+    name: "attestor-alice-base"
+    chainId: "8453"
+    type: remote
+    grpc: attestor-alice.example.com:3000
+  - alias: "attestor-bob-base"
+    name: "attestor-bob-base"
+    chainId: "8453"
+    type: remote
+    grpc: attestor-bob.example.com:3000
+  - alias: "attestor-dan-base"
+    name: "attestor-dan"
+    chainId: "8453"
+    type: local
+    signer: "attestor-dan-key"
+    finalityOffset: 1
+  - alias: "attestor-dan-ethereum"
+    name: "attestor-dan"
+    chainId: "1"
+    type: local
+    signer: "attestor-dan-key"
