@@ -197,6 +197,17 @@ func (c *Client) GetCommitment(ctx context.Context, height uint64, hashedPath [3
 	return commitment, nil
 }
 
+// GetCounterparty returns the client ID this chain's router has registered
+// as clientID's on-chain counterparty.
+func (c *Client) GetCounterparty(ctx context.Context, clientID string) (string, error) {
+	info, err := c.router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return "", errors.Wrapf(err, "querying on-chain counterparty for client %q on chain %s", clientID, c.chainID)
+	}
+
+	return info.ClientId, nil
+}
+
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
 	payloads := make([]channeltypesv2.Payload, len(packet.Payloads))
 	for i, payload := range packet.Payloads {

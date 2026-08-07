@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 )
@@ -70,7 +71,7 @@ func configNew(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func configValidate(_ *cobra.Command, _ []string) error {
+func configValidate(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return errors.Wrap(err, "setup home with config")
@@ -79,6 +80,15 @@ func configValidate(_ *cobra.Command, _ []string) error {
 	if flagConfigValidateLive {
 		if err := store.ValidateConfigLive(cfg); err != nil {
 			return errors.Wrap(err, "config live validation")
+		}
+
+		clientSet, err := chains.NewClientSetFromConfig(cfg)
+		if err != nil {
+			return errors.Wrap(err, "building chain clients for live validation")
+		}
+
+		if err := chains.ValidateConnectionsLive(cmd.Context(), cfg, clientSet); err != nil {
+			return errors.Wrap(err, "connection live validation")
 		}
 	}
 

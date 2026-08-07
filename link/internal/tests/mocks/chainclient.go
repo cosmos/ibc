@@ -444,6 +444,72 @@ func (_c *MockClient_GetCommitment_Call) RunAndReturn(run func(ctx context.Conte
 	return _c
 }
 
+// GetCounterparty provides a mock function for the type MockClient
+func (_mock *MockClient) GetCounterparty(ctx context.Context, clientID string) (string, error) {
+	ret := _mock.Called(ctx, clientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCounterparty")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return returnFunc(ctx, clientID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, clientID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, clientID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_GetCounterparty_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCounterparty'
+type MockClient_GetCounterparty_Call struct {
+	*mock.Call
+}
+
+// GetCounterparty is a helper method to define mock.On call
+//   - ctx context.Context
+//   - clientID string
+func (_e *MockClient_Expecter) GetCounterparty(ctx any, clientID any) *MockClient_GetCounterparty_Call {
+	return &MockClient_GetCounterparty_Call{Call: _e.mock.On("GetCounterparty", ctx, clientID)}
+}
+
+func (_c *MockClient_GetCounterparty_Call) Run(run func(ctx context.Context, clientID string)) *MockClient_GetCounterparty_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_GetCounterparty_Call) Return(s string, err error) *MockClient_GetCounterparty_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockClient_GetCounterparty_Call) RunAndReturn(run func(ctx context.Context, clientID string) (string, error)) *MockClient_GetCounterparty_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // IsPacketCommitted provides a mock function for the type MockClient
 func (_mock *MockClient) IsPacketCommitted(ctx context.Context, sourceClientID string, sequence uint64) (bool, error) {
 	ret := _mock.Called(ctx, sourceClientID, sequence)

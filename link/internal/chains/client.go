@@ -66,6 +66,10 @@ type Client interface {
 	// GetCommitment reads the IBC commitment stored at pathHash at height,
 	// used by the attestor to independently verify packet/ack/receipt claims.
 	GetCommitment(ctx context.Context, height uint64, pathHash [32]byte) ([32]byte, error)
+
+	// GetCounterparty returns the client ID this chain's router has
+	// registered as clientID's on-chain counterparty.
+	GetCounterparty(ctx context.Context, clientID string) (string, error)
 }
 
 var _ Client = (*evm.Client)(nil)
