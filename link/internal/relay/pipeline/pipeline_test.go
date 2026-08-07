@@ -378,12 +378,12 @@ func routedConfig() config.Config {
 			Connections: []config.ConnectionConfig{
 				{
 					Alias: "test-route",
-					ClientA: config.ClientConfig{
+					ClientA: config.ClientEnd{
 						ClientID: testRoute.SourceClientID,
 						ChainID:  testRoute.SourceChainID,
 						Type:     config.ClientTypeAttestation,
 					},
-					ClientB: config.ClientConfig{
+					ClientB: config.ClientEnd{
 						ClientID: testRoute.DestinationClientID,
 						ChainID:  testRoute.DestinationChainID,
 						Type:     config.ClientTypeAttestation,

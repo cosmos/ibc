@@ -32,13 +32,13 @@ func routedConfig() config.Config {
 			Connections: []config.ConnectionConfig{
 				{
 					Alias: "test-route",
-					ClientA: config.ClientConfig{
+					ClientA: config.ClientEnd{
 						ChainID:  testRoute.SourceChainID,
 						ClientID: testRoute.SourceClientID,
 						Signer:   "test-signer",
 						Type:     config.ClientTypeAttestation,
 					},
-					ClientB: config.ClientConfig{
+					ClientB: config.ClientEnd{
 						ChainID:  testRoute.DestinationChainID,
 						ClientID: testRoute.DestinationClientID,
 						Signer:   "test-signer",

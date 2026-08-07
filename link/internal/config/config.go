@@ -256,7 +256,7 @@ func (c Config) crossValidate() error {
 
 type namedClientEnd struct {
 	label string
-	cfg   ClientConfig
+	cfg   ClientEnd
 }
 
 func connectionEnds(conn ConnectionConfig) []namedClientEnd {
@@ -277,7 +277,7 @@ func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
 	var pairs []ChainSignerPair
 
 	for _, conn := range c.Relayer.Connections {
-		for _, end := range []ClientConfig{conn.ClientA, conn.ClientB} {
+		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
 			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
 			if _, dup := seen[pair]; dup {
 				continue
