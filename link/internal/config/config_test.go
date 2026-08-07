@@ -547,6 +547,31 @@ func TestSignerConfigValidateRequiresExactLocalFilePath(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestChainDeployerCrossValidation(t *testing.T) {
+	base := DefaultConfig()
+	base.Chains = []ChainConfig{
+		{
+			ChainID:  "1",
+			Deployer: "missing",
+			EVM: &EVMChainConfig{
+				RPC:         "http://localhost:8545",
+				ICS26Router: "0x0000000000000000000000000000000000000001",
+			},
+		},
+	}
+
+	err := base.Validate()
+	require.ErrorContains(t, err, "deployer references unknown signer")
+
+	base.Signers = Signers{{
+		Alias:       "missing",
+		Type:        SignerRemote,
+		GRPC:        "localhost:9000",
+		RemoteKeyID: "k1",
+	}}
+	require.NoError(t, base.Validate())
+}
+
 func writeTestConfig(t *testing.T, content string) string {
 	t.Helper()
 
@@ -554,4 +579,33 @@ func writeTestConfig(t *testing.T, content string) string {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 
 	return path
+}
+
+func TestConfigAccessors(t *testing.T) {
+	cfg := Config{
+		Signers: Signers{{Alias: "s1", Type: SignerRemote, GRPC: "g", RemoteKeyID: "k"}},
+		Attestor: AttestorConfig{Attestations: []AttestationConfig{
+			{ChainID: "1", Name: "a1", Signer: "s1"},
+			{ChainID: "2", Name: "a2", Signer: "s1"},
+			{ChainID: "1", Name: "a3", Signer: "s1"},
+		}},
+	}
+
+	signer, ok := cfg.Signer("s1")
+	require.True(t, ok)
+	require.Equal(t, "g", signer.GRPC)
+	_, ok = cfg.Signer("nope")
+	require.False(t, ok)
+
+	attestation, ok := cfg.AttestationByName("a2")
+	require.True(t, ok)
+	require.Equal(t, "2", attestation.ChainID)
+	_, ok = cfg.AttestationByName("nope")
+	require.False(t, ok)
+
+	forChain := cfg.AttestationsForChain("1")
+	require.Len(t, forChain, 2)
+	require.Equal(t, "a1", forChain[0].Name)
+	require.Equal(t, "a3", forChain[1].Name)
+	require.Empty(t, cfg.AttestationsForChain("9"))
 }

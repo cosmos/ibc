@@ -103,6 +103,9 @@ const (
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
 	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+
+	// Deployer optional signer alias used by `ibc deploy` for this chain.
+	Deployer string `yaml:"deployer,omitempty"`
 }
 
 // Type returns the chain type implied by the configured settings.
@@ -225,6 +228,15 @@ func (c Config) crossValidate() error {
 		}
 	}
 
+	for _, chain := range c.Chains {
+		if chain.Deployer == "" {
+			continue
+		}
+		if _, exists := signerSet[chain.Deployer]; !exists {
+			return errors.Errorf(".chains[%s].deployer references unknown signer: %q", chain.ChainID, chain.Deployer)
+		}
+	}
+
 	if err := c.validateChainReferences(); err != nil {
 		return err
 	}
@@ -315,6 +327,40 @@ func (c Config) Chain(chainID string) (ChainConfig, bool) {
 	}
 
 	return ChainConfig{}, false
+}
+
+// Signer returns the signer with the given alias.
+func (c Config) Signer(alias string) (SignerConfig, bool) {
+	for _, signer := range c.Signers {
+		if signer.Alias == alias {
+			return signer, true
+		}
+	}
+
+	return SignerConfig{}, false
+}
+
+// AttestationByName returns the attestation with the given name.
+func (c Config) AttestationByName(name string) (AttestationConfig, bool) {
+	for _, attestation := range c.Attestor.Attestations {
+		if attestation.Name == name {
+			return attestation, true
+		}
+	}
+
+	return AttestationConfig{}, false
+}
+
+// AttestationsForChain returns every attestation configured for chainID.
+func (c Config) AttestationsForChain(chainID string) []AttestationConfig {
+	var attestations []AttestationConfig
+	for _, attestation := range c.Attestor.Attestations {
+		if attestation.ChainID == chainID {
+			attestations = append(attestations, attestation)
+		}
+	}
+
+	return attestations
 }
 
 func (c ChainConfig) Validate() error {

@@ -9,6 +9,7 @@
 | `TestAttestedIFTTransfer_AutoRelay` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAttestedIFTTransfer_MultiAttestorQuorum` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 4 attestors | 2× Anvil; 2 IBC instances; 1 connection; 4 attestors | 2× Besu; 2 IBC instances; 1 connection; 4 attestors |
 | `TestCrossRoutePacketsDoNotCollideBySequence` | EVM portable | 3× Anvil; 3 IBC instances; 3 connections; 0 attestors | 3× Anvil; 3 IBC instances; 3 connections; 0 attestors | 3× Besu; 3 IBC instances; 3 connections; 0 attestors |
+| `TestDeployConnection` | EVM portable | 2× Anvil; 0 IBC instances; 0 connections; 0 attestors | 2× Anvil; 0 IBC instances; 0 connections; 0 attestors | 2× Besu; 0 IBC instances; 0 connections; 0 attestors |
 | `TestDummyClientMeshSpec` | None | No environment | No environment | No environment |
 | `TestGMPCall_AutoRelay` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 0 attestors | 2× Anvil; 2 IBC instances; 1 connection; 0 attestors | 2× Besu; 2 IBC instances; 1 connection; 0 attestors |
 | `TestGMPCall_ErrorAcknowledgement` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 0 attestors | 2× Anvil; 2 IBC instances; 1 connection; 0 attestors | 2× Besu; 2 IBC instances; 1 connection; 0 attestors |

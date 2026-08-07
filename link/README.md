@@ -22,6 +22,12 @@ make build
 # run the relayer and/or attestor after populating config
 ./bin/ibc relayer run
 ./bin/ibc attestor run
+
+# deploy IBC between two configured chains (idempotent; a rerun continues a partial deployment)
+./bin/ibc deploy core --chain <chainA> --yes
+./bin/ibc deploy core --chain <chainB> --yes
+./bin/ibc deploy client --chain <chainA> --counterparty-chain <chainB> --yes
+./bin/ibc deploy client --chain <chainB> --counterparty-chain <chainA> --yes
 ```
 
 ## Configuration
