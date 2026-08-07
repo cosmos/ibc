@@ -24,7 +24,7 @@ import (
 type LocalAttestor struct {
 	chainID        string
 	name           string
-	alias          string
+	address        string
 	finalityOffset uint
 
 	client chains.Client
@@ -37,8 +37,6 @@ var _ Attestor = &LocalAttestor{}
 
 func NewLocal(cfg config.AttestorConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
 	switch {
-	case cfg.Alias == "":
-		return nil, fmt.Errorf("alias required")
 	case cfg.ChainID == "":
 		return nil, fmt.Errorf("chainID required")
 	case cfg.Name == "":
@@ -53,13 +51,18 @@ func NewLocal(cfg config.AttestorConfig, client chains.Client, backingSigner sig
 		return nil, fmt.Errorf("ECDSA signer required, got %s", backingSigner.Type())
 	}
 
+	address, err := signer.PublicKeyToEVMAddress(backingSigner.PublicKey())
+	if err != nil {
+		return nil, fmt.Errorf("derive address from signer public key: %w", err)
+	}
+
 	fqn := attestorFQN("local", cfg.ChainID, cfg.Name)
 	logger := slog.With("module", "attestor", "name", fqn)
 
 	return &LocalAttestor{
 		chainID:        cfg.ChainID,
 		name:           cfg.Name,
-		alias:          cfg.Alias,
+		address:        address,
 		finalityOffset: cfg.FinalityOffset,
 
 		client: client,
@@ -256,10 +259,12 @@ func (a *LocalAttestor) packetCompact(
 	}, nil
 }
 
-func (a *LocalAttestor) Name() string    { return a.name }
-func (a *LocalAttestor) Alias() string   { return a.alias }
-func (a *LocalAttestor) ChainID() string { return a.chainID }
-func (a *LocalAttestor) IsLocal() bool   { return true }
+func (a *LocalAttestor) Name() string           { return a.name }
+func (a *LocalAttestor) Alias() string          { return a.name }
+func (a *LocalAttestor) ChainID() string        { return a.chainID }
+func (a *LocalAttestor) IsLocal() bool          { return true }
+func (a *LocalAttestor) Address() string        { return a.address }
+func (a *LocalAttestor) FinalityOffset() uint64 { return uint64(a.finalityOffset) }
 
 func attestorFQN(connection, chainID, name string) string {
 	return fmt.Sprintf("%s-%s-%s", chainID, connection, name)

@@ -70,6 +70,11 @@ type Client interface {
 	// GetCounterparty returns the client ID this chain's router has
 	// registered as clientID's on-chain counterparty.
 	GetCounterparty(ctx context.Context, clientID string) (string, error)
+
+	// GetAttestationSet returns the attestor addresses and minimum required
+	// signature count registered on-chain for clientID's attestation light
+	// client.
+	GetAttestationSet(ctx context.Context, clientID string) (addresses []string, minRequiredSigs uint8, err error)
 }
 
 var _ Client = (*evm.Client)(nil)

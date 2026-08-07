@@ -79,7 +79,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil)
+		gen := New(attestors, 2, 0, nil)
 
 		proof, err := gen.StateProof(ctx, 10)
 		require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil)
+		gen := New(attestors, 2, 0, nil)
 
 		_, err := gen.StateProof(ctx, 11)
 		require.Error(t, err)
@@ -118,7 +118,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 			signedPacketAttestor(t, "a2", 20, compact),
 		}
 
-		gen := New(attestors, 2, nil)
+		gen := New(attestors, 2, 0, nil)
 
 		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
 		require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 	t.Run("unsupportedKindErrors", func(t *testing.T) {
 		// an unsupported kind must be rejected before ever querying an
 		// attestor, so the generator here is given no attestors at all.
-		gen := New(nil, 2, nil)
+		gen := New(nil, 2, 0, nil)
 
 		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
 		require.Error(t, err)
@@ -147,7 +147,7 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 	counterpartyChain := mocks.NewMockClient(t)
 	counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(90)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
-	gen := New(attestors, 2, counterpartyChain)
+	gen := New(attestors, 2, 0, counterpartyChain)
 
 	height, timestamp, err := gen.LatestProvableHeight(ctx)
 	require.NoError(t, err)

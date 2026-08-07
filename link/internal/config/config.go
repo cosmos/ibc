@@ -58,15 +58,18 @@ type Attestors []AttestorConfig
 // AttestorConfig describes one attestor, either run by this process
 // (type: local) or reachable over gRPC (type: remote).
 type AttestorConfig struct {
-	// Alias is this config's unique local handle for the attestor, referenced
-	// by the relayer
-	Alias string `yaml:"alias"`
-
-	// Name is the attestor's own self-reported identity. Not required unique.
+	// Name identifies the attestor: for type: local it must be unique among
+	// this process's own local entries (this process's Service dispatches by
+	// it); for type: remote it's whatever name that attestor's own operator
+	// assigned it -- not required unique across different remote attestors,
+	// since a caller always dials a specific grpc endpoint and asks it for a
+	// specific name, never looks a name up across endpoints.
 	Name string `yaml:"name"`
 
-	// ChainID is the chain this attestor watches.
-	ChainID string `yaml:"chainId"`
+	// ChainID is the chain this attestor watches. Required for type: local
+	// (needed to stand up the local attestor); not used for type: remote --
+	// discovered live via its Info RPC instead.
+	ChainID string `yaml:"chainId,omitempty"`
 
 	Type AttestorType `yaml:"type"`
 
@@ -225,11 +228,6 @@ func (c Config) crossValidate() error {
 		signerSet[signer.Alias] = struct{}{}
 	}
 
-	attestorSet := make(map[string]struct{}, len(c.Attestors))
-	for _, a := range c.Attestors {
-		attestorSet[a.Alias] = struct{}{}
-	}
-
 	for i, a := range c.Attestors {
 		if a.Type != AttestorTypeLocal {
 			continue
@@ -244,10 +242,6 @@ func (c Config) crossValidate() error {
 	}
 
 	if err := c.validateConnectionSigners(signerSet); err != nil {
-		return errors.Wrap(err, ".relayer.connections")
-	}
-
-	if err := c.validateAttestorReferences(attestorSet); err != nil {
 		return errors.Wrap(err, ".relayer.connections")
 	}
 
@@ -324,28 +318,6 @@ func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
 					"connection %q %s references unknown signer %q",
 					conn.Alias, end.label, end.cfg.Signer,
 				)
-			}
-		}
-	}
-
-	return nil
-}
-
-// validateAttestorReferences ensures every attestorSet.attestors[] alias
-// resolves to a declared top-level attestor.
-func (c Config) validateAttestorReferences(attestorSet map[string]struct{}) error {
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range connectionEnds(conn) {
-			if end.cfg.AttestorSet == nil {
-				continue
-			}
-			for _, alias := range end.cfg.AttestorSet.Attestors {
-				if _, exists := attestorSet[alias]; !exists {
-					return errors.Errorf(
-						"connection %q %s attestorSet references unknown attestor %q",
-						conn.Alias, end.label, alias,
-					)
-				}
 			}
 		}
 	}
@@ -443,17 +415,27 @@ func DBConfigFromURL(url string) (DBConfig, error) {
 	return db, db.Validate()
 }
 
-// Validate validates the attestors list. Allows empty.
+// Validate validates the attestors list. Allows empty. Name uniqueness is
+// only enforced among type: local entries -- these all resolve through this
+// process's own Service and must not collide there. Remote entries are
+// exempt: two different remote attestors may legitimately share a name,
+// since dispatch is always scoped to (that remote's own grpc endpoint,
+// name), never looked up across endpoints.
 func (a Attestors) Validate() error {
-	aliases := make(map[string]struct{})
+	localNames := make(map[string]struct{})
 	for i, attestor := range a {
 		if err := attestor.Validate(); err != nil {
 			return errors.Wrapf(err, "[%d]", i)
 		}
-		if _, exists := aliases[attestor.Alias]; exists {
-			return errors.Errorf("duplicate alias: %q", attestor.Alias)
+
+		if attestor.Type != AttestorTypeLocal {
+			continue
 		}
-		aliases[attestor.Alias] = struct{}{}
+
+		if _, exists := localNames[attestor.Name]; exists {
+			return errors.Errorf("duplicate local attestor name: %q", attestor.Name)
+		}
+		localNames[attestor.Name] = struct{}{}
 	}
 
 	return nil
@@ -461,12 +443,8 @@ func (a Attestors) Validate() error {
 
 func (c AttestorConfig) Validate() error {
 	switch {
-	case c.Alias == "":
-		return errors.New(".alias required")
 	case c.Name == "":
 		return errors.New(".name required")
-	case c.ChainID == "":
-		return errors.New(".chainId required")
 	case c.Type != AttestorTypeLocal && c.Type != AttestorTypeRemote:
 		return errors.Errorf(".type unknown attestor type: %q", c.Type)
 	}
@@ -474,6 +452,8 @@ func (c AttestorConfig) Validate() error {
 	switch c.Type {
 	case AttestorTypeLocal:
 		switch {
+		case c.ChainID == "":
+			return errors.New(".chainId required for local attestors")
 		case c.Signer == "":
 			return errors.New(".signer required for local attestors")
 		case c.GRPC != "":
@@ -485,6 +465,8 @@ func (c AttestorConfig) Validate() error {
 			return errors.New(".grpc required for remote attestors")
 		case strings.Contains(c.GRPC, "://"):
 			return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
+		case c.ChainID != "":
+			return errors.New(".chainId must not be set for remote attestors -- discovered live via Info")
 		case c.Signer != "":
 			return errors.New(".signer must not be set for remote attestors")
 		case c.FinalityOffset != 0:
@@ -505,17 +487,6 @@ func (a Attestors) Locals() []AttestorConfig {
 	}
 
 	return locals
-}
-
-// ByAlias returns the attestor config for the given alias.
-func (a Attestors) ByAlias(alias string) (AttestorConfig, bool) {
-	for _, attestor := range a {
-		if attestor.Alias == alias {
-			return attestor, true
-		}
-	}
-
-	return AttestorConfig{}, false
 }
 
 func (c Signers) Validate() error {

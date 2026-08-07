@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"log/slog"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -18,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/attestation"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
@@ -206,6 +208,34 @@ func (c *Client) GetCounterparty(ctx context.Context, clientID string) (string, 
 	}
 
 	return info.ClientId, nil
+}
+
+// GetAttestationSet returns the attestor addresses and minimum required
+// signature count registered on-chain for clientID's attestation light
+// client. The light client's own contract address is resolved from the
+// router first, since it's a separate deployed contract from the router.
+func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]string, uint8, error) {
+	lightClientAddr, err := c.router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "resolving light client address for %q on chain %s", clientID, c.chainID)
+	}
+
+	lightClient, err := attestation.NewContract(lightClientAddr, c.eth)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "binding attestation light client %q on chain %s", clientID, c.chainID)
+	}
+
+	set, err := lightClient.GetAttestationSet(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "querying attestation set for client %q on chain %s", clientID, c.chainID)
+	}
+
+	addresses := make([]string, len(set.AttestorAddresses))
+	for i, addr := range set.AttestorAddresses {
+		addresses[i] = strings.ToLower(addr.Hex())
+	}
+
+	return addresses, set.MinRequiredSigs, nil
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {

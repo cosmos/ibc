@@ -13,36 +13,63 @@ import (
 )
 
 // RemoteAttestor provides attestation data from a remote gRPC service.
-// Used in one-way A->B relaying path.
+// Used in one-way A->B relaying path. Constructed only after resolution has
+// already learned its address/finality offset via Info -- fully resolved and
+// immutable once built.
 type RemoteAttestor struct {
-	chainID string
-	name    string
-	alias   string
-	client  proto.AttestationServiceClient
-	logger  *slog.Logger
+	chainID        string
+	name           string
+	address        string
+	finalityOffset uint64
+	client         proto.AttestationServiceClient
+	logger         *slog.Logger
 }
 
 var _ Attestor = &RemoteAttestor{}
 
 const remoteRequestTimeout = 5 * time.Second
 
-func NewRemoteFromURL(chainID, name, alias, grpcURL string) *RemoteAttestor {
+func NewRemoteFromURL(chainID, name, address string, finalityOffset uint64, grpcURL string) *RemoteAttestor {
 	var (
 		httpClient  = newConnectHTTPClient()
 		protoClient = proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
 	)
 
-	return NewRemote(chainID, name, alias, protoClient)
+	return NewRemote(chainID, name, address, finalityOffset, protoClient)
 }
 
-func NewRemote(chainID, name, alias string, client proto.AttestationServiceClient) *RemoteAttestor {
+func NewRemote(
+	chainID, name, address string,
+	finalityOffset uint64,
+	client proto.AttestationServiceClient,
+) *RemoteAttestor {
 	return &RemoteAttestor{
-		chainID: chainID,
-		name:    name,
-		alias:   alias,
-		client:  client,
-		logger:  slog.With("module", "attestor", "name", attestorFQN("remote", chainID, name)),
+		chainID:        chainID,
+		name:           name,
+		address:        address,
+		finalityOffset: finalityOffset,
+		client:         client,
+		logger:         slog.With("module", "attestor", "name", attestorFQN("remote", chainID, name)),
 	}
+}
+
+// QueryInfo queries a remote attestor endpoint's Info RPC for the attestor
+// identified by name, without constructing a full RemoteAttestor -- used
+// during quorum resolution before it's known whether this candidate should
+// be kept.
+func QueryInfo(ctx context.Context, grpcURL, name string) (chainID, address string, finalityOffset uint64, err error) {
+	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
+	defer cancel()
+
+	httpClient := newConnectHTTPClient()
+	protoClient := proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
+
+	res, err := protoClient.Info(ctx, connect.NewRequest(&proto.InfoRequest{Attestor: name}))
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	return res.Msg.ChainId, res.Msg.Address, res.Msg.FinalityOffset, nil
 }
 
 func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
@@ -102,10 +129,12 @@ func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttest
 	return attestationFromProto(res.Msg.Attestation)
 }
 
-func (a *RemoteAttestor) Name() string    { return a.name }
-func (a *RemoteAttestor) Alias() string   { return a.alias }
-func (a *RemoteAttestor) ChainID() string { return a.chainID }
-func (a *RemoteAttestor) IsLocal() bool   { return false }
+func (a *RemoteAttestor) Name() string           { return a.name }
+func (a *RemoteAttestor) Alias() string          { return a.name }
+func (a *RemoteAttestor) ChainID() string        { return a.chainID }
+func (a *RemoteAttestor) IsLocal() bool          { return false }
+func (a *RemoteAttestor) Address() string        { return a.address }
+func (a *RemoteAttestor) FinalityOffset() uint64 { return a.finalityOffset }
 
 func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 	if a == nil {

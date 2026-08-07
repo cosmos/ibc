@@ -55,27 +55,19 @@ type ConnectionConfig struct {
 }
 
 // ClientEnd one side of a connection: a light client on chainId,
-// tracking the connection's other end as its counterparty.
+// tracking the connection's other end as its counterparty. The attestor
+// quorum required to relay to this end is resolved live from the light
+// client's own on-chain attestation set, not declared here -- see
+// internal/relay/proofgen.
 type ClientEnd struct {
 	ChainID  string     `yaml:"chainId"`
 	Signer   string     `yaml:"signer"`
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	AttestorSet *AttestorSetConfig `yaml:"attestorSet,omitempty"`
-
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
-}
-
-// AttestorSetConfig attestation policy for a client end.
-type AttestorSetConfig struct {
-	Threshold                       int    `yaml:"threshold"`
-	CounterpartyChainFinalityOffset uint64 `yaml:"counterpartyChainFinalityOffset"`
-
-	// Attestors are aliases into the top-level attestors[] list.
-	Attestors []string `yaml:"attestors"`
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -208,41 +200,6 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".signer required")
 	case c.Type != ClientTypeAttestation:
 		return errors.Errorf(".type unknown client type: %q", c.Type)
-	}
-
-	if c.Type == ClientTypeAttestation {
-		if c.AttestorSet == nil {
-			return errors.Errorf(".attestorSet required for %s clients", ClientTypeAttestation)
-		}
-
-		if err := c.AttestorSet.Validate(); err != nil {
-			return errors.Wrap(err, ".attestorSet")
-		}
-	}
-
-	return nil
-}
-
-func (c AttestorSetConfig) Validate() error {
-	if c.Threshold < 1 {
-		return errors.New(".threshold must be at least 1")
-	}
-
-	if c.Threshold > len(c.Attestors) {
-		return errors.Errorf(".threshold %d exceeds number of attestors %d", c.Threshold, len(c.Attestors))
-	}
-
-	seen := make(map[string]struct{})
-
-	for i, alias := range c.Attestors {
-		if alias == "" {
-			return errors.Errorf(".attestors[%d] alias required", i)
-		}
-
-		if _, ok := seen[alias]; ok {
-			return errors.Errorf(".attestors duplicate alias: %q", alias)
-		}
-		seen[alias] = struct{}{}
 	}
 
 	return nil

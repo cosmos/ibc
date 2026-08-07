@@ -304,6 +304,80 @@ func (_c *MockClient_FindTimeoutTx_Call) RunAndReturn(run func(ctx context.Conte
 	return _c
 }
 
+// GetAttestationSet provides a mock function for the type MockClient
+func (_mock *MockClient) GetAttestationSet(ctx context.Context, clientID string) ([]string, uint8, error) {
+	ret := _mock.Called(ctx, clientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAttestationSet")
+	}
+
+	var r0 []string
+	var r1 uint8
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]string, uint8, error)); ok {
+		return returnFunc(ctx, clientID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []string); ok {
+		r0 = returnFunc(ctx, clientID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) uint8); ok {
+		r1 = returnFunc(ctx, clientID)
+	} else {
+		r1 = ret.Get(1).(uint8)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string) error); ok {
+		r2 = returnFunc(ctx, clientID)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockClient_GetAttestationSet_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAttestationSet'
+type MockClient_GetAttestationSet_Call struct {
+	*mock.Call
+}
+
+// GetAttestationSet is a helper method to define mock.On call
+//   - ctx context.Context
+//   - clientID string
+func (_e *MockClient_Expecter) GetAttestationSet(ctx any, clientID any) *MockClient_GetAttestationSet_Call {
+	return &MockClient_GetAttestationSet_Call{Call: _e.mock.On("GetAttestationSet", ctx, clientID)}
+}
+
+func (_c *MockClient_GetAttestationSet_Call) Run(run func(ctx context.Context, clientID string)) *MockClient_GetAttestationSet_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_GetAttestationSet_Call) Return(addresses []string, minRequiredSigs uint8, err error) *MockClient_GetAttestationSet_Call {
+	_c.Call.Return(addresses, minRequiredSigs, err)
+	return _c
+}
+
+func (_c *MockClient_GetAttestationSet_Call) RunAndReturn(run func(ctx context.Context, clientID string) ([]string, uint8, error)) *MockClient_GetAttestationSet_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBlockHeader provides a mock function for the type MockClient
 func (_mock *MockClient) GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error) {
 	ret := _mock.Called(ctx, height)

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/attestation"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -548,6 +549,97 @@ func TestFinality(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.True(t, finalized)
+	})
+}
+
+func TestGetAttestationSet(t *testing.T) {
+	lightClientAddress := common.HexToAddress("0x00000000000000000000000000000000000abc")
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	attestationABI, err := attestation.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	getClientCallData, err := routerABI.Pack("getClient", "base-0")
+	require.NoError(t, err)
+
+	getClientOutput, err := routerABI.Methods["getClient"].Outputs.Pack(lightClientAddress)
+	require.NoError(t, err)
+
+	getAttestationSetCallData, err := attestationABI.Pack("getAttestationSet")
+	require.NoError(t, err)
+
+	expectedAddresses := []common.Address{
+		common.HexToAddress("0x1111111111111111111111111111111111111111"),
+		common.HexToAddress("0x2222222222222222222222222222222222222222"),
+	}
+
+	t.Run("returnsAddressesAndThreshold", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		client, eth := newTestClient(t)
+
+		getAttestationSetOutput, err := attestationABI.Methods["getAttestationSet"].Outputs.Pack(expectedAddresses, uint8(2))
+		require.NoError(t, err)
+
+		routerAddr := common.HexToAddress(routerAddress)
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil),
+		).Return(getClientOutput, nil).Once()
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: getAttestationSetCallData}, (*big.Int)(nil),
+		).Return(getAttestationSetOutput, nil).Once()
+
+		// ACT
+		addresses, minRequiredSigs, err := client.GetAttestationSet(ctx, "base-0")
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"0x1111111111111111111111111111111111111111",
+			"0x2222222222222222222222222222222222222222",
+		}, addresses)
+		assert.Equal(t, uint8(2), minRequiredSigs)
+	})
+
+	t.Run("routerLookupError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		client, eth := newTestClient(t)
+
+		routerAddr := common.HexToAddress(routerAddress)
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil),
+		).Return(nil, errors.New("rpc down")).Once()
+
+		// ACT
+		_, _, err := client.GetAttestationSet(ctx, "base-0")
+
+		// ASSERT
+		require.ErrorContains(t, err, "resolving light client address")
+		require.ErrorContains(t, err, "rpc down")
+	})
+
+	t.Run("attestationSetQueryError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		client, eth := newTestClient(t)
+
+		routerAddr := common.HexToAddress(routerAddress)
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil),
+		).Return(getClientOutput, nil).Once()
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: getAttestationSetCallData}, (*big.Int)(nil),
+		).Return(nil, errors.New("rpc down")).Once()
+
+		// ACT
+		_, _, err := client.GetAttestationSet(ctx, "base-0")
+
+		// ASSERT
+		require.ErrorContains(t, err, "querying attestation set")
+		require.ErrorContains(t, err, "rpc down")
 	})
 }
 

@@ -30,7 +30,10 @@ relayer:
 
   # each connection is relayed bidirectionally: clientA's counterparty is
   # simply clientB, and vice versa -- no separate counterparty fields to
-  # keep in sync
+  # keep in sync. There's no attestorSet here: the relayer resolves the
+  # attestor quorum required for each client end live, by querying that
+  # client's on-chain attestation set and matching it against the top-level
+  # attestors[] list below -- see attestors[] for how that resolution works.
   connections:
     - alias: "eth-base"
       clientA:
@@ -38,11 +41,6 @@ relayer:
         signer: "eth-relayer-key"
         clientId: "base-0"
         type: "attestation"
-        # the attestors referenced here must attest to the counterparty chain (chain id "8453")
-        attestorSet:
-          threshold: 1
-          counterpartyChainFinalityOffset: 1
-          attestors: ["attestor-base"]
         autoRelay:
           enabled: true
           lookback: 100
@@ -51,35 +49,37 @@ relayer:
         signer: "base-relayer-key"
         clientId: "ethereum-0"
         type: "attestation"
-        # the attestors referenced here must attest to the counterparty chain (chain id "1")
-        attestorSet:
-          threshold: 1
-          counterpartyChainFinalityOffset: 1
-          attestors: ["attestor-ethereum"]
         autoRelay:
           enabled: true
           lookback: 100
 
 # attestors is the unified list of every attestor in play -- both the ones
 # this process runs itself (type: local) and the ones it queries over gRPC
-# (type: remote). `ibc attestor run` serves only the type: local subset;
-# `ibc relayer run` additionally resolves relayer.connections[].*.attestorSet
-# references against this same list.
+# (type: remote). `ibc attestor run` serves only the type: local subset.
 #
-# NOTE: each attestor needs a unique alias. name need not be unique.
+# `ibc relayer run` resolves each client end's attestor quorum live: it
+# queries the client's on-chain attestation set (the authoritative addresses
+# and required signature count), then for each entry here asks the attestor
+# itself (locally, or via its Info RPC for remote) what chain it watches and
+# what address it signs with, and keeps only the entries that both watch the
+# right chain and hold an address the chain has actually registered. There's
+# no attestorSet/threshold to declare or keep in sync -- the chain is the
+# single source of truth for both.
+#
+# NOTE: `name` is how the relayer identifies which attestor to ask for at a
+# given endpoint (local: within this process; remote: at that grpc target).
+# It only needs to be unique among this process's own type: local entries --
+# two different remote attestors are free to use the same name, since a
+# caller always asks a specific endpoint for a specific name, never looks a
+# name up across endpoints.
 attestors:
-  - alias: "attestor-base"
-    name: "attestor-base"
-    chainId: "8453"
+  - name: "attestor-base"
     type: remote
     grpc: attestor.example.com:3000
-  - alias: "attestor-ethereum"
-    name: "attestor-ethereum"
-    chainId: "1"
+  - name: "attestor-ethereum"
     type: remote
     grpc: attestor.example.com:3000
-#  - alias: "my-local-attestor"
-#    name: "my-local-attestor"
+#  - name: "my-local-attestor"
 #    chainId: "1"
 #    type: local
 #    signer: my-local-signer

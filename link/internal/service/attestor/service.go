@@ -35,9 +35,25 @@ type Attestor interface {
 	// IsLocal returns true if the attestor is local.
 	IsLocal() bool
 
+	// Address is the attestor's signing address, used only to cross-check
+	// against on-chain registered attestor sets -- never for dispatch.
+	Address() string
+
+	// FinalityOffset is the finality offset this attestor applies when
+	// producing attestations.
+	FinalityOffset() uint64
+
 	LatestHeight(ctx context.Context) (uint64, error)
 	StateAttestation(ctx context.Context, height uint64) (Attestation, error)
 	PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error)
+}
+
+// Info identifies one attestor: the chain it watches, its signing address,
+// and the finality offset it applies.
+type Info struct {
+	ChainID        string
+	Address        string
+	FinalityOffset uint64
 }
 
 // PacketAttestationRequest is a request for packet commitment attestations.
@@ -116,7 +132,7 @@ func NewFromConfig(cfg config.Config, clients *chains.ClientSet, signers *signer
 
 	for _, spec := range locals {
 		if err := add(spec); err != nil {
-			return nil, fmt.Errorf("attestor %s: %w", spec.Alias, err)
+			return nil, fmt.Errorf("attestor %s: %w", spec.Name, err)
 		}
 	}
 
@@ -151,6 +167,20 @@ func (s *Service) Add(id string, attestor Attestor) {
 func (s *Service) Get(alias string) (Attestor, bool) {
 	a, ok := s.attestors[alias]
 	return a, ok
+}
+
+// Info returns identity information for the attestor registered under alias.
+func (s *Service) Info(alias string) (Info, bool) {
+	a, ok := s.attestors[alias]
+	if !ok {
+		return Info{}, false
+	}
+
+	return Info{
+		ChainID:        a.ChainID(),
+		Address:        a.Address(),
+		FinalityOffset: a.FinalityOffset(),
+	}, true
 }
 
 func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {

@@ -13,7 +13,7 @@ import (
 
 func TestRemoteAttestorRequestTimeout(t *testing.T) {
 	client := timeoutAttestationClient{t: t}
-	remote := NewRemote("chain", "name", "alias", client)
+	remote := NewRemote("chain", "name", "0xaddress", 0, client)
 
 	_, err := remote.LatestHeight(context.Background())
 	require.NoError(t, err)
@@ -42,6 +42,11 @@ func (c timeoutAttestationClient) StateAttestation(ctx context.Context, _ *conne
 func (c timeoutAttestationClient) PacketAttestation(ctx context.Context, _ *connect.Request[proto.PacketAttestationRequest]) (*connect.Response[proto.PacketAttestationResponse], error) {
 	c.requireTimeout(ctx)
 	return connect.NewResponse(&proto.PacketAttestationResponse{Attestation: &proto.Attestation{}}), nil
+}
+
+func (c timeoutAttestationClient) Info(ctx context.Context, _ *connect.Request[proto.InfoRequest]) (*connect.Response[proto.InfoResponse], error) {
+	c.requireTimeout(ctx)
+	return connect.NewResponse(&proto.InfoResponse{}), nil
 }
 
 func (c timeoutAttestationClient) requireTimeout(ctx context.Context) {

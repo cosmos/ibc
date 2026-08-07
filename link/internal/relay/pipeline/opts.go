@@ -34,8 +34,10 @@ type Options struct {
 
 // OptionsFromConfig maps chain overrides onto pipeline options: recv batching
 // follows the destination chain, ack and timeout batching and the ack relay
-// flags follow the source chain.
-func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
+// flags follow the source chain. Finality offsets are read from the already-
+// resolved proofGenerators (each generator's offset reflects the attestors
+// matched for its counterparty chain), not from config directly.
+func OptionsFromConfig(cfg config.Config, proofGenerators processors.ProofGenerators, route processors.Route) Options {
 	opts := Options{
 		RecvBatchSize:       DefaultBatchSize,
 		RecvBatchTimeout:    DefaultBatchTimeout,
@@ -48,16 +50,16 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 	if sourceEnd, destEnd, ok := cfg.Relayer.ClientEnd(route.SourceChainID, route.SourceClientID); ok {
 		opts.SourceSignerAlias = sourceEnd.Signer
 		opts.DestSignerAlias = destEnd.Signer
+	}
 
-		if sourceEnd.AttestorSet != nil {
-			offset := sourceEnd.AttestorSet.CounterpartyChainFinalityOffset
-			opts.DestinationFinalityOffset = &offset
-		}
+	if sourceGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID); ok {
+		offset := sourceGen.FinalityOffset()
+		opts.DestinationFinalityOffset = &offset
+	}
 
-		if destEnd.AttestorSet != nil {
-			offset := destEnd.AttestorSet.CounterpartyChainFinalityOffset
-			opts.SourceFinalityOffset = &offset
-		}
+	if destGen, ok := proofGenerators.Get(route.DestinationChainID, route.DestinationClientID); ok {
+		offset := destGen.FinalityOffset()
+		opts.SourceFinalityOffset = &offset
 	}
 
 	if src, ok := cfg.Relayer.ChainOverride(route.SourceChainID); ok {

@@ -71,7 +71,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Proof generators
-	proofGenerators, err := proofgen.NewSetFromConfig(cfg, clientSet, attestorService)
+	proofGenerators, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, attestorService)
 	if err != nil {
 		return nil, err
 	}

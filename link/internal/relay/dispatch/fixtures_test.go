@@ -68,6 +68,12 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
+	destProofGen := mocks.NewMockProofGenerator(t)
+	destProofGen.EXPECT().FinalityOffset().Return(uint64(0)).Maybe()
+
+	sourceProofGen := mocks.NewMockProofGenerator(t)
+	sourceProofGen.EXPECT().FinalityOffset().Return(uint64(0)).Maybe()
+
 	deps := pipeline.Deps{
 		Storage: db,
 		Chains: staticChains{
@@ -75,8 +81,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
 		ProofGenerators: staticProofGenerators{
-			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): mocks.NewMockProofGenerator(t),
-			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           mocks.NewMockProofGenerator(t),
+			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): destProofGen,
+			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           sourceProofGen,
 		},
 		TxBuilders: staticTxBuilders{
 			testRoute.SourceChainID:      mocks.NewMockTxBuilder(t),

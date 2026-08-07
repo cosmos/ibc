@@ -43,17 +43,6 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "relayer-key", clientA.Signer)
 		assert.Equal(t, ClientTypeAttestation, clientA.Type)
 
-		require.NotNil(t, clientA.AttestorSet)
-		assert.Equal(t, 2, clientA.AttestorSet.Threshold)
-		assert.Equal(t, uint64(1), clientA.AttestorSet.CounterpartyChainFinalityOffset)
-		require.Len(t, clientA.AttestorSet.Attestors, 3)
-		assert.Equal(t, []string{"attestor-alice-base", "attestor-bob-base", "attestor-dan-base"}, clientA.AttestorSet.Attestors)
-
-		aliceAttestor, ok := config.Attestors.ByAlias(clientA.AttestorSet.Attestors[0])
-		require.True(t, ok)
-		assert.Equal(t, AttestorTypeRemote, aliceAttestor.Type)
-		assert.Equal(t, "attestor-alice-base", aliceAttestor.Name)
-
 		assert.False(t, *clientA.AutoRelay.Enabled)
 		assert.Equal(t, uint64(100), clientA.AutoRelay.Lookback)
 
@@ -235,13 +224,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: `.connections duplicate client "base-0" on chain "1"`,
 			},
 			{
-				name: "client without attestor set",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.AttestorSet = nil
-				},
-				errContains: `.attestorSet required for attestation clients`,
-			},
-			{
 				name: "connection missing alias",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].Alias = ""
@@ -257,28 +239,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Connections = append(c.Relayer.Connections, duplicate)
 				},
 				errContains: `.connections duplicate alias: "eth-base"`,
-			},
-			{
-				name: "threshold exceeds attestors",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.AttestorSet.Threshold = 4
-				},
-				errContains: `threshold 4 exceeds number of attestors 3`,
-			},
-			{
-				name: "zero threshold",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.AttestorSet.Threshold = 0
-				},
-				errContains: ".threshold must be at least 1",
-			},
-			{
-				name: "duplicate attestor alias in attestorSet",
-				patch: func(c *Config) {
-					set := c.Relayer.Connections[0].ClientA.AttestorSet
-					set.Attestors[1] = set.Attestors[0]
-				},
-				errContains: ".attestors duplicate alias",
 			},
 			{
 				name: "clientA signer unknown",
@@ -300,13 +260,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Connections[0].ClientA.Signer = ""
 				},
 				errContains: ".signer required",
-			},
-			{
-				name: "attestorSet references unknown attestor alias",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.AttestorSet.Attestors[0] = "ghost-attestor"
-				},
-				errContains: `attestorSet references unknown attestor "ghost-attestor"`,
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {

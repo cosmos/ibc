@@ -203,8 +203,7 @@ signers:
     grpc: https://kms.example.com
     remoteKeyId: key-a
 attestors:
-  - alias: attestation-a
-    name: attestation-a
+  - name: attestation-a
     chainId: chain-a
     type: local
     signer: signer-a
@@ -228,8 +227,7 @@ signers:
     grpc: https://kms.example.com
     remoteKeyId: key-a
 attestors:
-  - alias: attestation-a
-    name: attestation-a
+  - name: attestation-a
     chainId: chain-a
     type: local
     signer: missing-signer
@@ -326,67 +324,70 @@ func TestAttestorsValidate(t *testing.T) {
 		{
 			name: "valid local and remote",
 			attestors: Attestors{
-				{Alias: "a-local", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
-				{Alias: "b-remote", Name: "attestor-b", ChainID: "chain-b", Type: AttestorTypeRemote, GRPC: "attestor-b.example.com:3000"},
+				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
+				{Name: "attestor-b", Type: AttestorTypeRemote, GRPC: "attestor-b.example.com:3000"},
 			},
 		},
 		{
-			name: "same name distinct alias is valid",
+			name: "same name across two remotes is valid",
 			attestors: Attestors{
-				{Alias: "watcher-local", Name: "watcher", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
-				{Alias: "watcher-remote", Name: "watcher", ChainID: "chain-b", Type: AttestorTypeRemote, GRPC: "watcher.example.com:3000"},
+				{Name: "watcher", Type: AttestorTypeRemote, GRPC: "watcher-a.example.com:3000"},
+				{Name: "watcher", Type: AttestorTypeRemote, GRPC: "watcher-b.example.com:3000"},
 			},
-		},
-		{
-			name:        "alias required",
-			attestors:   Attestors{{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
-			errContains: "[0]: .alias required",
 		},
 		{
 			name:        "name required",
-			attestors:   Attestors{{Alias: "a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
+			attestors:   Attestors{{ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
 			errContains: "[0]: .name required",
 		},
 		{
-			name:        "chain id required",
-			attestors:   Attestors{{Alias: "a", Name: "attestor-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
-			errContains: "[0]: .chainId required",
+			name:        "local chain id required",
+			attestors:   Attestors{{Name: "attestor-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
+			errContains: "[0]: .chainId required for local attestors",
 		},
 		{
 			name:        "invalid type",
-			attestors:   Attestors{{Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: "hybrid"}},
+			attestors:   Attestors{{Name: "attestor-a", ChainID: "chain-a", Type: "hybrid"}},
 			errContains: `unknown attestor type: "hybrid"`,
 		},
 		{
 			name:        "local missing signer",
-			attestors:   Attestors{{Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal}},
+			attestors:   Attestors{{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal}},
 			errContains: ".signer required for local attestors",
 		},
 		{
 			name: "local with grpc set",
 			attestors: Attestors{{
-				Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal,
+				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal,
 				Signer: "signer-a", GRPC: "attestor-a.example.com:3000",
 			}},
 			errContains: ".grpc must not be set for local attestors",
 		},
 		{
 			name:        "remote missing grpc",
-			attestors:   Attestors{{Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote}},
+			attestors:   Attestors{{Name: "attestor-a", Type: AttestorTypeRemote}},
 			errContains: ".grpc required for remote attestors",
 		},
 		{
 			name: "remote grpc includes a scheme",
 			attestors: Attestors{{
-				Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
+				Name: "attestor-a", Type: AttestorTypeRemote,
 				GRPC: "https://attestor-a.example.com:443",
 			}},
 			errContains: ".grpc must be a bare host:port, not a URL",
 		},
 		{
+			name: "remote with chainId set",
+			attestors: Attestors{{
+				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
+				GRPC: "attestor-a.example.com:3000",
+			}},
+			errContains: ".chainId must not be set for remote attestors",
+		},
+		{
 			name: "remote with signer set",
 			attestors: Attestors{{
-				Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
+				Name: "attestor-a", Type: AttestorTypeRemote,
 				GRPC: "attestor-a.example.com:3000", Signer: "signer-a",
 			}},
 			errContains: ".signer must not be set for remote attestors",
@@ -394,18 +395,18 @@ func TestAttestorsValidate(t *testing.T) {
 		{
 			name: "remote with nonzero finalityOffset",
 			attestors: Attestors{{
-				Alias: "a", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
+				Name: "attestor-a", Type: AttestorTypeRemote,
 				GRPC: "attestor-a.example.com:3000", FinalityOffset: 1,
 			}},
 			errContains: ".finalityOffset must not be set for remote attestors",
 		},
 		{
-			name: "duplicate alias",
+			name: "duplicate local name",
 			attestors: Attestors{
-				{Alias: "same", Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
-				{Alias: "same", Name: "attestor-b", ChainID: "chain-b", Type: AttestorTypeLocal, Signer: "signer-b"},
+				{Name: "same", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
+				{Name: "same", ChainID: "chain-b", Type: AttestorTypeLocal, Signer: "signer-b"},
 			},
-			errContains: `duplicate alias: "same"`,
+			errContains: `duplicate local attestor name: "same"`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

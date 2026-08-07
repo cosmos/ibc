@@ -20,11 +20,28 @@ import (
 type Generator struct {
 	attestors         []attestor.Attestor
 	threshold         int
+	finalityOffset    uint64
 	counterpartyChain chains.Client
 }
 
-func New(attestors []attestor.Attestor, threshold int, counterpartyChain chains.Client) *Generator {
-	return &Generator{attestors: attestors, threshold: threshold, counterpartyChain: counterpartyChain}
+func New(
+	attestors []attestor.Attestor,
+	threshold int,
+	finalityOffset uint64,
+	counterpartyChain chains.Client,
+) *Generator {
+	return &Generator{
+		attestors:         attestors,
+		threshold:         threshold,
+		finalityOffset:    finalityOffset,
+		counterpartyChain: counterpartyChain,
+	}
+}
+
+// FinalityOffset is the finality offset resolved from this generator's
+// matched attestors -- the max reported by any of them.
+func (g *Generator) FinalityOffset() uint64 {
+	return g.finalityOffset
 }
 
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {

@@ -109,18 +109,28 @@ separate counterparty fields to keep in sync, unlike the old `clients[]` +
 | `signer`      | string | Signer submitting relay transactions on `chainId` — this end's own chain. Must match a `signers[].alias`. |
 | `clientId`    | string | This end's on-chain client ID, on `chainId`. |
 | `type`        | string | Only `attestation` is currently supported. |
-| `attestorSet` | object | Required for `attestation` clients. See below. |
 | `autoRelay`   | object | `enabled` (bool), `lookback` (uint) — auto-relay settings for packets flowing FROM this end's chain TOWARD the counterparty end. |
 
 `clientA` and `clientB` must be on different chains.
 
-#### `relayer.connections[].clientA/clientB.attestorSet`
+There's no `attestorSet` here — for `attestation` clients, the relayer
+resolves the required attestor quorum *live* at startup (and on every
+`--live` config validate) rather than from a static declaration:
 
-| Field                             | Type            | Description |
-|-----------------------------------|-----------------|--------------|
-| `threshold`                       | int             | Minimum number of attestor signatures required. |
-| `counterpartyChainFinalityOffset` | uint            | Blocks to wait on the *counterparty* chain before treating state final enough to relay. Should match the corresponding attestor's `finalityOffset`. |
-| `attestors`                       | list of string  | Aliases into the top-level `attestors[]` list — not embedded objects. |
+1. It queries `clientId`'s own on-chain attestation light client for the
+   authoritative registered attestor addresses and minimum required
+   signature count.
+2. For every entry in the top-level `attestors[]` list, it asks that
+   attestor (in-process for `type: local`, over its `Info` RPC for
+   `type: remote`) which chain it watches and which address it signs with.
+3. It keeps only the entries that watch this end's counterparty chain *and*
+   whose address is actually in the on-chain registered set, then requires
+   at least the on-chain minimum count of them.
+
+This removes a class of config drift that a static `attestorSet` couldn't
+catch: a declared threshold or attestor reference that disagreed with what
+the chain actually enforces used to surface only when a relay attempt failed
+on submission; now it's caught at startup instead.
 
 ```yaml
 relayer:
@@ -131,10 +141,6 @@ relayer:
         signer: "relayer-key"
         clientId: "base-0"
         type: "attestation"
-        attestorSet:
-          threshold: 1
-          counterpartyChainFinalityOffset: 1
-          attestors: ["base-watcher"]   # watches chain 8453, this end's counterparty
         autoRelay:
           enabled: true
           lookback: 100
@@ -143,10 +149,6 @@ relayer:
         signer: "relayer-key"
         clientId: "ethereum-0"
         type: "attestation"
-        attestorSet:
-          threshold: 1
-          counterpartyChainFinalityOffset: 1
-          attestors: ["eth-watcher"]    # watches chain 1, this end's counterparty
         autoRelay:
           enabled: true
           lookback: 100
@@ -155,7 +157,10 @@ relayer:
 `ibc config validate --live` additionally queries each connection's two
 chains' routers to confirm the on-chain registered counterparty actually
 matches `clientA`/`clientB`, in both directions — catching a config that
-names two clients as counterparties when the chains themselves disagree.
+names two clients as counterparties when the chains themselves disagree —
+and runs the same attestor-quorum resolution described above, so a `--live`
+pass means the relayer will actually be able to build its proof generators
+on real startup, not just that the YAML shape is well-formed.
 
 ---
 
@@ -163,36 +168,32 @@ names two clients as counterparties when the chains themselves disagree.
 
 Unified, top-level list of every attestor in play — both the ones this
 process runs itself (`type: local`) and the ones it queries over gRPC
-(`type: remote`). Replaces the old two-concept split between the top-level
-`attestor.attestations[]` block (this process's self-description) and
-`relayer.clients[].attestorSet.attestors[]` (embedded attestor references).
+(`type: remote`). Every entry describes exactly one attestor identity;
+which client ends it's actually authorized for is resolved live (see above),
+never declared here.
 
 Needed standalone (`ibc attestor run`, which only ever serves the
 `type: local` subset of this list) or alongside a relayer in the same
 process (`ibc relayer run` — `type: local` entries then run in-process and
-resolve locally instead of over gRPC; populate `relayer.connections[]` too).
+resolve locally instead of over gRPC).
 
 | Field            | Type   | Description |
 |------------------|--------|--------------|
-| `alias`          | string | Unique handle referenced by `relayer.connections[].clientA/clientB.attestorSet.attestors[]`. |
-| `name`           | string | The attestor's own self-reported identity. NOT required unique — a local and a remote attestor may share a name. |
-| `chainId`        | string | Which declared chain this attestor watches. |
+| `name`           | string | Identifies the attestor. For `type: local`, must be unique among this process's own local entries (they all share one dispatch table). For `type: remote`, it's whatever name that attestor's own operator assigned it — NOT required unique across different remote attestors, since a caller always asks a specific `grpc` endpoint for a specific name, never looks a name up across endpoints. |
+| `chainId`        | string | `local` only — which declared chain this attestor watches. Not set for `type: remote`; discovered live via its `Info` RPC instead. |
 | `type`           | string | `local` or `remote`. |
 | `signer`         | string | `local` only. Must reference a `signers[].alias`. |
-| `finalityOffset` | uint   | `local` only. `0` (default): attest up to the chain's `"finalized"` RPC tag. `n > 0`: attest up to `"latest" - n` instead. Use this where `"finalized"` is slow or unsupported (e.g. Ethereum PoS lags ~12-15 min behind head). |
+| `finalityOffset` | uint   | `local` only. `0` (default): attest up to the chain's `"finalized"` RPC tag. `n > 0`: attest up to `"latest" - n` instead. Use this where `"finalized"` is slow or unsupported (e.g. Ethereum PoS lags ~12-15 min behind head). A remote attestor's finality offset is discovered the same way as its chain and address — via `Info`, not configured here. |
 | `grpc`           | string | `remote` only. Bare `host:port` (not a URL — a `://` here is rejected at validation). |
 
 ```yaml
 attestors:
-  - alias: "eth-watcher"
-    name: "eth-watcher"
+  - name: "eth-watcher"
     chainId: "1"
     type: local
     signer: "my-local-signer"
     finalityOffset: 1
-  - alias: "base-watcher"
-    name: "base-watcher"
-    chainId: "8453"
+  - name: "base-watcher"
     type: remote
     grpc: attestor.example.com:3000
 ```

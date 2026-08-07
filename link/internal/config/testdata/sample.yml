@@ -39,10 +39,6 @@ relayer:
         signer: "relayer-key"
         clientId: "base-0"
         type: "attestation"
-        attestorSet:
-          threshold: 2
-          counterpartyChainFinalityOffset: 1
-          attestors: ["attestor-alice-base", "attestor-bob-base", "attestor-dan-base"]
         autoRelay:
           enabled: false
           lookback: 100
@@ -51,29 +47,19 @@ relayer:
         signer: "relayer-key"
         clientId: "ethereum-0"
         type: "attestation"
-        attestorSet:
-          threshold: 1
-          counterpartyChainFinalityOffset: 1
-          attestors: ["attestor-dan-ethereum"]
 attestors:
-  - alias: "attestor-alice-base"
-    name: "attestor-alice-base"
-    chainId: "8453"
+  - name: "attestor-alice-base"
     type: remote
     grpc: attestor-alice.example.com:3000
-  - alias: "attestor-bob-base"
-    name: "attestor-bob-base"
-    chainId: "8453"
+  - name: "attestor-bob-base"
     type: remote
     grpc: attestor-bob.example.com:3000
-  - alias: "attestor-dan-base"
-    name: "attestor-dan"
+  - name: "attestor-dan-base"
     chainId: "8453"
     type: local
     signer: "attestor-dan-key"
     finalityOffset: 1
-  - alias: "attestor-dan-ethereum"
-    name: "attestor-dan"
+  - name: "attestor-dan-ethereum"
     chainId: "1"
     type: local
     signer: "attestor-dan-key"
