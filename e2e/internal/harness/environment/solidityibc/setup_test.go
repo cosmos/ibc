@@ -20,6 +20,8 @@ import (
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
+const testMiningTimeout = 30 * time.Second
+
 type failSendBackend struct {
 	contractBackend
 	failAt int
@@ -51,7 +53,7 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 		clientAuthority.Address(): {Balance: ether(100)},
 	})
 	startMining(t, backend)
-	setup, err := newSetup(backend.Client(), big.NewInt(1337))
+	setup, err := newSetup(backend.Client(), big.NewInt(1337), testMiningTimeout)
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -107,7 +109,7 @@ func TestPrepareClientRejectsInvalidConfigurationBeforeSideEffects(t *testing.T)
 		authority.Address(): {Balance: ether(1)},
 	})
 	t.Cleanup(func() { require.NoError(t, backend.Close()) })
-	setup, err := newSetup(backend.Client(), big.NewInt(1337))
+	setup, err := newSetup(backend.Client(), big.NewInt(1337), testMiningTimeout)
 	require.NoError(t, err)
 
 	prepared, err := setup.PrepareClient(context.Background(), authority, common.Address{}, AttestationClientConfig{
@@ -130,7 +132,7 @@ func TestDeployInstanceReportsBroadcastFailure(t *testing.T) {
 	})
 	startMining(t, backend)
 	failing := &failSendBackend{contractBackend: backend.Client(), failAt: 2}
-	setup, err := newSetup(failing, big.NewInt(1337))
+	setup, err := newSetup(failing, big.NewInt(1337), testMiningTimeout)
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -142,6 +144,23 @@ func TestDeployInstanceReportsBroadcastFailure(t *testing.T) {
 	require.ErrorContains(t, err, failing.hash.Hex())
 }
 
+func TestAwaitMinedTimesOutWhenNeverMined(t *testing.T) {
+	authority, err := evm.NewAccount()
+	require.NoError(t, err)
+	backend := simulated.NewBackend(gethtypes.GenesisAlloc{
+		authority.Address(): {Balance: ether(1)},
+	})
+	t.Cleanup(func() { require.NoError(t, backend.Close()) })
+	setup, err := newSetup(backend.Client(), big.NewInt(1337), 200*time.Millisecond)
+	require.NoError(t, err)
+	tx := gethtypes.NewTx(&gethtypes.LegacyTx{Nonce: 77, Gas: 21_000})
+
+	receipt, err := setup.awaitMined(context.Background(), "unmined confirmation", tx)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorContains(t, err, "unmined confirmation")
+	require.Nil(t, receipt)
+}
+
 func TestAwaitMinedReturnsCancellation(t *testing.T) {
 	authority, err := evm.NewAccount()
 	require.NoError(t, err)
@@ -149,7 +168,7 @@ func TestAwaitMinedReturnsCancellation(t *testing.T) {
 		authority.Address(): {Balance: ether(1)},
 	})
 	t.Cleanup(func() { require.NoError(t, backend.Close()) })
-	setup, err := newSetup(backend.Client(), big.NewInt(1337))
+	setup, err := newSetup(backend.Client(), big.NewInt(1337), testMiningTimeout)
 	require.NoError(t, err)
 	tx := gethtypes.NewTx(&gethtypes.LegacyTx{Nonce: 77, Gas: 21_000})
 	ctx, cancel := context.WithCancel(context.Background())
