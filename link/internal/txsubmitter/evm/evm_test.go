@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	ethereum "github.com/ethereum/go-ethereum"
 
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
@@ -24,7 +25,10 @@ const (
 	toAddress  = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 )
 
-func newTestTxSubmitter(t *testing.T, opts ChainOptions) (*TxSubmitter, *mocks.MockTxSubmitterETHClient, signer.Signer) {
+func newTestTxSubmitter(
+	t *testing.T,
+	opts ChainOptions,
+) (*TxSubmitter, *mocks.MockTxSubmitterETHClient, signer.Signer) {
 	t.Helper()
 
 	eth := mocks.NewMockTxSubmitterETHClient(t)
@@ -113,7 +117,10 @@ func TestShouldRetry(t *testing.T) {
 	t.Run("pendingNotExpired", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(ctx, (*big.Int)(nil)).
+			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
 
@@ -124,7 +131,10 @@ func TestShouldRetry(t *testing.T) {
 	t.Run("pendingExpired", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(ctx, (*big.Int)(nil)).
+			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now().Add(-time.Hour))
 
@@ -134,7 +144,10 @@ func TestShouldRetry(t *testing.T) {
 
 	t.Run("reverted", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).Once()
+		eth.EXPECT().
+			TransactionReceipt(ctx, mock.Anything).
+			Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
 
@@ -144,7 +157,10 @@ func TestShouldRetry(t *testing.T) {
 
 	t.Run("confirmed", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).Once()
+		eth.EXPECT().
+			TransactionReceipt(ctx, mock.Anything).
+			Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
 

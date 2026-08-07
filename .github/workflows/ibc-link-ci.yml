@@ -37,6 +37,7 @@ jobs:
           filters: |
             link:
               - 'link/**'
+              - '.golangci.yml'
               - '.github/workflows/ibc-link-ci.yml'
             sql:
               - 'link/**/*.sql'

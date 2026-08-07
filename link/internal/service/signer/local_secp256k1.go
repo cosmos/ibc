@@ -6,9 +6,9 @@ import (
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 
-	"github.com/cosmos/ibc/link/keyfile"
-
 	kms "github.com/cosmos/kms/signing/file"
+
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 // LocalSecp256k1Signer signs with a local secp256k1 key.

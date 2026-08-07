@@ -8,7 +8,6 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder/evm"
-
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 

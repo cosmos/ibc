@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/cosmos/ibc/link/keyfile"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/link/keyfile"
 )
 
 const (

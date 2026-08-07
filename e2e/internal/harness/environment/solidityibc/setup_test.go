@@ -14,10 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/stretchr/testify/require"
 
+	gethtypes "github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/accessmanager"
-
-	gethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 type failSendBackend struct {

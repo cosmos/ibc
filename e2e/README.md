@@ -2,7 +2,7 @@
 
 This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets. Most use a permissive dummy light client that accepts packets without proof verification; the attested IFT tests instead use attestation clients and managed attestors, including 2-of-3 quorum loss and recovery.
 
-`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack and dummy light clients. `e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
+`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack and dummy light clients. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
 ## Acceptance coverage
 

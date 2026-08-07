@@ -13,7 +13,7 @@ explicitly.
 - Tests start an `Environment` (which realizes Chains, the IBC contract stack, and dummy light
   clients), hold the temporary Link driver and relayer explicitly, and assert through
   route-bound application bindings (ICS20 transfers, ICS27 GMP calls). This e2e-only setup
-  lives in `e2etest`; transport-contract tests may call the concrete driver or Relayer directly.
+  lives in `internal/e2etest`; transport-contract tests may call the concrete driver or Relayer directly.
 - E2e may import Link's public command transport types, generated RPC clients, and signer-keyfile
   package for transport and provisioning, but it must not import `link/internal` or invoke handlers
   in process.

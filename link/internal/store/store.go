@@ -8,9 +8,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
-
 	pgx "github.com/jackc/pgx/v5"
+
+	"github.com/cosmos/ibc/link/internal/config"
 )
 
 // Store a unified, database-agnostic API for persistence.

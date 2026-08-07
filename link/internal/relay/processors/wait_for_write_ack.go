@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/store"
-
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 

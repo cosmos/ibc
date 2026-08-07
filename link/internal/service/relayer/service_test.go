@@ -102,7 +102,7 @@ func TestRelay(t *testing.T) {
 		// request and packets land in one transaction; hash normalized to lowercase
 		st.EXPECT().
 			Transact(ctx, mock.AnythingOfType("func(store.Repository) error")).
-			RunAndReturn(func(ctx context.Context, fn func(store.Repository) error) error {
+			RunAndReturn(func(_ context.Context, fn func(store.Repository) error) error {
 				return fn(repo)
 			}).
 			Once()

@@ -386,5 +386,4 @@ func TestRelayerConfig(t *testing.T) {
 			})
 		}
 	})
-
 }

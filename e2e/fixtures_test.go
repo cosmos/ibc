@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/cosmos/ibc/e2e/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 

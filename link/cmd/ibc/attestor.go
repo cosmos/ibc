@@ -5,10 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
-
-	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
 var (

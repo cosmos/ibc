@@ -13,9 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
-
 	ethereum "github.com/ethereum/go-ethereum"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
 )
 
 const (
