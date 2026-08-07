@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
@@ -78,6 +80,9 @@ func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
 			"chain-b": "31338",
 		},
 		manualRoutes: map[string]bool{"route-manual": true},
+		waitPolicies: map[string]WaitPolicy{
+			"route-manual": {CompletionBudget: time.Second, StatusPoll: time.Millisecond, StabilityWindow: time.Second},
+		},
 	}
 }
 
@@ -134,4 +139,52 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 
 	require.True(t, relayer.ManualRoute("route-manual"))
 	require.False(t, relayer.ManualRoute("route-auto"))
+	policy, ok := relayer.WaitPolicy("route-manual")
+	require.True(t, ok)
+	require.Equal(t, time.Second, policy.CompletionBudget)
+	_, ok = relayer.WaitPolicy("route-auto")
+	require.False(t, ok)
+}
+
+func TestWaitPoliciesSurviveDriverAndRelayerStartup(t *testing.T) {
+	api := &fakeRelayerAPI{}
+	mux := http.NewServeMux()
+	path, handler := relayerv2.NewRelayerApiServiceHandler(api)
+	mux.Handle(path, handler)
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	script := filepath.Join(t.TempDir(), "ibc-ready")
+	require.NoError(t, os.WriteFile(script, []byte(fmt.Sprintf(
+		"#!/bin/sh\nprintf '%%s\\n' '%s'\nexec sleep 60\n",
+		fmt.Sprintf(`{"event":"ready","http":%q}`, strings.TrimPrefix(server.URL, "http://")),
+	)), 0o700))
+	t.Setenv(binEnv, script)
+
+	driver, err := NewDriver(filepath.Join(t.TempDir(), "ibc.yml"))
+	require.NoError(t, err)
+	want := WaitPolicy{
+		CompletionBudget: 17 * time.Second,
+		StatusPoll:       23 * time.Millisecond,
+		StabilityWindow:  5 * time.Second,
+	}
+	require.NoError(t, driver.ConfigureRelayer(RelayerOptions{
+		WaitPolicies: map[string]WaitPolicy{"route-a": want},
+	}))
+	relayer, err := driver.StartRelayer(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, relayer.Stop(context.Background())) })
+
+	got, ok := relayer.WaitPolicy("route-a")
+	require.True(t, ok)
+	require.Equal(t, want, got)
+}
+
+func TestConfigureRelayerRejectsInvalidWaitPolicy(t *testing.T) {
+	driver, err := NewDriver(filepath.Join(t.TempDir(), "ibc.yml"))
+	require.NoError(t, err)
+	err = driver.ConfigureRelayer(RelayerOptions{
+		WaitPolicies: map[string]WaitPolicy{"route-a": {}},
+	})
+	require.ErrorContains(t, err, `route "route-a" has invalid wait policy`)
 }

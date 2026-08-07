@@ -13,7 +13,7 @@ import (
 
 func TestGMPCall_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -25,10 +25,8 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 
 	call, err := gmp.Call(ctx, e2etest.GMPRequest{})
 	require.NoError(t, err)
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterExecuted(ctx))
 }
@@ -37,7 +35,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 // erc20.transfer executed by the destination ICS27 account.
 func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -66,10 +64,8 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 
 	call, err := gmp.Call(ctx, e2etest.GMPRequest{Receiver: token.Hex(), Salt: salt, Payload: payload})
 	require.NoError(t, err)
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
 	require.NoError(t, gmp.AwaitERC20Balance(ctx, account, big.NewInt(0), "ICS27 account drained"))
@@ -85,7 +81,7 @@ var invalidGMPPayload = []byte{0xde, 0xad, 0xbe, 0xef}
 
 func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -97,10 +93,8 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 
 	call, err := gmp.Call(ctx, e2etest.GMPRequest{Payload: invalidGMPPayload})
 	require.NoError(t, err)
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
 	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
-		relayerv2.PacketState_PACKET_STATE_REJECTED, destination.Timing())
+		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterRejected(ctx))
 }

@@ -171,6 +171,10 @@ func runAttestorHelper() error {
 	if len(config.Attestor.Attestations) != 1 || config.Attestor.Attestations[0].Name != "attestor-a" {
 		return fmt.Errorf("helper received unexpected attestor config: %+v", config.Attestor)
 	}
+	if config.Attestor.Attestations[0].FinalityOffset != HarnessFinalityOffset {
+		return fmt.Errorf("helper received finality offset %d, want %d",
+			config.Attestor.Attestations[0].FinalityOffset, HarnessFinalityOffset)
+	}
 	if len(config.Signers) != 1 || config.Signers[0].Alias != signerAlias {
 		return fmt.Errorf("helper received unexpected signer config: %+v", config.Signers)
 	}

@@ -2,7 +2,7 @@ help: ## List repository commands
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 E2E_FLAGS ?= -count=1
-E2E_LANE ?= anvil
+E2E_MODE ?= fast
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
@@ -17,7 +17,7 @@ install-link: ## Install the Link binary
 
 doctor-e2e: ## Check the runtime dependencies used by e2e tests
 	@command -v go >/dev/null || { echo "missing go" >&2; exit 1; }
-	@command -v docker >/dev/null || { echo "missing docker; Docker is required for e2e lanes" >&2; exit 1; }
+	@command -v docker >/dev/null || { echo "missing docker; Docker is required for e2e modes and matrix generation" >&2; exit 1; }
 	@docker info >/dev/null || { echo "docker daemon is not reachable" >&2; exit 1; }
 
 doctor-e2e-tools: ## Check the generation and lint tools used by repository e2e checks
@@ -28,11 +28,17 @@ doctor-e2e-tools: ## Check the generation and lint tools used by repository e2e 
 	@command -v golangci-lint >/dev/null || { echo "missing golangci-lint; it is required for e2e checks" >&2; exit 1; }
 
 test-harness: build-link ## Run harness tests, including Docker-backed integrations when available
-	go -C $(E2E_DIR) test ./internal/...
+	go -C $(E2E_DIR) test ./internal/... ./cmd/...
 
-test-e2e: build-link ## Run e2e tests (E2E_FLAGS=... E2E_LANE=...)
+test-e2e: build-link ## Run e2e tests (E2E_MODE=... E2E_FLAGS=...)
 	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
-	E2E_LANE=$(E2E_LANE) go -C $(E2E_DIR) test . -timeout 60m -parallel 4 $(E2E_FLAGS)
+	E2E_MODE=$(E2E_MODE) go -C $(E2E_DIR) test . -timeout 60m -parallel 4 $(E2E_FLAGS)
+
+generate-e2e-matrix: ## Regenerate the E2E provider and topology matrix (requires Docker)
+	go -C $(E2E_DIR) run ./cmd/e2e-matrix -write test-matrix.md
+
+check-e2e-matrix: ## Check that the E2E provider and topology matrix is current (requires Docker)
+	go -C $(E2E_DIR) run ./cmd/e2e-matrix -check test-matrix.md
 
 lint: lint-link lint-e2e ## Lint all Go modules
 
@@ -75,9 +81,9 @@ check-test-apps: ## Fail if typed Go contract bindings are stale
 check-link: ## Run Link-local checks
 	$(MAKE) -C link check
 
-check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps test-e2e ## Run all repository e2e checks
+check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps test-e2e check-e2e-matrix ## Run all repository e2e checks
 
 check: check-link check-e2e ## Run Link and repository e2e checks
 
-.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e \
+.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e \
 	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-link check-e2e check

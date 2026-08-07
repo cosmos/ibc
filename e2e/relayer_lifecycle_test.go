@@ -13,8 +13,8 @@ import (
 
 func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 	t.Parallel()
-	e2etest.RequireAnvilLane(t)
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	signers := e2etest.NewSigners(t)
@@ -42,13 +42,13 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 
 		// The restarted relayer still tracks the packet from its store.
 		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
-			relayerv2.PacketState_PACKET_STATE_PENDING, chainB.Timing()))
+			relayerv2.PacketState_PACKET_STATE_PENDING))
 		require.NoError(t, transfer.VerifyNotMinted(ctx))
 		return nil
 	}))
 
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, chainB.Timing())
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }

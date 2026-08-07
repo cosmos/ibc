@@ -28,6 +28,12 @@ func Start(ctx context.Context, spec Spec, runtime Runtime) (*Environment, error
 	return start(ctx, spec, runtime, productionDrivers())
 }
 
+// Validate checks an Environment declaration and its runtime bindings without
+// acquiring resources.
+func Validate(spec Spec, runtime Runtime) error {
+	return validateInputs(spec.snapshot(), runtime.snapshot())
+}
+
 type drivers struct {
 	validatePrerequisites func(Spec, Runtime) error
 	acquireChain          func(context.Context, ChainSpec, Runtime, workspace) (chainAcquisition, error)
@@ -52,10 +58,7 @@ type attestorAcquisition struct {
 func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environment, error) {
 	spec = spec.snapshot()
 	runtime = runtime.snapshot()
-	if err := spec.validate(); err != nil {
-		return nil, err
-	}
-	if err := validateRuntime(spec, runtime); err != nil {
+	if err := validateInputs(spec, runtime); err != nil {
 		return nil, err
 	}
 	if d.validatePrerequisites != nil {
@@ -107,6 +110,16 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		ws:          ws,
 		lease:       lease,
 	}, nil
+}
+
+func validateInputs(spec Spec, runtime Runtime) error {
+	if err := spec.validate(); err != nil {
+		return err
+	}
+	if err := validateRuntime(spec, runtime); err != nil {
+		return err
+	}
+	return nil
 }
 
 func abortStart(
@@ -340,31 +353,24 @@ func acquireChain(
 
 func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAcquisition, error) {
 	adapter, err := anvil.Start(ctx, anvil.Spec{
-		ID:        string(spec.ID),
-		ChainID:   spec.EVMChainID,
-		LogPath:   filepath.Join(ws.diagnosticsDir, "anvil-"+resourcePathToken(string(spec.ID))+".log"),
-		RunID:     ws.runID,
-		BlockTime: spec.BlockInterval,
+		ID:      string(spec.ID),
+		ChainID: spec.EVMChainID,
+		LogPath: filepath.Join(ws.diagnosticsDir, "anvil-"+resourcePathToken(string(spec.ID))+".log"),
+		RunID:   ws.runID,
 	})
 	if err != nil {
 		return chainAcquisition{}, err
 	}
 
-	timing := instantTiming()
-	if spec.BlockInterval > 0 {
-		timing = blockTiming(spec.BlockInterval)
-	}
 	resolved := &Chain{
 		id:         spec.ID,
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
-		timing:     timing,
+		timing:     blockTiming(time.Second),
 		impl:       adapter,
+		mining:     &Mining{controller: adapter},
 		node:       &NodeLifecycle{controller: adapter},
 		funding:    &Funding{controller: adapter},
-	}
-	if spec.BlockInterval == 0 {
-		resolved.mining = &Mining{controller: adapter}
 	}
 	return chainAcquisition{
 		chain:       resolved,

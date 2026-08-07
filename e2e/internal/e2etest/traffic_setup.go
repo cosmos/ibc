@@ -26,7 +26,6 @@ import (
 
 const (
 	relayerStopTimeout = 15 * time.Second
-	blockNudgeInterval = 500 * time.Millisecond
 )
 
 const weiPerEther int64 = 1_000_000_000_000_000_000
@@ -149,7 +148,9 @@ func DeployWithRelayerConfig(
 		require.NoError(t, signers.storeRelayerKey(config.SignerKeyFile), "e2etest: store signers")
 	}
 	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write config")
-	driver.ConfigureRelayer(options)
+	if err := driver.ConfigureRelayer(options); err != nil {
+		t.Fatalf("e2etest: configure relayer: %v", err)
+	}
 
 	require.NoError(t, driver.MigrateUp(t.Context()), "e2etest: migrate database")
 	return driver, deployment
@@ -188,51 +189,7 @@ func StartRelayer(
 			id,
 		)
 	}
-	startBlockNudger(t, env)
 	return relayer
-}
-
-// startBlockNudger keeps instamine chains producing blocks while the relayer
-// waits for "latest" minus relayFinalityOffset to cover packet heights: it
-// broadcasts empty self-transfers from the otherwise idle protocol authority.
-// Lanes whose chains produce blocks on their own don't need it.
-func startBlockNudger(t testing.TB, env *environment.Environment) {
-	t.Helper()
-	if selectedLaneName(t) != laneAnvil {
-		return
-	}
-	authority, err := evm.AccountFromHex(protocolAuthorityKeyHex)
-	require.NoError(t, err, "e2etest: block nudger authority")
-	address := authority.Address()
-	accesses := make([]*environment.EVM, 0, len(env.Chains()))
-	for _, id := range env.Chains() {
-		chain, chainErr := env.Chain(id)
-		require.NoError(t, chainErr, "e2etest: resolve Chain %q", id)
-		evmAccess, evmErr := chain.EVM()
-		require.NoError(t, evmErr, "e2etest: resolve EVM access on Chain %q", id)
-		accesses = append(accesses, evmAccess)
-	}
-	ctx := t.Context()
-	for _, evmAccess := range accesses {
-		// One goroutine per chain with a bounded broadcast: a chain whose
-		// mining is paused must not wedge nudging elsewhere or hold its
-		// access lease past the next tick.
-		go func() {
-			ticker := time.NewTicker(blockNudgeInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-				}
-				nudgeCtx, cancel := context.WithTimeout(ctx, blockNudgeInterval)
-				// Best effort: a failed nudge only delays the next block.
-				_, _ = evmAccess.BroadcastTx(nudgeCtx, authority, &address, nil, nil)
-				cancel()
-			}
-		}()
-	}
 }
 
 func deployApps(
@@ -369,11 +326,6 @@ func registerIFTBridges(
 	}
 }
 
-// relayFinalityOffset treats "latest" minus one block as final everywhere:
-// the dev chains behind the harness never serve a moving "finalized" tag.
-// The instamine anvil lane needs the block nudger for heights to keep moving.
-const relayFinalityOffset = 1
-
 func buildConfig(
 	t testing.TB,
 	env *environment.Environment,
@@ -388,11 +340,12 @@ func buildConfig(
 		DBPath:         dbPath,
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
-		FinalityOffset: relayFinalityOffset,
+		FinalityOffset: ibclink.HarnessFinalityOffset,
 	}
 	options := ibclink.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
 		ManualRoutes: make(map[string]bool, len(routes)),
+		WaitPolicies: make(map[string]ibclink.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
@@ -431,6 +384,15 @@ func buildConfig(
 		clients, ok := deployment.RouteClients(route.ID)
 		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
 		options.ManualRoutes[string(route.ID)] = route.Manual
+		source, err := env.Chain(route.Source)
+		if err != nil {
+			t.Fatalf("e2etest: resolve route %q source Chain %q: %v", route.ID, route.Source, err)
+		}
+		destination, err := env.Chain(route.Destination)
+		if err != nil {
+			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
+		}
+		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
@@ -457,6 +419,18 @@ func buildConfig(
 		})
 	}
 	return config, options
+}
+
+func routeWaitPolicy(source, destination environment.Timing) ibclink.WaitPolicy {
+	return ibclink.WaitPolicy{
+		CompletionBudget: source.CompletionBudget + destination.CompletionBudget,
+		StatusPoll:       max(source.PollInterval, destination.PollInterval),
+		StabilityWindow: max(
+			1500*time.Millisecond,
+			2*source.BlockInterval,
+			2*destination.BlockInterval,
+		),
+	}
 }
 
 func resolveRouteClients(env *environment.Environment, route Route) (string, string, error) {

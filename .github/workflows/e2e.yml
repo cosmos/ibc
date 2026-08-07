@@ -1,6 +1,8 @@
 name: E2E
 
 on:
+  schedule:
+    - cron: "0 3 * * *"
   push:
     branches: [main, development]
   pull_request:
@@ -37,8 +39,8 @@ jobs:
     if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: e2e/go.sum
@@ -52,8 +54,8 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: |
@@ -61,18 +63,20 @@ jobs:
             e2e/go.sum
       - run: make build-link
       - run: docker info
-      - run: go test -count=1 ./internal/...
+      - run: go test -count=1 ./internal/... ./cmd/...
         working-directory: e2e
         env:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
 
   e2e:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: github.event_name == 'schedule' || needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    env:
+      E2E_MODE: ${{ github.event_name == 'schedule' && 'production' || 'complete' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: |
@@ -80,3 +84,14 @@ jobs:
             e2e/go.sum
       - run: docker info
       - run: make test-e2e
+
+  matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: e2e/go.sum
+      - run: docker info
+      - run: make check-e2e-matrix

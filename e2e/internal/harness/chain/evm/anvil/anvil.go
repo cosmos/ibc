@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"os"
 	"strconv"
@@ -46,10 +45,6 @@ type Spec struct {
 	LogPath string
 	RunID   string
 	Image   string
-
-	// BlockTime > 0 seals blocks via --block-time (whole seconds; rounded, rejected if it rounds
-	// to zero); 0 keeps Anvil in instant/automine mode.
-	BlockTime time.Duration
 }
 
 type Chain struct {
@@ -120,17 +115,8 @@ func launchAnvil(ctx context.Context, spec Spec) (testcontainers.Container, stri
 		// avoids creating ambient identities, and quiet mode keeps its mnemonic out of diagnostics.
 		"--accounts", "0",
 		"--quiet",
-	}
-	if spec.BlockTime > 0 {
-		secs := uint64(math.Round(spec.BlockTime.Seconds()))
-		if secs == 0 {
-			return nil, "", nil, fmt.Errorf(
-				"anvil (chain %s): block time %v is below the 1s granularity of --block-time",
-				spec.ID,
-				spec.BlockTime,
-			)
-		}
-		args = append(args, "--block-time", strconv.FormatUint(secs, 10))
+		"--block-time", "1",
+		"--mixed-mining",
 	}
 
 	request := testcontainers.ContainerRequest{
