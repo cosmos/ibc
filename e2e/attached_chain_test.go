@@ -41,7 +41,10 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	require.NoError(t, externalNode.EnsureEOABalance(ctx, sender.Address(), e2etest.RequiredSignerBalance()))
 	require.NoError(t, externalNode.EnsureEOABalance(ctx, relayerSigner.Address(), e2etest.RequiredSignerBalance()))
-	require.NoError(t, externalNode.EnsureEOABalance(ctx, e2etest.ProtocolAuthorityAddress(), e2etest.RequiredSignerBalance()))
+	require.NoError(
+		t,
+		externalNode.EnsureEOABalance(ctx, e2etest.ProtocolAuthorityAddress(), e2etest.RequiredSignerBalance()),
+	)
 
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{
 		Endpoints: map[environment.EndpointBindingID]environment.EndpointBinding{
