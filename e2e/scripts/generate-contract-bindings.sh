@@ -26,3 +26,4 @@ generate "$solidity_ibc/contracts/out/DummyLightClient.sol/DummyLightClient.json
 generate "$solidity_ibc/contracts/out/TestERC20.sol/TestERC20.json" testerc20 TestERC20 "$solidity_ibc/testerc20/contract.go"
 generate "$solidity_ibc/contracts/out/Counter.sol/Counter.json" counter Counter "$solidity_ibc/counter/contract.go"
 generate "$solidity_ibc/contracts/out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json" iftsendcallconstructor EVMIFTSendCallConstructor "$solidity_ibc/iftsendcallconstructor/contract.go"
+generate "$solidity_ibc/contracts/out/IFTBatchTransferShim.sol/IFTBatchTransferShim.json" iftbatchtransfershim IFTBatchTransferShim "$solidity_ibc/iftbatchtransfershim/contract.go"

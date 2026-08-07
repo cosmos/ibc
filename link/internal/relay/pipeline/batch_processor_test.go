@@ -6,12 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/relay/processors"
-
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -115,7 +114,7 @@ func TestBatchProcess(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			t.Fatal("collector stalled while a batch was processing")
+			require.FailNow(t, "collector stalled while a batch was processing")
 		}
 
 		close(release)
@@ -135,7 +134,10 @@ func (p *blockingBatchProcessor) Status() store.RelayStatus {
 	return store.RelayStatusDeliverRecvPacket
 }
 
-func (p *blockingBatchProcessor) Process(_ context.Context, batch []*processors.Transfer) ([]*processors.Transfer, error) {
+func (p *blockingBatchProcessor) Process(
+	_ context.Context,
+	batch []*processors.Transfer,
+) ([]*processors.Transfer, error) {
 	<-p.release
 
 	return batch, nil

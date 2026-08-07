@@ -8,14 +8,13 @@ import (
 	"os"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
-
-	ethereum "github.com/ethereum/go-ethereum"
 )
 
 const (
@@ -204,7 +203,13 @@ func (e *EVMClient) buildSignedTx(
 		val.Set(value)
 	}
 
-	est, err := e.client.EstimateGas(ctx, ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data})
+	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
+	est, err := e.client.EstimateGas(ctx, msg)
+	if err != nil {
+		// Besu can reject otherwise-valid short-lived transactions because its
+		// pending estimate uses a future timestamp. Retry against latest.
+		est, err = e.client.EstimateGasAtBlock(ctx, msg, nil)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("estimate gas: %w", err)
 	}

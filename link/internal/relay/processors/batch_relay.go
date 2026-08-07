@@ -6,12 +6,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
-
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -20,23 +19,34 @@ func findPacketEvent(
 	events []v2.PacketEvent,
 	sequence uint64,
 	clientID string,
-	provableHeight uint64,
 ) (v2.PacketEvent, error) {
 	for _, event := range events {
 		if event.Packet.Sequence != sequence || event.Packet.SourceClient != clientID {
 			continue
 		}
 
-		if event.Height > provableHeight {
-			return v2.PacketEvent{}, errors.Errorf(
-				"packet observed at height %d exceeds currently provable height %d", event.Height, provableHeight,
-			)
-		}
-
 		return event, nil
 	}
 
 	return v2.PacketEvent{}, errors.Errorf("no packet event for sequence %d client %q", sequence, clientID)
+}
+
+func findPacketEventAtOrBeforeHeight(
+	events []v2.PacketEvent,
+	sequence uint64,
+	clientID string,
+	maxHeight uint64,
+) (v2.PacketEvent, error) {
+	event, err := findPacketEvent(events, sequence, clientID)
+	if err != nil {
+		return v2.PacketEvent{}, err
+	}
+	if event.Height > maxHeight {
+		return v2.PacketEvent{}, errors.Errorf(
+			"packet observed at height %d exceeds maximum height %d", event.Height, maxHeight,
+		)
+	}
+	return event, nil
 }
 
 // proofKindFor maps relayKind to the proof claim it requires

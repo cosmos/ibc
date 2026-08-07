@@ -145,7 +145,9 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 	}
 
 	counterpartyChain := mocks.NewMockClient(t)
-	counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(90)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
+	counterpartyChain.EXPECT().
+		GetBlockHeader(mock.Anything, uint64(90)).
+		Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 	gen := New(attestors, 2, counterpartyChain)
 

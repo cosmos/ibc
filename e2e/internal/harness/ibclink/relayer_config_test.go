@@ -88,6 +88,19 @@ signers:
 `, string(data))
 }
 
+func TestRelayerConfigEmitsHarnessFinalityOffset(t *testing.T) {
+	cfg := testRelayerConfig()
+	cfg.FinalityOffset = HarnessFinalityOffset
+	file, err := buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	for _, attestation := range file.Attestor.Attestations {
+		require.Equal(t, uint(HarnessFinalityOffset), attestation.FinalityOffset)
+	}
+	for _, client := range file.Relayer.Clients {
+		require.Equal(t, uint64(HarnessFinalityOffset), client.AttestorSet.CounterpartyChainFinalityOffset)
+	}
+}
+
 func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg := testRelayerConfig()
 	cfg.SignerType = RelayerSignerRemote

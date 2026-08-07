@@ -30,13 +30,14 @@ jobs:
       sql: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.sql }}
       proto: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.proto }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
             link:
               - 'link/**'
+              - '.golangci.yml'
               - '.github/workflows/ibc-link-ci.yml'
             sql:
               - 'link/**/*.sql'
@@ -53,8 +54,8 @@ jobs:
     runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
@@ -70,8 +71,8 @@ jobs:
     runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
@@ -90,8 +91,8 @@ jobs:
       # creates postgres docker container for testing
       TEST_POSTGRES: "true"
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
@@ -105,7 +106,7 @@ jobs:
     runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: sqlc-dev/setup-sqlc@v5
         if: needs.changes.outputs.sql == 'true'

@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
 
@@ -45,7 +44,7 @@ type TransferRequest struct {
 	Timeout time.Duration
 }
 
-// Transfer binds ICS20 Transfer on a single directed route.
+// Transfer drives ICS20 Transfer on a single directed route.
 type Transfer struct {
 	routeID      RouteID
 	source       endpoint
@@ -96,7 +95,7 @@ func (i *Transfer) Prepare(ctx context.Context, request TransferRequest) (*Prepa
 	if err != nil {
 		return nil, err
 	}
-	sourceBefore, err := i.tokenBalance(ctx, i.source.evm, i.sourceToken, i.sender.Address())
+	sourceBefore, err := erc20BalanceOf(ctx, i.source.evm, i.sourceToken, i.sender.Address())
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +199,7 @@ func (t *TransferPacket) VerifyDelivered(ctx context.Context) error {
 
 func (t *TransferPacket) VerifyEscrowed(ctx context.Context) error {
 	want := new(big.Int).Sub(t.sourceBefore, t.amount)
-	got, err := t.app.tokenBalance(ctx, t.app.source.evm, t.app.sourceToken, t.app.sender.Address())
+	got, err := erc20BalanceOf(ctx, t.app.source.evm, t.app.sourceToken, t.app.sender.Address())
 	if err != nil {
 		return err
 	}
@@ -243,7 +242,7 @@ func (t *TransferPacket) VerifyRefunded(ctx context.Context) error {
 		t.app.source.chain,
 		fmt.Sprintf("Transfer packet %s refund", t.packet.reference()),
 		func(ctx context.Context) (*big.Int, error) {
-			return t.app.tokenBalance(ctx, t.app.source.evm, t.app.sourceToken, t.app.sender.Address())
+			return erc20BalanceOf(ctx, t.app.source.evm, t.app.sourceToken, t.app.sender.Address())
 		},
 		t.sourceBefore,
 	)
@@ -347,26 +346,6 @@ func isICS20DenomNotFound(err error) bool {
 	return lookupErr == nil && contractErr.Name == "ICS20DenomNotFound"
 }
 
-func (i *Transfer) tokenBalance(
-	ctx context.Context,
-	client *environment.EVM,
-	contract, holder common.Address,
-) (*big.Int, error) {
-	var balance *big.Int
-	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
-		bound, err := testerc20.NewTestERC20Caller(contract, caller)
-		if err != nil {
-			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", contract, err)
-		}
-		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
-		return err
-	})
-	if err != nil {
-		return nil, fmt.Errorf("e2etest: query TestERC20 balance of %s: %w", holder, err)
-	}
-	return balance, nil
-}
-
 // awaitPacketTimeout waits for the source router to emit TimeoutPacket for the
 // given packet.
 func awaitPacketTimeout(
@@ -415,4 +394,23 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 		}
 		return 0, false, nil
 	}
+}
+
+// sendPacketSequences returns every SendPacket sequence emitted by the router
+// in one receipt, in log order
+func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
+	definition := ics26ABI.Events[eventSendPacket]
+	var sequences []uint64
+	for _, log := range receipt.Logs {
+		if log.Address != router || len(log.Topics) == 0 || log.Topics[0] != definition.ID {
+			continue
+		}
+		event, err := parser.ParseSendPacket(*log)
+		if err != nil {
+			return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
+		}
+		sequences = append(sequences, event.Packet.Sequence)
+	}
+	return sequences, nil
 }

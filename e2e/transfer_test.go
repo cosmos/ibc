@@ -7,22 +7,21 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-//nolint:dupl // acceptance tests keep their setup sequences deliberately explicit
 func TestTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
-	signers := e2etest.NewSigners(t)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -30,23 +29,22 @@ func TestTransfer_AutoRelay(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
 
 func TestTransfer_ManualRelay(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
-	signers := e2etest.NewSigners(t)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -54,14 +52,12 @@ func TestTransfer_ManualRelay(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
 	require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_PENDING, destination.Timing()))
+		relayerv2.PacketState_PACKET_STATE_PENDING))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, destination.Timing())
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
@@ -78,14 +74,15 @@ const (
 
 func TestTransferTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	e2etest.RequireAnvilLane(t)
-	spec := dummyClientMeshSpec(e2etest.ChainSpecsForConfiguredLane(t))
+	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
-	signers := e2etest.NewSigners(t)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, deployment := e2etest.Deploy(t, env, signers, route)
-	transferApp := e2etest.BindTransfer(t, env, deployment, signers, route)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -103,10 +100,8 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	source, err := env.Chain(route.Source)
-	require.NoError(t, err)
-	err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_TIMED_OUT, source.Timing())
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))

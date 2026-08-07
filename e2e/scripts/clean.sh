@@ -8,9 +8,9 @@ while [ "$#" -gt 0 ]; do
 		--dry-run) dry_run=1 ;;
 		-h|--help)
 			printf 'Usage: %s [--dry-run]\n\n' "$0"
-			printf 'Stops leaked e2e relayer daemons and removes e2e Docker containers by label.\n'
-			printf 'Daemons are matched by the harness config marker (ibc-link.config.yaml in argv), so a\n'
-			printf 'developer'"'"'s own unrelated "ibc relayer run" is left alone.\n'
+			printf 'Stops leaked e2e relayer and attestor daemons and removes e2e Docker containers by label.\n'
+			printf 'Daemons are matched by harness-only config or private-home markers, so a developer'"'"'s\n'
+			printf 'own unrelated "ibc relayer run" or "ibc attestor run" is left alone.\n'
 			exit 0
 			;;
 		*)
@@ -44,11 +44,14 @@ sweep() {
 	kill -9 $pids 2>/dev/null || true
 }
 
-# Match the `ibc` SUT running `relayer run`, scoped to the
+# Match Link running `relayer run`, scoped to the
 # harness's compiled config (ibc-link.config.yaml, always in --config of a harness-spawned daemon) so a
-# developer's own unrelated `ibc relayer run` is never signaled. Binary is anchored at a path separator
-# or start of the cmdline so an unrelated `…ibc` suffix can't false-match.
-sweep "e2e relayer daemons" '(^|/)ibc relayer run .*ibc-link\.config\.yaml'
+# developer's own unrelated `ibc relayer run` is never signaled.
+sweep "e2e relayer daemons" '(^|[[:space:]])relayer[[:space:]]+run[[:space:]].*ibc-link\.config\.yaml'
+
+# Match harness-spawned attestors by their --home path, which is always nested
+# under the harness-private ibc-environment-private-* workspace.
+sweep "e2e attestor daemons" '(^|[[:space:]])attestor[[:space:]]+run[[:space:]].*--home[[:space:]]+[^[:space:]]*/ibc-environment-private-[^[:space:]]+'
 
 docker_sweep() {
 	if ! command -v docker >/dev/null; then

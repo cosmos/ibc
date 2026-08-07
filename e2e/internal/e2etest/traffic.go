@@ -27,7 +27,7 @@ type endpoint struct {
 	evm   *environment.EVM
 }
 
-func bindRoute(
+func resolveRouteEndpoints(
 	routeID RouteID,
 	source, destination *environment.Chain,
 ) (endpoint, endpoint, error) {

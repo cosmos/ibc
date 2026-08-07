@@ -10,7 +10,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/txsubmitter/evm"
-
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 

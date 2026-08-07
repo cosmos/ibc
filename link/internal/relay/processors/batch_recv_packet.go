@@ -13,7 +13,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
-
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -95,7 +94,12 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 			continue
 		}
 
-		event, errEvent := findPacketEvent(txEvents, tr.PacketSequenceNumber, tr.PacketSourceClientID, proofHeight)
+		event, errEvent := findPacketEventAtOrBeforeHeight(
+			txEvents,
+			tr.PacketSequenceNumber,
+			tr.PacketSourceClientID,
+			proofHeight,
+		)
 		if errEvent != nil {
 			tr.ProcessingError = errors.Wrapf(errEvent, "tx %s", tr.SourceTxHash)
 

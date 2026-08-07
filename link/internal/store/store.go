@@ -6,11 +6,10 @@ import (
 	"log/slog"
 	"time"
 
+	pgx "github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/config"
-
-	pgx "github.com/jackc/pgx/v5"
 )
 
 // Store a unified, database-agnostic API for persistence.

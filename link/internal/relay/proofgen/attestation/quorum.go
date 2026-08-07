@@ -12,7 +12,6 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-
 	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 )
 

@@ -19,6 +19,8 @@ func TestSignerFileContract(t *testing.T) {
 
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
+	// the on-disk shape is a contract with external consumers; assert exact bytes
+	//nolint:testifylint // JSONEq would not catch a switch to indented output
 	require.Equal(t, `{"type":"ecdsa","privateKeyBase64":"AQID"}`, string(data))
 
 	dirInfo, err := os.Stat(dir)

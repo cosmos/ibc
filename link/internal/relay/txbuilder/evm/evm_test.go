@@ -18,7 +18,13 @@ func testPacket() ics26router.IICS26RouterMsgsPacket {
 		DestClient:       "ethereum-0",
 		TimeoutTimestamp: 1234567890,
 		Payloads: []ics26router.IICS26RouterMsgsPayload{
-			{SourcePort: "transfer", DestPort: "transfer", Version: "ics20-1", Encoding: "application/x-solidity-abi", Value: []byte{0xde, 0xad}},
+			{
+				SourcePort: "transfer",
+				DestPort:   "transfer",
+				Version:    "ics20-1",
+				Encoding:   "application/x-solidity-abi",
+				Value:      []byte{0xde, 0xad},
+			},
 		},
 	}
 }
@@ -82,7 +88,13 @@ func TestBuildRelayTxs(t *testing.T) {
 	packet := channeltypesv2.Packet{
 		Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890,
 		Payloads: []channeltypesv2.Payload{
-			{SourcePort: "transfer", DestinationPort: "transfer", Version: "ics20-1", Encoding: "application/x-solidity-abi", Value: []byte{0xde, 0xad}},
+			{
+				SourcePort:      "transfer",
+				DestinationPort: "transfer",
+				Version:         "ics20-1",
+				Encoding:        "application/x-solidity-abi",
+				Value:           []byte{0xde, 0xad},
+			},
 		},
 	}
 	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}

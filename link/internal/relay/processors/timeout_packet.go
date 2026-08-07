@@ -12,7 +12,6 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
-
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -85,7 +84,9 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 			continue
 		}
 
-		event, errEvent := findPacketEvent(txEvents, tr.PacketSequenceNumber, tr.PacketSourceClientID, proofHeight)
+		// The send event supplies packet data; its source-chain height is
+		// unrelated to the destination-chain timeout proof height.
+		sendEvent, errEvent := findPacketEvent(txEvents, tr.PacketSequenceNumber, tr.PacketSourceClientID)
 		if errEvent != nil {
 			tr.ProcessingError = errors.Wrapf(errEvent, "tx %s", tr.SourceTxHash)
 
@@ -100,7 +101,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 			continue
 		}
 
-		events = append(events, event)
+		events = append(events, sendEvent)
 	}
 
 	if len(events) == 0 {

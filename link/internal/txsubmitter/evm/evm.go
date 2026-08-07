@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -15,9 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/service/signer"
-
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
-	ethereum "github.com/ethereum/go-ethereum"
 )
 
 // DefaultTxSubmissionDelay the minimum delay between submissions on one chain

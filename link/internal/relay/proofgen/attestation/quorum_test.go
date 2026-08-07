@@ -70,7 +70,12 @@ func TestQueryQuorum(t *testing.T) {
 		}
 
 		_, err := queryStateQuorum(ctx, attestors, 2, 10)
-		require.ErrorContains(t, err, "quorum not met", "the second attestor's disagreeing claim must not count toward quorum")
+		require.ErrorContains(
+			t,
+			err,
+			"quorum not met",
+			"the second attestor's disagreeing claim must not count toward quorum",
+		)
 	})
 
 	t.Run("majorityQuorumMetDespiteFirstAttestorDisagreeing", func(t *testing.T) {
@@ -149,7 +154,12 @@ func TestQueryQuorum(t *testing.T) {
 		}
 
 		_, err = queryStateQuorum(ctx, attestors, 2, 10)
-		require.ErrorContains(t, err, "quorum not met", "the same recovered signer answering twice must not count twice")
+		require.ErrorContains(
+			t,
+			err,
+			"quorum not met",
+			"the same recovered signer answering twice must not count twice",
+		)
 	})
 }
 
@@ -189,12 +199,16 @@ func TestLatestProvableHeight(t *testing.T) {
 		}
 
 		counterpartyChain := mocks.NewMockClient(t)
-		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(100)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
+		counterpartyChain.EXPECT().
+			GetBlockHeader(mock.Anything, uint64(100)).
+			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 		height, timestamp, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
 		require.NoError(t, err)
 		require.Equal(
-			t, uint64(100), height,
+			t,
+			uint64(100),
+			height,
 			"a single lagging attestor (a2) must not drag the resolved height below what threshold=2 others (a1, a3) already agree on",
 		)
 		require.Equal(t, someBlockTime, timestamp)
@@ -208,7 +222,9 @@ func TestLatestProvableHeight(t *testing.T) {
 		}
 
 		counterpartyChain := mocks.NewMockClient(t)
-		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(95)).Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
+		counterpartyChain.EXPECT().
+			GetBlockHeader(mock.Anything, uint64(95)).
+			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
 		height, _, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
 		require.NoError(t, err)

@@ -28,17 +28,18 @@ func (ac *Chain) MineBlocks(ctx context.Context, n int) error {
 
 func (ac *Chain) PauseMining(ctx context.Context) error {
 	return ac.WithEVMClient(func(client *evm.EVMClient) error {
-		if err := client.RPCClient().CallContext(ctx, nil, "evm_setAutomine", false); err != nil {
-			return fmt.Errorf("evm_setAutomine false: %w", err)
+		if err := client.RPCClient().CallContext(ctx, nil, "evm_setIntervalMining", 0); err != nil {
+			return fmt.Errorf("evm_setIntervalMining 0: %w", err)
 		}
 		return nil
 	})
 }
 
+// ResumeMining restores interval mining only. Transactions may wait up to one second.
 func (ac *Chain) ResumeMining(ctx context.Context) error {
 	return ac.WithEVMClient(func(client *evm.EVMClient) error {
-		if err := client.RPCClient().CallContext(ctx, nil, "evm_setAutomine", true); err != nil {
-			return fmt.Errorf("evm_setAutomine true: %w", err)
+		if err := client.RPCClient().CallContext(ctx, nil, "evm_setIntervalMining", 1); err != nil {
+			return fmt.Errorf("evm_setIntervalMining 1: %w", err)
 		}
 		return nil
 	})

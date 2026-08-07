@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	migrate "github.com/rubenv/sql-migrate"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	reposqlite "github.com/cosmos/ibc/link/internal/store/repository/sqlite"
 
 	//nolint:blank-imports // SQL driver
 	_ "modernc.org/sqlite"
-
-	reposqlite "github.com/cosmos/ibc/link/internal/store/repository/sqlite"
-	migrate "github.com/rubenv/sql-migrate"
 )
 
 // SqliteInMemory tells sqlite to use a fully in-memory database

@@ -16,16 +16,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
-
-	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	containertypes "github.com/moby/moby/api/types/container"
 )
 
 const (
