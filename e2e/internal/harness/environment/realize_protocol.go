@@ -318,26 +318,6 @@ func prepareConnections(
 					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", identity.ID, err)
 				}
 				dependencies.preparedClients[identity.ID] = prepared
-			case DummyClient:
-				instance := dependencies.instances[identity.IBCInstance]
-				setup, err := solidityIBCSetup(ctx, instance.chain)
-				if err != nil {
-					return dependencies, err
-				}
-				authority, _ := runtime.evmAccount(client.Authority)
-				prepared, err := setup.PrepareDummyClient(
-					ctx,
-					authority,
-					common.HexToAddress(string(instance.locator)),
-					solidityibc.DummyClientConfig{
-						ID:                   string(locators[end.label]),
-						CounterpartyClientID: string(locators[counterpartyEnd(end.label)]),
-					},
-				)
-				if err != nil {
-					return dependencies, fmt.Errorf("prepare dummy IBC Client %q: %w", identity.ID, err)
-				}
-				dependencies.preparedClients[identity.ID] = prepared
 			}
 		}
 	}
@@ -417,22 +397,6 @@ func acquireIBCClient(
 			return nil, attestorErr
 		}
 	case NewClient:
-		prepared := dependencies.preparedClients[identity.ID]
-		if prepared == nil {
-			return nil, fmt.Errorf("IBC Client %q was not prepared", identity.ID)
-		}
-		authority, err := runtime.evmAccount(client.Authority)
-		if err != nil {
-			return nil, err
-		}
-		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, authority); fundingErr != nil {
-			return nil, fmt.Errorf("fund IBC Client %q authority: %w", identity.ID, fundingErr)
-		}
-		resolved, err = prepared.Deploy(ctx)
-		if err != nil {
-			return nil, err
-		}
-	case DummyClient:
 		prepared := dependencies.preparedClients[identity.ID]
 		if prepared == nil {
 			return nil, fmt.Errorf("IBC Client %q was not prepared", identity.ID)

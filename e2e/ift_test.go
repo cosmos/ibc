@@ -20,128 +20,50 @@ import (
 // destination mint reverts on it, forcing an error acknowledgement.
 var zeroAddressReceiver = (common.Address{}).Hex()
 
-const (
-	attestedClientAID  environment.ClientID    = "attested-client-a"
-	attestedClientBID  environment.ClientID    = "attested-client-b"
-	attestorAID        environment.AttestorID  = "attestor-a"
-	attestorBID        environment.AttestorID  = "attestor-b"
-	attestorCID        environment.AttestorID  = "attestor-c"
-	attestorDID        environment.AttestorID  = "attestor-d"
-	attestorAAuthority environment.AuthorityID = "attestor-a-authority"
-	attestorBAuthority environment.AuthorityID = "attestor-b-authority"
-	attestorCAuthority environment.AuthorityID = "attestor-c-authority"
-	attestorDAuthority environment.AuthorityID = "attestor-d-authority"
-)
-
-func TestAttestedIFTTransfer_AutoRelay(t *testing.T) {
+func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	t.Parallel()
-	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
-		IBCInstances: []environment.IBCInstanceSpec{
-			environment.NewIBCInstance{
-				ID:        "attested-ibc-a",
-				Chain:     e2etest.ChainA,
-				Authority: e2etest.ProtocolAuthorityID,
-			},
-			environment.NewIBCInstance{
-				ID:        "attested-ibc-b",
-				Chain:     e2etest.ChainB,
-				Authority: e2etest.ProtocolAuthorityID,
-			},
-		},
-		Connections: []environment.ConnectionSpec{{
-			ID: "attested-connection",
-			A: environment.NewClient{
-				ID:                    attestedClientAID,
-				IBCInstance:           "attested-ibc-a",
-				Authority:             e2etest.ProtocolAuthorityID,
-				MinRequiredSignatures: 1,
-			},
-			B: environment.NewClient{
-				ID:                    attestedClientBID,
-				IBCInstance:           "attested-ibc-b",
-				Authority:             e2etest.ProtocolAuthorityID,
-				MinRequiredSignatures: 1,
-			},
-		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: attestorAID, Client: attestedClientAID, Authority: attestorAAuthority},
-			{ID: attestorBID, Client: attestedClientBID, Authority: attestorBAuthority},
-		},
-	}
-	runtime := e2etest.RuntimeWithProtocolDeployer(
-		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
-			attestorAAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000006"},
-			attestorBAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000007"},
-		}},
+	const (
+		clientAID          environment.ClientID    = "quorum-client-a"
+		clientBID          environment.ClientID    = "quorum-client-b"
+		attestorAID        environment.AttestorID  = "attestor-a"
+		attestorBID        environment.AttestorID  = "attestor-b"
+		attestorCID        environment.AttestorID  = "attestor-c"
+		attestorDID        environment.AttestorID  = "attestor-d"
+		attestorAAuthority environment.AuthorityID = "attestor-a-authority"
+		attestorBAuthority environment.AuthorityID = "attestor-b-authority"
+		attestorCAuthority environment.AuthorityID = "attestor-c-authority"
+		attestorDAuthority environment.AuthorityID = "attestor-d-authority"
 	)
-	env := e2etest.Start(t, spec, runtime)
-	sender := e2etest.NewSigner(t)
-	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	attestorA, err := env.Attestor(attestorAID)
-	require.NoError(t, err)
-	attestorB, err := env.Attestor(attestorBID)
-	require.NoError(t, err)
-	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
-	relayer := e2etest.StartRelayer(t, driver, env)
-	ctx := t.Context()
-
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
-	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyBurned(ctx))
-
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
-	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyDelivered(ctx))
-
-	source, err := env.Chain(route.Source)
-	require.NoError(t, err)
-	sourceEVM, err := source.EVM()
-	require.NoError(t, err)
-	destinationEVM, err := destination.EVM()
-	require.NoError(t, err)
-	requireAttestedIFTClientHeights(t, sourceEVM, destinationEVM,
-		attestorA.IBCClient().LightClientAddress(), attestorB.IBCClient().LightClientAddress(),
-		transfer, status.GetRecvTx().GetTxHash())
-}
-
-func TestAttestedIFTTransfer_MultiAttestorQuorum(t *testing.T) {
-	t.Parallel()
 	spec := environment.Spec{
 		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
 		IBCInstances: []environment.IBCInstanceSpec{
 			environment.NewIBCInstance{
-				ID:        "attested-quorum-ibc-a",
+				ID:        "quorum-ibc-a",
 				Chain:     e2etest.ChainA,
 				Authority: e2etest.ProtocolAuthorityID,
 			},
 			environment.NewIBCInstance{
-				ID:        "attested-quorum-ibc-b",
+				ID:        "quorum-ibc-b",
 				Chain:     e2etest.ChainB,
 				Authority: e2etest.ProtocolAuthorityID,
 			},
 		},
 		Connections: []environment.ConnectionSpec{{
-			ID: "attested-quorum-connection",
+			ID: "quorum-connection",
 			A: environment.NewClient{
-				ID: attestedClientAID, IBCInstance: "attested-quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
+				ID: clientAID, IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
 			},
 			B: environment.NewClient{
-				ID: attestedClientBID, IBCInstance: "attested-quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
+				ID: clientBID, IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 2,
 			},
 		}},
 		Attestors: []environment.AttestorSpec{
-			{ID: attestorAID, Client: attestedClientAID, Authority: attestorAAuthority},
-			{ID: attestorBID, Client: attestedClientBID, Authority: attestorBAuthority},
-			{ID: attestorCID, Client: attestedClientBID, Authority: attestorCAuthority},
-			{ID: attestorDID, Client: attestedClientBID, Authority: attestorDAuthority},
+			{ID: attestorAID, Client: clientAID, Authority: attestorAAuthority},
+			{ID: attestorBID, Client: clientBID, Authority: attestorBAuthority},
+			{ID: attestorCID, Client: clientBID, Authority: attestorCAuthority},
+			{ID: attestorDID, Client: clientBID, Authority: attestorDAuthority},
 		},
 	}
 	runtime := e2etest.RuntimeWithProtocolDeployer(
@@ -204,9 +126,17 @@ func TestAttestedIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.NoError(t, err)
 	sourceEVM, err := source.EVM()
 	require.NoError(t, err)
-	sendBlock := requireAttestedIFTClientHeights(t, sourceEVM, destinationEVM,
-		sourceAttestor.IBCClient().LightClientAddress(), destinationClient.LightClientAddress(),
-		transfer, status.GetRecvTx().GetTxHash())
+	sendReceipt, err := sourceEVM.TransactionReceipt(ctx, common.HexToHash(transfer.Packet().SourceTxHash))
+	require.NoError(t, err)
+	receiveReceipt, err := destinationEVM.TransactionReceipt(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
+	require.NoError(t, err)
+	sendBlock := sendReceipt.BlockNumber.Uint64()
+	// The receive proof advanced the destination client through the send block.
+	destinationState := attestedClientState(t, destinationEVM, destinationClient.LightClientAddress())
+	require.GreaterOrEqual(t, destinationState.LatestHeight, sendBlock)
+	// The acknowledgement proof advanced the source client through the receive block.
+	sourceState := attestedClientState(t, sourceEVM, sourceAttestor.IBCClient().LightClientAddress())
+	require.GreaterOrEqual(t, sourceState.LatestHeight, receiveReceipt.BlockNumber.Uint64())
 	destinationAttestorBHeight, err := destinationAttestorB.LatestHeight(ctx)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, destinationAttestorBHeight, sendBlock)
@@ -232,53 +162,18 @@ func TestAttestedIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.NoError(t, pending.VerifyDelivered(ctx))
 }
 
-func TestAttestedIFTTimeout_Refund(t *testing.T) {
+// TestIFTTimeout_RefundUsesFinalizedDestinationAnchor proves timeouts anchor
+// on the finalized destination header the attested client tracks — including
+// when the source chain is far ahead of the destination.
+func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	t.Parallel()
-	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB),
-		IBCInstances: []environment.IBCInstanceSpec{
-			environment.NewIBCInstance{
-				ID:        "attested-timeout-ibc-a",
-				Chain:     e2etest.ChainA,
-				Authority: e2etest.ProtocolAuthorityID,
-			},
-			environment.NewIBCInstance{
-				ID:        "attested-timeout-ibc-b",
-				Chain:     e2etest.ChainB,
-				Authority: e2etest.ProtocolAuthorityID,
-			},
-		},
-		Connections: []environment.ConnectionSpec{{
-			ID: "attested-timeout-connection",
-			A: environment.NewClient{
-				ID:                    attestedClientAID,
-				IBCInstance:           "attested-timeout-ibc-a",
-				Authority:             e2etest.ProtocolAuthorityID,
-				MinRequiredSignatures: 1,
-			},
-			B: environment.NewClient{
-				ID:                    attestedClientBID,
-				IBCInstance:           "attested-timeout-ibc-b",
-				Authority:             e2etest.ProtocolAuthorityID,
-				MinRequiredSignatures: 1,
-			},
-		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: attestorAID, Client: attestedClientAID, Authority: attestorAAuthority},
-			{ID: attestorBID, Client: attestedClientBID, Authority: attestorBAuthority},
-		},
-	}
-	runtime := e2etest.RuntimeWithProtocolDeployer(
-		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
-			attestorAAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000006"},
-			attestorBAuthority: {PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000007"},
-		}},
-	)
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	attestorA, err := env.Attestor(attestorAID)
+	attestorA, err := env.Attestor(meshAttestorID(fixtureConnectionID(e2etest.ChainA, e2etest.ChainB), "a"))
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
@@ -367,8 +262,7 @@ func TestAttestedIFTTimeout_Refund(t *testing.T) {
 
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -393,9 +287,8 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 func TestIFTTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -447,9 +340,8 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -529,8 +421,7 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 // destination mint rejects, forcing an error acknowledgement and a refund.
 func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -560,8 +451,7 @@ func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 // bridge unregistered, so onRecvPacket hits IFTBridgeNotFound.
 func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -590,8 +480,7 @@ func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 // cleared by its own acknowledgement.
 func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -629,8 +518,7 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 // from that one transaction — none missing, none duplicated.
 func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -698,8 +586,7 @@ func withBatchOverride(cfg *ibclink.RelayerConfig) {
 // packet.
 func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -779,9 +666,8 @@ func hasBatchedTx(counts map[string]int) bool {
 // in batches
 func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	t.Parallel()
-	spec := dummyClientMeshSpec(e2etest.EVMChains(t,
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

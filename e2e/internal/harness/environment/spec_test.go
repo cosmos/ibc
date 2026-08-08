@@ -117,18 +117,6 @@ func TestSpecValidateNewClientRequiresAttestor(t *testing.T) {
 	require.ErrorContains(t, spec.validate(), "client \"client-b\" must have at least one Attestor")
 }
 
-func TestSpecValidateDummyClientRejectsAttestors(t *testing.T) {
-	spec := validSpec()
-	connection := spec.Connections[0]
-	connection.A = DummyClient{ID: "client-a", IBCInstance: "ibc-a", Authority: "deploy-a"}
-	connection.B = DummyClient{ID: "client-b", IBCInstance: "ibc-b", Authority: "deploy-b"}
-	spec.Connections[0] = connection
-	require.ErrorContains(t, spec.validate(), `Attestor "attestor-1" references DummyClient "client-a"`)
-
-	spec.Attestors = nil
-	require.NoError(t, spec.validate())
-}
-
 func TestSpecValidateNewClientQuorumDoesNotExceedAttestors(t *testing.T) {
 	spec := validSpec()
 	connection := spec.Connections[0]
