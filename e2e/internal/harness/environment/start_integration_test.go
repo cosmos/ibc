@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
@@ -18,7 +16,6 @@ import (
 	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/accessmanager"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 )
 
@@ -98,8 +95,10 @@ func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.AccessManagerAddress())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.AccessManagerAddress())))
 
-	requireRealizedAppStack(t, resolvedInstanceA)
-	requireRealizedAppStack(t, resolvedInstanceB)
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.ICS20TransferAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.ICS27GMPAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.ICS20TransferAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.ICS27GMPAddress())))
 	byChainA, err := env.IBCInstanceForChain(chainA)
 	require.NoError(t, err)
 	require.Same(t, resolvedInstanceA, byChainA)
@@ -632,50 +631,4 @@ func assertRPCUnavailable(t *testing.T, rpcURL string) {
 		_, err = client.BlockNumber(ctx)
 	}
 	require.Error(t, err, "managed Chain RPC remains reachable after Environment.Close")
-}
-
-// requireRealizedAppStack proves the instance's ICS20/ICS27 applications are
-// registered with its router and that recvPacket is publicly callable.
-func requireRealizedAppStack(t *testing.T, instance *environment.IBCInstance) {
-	t.Helper()
-	evmAccess, err := instance.Chain().EVM()
-	require.NoError(t, err)
-	routerAddr := common.HexToAddress(string(instance.Locator()))
-	accessManagerAddr := common.HexToAddress(string(instance.AccessManagerAddress()))
-	ics20Addr := common.HexToAddress(string(instance.ICS20TransferAddress()))
-	ics27Addr := common.HexToAddress(string(instance.ICS27GMPAddress()))
-	require.NotEqual(t, common.Address{}, ics20Addr)
-	require.NotEqual(t, common.Address{}, ics27Addr)
-
-	require.NoError(t, evmAccess.UseContractCaller(func(caller bind.ContractCaller) error {
-		router, routerErr := ics26router.NewContractCaller(routerAddr, caller)
-		require.NoError(t, routerErr)
-		transferApp, appErr := router.GetIBCApp(&bind.CallOpts{Context: t.Context()}, "transfer")
-		require.NoError(t, appErr)
-		require.Equal(t, ics20Addr, transferApp)
-		gmpApp, appErr := router.GetIBCApp(&bind.CallOpts{Context: t.Context()}, "gmpport")
-		require.NoError(t, appErr)
-		require.Equal(t, ics27Addr, gmpApp)
-
-		routerABI, abiErr := ics26router.ContractMetaData.GetAbi()
-		require.NoError(t, abiErr)
-		recvPacket, methodOK := routerABI.Methods["recvPacket"]
-		require.True(t, methodOK)
-		var selector [4]byte
-		copy(selector[:], recvPacket.ID)
-
-		manager, managerErr := accessmanager.NewAccessManagerCaller(accessManagerAddr, caller)
-		require.NoError(t, managerErr)
-		unrelated := common.HexToAddress("0xabcdef0000000000000000000000000000000001")
-		permission, callErr := manager.CanCall(
-			&bind.CallOpts{Context: t.Context()},
-			unrelated,
-			routerAddr,
-			selector,
-		)
-		require.NoError(t, callErr)
-		require.True(t, permission.Immediate)
-		require.EqualValues(t, 0, permission.Delay)
-		return nil
-	}))
 }

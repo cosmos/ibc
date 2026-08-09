@@ -217,10 +217,8 @@ func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *en
 		t.SkipNow()
 		return nil
 	}
-	started := time.Now()
 	env, err := environment.Start(t.Context(), spec, runtime)
 	require.NoError(t, err, "e2etest: start Environment")
-	t.Logf("e2etest: Environment ready in %s", time.Since(started).Round(time.Millisecond))
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
