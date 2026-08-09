@@ -7,7 +7,7 @@ E2E_MODE ?= fast
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
 CONTRACT_BINDINGS := $(addprefix $(HARNESS_DIR)/environment/solidityibc/,\
-	accessmanager escrow dummylightclient testerc20 counter iftsendcallconstructor iftbatchtransfershim)
+	accessmanager escrow testerc20 counter iftsendcallconstructor iftbatchtransfershim)
 
 build-link: ## Build the Link binary
 	$(MAKE) -C link build
