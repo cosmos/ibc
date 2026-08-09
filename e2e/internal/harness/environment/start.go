@@ -263,9 +263,7 @@ func acquireChains(
 	errs := make([]error, len(declarations))
 	var wg sync.WaitGroup
 	for i, declaration := range declarations {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			acquisition, err := d.acquireChain(ctx, declaration, runtime, ws)
 			if err != nil {
 				errs[i] = fmt.Errorf("start Chain %q failed: %w", declaration.chainID(), err)
@@ -278,7 +276,7 @@ func acquireChains(
 				release:     acquisition.release,
 			})
 			acquired[i] = acquisition
-		}()
+		})
 	}
 	wg.Wait()
 

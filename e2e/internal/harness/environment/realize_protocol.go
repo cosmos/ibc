@@ -145,9 +145,7 @@ func acquireAttestors(
 	errs := make([]error, len(spec.Attestors))
 	var wg sync.WaitGroup
 	for i, declaration := range spec.Attestors {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			observed, err := observedInstanceForClient(spec.Connections, declaration.Client, instances)
 			if err != nil {
 				errs[i] = err
@@ -181,7 +179,7 @@ func acquireAttestors(
 				release:     acquisition.release,
 			})
 			acquired[i] = acquisition
-		}()
+		})
 	}
 	wg.Wait()
 
