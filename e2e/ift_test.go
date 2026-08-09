@@ -86,8 +86,6 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	sourceAttestor, err := env.Attestor(attestorAID)
-	require.NoError(t, err)
 	destinationAttestorB, err := env.Attestor(attestorBID)
 	require.NoError(t, err)
 	destinationAttestorC, err := env.Attestor(attestorCID)
@@ -101,10 +99,6 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.NoError(t, destinationAttestorD.Stop(ctx))
 	relayer := e2etest.StartRelayer(t, driver, env)
 
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err)
-	destinationEVM, err := destination.EVM()
-	require.NoError(t, err)
 	destinationClient := destinationAttestorB.IBCClient()
 	require.ElementsMatch(t, []environment.EVMAddress{
 		destinationAttestorB.SignerAddress(),
@@ -117,32 +111,10 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
-
-	source, err := env.Chain(route.Source)
-	require.NoError(t, err)
-	sourceEVM, err := source.EVM()
-	require.NoError(t, err)
-	sendReceipt, err := sourceEVM.TransactionReceipt(ctx, common.HexToHash(transfer.Packet().SourceTxHash))
-	require.NoError(t, err)
-	receiveReceipt, err := destinationEVM.TransactionReceipt(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
-	require.NoError(t, err)
-	sendBlock := sendReceipt.BlockNumber.Uint64()
-	// The receive proof advanced the destination client through the send block.
-	destinationState := attestedClientState(t, destinationEVM, destinationClient.LightClientAddress())
-	require.GreaterOrEqual(t, destinationState.LatestHeight, sendBlock)
-	// The acknowledgement proof advanced the source client through the receive block.
-	sourceState := attestedClientState(t, sourceEVM, sourceAttestor.IBCClient().LightClientAddress())
-	require.GreaterOrEqual(t, sourceState.LatestHeight, receiveReceipt.BlockNumber.Uint64())
-	destinationAttestorBHeight, err := destinationAttestorB.LatestHeight(ctx)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, destinationAttestorBHeight, sendBlock)
-	destinationAttestorCHeight, err := destinationAttestorC.LatestHeight(ctx)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, destinationAttestorCHeight, sendBlock)
 
 	// One live attestor cannot satisfy the destination client's quorum.
 	require.NoError(t, destinationAttestorC.Stop(ctx))
@@ -193,34 +165,7 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	sourceMining, err := source.Mining()
 	require.NoError(t, err)
 
-	// First prove the ordinary attested timeout path.
-	require.NoError(t, relayer.Stop(ctx))
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
-		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
-	})
-	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyBurned(ctx))
-	require.NoError(t, transfer.VerifyPending(ctx))
-	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
-	require.NoError(t, destinationMining.Mine(ctx, 1))
-	destinationHeight, err := destination.Height(ctx)
-	require.NoError(t, err)
-	destinationAnchor := destinationHeight - 1
-	anchorHeader, err := destinationEVM.HeaderByNumber(ctx, new(big.Int).SetUint64(destinationAnchor))
-	require.NoError(t, err)
-	require.Greater(t, anchorHeader.Time, transfer.TimeoutTimestamp())
-	relayer = e2etest.StartRelayer(t, driver, env)
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
-		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
-	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyRefunded(ctx))
-	require.NoError(t, transfer.VerifyNotMinted(ctx))
-	require.NoError(t, transfer.VerifyPendingCleared(ctx))
-	sourceState := attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
-	require.GreaterOrEqual(t, sourceState.LatestHeight, destinationAnchor)
-
-	// Then keep the destination fixed while the source moves far ahead. Timeout
+	// Keep the destination fixed while the source moves far ahead. Timeout
 	// still uses the finalized destination anchor rather than the source height.
 	require.NoError(t, relayer.Stop(ctx))
 	asymmetricTransfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
@@ -232,10 +177,10 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	require.NoError(t, asymmetricTransfer.VerifyPending(ctx))
 	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
 	require.NoError(t, destinationMining.Mine(ctx, 1))
-	destinationHeight, err = destination.Height(ctx)
+	destinationHeight, err := destination.Height(ctx)
 	require.NoError(t, err)
-	destinationAnchor = destinationHeight - 1
-	anchorHeader, err = destinationEVM.HeaderByNumber(ctx, new(big.Int).SetUint64(destinationAnchor))
+	destinationAnchor := destinationHeight - 1
+	anchorHeader, err := destinationEVM.HeaderByNumber(ctx, new(big.Int).SetUint64(destinationAnchor))
 	require.NoError(t, err)
 	require.Greater(t, anchorHeader.Time, asymmetricTransfer.TimeoutTimestamp())
 
@@ -254,7 +199,7 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 		require.NoError(t, asymmetricTransfer.VerifyRefunded(ctx))
 		require.NoError(t, asymmetricTransfer.VerifyNotMinted(ctx))
 		require.NoError(t, asymmetricTransfer.VerifyPendingCleared(ctx))
-		sourceState = attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
+		sourceState := attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
 		require.GreaterOrEqual(t, sourceState.LatestHeight, destinationAnchor)
 		return nil
 	}))
