@@ -145,7 +145,7 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	attestorA, err := env.Attestor(meshAttestorID(fixtureConnectionID(e2etest.ChainA, e2etest.ChainB), "a"))
+	sourceAttestor, err := env.Attestor(meshAttestorFor(route.Source, route.Destination))
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
@@ -199,7 +199,7 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 		require.NoError(t, asymmetricTransfer.VerifyRefunded(ctx))
 		require.NoError(t, asymmetricTransfer.VerifyNotMinted(ctx))
 		require.NoError(t, asymmetricTransfer.VerifyPendingCleared(ctx))
-		sourceState := attestedClientState(t, sourceEVM, attestorA.IBCClient().LightClientAddress())
+		sourceState := attestedClientState(t, sourceEVM, sourceAttestor.IBCClient().LightClientAddress())
 		require.GreaterOrEqual(t, sourceState.LatestHeight, destinationAnchor)
 		return nil
 	}))

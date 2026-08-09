@@ -66,6 +66,16 @@ func meshAttestorID(connection environment.ConnectionID, end string) environment
 	return environment.AttestorID(fmt.Sprintf("%s-attestor", fixtureClientID(connection, end)))
 }
 
+// meshAttestorFor returns the Attestor backing the mesh Client hosted on chain
+// and tracking counterparty, hiding that end labels follow sort order.
+func meshAttestorFor(chain, counterparty environment.ChainID) environment.AttestorID {
+	end := "a"
+	if counterparty < chain {
+		end = "b"
+	}
+	return meshAttestorID(fixtureConnectionID(chain, counterparty), end)
+}
+
 func fixtureChainID(declaration environment.ChainSpec) environment.ChainID {
 	switch chain := declaration.(type) {
 	case environment.ManagedAnvil:
@@ -142,6 +152,11 @@ func TestAttestedMesh(t *testing.T) {
 		},
 	}
 	require.Equal(t, want, spec)
+
+	// The hosted-on-chain lookup must be argument-order insensitive even
+	// though the underlying end labels follow sort order.
+	require.Equal(t, environment.AttestorID("conn-chain-a-chain-b-a-attestor"), meshAttestorFor("chain-a", "chain-b"))
+	require.Equal(t, environment.AttestorID("conn-chain-a-chain-b-b-attestor"), meshAttestorFor("chain-b", "chain-a"))
 
 	keys := map[string]struct{}{}
 	for _, authority := range runtime.Authorities {

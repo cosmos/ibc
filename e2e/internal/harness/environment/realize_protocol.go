@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -136,35 +138,59 @@ func acquireAttestors(
 	d drivers,
 	effects *effectJournal,
 ) (map[AttestorID]*Attestor, error) {
-	attestors := make(map[AttestorID]*Attestor, len(spec.Attestors))
-	for _, declaration := range spec.Attestors {
-		observed, err := observedInstanceForClient(spec.Connections, declaration.Client, instances)
-		if err != nil {
-			return nil, err
-		}
-		acquisition, err := d.acquireAttestor(ctx, declaration, attestorDependencies{
-			client: clients[declaration.Client], observed: observed,
-		}, runtime, ws)
-		if err != nil {
-			if acquisition.release != nil {
-				effects.append(cleanupEffect{
-					description: acquisition.description,
-					release:     acquisition.release,
-				})
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	acquired := make([]attestorAcquisition, len(spec.Attestors))
+	errs := make([]error, len(spec.Attestors))
+	var wg sync.WaitGroup
+	for i, declaration := range spec.Attestors {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			observed, err := observedInstanceForClient(spec.Connections, declaration.Client, instances)
+			if err != nil {
+				errs[i] = err
+				cancel()
+				return
 			}
-			return nil, fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
-		}
-		if acquisition.attestor == nil || acquisition.release == nil {
-			return nil, fmt.Errorf(
-				"environment: Attestor %q adapter returned an incomplete acquisition",
-				declaration.ID,
-			)
-		}
-		effects.append(cleanupEffect{
-			description: acquisition.description,
-			release:     acquisition.release,
-		})
-		attestors[declaration.ID] = acquisition.attestor
+			acquisition, err := d.acquireAttestor(ctx, declaration, attestorDependencies{
+				client: clients[declaration.Client], observed: observed,
+			}, runtime, ws)
+			if err != nil {
+				if acquisition.release != nil {
+					effects.append(cleanupEffect{
+						description: acquisition.description,
+						release:     acquisition.release,
+					})
+				}
+				errs[i] = fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
+				cancel()
+				return
+			}
+			if acquisition.attestor == nil || acquisition.release == nil {
+				errs[i] = fmt.Errorf(
+					"environment: Attestor %q adapter returned an incomplete acquisition",
+					declaration.ID,
+				)
+				cancel()
+				return
+			}
+			effects.append(cleanupEffect{
+				description: acquisition.description,
+				release:     acquisition.release,
+			})
+			acquired[i] = acquisition
+		}()
+	}
+	wg.Wait()
+
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	attestors := make(map[AttestorID]*Attestor, len(acquired))
+	for i, acquisition := range acquired {
+		attestors[spec.Attestors[i].ID] = acquisition.attestor
 	}
 	return attestors, nil
 }
