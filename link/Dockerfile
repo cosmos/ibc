@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 
+# SPDX-License-Identifier: Apache-2.0
+
 # 1. Source image builder
 FROM golang:1.26.4-alpine AS builder
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package txsubmitter signs and broadcasts transactions for the relayer.
 package txsubmitter
 

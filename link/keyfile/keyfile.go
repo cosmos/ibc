@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package keyfile owns the on-disk format for local signer credentials.
 package keyfile
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package solidityibc
 
 import (
@@ -22,7 +24,6 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/accessmanager"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/dummylightclient"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/escrow"
 )
 
@@ -404,17 +405,8 @@ type PreparedClient struct {
 	setup     *Setup
 	authority evm.Account
 	instance  Instance
-	kind      preparedClientKind
 	config    AttestationClientConfig
-	dummy     DummyClientConfig
 }
-
-type preparedClientKind int
-
-const (
-	preparedAttestationClient preparedClientKind = iota
-	preparedDummyClient
-)
 
 // PrepareClient validates one Client deployment without submitting a
 // transaction. The returned value owns the snapshotted inputs used by Deploy.
@@ -445,66 +437,16 @@ func (s *Setup) PrepareClient(
 		setup:     s,
 		authority: authority,
 		instance:  instance,
-		kind:      preparedAttestationClient,
 		config:    config,
-	}, nil
-}
-
-// PrepareDummyClient validates one dummy Client deployment without submitting a
-// transaction. The returned value owns the snapshotted inputs used by Deploy.
-func (s *Setup) PrepareDummyClient(
-	ctx context.Context,
-	authority evm.Account,
-	router common.Address,
-	config DummyClientConfig,
-) (*PreparedClient, error) {
-	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
-	}
-	if err := validateAuthority(authority); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
-	}
-	instance, err := s.AttachInstance(ctx, router)
-	if err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
-	}
-	if err := s.requireCanAddCustomClient(ctx, instance, authority.Address()); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare dummy Client: authority cannot register it: %w", err)
-	}
-	if err := s.verifyClientVacant(ctx, instance, config.ID); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare dummy Client: %w", err)
-	}
-	return &PreparedClient{
-		setup:     s,
-		authority: authority,
-		instance:  instance,
-		kind:      preparedDummyClient,
-		dummy:     config,
 	}, nil
 }
 
 // Deploy submits a prepared Client deployment and registers it with the router.
 func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
-	if p == nil || p.setup == nil {
-		return Client{}, fmt.Errorf("solidity IBC deploy Client: preparation is required")
-	}
-	switch p.kind {
-	case preparedAttestationClient:
-		return p.deployAttestationClient(ctx)
-	case preparedDummyClient:
-		return p.deployDummyClient(ctx)
-	default:
-		return Client{}, fmt.Errorf("solidity IBC deploy Client: unsupported preparation kind %d", p.kind)
-	}
-}
-
-func (p *PreparedClient) deployAttestationClient(ctx context.Context) (Client, error) {
 	s := p.setup
-	authority := p.authority
-	instance := p.instance
 	config := p.config
 
-	clientAddress, err := s.deployVerified(ctx, authority, "attestation Client "+config.ID,
+	clientAddress, err := s.deployVerified(ctx, p.authority, "Client "+config.ID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := attestation.DeployContract(
 				opts,
@@ -523,8 +465,8 @@ func (p *PreparedClient) deployAttestationClient(ctx context.Context) (Client, e
 
 	if registerErr := s.registerClient(
 		ctx,
-		authority,
-		instance,
+		p.authority,
+		p.instance,
 		config.ID,
 		config.CounterpartyClientID,
 		clientAddress,
@@ -532,48 +474,9 @@ func (p *PreparedClient) deployAttestationClient(ctx context.Context) (Client, e
 		return Client{}, registerErr
 	}
 
-	client, err := s.verifyClient(ctx, instance, config.ID, clientAddress, config.CounterpartyClientID)
+	client, err := s.verifyClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID)
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC verify deployed Client %q: %w", config.ID, err)
-	}
-	return client, nil
-}
-
-func (p *PreparedClient) deployDummyClient(ctx context.Context) (Client, error) {
-	s := p.setup
-	authority := p.authority
-	instance := p.instance
-	config := p.dummy
-
-	clientAddress, err := s.deployVerified(ctx, authority, "dummy Client "+config.ID,
-		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
-			address, transaction, _, deployErr := dummylightclient.DeployDummyLightClient(
-				opts,
-				s.backend,
-				0,              // updateResult: UpdateResult.Update
-				math.MaxUint64, // membershipResult: non-membership timestamp for timeouts
-				false,          // membershipShouldFail
-			)
-			return address, transaction, deployErr
-		})
-	if err != nil {
-		return Client{}, err
-	}
-
-	if registerErr := s.registerClient(
-		ctx,
-		authority,
-		instance,
-		config.ID,
-		config.CounterpartyClientID,
-		clientAddress,
-	); registerErr != nil {
-		return Client{}, registerErr
-	}
-
-	client, err := s.verifyDummyClient(ctx, instance, config.ID, clientAddress, config.CounterpartyClientID)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC verify deployed dummy Client %q: %w", config.ID, err)
 	}
 	return client, nil
 }
@@ -650,16 +553,54 @@ func (s *Setup) verifyClient(
 	expectedAddress common.Address,
 	counterpartyClientID string,
 ) (Client, error) {
-	registered, err := s.verifyRegisteredClient(
-		ctx,
-		instance,
-		clientID,
-		expectedAddress,
-		counterpartyClientID,
-		"attestation Client "+clientID,
-	)
+	if clientID == "" {
+		return Client{}, fmt.Errorf("solidity IBC attach Client: empty client id")
+	}
+	if counterpartyClientID == "" {
+		return Client{}, fmt.Errorf("solidity IBC attach Client %q: empty counterparty client id", clientID)
+	}
+	router, err := ics26router.NewContract(instance.Router, s.backend)
 	if err != nil {
-		return Client{}, err
+		return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind ICS26Router: %w", clientID, err)
+	}
+	registered, err := router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query router client: %w", clientID, err)
+	}
+	if expectedAddress != (common.Address{}) && registered != expectedAddress {
+		return Client{}, fmt.Errorf(
+			"solidity IBC attach Client %q: router has address %s, want %s",
+			clientID,
+			registered,
+			expectedAddress,
+		)
+	}
+	if registered == (common.Address{}) {
+		return Client{}, fmt.Errorf(
+			"solidity IBC attach Client %q: router returned a zero contract address",
+			clientID,
+		)
+	}
+	if codeErr := s.requireCode(ctx, "Client "+clientID, registered); codeErr != nil {
+		return Client{}, codeErr
+	}
+	counterparty, err := router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query counterparty: %w", clientID, err)
+	}
+	if counterparty.ClientId != counterpartyClientID {
+		return Client{}, fmt.Errorf(
+			"solidity IBC attach Client %q: counterparty id is %q, want %q",
+			clientID,
+			counterparty.ClientId,
+			counterpartyClientID,
+		)
+	}
+	if len(counterparty.MerklePrefix) != 1 || len(counterparty.MerklePrefix[0]) != 0 {
+		return Client{}, fmt.Errorf(
+			"solidity IBC attach Client %q: counterparty Merkle prefix is not the EVM empty prefix",
+			clientID,
+		)
 	}
 
 	lightClient, err := attestation.NewContract(registered, s.backend)
@@ -681,91 +622,6 @@ func (s *Setup) verifyClient(
 		Attestors:             slices.Clone(set.AttestorAddresses),
 		MinRequiredSignatures: set.MinRequiredSigs,
 	}, nil
-}
-
-func (s *Setup) verifyDummyClient(
-	ctx context.Context,
-	instance Instance,
-	clientID string,
-	expectedAddress common.Address,
-	counterpartyClientID string,
-) (Client, error) {
-	registered, err := s.verifyRegisteredClient(
-		ctx,
-		instance,
-		clientID,
-		expectedAddress,
-		counterpartyClientID,
-		"dummy Client "+clientID,
-	)
-	if err != nil {
-		return Client{}, err
-	}
-	return Client{
-		ID:                   clientID,
-		Address:              registered,
-		CounterpartyClientID: counterpartyClientID,
-	}, nil
-}
-
-func (s *Setup) verifyRegisteredClient(
-	ctx context.Context,
-	instance Instance,
-	clientID string,
-	expectedAddress common.Address,
-	counterpartyClientID string,
-	codeLabel string,
-) (common.Address, error) {
-	if clientID == "" {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client: empty client id")
-	}
-	if counterpartyClientID == "" {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: empty counterparty client id", clientID)
-	}
-	router, err := ics26router.NewContract(instance.Router, s.backend)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: bind ICS26Router: %w", clientID, err)
-	}
-	registered, err := router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: query router client: %w", clientID, err)
-	}
-	if expectedAddress != (common.Address{}) && registered != expectedAddress {
-		return common.Address{}, fmt.Errorf(
-			"solidity IBC attach Client %q: router has address %s, want %s",
-			clientID,
-			registered,
-			expectedAddress,
-		)
-	}
-	if registered == (common.Address{}) {
-		return common.Address{}, fmt.Errorf(
-			"solidity IBC attach Client %q: router returned a zero contract address",
-			clientID,
-		)
-	}
-	if codeErr := s.requireCode(ctx, codeLabel, registered); codeErr != nil {
-		return common.Address{}, codeErr
-	}
-	counterparty, err := router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: query counterparty: %w", clientID, err)
-	}
-	if counterparty.ClientId != counterpartyClientID {
-		return common.Address{}, fmt.Errorf(
-			"solidity IBC attach Client %q: counterparty id is %q, want %q",
-			clientID,
-			counterparty.ClientId,
-			counterpartyClientID,
-		)
-	}
-	if len(counterparty.MerklePrefix) != 1 || len(counterparty.MerklePrefix[0]) != 0 {
-		return common.Address{}, fmt.Errorf(
-			"solidity IBC attach Client %q: counterparty Merkle prefix is not the EVM empty prefix",
-			clientID,
-		)
-	}
-	return registered, nil
 }
 
 func (s *Setup) send(

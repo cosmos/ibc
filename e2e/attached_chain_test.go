@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2e_test
 
 import (
@@ -46,12 +48,6 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 		externalNode.EnsureEOABalance(ctx, e2etest.ProtocolAuthorityAddress(), e2etest.RequiredSignerBalance()),
 	)
 
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{
-		Endpoints: map[environment.EndpointBindingID]environment.EndpointBinding{
-			externalEndpoint: {RPCURL: externalNode.RPCURL()},
-		},
-	})
-
 	// Subtest teardown must finish before the out-of-band liveness probe below, or the check is vacuous.
 	t.Run("environment", func(t *testing.T) {
 		chains := e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA)
@@ -62,7 +58,10 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 				PollInterval:     100 * time.Millisecond,
 			},
 		})
-		spec := dummyClientMeshSpec(chains)
+		spec, runtime := attestedMesh(chains)
+		runtime.Endpoints = map[environment.EndpointBindingID]environment.EndpointBinding{
+			externalEndpoint: {RPCURL: externalNode.RPCURL()},
+		}
 		env := e2etest.Start(t, spec, runtime)
 		route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 		driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)

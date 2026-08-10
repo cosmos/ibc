@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package environment_test
 
 import (
@@ -22,7 +24,7 @@ import (
 // This deterministic identity is not one of Anvil's provider-default funded accounts.
 const testDeployerPrivateKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
-func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
+func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 	requireDocker(t)
 	requireIBCLinkBinary(t)
 
@@ -94,6 +96,14 @@ func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
 	require.True(t, common.IsHexAddress(string(resolvedInstanceB.Locator())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.AccessManagerAddress())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.AccessManagerAddress())))
+
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.ICS20TransferAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.ICS27GMPAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.ICS20TransferAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.ICS27GMPAddress())))
+	byChainA, err := env.IBCInstanceForChain(chainA)
+	require.NoError(t, err)
+	require.Same(t, resolvedInstanceA, byChainA)
 
 	connection, err := env.Connection(connectionID)
 	require.NoError(t, err)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2etest
 
 import (
@@ -69,13 +71,14 @@ func ManualAtoB(a, b environment.ChainID) Route {
 
 // ChainDeployment holds per-chain application contracts deployed for traffic.
 type ChainDeployment struct {
-	Token         common.Address
-	Counter       common.Address
-	IFT           common.Address
-	IFTBatchShim  common.Address
-	ICS20Transfer common.Address
-	ICS27GMP      common.Address
-	ICS26Router   common.Address
+	Token                  common.Address
+	Counter                common.Address
+	IFT                    common.Address
+	IFTBatchShim           common.Address
+	IFTSendCallConstructor common.Address
+	ICS20Transfer          common.Address
+	ICS27GMP               common.Address
+	ICS26Router            common.Address
 }
 
 // RouteClients holds the realized client locators for one directed route.
@@ -206,8 +209,6 @@ func deployApps(
 		chains: make(map[environment.ChainID]ChainDeployment, len(env.Chains())),
 		routes: make(map[RouteID]RouteClients, len(routes)),
 	}
-	callConstructors := make(map[environment.ChainID]common.Address, len(env.Chains()))
-
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
 		require.NoError(t, err, "e2etest: resolve Chain %q", id)
@@ -235,9 +236,15 @@ func deployApps(
 			counter.CounterMetaData,
 		)
 		require.NoError(t, err, "e2etest: deploy Counter on Chain %q", id)
-		iftToken, callConstructor, err := deployIFTToken(t.Context(), evmAccess, deployer.account, ics27)
+		iftToken, err := deployIFTToken(t.Context(), evmAccess, deployer.account, ics27)
 		require.NoError(t, err, "e2etest: deploy IFT on Chain %q", id)
-		callConstructors[id] = callConstructor
+		iftSendCallConstructor, err := deployContract(
+			t.Context(),
+			evmAccess,
+			deployer.account,
+			iftsendcallconstructor.EVMIFTSendCallConstructorMetaData,
+		)
+		require.NoError(t, err, "e2etest: deploy IFT send-call constructor on Chain %q", id)
 
 		iftBatchShim, err := deployIFTBatchShim(
 			t.Context(),
@@ -249,13 +256,14 @@ func deployApps(
 		require.NoError(t, err, "e2etest: deploy IFT batch transfer shim on Chain %q", id)
 
 		deployment.chains[id] = ChainDeployment{
-			Token:         token,
-			Counter:       counterAddr,
-			IFT:           iftToken,
-			IFTBatchShim:  iftBatchShim,
-			ICS20Transfer: ics20,
-			ICS27GMP:      ics27,
-			ICS26Router:   router,
+			Token:                  token,
+			Counter:                counterAddr,
+			IFT:                    iftToken,
+			IFTBatchShim:           iftBatchShim,
+			IFTSendCallConstructor: iftSendCallConstructor,
+			ICS20Transfer:          ics20,
+			ICS27GMP:               ics27,
+			ICS26Router:            router,
 		}
 	}
 
@@ -268,7 +276,7 @@ func deployApps(
 		}
 	}
 
-	registerIFTBridges(t, env, deployer, deployment, callConstructors, routes)
+	registerIFTBridges(t, env, deployer, deployment, routes)
 	return deployment
 }
 
@@ -279,7 +287,6 @@ func registerIFTBridges(
 	env *environment.Environment,
 	deployer Signer,
 	deployment *Deployment,
-	callConstructors map[environment.ChainID]common.Address,
 	routes []Route,
 ) {
 	t.Helper()
@@ -304,29 +311,30 @@ func registerIFTBridges(
 			require.NoError(t, err, "e2etest: resolve EVM access on Chain %q", end.chain)
 			iftToken := deployment.chains[end.chain].IFT
 			counterpartyIFT := deployment.chains[end.counterparty].IFT
-			data, err := iftABI.Pack(
-				"registerIFTBridge",
-				end.client,
-				counterpartyIFT.Hex(),
-				callConstructors[end.chain],
-			)
-			require.NoError(t, err, "e2etest: pack IFT registerIFTBridge")
-			_, err = evmAccess.BroadcastTx(
-				t.Context(),
-				deployer.account,
-				&iftToken,
-				data,
-				nil,
-			)
-			require.NoError(
-				t,
-				err,
-				"e2etest: register IFT bridge for client %q on Chain %q",
-				end.client,
-				end.chain,
+			registerIFTBridge(
+				t, evmAccess, deployer, end.chain,
+				iftToken, end.client, counterpartyIFT,
+				deployment.chains[end.chain].IFTSendCallConstructor,
 			)
 		}
 	}
+}
+
+func registerIFTBridge(
+	t testing.TB,
+	evmAccess *environment.EVM,
+	deployer Signer,
+	chain environment.ChainID,
+	iftToken common.Address,
+	client string,
+	counterpartyIFT common.Address,
+	callConstructor common.Address,
+) {
+	t.Helper()
+	data, err := iftABI.Pack("registerIFTBridge", client, counterpartyIFT.Hex(), callConstructor)
+	require.NoError(t, err, "e2etest: pack IFT registerIFTBridge")
+	_, err = evmAccess.BroadcastTx(t.Context(), deployer.account, &iftToken, data, nil)
+	require.NoError(t, err, "e2etest: register IFT bridge for client %q on Chain %q", client, chain)
 }
 
 func buildConfig(
@@ -478,43 +486,33 @@ func deployAndMintToken(
 }
 
 // deployIFTToken deploys the IFT token (a UUPS implementation behind an
-// ERC1967 proxy) plus its send-call constructor, and mints the initial supply
-// to the sender.
+// ERC1967 proxy) and mints the initial supply to the sender.
 func deployIFTToken(
 	ctx context.Context,
 	client *environment.EVM,
 	sender evm.Account,
 	ics27 common.Address,
-) (common.Address, common.Address, error) {
+) (common.Address, error) {
 	implementation, err := deployContract(ctx, client, sender, ift.ContractMetaData)
 	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: deploy IFT implementation: %w", err)
+		return common.Address{}, fmt.Errorf("e2etest: deploy IFT implementation: %w", err)
 	}
 	initialize, err := iftABI.Pack("initialize", sender.Address(), "IFT Token", "IFT", ics27)
 	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: pack IFT initialize: %w", err)
+		return common.Address{}, fmt.Errorf("e2etest: pack IFT initialize: %w", err)
 	}
 	token, err := deployContract(ctx, client, sender, erc1967proxy.ContractMetaData, implementation, initialize)
 	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: deploy IFT proxy: %w", err)
-	}
-	callConstructor, err := deployContract(
-		ctx,
-		client,
-		sender,
-		iftsendcallconstructor.EVMIFTSendCallConstructorMetaData,
-	)
-	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: deploy IFT send-call constructor: %w", err)
+		return common.Address{}, fmt.Errorf("e2etest: deploy IFT proxy: %w", err)
 	}
 	mint, err := iftABI.Pack("mint", sender.Address(), initialTokenSupply)
 	if err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: pack IFT mint: %w", err)
+		return common.Address{}, fmt.Errorf("e2etest: pack IFT mint: %w", err)
 	}
 	if _, err := client.BroadcastTx(ctx, sender, &token, mint, nil); err != nil {
-		return common.Address{}, common.Address{}, fmt.Errorf("e2etest: mint IFT supply: %w", err)
+		return common.Address{}, fmt.Errorf("e2etest: mint IFT supply: %w", err)
 	}
-	return token, callConstructor, nil
+	return token, nil
 }
 
 // deployIFTBatchShim deploys the IFT batch-transfer shim and funds it with

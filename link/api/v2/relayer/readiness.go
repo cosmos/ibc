@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package relayer
 
 // ProcessReadinessEvent identifies the relayer startup event.

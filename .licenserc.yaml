@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+
+header:
+  license:
+    content: "SPDX-License-Identifier: Apache-2.0"
+    pattern: 'SPDX-License-Identifier:\s*Apache-2.0'
+
+  paths:
+    - "**"
+
+  paths-ignore:
+    - ".git/**"
+    - "**/node_modules/**"
+
+    # Specs move to Community-Spec-1.0 separately; remove this when that conversion lands.
+    - "spec/**"
+
+    # Files and generated formats that cannot carry a source header.
+    - "LICENSE"
+    - "NOTICE"
+    - "**/go.sum"
+    - "**/*.json"
+    - "**/*.jsonc"
+    - "**/*.svg"
+    - "**/*.excalidraw"
+    - "**/bun.lock"
+
+    # Generated Go without configurable file headers.
+    - "link/internal/store/repository/**"
+    - "link/internal/tests/mocks/**"
+    - "link/internal/service/**/*.mock.go"
+    - "link/internal/chains/evm/contracts/**"
+    - "e2e/internal/harness/environment/solidityibc/*/contract.go"
+
+    # Third-party and test Solidity sources retain their own SPDX identifiers.
+    - "e2e/internal/harness/environment/solidityibc/contracts/src/**"
+
+  comment: never
+  license-location-threshold: 80

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 module github.com/cosmos/ibc/e2e
 
 go 1.26.4

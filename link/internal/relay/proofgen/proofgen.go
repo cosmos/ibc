@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package proofgen generates packet membership/non-membership proofs and
 // light-client state proofs. There is one implementation per light-client
 // type.

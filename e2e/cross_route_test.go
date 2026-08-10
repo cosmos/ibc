@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2e_test
 
 import (
@@ -11,27 +13,22 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-// crossRouteSpec shares destination chain-a; both routes send sequence 1 to probe bare-seq collision.
-func crossRouteSpec(t testing.TB) environment.Spec {
-	t.Helper()
+func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
+	t.Parallel()
 	const (
 		chainA environment.ChainID = "chain-a"
 		chainB environment.ChainID = "chain-b"
 		chainC environment.ChainID = "chain-c"
 	)
-	return dummyClientMeshSpec(e2etest.EVMChains(t, e2etest.EVMRequirements{}, chainA, chainB, chainC))
-}
-
-func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
-	t.Parallel()
-	spec := crossRouteSpec(t)
-	runtime := e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+	// Both routes share destination chain-a and send sequence 1 to probe
+	// bare-seq collision.
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, chainA, chainB, chainC))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 	routes := []e2etest.Route{
-		{ID: "b-to-a", Source: "chain-b", Destination: "chain-a"},
-		{ID: "c-to-a", Source: "chain-c", Destination: "chain-a"},
+		{ID: "b-to-a", Source: chainB, Destination: chainA},
+		{ID: "c-to-a", Source: chainC, Destination: chainA},
 	}
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, routes...)
 	bToAApp := e2etest.NewTransfer(t, env, deployment, sender, routes[0])
