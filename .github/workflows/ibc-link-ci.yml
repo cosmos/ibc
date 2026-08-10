@@ -11,8 +11,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: read-all
 
 defaults:
   run:
@@ -52,6 +51,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.link == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -69,6 +70,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.link == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -86,6 +89,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.link == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 30
     env:
       # creates postgres docker container for testing
@@ -104,6 +109,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.sql == 'true' || needs.changes.outputs.proto == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -144,6 +151,7 @@ jobs:
     if: always()
     needs: [changes, lint, build, test, verify-codegen]
     runs-on: depot-ubuntu-24.04-4
+    permissions: {}
     steps:
       - name: Check required jobs
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
