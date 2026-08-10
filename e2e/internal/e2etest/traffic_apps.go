@@ -62,6 +62,56 @@ func NewIFT(
 	}
 }
 
+// DeployIFTTokenPair deploys, funds, and registers another IFT pair on an existing route.
+func DeployIFTTokenPair(
+	t testing.TB,
+	env *environment.Environment,
+	deployment *Deployment,
+	deployer Signer,
+	route Route,
+) *IFT {
+	t.Helper()
+	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
+	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
+	require.NoError(t, err, "e2etest: resolve endpoints for additional IFT on route %q", route.ID)
+
+	sourceIFT, err := deployIFTToken(
+		t.Context(), sourceEndpoint.evm, deployer.account, sourceApps.ICS27GMP,
+	)
+	require.NoError(t, err, "e2etest: deploy additional IFT on Chain %q", route.Source)
+	destinationIFT, err := deployIFTToken(
+		t.Context(), destinationEndpoint.evm, deployer.account, destinationApps.ICS27GMP,
+	)
+	require.NoError(t, err, "e2etest: deploy additional IFT on Chain %q", route.Destination)
+	batcher, err := deployIFTBatchShim(
+		t.Context(), sourceEndpoint.evm, deployer.account, sourceIFT, initialTokenSupply,
+	)
+	require.NoError(t, err, "e2etest: deploy additional IFT batch transfer shim on Chain %q", route.Source)
+
+	registerIFTBridge(
+		t, sourceEndpoint.evm, deployer, route.Source,
+		sourceIFT, clients.SourceClient, destinationIFT, sourceApps.IFTSendCallConstructor,
+	)
+	if !route.SkipDestinationIFTBridge {
+		registerIFTBridge(
+			t, destinationEndpoint.evm, deployer, route.Destination,
+			destinationIFT, clients.DestClient, sourceIFT, destinationApps.IFTSendCallConstructor,
+		)
+	}
+
+	return &IFT{
+		routeID:      route.ID,
+		source:       sourceEndpoint,
+		destination:  destinationEndpoint,
+		sender:       deployer.account,
+		sourceIFT:    sourceIFT,
+		destIFT:      destinationIFT,
+		sourceRouter: sourceApps.ICS26Router,
+		sourceClient: clients.SourceClient,
+		batcher:      batcher,
+	}
+}
+
 // NewGMP constructs the GMP app for a route. The sender must be the signer
 // that deployed the apps: it holds the minted token supply.
 func NewGMP(

@@ -230,6 +230,57 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 	require.NoError(t, transfer.VerifyBurned(ctx), "a successful ack must not also refund")
 }
 
+func TestIFTTransfer_TwoTokensSameClientPair(t *testing.T) {
+	t.Parallel()
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	tokenA := e2etest.NewIFT(t, env, deployment, sender, route)
+	tokenB := e2etest.DeployIFTTokenPair(t, env, deployment, sender, route)
+	ctx := t.Context()
+
+	receiver := common.HexToAddress("0xa").Hex()
+
+	transferA, err := tokenA.Send(ctx, e2etest.IFTRequest{
+		Amount:   big.NewInt(1_234_000),
+		Receiver: receiver,
+	})
+	require.NoError(t, err)
+	transferB, err := tokenB.Send(ctx, e2etest.IFTRequest{
+		Amount:   big.NewInt(5_678_000),
+		Receiver: receiver,
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, transferA.Packet().Sequence, transferB.Packet().Sequence)
+
+	transfers := []*e2etest.IFTPacket{transferA, transferB}
+	for _, transfer := range transfers {
+		require.NoError(t, transfer.VerifyBurned(ctx))
+		require.NoError(t, transfer.VerifyPending(ctx))
+	}
+
+	relayer := e2etest.StartRelayer(t, driver, env)
+	require.NoError(t, e2etest.Relay(ctx, relayer, transferA.Packet()))
+	_, err = e2etest.AwaitState(ctx, relayer, transferA.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transferA.VerifyPendingCleared(ctx))
+	require.NoError(t, transferB.VerifyPending(ctx), "token B must remain pending after token A is acknowledged")
+
+	require.NoError(t, e2etest.Relay(ctx, relayer, transferB.Packet()))
+	_, err = e2etest.AwaitState(ctx, relayer, transferB.Packet(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	for _, transfer := range transfers {
+		require.NoError(t, transfer.VerifyDelivered(ctx))
+		require.NoError(t, transfer.VerifyPendingCleared(ctx))
+		require.NoError(t, transfer.VerifyBurned(ctx), "a successful ack must not refund either token")
+	}
+}
+
 func TestIFTTimeout_Refund(t *testing.T) {
 	t.Parallel()
 	spec, runtime := attestedMesh(e2etest.EVMChains(t,
