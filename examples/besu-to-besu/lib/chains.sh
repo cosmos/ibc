@@ -191,12 +191,16 @@ _init_chain() {
   # Besu wants the raw 32-byte hex with no 0x prefix.
   printf '%s\n' "$pk" > "$out_dir/key"
 
-  # Everything here is bind-mounted into a container that runs as the `besu`
-  # user, so it has to be readable by a uid that is not the host user's. A
-  # restrictive host umask would otherwise render these 0640 and lock Besu out
-  # of its own genesis and signing key. These are throwaway devnet secrets.
+  # The validator signing key stays owner-only: anything that can read it can
+  # sign blocks as this chain's sole validator. The Besu image runs as root
+  # (`docker inspect --format '{{.Config.User}}'`), so it reads 0600 through the
+  # bind mount regardless of the host uid that owns the file.
+  #
+  # besu.toml and el-genesis.json hold no secrets and are set explicitly so a
+  # restrictive host umask cannot render them unreadable to the container.
   chmod 755 "$out_dir"
-  chmod 644 "$out_dir/key" "$out_dir/besu.toml" "$out_dir/el-genesis.json"
+  chmod 600 "$out_dir/key"
+  chmod 644 "$out_dir/besu.toml" "$out_dir/el-genesis.json"
 
   if command -v jq >/dev/null 2>&1; then
     jq empty "$out_dir/el-genesis.json" 2>/dev/null \

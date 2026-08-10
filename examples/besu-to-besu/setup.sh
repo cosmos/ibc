@@ -2,7 +2,7 @@
 
 # SPDX-License-Identifier: Apache-2.0
 
-# setup.sh — besu-besu demo.
+# setup.sh — besu-to-besu example.
 #
 # Boots two independent single-validator Besu QBFT chains (A and B), the
 # substrate for a single IBC pair:
@@ -73,8 +73,7 @@ export FOUNDRY_IMAGE="${FOUNDRY_IMAGE:-ghcr.io/foundry-rs/foundry:latest}"
 # A QBFT light client trusts the counterparty's validator set by address, so if
 # A and B shared a validator, a header signed for one chain would be
 # signature-valid against the other's client. Distinct phrases make that
-# impossible by construction. (besu-trio separates them for the same reason,
-# using one validator per chain.)
+# impossible by construction.
 #
 # Never point either of these at a mnemonic holding real funds: derived
 # validator keys are written to chains/local/<chain>/key in plaintext for Besu
@@ -124,7 +123,7 @@ main() {
     clean)    clean;          exit 0 ;;
     "")
       log "╔══════════════════════════════════════════════════╗"
-      log "║  besu-besu: 2 Besu QBFT chains (A, B)            ║"
+      log "║  besu-to-besu: 2 Besu QBFT chains (A, B)         ║"
       log "╚══════════════════════════════════════════════════╝"
       cmd_init
       cmd_start

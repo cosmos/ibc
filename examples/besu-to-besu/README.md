@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# besu-besu
+# besu-to-besu
 
 Two single-validator Besu QBFT chains running side-by-side, intended as the
 substrate for a single IBC pair:
@@ -10,8 +10,7 @@ substrate for a single IBC pair:
 ```
 
 Current scope is chain bring-up only: derive keys, render configs, boot both
-chains, wait for them to produce blocks. (The three-chain hub-and-spoke variant
-with contracts, attestors, proof-api, and relayer lives in `demo/besu-trio/`.)
+chains, wait for them to produce blocks.
 
 ## No committed private keys
 
@@ -69,7 +68,7 @@ derived keys are written to disk in plaintext for Besu to read.
 ## Layout
 
 ```
-demo/besu-besu/
+examples/besu-to-besu/
 ├── README.md
 ├── setup.sh                    — entrypoint: init | start | accounts | status | clean
 ├── docker-compose.yml          — besu-a + besu-b
@@ -229,8 +228,8 @@ host install is optional.
 
 ## What's not here
 
-- IBC contracts, light clients, attestors, proof-api, relayer — see
-  `demo/besu-trio/` for the wired-up multi-chain version.
+- IBC contracts, light clients, attestors, proof-api, relayer. This example
+  stops at two bare chains; nothing is wired between them yet.
 - Multi-validator QBFT. `qbft_extradata` encodes exactly one validator per
   chain; a validator set of two or more needs a real RLP encoder for the
   list-length prefix.
