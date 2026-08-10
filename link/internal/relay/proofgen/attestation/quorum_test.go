@@ -12,8 +12,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	attestordomain "github.com/cosmos/ibc/link/attestor"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -34,7 +35,7 @@ func signedAttestor(t *testing.T, name string, attestedData []byte) *attestor.Mo
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
 	a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
-		attestor.Attestation{Height: 10, AttestedData: attestedData, Signature: sig}, nil,
+		attestordomain.Attestation{Height: 10, AttestedData: attestedData, Signature: sig}, nil,
 	)
 
 	return a
@@ -100,7 +101,9 @@ func TestQueryQuorum(t *testing.T) {
 	t.Run("queryErrorExcludedNotFatal", func(t *testing.T) {
 		erroring := attestor.NewMockAttestor(t)
 		erroring.EXPECT().Name().Return("erroring").Maybe()
-		erroring.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(attestor.Attestation{}, assert.AnError)
+		erroring.EXPECT().
+			StateAttestation(mock.Anything, mock.Anything).
+			Return(attestordomain.Attestation{}, assert.AnError)
 
 		attestors := []attestor.Attestor{
 			signedAttestor(t, "a1", data),
@@ -117,7 +120,7 @@ func TestQueryQuorum(t *testing.T) {
 		badAttestor := attestor.NewMockAttestor(t)
 		badAttestor.EXPECT().Name().Return("bad").Maybe()
 		badAttestor.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
-			attestor.Attestation{Height: 10, AttestedData: data, Signature: []byte("not a valid signature")}, nil,
+			attestordomain.Attestation{Height: 10, AttestedData: data, Signature: []byte("not a valid signature")}, nil,
 		)
 
 		attestors := []attestor.Attestor{
@@ -144,7 +147,7 @@ func TestQueryQuorum(t *testing.T) {
 			a := attestor.NewMockAttestor(t)
 			a.EXPECT().Name().Return(name).Maybe()
 			a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
-				attestor.Attestation{Height: 10, AttestedData: data, Signature: sig}, nil,
+				attestordomain.Attestation{Height: 10, AttestedData: data, Signature: sig}, nil,
 			)
 
 			return a

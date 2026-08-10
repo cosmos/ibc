@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
+	attestordomain "github.com/cosmos/ibc/link/attestor"
 )
 
 // RemoteAttestor provides attestation data from a remote gRPC service.
@@ -63,7 +64,10 @@ func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	return res.Msg.Height, nil
 }
 
-func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+func (a *RemoteAttestor) StateAttestation(
+	ctx context.Context,
+	height uint64,
+) (attestordomain.Attestation, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
@@ -74,19 +78,22 @@ func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (A
 
 	res, err := a.client.StateAttestation(ctx, connect.NewRequest(req))
 	if err != nil {
-		return Attestation{}, err
+		return attestordomain.Attestation{}, err
 	}
 
 	return attestationFromProto(res.Msg.Attestation)
 }
 
-func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
+func (a *RemoteAttestor) PacketAttestation(
+	ctx context.Context,
+	req attestordomain.PacketAttestationRequest,
+) (attestordomain.Attestation, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
 	ct, err := CommitmentTypeToProto(req.CommitmentType)
 	if err != nil {
-		return Attestation{}, err
+		return attestordomain.Attestation{}, err
 	}
 
 	protoReq := &proto.PacketAttestationRequest{
@@ -98,7 +105,7 @@ func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttest
 
 	res, err := a.client.PacketAttestation(ctx, connect.NewRequest(protoReq))
 	if err != nil {
-		return Attestation{}, err
+		return attestordomain.Attestation{}, err
 	}
 
 	return attestationFromProto(res.Msg.Attestation)
@@ -109,9 +116,9 @@ func (a *RemoteAttestor) Alias() string   { return a.alias }
 func (a *RemoteAttestor) ChainID() string { return a.chainID }
 func (a *RemoteAttestor) IsLocal() bool   { return false }
 
-func attestationFromProto(a *proto.Attestation) (Attestation, error) {
+func attestationFromProto(a *proto.Attestation) (attestordomain.Attestation, error) {
 	if a == nil {
-		return Attestation{}, errors.New("attestation is nil")
+		return attestordomain.Attestation{}, errors.New("attestation is nil")
 	}
 
 	var timestamp *time.Time
@@ -120,7 +127,7 @@ func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 		timestamp = &t
 	}
 
-	return Attestation{
+	return attestordomain.Attestation{
 		Height:       a.Height,
 		Timestamp:    timestamp,
 		AttestedData: a.AttestedData,
@@ -128,29 +135,29 @@ func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 	}, nil
 }
 
-func CommitmentTypeToProto(ct CommitmentType) (proto.CommitmentType, error) {
+func CommitmentTypeToProto(ct attestordomain.CommitmentType) (proto.CommitmentType, error) {
 	switch ct {
-	case CommitmentTypePacket:
+	case attestordomain.CommitmentTypePacket:
 		return proto.CommitmentType_COMMITMENT_TYPE_PACKET, nil
-	case CommitmentTypeAck:
+	case attestordomain.CommitmentTypeAck:
 		return proto.CommitmentType_COMMITMENT_TYPE_ACK, nil
-	case CommitmentTypeReceipt:
+	case attestordomain.CommitmentTypeReceipt:
 		return proto.CommitmentType_COMMITMENT_TYPE_RECEIPT, nil
 	default:
 		return 0, errors.Errorf("unsupported commitment type: %d", ct)
 	}
 }
 
-func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
+func CommitmentTypeFromProto(ct proto.CommitmentType) (attestordomain.CommitmentType, error) {
 	switch ct {
 	case proto.CommitmentType_COMMITMENT_TYPE_PACKET:
-		return CommitmentTypePacket, nil
+		return attestordomain.CommitmentTypePacket, nil
 	case proto.CommitmentType_COMMITMENT_TYPE_ACK:
-		return CommitmentTypeAck, nil
+		return attestordomain.CommitmentTypeAck, nil
 	case proto.CommitmentType_COMMITMENT_TYPE_RECEIPT:
-		return CommitmentTypeReceipt, nil
+		return attestordomain.CommitmentTypeReceipt, nil
 	default:
-		return CommitmentTypeInvalid, errors.Errorf("unsupported commitment type: %s", ct)
+		return attestordomain.CommitmentTypeInvalid, errors.Errorf("unsupported commitment type: %s", ct)
 	}
 }
 

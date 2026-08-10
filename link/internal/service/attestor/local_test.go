@@ -18,10 +18,12 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	attestordomain "github.com/cosmos/ibc/link/attestor"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
+	attestorevmibc "github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -264,7 +266,7 @@ func TestLocal(t *testing.T) {
 			result, err := attestor.StateAttestation(context.Background(), 42)
 
 			// ASSERT
-			require.ErrorIs(t, err, ErrNotFinalized)
+			require.ErrorIs(t, err, attestordomain.ErrNotFinalized)
 			assert.Empty(t, result)
 		})
 
@@ -298,7 +300,7 @@ func TestLocal(t *testing.T) {
 
 	t.Run("PacketAttestation", func(t *testing.T) {
 		validPacket := sampleEvmPacket(t)
-		decodedPacket, err := attestorevm.DecodePacket(validPacket)
+		decodedPacket, err := attestorevmibc.DecodePacket(validPacket)
 		require.NoError(t, err)
 		pathHash := [32]byte(
 			crypto.Keccak256Hash(hostv2.PacketCommitmentKey(decodedPacket.SourceClient, decodedPacket.Sequence)),
@@ -315,7 +317,7 @@ func TestLocal(t *testing.T) {
 
 		for _, tt := range []struct {
 			name            string
-			request         PacketAttestationRequest
+			request         attestordomain.PacketAttestationRequest
 			latestHeader    *v2.BlockHeader
 			latestHeightErr error
 			commitment      *[32]byte
@@ -323,89 +325,89 @@ func TestLocal(t *testing.T) {
 		}{
 			{
 				name: "rejectsEmptyPacketBatch",
-				request: PacketAttestationRequest{
-					CommitmentType: CommitmentTypePacket,
+				request: attestordomain.PacketAttestationRequest{
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				errContains: "packet count 0",
 			},
 			{
 				name: "rejectsPacketBatchAboveLimit",
-				request: PacketAttestationRequest{
-					Packets:        make([][]byte, MaxPacketsPerAttestation+1),
-					CommitmentType: CommitmentTypePacket,
+				request: attestordomain.PacketAttestationRequest{
+					Packets:        make([][]byte, attestordomain.MaxPacketsPerAttestation+1),
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				errContains: "packet count 101",
 			},
 			{
 				name: "rejectsMalformedPacket",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{{1, 2, 3}},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				errContains: "decode packet 0",
 			},
 			{
 				name: "rejectsZeroHeight",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				errContains: "height must be greater than 0",
 			},
 			{
 				name: "rejectsLatestHeight",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         v2.LatestBlock,
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				errContains: "invalid height",
 			},
 			{
 				name: "rejectsFinalizedHeight",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         uint64(v2.FinalizedBlock),
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				errContains: "invalid height",
 			},
 			{
 				name: "rejectsUnsupportedCommitmentType",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypeInvalid,
+					CommitmentType: attestordomain.CommitmentTypeInvalid,
 				},
 				errContains: "unsupported commitment type 0",
 			},
 			{
 				name: "rejectsUnfinalizedHeight",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         11,
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				latestHeader: &v2.BlockHeader{Height: 10},
 				errContains:  "block is not finalized",
 			},
 			{
 				name: "returnsLatestHeightError",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				latestHeightErr: errors.New("rpc down"),
 				errContains:     "get latest attestable height: rpc down",
 			},
 			{
 				name: "returnsCommitmentNotFound",
-				request: PacketAttestationRequest{
+				request: attestordomain.PacketAttestationRequest{
 					Height:         10,
 					Packets:        [][]byte{validPacket},
-					CommitmentType: CommitmentTypePacket,
+					CommitmentType: attestordomain.CommitmentTypePacket,
 				},
 				latestHeader: &v2.BlockHeader{Height: 10},
 				commitment:   new([32]byte),
@@ -481,10 +483,10 @@ func TestLocal(t *testing.T) {
 			require.NoError(t, err)
 
 			// ACT
-			result, err := attestor.PacketAttestation(context.Background(), PacketAttestationRequest{
+			result, err := attestor.PacketAttestation(context.Background(), attestordomain.PacketAttestationRequest{
 				Height:         height,
 				Packets:        [][]byte{validPacket},
-				CommitmentType: CommitmentTypePacket,
+				CommitmentType: attestordomain.CommitmentTypePacket,
 			})
 
 			// ASSERT
@@ -506,38 +508,38 @@ func TestLocal(t *testing.T) {
 		t.Run("commitmentSemantics", func(t *testing.T) {
 			for _, tt := range []struct {
 				name           string
-				commitmentType CommitmentType
+				commitmentType attestordomain.CommitmentType
 				path           [32]byte
 				commitment     [32]byte
 				errContains    string
 			}{
 				{
 					name:           "rejectsPacketMismatch",
-					commitmentType: CommitmentTypePacket,
+					commitmentType: attestordomain.CommitmentTypePacket,
 					path:           pathHash,
 					commitment:     [32]byte{1},
 					errContains:    "packet commitment mismatch",
 				},
 				{
 					name:           "acceptsPresentAck",
-					commitmentType: CommitmentTypeAck,
+					commitmentType: attestordomain.CommitmentTypeAck,
 					path:           ackPathHash,
 					commitment:     [32]byte{1},
 				},
 				{
 					name:           "rejectsMissingAck",
-					commitmentType: CommitmentTypeAck,
+					commitmentType: attestordomain.CommitmentTypeAck,
 					path:           ackPathHash,
 					errContains:    "acknowledgement commitment",
 				},
 				{
 					name:           "acceptsMissingReceipt",
-					commitmentType: CommitmentTypeReceipt,
+					commitmentType: attestordomain.CommitmentTypeReceipt,
 					path:           receiptPathHash,
 				},
 				{
 					name:           "rejectsPresentReceipt",
-					commitmentType: CommitmentTypeReceipt,
+					commitmentType: attestordomain.CommitmentTypeReceipt,
 					path:           receiptPathHash,
 					commitment:     [32]byte{1},
 					errContains:    "receipt exists",
@@ -563,11 +565,14 @@ func TestLocal(t *testing.T) {
 					require.NoError(t, err)
 
 					// ACT
-					result, err := attestor.PacketAttestation(context.Background(), PacketAttestationRequest{
-						Height:         height,
-						Packets:        [][]byte{validPacket},
-						CommitmentType: tt.commitmentType,
-					})
+					result, err := attestor.PacketAttestation(
+						context.Background(),
+						attestordomain.PacketAttestationRequest{
+							Height:         height,
+							Packets:        [][]byte{validPacket},
+							CommitmentType: tt.commitmentType,
+						},
+					)
 
 					// ASSERT
 					if tt.errContains != "" {

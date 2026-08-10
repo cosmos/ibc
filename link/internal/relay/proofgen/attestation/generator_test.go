@@ -11,8 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	attestordomain "github.com/cosmos/ibc/link/attestor"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -36,7 +37,7 @@ func signedStateAttestor(t *testing.T, name string, height uint64) *attestor.Moc
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
 	a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
-		attestor.Attestation{Height: height, AttestedData: data, Signature: sig}, nil,
+		attestordomain.Attestation{Height: height, AttestedData: data, Signature: sig}, nil,
 	)
 
 	return a
@@ -66,7 +67,7 @@ func signedPacketAttestor(
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
 	a.EXPECT().PacketAttestation(mock.Anything, mock.Anything).Return(
-		attestor.Attestation{Height: height, AttestedData: dataArgs, Signature: sig}, nil,
+		attestordomain.Attestation{Height: height, AttestedData: dataArgs, Signature: sig}, nil,
 	)
 
 	return a

@@ -43,12 +43,12 @@ func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte,
 		return nil, err
 	}
 
-	return normalizeSignature(signature)
+	return NormalizeSignature(signature)
 }
 
-// normalizeSignature converts the recovery ID from the signer's 0/1 form to
+// NormalizeSignature converts the recovery ID from the signer's 0/1 form to
 // Solidity's 27/28 form. It accepts either form and does not mutate the input.
-func normalizeSignature(signature []byte) ([]byte, error) {
+func NormalizeSignature(signature []byte) ([]byte, error) {
 	if len(signature) != 65 {
 		return nil, fmt.Errorf("invalid signature length %d, expected 65", len(signature))
 	}
@@ -68,7 +68,7 @@ func normalizeSignature(signature []byte) ([]byte, error) {
 // RecoverSigner recovers the address that produced sig (65-byte r||s||v)
 // over digest, the inverse of SignABI: it accepts either recovery-ID form
 // (crypto.SigToPub requires the signer's raw 0/1 form, but attestors sign
-// with Ethereum's legacy v of 27/28 via normalizeSignature above, and a
+// with Ethereum's legacy v of 27/28 via NormalizeSignature above, and a
 // verifier only ever sees the signature on the wire, never picks the form
 // itself).
 func RecoverSigner(digest [32]byte, sig []byte) (common.Address, error) {

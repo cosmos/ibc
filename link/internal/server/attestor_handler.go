@@ -11,7 +11,8 @@ import (
 	"github.com/pkg/errors"
 
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
-	"github.com/cosmos/ibc/link/internal/service/attestor"
+	attestordomain "github.com/cosmos/ibc/link/attestor"
+	attestorsvc "github.com/cosmos/ibc/link/internal/service/attestor"
 )
 
 // AttestorHandler handles attestor RPC requests.
@@ -23,12 +24,12 @@ type AttestorHandler struct {
 // AttestorService defines attestor business logic.
 type AttestorService interface {
 	LatestHeight(ctx context.Context, attestor string) (uint64, error)
-	StateAttestation(ctx context.Context, attestor string, height uint64) (attestor.Attestation, error)
+	StateAttestation(ctx context.Context, attestor string, height uint64) (attestordomain.Attestation, error)
 	PacketAttestation(
 		ctx context.Context,
 		attestor string,
-		req attestor.PacketAttestationRequest,
-	) (attestor.Attestation, error)
+		req attestordomain.PacketAttestationRequest,
+	) (attestordomain.Attestation, error)
 }
 
 var (
@@ -57,9 +58,9 @@ func (h *AttestorHandler) LatestHeight(
 ) (*connect.Response[proto.LatestHeightResponse], error) {
 	height, err := h.service.LatestHeight(ctx, req.Msg.Attestor)
 	switch {
-	case errors.Is(err, attestor.ErrNotFound):
+	case errors.Is(err, attestorsvc.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, attestor.ErrNotFinalized):
+	case errors.Is(err, attestordomain.ErrNotFinalized):
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
@@ -76,11 +77,11 @@ func (h *AttestorHandler) StateAttestation(
 ) (*connect.Response[proto.StateAttestationResponse], error) {
 	attestation, err := h.service.StateAttestation(ctx, req.Msg.Attestor, req.Msg.Height)
 	switch {
-	case errors.Is(err, attestor.ErrNotFound):
+	case errors.Is(err, attestorsvc.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, attestor.ErrInvalidInput):
+	case errors.Is(err, attestordomain.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, attestor.ErrNotFinalized):
+	case errors.Is(err, attestordomain.ErrNotFinalized):
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
@@ -104,11 +105,11 @@ func (h *AttestorHandler) PacketAttestation(
 
 	attestation, err := h.service.PacketAttestation(ctx, req.Msg.Attestor, packetReq)
 	switch {
-	case errors.Is(err, attestor.ErrNotFound), errors.Is(err, attestor.ErrCommitmentNotFound):
+	case errors.Is(err, attestorsvc.ErrNotFound), errors.Is(err, attestordomain.ErrCommitmentNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, attestor.ErrInvalidInput):
+	case errors.Is(err, attestordomain.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, attestor.ErrNotFinalized), errors.Is(err, attestor.ErrReceiptExists):
+	case errors.Is(err, attestordomain.ErrNotFinalized), errors.Is(err, attestordomain.ErrReceiptExists):
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case err != nil:
 		// todo: move to interceptor
@@ -121,7 +122,7 @@ func (h *AttestorHandler) PacketAttestation(
 	}), nil
 }
 
-func attestationToProto(a attestor.Attestation) *proto.Attestation {
+func attestationToProto(a attestordomain.Attestation) *proto.Attestation {
 	var timestamp *uint64
 	if a.Timestamp != nil {
 		asUnix := uint64(a.Timestamp.Unix())
@@ -136,17 +137,19 @@ func attestationToProto(a attestor.Attestation) *proto.Attestation {
 	}
 }
 
-func packetAttestationRequestFromProto(req *proto.PacketAttestationRequest) (attestor.PacketAttestationRequest, error) {
+func packetAttestationRequestFromProto(
+	req *proto.PacketAttestationRequest,
+) (attestordomain.PacketAttestationRequest, error) {
 	if len(req.Packets) == 0 {
-		return attestor.PacketAttestationRequest{}, errors.New("packets must be provided")
+		return attestordomain.PacketAttestationRequest{}, errors.New("packets must be provided")
 	}
 
-	ct, err := attestor.CommitmentTypeFromProto(req.CommitmentType)
+	ct, err := attestorsvc.CommitmentTypeFromProto(req.CommitmentType)
 	if err != nil {
-		return attestor.PacketAttestationRequest{}, err
+		return attestordomain.PacketAttestationRequest{}, err
 	}
 
-	return attestor.PacketAttestationRequest{
+	return attestordomain.PacketAttestationRequest{
 		Height:         req.Height,
 		Packets:        req.Packets,
 		CommitmentType: ct,

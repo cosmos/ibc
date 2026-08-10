@@ -9,9 +9,11 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	attestordomain "github.com/cosmos/ibc/link/attestor"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
+	attestorevmibc "github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
+	attestorsvc "github.com/cosmos/ibc/link/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -19,12 +21,12 @@ import (
 // attestation light client: LatestProvableHeight/StateProof/PacketProofs all
 // query the same fixed attestor set with the same quorum threshold
 type Generator struct {
-	attestors         []attestor.Attestor
+	attestors         []attestorsvc.Attestor
 	threshold         int
 	counterpartyChain chains.Client
 }
 
-func New(attestors []attestor.Attestor, threshold int, counterpartyChain chains.Client) *Generator {
+func New(attestors []attestorsvc.Attestor, threshold int, counterpartyChain chains.Client) *Generator {
 	return &Generator{attestors: attestors, threshold: threshold, counterpartyChain: counterpartyChain}
 }
 
@@ -76,7 +78,7 @@ func (g *Generator) PacketProofs(
 	encodedPackets := make([][]byte, len(packets))
 
 	for i, packet := range packets {
-		encoded, errEnc := attestorevm.EncodePacket(packet)
+		encoded, errEnc := attestorevmibc.EncodePacket(packet)
 		if errEnc != nil {
 			return nil, errors.Wrapf(errEnc, "encoding packet sequence %d", packet.Sequence)
 		}
@@ -129,14 +131,14 @@ func (g *Generator) PacketProofs(
 	return proofs, nil
 }
 
-func commitmentTypeOf(kind v2.ProofKind) (attestor.CommitmentType, error) {
+func commitmentTypeOf(kind v2.ProofKind) (attestordomain.CommitmentType, error) {
 	switch kind {
 	case v2.ProofKindPacketCommitment:
-		return attestor.CommitmentTypePacket, nil
+		return attestordomain.CommitmentTypePacket, nil
 	case v2.ProofKindAcknowledgement:
-		return attestor.CommitmentTypeAck, nil
+		return attestordomain.CommitmentTypeAck, nil
 	case v2.ProofKindReceiptAbsence:
-		return attestor.CommitmentTypeReceipt, nil
+		return attestordomain.CommitmentTypeReceipt, nil
 	default:
 		return 0, errors.Errorf("unsupported proof kind %v", kind)
 	}

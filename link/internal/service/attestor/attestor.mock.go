@@ -6,6 +6,7 @@ package attestor
 
 import (
 	"context"
+	"github.com/cosmos/ibc/link/attestor"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -273,24 +274,24 @@ func (_c *MockAttestor_Name_Call) RunAndReturn(run func() string) *MockAttestor_
 }
 
 // PacketAttestation provides a mock function for the type MockAttestor
-func (_mock *MockAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
+func (_mock *MockAttestor) PacketAttestation(ctx context.Context, req attestor.PacketAttestationRequest) (attestor.Attestation, error) {
 	ret := _mock.Called(ctx, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PacketAttestation")
 	}
 
-	var r0 Attestation
+	var r0 attestor.Attestation
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketAttestationRequest) (Attestation, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, attestor.PacketAttestationRequest) (attestor.Attestation, error)); ok {
 		return returnFunc(ctx, req)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, PacketAttestationRequest) Attestation); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, attestor.PacketAttestationRequest) attestor.Attestation); ok {
 		r0 = returnFunc(ctx, req)
 	} else {
-		r0 = ret.Get(0).(Attestation)
+		r0 = ret.Get(0).(attestor.Attestation)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, PacketAttestationRequest) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, attestor.PacketAttestationRequest) error); ok {
 		r1 = returnFunc(ctx, req)
 	} else {
 		r1 = ret.Error(1)
@@ -305,20 +306,20 @@ type MockAttestor_PacketAttestation_Call struct {
 
 // PacketAttestation is a helper method to define mock.On call
 //   - ctx context.Context
-//   - req PacketAttestationRequest
+//   - req attestor.PacketAttestationRequest
 func (_e *MockAttestor_Expecter) PacketAttestation(ctx any, req any) *MockAttestor_PacketAttestation_Call {
 	return &MockAttestor_PacketAttestation_Call{Call: _e.mock.On("PacketAttestation", ctx, req)}
 }
 
-func (_c *MockAttestor_PacketAttestation_Call) Run(run func(ctx context.Context, req PacketAttestationRequest)) *MockAttestor_PacketAttestation_Call {
+func (_c *MockAttestor_PacketAttestation_Call) Run(run func(ctx context.Context, req attestor.PacketAttestationRequest)) *MockAttestor_PacketAttestation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 PacketAttestationRequest
+		var arg1 attestor.PacketAttestationRequest
 		if args[1] != nil {
-			arg1 = args[1].(PacketAttestationRequest)
+			arg1 = args[1].(attestor.PacketAttestationRequest)
 		}
 		run(
 			arg0,
@@ -328,33 +329,33 @@ func (_c *MockAttestor_PacketAttestation_Call) Run(run func(ctx context.Context,
 	return _c
 }
 
-func (_c *MockAttestor_PacketAttestation_Call) Return(attestation Attestation, err error) *MockAttestor_PacketAttestation_Call {
+func (_c *MockAttestor_PacketAttestation_Call) Return(attestation attestor.Attestation, err error) *MockAttestor_PacketAttestation_Call {
 	_c.Call.Return(attestation, err)
 	return _c
 }
 
-func (_c *MockAttestor_PacketAttestation_Call) RunAndReturn(run func(ctx context.Context, req PacketAttestationRequest) (Attestation, error)) *MockAttestor_PacketAttestation_Call {
+func (_c *MockAttestor_PacketAttestation_Call) RunAndReturn(run func(ctx context.Context, req attestor.PacketAttestationRequest) (attestor.Attestation, error)) *MockAttestor_PacketAttestation_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // StateAttestation provides a mock function for the type MockAttestor
-func (_mock *MockAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+func (_mock *MockAttestor) StateAttestation(ctx context.Context, height uint64) (attestor.Attestation, error) {
 	ret := _mock.Called(ctx, height)
 
 	if len(ret) == 0 {
 		panic("no return value specified for StateAttestation")
 	}
 
-	var r0 Attestation
+	var r0 attestor.Attestation
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) (Attestation, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) (attestor.Attestation, error)); ok {
 		return returnFunc(ctx, height)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) Attestation); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) attestor.Attestation); ok {
 		r0 = returnFunc(ctx, height)
 	} else {
-		r0 = ret.Get(0).(Attestation)
+		r0 = ret.Get(0).(attestor.Attestation)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
 		r1 = returnFunc(ctx, height)
@@ -394,12 +395,12 @@ func (_c *MockAttestor_StateAttestation_Call) Run(run func(ctx context.Context, 
 	return _c
 }
 
-func (_c *MockAttestor_StateAttestation_Call) Return(attestation Attestation, err error) *MockAttestor_StateAttestation_Call {
+func (_c *MockAttestor_StateAttestation_Call) Return(attestation attestor.Attestation, err error) *MockAttestor_StateAttestation_Call {
 	_c.Call.Return(attestation, err)
 	return _c
 }
 
-func (_c *MockAttestor_StateAttestation_Call) RunAndReturn(run func(ctx context.Context, height uint64) (Attestation, error)) *MockAttestor_StateAttestation_Call {
+func (_c *MockAttestor_StateAttestation_Call) RunAndReturn(run func(ctx context.Context, height uint64) (attestor.Attestation, error)) *MockAttestor_StateAttestation_Call {
 	_c.Call.Return(run)
 	return _c
 }
