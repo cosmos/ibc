@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# SPDX-License-Identifier: Apache-2.0
+
 # Chain bring-up for the two single-validator Besu QBFT chains (A and B).
 #
 # Nothing under chains/ is committed except the two templates. Each chain's
@@ -8,8 +11,8 @@
 # source of truth: change one and every derived artefact — validator address,
 # genesis extraData, genesis allocs — moves with it.
 #
-# Each chain owns a mnemonic (A_MNEMONIC / B_MNEMONIC, falling back to MNEMONIC)
-# and every account on that chain comes out of it: FUNDED_ACCOUNTS addresses are
+# Each chain owns a mnemonic (A_MNEMONIC / B_MNEMONIC) and every account on that
+# chain comes out of it: FUNDED_ACCOUNTS addresses are
 # derived per chain and funded in that chain's genesis. By convention index 0 is
 # the chain's deployer and index 1 its validator, so the two chains share no
 # accounts at all — separate funded sets, separate deployers, separate
@@ -36,11 +39,11 @@ _chain_attr() {
   printf '%s' "${!var}"
 }
 
-# _chain_mnemonic <name> — that chain's phrase, falling back to the shared
-# MNEMONIC when no per-chain one is set.
+# _chain_mnemonic <name> — that chain's phrase. Tolerates the variable being
+# unset (rather than tripping `set -u`) so callers can report a usable error.
 _chain_mnemonic() {
   local var="${1}_MNEMONIC"
-  printf '%s' "${!var:-$MNEMONIC}"
+  printf '%s' "${!var-}"
 }
 
 # derive_account <mnemonic> <index> — echo "<privkey-without-0x> <address>".
@@ -72,7 +75,7 @@ derive_chain_accounts() {
 
   [[ "$FUNDED_ACCOUNTS" =~ ^[0-9]+$ && "$FUNDED_ACCOUNTS" -gt 0 ]] \
     || die "FUNDED_ACCOUNTS must be a positive integer, got '$FUNDED_ACCOUNTS'"
-  [[ -n "$mnemonic" ]] || die "No mnemonic for chain $name — set ${name}_MNEMONIC or MNEMONIC"
+  [[ -n "$mnemonic" ]] || die "No mnemonic for chain $name — set ${name}_MNEMONIC"
 
   if [[ "$mnemonic" == "$_DERIVED_MNEMONIC" ]]; then
     log "[$name] reusing the ${#CHAIN_ACCT_ADDRS[@]} accounts already derived (same mnemonic)"
@@ -168,7 +171,7 @@ _init_chain() {
     # Validator index outside the funded range — derive it separately and let
     # _genesis_alloc append it, or it would have no gas on its own chain.
     account=$(derive_account "$mnemonic" "$index") \
-      || die "Could not derive chain $name's validator at index $index — check ${name}_MNEMONIC/MNEMONIC"
+      || die "Could not derive chain $name's validator at index $index — check ${name}_MNEMONIC"
     read -r pk addr <<<"$account"
   fi
 

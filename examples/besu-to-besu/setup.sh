@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# SPDX-License-Identifier: Apache-2.0
+
 # setup.sh — besu-besu demo.
 #
 # Boots two independent single-validator Besu QBFT chains (A and B), the
@@ -22,18 +25,16 @@
 #   ./setup.sh clean        — stop containers, remove volumes and chains/local/
 #
 # Environment (optional):
-#   MNEMONIC             BIP-39 phrase the pre-funded accounts and the deployer
-#                        derive from (default: the Anvil/Hardhat test mnemonic)
-#   A_MNEMONIC           BIP-39 phrase chain A's validator derives from
-#   B_MNEMONIC           BIP-39 phrase chain B's validator derives from
-#                        (each chain has its own phrase, distinct from MNEMONIC
-#                        and from each other)
+#   A_MNEMONIC           BIP-39 phrase every chain A account derives from
+#   B_MNEMONIC           BIP-39 phrase every chain B account derives from
+#                        (each chain has its own phrase, distinct from the
+#                        other's, so the chains share no accounts)
 #   A_VALIDATOR_INDEX    index of chain A's validator within A_MNEMONIC (1)
 #   B_VALIDATOR_INDEX    index of chain B's validator within B_MNEMONIC (1)
-#                        Index 0 of MNEMONIC is the deployer and is
+#                        Index 0 of each phrase is that chain's deployer and is
 #                        deliberately not a validator anywhere.
-#   FUNDED_ACCOUNTS      how many accounts from MNEMONIC to pre-fund in each
-#                        genesis (default 5). init logs every funded address.
+#   FUNDED_ACCOUNTS      how many accounts from each chain's phrase to pre-fund
+#                        in its genesis (default 5). init logs every address.
 #   GENESIS_BALANCE      hex wei per funded account (default 1 000 000 ETH)
 #   QBFT_BLOCK_PERIOD_SECONDS / QBFT_EPOCH_LENGTH /
 #   QBFT_REQUEST_TIMEOUT_SECONDS   QBFT consensus tunables
@@ -64,20 +65,20 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$SCRIPT_DIR")}"
 export BESU_IMAGE="${BESU_IMAGE:-hyperledger/besu:25.4.0}"
 export FOUNDRY_IMAGE="${FOUNDRY_IMAGE:-ghcr.io/foundry-rs/foundry:latest}"
 
-# Key material. Three separate mnemonics, all publicly known devnet phrases:
-# MNEMONIC is the shared funding phrase every pre-funded account (including the
-# deployer) comes from, and each chain gets its own phrase for its validator.
+# Key material. One mnemonic per chain, both publicly known devnet phrases.
+# Every account on a chain — deployer, validator, and the rest of the pre-funded
+# set — derives from that chain's phrase, so the two chains share no accounts.
 #
-# Per-chain validator phrases are deliberately distinct rather than two indices
-# of one mnemonic. A QBFT light client trusts the counterparty's validator set
-# by address, so if A and B shared a validator, a header signed for one chain
-# would be signature-valid against the other's client. Distinct phrases make
-# that impossible by construction. (besu-trio separates them for the same
-# reason, using one validator per chain.)
+# The phrases are deliberately distinct rather than two indices of one mnemonic.
+# A QBFT light client trusts the counterparty's validator set by address, so if
+# A and B shared a validator, a header signed for one chain would be
+# signature-valid against the other's client. Distinct phrases make that
+# impossible by construction. (besu-trio separates them for the same reason,
+# using one validator per chain.)
 #
-# Never point any of these at a mnemonic holding real funds: derived validator
-# keys are written to chains/local/<chain>/key in plaintext for Besu to read.
-export MNEMONIC="${MNEMONIC:-test test test test test test test test test test test junk}"
+# Never point either of these at a mnemonic holding real funds: derived
+# validator keys are written to chains/local/<chain>/key in plaintext for Besu
+# to read.
 export A_MNEMONIC="${A_MNEMONIC:-legal winner thank year wave sausage worth useful legal winner thank yellow}"
 export B_MNEMONIC="${B_MNEMONIC:-letter advice cage absurd amount doctor acoustic avoid letter advice cage above}"
 # Index 0 is the deployer on both chains and index 1 is the validator on both,

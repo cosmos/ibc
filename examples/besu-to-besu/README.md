@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # besu-besu
 
 Two single-validator Besu QBFT chains running side-by-side, intended as the
@@ -40,8 +42,7 @@ Separate phrases per chain are deliberate:
   itself on the chain it validates, which quietly breaks any test asserting
   exact gas spend.
 
-`MNEMONIC` remains as the fallback for a chain with no phrase of its own; set
-`A_MNEMONIC` and `B_MNEMONIC` to the same value if you *want* the chains to
+Set `A_MNEMONIC` and `B_MNEMONIC` to the same value if you *want* the chains to
 share accounts (derivation is cached, so that costs one pass, not two).
 
 Because the deployer differs per chain, a contract deployed to both chains will
@@ -61,10 +62,9 @@ So the mnemonics are the single source of truth: change one and the validator
 address, the genesis `extraData`, and the allocs all move together. No manual
 re-encoding of `extraData` when a key changes.
 
-`A_MNEMONIC` and `B_MNEMONIC` default to standard BIP-39 test vectors, and the
-`MNEMONIC` fallback to the well-known Anvil/Hardhat phrase (`test test … junk`).
-**Never point any of them at a phrase that holds real funds** — derived keys are
-written to disk in plaintext for Besu to read.
+`A_MNEMONIC` and `B_MNEMONIC` default to standard, publicly known BIP-39 test
+vectors. **Never point either of them at a phrase that holds real funds** —
+derived keys are written to disk in plaintext for Besu to read.
 
 ## Layout
 
@@ -191,7 +191,6 @@ All optional; export before running `./setup.sh`.
 |----------|---------|---------|
 | `A_MNEMONIC` | `legal winner thank …` | phrase every chain A account derives from |
 | `B_MNEMONIC` | `letter advice cage …` | phrase every chain B account derives from |
-| `MNEMONIC` | Anvil/Hardhat test phrase | fallback for a chain with no phrase of its own |
 | `A_VALIDATOR_INDEX` | `1` | chain A's validator, within `A_MNEMONIC` |
 | `B_VALIDATOR_INDEX` | `1` | chain B's validator, within `B_MNEMONIC` |
 | `FUNDED_ACCOUNTS` | `5` | accounts derived per chain and funded in that chain's genesis |

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Two independent single-validator Besu QBFT chains.
 #
 # Each /evm mount points at chains/local/<chain>/, which ./setup.sh init
