@@ -246,7 +246,7 @@ func (t *TransferSend) successfulReceipt(
 	action string,
 	txHash string,
 ) (*types.Receipt, error) {
-	receipt, err := target.evm.TransactionReceipt(ctx, common.HexToHash(txHash))
+	receipt, err := target.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
 		return nil, fmt.Errorf(
 			"e2etest: fetch Transfer packet %s %s transaction %s: %w",
