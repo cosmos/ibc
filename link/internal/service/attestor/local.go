@@ -12,8 +12,8 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
-	attestorevmibc "github.com/cosmos/ibc/link/attestor/evm/ibc"
+	"github.com/cosmos/ibc/link/attestor/evm"
+	"github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
@@ -114,12 +114,12 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (At
 		return Attestation{}, errors.Wrapf(err, "get header at height %d", height)
 	}
 
-	attestedData, err := attestorevm.EncodeStateAttestation(height, uint64(header.Timestamp.Unix()))
+	attestedData, err := evm.EncodeStateAttestation(height, uint64(header.Timestamp.Unix()))
 	if err != nil {
 		return Attestation{}, err
 	}
 
-	signature, err := attestorevm.SignABI(ctx, a.signer, attestorevm.TagStateAttestation, attestedData)
+	signature, err := evm.SignABI(ctx, a.signer, evm.TagStateAttestation, attestedData)
 	if err != nil {
 		return Attestation{}, fmt.Errorf("sign state attestation: %w", err)
 	}
@@ -141,7 +141,7 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 	// 2. decode packets
 	packets := make([]channeltypesv2.Packet, len(req.Packets))
 	for i, encoded := range req.Packets {
-		packet, err := attestorevmibc.DecodePacket(encoded)
+		packet, err := ibc.DecodePacket(encoded)
 		if err != nil {
 			return Attestation{}, errors.Wrapf(ErrInvalidInput, "decode packet %d: %s", i, err)
 		}
@@ -158,7 +158,7 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 	}
 
 	// 4. convert packets to their "compact" form
-	compacts := make([]attestorevm.PacketCompact, len(packets))
+	compacts := make([]evm.PacketCompact, len(packets))
 	for i, packet := range packets {
 		compact, compactErr := a.packetCompact(ctx, req.Height, packet, req.CommitmentType)
 		if compactErr != nil {
@@ -168,12 +168,12 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 	}
 
 	// 5. encode & sign the attested data
-	attestedData, err := attestorevm.EncodePacketAttestation(req.Height, compacts)
+	attestedData, err := evm.EncodePacketAttestation(req.Height, compacts)
 	if err != nil {
 		return Attestation{}, err
 	}
 
-	signature, err := attestorevm.SignABI(ctx, a.signer, attestorevm.TagPacketAttestation, attestedData)
+	signature, err := evm.SignABI(ctx, a.signer, evm.TagPacketAttestation, attestedData)
 	if err != nil {
 		return Attestation{}, fmt.Errorf("sign packet attestation: %w", err)
 	}
@@ -191,7 +191,7 @@ func (a *LocalAttestor) packetCompact(
 	height uint64,
 	packet channeltypesv2.Packet,
 	commitmentType CommitmentType,
-) (attestorevm.PacketCompact, error) {
+) (evm.PacketCompact, error) {
 	var path []byte
 	switch commitmentType {
 	case CommitmentTypePacket:
@@ -201,23 +201,19 @@ func (a *LocalAttestor) packetCompact(
 	case CommitmentTypeReceipt:
 		path = hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence)
 	default:
-		return attestorevm.PacketCompact{}, errors.Wrapf(
-			ErrInvalidInput,
-			"unsupported commitment type %d",
-			commitmentType,
-		)
+		return evm.PacketCompact{}, errors.Wrapf(ErrInvalidInput, "unsupported commitment type %d", commitmentType)
 	}
 
 	pathHash := [32]byte(crypto.Keccak256Hash(path))
 	commitment, err := a.client.GetCommitment(ctx, height, pathHash)
 	if err != nil {
-		return attestorevm.PacketCompact{}, errors.Wrapf(err, "get commitment at height %d", height)
+		return evm.PacketCompact{}, errors.Wrapf(err, "get commitment at height %d", height)
 	}
 
 	switch commitmentType {
 	case CommitmentTypePacket:
 		if commitment == ([32]byte{}) {
-			return attestorevm.PacketCompact{}, errors.Wrapf(
+			return evm.PacketCompact{}, errors.Wrapf(
 				ErrCommitmentNotFound,
 				"packet commitment for client %q sequence %d",
 				packet.SourceClient,
@@ -225,7 +221,7 @@ func (a *LocalAttestor) packetCompact(
 			)
 		}
 		if expected := [32]byte(channeltypesv2.CommitPacket(packet)); commitment != expected {
-			return attestorevm.PacketCompact{}, errors.Wrapf(
+			return evm.PacketCompact{}, errors.Wrapf(
 				ErrInvalidInput,
 				"packet commitment mismatch: got %x, expected %x",
 				commitment,
@@ -234,7 +230,7 @@ func (a *LocalAttestor) packetCompact(
 		}
 	case CommitmentTypeAck:
 		if commitment == ([32]byte{}) {
-			return attestorevm.PacketCompact{}, errors.Wrapf(
+			return evm.PacketCompact{}, errors.Wrapf(
 				ErrCommitmentNotFound,
 				"acknowledgement commitment for client %q sequence %d",
 				packet.DestinationClient,
@@ -243,7 +239,7 @@ func (a *LocalAttestor) packetCompact(
 		}
 	case CommitmentTypeReceipt:
 		if commitment != ([32]byte{}) {
-			return attestorevm.PacketCompact{}, errors.Wrapf(
+			return evm.PacketCompact{}, errors.Wrapf(
 				ErrReceiptExists,
 				"client %q sequence %d",
 				packet.DestinationClient,
@@ -252,7 +248,7 @@ func (a *LocalAttestor) packetCompact(
 		}
 	}
 
-	return attestorevm.PacketCompact{
+	return evm.PacketCompact{
 		Path:       pathHash,
 		Commitment: commitment,
 	}, nil

@@ -24,8 +24,7 @@ type packetAttestation struct {
 	Packets []PacketCompact `abi:"packets"`
 }
 
-// AttestationProof mirrors IAttestationMsgs.AttestationProof
-type AttestationProof struct {
+type attestationProof struct {
 	AttestationData []byte   `abi:"attestationData"`
 	Signatures      [][]byte `abi:"signatures"`
 }
@@ -125,8 +124,11 @@ func DecodePacketAttestation(data []byte) (height uint64, packets []PacketCompac
 }
 
 // EncodeAttestationProof encodes the Solidity AttestationProof struct
-func EncodeAttestationProof(p AttestationProof) ([]byte, error) {
-	data, err := attestationProofArgs.Pack(p)
+func EncodeAttestationProof(attestationData []byte, signatures [][]byte) ([]byte, error) {
+	data, err := attestationProofArgs.Pack(attestationProof{
+		AttestationData: attestationData,
+		Signatures:      signatures,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("encode attestation proof: %w", err)
 	}
