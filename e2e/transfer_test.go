@@ -98,9 +98,9 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyRefunded(ctx))
+	require.NoError(t, transfer.VerifyRefunded(ctx, status.GetTimeoutTx().GetTxHash()))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 }
