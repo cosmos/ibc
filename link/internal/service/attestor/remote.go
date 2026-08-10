@@ -63,10 +63,7 @@ func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	return res.Msg.Height, nil
 }
 
-func (a *RemoteAttestor) StateAttestation(
-	ctx context.Context,
-	height uint64,
-) (Attestation, error) {
+func (a *RemoteAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
@@ -83,10 +80,7 @@ func (a *RemoteAttestor) StateAttestation(
 	return attestationFromProto(res.Msg.Attestation)
 }
 
-func (a *RemoteAttestor) PacketAttestation(
-	ctx context.Context,
-	req PacketAttestationRequest,
-) (Attestation, error) {
+func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 

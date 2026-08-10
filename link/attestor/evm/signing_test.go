@@ -50,7 +50,7 @@ func TestRecoverSigner(t *testing.T) {
 
 	// AcceptsLegacyVByte verifies RecoverSigner works against signatures
 	// using Ethereum's legacy v (27/28), the convention the real attestor
-	// signs with (see SignABI/NormalizeSignature), not just the raw 0/1
+	// signs with (see SignABI/normalizeSignature), not just the raw 0/1
 	// recovery id crypto.Sign itself produces.
 	t.Run("acceptsLegacyVByte", func(t *testing.T) {
 		key, err := crypto.GenerateKey()

@@ -136,9 +136,7 @@ func attestationToProto(a attestor.Attestation) *proto.Attestation {
 	}
 }
 
-func packetAttestationRequestFromProto(
-	req *proto.PacketAttestationRequest,
-) (attestor.PacketAttestationRequest, error) {
+func packetAttestationRequestFromProto(req *proto.PacketAttestationRequest) (attestor.PacketAttestationRequest, error) {
 	if len(req.Packets) == 0 {
 		return attestor.PacketAttestationRequest{}, errors.New("packets must be provided")
 	}

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ibc translates IBC packets to and from the Solidity router ABI.
 package ibc
 

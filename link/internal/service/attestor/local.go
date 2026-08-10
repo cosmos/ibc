@@ -106,12 +106,7 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (At
 	case err != nil:
 		return Attestation{}, errors.Wrapf(err, "get latest attestable height")
 	case height > latestHeight:
-		return Attestation{}, errors.Wrapf(
-			ErrNotFinalized,
-			"latest %d, requested %d",
-			latestHeight,
-			height,
-		)
+		return Attestation{}, errors.Wrapf(ErrNotFinalized, "latest %d, requested %d", latestHeight, height)
 	}
 
 	header, err := a.client.GetBlockHeader(ctx, height)
@@ -137,10 +132,7 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (At
 	}, nil
 }
 
-func (a *LocalAttestor) PacketAttestation(
-	ctx context.Context,
-	req PacketAttestationRequest,
-) (Attestation, error) {
+func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error) {
 	// 1. validate input
 	if err := req.Validate(); err != nil {
 		return Attestation{}, errors.Wrapf(ErrInvalidInput, "%s", err)
@@ -151,12 +143,7 @@ func (a *LocalAttestor) PacketAttestation(
 	for i, encoded := range req.Packets {
 		packet, err := attestorevmibc.DecodePacket(encoded)
 		if err != nil {
-			return Attestation{}, errors.Wrapf(
-				ErrInvalidInput,
-				"decode packet %d: %s",
-				i,
-				err,
-			)
+			return Attestation{}, errors.Wrapf(ErrInvalidInput, "decode packet %d: %s", i, err)
 		}
 		packets[i] = packet
 	}
@@ -167,12 +154,7 @@ func (a *LocalAttestor) PacketAttestation(
 	case err != nil:
 		return Attestation{}, errors.Wrapf(err, "get latest attestable height")
 	case req.Height > latestHeight:
-		return Attestation{}, errors.Wrapf(
-			ErrNotFinalized,
-			"latest %d, requested %d",
-			latestHeight,
-			req.Height,
-		)
+		return Attestation{}, errors.Wrapf(ErrNotFinalized, "latest %d, requested %d", latestHeight, req.Height)
 	}
 
 	// 4. convert packets to their "compact" form

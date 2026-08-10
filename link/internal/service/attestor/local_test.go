@@ -564,14 +564,11 @@ func TestLocal(t *testing.T) {
 					require.NoError(t, err)
 
 					// ACT
-					result, err := attestor.PacketAttestation(
-						context.Background(),
-						PacketAttestationRequest{
-							Height:         height,
-							Packets:        [][]byte{validPacket},
-							CommitmentType: tt.commitmentType,
-						},
-					)
+					result, err := attestor.PacketAttestation(context.Background(), PacketAttestationRequest{
+						Height:         height,
+						Packets:        [][]byte{validPacket},
+						CommitmentType: tt.commitmentType,
+					})
 
 					// ASSERT
 					if tt.errContains != "" {

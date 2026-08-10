@@ -100,9 +100,7 @@ func TestQueryQuorum(t *testing.T) {
 	t.Run("queryErrorExcludedNotFatal", func(t *testing.T) {
 		erroring := attestor.NewMockAttestor(t)
 		erroring.EXPECT().Name().Return("erroring").Maybe()
-		erroring.EXPECT().
-			StateAttestation(mock.Anything, mock.Anything).
-			Return(attestor.Attestation{}, assert.AnError)
+		erroring.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(attestor.Attestation{}, assert.AnError)
 
 		attestors := []attestor.Attestor{
 			signedAttestor(t, "a1", data),
