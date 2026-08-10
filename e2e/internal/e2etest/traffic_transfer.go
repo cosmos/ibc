@@ -356,7 +356,7 @@ func verifyPacketTimeout(
 	packetTx PacketTx,
 	txHash string,
 ) error {
-	receipt, err := source.evm.TransactionReceipt(ctx, common.HexToHash(txHash))
+	receipt, err := source.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
 		return fmt.Errorf("e2etest: fetch packet %s timeout transaction %s: %w", packetTx.reference(), txHash, err)
 	}

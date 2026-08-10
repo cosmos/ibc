@@ -281,6 +281,20 @@ func (e *EVMClient) WaitNextPendingTx(ctx context.Context, wait TransactionWait)
 	return nil
 }
 
+// WaitForReceipt polls until hash is mined or the configured wait expires.
+func (e *EVMClient) WaitForReceipt(
+	ctx context.Context,
+	hash common.Hash,
+	wait TransactionWait,
+) (*types.Receipt, error) {
+	waitCtx, cancel, err := wait.context(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+	return e.waitForReceipt(waitCtx, hash, wait)
+}
+
 func (e *EVMClient) waitForReceipt(
 	ctx context.Context,
 	hash common.Hash,
