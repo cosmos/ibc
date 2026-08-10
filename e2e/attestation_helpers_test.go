@@ -9,9 +9,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 )
 
 type attestationClientState struct {
@@ -47,4 +49,49 @@ func attestedClientState(
 	values, err := (abi.Arguments{{Type: tuple}}).Unpack(encoded)
 	require.NoError(t, err)
 	return *abi.ConvertType(values[0], new(attestationClientState)).(*attestationClientState)
+}
+
+func attestedConsensusTimestamp(
+	t testing.TB,
+	evm *environment.EVM,
+	address environment.EVMAddress,
+	height uint64,
+) uint64 {
+	t.Helper()
+	var timestamp uint64
+	err := evm.UseContractCaller(func(caller bind.ContractCaller) error {
+		client, err := attestation.NewContractCaller(common.HexToAddress(string(address)), caller)
+		if err != nil {
+			return err
+		}
+		timestamp, err = client.GetConsensusTimestamp(&bind.CallOpts{Context: t.Context()}, height)
+		return err
+	})
+	require.NoError(t, err)
+	return timestamp
+}
+
+func signedStateAttestationProof(
+	t testing.TB,
+	privateKeyHex string,
+	height, timestamp uint64,
+) []byte {
+	t.Helper()
+	attestationData, err := attestorevm.EncodeStateAttestation(height, timestamp)
+	require.NoError(t, err)
+
+	digest := attestorevm.Digest(attestorevm.TagStateAttestation, attestationData)
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+	signature, err := crypto.Sign(digest[:], privateKey)
+	require.NoError(t, err)
+	signature, err = attestorevm.NormalizeSignature(signature)
+	require.NoError(t, err)
+
+	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
+		AttestationData: attestationData,
+		Signatures:      [][]byte{signature},
+	})
+	require.NoError(t, err)
+	return proof
 }
