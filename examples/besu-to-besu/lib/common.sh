@@ -3,12 +3,25 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Shared helpers: logging, prerequisites, RPC waiters.
+#
+# DEMO KEYS ONLY — every key this example touches is a throwaway local-devnet
+# key derived from a public BIP-39 test vector. See the banner in setup.sh.
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[$(date '+%H:%M:%S')]${NC} $*"; }
 info() { echo -e "${CYAN}[$(date '+%H:%M:%S')]${NC} $*"; }
 warn() { echo -e "${YELLOW}[$(date '+%H:%M:%S')] WARN${NC} $*"; }
 die()  { echo -e "${RED}[$(date '+%H:%M:%S')] ERROR${NC} $*" >&2; exit 1; }
+
+# Printed wherever this example hands the operator a key or an address, so the
+# provenance travels with the material instead of living only in the README.
+warn_demo_keys() {
+  warn "DEMO KEYS — LOCAL DEVNET ONLY. Every mnemonic, private key, and address"
+  warn "above is derived from a publicly known BIP-39 test vector: anyone can"
+  warn "regenerate them in seconds and they are worthless by design."
+  warn "Never use them on any public, shared, or production network, never send"
+  warn "real funds to them, and never copy them into another project."
+}
 
 check_prerequisites() {
   log "Checking prerequisites..."
@@ -22,8 +35,7 @@ check_prerequisites() {
 
 # Run `cast`, preferring a host binary and falling back to the pinned foundry
 # image. Key derivation happens before any compose network exists, so this
-# helper deliberately runs without --network (unlike the trio demo's
-# _cast_in_net).
+# helper deliberately runs without --network.
 cast_cli() {
   if command -v cast >/dev/null 2>&1; then
     cast "$@"

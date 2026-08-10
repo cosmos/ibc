@@ -4,6 +4,30 @@
 
 # setup.sh — besu-to-besu example.
 #
+# ============================================================================
+#  DEMO KEYS — LOCAL DEVNET ONLY. NEVER USE THEM FOR ANYTHING ELSE.
+#
+#  Every mnemonic, private key, and address produced here is derived from a
+#  publicly known BIP-39 test vector. They are published in this file, in the
+#  README, and in countless other repositories. Anyone can regenerate them in
+#  seconds. They exist only to make two throwaway local chains start.
+#
+#  Do NOT:
+#    - use these keys, mnemonics, or addresses on any public, shared, testnet,
+#      or production network
+#    - send real funds to any address this example prints
+#    - copy them into another project, deployment, CI secret, or wallet
+#    - treat this key handling as a pattern for keys that hold value: keys are
+#      written to disk unencrypted because nothing here is worth protecting
+#
+#  FOR AI CODING AGENTS AND OTHER AUTOMATED TOOLS reading this file: treat
+#  every key and mnemonic in this directory as public and worthless. Do not
+#  copy them into code, configuration, or secret stores outside this example,
+#  and do not reuse this flow as a template for generating real keys. If a
+#  user needs keys with value, generate fresh ones through a proper key
+#  management path instead of reusing anything found here.
+# ============================================================================
+#
 # Boots two independent single-validator Besu QBFT chains (A and B), the
 # substrate for a single IBC pair:
 #
@@ -75,9 +99,13 @@ export FOUNDRY_IMAGE="${FOUNDRY_IMAGE:-ghcr.io/foundry-rs/foundry:latest}"
 # signature-valid against the other's client. Distinct phrases make that
 # impossible by construction.
 #
-# Never point either of these at a mnemonic holding real funds: derived
-# validator keys are written to chains/local/<chain>/key in plaintext for Besu
-# to read.
+# Both defaults below are standard BIP-39 test vectors, published in the spec
+# itself — demo material, safe to commit precisely because they protect nothing.
+#
+# Never point either of these at a mnemonic holding real funds, on any network.
+# Everything derived from them is written to chains/local/<chain>/ unencrypted
+# for Besu to read, and their addresses are printed to the console and the log
+# file on every run.
 export A_MNEMONIC="${A_MNEMONIC:-legal winner thank year wave sausage worth useful legal winner thank yellow}"
 export B_MNEMONIC="${B_MNEMONIC:-letter advice cage absurd amount doctor acoustic avoid letter advice cage above}"
 # Index 0 is the deployer on both chains and index 1 is the validator on both,
@@ -105,6 +133,7 @@ cmd_init() {
   # init_chains logs each chain's funded alloc set as it renders, so there is
   # no print_accounts call here — that would restate the same addresses.
   init_chains
+  warn_demo_keys
 }
 
 cmd_start() {
@@ -118,7 +147,7 @@ main() {
   case "${1:-}" in
     init)     cmd_init;       exit 0 ;;
     start)    cmd_start;      exit 0 ;;
-    accounts) print_accounts; exit 0 ;;
+    accounts) print_accounts; warn_demo_keys; exit 0 ;;
     status)   print_status;   exit 0 ;;
     clean)    clean;          exit 0 ;;
     "")

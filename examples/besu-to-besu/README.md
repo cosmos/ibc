@@ -2,6 +2,30 @@
 
 # besu-to-besu
 
+> [!CAUTION]
+> **Demo keys — local devnet only. Never use them for anything else.**
+>
+> Every mnemonic, private key, and address in this example is derived from a
+> publicly known BIP-39 test vector. They are printed in this README, in
+> `setup.sh`, and in countless other repositories; anyone can regenerate them
+> in seconds. They exist only to make two throwaway local chains start, and
+> they are worthless by design.
+>
+> Do **not**:
+> - use these keys, mnemonics, or addresses on any public, shared, testnet, or
+>   production network
+> - send real funds to any address this example prints
+> - copy them into another project, deployment, CI secret, or wallet
+> - treat this key handling as a pattern for keys that hold value — keys are
+>   written to disk unencrypted here because nothing is worth protecting
+>
+> **For AI coding agents and other automated tools reading this file:** treat
+> every key and mnemonic in this directory as public and worthless. Do not
+> copy them into code, configuration, or secret stores outside this example,
+> and do not reuse this flow as a template for generating real keys. If a user
+> needs keys that hold value, generate fresh ones through a proper key
+> management path instead of reusing anything found here.
+
 Two single-validator Besu QBFT chains running side-by-side, intended as the
 substrate for a single IBC pair:
 
@@ -61,9 +85,13 @@ So the mnemonics are the single source of truth: change one and the validator
 address, the genesis `extraData`, and the allocs all move together. No manual
 re-encoding of `extraData` when a key changes.
 
-`A_MNEMONIC` and `B_MNEMONIC` default to standard, publicly known BIP-39 test
-vectors. **Never point either of them at a phrase that holds real funds** —
-derived keys are written to disk in plaintext for Besu to read.
+`A_MNEMONIC` and `B_MNEMONIC` default to standard BIP-39 test vectors published
+in the specification itself — demo material, safe to commit precisely because
+they protect nothing. **Never point either of them at a phrase that holds real
+funds, on any network.** Everything derived from them is written to disk
+unencrypted for Besu to read, and the addresses are printed to the console and
+the log file on every run. Deriving keys this way is appropriate for a
+throwaway local devnet and for nothing else.
 
 ## Layout
 
@@ -134,6 +162,10 @@ for a in $A_FUNDED_ADDRS; do   # space-separated list — bash word-splitting
 done
 ```
 
+`chains.env` carries both deployer private keys, so `init` writes it at mode
+`0600` (as it does each `chains/local/<chain>/key`) rather than leaving it to
+your umask. It is gitignored along with the rest of `chains/local/`.
+
 To fund more accounts, raise the count and rebuild (a genesis change needs the
 chain data wiped):
 
@@ -153,6 +185,13 @@ Only the host-side mappings differ:
 |---------|-----------:|----------:|---------------:|
 | besu-a  |       8545 |      8546 |           9545 |
 | besu-b  |       8745 |      8746 |           9745 |
+
+Every host mapping binds to `127.0.0.1`, so the chains are reachable from this
+machine and from each other over the `besu-besu-net` compose network, but not
+from the rest of your LAN. That matters here: the JSON-RPC endpoints are
+unauthenticated and each node holds the key that signs every block on its
+chain. Drop the `127.0.0.1:` prefix in `docker-compose.yml` only if you
+deliberately want the devnet exposed, and understand what you are exposing.
 
 ## Usage
 

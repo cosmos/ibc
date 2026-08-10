@@ -2,6 +2,10 @@
 
 # Two independent single-validator Besu QBFT chains.
 #
+# DEMO KEYS ONLY: the validator keys mounted at /evm are derived from publicly
+# known BIP-39 test vectors. Local devnet use only — never on a public, shared,
+# or production network.
+#
 # Each /evm mount points at chains/local/<chain>/, which ./setup.sh init
 # renders from chains/*.tmpl — besu.toml, el-genesis.json, and the validator
 # key derived from the demo mnemonic. Nothing under chains/local/ is committed,
@@ -19,10 +23,15 @@ services:
       - "--metrics-host=0.0.0.0"
       - "--metrics-port=9545"
       - "--Xqbft-enable-early-round-change"
+    # Published on the loopback interface only. Without the explicit 127.0.0.1
+    # these bind to 0.0.0.0 and expose an unauthenticated JSON-RPC endpoint —
+    # holding keys that can sign as the chain's sole validator — to the whole
+    # LAN. Container-to-container traffic goes over besu-besu-net and does not
+    # depend on these mappings.
     ports:
-      - "8545:8545"
-      - "8546:8546"
-      - "9545:9545"
+      - "127.0.0.1:8545:8545"
+      - "127.0.0.1:8546:8546"
+      - "127.0.0.1:9545:9545"
     volumes:
       - besu-a-data:/data
       - ./chains/local/A:/evm:ro
@@ -44,10 +53,10 @@ services:
       - "--metrics-host=0.0.0.0"
       - "--metrics-port=9545"
       - "--Xqbft-enable-early-round-change"
-    ports:
-      - "8745:8545"
-      - "8746:8546"
-      - "9745:9545"
+    ports:                       # loopback only — see besu-a
+      - "127.0.0.1:8745:8545"
+      - "127.0.0.1:8746:8546"
+      - "127.0.0.1:9745:9545"
     volumes:
       - besu-b-data:/data
       - ./chains/local/B:/evm:ro
