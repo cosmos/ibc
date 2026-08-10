@@ -35,7 +35,25 @@ type deployManifest struct {
 	Core struct {
 		Router string `json:"router"`
 	} `json:"core"`
+	GMP *struct {
+		Address string `json:"address"`
+		Port    string `json:"port"`
+	} `json:"gmp"`
+	Tokens []struct {
+		Symbol  string `json:"symbol"`
+		Address string `json:"address"`
+	} `json:"tokens"`
 	TargetData map[string]string `json:"targetData"`
+}
+
+// token looks up a deployed IFT token's address by symbol.
+func (m deployManifest) token(symbol string) (string, bool) {
+	for _, t := range m.Tokens {
+		if t.Symbol == symbol {
+			return t.Address, true
+		}
+	}
+	return "", false
 }
 
 // TestDeployConnection drives `ibc deploy` as a black box: two bare managed
@@ -170,6 +188,116 @@ func TestDeployConnection(t *testing.T) {
 	} {
 		require.Contains(t, string(rendered), want)
 	}
+}
+
+// TestDeployIFTBridge drives the app-layer deploy commands end-to-end: core +
+// client + gmp + ift on each of two chains, then ift-bridge on each side
+// pointing at the other's token. Asserts executed-then-skipped idempotency and
+// that status passes.
+func TestDeployIFTBridge(t *testing.T) {
+	t.Parallel()
+
+	spec := environment.Spec{
+		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	}
+	env := e2etest.Start(t, spec, environment.Runtime{})
+
+	chainA, err := env.Chain(e2etest.ChainA)
+	require.NoError(t, err)
+	chainB, err := env.Chain(e2etest.ChainB)
+	require.NoError(t, err)
+	chainAID := strconv.FormatUint(chainA.EVMChainID(), 10)
+	chainBID := strconv.FormatUint(chainB.EVMChainID(), 10)
+
+	home := t.TempDir()
+	configPath := filepath.Join(home, "ibc.yml")
+	driver, err := ibclink.NewDriver(configPath)
+	require.NoError(t, err)
+	require.NoError(t, env.BindIBCLink(driver))
+
+	deployerKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	deployerHex := hex.EncodeToString(crypto.FromECDSA(deployerKey))
+	deployerAddress := crypto.PubkeyToAddress(deployerKey.PublicKey)
+
+	minimum := e2etest.RequiredSignerBalance()
+	for _, chain := range []*environment.Chain{chainA, chainB} {
+		funding, fundingErr := chain.Funding()
+		require.NoError(t, fundingErr)
+		require.NoError(t, funding.EnsureEOABalance(t.Context(), deployerAddress, minimum))
+	}
+
+	rpcA, err := driver.ChainRPC(string(e2etest.ChainA))
+	require.NoError(t, err)
+	rpcB, err := driver.ChainRPC(string(e2etest.ChainB))
+	require.NoError(t, err)
+
+	const deployerAlias = "deployer"
+	require.NoError(t, ibclink.WriteDeployConfig(configPath, ibclink.DeployConfig{
+		DBPath:        filepath.Join(home, "unused.db"),
+		SignerAlias:   deployerAlias,
+		SignerKeyFile: driver.KeyFilePath(deployerAlias),
+		Chains: []ibclink.DeployChain{
+			{ChainID: chainAID, RPC: rpcA},
+			{ChainID: chainBID, RPC: rpcB},
+		},
+	}))
+
+	ctx := t.Context()
+	require.NoError(t, driver.KeysImportECDSA(ctx, deployerAlias, deployerHex))
+
+	// per-chain bring-up: core, client, gmp, ift
+	perChain := func(chainID, counterparty string) [][]string {
+		return [][]string{
+			{"core", "--chain", chainID, "--yes"},
+			{"client", "--chain", chainID, "--counterparty-chain", counterparty, "--attestors", deployerAddress.Hex(), "--yes"},
+			{"gmp", "--chain", chainID, "--yes"},
+			{"ift", "--chain", chainID, "--name", "Foo", "--symbol", "FOO", "--yes"},
+		}
+	}
+	bringUp := append(perChain(chainAID, chainBID), perChain(chainBID, chainAID)...)
+	for _, args := range bringUp {
+		stdout, deployErr := driver.Deploy(ctx, args...)
+		require.NoErrorf(t, deployErr, "deploy %v", args)
+		for _, r := range decodeStepResults(t, stdout) {
+			require.Equalf(t, "executed", r.Action, "step %q", r.Name)
+		}
+	}
+
+	manifestDir := filepath.Join(home, "deployments")
+	manifestA := readManifest(t, manifestDir, chainAID)
+	manifestB := readManifest(t, manifestDir, chainBID)
+	iftA, ok := manifestA.token("FOO")
+	require.True(t, ok)
+	iftB, ok := manifestB.token("FOO")
+	require.True(t, ok)
+	require.NotNil(t, manifestA.GMP)
+	require.Equal(t, "gmpport", manifestA.GMP.Port)
+
+	sharedClientID := "link-" + chainAID + "-" + chainBID
+	bridges := [][]string{
+		{"ift-bridge", "--chain", chainAID, "--symbol", "FOO", "--client-id", sharedClientID, "--counterparty-ift", iftB, "--yes"},
+		{"ift-bridge", "--chain", chainBID, "--symbol", "FOO", "--client-id", sharedClientID, "--counterparty-ift", iftA, "--yes"},
+	}
+	for _, args := range bridges {
+		stdout, deployErr := driver.Deploy(ctx, args...)
+		require.NoErrorf(t, deployErr, "deploy %v", args)
+		for _, r := range decodeStepResults(t, stdout) {
+			require.Equalf(t, "executed", r.Action, "step %q", r.Name)
+		}
+	}
+
+	// idempotency: rerun bring-up + bridges, everything skips
+	for _, args := range append(bringUp, bridges...) {
+		stdout, deployErr := driver.Deploy(ctx, args...)
+		require.NoErrorf(t, deployErr, "rerun %v", args)
+		for _, r := range decodeStepResults(t, stdout) {
+			require.Equalf(t, "skipped", r.Action, "step %q", r.Name)
+		}
+	}
+
+	_, err = driver.Deploy(ctx, "status")
+	require.NoError(t, err)
 }
 
 func decodeStepResults(t testing.TB, stdout []byte) []deployStepResult {

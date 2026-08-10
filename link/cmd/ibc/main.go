@@ -86,6 +86,7 @@ func init() {
 	cmdDeploy.AddCommand(
 		cmdDeployCore, cmdDeployClient,
 		cmdDeployStatus, cmdDeployRenderConfig,
+		cmdDeployGMP, cmdDeployIFT, cmdDeployIFTBridge,
 	)
 	dpf := cmdDeploy.PersistentFlags()
 	dpf.StringVar(&flagDeployManifestDir, "manifest-dir", "deployments", "manifest directory relative to home")
@@ -109,4 +110,17 @@ func init() {
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
+
+	// IFT commands
+	cmdDeployIFT.Flags().StringVar(&flagDeployIFTName, "name", "", "ERC20 token name")
+	cmdDeployIFT.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "ERC20 token symbol (per-chain token key)")
+	cmdDeployIFT.Flags().StringVar(&flagDeployIFTOwner, "owner", "", "token owner address (default: deployer)")
+
+	cmdDeployIFTBridge.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "symbol of the token to wire")
+	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeClientID, "client-id", "", "client id the bridge relays over")
+	cmdDeployIFTBridge.Flags().
+		StringVar(&flagDeployBridgeCounterparty, "counterparty-ift", "", "counterparty IFT token address")
+	cmdDeployIFTBridge.Flags().
+		StringVar(&flagDeploySendCallConstructor, "send-call-constructor", "",
+			"send call constructor address (default: deploy/reuse the EVM constructor)")
 }

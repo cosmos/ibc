@@ -36,6 +36,13 @@ var (
 	flagDeployThreshold       uint8
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
+
+	flagDeployIFTName             string
+	flagDeployIFTSymbol           string
+	flagDeployIFTOwner            string
+	flagDeployBridgeClientID      string
+	flagDeployBridgeCounterparty  string
+	flagDeploySendCallConstructor string
 )
 
 var (
@@ -67,6 +74,24 @@ var (
 		Short: "Project two deployment manifests into config sections for relaying between them (stdout)",
 		Args:  cobra.ExactArgs(2),
 		RunE:  deployRenderConfig,
+	}
+
+	cmdDeployGMP = &cobra.Command{
+		Use:   "gmp",
+		Short: "Deploy the ICS27-GMP app on one chain",
+		RunE:  deployGMP,
+	}
+
+	cmdDeployIFT = &cobra.Command{
+		Use:   "ift",
+		Short: "Deploy an IFT token on one chain",
+		RunE:  deployIFT,
+	}
+
+	cmdDeployIFTBridge = &cobra.Command{
+		Use:   "ift-bridge",
+		Short: "Register an IFT bridge to a counterparty token over a client",
+		RunE:  deployIFTBridge,
 	}
 )
 
@@ -493,4 +518,83 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		return err
 	}
 	return config.PrintYAML(out)
+}
+
+// deployerAddress derives the deployer's EVM address, for use as the default
+// IFT owner. Reuses signer.EVMAddressOf (as the attestor path does) rather
+// than round-tripping the raw private key.
+func deployerAddress(cfg config.Config, alias string) (string, error) {
+	if alias == "" {
+		return "", errors.New("no deployer configured: set chains[].deployer or pass --deployer")
+	}
+	sc, ok := cfg.Signer(alias)
+	if !ok {
+		return "", errors.Errorf("deployer signer %q not found in config", alias)
+	}
+	return signer.EVMAddressOf(sc)
+}
+
+func deployGMP(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
+	}
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	if err != nil {
+		return err
+	}
+	return planThenRun(cmd.Context(), deploy.GMPSteps(target, flagDeployManifestDir, flagDeployChain))
+}
+
+func deployIFT(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
+	}
+	if flagDeployIFTName == "" || flagDeployIFTSymbol == "" {
+		return errors.New("--name and --symbol are required")
+	}
+	chain, ok := cfg.Chain(flagDeployChain)
+	if !ok {
+		return errors.Errorf("chain %q not declared in config", flagDeployChain)
+	}
+	owner := flagDeployIFTOwner
+	if owner == "" {
+		owner, err = deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+		if err != nil {
+			return err
+		}
+	}
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	if err != nil {
+		return err
+	}
+	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol}
+	return planThenRun(cmd.Context(), deploy.IFTSteps(target, flagDeployManifestDir, flagDeployChain, spec))
+}
+
+func deployIFTBridge(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
+	}
+	if flagDeployIFTSymbol == "" || flagDeployBridgeClientID == "" || flagDeployBridgeCounterparty == "" {
+		return errors.New("--symbol, --client-id and --counterparty-ift are required")
+	}
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	if err != nil {
+		return err
+	}
+	spec := deploy.BridgeSpec{ClientID: flagDeployBridgeClientID, CounterpartyIFT: flagDeployBridgeCounterparty}
+	return planThenRun(cmd.Context(), deploy.IFTBridgeSteps(
+		target, flagDeployManifestDir, flagDeployChain, flagDeployIFTSymbol, flagDeploySendCallConstructor, spec))
 }

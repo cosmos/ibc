@@ -16,7 +16,11 @@ import (
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27account"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -117,6 +121,27 @@ func accessManagerArtifact() (abi.ABI, []byte, error) {
 	return parsed, common.FromHex(artifact.Bytecode.Object), nil
 }
 
+// deployProxy deploys an ERC1967 proxy for impl, initialized by packing
+// initialize(initArgs...) from meta's ABI. label names it in logs/errors.
+func (d *Driver) deployProxy(
+	ctx context.Context, opts *bind.TransactOpts, label string,
+	meta *bind.MetaData, impl common.Address, initArgs ...any,
+) (common.Address, error) {
+	parsed, err := meta.GetAbi()
+	if err != nil {
+		return common.Address{}, err
+	}
+	init, err := parsed.Pack("initialize", initArgs...)
+	if err != nil {
+		return common.Address{}, err
+	}
+	addr, tx, _, err := erc1967proxy.DeployContract(opts, d.backend, impl, init)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("deploy %s proxy: %w", label, err)
+	}
+	return addr, d.awaitMined(ctx, "deploy "+label+" proxy", tx)
+}
+
 // ProvisionCore deploys AccessManager + ICS26Router (implementation behind
 // an initialized ERC1967 proxy), then binds the relaying selectors to
 // PUBLIC_ROLE so any relayer EOA can submit packets. The deployer key stays
@@ -151,20 +176,9 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 		return deploy.CoreRef{}, mineErr
 	}
 
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	routerAddr, err := d.deployProxy(ctx, opts, "ICS26Router", ics26router.ContractMetaData, implAddr, amAddr)
 	if err != nil {
 		return deploy.CoreRef{}, err
-	}
-	init, err := routerABI.Pack("initialize", amAddr)
-	if err != nil {
-		return deploy.CoreRef{}, err
-	}
-	routerAddr, routerTx, _, err := erc1967proxy.DeployContract(opts, d.backend, implAddr, init)
-	if err != nil {
-		return deploy.CoreRef{}, fmt.Errorf("deploy ICS26Router proxy: %w", err)
-	}
-	if mineErr := d.awaitMined(ctx, "deploy ICS26Router proxy", routerTx); mineErr != nil {
-		return deploy.CoreRef{}, mineErr
 	}
 
 	// OZ AccessManager PUBLIC_ROLE is type(uint64).max
@@ -247,6 +261,81 @@ func attestationArgs(p deploy.AttestationParams) ([]common.Address, error) {
 		return nil, fmt.Errorf("initial height and timestamp required")
 	}
 	return attestors, nil
+}
+
+// ProvisionGMP deploys the ICS27Account logic impl, the ICS27GMP impl, and an
+// ERC1967 proxy initialized with the router, account logic, and AccessManager
+// authority.
+func (d *Driver) ProvisionGMP(ctx context.Context, router, accessManager string) (deploy.GMPRef, error) {
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return deploy.GMPRef{}, err
+	}
+	logicAddr, logicTx, _, err := ics27account.DeployContract(opts, d.backend)
+	if err != nil {
+		return deploy.GMPRef{}, fmt.Errorf("deploy ICS27Account logic: %w", err)
+	}
+	if mineErr := d.awaitMined(ctx, "deploy ICS27Account logic", logicTx); mineErr != nil {
+		return deploy.GMPRef{}, mineErr
+	}
+	implAddr, implTx, _, err := ics27gmp.DeployContract(opts, d.backend)
+	if err != nil {
+		return deploy.GMPRef{}, fmt.Errorf("deploy ICS27GMP implementation: %w", err)
+	}
+	if mineErr := d.awaitMined(ctx, "deploy ICS27GMP implementation", implTx); mineErr != nil {
+		return deploy.GMPRef{}, mineErr
+	}
+	proxyAddr, err := d.deployProxy(ctx, opts, "ICS27GMP", ics27gmp.ContractMetaData, implAddr,
+		common.HexToAddress(router), logicAddr, common.HexToAddress(accessManager))
+	if err != nil {
+		return deploy.GMPRef{}, err
+	}
+	return deploy.GMPRef{Address: proxyAddr.Hex(), AccountLogic: logicAddr.Hex()}, nil
+}
+
+// ProvisionIFT deploys an IFT impl and an ERC1967 proxy initialized with the
+// owner, name, symbol, and GMP address.
+func (d *Driver) ProvisionIFT(ctx context.Context, gmp string, spec deploy.IFTSpec) (deploy.IFTRef, error) {
+	if spec.Name == "" || spec.Symbol == "" {
+		return deploy.IFTRef{}, fmt.Errorf("ift name and symbol required")
+	}
+	if !common.IsHexAddress(spec.Owner) {
+		return deploy.IFTRef{}, fmt.Errorf("invalid owner address %q", spec.Owner)
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return deploy.IFTRef{}, err
+	}
+	implAddr, implTx, _, err := ift.DeployContract(opts, d.backend)
+	if err != nil {
+		return deploy.IFTRef{}, fmt.Errorf("deploy IFT implementation: %w", err)
+	}
+	if mineErr := d.awaitMined(ctx, "deploy IFT implementation", implTx); mineErr != nil {
+		return deploy.IFTRef{}, mineErr
+	}
+	proxyAddr, err := d.deployProxy(ctx, opts, "IFT", ift.ContractMetaData, implAddr,
+		common.HexToAddress(spec.Owner), spec.Name, spec.Symbol, common.HexToAddress(gmp))
+	if err != nil {
+		return deploy.IFTRef{}, err
+	}
+	return deploy.IFTRef{Address: proxyAddr.Hex()}, nil
+}
+
+// ProvisionSendCallConstructor deploys the stateless EVM IFT send-call
+// constructor.
+func (d *Driver) ProvisionSendCallConstructor(ctx context.Context) (string, error) {
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return "", err
+	}
+	addr, tx, _, err := evmiftsendcall.DeployContract(opts, d.backend)
+	if err != nil {
+		return "", fmt.Errorf("deploy EVMIFTSendCallConstructor: %w", err)
+	}
+	if mineErr := d.awaitMined(ctx, "deploy EVMIFTSendCallConstructor", tx); mineErr != nil {
+		return "", mineErr
+	}
+	return addr.Hex(), nil
 }
 
 // transactOpts builds signed transact opts for deployment and wiring

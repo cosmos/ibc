@@ -11,6 +11,11 @@ import (
 // ClientTypeAttestation is the only client type currently implemented.
 const ClientTypeAttestation = "attestation"
 
+// GMPPortID is the fixed IBC port the ICS27-GMP app registers under
+// (ICS27Lib.DEFAULT_PORT_ID). ICS27GMP.onRecvPacket requires this exact port,
+// so the app is only reachable when registered here.
+const GMPPortID = "gmpport"
+
 // CoreParams parameterizes core-stack provisioning.
 type CoreParams struct {
 	ChainID string
@@ -43,6 +48,31 @@ type CoreRef struct {
 // ClientRef is the result of provisioning a light client contract.
 type ClientRef struct {
 	Address string
+}
+
+// GMPRef is the result of provisioning the ICS27-GMP app.
+type GMPRef struct {
+	Address      string // proxy
+	AccountLogic string // beacon logic impl
+}
+
+// IFTSpec describes one IFT token to deploy.
+type IFTSpec struct {
+	Owner  string
+	Name   string
+	Symbol string
+}
+
+// IFTRef is the result of provisioning an IFT token.
+type IFTRef struct {
+	Address string // proxy
+}
+
+// BridgeSpec describes one IFT bridge to register on a token.
+type BridgeSpec struct {
+	ClientID            string
+	CounterpartyIFT     string
+	SendCallConstructor string
 }
 
 // Check statuses.
@@ -99,4 +129,21 @@ type Target interface {
 	// SupportedClientTypes lists the client type names ProvisionClient
 	// accepts in ClientSpec.Type.
 	SupportedClientTypes() []string
+	// ProvisionGMP deploys the ICS27-GMP app (account logic + impl + proxy).
+	ProvisionGMP(ctx context.Context, router, accessManager string) (GMPRef, error)
+	// RegisterApp registers app on the router under port.
+	RegisterApp(ctx context.Context, router, app, port string) error
+	// AppRegistered reports whether an app is registered at port, returning its
+	// address when it is.
+	AppRegistered(ctx context.Context, router, port string) (string, bool, error)
+	// ProvisionIFT deploys an IFT token governed by the GMP app.
+	ProvisionIFT(ctx context.Context, gmp string, spec IFTSpec) (IFTRef, error)
+	// ProvisionSendCallConstructor deploys the stateless EVM IFT send-call
+	// constructor and returns its address.
+	ProvisionSendCallConstructor(ctx context.Context) (string, error)
+	// RegisterIFTBridge registers a bridge on an IFT token.
+	RegisterIFTBridge(ctx context.Context, ift string, spec BridgeSpec) error
+	// IFTBridge reports whether a bridge for clientID exists on the token,
+	// returning the counterparty IFT address when it does.
+	IFTBridge(ctx context.Context, ift, clientID string) (string, bool, error)
 }

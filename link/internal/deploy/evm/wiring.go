@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -27,6 +28,14 @@ var publicRelayingMethods = []string{
 	"multicall",
 	"submitMisbehaviour",
 }
+
+// Custom-error selectors for the getters that revert when absent, so their
+// reverts can be classified as not-found.
+var (
+	clientNotFoundSelector    = customErrorSelector(ics26router.ContractMetaData, "IBCClientNotFound")
+	appNotFoundSelector       = customErrorSelector(ics26router.ContractMetaData, "IBCAppNotFound")
+	iftBridgeNotFoundSelector = customErrorSelector(ift.ContractMetaData, "IFTBridgeNotFound")
+)
 
 // RegisterClient calls ICS26Router.addClient with the custom client ID.
 func (d *Driver) RegisterClient(
@@ -86,20 +95,6 @@ func (d *Driver) ClientRegistered(ctx context.Context, router, clientID string) 
 		return "", false, err
 	}
 }
-
-// clientNotFoundSelector is the 4-byte selector of the router's
-// IBCClientNotFound custom error, hex-encoded with 0x prefix.
-var clientNotFoundSelector = func() string {
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	if err != nil || routerABI == nil {
-		return ""
-	}
-	e, ok := routerABI.Errors["IBCClientNotFound"]
-	if !ok {
-		return ""
-	}
-	return "0x" + common.Bytes2Hex(e.ID[:4])
-}()
 
 // getClientError classifies a getClient failure.
 type getClientError int
@@ -235,5 +230,159 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			fmt.Sprintf("router has %q, manifest has %q", cp.ClientId, c.CounterpartyClientID),
 		)
 	}
+
+	if m.GMP != nil && m.GMP.Address != "" {
+		gmpCode, codeErr := d.HasCode(ctx, m.GMP.Address)
+		if codeErr != nil {
+			return report, codeErr
+		}
+		check("gmp app code present", gmpCode, "no code at "+m.GMP.Address)
+		if gmpCode {
+			appAddr, registered, appErr := d.AppRegistered(ctx, m.Core.Router, m.GMP.Port)
+			if appErr != nil {
+				return report, appErr
+			}
+			check(
+				"gmp app registered at port "+m.GMP.Port,
+				registered && strings.EqualFold(appAddr, m.GMP.Address),
+				fmt.Sprintf("router has %q at port %s, manifest has %s", appAddr, m.GMP.Port, m.GMP.Address),
+			)
+		}
+	}
+
+	for _, tok := range m.Tokens {
+		tokenCode, codeErr := d.HasCode(ctx, tok.Address)
+		if codeErr != nil {
+			return report, codeErr
+		}
+		check("ift token "+tok.Symbol+" code present", tokenCode, "no code at "+tok.Address)
+		if !tokenCode {
+			continue
+		}
+		for _, b := range tok.Bridges {
+			cp, registered, bridgeErr := d.IFTBridge(ctx, tok.Address, b.ClientID)
+			if bridgeErr != nil {
+				return report, bridgeErr
+			}
+			check(
+				"ift "+tok.Symbol+" bridge "+b.ClientID+" registered",
+				registered && cp == b.CounterpartyIFT,
+				fmt.Sprintf("token has %q for client %s, manifest has %s", cp, b.ClientID, b.CounterpartyIFT),
+			)
+		}
+	}
 	return report, nil
+}
+
+// customErrorSelector returns the 0x-prefixed 4-byte selector of the named
+// custom error in md's ABI, or "" if unavailable.
+func customErrorSelector(md *bind.MetaData, name string) string {
+	parsed, err := md.GetAbi()
+	if err != nil || parsed == nil {
+		return ""
+	}
+	e, ok := parsed.Errors[name]
+	if !ok {
+		return ""
+	}
+	return "0x" + common.Bytes2Hex(e.ID[:4])
+}
+
+// isNotFoundRevert reports whether err is a contract revert for the custom
+// error identified by selectorHex/name (getIBCApp and getIFTBridge revert when
+// absent rather than returning zero). A revert whose data the provider stripped
+// is treated as a match: the caller's follow-up write fails loudly if the entry
+// actually exists.
+func isNotFoundRevert(err error, selectorHex, name string) bool {
+	if err == nil {
+		return false
+	}
+	var dataErr interface{ ErrorData() any }
+	if errors.As(err, &dataErr) {
+		if data, ok := dataErr.ErrorData().(string); ok && data != "" {
+			return selectorHex != "" && strings.HasPrefix(strings.ToLower(data), selectorHex)
+		}
+	}
+	if strings.Contains(err.Error(), name) {
+		return true
+	}
+	return strings.Contains(err.Error(), "execution reverted")
+}
+
+// RegisterApp registers app on the router under port via the restricted
+// addIBCApp(portId, app) overload.
+func (d *Driver) RegisterApp(ctx context.Context, router, app, port string) error {
+	contract, err := ics26router.NewContract(common.HexToAddress(router), d.backend)
+	if err != nil {
+		return err
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := contract.AddIBCApp0(opts, port, common.HexToAddress(app))
+	if err != nil {
+		return fmt.Errorf("addIBCApp %q: %w", port, err)
+	}
+	return d.awaitMined(ctx, "addIBCApp "+port, tx)
+}
+
+// AppRegistered queries the router for the app at port.
+func (d *Driver) AppRegistered(ctx context.Context, router, port string) (string, bool, error) {
+	contract, err := ics26router.NewContract(common.HexToAddress(router), d.backend)
+	if err != nil {
+		return "", false, err
+	}
+	addr, err := contract.GetIBCApp(&bind.CallOpts{Context: ctx}, port)
+	if err == nil {
+		return addr.Hex(), true, nil
+	}
+	if isNotFoundRevert(err, appNotFoundSelector, "IBCAppNotFound") {
+		return "", false, nil
+	}
+	return "", false, err
+}
+
+// RegisterIFTBridge registers a bridge on an IFT token.
+func (d *Driver) RegisterIFTBridge(ctx context.Context, iftAddr string, spec deploy.BridgeSpec) error {
+	if !common.IsHexAddress(spec.SendCallConstructor) {
+		return fmt.Errorf("invalid send call constructor address %q", spec.SendCallConstructor)
+	}
+	if spec.CounterpartyIFT == "" {
+		return fmt.Errorf("counterparty ift address required")
+	}
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return err
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := contract.RegisterIFTBridge(
+		opts,
+		spec.ClientID,
+		spec.CounterpartyIFT,
+		common.HexToAddress(spec.SendCallConstructor),
+	)
+	if err != nil {
+		return fmt.Errorf("registerIFTBridge %q: %w", spec.ClientID, err)
+	}
+	return d.awaitMined(ctx, "registerIFTBridge "+spec.ClientID, tx)
+}
+
+// IFTBridge queries the token for a bridge registered under clientID.
+func (d *Driver) IFTBridge(ctx context.Context, iftAddr, clientID string) (string, bool, error) {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return "", false, err
+	}
+	bridge, err := contract.GetIFTBridge(&bind.CallOpts{Context: ctx}, clientID)
+	if err == nil {
+		return bridge.CounterpartyIFTAddress, true, nil
+	}
+	if isNotFoundRevert(err, iftBridgeNotFoundSelector, "IFTBridgeNotFound") {
+		return "", false, nil
+	}
+	return "", false, err
 }
