@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package e2etest starts Environments and provides the traffic bindings the
 // acceptance tests drive against IBC Link.
 package e2etest

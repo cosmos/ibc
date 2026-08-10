@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package poll provides readiness polling for EVM clients and launchers.
 package poll
 

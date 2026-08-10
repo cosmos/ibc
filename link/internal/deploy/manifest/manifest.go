@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package manifest stores generated per-chain deployment records. Manifests
 // are machine-written only; user-supplied inputs belong in the config file.
 package manifest

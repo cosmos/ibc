@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package environment describes and realizes IBC test environments.
 package environment
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ibclink drives the ibc link SUT as a black box over its public CLI, config YAML, and JSON output.
 package ibclink
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ibclink manages IBC Link processes as black boxes.
 package ibclink
 

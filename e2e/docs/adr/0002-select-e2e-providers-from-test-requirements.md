@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # ADR 0002: Select E2E providers from test requirements
 
 - Status: Proposed

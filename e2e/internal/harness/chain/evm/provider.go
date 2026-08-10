@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package evm
 
 import "github.com/cosmos/ibc/e2e/internal/harness/chain"

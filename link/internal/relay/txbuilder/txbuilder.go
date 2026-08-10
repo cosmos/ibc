@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package txbuilder assembles transactions from packet relay and client
 // update details. There is one implementation per supported chain type.
 package txbuilder

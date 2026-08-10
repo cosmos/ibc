@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package evm submits transactions to EVM chains.
 package evm
 

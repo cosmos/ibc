@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package graceful contains API for working with graceful application shutdown.
 //
 // Application starts listening for SIGINT or SIGTERM signals and handles them properly.

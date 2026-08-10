@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package evm implements the deploy Target for EVM chains. All contract
 // creation bytecode ships inside the binary (go-abigen artifacts plus the
 // embedded AccessManager artifact), so deployment needs only an RPC endpoint.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package solidityibc realizes the concrete Solidity IBC EVM protocol state.
 package solidityibc
 
