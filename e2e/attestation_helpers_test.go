@@ -87,10 +87,7 @@ func signedStateAttestationProof(
 	require.NoError(t, err)
 	signature[64] += 27
 
-	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
-		AttestationData: attestationData,
-		Signatures:      [][]byte{signature},
-	})
+	proof, err := attestorevm.EncodeAttestationProof(attestationData, [][]byte{signature})
 	require.NoError(t, err)
 	return proof
 }
