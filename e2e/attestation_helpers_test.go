@@ -85,8 +85,7 @@ func signedStateAttestationProof(
 	require.NoError(t, err)
 	signature, err := crypto.Sign(digest[:], privateKey)
 	require.NoError(t, err)
-	signature, err = attestorevm.NormalizeSignature(signature)
-	require.NoError(t, err)
+	signature[64] += 27
 
 	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
 		AttestationData: attestationData,
