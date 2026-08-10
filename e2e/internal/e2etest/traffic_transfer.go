@@ -4,7 +4,6 @@ package e2etest
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -20,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
@@ -27,8 +27,6 @@ import (
 const (
 	ics20DestPort         = "transfer"
 	defaultTimeoutHorizon = 12 * time.Hour
-	packetCommitmentPath  = byte(1)
-	packetReceiptPath     = byte(2)
 )
 
 var (
@@ -194,7 +192,7 @@ func (t *TransferSend) VerifyCommitmentCreated(ctx context.Context) error {
 		ctx,
 		t.app.source,
 		t.app.sourceRouter,
-		packetPath(t.app.sourceClientID, packetCommitmentPath, t.packetTx.Sequence),
+		crypto.Keccak256Hash(hostv2.PacketCommitmentKey(t.app.sourceClientID, t.packetTx.Sequence)),
 		new(big.Int).SetUint64(t.packetTx.SourceBlockNumber),
 	)
 	if err != nil {
@@ -212,7 +210,7 @@ func (t *TransferSend) VerifyReceiptCreated(ctx context.Context) error {
 		ctx,
 		t.app.destination,
 		t.app.destRouter,
-		packetPath(t.app.destClientID, packetReceiptPath, t.packetTx.Sequence),
+		crypto.Keccak256Hash(hostv2.PacketReceiptKey(t.app.destClientID, t.packetTx.Sequence)),
 		nil,
 	)
 	if err != nil {
@@ -230,7 +228,7 @@ func (t *TransferSend) VerifyCommitmentCleared(ctx context.Context) error {
 		ctx,
 		t.app.source,
 		t.app.sourceRouter,
-		packetPath(t.app.sourceClientID, packetCommitmentPath, t.packetTx.Sequence),
+		crypto.Keccak256Hash(hostv2.PacketCommitmentKey(t.app.sourceClientID, t.packetTx.Sequence)),
 		nil,
 	)
 	if err != nil {
@@ -278,11 +276,6 @@ func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash
 		)
 	}
 	return nil
-}
-
-func packetPath(clientID string, prefix byte, sequence uint64) common.Hash {
-	path := append([]byte(clientID), prefix)
-	return crypto.Keccak256Hash(binary.BigEndian.AppendUint64(path, sequence))
 }
 
 func getCommitment(
@@ -421,7 +414,7 @@ func destinationTimeout(
 }
 
 func (i *Transfer) voucherDenom() string {
-	return "transfer/" + i.destClientID + "/" + strings.ToLower(i.sourceToken.Hex())
+	return ics20DestPort + "/" + i.destClientID + "/" + strings.ToLower(i.sourceToken.Hex())
 }
 
 func (i *Transfer) voucherBalance(ctx context.Context, holder string) (*big.Int, error) {
