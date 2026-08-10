@@ -1,4 +1,4 @@
-package chains
+package livevalidate
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 )
@@ -35,11 +36,11 @@ func TestValidateConnectionsLive(t *testing.T) {
 		chainB := mocks.NewMockClient(t)
 		chainB.EXPECT().GetCounterparty(context.Background(), conn.ClientB.ClientID).Return(conn.ClientA.ClientID, nil)
 
-		clients := NewClientSet(map[string]Client{conn.ClientA.ChainID: chainA, conn.ClientB.ChainID: chainB})
+		clients := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: chainA, conn.ClientB.ChainID: chainB})
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		// ACT
-		err := ValidateConnectionsLive(context.Background(), cfg, clients)
+		err := validateConnectionsLive(context.Background(), cfg, clients)
 
 		// ASSERT
 		require.NoError(t, err)
@@ -55,11 +56,11 @@ func TestValidateConnectionsLive(t *testing.T) {
 		chainB := mocks.NewMockClient(t)
 		chainB.EXPECT().GetCounterparty(context.Background(), conn.ClientB.ClientID).Return(conn.ClientA.ClientID, nil).Maybe()
 
-		clients := NewClientSet(map[string]Client{conn.ClientA.ChainID: chainA, conn.ClientB.ChainID: chainB})
+		clients := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: chainA, conn.ClientB.ChainID: chainB})
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		// ACT
-		err := ValidateConnectionsLive(context.Background(), cfg, clients)
+		err := validateConnectionsLive(context.Background(), cfg, clients)
 
 		// ASSERT
 		require.ErrorContains(t, err, `connection "eth-base"`)
@@ -70,11 +71,11 @@ func TestValidateConnectionsLive(t *testing.T) {
 	t.Run("noChainClientConfigured", func(t *testing.T) {
 		// ARRANGE
 		conn := testConnection()
-		clients := NewClientSet(nil)
+		clients := chains.NewClientSet(nil)
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		// ACT
-		err := ValidateConnectionsLive(context.Background(), cfg, clients)
+		err := validateConnectionsLive(context.Background(), cfg, clients)
 
 		// ASSERT
 		require.ErrorContains(t, err, `no chain client for "1"`)

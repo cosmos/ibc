@@ -3,7 +3,6 @@ package chains
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -19,6 +18,9 @@ type Client interface {
 
 	// TxPacketEvents reads every packet event emitted by txHash.
 	TxPacketEvents(ctx context.Context, txHash []byte) ([]v2.PacketEvent, error)
+
+	// TxHeight returns the height txHash was included at.
+	TxHeight(ctx context.Context, txHash []byte) (uint64, error)
 
 	// IsPacketReceived reports whether a packet receipt exists on the
 	// destination chain.
@@ -42,18 +44,6 @@ type Client interface {
 		sourceClientID string,
 		destClientID string,
 	) (v2.WriteAckStatus, error)
-
-	// IsTxFinalized reports whether a transaction's block is finalized. A nil
-	// finalityOffset uses the chain's native finality (the tx's block is at or
-	// below the finalized head); otherwise the tx is finalized once
-	// finalityOffset blocks are mined on top of its block.
-	IsTxFinalized(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error)
-
-	// IsTimestampFinalized reports whether the chain has finalized a block at
-	// or after the timestamp. A nil finalityOffset compares against the
-	// finalized head; otherwise against the block finalityOffset blocks behind
-	// the latest.
-	IsTimestampFinalized(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error)
 
 	// WaitForChain blocks until the chain's latest block time catches up to
 	// the current time.

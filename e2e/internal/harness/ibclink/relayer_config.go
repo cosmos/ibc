@@ -31,9 +31,7 @@ type RelayerConfig struct {
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
 	Routes         []RelayerRoute
-	// Attestors is the flat, top-level candidate list; which ones end up
-	// authorized for which client end is resolved live at relayer startup.
-	Attestors []RelayerAttestor
+	Attestors      []RelayerAttestor
 }
 
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
@@ -57,7 +55,7 @@ type RelayerConnection struct {
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
 // the relayer and provisions its signer from KeyFile, watching ChainID; a
-// remote entry is reached at a bare gRPC host:port (ChainID is ignored).
+// remote entry is reached at a bare gRPC host:port
 type RelayerAttestor struct {
 	Name    string
 	Type    string
@@ -67,11 +65,7 @@ type RelayerAttestor struct {
 }
 
 // RelayerRoute relays the full packet lifecycle for packets sent through
-// SourceClient on SourceChain. Every configured connection is always relayed
-// bidirectionally now (there is no per-direction opt-in in the file format
-// this harness writes), so this is validation-only: it documents which
-// client the test author expects to be relayable and catches typos, but no
-// longer affects the emitted YAML.
+// SourceClient on SourceChain.
 type RelayerRoute struct {
 	SourceChain  string
 	SourceClient string
@@ -162,7 +156,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		}
 	} else {
 		for _, attestor := range cfg.Attestors {
-			if err := declareAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
+			if err := addAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
 				return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
 			}
 		}
@@ -201,11 +195,11 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-// declareAttestor declares one explicitly-configured candidate attestor.
+// addAttestor declares one explicitly-configured candidate attestor.
 // Local entries always bring their own key file, unlike the implicit
 // default (addDefaultLocalAttestor), so multiple local attestors don't
 // share a signing identity.
-func declareAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
+func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
 	case RelayerAttestorRemote:
 		file.Attestors = append(file.Attestors, attestorFileConfig{

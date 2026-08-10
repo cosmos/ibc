@@ -39,50 +39,6 @@ func (_m *MockProofGenerator) EXPECT() *MockProofGenerator_Expecter {
 	return &MockProofGenerator_Expecter{mock: &_m.Mock}
 }
 
-// FinalityOffset provides a mock function for the type MockProofGenerator
-func (_mock *MockProofGenerator) FinalityOffset() uint64 {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for FinalityOffset")
-	}
-
-	var r0 uint64
-	if returnFunc, ok := ret.Get(0).(func() uint64); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(uint64)
-	}
-	return r0
-}
-
-// MockProofGenerator_FinalityOffset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FinalityOffset'
-type MockProofGenerator_FinalityOffset_Call struct {
-	*mock.Call
-}
-
-// FinalityOffset is a helper method to define mock.On call
-func (_e *MockProofGenerator_Expecter) FinalityOffset() *MockProofGenerator_FinalityOffset_Call {
-	return &MockProofGenerator_FinalityOffset_Call{Call: _e.mock.On("FinalityOffset")}
-}
-
-func (_c *MockProofGenerator_FinalityOffset_Call) Run(run func()) *MockProofGenerator_FinalityOffset_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockProofGenerator_FinalityOffset_Call) Return(v uint64) *MockProofGenerator_FinalityOffset_Call {
-	_c.Call.Return(v)
-	return _c
-}
-
-func (_c *MockProofGenerator_FinalityOffset_Call) RunAndReturn(run func() uint64) *MockProofGenerator_FinalityOffset_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // LatestProvableHeight provides a mock function for the type MockProofGenerator
 func (_mock *MockProofGenerator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	ret := _mock.Called(ctx)

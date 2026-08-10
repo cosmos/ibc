@@ -453,8 +453,6 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
-	// Attestors is a flat, deduped candidate list; authorization is resolved
-	// live at relayer startup, so there's no per-connection wiring here.
 	declaredAttestors := map[string]bool{}
 	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)

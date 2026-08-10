@@ -1,19 +1,14 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
-	"github.com/cosmos/ibc/link/internal/service/attestor"
-	"github.com/cosmos/ibc/link/internal/service/signer"
-	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/livevalidate"
 )
 
 // set in init()
@@ -82,34 +77,8 @@ func configValidate(cmd *cobra.Command, _ []string) error {
 	}
 
 	if flagConfigValidateLive {
-		if err := store.ValidateConfigLive(cfg); err != nil {
-			return errors.Wrap(err, "config live validation")
-		}
-
-		clientSet, err := chains.NewClientSetFromConfig(cfg)
-		if err != nil {
-			return errors.Wrap(err, "building chain clients for live validation")
-		}
-
-		if errLive := chains.ValidateConnectionsLive(cmd.Context(), cfg, clientSet); errLive != nil {
-			return errors.Wrap(errLive, "connection live validation")
-		}
-
-		var localAttestors *attestor.Service
-		if len(cfg.Attestors.Locals()) > 0 {
-			signers, errSigners := signerSetFor(cmd.Context(), cfg)
-			if errSigners != nil {
-				return errors.Wrap(errSigners, "building signers for live validation")
-			}
-
-			localAttestors, err = attestor.NewFromConfig(cfg, clientSet, signers)
-			if err != nil {
-				return errors.Wrap(err, "building local attestors for live validation")
-			}
-		}
-
-		if _, err := proofgen.NewSetFromConfig(cmd.Context(), cfg, clientSet, localAttestors); err != nil {
-			return errors.Wrap(err, "attestor quorum live validation")
+		if err := livevalidate.Validate(cmd.Context(), cfg); err != nil {
+			return err
 		}
 	}
 
@@ -120,23 +89,6 @@ func configValidate(cmd *cobra.Command, _ []string) error {
 	}
 
 	return nil
-}
-
-// signerSetFor builds a signer.Set from config, needed to stand up local
-// attestors for live validation.
-func signerSetFor(ctx context.Context, cfg config.Config) (*signer.Set, error) {
-	set := signer.NewSet()
-
-	for _, signerConfig := range cfg.Signers {
-		s, alias, err := signer.NewSignerFromConfig(ctx, signerConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		set.Set(alias, s)
-	}
-
-	return set, nil
 }
 
 func printConfigHome(_ *cobra.Command, _ []string) {

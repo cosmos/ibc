@@ -6,32 +6,35 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
-// CheckTimeoutFinality gates timing out a packet on the destination chain
-// having finalized a block past the timeout timestamp.
+// CheckTimeoutFinality gates timing out a packet on the source client's
+// proof generator currently being able to prove a destination-chain
+// timestamp past the timeout.
 type CheckTimeoutFinality struct {
-	chains         ChainClients
-	finalityOffset *uint64
+	proofGen proofgen.ProofGenerator
 }
 
-func NewCheckTimeoutFinality(chainClients ChainClients, finalityOffset *uint64) CheckTimeoutFinality {
-	return CheckTimeoutFinality{chains: chainClients, finalityOffset: finalityOffset}
+func NewCheckTimeoutFinality(proofGenerators ProofGenerators, route Route) (CheckTimeoutFinality, error) {
+	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+	if !ok {
+		return CheckTimeoutFinality{}, errors.Errorf(
+			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
+		)
+	}
+
+	return CheckTimeoutFinality{proofGen: proofGen}, nil
 }
 
 func (p CheckTimeoutFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	client, ok := p.chains.Get(tr.DestinationChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
-	}
-
-	finalized, err := client.IsTimestampFinalized(ctx, tr.PacketTimeoutTimestamp, p.finalityOffset)
+	_, timestamp, err := p.proofGen.LatestProvableHeight(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "checking timeout finality on chain %s", tr.DestinationChainID)
+		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
 
-	if !finalized {
+	if tr.PacketTimeoutTimestamp.After(timestamp) {
 		return nil, ErrTimeoutNotFinalized
 	}
 

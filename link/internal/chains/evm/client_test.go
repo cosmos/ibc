@@ -509,49 +509,6 @@ func TestPacketWriteAckStatus(t *testing.T) {
 	})
 }
 
-func TestFinality(t *testing.T) {
-	ctx := context.Background()
-	offset := uint64(5)
-
-	t.Run("txFinalizedWithOffset", func(t *testing.T) {
-		client, eth := newTestClient(t)
-		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{BlockNumber: big.NewInt(100)}, nil).Twice()
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(105), Time: 1}, nil).Once()
-
-		finalized, err := client.IsTxFinalized(ctx, txHash.String(), &offset)
-		require.NoError(t, err)
-		assert.True(t, finalized)
-
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(104), Time: 1}, nil).Once()
-
-		finalized, err = client.IsTxFinalized(ctx, txHash.String(), &offset)
-		require.NoError(t, err)
-		assert.False(t, finalized)
-	})
-
-	t.Run("txFinalizedNative", func(t *testing.T) {
-		client, eth := newTestClient(t)
-		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{BlockNumber: big.NewInt(100)}, nil).Once()
-		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64())).Return(&types.Header{Number: big.NewInt(100), Time: 1}, nil).Once()
-
-		finalized, err := client.IsTxFinalized(ctx, txHash.String(), nil)
-
-		require.NoError(t, err)
-		assert.True(t, finalized)
-	})
-
-	t.Run("timestampFinalizedWithOffset", func(t *testing.T) {
-		client, eth := newTestClient(t)
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(100), Time: 1}, nil).Once()
-		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(95)).Return(&types.Header{Number: big.NewInt(95), Time: 1752000000}, nil).Once()
-
-		finalized, err := client.IsTimestampFinalized(ctx, time.Unix(1751999999, 0), &offset)
-
-		require.NoError(t, err)
-		assert.True(t, finalized)
-	})
-}
-
 func TestGetAttestationSet(t *testing.T) {
 	lightClientAddress := common.HexToAddress("0x00000000000000000000000000000000000abc")
 

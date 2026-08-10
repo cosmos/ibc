@@ -69,10 +69,7 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	require.NoError(t, err)
 
 	destProofGen := mocks.NewMockProofGenerator(t)
-	destProofGen.EXPECT().FinalityOffset().Return(uint64(0)).Maybe()
-
 	sourceProofGen := mocks.NewMockProofGenerator(t)
-	sourceProofGen.EXPECT().FinalityOffset().Return(uint64(0)).Maybe()
 
 	deps := pipeline.Deps{
 		Storage: db,

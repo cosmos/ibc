@@ -27,40 +27,44 @@ var _ Attestor = &RemoteAttestor{}
 
 const remoteRequestTimeout = 5 * time.Second
 
-func NewRemoteFromURL(grpcURL, name string) *RemoteAttestor {
+// NewRemoteFromURL connects to the attestor at grpcURL and queries its Info
+// RPC to resolve its chain, address, and finality offset.
+func NewRemoteFromURL(ctx context.Context, grpcURL, name string) (*RemoteAttestor, error) {
 	var (
 		httpClient  = newConnectHTTPClient()
 		protoClient = proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
 	)
 
-	return NewRemote(name, protoClient)
-}
-
-func NewRemote(name string, client proto.AttestationServiceClient) *RemoteAttestor {
-	return &RemoteAttestor{
-		name:   name,
-		client: client,
-		logger: slog.With("module", "attestor", "name", name),
+	info, err := queryAttestorInfo(ctx, protoClient, name)
+	if err != nil {
+		return nil, err
 	}
+
+	return &RemoteAttestor{
+		name:           name,
+		chainID:        info.ChainId,
+		address:        info.Address,
+		finalityOffset: info.FinalityOffset,
+		client:         protoClient,
+		logger:         slog.With("module", "attestor", "name", attestorFQN("remote", info.ChainId, name)),
+	}, nil
 }
 
-// QueryInfo queries this attestor's Info RPC and populates its chain,
-// address, and finality offset.
-func (a *RemoteAttestor) QueryInfo(ctx context.Context) error {
+// queryAttestorInfo queries name's Info RPC through client.
+func queryAttestorInfo(
+	ctx context.Context,
+	client proto.AttestationServiceClient,
+	name string,
+) (*proto.InfoResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
-	res, err := a.client.Info(ctx, connect.NewRequest(&proto.InfoRequest{Attestor: a.name}))
+	res, err := client.Info(ctx, connect.NewRequest(&proto.InfoRequest{Attestor: name}))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	a.chainID = res.Msg.ChainId
-	a.address = res.Msg.Address
-	a.finalityOffset = res.Msg.FinalityOffset
-	a.logger = slog.With("module", "attestor", "name", attestorFQN("remote", a.chainID, a.name))
-
-	return nil
+	return res.Msg, nil
 }
 
 func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {

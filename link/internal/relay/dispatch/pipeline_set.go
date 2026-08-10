@@ -71,9 +71,7 @@ func (s *PipelineSet) Pipeline(ctx context.Context, tr *processors.Transfer) (pi
 		"destinationClientID", route.DestinationClientID,
 	)
 
-	opts := pipeline.OptionsFromConfig(s.cfg, s.deps.ProofGenerators, route)
-
-	inner, err := pipeline.NewPipeline(ctx, s.logger, s.deps, route, opts)
+	inner, err := pipeline.NewPipeline(ctx, s.logger, s.deps, route, pipeline.OptionsFromConfig(s.cfg, route))
 	if err != nil {
 		return nil, errors.Wrap(err, "creating pipeline")
 	}

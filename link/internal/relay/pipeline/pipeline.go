@@ -111,21 +111,25 @@ func NewPipeline(
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
-	// wait for the send tx to finalize on the source chain
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewCheckSendFinality(deps.Chains, opts.SourceFinalityOffset)), output)
+	// wait for the send tx's packet event to be at or before what the
+	// destination client can currently prove
+	checkSendFinality, err := processors.NewCheckSendFinality(deps.Chains, deps.ProofGenerators, route)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing check send finality processor")
+	}
 
-	// before timing out, wait for the timeout timestamp to finalize on the
-	// destination chain
-	output = pipeline.ProcessConcurrently(
-		ctx,
-		stageConcurrency,
-		NewProcessorMW(
-			deps.Storage,
-			processors.NewCheckTimeoutFinality(deps.Chains, opts.DestinationFinalityOffset),
-		),
-		output,
-	)
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, checkSendFinality), output)
+
+	// before timing out, wait for the source client to be able to prove a
+	// destination-chain timestamp past the timeout
+	checkTimeoutFinality, err := processors.NewCheckTimeoutFinality(deps.ProofGenerators, route)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing check timeout finality processor")
+	}
+
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, checkTimeoutFinality), output)
 
 	// deliver timeouts in batches on the source chain
 	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
@@ -175,19 +179,15 @@ func NewPipeline(
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		NewProcessorMW(deps.Storage, processors.NewWaitForWriteAck(deps.Chains, deps.Storage)), output)
 
-	// wait for the write ack tx to finalize on the destination chain
-	output = pipeline.ProcessConcurrently(
-		ctx,
-		stageConcurrency,
-		NewProcessorMW(
-			deps.Storage,
-			processors.NewCheckWriteAckFinality(
-				deps.Chains,
-				opts.DestinationFinalityOffset,
-			),
-		),
-		output,
-	)
+	// wait for the write ack tx's packet event to be at or before what the
+	// source client can currently prove
+	checkWriteAckFinality, err := processors.NewCheckWriteAckFinality(deps.Chains, deps.ProofGenerators, route)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing check write ack finality processor")
+	}
+
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, checkWriteAckFinality), output)
 
 	// populate the ack or timeout tx if the packet commitment is now gone
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,

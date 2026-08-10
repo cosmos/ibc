@@ -8,7 +8,6 @@ import (
 	"context"
 	"github.com/cosmos/ibc/link/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
-	"time"
 )
 
 // NewMockClient creates a new instance of MockClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -728,150 +727,6 @@ func (_c *MockClient_IsPacketReceived_Call) RunAndReturn(run func(ctx context.Co
 	return _c
 }
 
-// IsTimestampFinalized provides a mock function for the type MockClient
-func (_mock *MockClient) IsTimestampFinalized(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error) {
-	ret := _mock.Called(ctx, timestamp, finalityOffset)
-
-	if len(ret) == 0 {
-		panic("no return value specified for IsTimestampFinalized")
-	}
-
-	var r0 bool
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, *uint64) (bool, error)); ok {
-		return returnFunc(ctx, timestamp, finalityOffset)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, *uint64) bool); ok {
-		r0 = returnFunc(ctx, timestamp, finalityOffset)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time, *uint64) error); ok {
-		r1 = returnFunc(ctx, timestamp, finalityOffset)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockClient_IsTimestampFinalized_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsTimestampFinalized'
-type MockClient_IsTimestampFinalized_Call struct {
-	*mock.Call
-}
-
-// IsTimestampFinalized is a helper method to define mock.On call
-//   - ctx context.Context
-//   - timestamp time.Time
-//   - finalityOffset *uint64
-func (_e *MockClient_Expecter) IsTimestampFinalized(ctx any, timestamp any, finalityOffset any) *MockClient_IsTimestampFinalized_Call {
-	return &MockClient_IsTimestampFinalized_Call{Call: _e.mock.On("IsTimestampFinalized", ctx, timestamp, finalityOffset)}
-}
-
-func (_c *MockClient_IsTimestampFinalized_Call) Run(run func(ctx context.Context, timestamp time.Time, finalityOffset *uint64)) *MockClient_IsTimestampFinalized_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 time.Time
-		if args[1] != nil {
-			arg1 = args[1].(time.Time)
-		}
-		var arg2 *uint64
-		if args[2] != nil {
-			arg2 = args[2].(*uint64)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockClient_IsTimestampFinalized_Call) Return(b bool, err error) *MockClient_IsTimestampFinalized_Call {
-	_c.Call.Return(b, err)
-	return _c
-}
-
-func (_c *MockClient_IsTimestampFinalized_Call) RunAndReturn(run func(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error)) *MockClient_IsTimestampFinalized_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// IsTxFinalized provides a mock function for the type MockClient
-func (_mock *MockClient) IsTxFinalized(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error) {
-	ret := _mock.Called(ctx, txHash, finalityOffset)
-
-	if len(ret) == 0 {
-		panic("no return value specified for IsTxFinalized")
-	}
-
-	var r0 bool
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *uint64) (bool, error)); ok {
-		return returnFunc(ctx, txHash, finalityOffset)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *uint64) bool); ok {
-		r0 = returnFunc(ctx, txHash, finalityOffset)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, *uint64) error); ok {
-		r1 = returnFunc(ctx, txHash, finalityOffset)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockClient_IsTxFinalized_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsTxFinalized'
-type MockClient_IsTxFinalized_Call struct {
-	*mock.Call
-}
-
-// IsTxFinalized is a helper method to define mock.On call
-//   - ctx context.Context
-//   - txHash string
-//   - finalityOffset *uint64
-func (_e *MockClient_Expecter) IsTxFinalized(ctx any, txHash any, finalityOffset any) *MockClient_IsTxFinalized_Call {
-	return &MockClient_IsTxFinalized_Call{Call: _e.mock.On("IsTxFinalized", ctx, txHash, finalityOffset)}
-}
-
-func (_c *MockClient_IsTxFinalized_Call) Run(run func(ctx context.Context, txHash string, finalityOffset *uint64)) *MockClient_IsTxFinalized_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 *uint64
-		if args[2] != nil {
-			arg2 = args[2].(*uint64)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockClient_IsTxFinalized_Call) Return(b bool, err error) *MockClient_IsTxFinalized_Call {
-	_c.Call.Return(b, err)
-	return _c
-}
-
-func (_c *MockClient_IsTxFinalized_Call) RunAndReturn(run func(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error)) *MockClient_IsTxFinalized_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // PacketWriteAckStatus provides a mock function for the type MockClient
 func (_mock *MockClient) PacketWriteAckStatus(ctx context.Context, recvTxHash string, sequence uint64, sourceClientID string, destClientID string) (v2.WriteAckStatus, error) {
 	ret := _mock.Called(ctx, recvTxHash, sequence, sourceClientID, destClientID)
@@ -952,6 +807,72 @@ func (_c *MockClient_PacketWriteAckStatus_Call) Return(writeAckStatus v2.WriteAc
 }
 
 func (_c *MockClient_PacketWriteAckStatus_Call) RunAndReturn(run func(ctx context.Context, recvTxHash string, sequence uint64, sourceClientID string, destClientID string) (v2.WriteAckStatus, error)) *MockClient_PacketWriteAckStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// TxHeight provides a mock function for the type MockClient
+func (_mock *MockClient) TxHeight(ctx context.Context, txHash []byte) (uint64, error) {
+	ret := _mock.Called(ctx, txHash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for TxHeight")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) (uint64, error)); ok {
+		return returnFunc(ctx, txHash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) uint64); ok {
+		r0 = returnFunc(ctx, txHash)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
+		r1 = returnFunc(ctx, txHash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_TxHeight_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TxHeight'
+type MockClient_TxHeight_Call struct {
+	*mock.Call
+}
+
+// TxHeight is a helper method to define mock.On call
+//   - ctx context.Context
+//   - txHash []byte
+func (_e *MockClient_Expecter) TxHeight(ctx any, txHash any) *MockClient_TxHeight_Call {
+	return &MockClient_TxHeight_Call{Call: _e.mock.On("TxHeight", ctx, txHash)}
+}
+
+func (_c *MockClient_TxHeight_Call) Run(run func(ctx context.Context, txHash []byte)) *MockClient_TxHeight_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_TxHeight_Call) Return(v uint64, err error) *MockClient_TxHeight_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *MockClient_TxHeight_Call) RunAndReturn(run func(ctx context.Context, txHash []byte) (uint64, error)) *MockClient_TxHeight_Call {
 	_c.Call.Return(run)
 	return _c
 }

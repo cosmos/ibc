@@ -4,14 +4,14 @@
 `~/.ibc/ibc.yml`). Env vars are expanded before parsing (`os.ExpandEnv`), so
 `${VAR}` works anywhere in the file. Six top-level keys:
 
-| Key         | Used by            | Purpose                                                          |
-|-------------|--------------------|-------------------------------------------------------------------|
-| `server`    | relayer, attestor  | gRPC/HTTP listener address                                       |
-| `db`        | relayer            | sqlite or postgres connection                                    |
-| `chains`    | relayer, attestor  | chain configs common to both relayer and attestor                |
-| `relayer`   | relayer            | connections to actively relay                                    |
-| `attestors` | relayer, attestor  | every attestor in play — this process's own and remote ones      |
-| `signers`   | relayer, attestor  | signing backends referenced by client ends and local attestors   |
+| Key         | Used by            | Purpose                                                       |
+|-------------|--------------------|---------------------------------------------------------------|
+| `server`    | relayer, attestor  | gRPC/HTTP listener address                                    |
+| `db`        | relayer            | sqlite or postgres connection                                 |
+| `chains`    | relayer, attestor  | chain configs common to both relayer and attestor             |
+| `relayer`   | relayer            | connections to actively relay                                 |
+| `attestors` | relayer, attestor  | attestors - local and remote                              |
+| `signers`   | relayer, attestor  | signing backends referenced by client ends and local attestors |
 
 Running the relayer with at least one `type: local` entry in `attestors` runs an attestor instance in-process ("dual mode").
 
@@ -91,9 +91,7 @@ chains:
 
 One entry per IBC connection the relayer actively relays, in both
 directions. Each connection has two client ends, `clientA` and `clientB`;
-each end's counterparty is simply the connection's other end — there are no
-separate counterparty fields to keep in sync, unlike the old `clients[]` +
-`routesToRelay[]` shape.
+each end's counterparty is simply the connection's other end.
 
 | Field     | Type   | Description                        |
 |-----------|--------|-------------------------------------|
@@ -112,12 +110,6 @@ separate counterparty fields to keep in sync, unlike the old `clients[]` +
 | `autoRelay`   | object | `enabled` (bool), `lookback` (uint) — auto-relay settings for packets flowing FROM this end's chain TOWARD the counterparty end. |
 
 `clientA` and `clientB` must be on different chains.
-
-There's no `attestorSet` here — for `attestation` clients, the relayer
-resolves the required attestor quorum live at startup: it queries
-`clientId`'s on-chain attestation light client for the registered attestor
-addresses and required signature count, then matches those against the
-top-level `attestors[]` list (querying each one's chain and address, live).
 
 ```yaml
 relayer:
@@ -149,24 +141,17 @@ same attestor-quorum resolution described above.
 
 ## `attestors`
 
-Unified, top-level list of every attestor in play — both the ones this
+Top-level list of attestors — both the ones this
 process runs itself (`type: local`) and the ones it queries over gRPC
-(`type: remote`). Every entry describes exactly one attestor identity;
-which client ends it's actually authorized for is resolved live (see above),
-never declared here.
-
-Needed standalone (`ibc attestor run`, which only ever serves the
-`type: local` subset of this list) or alongside a relayer in the same
-process (`ibc relayer run` — `type: local` entries then run in-process and
-resolve locally instead of over gRPC).
+(`type: remote`).
 
 | Field            | Type   | Description |
 |------------------|--------|--------------|
-| `name`           | string | Identifies the attestor. For `type: local`, must be unique among this process's own local entries (they all share one dispatch table). For `type: remote`, it's whatever name that attestor's own operator assigned it — NOT required unique across different remote attestors, since a caller always asks a specific `grpc` endpoint for a specific name, never looks a name up across endpoints. |
+| `name`           | string | Identifies the attestor. |
 | `chainId`        | string | `local` only — which declared chain this attestor watches. Not set for `type: remote`; discovered live via its `Info` RPC instead. |
 | `type`           | string | `local` or `remote`. |
 | `signer`         | string | `local` only. Must reference a `signers[].alias`. |
-| `finalityOffset` | uint   | `local` only. `0` (default): attest up to the chain's `"finalized"` RPC tag. `n > 0`: attest up to `"latest" - n` instead. Use this where `"finalized"` is slow or unsupported (e.g. Ethereum PoS lags ~12-15 min behind head). A remote attestor's finality offset is discovered the same way as its chain and address — via `Info`, not configured here. |
+| `finalityOffset` | uint   | `local` only. `0` (default): attest up to the chain's `"finalized"` RPC tag. `n > 0`: attest up to `"latest" - n` instead. |
 | `grpc`           | string | `remote` only. Bare `host:port` (not a URL — a `://` here is rejected at validation). |
 
 ```yaml

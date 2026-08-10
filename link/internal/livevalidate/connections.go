@@ -1,17 +1,18 @@
-package chains
+package livevalidate
 
 import (
 	"context"
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
-// ValidateConnectionsLive queries each configured connection's two chains to
+// validateConnectionsLive queries each configured connection's two chains to
 // confirm the on-chain registered counterparty actually matches clientA/
 // clientB, in both directions.
-func ValidateConnectionsLive(ctx context.Context, cfg config.Config, clients *ClientSet) error {
+func validateConnectionsLive(ctx context.Context, cfg config.Config, clients *chains.ClientSet) error {
 	for _, conn := range cfg.Relayer.Connections {
 		if err := validateConnectionLive(ctx, conn, clients); err != nil {
 			return errors.Wrapf(err, "connection %q", conn.Alias)
@@ -21,7 +22,7 @@ func ValidateConnectionsLive(ctx context.Context, cfg config.Config, clients *Cl
 	return nil
 }
 
-func validateConnectionLive(ctx context.Context, conn config.ConnectionConfig, clients *ClientSet) error {
+func validateConnectionLive(ctx context.Context, conn config.ConnectionConfig, clients *chains.ClientSet) error {
 	for _, end := range []struct {
 		label              string
 		self, counterparty config.ClientEnd

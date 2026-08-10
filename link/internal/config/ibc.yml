@@ -29,9 +29,7 @@ relayer:
       packetBatchSize: 50
 
   # each connection is relayed bidirectionally: clientA's counterparty is
-  # simply clientB, and vice versa -- no separate counterparty fields to
-  # keep in sync. Attestor quorum is resolved live against attestors[]
-  # below, not declared here.
+  # simply clientB, and vice versa
   connections:
     - alias: "eth-base"
       clientA:
@@ -51,14 +49,8 @@ relayer:
           enabled: true
           lookback: 100
 
-# attestors is the unified list of every attestor in play -- both the ones
-# this process runs itself (type: local) and the ones it queries over gRPC
-# (type: remote). `ibc attestor run` serves only the type: local subset;
-# `ibc relayer run` additionally resolves each client end's attestor quorum
-# live against this list and the chain's own on-chain attestation set.
-#
-# NOTE: `name` only needs to be unique among this process's own type: local
-# entries -- remote attestors may share a name with each other.
+# attestors -- both the ones this process runs itself (type: local)
+#  and the ones it queries over gRPC (type: remote).
 attestors:
   - name: "attestor-base"
     type: remote

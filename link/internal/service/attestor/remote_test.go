@@ -2,6 +2,7 @@ package attestor
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -11,9 +12,17 @@ import (
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
+func newTestRemoteAttestor(name string, client proto.AttestationServiceClient) *RemoteAttestor {
+	return &RemoteAttestor{
+		name:   name,
+		client: client,
+		logger: slog.With("module", "attestor", "name", name),
+	}
+}
+
 func TestRemoteAttestorRequestTimeout(t *testing.T) {
 	client := timeoutAttestationClient{t: t}
-	remote := NewRemote("name", client)
+	remote := newTestRemoteAttestor("name", client)
 
 	_, err := remote.LatestHeight(context.Background())
 	require.NoError(t, err)
@@ -23,7 +32,8 @@ func TestRemoteAttestorRequestTimeout(t *testing.T) {
 		CommitmentType: CommitmentTypePacket,
 	})
 	require.NoError(t, err)
-	require.NoError(t, remote.QueryInfo(context.Background()))
+	_, err = queryAttestorInfo(context.Background(), client, "name")
+	require.NoError(t, err)
 }
 
 type timeoutAttestationClient struct {

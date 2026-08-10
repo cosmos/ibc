@@ -7,10 +7,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
-	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/service/signer"
 )
 
 // Service manages configured attestors.
@@ -93,47 +89,6 @@ var (
 	ErrCommitmentNotFound = errors.New("commitment not found")
 	ErrReceiptExists      = errors.New("receipt exists")
 )
-
-// NewFromConfig creates a new attestor service from the configuration,
-// serving only the type: local entries in the unified attestors[] list --
-// type: remote entries are meaningful only to a relayer that queries them.
-func NewFromConfig(cfg config.Config, clients *chains.ClientSet, signers *signer.Set) (*Service, error) {
-	locals := cfg.Attestors.Locals()
-	if len(locals) == 0 {
-		return nil, ErrNoAttestations
-	}
-
-	attestorsSpecs := make([]Attestor, 0, len(locals))
-
-	add := func(spec config.AttestorConfig) error {
-		client, ok := clients.Get(spec.ChainID)
-		if !ok {
-			return fmt.Errorf("client not found for chain %s", spec.ChainID)
-		}
-
-		signer, ok := signers.Get(spec.Signer)
-		if !ok {
-			return fmt.Errorf("unknown signer %s", spec.Signer)
-		}
-
-		a, err := NewLocal(spec, client, signer)
-		if err != nil {
-			return err
-		}
-
-		attestorsSpecs = append(attestorsSpecs, a)
-
-		return nil
-	}
-
-	for _, spec := range locals {
-		if err := add(spec); err != nil {
-			return nil, fmt.Errorf("attestor %s: %w", spec.Name, err)
-		}
-	}
-
-	return New(attestorsSpecs)
-}
 
 // New Service constructor. Attestors should have unique aliases
 func New(attestors []Attestor) (*Service, error) {

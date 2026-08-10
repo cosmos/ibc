@@ -47,7 +47,7 @@ type RelayerEVMConfig struct {
 
 // ConnectionConfig one bidirectional IBC connection the relayer actively
 // relays, in both directions. ClientA's counterparty is simply ClientB (and
-// vice versa) -- there are no separate counterparty pointers to keep in sync.
+// vice versa).
 type ConnectionConfig struct {
 	Alias   string    `yaml:"alias"`
 	ClientA ClientEnd `yaml:"clientA"`
@@ -55,8 +55,7 @@ type ConnectionConfig struct {
 }
 
 // ClientEnd one side of a connection: a light client on chainId,
-// tracking the connection's other end as its counterparty. Attestor quorum
-// is resolved live on-chain, not declared here -- see internal/relay/proofgen.
+// tracking the connection's other end as its counterparty
 type ClientEnd struct {
 	ChainID  string     `yaml:"chainId"`
 	Signer   string     `yaml:"signer"`
@@ -88,8 +87,7 @@ func (c RelayerConfig) ChainOverride(chainID string) (RelayerChainOverride, bool
 }
 
 // ClientEnd returns the client end matching (chainID, clientID) in any
-// configured connection, along with counterparty, the other end of that same
-// connection.
+// configured connection, along with its counterparty
 func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty ClientEnd, ok bool) {
 	for _, conn := range c.Connections {
 		switch {

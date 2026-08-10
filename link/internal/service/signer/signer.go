@@ -38,6 +38,21 @@ func NewSet() *Set {
 	}
 }
 
+func NewSetFromConfig(ctx context.Context, signers config.Signers) (*Set, error) {
+	set := NewSet()
+
+	for _, signerConfig := range signers {
+		s, alias, err := NewSignerFromConfig(ctx, signerConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		set.Set(alias, s)
+	}
+
+	return set, nil
+}
+
 func (s *Set) Set(alias string, signer Signer) {
 	s.set[alias] = signer
 }
