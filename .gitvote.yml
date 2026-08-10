@@ -1,0 +1,12 @@
+version: "1"
+
+audit:
+  enabled: true
+
+profiles:
+  default:
+    duration: 14d
+    pass_threshold: 55
+    allowed_voters:
+      teams:
+        - ibc-tsc
