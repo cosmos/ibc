@@ -161,12 +161,15 @@ func TestDeployConnection(t *testing.T) {
 	_, err = driver.Deploy(ctx, "status")
 	require.NoError(t, err)
 
-	// render-config pairs the two manifests into relayer config sections
+	// render-config pairs the two manifests into one relayer.connections[]
+	// entry: clientA/clientB, each end's counterparty implied by the other.
 	rendered, err := driver.Deploy(ctx, "render-config", chainAID, chainBID)
 	require.NoError(t, err)
 	for _, want := range []string{
+		"alias: " + sharedClientID,
 		"clientId: " + sharedClientID,
-		"counterpartyClientId: " + sharedClientID,
+		`chainId: "` + chainAID + `"`,
+		`chainId: "` + chainBID + `"`,
 	} {
 		require.Contains(t, string(rendered), want)
 	}
