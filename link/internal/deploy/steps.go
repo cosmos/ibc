@@ -359,6 +359,15 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 						spec.CounterpartyIFT,
 					)
 				}
+				// a rerun requesting a different send-call constructor must re-register
+				ctor, err := resolveConstructor(m, ctorOverride)
+				if err != nil {
+					return false, err
+				}
+				if existing, ok := tok.Bridge(spec.ClientID); ok &&
+					!strings.EqualFold(existing.SendCallConstructor, ctor) {
+					return false, nil
+				}
 				return true, nil
 			},
 			Run: func(ctx context.Context) error {

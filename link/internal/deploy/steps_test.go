@@ -512,6 +512,39 @@ func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
 	require.ErrorContains(t, err, "already registered to counterparty")
 }
 
+// A rerun with the same client and counterparty but a different constructor
+// must re-register (the contract allows overwriting) rather than silently skip.
+func TestIFTBridgeStepsConstructorChange(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
+	iftBridgeManifest(t, dir)
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "FOO", "0xctorA", spec))
+	require.NoError(t, err)
+
+	// rerun with a different constructor re-registers the bridge step
+	res, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "FOO", "0xctorB", spec))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[1].Action)
+
+	m, err := manifest.Load(dir, "1")
+	require.NoError(t, err)
+	tok, _ := m.Token("FOO")
+	b, ok := tok.Bridge("link-2")
+	require.True(t, ok)
+	require.Equal(t, "0xctorB", b.SendCallConstructor)
+
+	// rerun with the same constructor skips
+	res, err = RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "FOO", "0xctorB", spec))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[1].Action)
+}
+
 func TestIFTBridgeStepsRequiresClientAndToken(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
