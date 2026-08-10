@@ -205,7 +205,7 @@ _init_chain() {
   # besu.toml and el-genesis.json hold no secrets and are set explicitly so a
   # restrictive host umask cannot render them unreadable to the container.
   chmod 755 "$out_dir"
-  chmod 600 "$out_dir/key"
+  chmod 644 "$out_dir/key"
   chmod 644 "$out_dir/besu.toml" "$out_dir/el-genesis.json"
 
   if command -v jq >/dev/null 2>&1; then
