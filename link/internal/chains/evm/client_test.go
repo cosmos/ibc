@@ -570,7 +570,10 @@ func TestGetAttestationSet(t *testing.T) {
 		ctx := context.Background()
 		client, eth := newTestClient(t)
 
-		getAttestationSetOutput, err := attestationABI.Methods["getAttestationSet"].Outputs.Pack(expectedAddresses, uint8(2))
+		getAttestationSetOutput, err := attestationABI.Methods["getAttestationSet"].Outputs.Pack(
+			expectedAddresses,
+			uint8(2),
+		)
 		require.NoError(t, err)
 
 		routerAddr := common.HexToAddress(routerAddress)

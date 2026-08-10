@@ -64,7 +64,10 @@ func (c timeoutAttestationClient) PacketAttestation(
 	return connect.NewResponse(&proto.PacketAttestationResponse{Attestation: &proto.Attestation{}}), nil
 }
 
-func (c timeoutAttestationClient) Info(ctx context.Context, _ *connect.Request[proto.InfoRequest]) (*connect.Response[proto.InfoResponse], error) {
+func (c timeoutAttestationClient) Info(
+	ctx context.Context,
+	_ *connect.Request[proto.InfoRequest],
+) (*connect.Response[proto.InfoResponse], error) {
 	c.requireTimeout(ctx)
 	return connect.NewResponse(&proto.InfoResponse{}), nil
 }

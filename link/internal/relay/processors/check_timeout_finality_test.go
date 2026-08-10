@@ -24,7 +24,9 @@ func TestNewCheckTimeoutFinality(t *testing.T) {
 
 	t.Run("resolvesProofGenerator", func(t *testing.T) {
 		_, err := NewCheckTimeoutFinality(
-			staticProofGenerators{proofgen.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProofGenerator(t)},
+			staticProofGenerators{
+				proofgen.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProofGenerator(t),
+			},
 			route,
 		)
 		require.NoError(t, err)

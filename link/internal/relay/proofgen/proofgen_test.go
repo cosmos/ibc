@@ -54,10 +54,14 @@ func testConfig(t *testing.T) (config.Config, *chains.ClientSet, []attestor.Atte
 	conn := testConnection()
 
 	chainA := mocks.NewMockClient(t)
-	chainA.EXPECT().GetAttestationSet(context.Background(), conn.ClientA.ClientID).Return([]string{"0xaaa"}, uint8(1), nil)
+	chainA.EXPECT().
+		GetAttestationSet(context.Background(), conn.ClientA.ClientID).
+		Return([]string{"0xaaa"}, uint8(1), nil)
 
 	chainB := mocks.NewMockClient(t)
-	chainB.EXPECT().GetAttestationSet(context.Background(), conn.ClientB.ClientID).Return([]string{"0xbbb"}, uint8(1), nil)
+	chainB.EXPECT().
+		GetAttestationSet(context.Background(), conn.ClientB.ClientID).
+		Return([]string{"0xbbb"}, uint8(1), nil)
 
 	clientSet := chains.NewClientSet(map[string]chains.Client{
 		conn.ClientA.ChainID: chainA,

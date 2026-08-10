@@ -13,7 +13,6 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
@@ -245,8 +244,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
 		// packet not yet received, commitment present, send finalized
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Times(2)
 
 		// check send finality: destination client's proof generator must be able to prove the send tx
 		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
@@ -263,8 +268,10 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// success write ack: relayed back to the source chain like any other ack
-		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
-			Return(chainsWriteAckSuccess(), nil).Once()
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckSuccess(), nil).
+			Once()
 
 		// check write ack finality: source client's proof generator must be able to prove the write ack tx
 		env.srcProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
@@ -296,8 +303,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Times(2)
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Times(2)
 
 		// check send finality: destination client's proof generator must be able to prove the send tx
 		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
@@ -312,8 +325,10 @@ func TestPipelineLifecycle(t *testing.T) {
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// error write ack: relayed back to the source chain
-		env.dstClient.EXPECT().PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
-			Return(chainsWriteAckError(), nil).Once()
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckError(), nil).
+			Once()
 
 		// check write ack finality: source client's proof generator must be able to prove the write ack tx
 		env.srcProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
@@ -342,8 +357,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(-time.Hour))
 
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Once()
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Once()
 
 		// check send finality: destination client's proof generator must be able to prove the send tx
 		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
@@ -378,8 +399,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-		env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil).Once()
-		env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil).Once()
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Once()
 
 		// check send finality: the send event's height is past what the destination proof generator can prove
 		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(50), time.Now(), nil).Once()
@@ -398,29 +425,6 @@ func TestPipelineLifecycle(t *testing.T) {
 
 func chainsWriteAckSuccess() v2.WriteAckStatus { return v2.WriteAckStatusSuccess }
 func chainsWriteAckError() v2.WriteAckStatus   { return v2.WriteAckStatusError }
-
-// routedConfig a config whose connection covers testRoute.
-func routedConfig() config.Config {
-	return config.Config{
-		Relayer: config.RelayerConfig{
-			Connections: []config.ConnectionConfig{
-				{
-					Alias: "test-route",
-					ClientA: config.ClientEnd{
-						ClientID: testRoute.SourceClientID,
-						ChainID:  testRoute.SourceChainID,
-						Type:     config.ClientTypeAttestation,
-					},
-					ClientB: config.ClientEnd{
-						ClientID: testRoute.DestinationClientID,
-						ChainID:  testRoute.DestinationChainID,
-						Type:     config.ClientTypeAttestation,
-					},
-				},
-			},
-		},
-	}
-}
 
 type staticTxSubmitters map[string]txsubmitter.TxSubmitter
 

@@ -20,7 +20,9 @@ func TestNewCheckWriteAckFinality(t *testing.T) {
 	t.Run("missingChainClientErrors", func(t *testing.T) {
 		_, err := NewCheckWriteAckFinality(
 			staticChains{},
-			staticProofGenerators{proofgen.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProofGenerator(t)},
+			staticProofGenerators{
+				proofgen.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProofGenerator(t),
+			},
 			route,
 		)
 		require.Error(t, err)

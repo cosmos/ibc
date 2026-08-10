@@ -29,7 +29,9 @@ func TestNewCheckSendFinality(t *testing.T) {
 	t.Run("missingChainClientErrors", func(t *testing.T) {
 		_, err := NewCheckSendFinality(
 			staticChains{},
-			staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): mocks.NewMockProofGenerator(t)},
+			staticProofGenerators{
+				proofgen.Key(route.DestinationChainID, route.DestinationClientID): mocks.NewMockProofGenerator(t),
+			},
 			route,
 		)
 		require.Error(t, err)

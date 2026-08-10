@@ -76,9 +76,19 @@ func TestCheckAttestorQuorum(t *testing.T) {
 			Signers: config.Signers{signerB, signerA},
 			Attestors: config.Attestors{
 				// watches chain B, authorized for chain A's client
-				{Name: "watches-b", Type: config.AttestorTypeLocal, ChainID: conn.ClientB.ChainID, Signer: signerB.Alias},
+				{
+					Name:    "watches-b",
+					Type:    config.AttestorTypeLocal,
+					ChainID: conn.ClientB.ChainID,
+					Signer:  signerB.Alias,
+				},
 				// watches chain A, authorized for chain B's client
-				{Name: "watches-a", Type: config.AttestorTypeLocal, ChainID: conn.ClientA.ChainID, Signer: signerA.Alias},
+				{
+					Name:    "watches-a",
+					Type:    config.AttestorTypeLocal,
+					ChainID: conn.ClientA.ChainID,
+					Signer:  signerA.Alias,
+				},
 			},
 		}
 
@@ -91,7 +101,9 @@ func TestCheckAttestorQuorum(t *testing.T) {
 		signerB, _ := newLocalSignerConfig(t, "signer-b")
 
 		selfChain := stubChainClient(t, conn.ClientA.ChainID)
-		selfChain.EXPECT().GetAttestationSet(ctx, conn.ClientA.ClientID).Return([]string{"0xaaa", "0xbbb"}, uint8(2), nil)
+		selfChain.EXPECT().
+			GetAttestationSet(ctx, conn.ClientA.ClientID).
+			Return([]string{"0xaaa", "0xbbb"}, uint8(2), nil)
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{
 			conn.ClientA.ChainID: selfChain,
@@ -102,7 +114,12 @@ func TestCheckAttestorQuorum(t *testing.T) {
 			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
 			Signers: config.Signers{signerB},
 			Attestors: config.Attestors{
-				{Name: "watches-b", Type: config.AttestorTypeLocal, ChainID: conn.ClientB.ChainID, Signer: signerB.Alias},
+				{
+					Name:    "watches-b",
+					Type:    config.AttestorTypeLocal,
+					ChainID: conn.ClientB.ChainID,
+					Signer:  signerB.Alias,
+				},
 			},
 		}
 

@@ -71,7 +71,9 @@ func TestResolveGenerator(t *testing.T) {
 		conn := testConnection()
 
 		selfChain := mocks.NewMockClient(t)
-		selfChain.EXPECT().GetAttestationSet(ctx, conn.ClientA.ClientID).Return([]string{"0xaaa", "0xbbb"}, uint8(2), nil)
+		selfChain.EXPECT().
+			GetAttestationSet(ctx, conn.ClientA.ClientID).
+			Return([]string{"0xaaa", "0xbbb"}, uint8(2), nil)
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
 

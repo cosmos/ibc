@@ -55,7 +55,7 @@ func TestStateFinisherProcess(t *testing.T) {
 		_, err := NewStateFinisher(storage).Process(context.Background(), tr)
 		require.NoError(t, err)
 
-		assert.Equal(t, store.RelayStatusCompleteWithWriteAckSuccess, tr.Status)
+		assert.Equal(t, store.RelayStatusCompleteWithAck, tr.Status)
 	})
 
 	t.Run("ackRelayedWithWriteAckError", func(t *testing.T) {
