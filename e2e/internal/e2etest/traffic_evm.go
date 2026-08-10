@@ -64,7 +64,7 @@ func transactionEventSequences[T any](
 	parse func(types.Log) (*T, error),
 	sequence func(*T) uint64,
 ) ([]uint64, error) {
-	receipt, err := target.evm.TransactionReceipt(ctx, common.HexToHash(txHash))
+	receipt, err := target.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
 		return nil, fmt.Errorf("fetch transaction %s: %w", txHash, err)
 	}
