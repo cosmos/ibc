@@ -15,13 +15,6 @@ import (
 // ResolveFromConfig resolves every entry in the unified attestors[] config
 // list into a live Attestor, split by whether it runs in this process
 // (local) or is queried over gRPC (remote).
-//
-// Local entries are resolved strictly: this process is meant to run them,
-// so a bad client/signer reference is a fatal misconfiguration. Remote
-// entries are resolved best-effort: an unreachable remote is excluded and
-// logged rather than failing the whole resolution, since a relayer's
-// candidate pool should degrade gracefully instead of refusing to start
-// over one unreachable peer.
 func ResolveFromConfig(
 	ctx context.Context,
 	entries config.Attestors,

@@ -2,6 +2,7 @@ package attestation
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -36,8 +37,6 @@ func ResolveGenerator(
 // MatchAttestors resolves self's on-chain attestation set and returns the
 // attestors that watch counterparty's chain and whose self-reported address
 // appears in it, erroring if too few match to meet the on-chain threshold.
-// Address comparison is case-insensitive so a checksummed config address
-// still matches a lowercase on-chain one (and vice versa).
 func MatchAttestors(
 	ctx context.Context,
 	self, counterparty config.ClientEnd,
@@ -46,7 +45,7 @@ func MatchAttestors(
 ) ([]attestor.Attestor, uint8, error) {
 	selfChain, ok := clientSet.Get(self.ChainID)
 	if !ok {
-		return nil, 0, errors.Errorf("no configured chain client for %q", self.ChainID)
+		return nil, 0, errors.Errorf("client %q: no configured chain client for %q", self.ClientID, self.ChainID)
 	}
 
 	onChainAddrs, minRequiredSigs, err := selfChain.GetAttestationSet(ctx, self.ClientID)
@@ -61,10 +60,14 @@ func MatchAttestors(
 
 	var matched []attestor.Attestor
 
+	configured := make([]string, 0, len(attestors))
+
 	for _, a := range attestors {
 		if a.ChainID() != counterparty.ChainID {
 			continue
 		}
+
+		configured = append(configured, fmt.Sprintf("%s=%s", a.Name(), a.Address()))
 
 		if _, inOnChainSet := onChainSet[strings.ToLower(a.Address())]; !inOnChainSet {
 			continue
@@ -75,8 +78,10 @@ func MatchAttestors(
 
 	if len(matched) < int(minRequiredSigs) {
 		return nil, 0, errors.Errorf(
-			"only %d reachable/matching attestors for chain %q, on-chain quorum requires %d",
-			len(matched), counterparty.ChainID, minRequiredSigs,
+			"client %q: only %d reachable/matching attestors for chain %q, on-chain quorum requires %d "+
+				"(on-chain addresses: [%s], configured attestors: [%s])",
+			self.ClientID, len(matched), counterparty.ChainID, minRequiredSigs,
+			strings.Join(onChainAddrs, ", "), strings.Join(configured, ", "),
 		)
 	}
 

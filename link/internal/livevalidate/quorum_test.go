@@ -2,13 +2,14 @@ package livevalidate
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/service/attestor"
+	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 )
 
@@ -20,15 +21,34 @@ func attestationConnection() config.ConnectionConfig {
 	return conn
 }
 
-// quorumCandidate builds a mock Attestor identified by watchedChainID/address.
-func quorumCandidate(t *testing.T, watchedChainID, address string) attestor.Attestor {
+// newLocalSignerConfig generates a real local secp256k1 key, stores it to a
+// temp keyfile, and returns both the config entry referencing it and its
+// derived EVM address -- resolving a local attestor derives its address the
+// same way, so tests need the real address to stage a matching on-chain set.
+func newLocalSignerConfig(t *testing.T, alias string) (config.SignerConfig, string) {
 	t.Helper()
 
-	a := attestor.NewMockAttestor(t)
-	a.EXPECT().ChainID().Return(watchedChainID).Maybe()
-	a.EXPECT().Address().Return(address).Maybe()
+	key, err := signer.GenerateLocalSecp256k1Signer()
+	require.NoError(t, err)
 
-	return a
+	path := filepath.Join(t.TempDir(), alias+".json")
+	require.NoError(t, key.StoreToFile(path))
+
+	address, err := signer.PublicKeyToEVMAddress(key.PublicKey())
+	require.NoError(t, err)
+
+	return config.SignerConfig{Alias: alias, Type: config.SignerLocal, File: path}, address
+}
+
+// stubChainClient builds a mock Client that only reports its own chain ID,
+// enough for local attestor resolution's client-chain-match check.
+func stubChainClient(t *testing.T, chainID string) *mocks.MockClient {
+	t.Helper()
+
+	client := mocks.NewMockClient(t)
+	client.EXPECT().ChainID().Return(chainID).Maybe()
+
+	return client
 }
 
 func TestCheckAttestorQuorum(t *testing.T) {
@@ -37,40 +57,58 @@ func TestCheckAttestorQuorum(t *testing.T) {
 	t.Run("resolvesBothDirections", func(t *testing.T) {
 		conn := attestationConnection()
 
-		chainA := mocks.NewMockClient(t)
-		chainA.EXPECT().GetAttestationSet(ctx, conn.ClientA.ClientID).Return([]string{"0xaaa"}, uint8(1), nil)
+		signerB, addressB := newLocalSignerConfig(t, "signer-b")
+		signerA, addressA := newLocalSignerConfig(t, "signer-a")
 
-		chainB := mocks.NewMockClient(t)
-		chainB.EXPECT().GetAttestationSet(ctx, conn.ClientB.ClientID).Return([]string{"0xbbb"}, uint8(1), nil)
+		chainA := stubChainClient(t, conn.ClientA.ChainID)
+		chainA.EXPECT().GetAttestationSet(ctx, conn.ClientA.ClientID).Return([]string{addressB}, uint8(1), nil)
+
+		chainB := stubChainClient(t, conn.ClientB.ChainID)
+		chainB.EXPECT().GetAttestationSet(ctx, conn.ClientB.ClientID).Return([]string{addressA}, uint8(1), nil)
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{
 			conn.ClientA.ChainID: chainA,
 			conn.ClientB.ChainID: chainB,
 		})
 
-		watchesB := quorumCandidate(t, conn.ClientB.ChainID, "0xaaa")
-		watchesA := quorumCandidate(t, conn.ClientA.ChainID, "0xbbb")
+		cfg := config.Config{
+			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+			Signers: config.Signers{signerB, signerA},
+			Attestors: config.Attestors{
+				// watches chain B, authorized for chain A's client
+				{Name: "watches-b", Type: config.AttestorTypeLocal, ChainID: conn.ClientB.ChainID, Signer: signerB.Alias},
+				// watches chain A, authorized for chain B's client
+				{Name: "watches-a", Type: config.AttestorTypeLocal, ChainID: conn.ClientA.ChainID, Signer: signerA.Alias},
+			},
+		}
 
-		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
-
-		require.NoError(t, checkAttestorQuorum(ctx, cfg, clientSet, []attestor.Attestor{watchesB, watchesA}))
+		require.NoError(t, checkAttestorQuorum(ctx, cfg, clientSet))
 	})
 
 	t.Run("insufficientMatchingAttestorsErrors", func(t *testing.T) {
 		conn := attestationConnection()
 
-		selfChain := mocks.NewMockClient(t)
+		signerB, _ := newLocalSignerConfig(t, "signer-b")
+
+		selfChain := stubChainClient(t, conn.ClientA.ChainID)
 		selfChain.EXPECT().GetAttestationSet(ctx, conn.ClientA.ClientID).Return([]string{"0xaaa", "0xbbb"}, uint8(2), nil)
 
-		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
+		clientSet := chains.NewClientSet(map[string]chains.Client{
+			conn.ClientA.ChainID: selfChain,
+			conn.ClientB.ChainID: stubChainClient(t, conn.ClientB.ChainID),
+		})
 
-		candidate := quorumCandidate(t, conn.ClientB.ChainID, "0xaaa")
+		cfg := config.Config{
+			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+			Signers: config.Signers{signerB},
+			Attestors: config.Attestors{
+				{Name: "watches-b", Type: config.AttestorTypeLocal, ChainID: conn.ClientB.ChainID, Signer: signerB.Alias},
+			},
+		}
 
-		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+		err := checkAttestorQuorum(ctx, cfg, clientSet)
 
-		err := checkAttestorQuorum(ctx, cfg, clientSet, []attestor.Attestor{candidate})
-
-		require.ErrorContains(t, err, `only 1 reachable/matching attestors for chain "8453"`)
+		require.ErrorContains(t, err, `only 0 reachable/matching attestors for chain "8453"`)
 		require.ErrorContains(t, err, "on-chain quorum requires 2")
 	})
 
@@ -85,6 +123,6 @@ func TestCheckAttestorQuorum(t *testing.T) {
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		// ACT + ASSERT -- an empty ClientSet proves neither end was looked up.
-		require.NoError(t, checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil), nil))
+		require.NoError(t, checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil)))
 	})
 }

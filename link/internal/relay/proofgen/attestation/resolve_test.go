@@ -36,6 +36,7 @@ func localCandidate(t *testing.T, alias, watchedChainID, address string, finalit
 	t.Helper()
 
 	a := attestor.NewMockAttestor(t)
+	a.EXPECT().Name().Return(alias).Maybe()
 	a.EXPECT().Alias().Return(alias).Maybe()
 	a.EXPECT().ChainID().Return(watchedChainID).Maybe()
 	a.EXPECT().Address().Return(address).Maybe()
@@ -80,6 +81,8 @@ func TestResolveGenerator(t *testing.T) {
 
 		require.ErrorContains(t, err, `only 1 reachable/matching attestors for chain "8453"`)
 		require.ErrorContains(t, err, "on-chain quorum requires 2")
+		require.ErrorContains(t, err, "on-chain addresses: [0xaaa, 0xbbb]")
+		require.ErrorContains(t, err, "configured attestors: [watcher=0xaaa]")
 	})
 
 	t.Run("nonMatchingAddressExcluded", func(t *testing.T) {
