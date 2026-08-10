@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
-	attestordomain "github.com/cosmos/ibc/link/attestor"
 )
 
 func TestRemoteAttestorRequestTimeout(t *testing.T) {
@@ -22,8 +21,8 @@ func TestRemoteAttestorRequestTimeout(t *testing.T) {
 	require.NoError(t, err)
 	_, err = remote.StateAttestation(context.Background(), 1)
 	require.NoError(t, err)
-	_, err = remote.PacketAttestation(context.Background(), attestordomain.PacketAttestationRequest{
-		CommitmentType: attestordomain.CommitmentTypePacket,
+	_, err = remote.PacketAttestation(context.Background(), PacketAttestationRequest{
+		CommitmentType: CommitmentTypePacket,
 	})
 	require.NoError(t, err)
 }

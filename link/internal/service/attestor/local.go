@@ -12,7 +12,6 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	attestordomain "github.com/cosmos/ibc/link/attestor"
 	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	attestorevmibc "github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
@@ -87,7 +86,7 @@ func (a *LocalAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	offset := uint64(a.finalityOffset)
 	if offset >= actualHeight {
 		return 0, errors.Wrapf(
-			attestordomain.ErrNotFinalized,
+			ErrNotFinalized,
 			"latest height %d does not exceed finality offset %d",
 			actualHeight,
 			offset,
@@ -97,18 +96,18 @@ func (a *LocalAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	return actualHeight - offset, nil
 }
 
-func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (attestordomain.Attestation, error) {
-	if err := attestordomain.ValidateHeight(height); err != nil {
-		return attestordomain.Attestation{}, errors.Wrapf(attestordomain.ErrInvalidInput, "%s", err)
+func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+	if err := validateHeight(height); err != nil {
+		return Attestation{}, errors.Wrapf(ErrInvalidInput, "%s", err)
 	}
 
 	latestHeight, err := a.LatestHeight(ctx)
 	switch {
 	case err != nil:
-		return attestordomain.Attestation{}, errors.Wrapf(err, "get latest attestable height")
+		return Attestation{}, errors.Wrapf(err, "get latest attestable height")
 	case height > latestHeight:
-		return attestordomain.Attestation{}, errors.Wrapf(
-			attestordomain.ErrNotFinalized,
+		return Attestation{}, errors.Wrapf(
+			ErrNotFinalized,
 			"latest %d, requested %d",
 			latestHeight,
 			height,
@@ -117,20 +116,20 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (at
 
 	header, err := a.client.GetBlockHeader(ctx, height)
 	if err != nil {
-		return attestordomain.Attestation{}, errors.Wrapf(err, "get header at height %d", height)
+		return Attestation{}, errors.Wrapf(err, "get header at height %d", height)
 	}
 
 	attestedData, err := attestorevm.EncodeStateAttestation(height, uint64(header.Timestamp.Unix()))
 	if err != nil {
-		return attestordomain.Attestation{}, err
+		return Attestation{}, err
 	}
 
 	signature, err := attestorevm.SignABI(ctx, a.signer, attestorevm.TagStateAttestation, attestedData)
 	if err != nil {
-		return attestordomain.Attestation{}, fmt.Errorf("sign state attestation: %w", err)
+		return Attestation{}, fmt.Errorf("sign state attestation: %w", err)
 	}
 
-	return attestordomain.Attestation{
+	return Attestation{
 		Height:       height,
 		Timestamp:    &header.Timestamp,
 		AttestedData: attestedData,
@@ -140,11 +139,11 @@ func (a *LocalAttestor) StateAttestation(ctx context.Context, height uint64) (at
 
 func (a *LocalAttestor) PacketAttestation(
 	ctx context.Context,
-	req attestordomain.PacketAttestationRequest,
-) (attestordomain.Attestation, error) {
+	req PacketAttestationRequest,
+) (Attestation, error) {
 	// 1. validate input
 	if err := req.Validate(); err != nil {
-		return attestordomain.Attestation{}, errors.Wrapf(attestordomain.ErrInvalidInput, "%s", err)
+		return Attestation{}, errors.Wrapf(ErrInvalidInput, "%s", err)
 	}
 
 	// 2. decode packets
@@ -152,8 +151,8 @@ func (a *LocalAttestor) PacketAttestation(
 	for i, encoded := range req.Packets {
 		packet, err := attestorevmibc.DecodePacket(encoded)
 		if err != nil {
-			return attestordomain.Attestation{}, errors.Wrapf(
-				attestordomain.ErrInvalidInput,
+			return Attestation{}, errors.Wrapf(
+				ErrInvalidInput,
 				"decode packet %d: %s",
 				i,
 				err,
@@ -166,10 +165,10 @@ func (a *LocalAttestor) PacketAttestation(
 	latestHeight, err := a.LatestHeight(ctx)
 	switch {
 	case err != nil:
-		return attestordomain.Attestation{}, errors.Wrapf(err, "get latest attestable height")
+		return Attestation{}, errors.Wrapf(err, "get latest attestable height")
 	case req.Height > latestHeight:
-		return attestordomain.Attestation{}, errors.Wrapf(
-			attestordomain.ErrNotFinalized,
+		return Attestation{}, errors.Wrapf(
+			ErrNotFinalized,
 			"latest %d, requested %d",
 			latestHeight,
 			req.Height,
@@ -181,7 +180,7 @@ func (a *LocalAttestor) PacketAttestation(
 	for i, packet := range packets {
 		compact, compactErr := a.packetCompact(ctx, req.Height, packet, req.CommitmentType)
 		if compactErr != nil {
-			return attestordomain.Attestation{}, errors.Wrapf(compactErr, "packet %d", i)
+			return Attestation{}, errors.Wrapf(compactErr, "packet %d", i)
 		}
 		compacts[i] = compact
 	}
@@ -189,15 +188,15 @@ func (a *LocalAttestor) PacketAttestation(
 	// 5. encode & sign the attested data
 	attestedData, err := attestorevm.EncodePacketAttestation(req.Height, compacts)
 	if err != nil {
-		return attestordomain.Attestation{}, err
+		return Attestation{}, err
 	}
 
 	signature, err := attestorevm.SignABI(ctx, a.signer, attestorevm.TagPacketAttestation, attestedData)
 	if err != nil {
-		return attestordomain.Attestation{}, fmt.Errorf("sign packet attestation: %w", err)
+		return Attestation{}, fmt.Errorf("sign packet attestation: %w", err)
 	}
 
-	return attestordomain.Attestation{
+	return Attestation{
 		Height:       req.Height,
 		Timestamp:    nil,
 		AttestedData: attestedData,
@@ -209,19 +208,19 @@ func (a *LocalAttestor) packetCompact(
 	ctx context.Context,
 	height uint64,
 	packet channeltypesv2.Packet,
-	commitmentType attestordomain.CommitmentType,
+	commitmentType CommitmentType,
 ) (attestorevm.PacketCompact, error) {
 	var path []byte
 	switch commitmentType {
-	case attestordomain.CommitmentTypePacket:
+	case CommitmentTypePacket:
 		path = hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence)
-	case attestordomain.CommitmentTypeAck:
+	case CommitmentTypeAck:
 		path = hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence)
-	case attestordomain.CommitmentTypeReceipt:
+	case CommitmentTypeReceipt:
 		path = hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence)
 	default:
 		return attestorevm.PacketCompact{}, errors.Wrapf(
-			attestordomain.ErrInvalidInput,
+			ErrInvalidInput,
 			"unsupported commitment type %d",
 			commitmentType,
 		)
@@ -234,10 +233,10 @@ func (a *LocalAttestor) packetCompact(
 	}
 
 	switch commitmentType {
-	case attestordomain.CommitmentTypePacket:
+	case CommitmentTypePacket:
 		if commitment == ([32]byte{}) {
 			return attestorevm.PacketCompact{}, errors.Wrapf(
-				attestordomain.ErrCommitmentNotFound,
+				ErrCommitmentNotFound,
 				"packet commitment for client %q sequence %d",
 				packet.SourceClient,
 				packet.Sequence,
@@ -245,25 +244,25 @@ func (a *LocalAttestor) packetCompact(
 		}
 		if expected := [32]byte(channeltypesv2.CommitPacket(packet)); commitment != expected {
 			return attestorevm.PacketCompact{}, errors.Wrapf(
-				attestordomain.ErrInvalidInput,
+				ErrInvalidInput,
 				"packet commitment mismatch: got %x, expected %x",
 				commitment,
 				expected,
 			)
 		}
-	case attestordomain.CommitmentTypeAck:
+	case CommitmentTypeAck:
 		if commitment == ([32]byte{}) {
 			return attestorevm.PacketCompact{}, errors.Wrapf(
-				attestordomain.ErrCommitmentNotFound,
+				ErrCommitmentNotFound,
 				"acknowledgement commitment for client %q sequence %d",
 				packet.DestinationClient,
 				packet.Sequence,
 			)
 		}
-	case attestordomain.CommitmentTypeReceipt:
+	case CommitmentTypeReceipt:
 		if commitment != ([32]byte{}) {
 			return attestorevm.PacketCompact{}, errors.Wrapf(
-				attestordomain.ErrReceiptExists,
+				ErrReceiptExists,
 				"client %q sequence %d",
 				packet.DestinationClient,
 				packet.Sequence,
@@ -285,4 +284,16 @@ func (a *LocalAttestor) IsLocal() bool   { return true }
 
 func attestorFQN(connection, chainID, name string) string {
 	return fmt.Sprintf("%s-%s-%s", chainID, connection, name)
+}
+
+// restrict "special" heights from external input
+func validateHeight(height uint64) error {
+	switch height {
+	case 0:
+		return errors.New("height must be greater than 0")
+	case v2.LatestBlock, v2.FinalizedBlock:
+		return errors.Errorf("invalid height: %d", height)
+	default:
+		return nil
+	}
 }

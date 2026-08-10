@@ -12,10 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	attestordomain "github.com/cosmos/ibc/link/attestor"
 	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
-	attestorsvc "github.com/cosmos/ibc/link/internal/service/attestor"
+	"github.com/cosmos/ibc/link/internal/service/attestor"
 )
 
 // quorumResult the aggregated, quorum-verified attestation for one claim:
@@ -28,14 +27,14 @@ type quorumResult struct {
 // queryStateQuorum aggregates a StateAttestation claim across attestors.
 func queryStateQuorum(
 	ctx context.Context,
-	attestors []attestorsvc.Attestor,
+	attestors []attestor.Attestor,
 	threshold int,
 	height uint64,
 ) (quorumResult, error) {
 	return queryQuorum(ctx, attestors, threshold, attestorevm.TagStateAttestation, func(
 		ctx context.Context,
-		a attestorsvc.Attestor,
-	) (attestordomain.Attestation, error) {
+		a attestor.Attestor,
+	) (attestor.Attestation, error) {
 		return a.StateAttestation(ctx, height)
 	})
 }
@@ -43,17 +42,17 @@ func queryStateQuorum(
 // queryPacketQuorum aggregates a PacketAttestation claim across attestors.
 func queryPacketQuorum(
 	ctx context.Context,
-	attestors []attestorsvc.Attestor,
+	attestors []attestor.Attestor,
 	threshold int,
 	packets [][]byte,
 	height uint64,
-	kind attestordomain.CommitmentType,
+	kind attestor.CommitmentType,
 ) (quorumResult, error) {
 	return queryQuorum(ctx, attestors, threshold, attestorevm.TagPacketAttestation, func(
 		ctx context.Context,
-		a attestorsvc.Attestor,
-	) (attestordomain.Attestation, error) {
-		return a.PacketAttestation(ctx, attestordomain.PacketAttestationRequest{
+		a attestor.Attestor,
+	) (attestor.Attestation, error) {
+		return a.PacketAttestation(ctx, attestor.PacketAttestationRequest{
 			Height:         height,
 			Packets:        packets,
 			CommitmentType: kind,
@@ -61,7 +60,7 @@ func queryPacketQuorum(
 	})
 }
 
-type attestationQuery func(context.Context, attestorsvc.Attestor) (attestordomain.Attestation, error)
+type attestationQuery func(context.Context, attestor.Attestor) (attestor.Attestation, error)
 
 // quorumResponse one attestor's contribution to a quorum.
 type quorumResponse struct {
@@ -78,7 +77,7 @@ type quorumResponse struct {
 // the number of distinct signers to reach threshold.
 func queryQuorum(
 	ctx context.Context,
-	attestors []attestorsvc.Attestor,
+	attestors []attestor.Attestor,
 	threshold int,
 	typeTag byte,
 	query attestationQuery,
@@ -94,7 +93,7 @@ func queryQuorum(
 	for i, a := range attestors {
 		wg.Add(1)
 
-		go func(i int, a attestorsvc.Attestor) {
+		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
 			responses[i] = queryOne(ctx, a, typeTag, query)
@@ -106,7 +105,7 @@ func queryQuorum(
 	return reduceQuorum(responses, threshold)
 }
 
-func queryOne(ctx context.Context, a attestorsvc.Attestor, typeTag byte, query attestationQuery) quorumResponse {
+func queryOne(ctx context.Context, a attestor.Attestor, typeTag byte, query attestationQuery) quorumResponse {
 	attestation, err := query(ctx, a)
 	if err != nil {
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
@@ -185,7 +184,7 @@ func joinResponseErrors(responses []quorumResponse) string {
 // that answered, requiring at least threshold of them to respond.
 func latestProvableHeight(
 	ctx context.Context,
-	attestors []attestorsvc.Attestor,
+	attestors []attestor.Attestor,
 	threshold int,
 	counterpartyChain chains.Client,
 ) (uint64, time.Time, error) {
@@ -201,7 +200,7 @@ func latestProvableHeight(
 	for i, a := range attestors {
 		wg.Add(1)
 
-		go func(i int, a attestorsvc.Attestor) {
+		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
 			height, err := a.LatestHeight(ctx)

@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
-	attestordomain "github.com/cosmos/ibc/link/attestor"
 )
 
 // RemoteAttestor provides attestation data from a remote gRPC service.
@@ -67,7 +66,7 @@ func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 func (a *RemoteAttestor) StateAttestation(
 	ctx context.Context,
 	height uint64,
-) (attestordomain.Attestation, error) {
+) (Attestation, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
@@ -78,7 +77,7 @@ func (a *RemoteAttestor) StateAttestation(
 
 	res, err := a.client.StateAttestation(ctx, connect.NewRequest(req))
 	if err != nil {
-		return attestordomain.Attestation{}, err
+		return Attestation{}, err
 	}
 
 	return attestationFromProto(res.Msg.Attestation)
@@ -86,14 +85,14 @@ func (a *RemoteAttestor) StateAttestation(
 
 func (a *RemoteAttestor) PacketAttestation(
 	ctx context.Context,
-	req attestordomain.PacketAttestationRequest,
-) (attestordomain.Attestation, error) {
+	req PacketAttestationRequest,
+) (Attestation, error) {
 	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
 	defer cancel()
 
 	ct, err := CommitmentTypeToProto(req.CommitmentType)
 	if err != nil {
-		return attestordomain.Attestation{}, err
+		return Attestation{}, err
 	}
 
 	protoReq := &proto.PacketAttestationRequest{
@@ -105,7 +104,7 @@ func (a *RemoteAttestor) PacketAttestation(
 
 	res, err := a.client.PacketAttestation(ctx, connect.NewRequest(protoReq))
 	if err != nil {
-		return attestordomain.Attestation{}, err
+		return Attestation{}, err
 	}
 
 	return attestationFromProto(res.Msg.Attestation)
@@ -116,9 +115,9 @@ func (a *RemoteAttestor) Alias() string   { return a.alias }
 func (a *RemoteAttestor) ChainID() string { return a.chainID }
 func (a *RemoteAttestor) IsLocal() bool   { return false }
 
-func attestationFromProto(a *proto.Attestation) (attestordomain.Attestation, error) {
+func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 	if a == nil {
-		return attestordomain.Attestation{}, errors.New("attestation is nil")
+		return Attestation{}, errors.New("attestation is nil")
 	}
 
 	var timestamp *time.Time
@@ -127,7 +126,7 @@ func attestationFromProto(a *proto.Attestation) (attestordomain.Attestation, err
 		timestamp = &t
 	}
 
-	return attestordomain.Attestation{
+	return Attestation{
 		Height:       a.Height,
 		Timestamp:    timestamp,
 		AttestedData: a.AttestedData,
@@ -135,29 +134,29 @@ func attestationFromProto(a *proto.Attestation) (attestordomain.Attestation, err
 	}, nil
 }
 
-func CommitmentTypeToProto(ct attestordomain.CommitmentType) (proto.CommitmentType, error) {
+func CommitmentTypeToProto(ct CommitmentType) (proto.CommitmentType, error) {
 	switch ct {
-	case attestordomain.CommitmentTypePacket:
+	case CommitmentTypePacket:
 		return proto.CommitmentType_COMMITMENT_TYPE_PACKET, nil
-	case attestordomain.CommitmentTypeAck:
+	case CommitmentTypeAck:
 		return proto.CommitmentType_COMMITMENT_TYPE_ACK, nil
-	case attestordomain.CommitmentTypeReceipt:
+	case CommitmentTypeReceipt:
 		return proto.CommitmentType_COMMITMENT_TYPE_RECEIPT, nil
 	default:
 		return 0, errors.Errorf("unsupported commitment type: %d", ct)
 	}
 }
 
-func CommitmentTypeFromProto(ct proto.CommitmentType) (attestordomain.CommitmentType, error) {
+func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
 	switch ct {
 	case proto.CommitmentType_COMMITMENT_TYPE_PACKET:
-		return attestordomain.CommitmentTypePacket, nil
+		return CommitmentTypePacket, nil
 	case proto.CommitmentType_COMMITMENT_TYPE_ACK:
-		return attestordomain.CommitmentTypeAck, nil
+		return CommitmentTypeAck, nil
 	case proto.CommitmentType_COMMITMENT_TYPE_RECEIPT:
-		return attestordomain.CommitmentTypeReceipt, nil
+		return CommitmentTypeReceipt, nil
 	default:
-		return attestordomain.CommitmentTypeInvalid, errors.Errorf("unsupported commitment type: %s", ct)
+		return CommitmentTypeInvalid, errors.Errorf("unsupported commitment type: %s", ct)
 	}
 }
 

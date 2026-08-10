@@ -15,7 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen/attestation"
-	attestorsvc "github.com/cosmos/ibc/link/internal/service/attestor"
+	"github.com/cosmos/ibc/link/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -73,7 +73,7 @@ func (s *Set) Get(chainID, clientID string) (ProofGenerator, bool) {
 func NewSetFromConfig(
 	cfg config.Config,
 	clientSet *chains.ClientSet,
-	localAttestors *attestorsvc.Service,
+	localAttestors *attestor.Service,
 ) (*Set, error) {
 	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Clients))
 
@@ -84,7 +84,7 @@ func NewSetFromConfig(
 				return nil, errors.Errorf("client %q: attestorSet required for attestation clients", clientCfg.Alias)
 			}
 
-			attestors := make([]attestorsvc.Attestor, 0, len(clientCfg.AttestorSet.Attestors))
+			attestors := make([]attestor.Attestor, 0, len(clientCfg.AttestorSet.Attestors))
 
 			for _, entry := range clientCfg.AttestorSet.Attestors {
 				a, err := resolveAttestor(entry, clientCfg.CounterpartyChainID, localAttestors)
@@ -127,8 +127,8 @@ func NewSetFromConfig(
 func resolveAttestor(
 	entry config.AttestorEntry,
 	watchedChainID string,
-	localAttestors *attestorsvc.Service,
-) (attestorsvc.Attestor, error) {
+	localAttestors *attestor.Service,
+) (attestor.Attestor, error) {
 	switch entry.Type {
 	case config.AttestorTypeRemote:
 		if entry.GRPC == "" {
@@ -136,7 +136,7 @@ func resolveAttestor(
 		}
 
 		// TODO: Support TLS
-		return attestorsvc.NewRemoteFromURL(watchedChainID, entry.Name, entry.Name, "http://"+entry.GRPC), nil
+		return attestor.NewRemoteFromURL(watchedChainID, entry.Name, entry.Name, "http://"+entry.GRPC), nil
 	case config.AttestorTypeLocal:
 		if localAttestors == nil {
 			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)
