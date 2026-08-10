@@ -40,6 +40,7 @@ func TestTransfer_AutoRelay(t *testing.T) {
 	require.NoError(t, transfer.VerifyCommitmentCreated(ctx))
 	require.NoError(t, transfer.VerifyReceiptCreated(ctx))
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
+	require.NoError(t, transfer.VerifyAcknowledgementWritten(ctx, status.GetRecvTx().GetTxHash()))
 	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
 }
 

@@ -240,20 +240,61 @@ func (t *TransferSend) VerifyCommitmentCleared(ctx context.Context) error {
 	return nil
 }
 
-// VerifyAcknowledgementExecuted checks that txHash succeeded with one AckPacket for this packet.
-func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash string) error {
-	receipt, err := t.app.source.evm.TransactionReceipt(ctx, common.HexToHash(txHash))
+func (t *TransferSend) successfulReceipt(
+	ctx context.Context,
+	target endpoint,
+	action string,
+	txHash string,
+) (*types.Receipt, error) {
+	receipt, err := target.evm.TransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
-		return fmt.Errorf(
-			"e2etest: fetch Transfer packet %s acknowledgement transaction %s: %w",
-			t.packetTx.reference(), txHash, err,
+		return nil, fmt.Errorf(
+			"e2etest: fetch Transfer packet %s %s transaction %s: %w",
+			t.packetTx.reference(), action, txHash, err,
 		)
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		return fmt.Errorf(
-			"e2etest: Transfer packet %s acknowledgement transaction %s failed",
-			t.packetTx.reference(), txHash,
+		return nil, fmt.Errorf(
+			"e2etest: Transfer packet %s %s transaction %s failed",
+			t.packetTx.reference(), action, txHash,
 		)
+	}
+	return receipt, nil
+}
+
+// VerifyAcknowledgementWritten checks that txHash succeeded with one WriteAcknowledgement for this packet.
+func (t *TransferSend) VerifyAcknowledgementWritten(ctx context.Context, txHash string) error {
+	receipt, err := t.successfulReceipt(ctx, t.app.destination, "receive", txHash)
+	if err != nil {
+		return err
+	}
+
+	parser := mustBinding(ics26router.NewContractFilterer(t.app.destRouter, nil))
+	events, err := receiptEvents(receipt, t.app.destRouter, parser.ParseWriteAcknowledgement)
+	if err != nil {
+		return fmt.Errorf("e2etest: decode WriteAcknowledgement: %w", err)
+	}
+	matches := 0
+	for _, event := range events {
+		if event.Packet.SourceClient == t.app.sourceClient && event.Packet.Sequence == t.packetTx.Sequence {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return fmt.Errorf(
+			"e2etest: Transfer packet %s receive transaction %s emitted %d matching "+
+				"WriteAcknowledgement events, want 1",
+			t.packetTx.reference(), txHash, matches,
+		)
+	}
+	return nil
+}
+
+// VerifyAcknowledgementExecuted checks that txHash succeeded with one AckPacket for this packet.
+func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash string) error {
+	receipt, err := t.successfulReceipt(ctx, t.app.source, "acknowledgement", txHash)
+	if err != nil {
+		return err
 	}
 
 	parser := mustBinding(ics26router.NewContractFilterer(t.app.sourceRouter, nil))
@@ -270,9 +311,7 @@ func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash
 	if matches != 1 {
 		return fmt.Errorf(
 			"e2etest: Transfer packet %s acknowledgement transaction %s emitted %d matching AckPacket events, want 1",
-			t.packetTx.reference(),
-			txHash,
-			matches,
+			t.packetTx.reference(), txHash, matches,
 		)
 	}
 	return nil
