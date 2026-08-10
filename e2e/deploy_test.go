@@ -252,7 +252,16 @@ func TestDeployIFTBridge(t *testing.T) {
 	perChain := func(chainID, counterparty string) [][]string {
 		return [][]string{
 			{"core", "--chain", chainID, "--yes"},
-			{"client", "--chain", chainID, "--counterparty-chain", counterparty, "--attestors", deployerAddress.Hex(), "--yes"},
+			{
+				"client",
+				"--chain",
+				chainID,
+				"--counterparty-chain",
+				counterparty,
+				"--attestors",
+				deployerAddress.Hex(),
+				"--yes",
+			},
 			{"gmp", "--chain", chainID, "--yes"},
 			{"ift", "--chain", chainID, "--name", "Foo", "--symbol", "FOO", "--yes"},
 		}
@@ -278,8 +287,30 @@ func TestDeployIFTBridge(t *testing.T) {
 
 	sharedClientID := "link-" + chainAID + "-" + chainBID
 	bridges := [][]string{
-		{"ift-bridge", "--chain", chainAID, "--symbol", "FOO", "--client-id", sharedClientID, "--counterparty-ift", iftB, "--yes"},
-		{"ift-bridge", "--chain", chainBID, "--symbol", "FOO", "--client-id", sharedClientID, "--counterparty-ift", iftA, "--yes"},
+		{
+			"ift-bridge",
+			"--chain",
+			chainAID,
+			"--symbol",
+			"FOO",
+			"--client-id",
+			sharedClientID,
+			"--counterparty-ift",
+			iftB,
+			"--yes",
+		},
+		{
+			"ift-bridge",
+			"--chain",
+			chainBID,
+			"--symbol",
+			"FOO",
+			"--client-id",
+			sharedClientID,
+			"--counterparty-ift",
+			iftA,
+			"--yes",
+		},
 	}
 	for _, args := range bridges {
 		stdout, deployErr := driver.Deploy(ctx, args...)
