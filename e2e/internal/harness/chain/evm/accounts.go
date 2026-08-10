@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package evm contains shared ethclient-backed account, signing, and client helpers.
 package evm
 

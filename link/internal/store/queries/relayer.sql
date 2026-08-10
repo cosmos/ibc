@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 -- name: GetRelayRequest :one
 SELECT * FROM relay_requests
 WHERE source_chain_id = sqlc.arg(chain_id)

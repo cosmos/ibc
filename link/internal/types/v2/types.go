@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package v2 contains shared IBC v2 domain types.
 package v2
 

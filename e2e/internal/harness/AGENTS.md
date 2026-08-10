@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # E2E Harness Development Guide for AI Agents
 
 This internal package tree of the e2e module is the black-box e2e harness. Its Link adapter observes the `ibc` binary only through

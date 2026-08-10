@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # IBC Interchain Standards
 
 ![banner](./.github/assets/cosmos-ibc-github.svg)

@@ -143,6 +143,10 @@ func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash
 }
 
 const getRelayRequest = `-- name: GetRelayRequest :one
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 SELECT id, source_chain_id, source_tx_hash, created_at FROM relay_requests
 WHERE source_chain_id = ?1
 AND source_tx_hash = ?2

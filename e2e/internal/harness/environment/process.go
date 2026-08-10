@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package environment
 
 import "github.com/cosmos/ibc/e2e/internal/harness/ibclink"

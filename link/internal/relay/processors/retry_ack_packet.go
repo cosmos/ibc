@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //nolint:dupl // the retry directions are structurally parallel by design
 package processors
 
