@@ -1,0 +1,31 @@
+# Besu execution-layer config for chain ${CHAIN_NAME} (besu-besu).
+# Rendered by ./setup.sh init — edit chains/besu.toml.tmpl, not this copy.
+genesis-file           = "/evm/el-genesis.json"
+data-path              = "/data"
+
+# QBFT signing key — derived from the demo mnemonic at index ${VALIDATOR_INDEX},
+# giving ${VALIDATOR_ADDR}:
+# the sole validator encoded in the genesis extraData for chain ${CHAIN_NAME}.
+node-private-key-file  = "/evm/key"
+
+# Networking — single-validator devnet, but p2p must be enabled or QBFT's pivot
+# selector blocks waiting for peers. Discovery off + no bootnodes keeps each
+# chain solo; A and B never gossip with each other.
+p2p-enabled          = true
+discovery-enabled    = false
+bootnodes            = []
+host-allowlist       = ["*"]
+
+rpc-http-enabled     = true
+rpc-http-host        = "0.0.0.0"
+rpc-http-port        = 8545
+rpc-http-cors-origins = ["*"]
+rpc-http-api         = ["ETH","NET","WEB3","TXPOOL","DEBUG","ADMIN","QBFT"]
+
+rpc-ws-enabled       = true
+rpc-ws-host          = "0.0.0.0"
+rpc-ws-port          = 8546
+rpc-ws-api           = ["ETH","NET","WEB3","TXPOOL"]
+
+sync-mode            = "FULL"
+sync-min-peers       = 0

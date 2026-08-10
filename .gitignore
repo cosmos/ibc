@@ -6,3 +6,6 @@
 
 # macOS
 .DS_Store
+
+logs/
+examples/**/local/
