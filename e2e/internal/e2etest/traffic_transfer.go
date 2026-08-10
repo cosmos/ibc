@@ -4,6 +4,7 @@ package e2etest
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -16,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
@@ -25,6 +27,8 @@ import (
 const (
 	ics20DestPort         = "transfer"
 	defaultTimeoutHorizon = 12 * time.Hour
+	packetCommitmentPath  = byte(1)
+	packetReceiptPath     = byte(2)
 )
 
 var (
@@ -41,6 +45,8 @@ type TransferRequest struct {
 	// Timeout is the destination-relative packet lifetime. Non-positive selects
 	// a far-future-but-valid default; positive values are rounded up to whole seconds.
 	Timeout time.Duration
+	// Memo is forwarded to ICS20 as-is.
+	Memo string
 }
 
 // Transfer drives ICS20 Transfer on a single directed route.
@@ -52,6 +58,7 @@ type Transfer struct {
 	sourceToken    common.Address
 	sourceICS20    common.Address
 	sourceRouter   common.Address
+	destRouter     common.Address
 	destICS20      common.Address
 	sourceClientID string
 	destClientID   string
@@ -148,7 +155,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		SourceClient:     p.app.sourceClientID,
 		DestPort:         ics20DestPort,
 		TimeoutTimestamp: p.timeoutTimestamp,
-		Memo:             "",
+		Memo:             p.request.Memo,
 	}
 	data, err := ics20ABI.Pack("sendTransfer", msg)
 	if err != nil {
@@ -179,6 +186,122 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		sourceBefore:      new(big.Int).Set(p.sourceBefore),
 		destinationBefore: new(big.Int).Set(p.destinationBefore),
 	}, nil
+}
+
+// VerifyCommitmentCreated checks the source commitment at the send transaction's block.
+func (t *TransferSend) VerifyCommitmentCreated(ctx context.Context) error {
+	commitment, err := getCommitment(
+		ctx,
+		t.app.source,
+		t.app.sourceRouter,
+		packetPath(t.app.sourceClientID, packetCommitmentPath, t.packetTx.Sequence),
+		new(big.Int).SetUint64(t.packetTx.SourceBlockNumber),
+	)
+	if err != nil {
+		return fmt.Errorf("e2etest: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
+	}
+	if commitment == ([32]byte{}) {
+		return fmt.Errorf("e2etest: Transfer packet %s source commitment was not created", t.packetTx.reference())
+	}
+	return nil
+}
+
+// VerifyReceiptCreated checks that the destination recorded the packet receipt.
+func (t *TransferSend) VerifyReceiptCreated(ctx context.Context) error {
+	receipt, err := getCommitment(
+		ctx,
+		t.app.destination,
+		t.app.destRouter,
+		packetPath(t.app.destClientID, packetReceiptPath, t.packetTx.Sequence),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("e2etest: query Transfer packet %s destination receipt: %w", t.packetTx.reference(), err)
+	}
+	if receipt == ([32]byte{}) {
+		return fmt.Errorf("e2etest: Transfer packet %s destination receipt was not created", t.packetTx.reference())
+	}
+	return nil
+}
+
+// VerifyCommitmentCleared checks that acknowledgement or timeout removed the source commitment.
+func (t *TransferSend) VerifyCommitmentCleared(ctx context.Context) error {
+	commitment, err := getCommitment(
+		ctx,
+		t.app.source,
+		t.app.sourceRouter,
+		packetPath(t.app.sourceClientID, packetCommitmentPath, t.packetTx.Sequence),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("e2etest: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
+	}
+	if commitment != ([32]byte{}) {
+		return fmt.Errorf("e2etest: Transfer packet %s source commitment was not cleared", t.packetTx.reference())
+	}
+	return nil
+}
+
+// VerifyAcknowledgementExecuted checks that txHash succeeded with one AckPacket for this packet.
+func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash string) error {
+	receipt, err := t.app.source.evm.TransactionReceipt(ctx, common.HexToHash(txHash))
+	if err != nil {
+		return fmt.Errorf(
+			"e2etest: fetch Transfer packet %s acknowledgement transaction %s: %w",
+			t.packetTx.reference(), txHash, err,
+		)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return fmt.Errorf(
+			"e2etest: Transfer packet %s acknowledgement transaction %s failed",
+			t.packetTx.reference(), txHash,
+		)
+	}
+
+	parser := mustBinding(ics26router.NewContractFilterer(t.app.sourceRouter, nil))
+	events, err := receiptEvents(receipt, t.app.sourceRouter, parser.ParseAckPacket)
+	if err != nil {
+		return fmt.Errorf("e2etest: decode AckPacket: %w", err)
+	}
+	matches := 0
+	for _, event := range events {
+		if event.Packet.SourceClient == t.app.sourceClientID && event.Packet.Sequence == t.packetTx.Sequence {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return fmt.Errorf(
+			"e2etest: Transfer packet %s acknowledgement transaction %s emitted %d matching AckPacket events, want 1",
+			t.packetTx.reference(),
+			txHash,
+			matches,
+		)
+	}
+	return nil
+}
+
+func packetPath(clientID string, prefix byte, sequence uint64) common.Hash {
+	path := append([]byte(clientID), prefix)
+	return crypto.Keccak256Hash(binary.BigEndian.AppendUint64(path, sequence))
+}
+
+func getCommitment(
+	ctx context.Context,
+	endpoint endpoint,
+	router common.Address,
+	path common.Hash,
+	blockNumber *big.Int,
+) ([32]byte, error) {
+	var commitment [32]byte
+	err := endpoint.evm.UseContractCaller(func(caller bind.ContractCaller) error {
+		bound, err := ics26router.NewContractCaller(router, caller)
+		if err != nil {
+			return fmt.Errorf("bind ICS26Router %s: %w", router, err)
+		}
+		commitment, err = bound.GetCommitment(&bind.CallOpts{Context: ctx, BlockNumber: blockNumber}, path)
+		return err
+	})
+	return commitment, err
 }
 
 // VerifyDelivered waits for the destination voucher balance to reflect the
