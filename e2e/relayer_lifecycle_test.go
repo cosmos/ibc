@@ -31,24 +31,24 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 	require.NoError(t, err)
 
 	// Keep destination mining paused across restart so delivery cannot finish before the new Relayer is up.
-	var transfer *e2etest.TransferPacket
+	var transfer *e2etest.TransferSend
 	require.NoError(t, mining.WithPaused(ctx, func() error {
 		transfer, err = transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(888_000)})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-		require.NoError(t, e2etest.Relay(ctx, relayer, transfer.Packet()))
+		require.NoError(t, e2etest.Relay(ctx, relayer, transfer.PacketTx()))
 		require.NoError(t, relayer.Stop(ctx))
 		relayer = e2etest.StartRelayer(t, driver, env)
 
 		// The restarted relayer still tracks the packet from its store.
-		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
+		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_PENDING))
 		require.NoError(t, transfer.VerifyNotMinted(ctx))
 		return nil
 	}))
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

@@ -98,22 +98,22 @@ func send(
 	to common.Address,
 	data []byte,
 	sequenceFromReceipt func(*types.Receipt) (uint64, bool, error),
-) (string, uint64, error) {
+) (*types.Receipt, uint64, error) {
 	receipt, err := client.BroadcastTx(ctx, sender, &to, data, nil)
 	if err != nil {
-		return "", 0, fmt.Errorf("e2etest: broadcast transaction: %w", err)
+		return nil, 0, fmt.Errorf("e2etest: broadcast transaction: %w", err)
 	}
 	sequence, found, err := sequenceFromReceipt(receipt)
 	if err != nil {
-		return "", 0, err
+		return nil, 0, err
 	}
 	if !found {
-		return "", 0, fmt.Errorf(
+		return nil, 0, fmt.Errorf(
 			"e2etest: source transaction %s emitted no application send event",
 			receipt.TxHash.Hex(),
 		)
 	}
-	return receipt.TxHash.Hex(), sequence, nil
+	return receipt, sequence, nil
 }
 
 type eventSource struct {

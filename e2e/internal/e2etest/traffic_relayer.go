@@ -17,7 +17,7 @@ import (
 func AwaitState(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
-	packet Packet,
+	packet PacketTx,
 	want relayerv2.PacketState,
 ) (*relayerv2.PacketStatus, error) {
 	if relayer == nil {
@@ -42,14 +42,12 @@ type packetStatusObserver func(context.Context) (*relayerv2.PacketStatus, relaye
 
 func awaitPacketState(
 	ctx context.Context,
-	packet Packet,
+	packet PacketTx,
 	want relayerv2.PacketState,
 	policy ibclink.WaitPolicy,
 	observe packetStatusObserver,
 ) (*relayerv2.PacketStatus, error) {
-	packetID := packetID(packet)
-
-	description := fmt.Sprintf("packet %s to report status %q", packetID, want)
+	description := fmt.Sprintf("packet %s to report status %q", packet, want)
 	return await(
 		ctx,
 		policy.CompletionBudget,
@@ -61,20 +59,20 @@ func awaitPacketState(
 				return nil, false, err
 			}
 			if !ok {
-				return nil, false, fmt.Errorf("packet %s is absent from relayer status", packetID)
+				return nil, false, fmt.Errorf("packet %s is absent from relayer status", packet)
 			}
 			if state != want {
 				return nil, false, fmt.Errorf(
 					"packet %s is %q, want %q",
-					packetID,
+					packet,
 					state,
 					want,
 				)
 			}
-			if err := verifySourceTx(packetID, packet, observed); err != nil {
+			if err := verifySourceTx(packet, observed); err != nil {
 				return nil, true, err
 			}
-			if err := validateTerminalStatus(packetID, state, observed); err != nil {
+			if err := validateTerminalStatus(packet, state, observed); err != nil {
 				return nil, true, err
 			}
 			return observed, true, nil
@@ -87,7 +85,7 @@ func awaitPacketState(
 func AwaitStable(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
-	packet Packet,
+	packet PacketTx,
 	want relayerv2.PacketState,
 ) error {
 	if relayer == nil {
@@ -105,7 +103,7 @@ func AwaitStable(
 
 func awaitStablePacketState(
 	ctx context.Context,
-	packet Packet,
+	packet PacketTx,
 	want relayerv2.PacketState,
 	policy ibclink.WaitPolicy,
 	observe packetStatusObserver,
@@ -118,32 +116,31 @@ func awaitStablePacketState(
 
 func watchPacketState(
 	ctx context.Context,
-	packet Packet,
+	packet PacketTx,
 	want relayerv2.PacketState,
 	policy ibclink.WaitPolicy,
 	observe packetStatusObserver,
 ) error {
-	packetID := packetID(packet)
 	check := func() error {
 		observed, state, ok, err := observe(ctx)
 		if err != nil {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("packet %s must stay present in relayer status", packetID)
+			return fmt.Errorf("packet %s must stay present in relayer status", packet)
 		}
 		if state != want {
-			return fmt.Errorf("packet %s must remain %q, got %q", packetID, want, state)
+			return fmt.Errorf("packet %s must remain %q, got %q", packet, want, state)
 		}
-		if err := verifySourceTx(packetID, packet, observed); err != nil {
+		if err := verifySourceTx(packet, observed); err != nil {
 			return err
 		}
-		return validateTerminalStatus(packetID, state, observed)
+		return validateTerminalStatus(packet, state, observed)
 	}
 	cancellationError := func() error {
 		return fmt.Errorf(
 			"context canceled while watching packet %s stay %q: %w",
-			packetID,
+			packet,
 			want,
 			ctx.Err(),
 		)
@@ -175,7 +172,7 @@ func watchPacketState(
 	}
 }
 
-func packetWaitPolicy(relayer *ibclink.Relayer, packet Packet) (ibclink.WaitPolicy, error) {
+func packetWaitPolicy(relayer *ibclink.Relayer, packet PacketTx) (ibclink.WaitPolicy, error) {
 	if packet.RouteID == "" {
 		return ibclink.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
 	}
@@ -183,7 +180,7 @@ func packetWaitPolicy(relayer *ibclink.Relayer, packet Packet) (ibclink.WaitPoli
 	if !ok {
 		return ibclink.WaitPolicy{}, fmt.Errorf(
 			"e2etest: packet %s has no wait policy for route %q",
-			packetID(packet),
+			packet,
 			packet.RouteID,
 		)
 	}
@@ -192,7 +189,7 @@ func packetWaitPolicy(relayer *ibclink.Relayer, packet Packet) (ibclink.WaitPoli
 
 // Relay submits the packet's source transaction for relaying and confirms the
 // relayer enumerated the packet.
-func Relay(ctx context.Context, relayer *ibclink.Relayer, packet Packet) error {
+func Relay(ctx context.Context, relayer *ibclink.Relayer, packet PacketTx) error {
 	if relayer == nil {
 		return errors.New("e2etest: relayer is required")
 	}
@@ -206,7 +203,7 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet Packet) error {
 	if statusForPacket(statuses, packet) == nil {
 		return fmt.Errorf(
 			"e2etest: relay result for packet %s did not include it: %v",
-			packetID(packet),
+			packet,
 			statuses,
 		)
 	}
@@ -221,7 +218,7 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet Packet) error {
 func observeStatus(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
-	packet Packet,
+	packet PacketTx,
 ) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
 	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
 	if ibclink.IsStatusNotFound(err) {
@@ -242,7 +239,7 @@ func observeStatus(
 	return observed, observed.GetState(), true, nil
 }
 
-func statusForPacket(statuses []*relayerv2.PacketStatus, packet Packet) *relayerv2.PacketStatus {
+func statusForPacket(statuses []*relayerv2.PacketStatus, packet PacketTx) *relayerv2.PacketStatus {
 	for _, status := range statuses {
 		if status.GetSourceClientId() == packet.SourceClient && status.GetSequenceNumber() == packet.Sequence {
 			return status
@@ -251,11 +248,7 @@ func statusForPacket(statuses []*relayerv2.PacketStatus, packet Packet) *relayer
 	return nil
 }
 
-func packetID(packet Packet) string {
-	return fmt.Sprintf("%s-%d", packet.RouteID, packet.Sequence)
-}
-
-func verifySourceTx(packetID string, packet Packet, observed *relayerv2.PacketStatus) error {
+func verifySourceTx(packet PacketTx, observed *relayerv2.PacketStatus) error {
 	if observed == nil {
 		return nil
 	}
@@ -263,7 +256,7 @@ func verifySourceTx(packetID string, packet Packet, observed *relayerv2.PacketSt
 	if sendTx != packet.SourceTxHash {
 		return fmt.Errorf(
 			"e2etest: packet %s status source transaction %q, want %q",
-			packetID,
+			packet,
 			sendTx,
 			packet.SourceTxHash,
 		)
@@ -272,22 +265,22 @@ func verifySourceTx(packetID string, packet Packet, observed *relayerv2.PacketSt
 }
 
 func validateTerminalStatus(
-	packetID string,
+	packet PacketTx,
 	state relayerv2.PacketState,
 	observed *relayerv2.PacketStatus,
 ) error {
 	switch state {
 	case relayerv2.PacketState_PACKET_STATE_TIMED_OUT:
 		if observed.GetTimeoutTx().GetTxHash() == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no timeout transaction", state, packetID)
+			return fmt.Errorf("e2etest: %s packet %s has no timeout transaction", state, packet)
 		}
 	case relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
 		relayerv2.PacketState_PACKET_STATE_REJECTED:
 		if observed.GetRecvTx().GetTxHash() == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no receive transaction", state, packetID)
+			return fmt.Errorf("e2etest: %s packet %s has no receive transaction", state, packet)
 		}
 		if observed.GetAckTx().GetTxHash() == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no acknowledgement transaction", state, packetID)
+			return fmt.Errorf("e2etest: %s packet %s has no acknowledgement transaction", state, packet)
 		}
 	}
 	return nil

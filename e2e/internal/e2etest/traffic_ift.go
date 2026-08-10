@@ -11,6 +11,7 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
@@ -46,9 +47,11 @@ type IFT struct {
 	batcher      common.Address
 }
 
-type IFTPacket struct {
+// IFTSend is the result of an IFT Send: the packet it emitted plus the balance
+// baselines its Verify methods compare against.
+type IFTSend struct {
+	sendResult
 	app                     *IFT
-	packet                  Packet
 	receiver                common.Address
 	amount                  *big.Int
 	sourceBefore            *big.Int
@@ -57,7 +60,7 @@ type IFTPacket struct {
 	timeoutTimestamp        uint64
 }
 
-func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) {
+func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 	amount, err := validAmount(request.Amount)
 	if err != nil {
 		return nil, err
@@ -86,7 +89,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT iftTransfer: %w", err)
 	}
-	txHash, sequence, err := send(
+	receipt, sequence, err := send(
 		ctx,
 		i.source.evm,
 		i.sender,
@@ -97,15 +100,9 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTPacket, error) 
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send IFT on route %q: %w", i.routeID, err)
 	}
-	return &IFTPacket{
-		app: i,
-		packet: Packet{
-			RouteID:      i.routeID,
-			Source:       i.source.chain.ID(),
-			SourceClient: i.sourceClient,
-			SourceTxHash: txHash,
-			Sequence:     sequence,
-		},
+	return &IFTSend{
+		sendResult:              newSendResult(i.routeID, i.source, i.sourceClient, receipt, sequence),
+		app:                     i,
 		receiver:                receiver,
 		amount:                  amount,
 		sourceBefore:            sourceBefore,
@@ -181,45 +178,54 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		)
 	}
 
-	packets := make([]*IFTPacket, len(requests))
+	sends := make([]*IFTSend, len(requests))
 	for k, sequence := range sequences {
-		packets[k] = &IFTPacket{
-			app: i,
-			packet: Packet{
-				RouteID:      i.routeID,
-				Source:       i.source.chain.ID(),
-				SourceClient: i.sourceClient,
-				SourceTxHash: receipt.TxHash.Hex(),
-				Sequence:     sequence,
-			},
+		sends[k] = &IFTSend{
+			sendResult:        newSendResult(i.routeID, i.source, i.sourceClient, receipt, sequence),
+			app:               i,
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
 			destinationBefore: destinationsBefore[k],
 		}
 	}
-	return &IFTBatch{app: i, packets: packets, batcherBefore: batcherBefore, total: total}, nil
+	return &IFTBatch{
+		app:           i,
+		sends:         sends,
+		receipt:       receipt,
+		batcherBefore: batcherBefore,
+		total:         total,
+	}, nil
 }
 
 // IFTBatch is the result of a SendBatch call: several IFT packets emitted
 // from a single source transaction.
 type IFTBatch struct {
 	app           *IFT
-	packets       []*IFTPacket
+	sends         []*IFTSend
+	receipt       *types.Receipt
 	batcherBefore *big.Int
 	total         *big.Int
 }
 
-func (b *IFTBatch) Packets() []Packet {
-	packets := make([]Packet, len(b.packets))
-	for k, packet := range b.packets {
-		packets[k] = packet.Packet()
+// PacketTxs locates every packet the batch emitted, in send order. They all
+// share the batch's single source transaction.
+func (b *IFTBatch) PacketTxs() []PacketTx {
+	packetTxs := make([]PacketTx, len(b.sends))
+	for k, s := range b.sends {
+		packetTxs[k] = s.PacketTx()
 	}
-	return packets
+	return packetTxs
 }
 
+// TxHash is the hex hash of the one source transaction that emitted the batch.
+func (b *IFTBatch) TxHash() string { return b.receipt.TxHash.Hex() }
+
+// Receipt is the batch's source transaction receipt.
+func (b *IFTBatch) Receipt() *types.Receipt { return b.receipt }
+
 func (b *IFTBatch) VerifyDelivered(ctx context.Context) error {
-	for _, packet := range b.packets {
-		if err := packet.VerifyDelivered(ctx); err != nil {
+	for _, s := range b.sends {
+		if err := s.VerifyDelivered(ctx); err != nil {
 			return err
 		}
 	}
@@ -245,12 +251,10 @@ func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
 	return nil
 }
 
-func (p *IFTPacket) Packet() Packet { return p.packet }
-
-func (p *IFTPacket) TimeoutTimestamp() uint64 { return p.timeoutTimestamp }
+func (p *IFTSend) TimeoutTimestamp() uint64 { return p.timeoutTimestamp }
 
 // VerifyBurned checks that the submitted amount left the source sender balance.
-func (p *IFTPacket) VerifyBurned(ctx context.Context) error {
+func (p *IFTSend) VerifyBurned(ctx context.Context) error {
 	want := new(big.Int).Sub(p.sourceBefore, p.amount)
 	got, err := p.app.balance(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sender.Address())
 	if err != nil {
@@ -259,7 +263,7 @@ func (p *IFTPacket) VerifyBurned(ctx context.Context) error {
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s burned balance of %s: got %s, want %s",
-			p.packet.reference(),
+			p.packetTx.reference(),
 			p.app.sender.Address().Hex(),
 			got,
 			want,
@@ -270,12 +274,12 @@ func (p *IFTPacket) VerifyBurned(ctx context.Context) error {
 
 // VerifyDelivered waits for the destination IFT to mint the submitted amount
 // at the submitted receiver.
-func (p *IFTPacket) VerifyDelivered(ctx context.Context) error {
+func (p *IFTSend) VerifyDelivered(ctx context.Context) error {
 	want := new(big.Int).Add(p.destinationBefore, p.amount)
 	return awaitBalance(
 		ctx,
 		p.app.destination.chain,
-		fmt.Sprintf("IFT packet %s mint delivery", p.packet.reference()),
+		fmt.Sprintf("IFT packet %s mint delivery", p.packetTx.reference()),
 		func(ctx context.Context) (*big.Int, error) {
 			return p.app.balance(ctx, p.app.destination.evm, p.app.destIFT, p.receiver)
 		},
@@ -283,7 +287,7 @@ func (p *IFTPacket) VerifyDelivered(ctx context.Context) error {
 	)
 }
 
-func (p *IFTPacket) VerifyNotMinted(ctx context.Context) error {
+func (p *IFTSend) VerifyNotMinted(ctx context.Context) error {
 	got, err := p.app.balance(ctx, p.app.destination.evm, p.app.destIFT, p.receiver)
 	if err != nil {
 		return err
@@ -291,7 +295,7 @@ func (p *IFTPacket) VerifyNotMinted(ctx context.Context) error {
 	if got.Cmp(p.destinationBefore) != 0 {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s not minted balance of %s: got %s, want %s",
-			p.packet.reference(),
+			p.packetTx.reference(),
 			p.receiver.Hex(),
 			got,
 			p.destinationBefore,
@@ -304,7 +308,7 @@ func (p *IFTPacket) VerifyNotMinted(ctx context.Context) error {
 	if supply.Cmp(p.destinationSupplyBefore) != 0 {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s destination total supply: got %s, want %s",
-			p.packet.reference(),
+			p.packetTx.reference(),
 			supply,
 			p.destinationSupplyBefore,
 		)
@@ -313,27 +317,27 @@ func (p *IFTPacket) VerifyNotMinted(ctx context.Context) error {
 }
 
 // VerifyRefunded waits for the source sender balance to be restored after the transfer completes.
-func (p *IFTPacket) VerifyRefunded(ctx context.Context) error {
+func (p *IFTSend) VerifyRefunded(ctx context.Context) error {
 	if err := p.awaitPendingCleared(ctx); err != nil {
 		return err
 	}
 	return p.awaitSourceRefund(ctx)
 }
 
-func (p *IFTPacket) awaitPendingCleared(ctx context.Context) error {
+func (p *IFTSend) awaitPendingCleared(ctx context.Context) error {
 	timing := p.app.source.chain.Timing()
 	_, err := await(
 		ctx,
 		timing.CompletionBudget,
 		timing.PollInterval,
-		fmt.Sprintf("IFT packet %s pending transfer cleared", p.packet.reference()),
+		fmt.Sprintf("IFT packet %s pending transfer cleared", p.packetTx.reference()),
 		func(ctx context.Context) (struct{}, bool, error) {
 			_, err := p.app.pendingTransfer(
 				ctx,
 				p.app.source.evm,
 				p.app.sourceIFT,
 				p.app.sourceClient,
-				p.packet.Sequence,
+				p.packetTx.Sequence,
 			)
 			switch {
 			case err == nil:
@@ -348,11 +352,11 @@ func (p *IFTPacket) awaitPendingCleared(ctx context.Context) error {
 	return err
 }
 
-func (p *IFTPacket) awaitSourceRefund(ctx context.Context) error {
+func (p *IFTSend) awaitSourceRefund(ctx context.Context) error {
 	return awaitBalance(
 		ctx,
 		p.app.source.chain,
-		fmt.Sprintf("IFT packet %s refund", p.packet.reference()),
+		fmt.Sprintf("IFT packet %s refund", p.packetTx.reference()),
 		func(ctx context.Context) (*big.Int, error) {
 			return p.app.balance(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sender.Address())
 		},
@@ -362,15 +366,21 @@ func (p *IFTPacket) awaitSourceRefund(ctx context.Context) error {
 
 // VerifyPending checks that a pending-transfer record exists on the source
 // IFT contract for this packet's sequence, with the expected sender and amount.
-func (p *IFTPacket) VerifyPending(ctx context.Context) error {
-	record, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packet.Sequence)
+func (p *IFTSend) VerifyPending(ctx context.Context) error {
+	record, err := p.app.pendingTransfer(
+		ctx,
+		p.app.source.evm,
+		p.app.sourceIFT,
+		p.app.sourceClient,
+		p.packetTx.Sequence,
+	)
 	if err != nil {
-		return fmt.Errorf("e2etest: IFT packet %s pending transfer: %w", p.packet.reference(), err)
+		return fmt.Errorf("e2etest: IFT packet %s pending transfer: %w", p.packetTx.reference(), err)
 	}
 	if record.Sender != p.app.sender.Address() {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s pending transfer sender: got %s, want %s",
-			p.packet.reference(),
+			p.packetTx.reference(),
 			record.Sender.Hex(),
 			p.app.sender.Address().Hex(),
 		)
@@ -378,7 +388,7 @@ func (p *IFTPacket) VerifyPending(ctx context.Context) error {
 	if record.Amount.Cmp(p.amount) != 0 {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s pending transfer amount: got %s, want %s",
-			p.packet.reference(),
+			p.packetTx.reference(),
 			record.Amount,
 			p.amount,
 		)
@@ -388,18 +398,18 @@ func (p *IFTPacket) VerifyPending(ctx context.Context) error {
 
 // VerifyPendingCleared checks that no pending-transfer record exists for
 // this packet's sequence on the source IFT contract.
-func (p *IFTPacket) VerifyPendingCleared(ctx context.Context) error {
-	_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packet.Sequence)
+func (p *IFTSend) VerifyPendingCleared(ctx context.Context) error {
+	_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packetTx.Sequence)
 	if err == nil {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s pending transfer still present, want cleared",
-			p.packet.reference(),
+			p.packetTx.reference(),
 		)
 	}
 	if !isIFTPendingTransferNotFound(err) {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s pending transfer lookup: want IFTPendingTransferNotFound, got: %w",
-			p.packet.reference(),
+			p.packetTx.reference(),
 			err,
 		)
 	}
