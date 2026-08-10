@@ -32,6 +32,37 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 	require.NoError(t, call.VerifyCounterExecuted(ctx))
 }
 
+func TestGMPCall_Timeout(t *testing.T) {
+	t.Parallel()
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	require.NoError(t, relayer.Stop(ctx))
+	call, err := gmp.Call(ctx, e2etest.GMPRequest{Timeout: packetTimeout})
+	require.NoError(t, err)
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	mining, err := destination.Mining()
+	require.NoError(t, err)
+	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
+	relayer = e2etest.StartRelayer(t, driver, env)
+
+	status, err := e2etest.AwaitState(ctx, relayer, call.Packet(),
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
+	require.NoError(t, err)
+	require.NoError(t, call.VerifyTimeoutExecuted(ctx, status.GetTimeoutTx().GetTxHash()))
+	require.NoError(t, call.VerifyCounterUnchanged(ctx))
+}
+
 // TestGMPCall_ICS27AccountTransfer sends a GMP call whose payload is an
 // erc20.transfer executed by the destination ICS27 account.
 func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
@@ -95,5 +126,5 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
-	require.NoError(t, call.VerifyCounterRejected(ctx))
+	require.NoError(t, call.VerifyCounterUnchanged(ctx))
 }

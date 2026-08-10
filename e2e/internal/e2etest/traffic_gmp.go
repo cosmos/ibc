@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -24,6 +25,9 @@ type GMPRequest struct {
 	Receiver string
 	// Salt defaults to empty, matching sendCall's default account identifier.
 	Salt []byte
+	// Timeout is the destination-relative packet lifetime. Non-positive selects
+	// a far-future-but-valid default; positive values are rounded up to whole seconds.
+	Timeout time.Duration
 }
 
 // GMP drives ICS27 GMP and its default Counter and TestERC20 targets on a
@@ -68,7 +72,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 	if err != nil {
 		return nil, err
 	}
-	timeoutTimestamp, err := destinationTimeout(ctx, g.destination, 0)
+	timeoutTimestamp, err := destinationTimeout(ctx, g.destination, request.Timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +119,17 @@ func (c *GMPCall) VerifyCounterExecuted(ctx context.Context) error {
 	)
 }
 
-// VerifyCounterRejected checks that the destination Counter did not change
-// after an error acknowledgement. Only meaningful when the call's receiver
-// was the bound Counter.
-func (c *GMPCall) VerifyCounterRejected(ctx context.Context) error {
+// VerifyCounterUnchanged checks that the destination Counter did not change.
+// Only meaningful when the call's receiver was the bound Counter.
+func (c *GMPCall) VerifyCounterUnchanged(ctx context.Context) error {
 	return c.verifyCount(ctx, c.before, "unchanged")
+}
+
+// VerifyTimeoutExecuted checks that txHash succeeded with a TimeoutPacket for this packet.
+func (c *GMPCall) VerifyTimeoutExecuted(ctx context.Context, txHash string) error {
+	return verifyPacketTimeout(
+		ctx, c.app.source, c.app.sourceRouter, c.app.sourceClient, c.packet, txHash,
+	)
 }
 
 func (g *GMP) count(ctx context.Context) (*big.Int, error) {

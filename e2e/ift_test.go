@@ -172,12 +172,12 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	require.NoError(t, relayer.Stop(ctx))
 	asymmetricTransfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(4_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 	require.NoError(t, asymmetricTransfer.VerifyBurned(ctx))
 	require.NoError(t, asymmetricTransfer.VerifyPending(ctx))
-	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, destinationMining.AdvanceTime(ctx, packetTimeoutAdvance))
 	require.NoError(t, destinationMining.Mine(ctx, 1))
 	destinationHeight, err := destination.Height(ctx)
 	require.NoError(t, err)
@@ -298,7 +298,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
@@ -361,7 +361,7 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	require.NoError(t, mining.WithPaused(ctx, func() error {
 		transfer, err = iftApp.Send(ctx, e2etest.IFTRequest{
 			Amount:  big.NewInt(3_000_000),
-			Timeout: transferTimeout,
+			Timeout: packetTimeout,
 		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
@@ -680,7 +680,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	for i := range sends {
 		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 			Amount:  big.NewInt(int64(1_000_000 + i)),
-			Timeout: transferTimeout,
+			Timeout: packetTimeout,
 		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
@@ -691,7 +691,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := destination.Mining()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
 
 	relayErrs := make([]error, packetCount)
 	var wg sync.WaitGroup

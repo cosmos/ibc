@@ -62,13 +62,13 @@ func TestTransfer_ManualRelay(t *testing.T) {
 }
 
 const (
-	// transferTimeout must elapse in real time before the relayer times a
+	// packetTimeout must elapse in real time before the relayer times a
 	// packet out (the pipeline gates on the relayer's own clock), so it has
 	// to fit well inside the await budget.
-	transferTimeout = 5 * time.Second
-	// Advance well past transferTimeout so the packet is decisively expired
+	packetTimeout = 5 * time.Second
+	// Advance well past packetTimeout so the packet is decisively expired
 	// when the relayer starts.
-	transferTimeoutAdvance = 5 * transferTimeout
+	packetTimeoutAdvance = 5 * packetTimeout
 )
 
 func TestTransferTimeout_Refund(t *testing.T) {
@@ -87,7 +87,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, relayer.Stop(ctx))
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
 		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 
@@ -95,7 +95,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := chainB.Mining()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
 	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
