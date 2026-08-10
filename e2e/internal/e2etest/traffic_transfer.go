@@ -19,13 +19,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	transfertypes "github.com/cosmos/ibc-go/v11/modules/apps/transfer/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
 
 const (
-	ics20DestPort         = "transfer"
 	defaultTimeoutHorizon = 12 * time.Hour
 )
 
@@ -151,7 +151,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		Amount:           p.request.Amount,
 		Receiver:         p.request.Receiver,
 		SourceClient:     p.app.sourceClientID,
-		DestPort:         ics20DestPort,
+		DestPort:         transfertypes.PortID,
 		TimeoutTimestamp: p.timeoutTimestamp,
 		Memo:             p.request.Memo,
 	}
@@ -414,7 +414,10 @@ func destinationTimeout(
 }
 
 func (i *Transfer) voucherDenom() string {
-	return ics20DestPort + "/" + i.destClientID + "/" + strings.ToLower(i.sourceToken.Hex())
+	return transfertypes.NewDenom(
+		strings.ToLower(i.sourceToken.Hex()),
+		transfertypes.NewHop(transfertypes.PortID, i.destClientID),
+	).Path()
 }
 
 func (i *Transfer) voucherBalance(ctx context.Context, holder string) (*big.Int, error) {
