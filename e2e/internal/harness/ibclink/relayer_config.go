@@ -30,7 +30,6 @@ type RelayerConfig struct {
 	FinalityOffset uint64
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
-	Routes         []RelayerRoute
 	Attestors      []RelayerAttestor
 }
 
@@ -62,13 +61,6 @@ type RelayerAttestor struct {
 	ChainID string // local only
 	GRPC    string // remote only
 	KeyFile string // local only
-}
-
-// RelayerRoute relays the full packet lifecycle for packets sent through
-// SourceClient on SourceChain.
-type RelayerRoute struct {
-	SourceChain  string
-	SourceClient string
 }
 
 // WriteRelayerConfig renders the relayer process configuration YAML.
@@ -106,8 +98,6 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		return fileConfig{}, errors.New("at least one chain is required")
 	case len(cfg.Connections) == 0:
 		return fileConfig{}, errors.New("at least one connection is required")
-	case len(cfg.Routes) == 0:
-		return fileConfig{}, errors.New("at least one route is required")
 	}
 
 	processSigner := signerConfig{Alias: cfg.SignerAlias, Type: signerType}
@@ -162,7 +152,6 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		}
 	}
 
-	sourceClients := make(map[string]struct{}, 2*len(cfg.Connections))
 	for _, connection := range cfg.Connections {
 		ends := make(map[string]clientEndFileConfig, 2)
 		for _, end := range []struct{ chain, client string }{
@@ -175,22 +164,12 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				ClientID: end.client,
 				Type:     "attestation",
 			}
-			sourceClients[end.chain+"/"+end.client] = struct{}{}
 		}
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
 			Alias:   connection.ClientA + "-" + connection.ClientB,
 			ClientA: ends[connection.ChainA+"/"+connection.ClientA],
 			ClientB: ends[connection.ChainB+"/"+connection.ClientB],
 		})
-	}
-	for _, route := range cfg.Routes {
-		if _, ok := sourceClients[route.SourceChain+"/"+route.SourceClient]; !ok {
-			return fileConfig{}, fmt.Errorf(
-				"route source client %q on chain %q is not part of any connection",
-				route.SourceClient,
-				route.SourceChain,
-			)
-		}
 	}
 	return file, nil
 }

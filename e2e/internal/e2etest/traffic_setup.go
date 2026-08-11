@@ -411,11 +411,6 @@ func buildConfig(
 			connections[key] = true
 			config.Connections = append(config.Connections, connection)
 		}
-
-		config.Routes = append(config.Routes, ibclink.RelayerRoute{
-			SourceChain:  sourceChain,
-			SourceClient: clients.SourceClient,
-		})
 	}
 	return config, options
 }

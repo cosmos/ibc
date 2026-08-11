@@ -179,6 +179,5 @@ func testRelayerConfig() RelayerConfig {
 		Connections: []RelayerConnection{{
 			ChainA: "1", ClientA: "client-1", ChainB: "2", ClientB: "client-2",
 		}},
-		Routes: []RelayerRoute{{SourceChain: "1", SourceClient: "client-1"}},
 	}
 }

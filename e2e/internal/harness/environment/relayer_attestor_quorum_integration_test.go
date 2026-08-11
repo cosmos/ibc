@@ -149,7 +149,6 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 				ChainA: chainAID, ClientA: string(connection.A().Locator()),
 				ChainB: chainBID, ClientB: string(connection.B().Locator()),
 			}},
-			Routes:    []ibclink.RelayerRoute{{SourceChain: chainAID, SourceClient: string(connection.A().Locator())}},
 			Attestors: attestors,
 		}
 
