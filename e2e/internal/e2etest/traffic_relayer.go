@@ -241,7 +241,7 @@ func observeStatus(
 
 func statusForPacket(statuses []*relayerv2.PacketStatus, packet PacketTx) *relayerv2.PacketStatus {
 	for _, status := range statuses {
-		if status.GetSourceClientId() == packet.SourceClient && status.GetSequenceNumber() == packet.Sequence {
+		if status.GetSourceClientId() == string(packet.SourceClient) && status.GetSequenceNumber() == packet.Sequence {
 			return status
 		}
 	}

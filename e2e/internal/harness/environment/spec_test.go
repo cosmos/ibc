@@ -15,7 +15,7 @@ func TestSpecValidateMixedGraph(t *testing.T) {
 
 	// Multiple independently identified Attestors may serve the same Client.
 	spec.Attestors = append(spec.Attestors, AttestorSpec{
-		ID: "attestor-3", Client: "client-a", Authority: "attest-a-2",
+		ID: "attestor-3", Client: spec.Connections[0].ARef(), Authority: "attest-a-2",
 	})
 	require.NoError(t, spec.validate())
 }
@@ -71,7 +71,7 @@ func TestSpecValidateStrictVariants(t *testing.T) {
 				connection.A = client
 				s.Connections[0] = connection
 			},
-			want: "client \"client-a\" authority is required",
+			want: `IBC Client "connection-ab/A" authority is required`,
 		},
 		{
 			name: "new IBC Client quorum is required",
@@ -93,7 +93,7 @@ func TestSpecValidateStrictVariants(t *testing.T) {
 				connection.B = client
 				s.Connections[0] = connection
 			},
-			want: "client \"client-b\" locator is required",
+			want: `IBC Client "connection-ab/B" locator is required`,
 		},
 		{
 			name: "Attestor authority is required",
@@ -116,7 +116,7 @@ func TestSpecValidateStrictVariants(t *testing.T) {
 func TestSpecValidateNewClientRequiresAttestor(t *testing.T) {
 	spec := validSpec()
 	spec.Attestors = spec.Attestors[:1]
-	require.ErrorContains(t, spec.validate(), "client \"client-b\" must have at least one Attestor")
+	require.ErrorContains(t, spec.validate(), `IBC Client "connection-ab/B" must have at least one Attestor`)
 }
 
 func TestSpecValidateNewClientQuorumDoesNotExceedAttestors(t *testing.T) {
@@ -126,7 +126,7 @@ func TestSpecValidateNewClientQuorumDoesNotExceedAttestors(t *testing.T) {
 	client.MinRequiredSignatures = 2
 	connection.A = client
 	spec.Connections[0] = connection
-	require.ErrorContains(t, spec.validate(), `client "client-a" requires 2 signatures from 1 Attestors`)
+	require.ErrorContains(t, spec.validate(), `IBC Client "connection-ab/A" requires 2 signatures from 1 Attestors`)
 }
 
 func TestSpecValidateConnectionEndCombinations(t *testing.T) {
@@ -168,7 +168,7 @@ func TestSpecValidateConnectionEndCombinations(t *testing.T) {
 		require.ErrorContains(
 			t,
 			spec.validate(),
-			`existing client "client-a" cannot belong to new IBC Instance "ibc-a"`,
+			`existing IBC Client "connection-ab/A" cannot belong to new IBC Instance "ibc-a"`,
 		)
 	})
 }
@@ -230,26 +230,18 @@ func TestSpecValidateIdentityAndReferences(t *testing.T) {
 			want: "references unknown IBC Instance \"missing\"",
 		},
 		{
-			name: "IBC Client identity is globally unique",
-			mutate: func(s *Spec) {
-				s.Connections = append(s.Connections, ConnectionSpec{
-					ID: "connection-2",
-					A: NewClient{
-						ID: "client-a", IBCInstance: "ibc-a", Authority: "connect-a", MinRequiredSignatures: 1,
-					},
-					B: ExistingClient{
-						ID: "client-c", IBCInstance: "ibc-b", Locator: "client-11",
-					},
-				})
-			},
-			want: "duplicate IBC Client id \"client-a\"",
-		},
-		{
 			name: "Attestor references known IBC Client",
 			mutate: func(s *Spec) {
-				s.Attestors[0].Client = "missing"
+				s.Attestors[0].Client.Connection = "missing"
 			},
-			want: "Attestor \"attestor-1\" references unknown IBC Client \"missing\"",
+			want: `Attestor "attestor-1" references unknown IBC Client "missing/A"`,
+		},
+		{
+			name: "Attestor reference end is valid",
+			mutate: func(s *Spec) {
+				s.Attestors[0].Client.End = 99
+			},
+			want: `has invalid Connection end ConnectionEnd(99)`,
 		},
 	}
 
@@ -263,17 +255,6 @@ func TestSpecValidateIdentityAndReferences(t *testing.T) {
 }
 
 func TestSpecValidateConnectionPair(t *testing.T) {
-	t.Run("client ids differ", func(t *testing.T) {
-		spec := validSpec()
-		connection := spec.Connections[0]
-		clientA := connection.A.(NewClient)
-		clientB := connection.B.(NewClient)
-		clientB.ID = clientA.ID
-		connection.B = clientB
-		spec.Connections[0] = connection
-		require.ErrorContains(t, spec.validate(), "clients must have distinct ids")
-	})
-
 	t.Run("IBC Instances differ", func(t *testing.T) {
 		spec := validSpec()
 		connection := spec.Connections[0]
@@ -284,6 +265,67 @@ func TestSpecValidateConnectionPair(t *testing.T) {
 		spec.Connections[0] = connection
 		require.ErrorContains(t, spec.validate(), "clients must belong to distinct IBC Instances")
 	})
+}
+
+func TestConnectionClientRefsAreStableAndDistinct(t *testing.T) {
+	connection := ConnectionSpec{ID: "connection-ab"}
+	copied := connection
+
+	require.Equal(t, IBCClientRef{Connection: "connection-ab", End: ConnectionEndA}, connection.ARef())
+	require.Equal(t, IBCClientRef{Connection: "connection-ab", End: ConnectionEndB}, connection.BRef())
+	require.Equal(t, connection.ARef(), copied.ARef())
+	require.NotEqual(t, connection.ARef(), connection.BRef())
+}
+
+func TestSpecValidateClientLocatorUniquenessIsInstanceScoped(t *testing.T) {
+	spec := Spec{
+		Chains: []ChainSpec{
+			AttachedEVM{ID: "chain-a", EVMChainID: 1, Endpoint: "a", Timing: testTiming()},
+			AttachedEVM{ID: "chain-b", EVMChainID: 2, Endpoint: "b", Timing: testTiming()},
+			AttachedEVM{ID: "chain-c", EVMChainID: 3, Endpoint: "c", Timing: testTiming()},
+		},
+		IBCInstances: []IBCInstanceSpec{
+			ExistingIBCInstance{ID: "ibc-a", Chain: "chain-a", Locator: "0x1"},
+			ExistingIBCInstance{ID: "ibc-b", Chain: "chain-b", Locator: "0x2"},
+			ExistingIBCInstance{ID: "ibc-c", Chain: "chain-c", Locator: "0x3"},
+		},
+		Connections: []ConnectionSpec{
+			{
+				ID: "ab",
+				A:  ExistingClient{IBCInstance: "ibc-a", Locator: "shared"},
+				B:  ExistingClient{IBCInstance: "ibc-b", Locator: "b"},
+			},
+			{
+				ID: "ac",
+				A:  ExistingClient{IBCInstance: "ibc-a", Locator: "shared"},
+				B:  ExistingClient{IBCInstance: "ibc-c", Locator: "c"},
+			},
+		},
+	}
+	require.ErrorContains(
+		t,
+		spec.validate(),
+		`IBC Clients "ab/A" and "ac/A" on IBC Instance "ibc-a" resolve to duplicate locator "shared"`,
+	)
+
+	spec.Connections[1].A = ExistingClient{IBCInstance: "ibc-c", Locator: "shared"}
+	spec.Connections[1].B = ExistingClient{IBCInstance: "ibc-a", Locator: "a-second"}
+	require.NoError(t, spec.validate(), "the same locator is legal on distinct IBC Instances")
+}
+
+func TestSpecValidateRejectsExistingInstanceAliases(t *testing.T) {
+	spec := validSpec()
+	makeChainAAttached(&spec)
+	spec.IBCInstances = []IBCInstanceSpec{
+		ExistingIBCInstance{ID: "ibc-a", Chain: "chain-a", Locator: "0xrouter"},
+		ExistingIBCInstance{ID: "ibc-b", Chain: "chain-b", Locator: "0xother"},
+		ExistingIBCInstance{ID: "ibc-a-alias", Chain: "chain-a", Locator: "0xrouter"},
+	}
+	require.ErrorContains(
+		t,
+		spec.validate(),
+		`existing IBC Instances "ibc-a" and "ibc-a-alias" on Chain "chain-a" reference duplicate locator "0xrouter"`,
+	)
 }
 
 func TestSpecValidateRejectsPointerClientDeclaration(t *testing.T) {
@@ -342,16 +384,24 @@ func validSpec() Spec {
 			{
 				ID: "connection-ab",
 				A: NewClient{
-					ID: "client-a", IBCInstance: "ibc-a", Authority: "connect-a", MinRequiredSignatures: 1,
+					IBCInstance: "ibc-a", Authority: "connect-a", MinRequiredSignatures: 1,
 				},
 				B: NewClient{
-					ID: "client-b", IBCInstance: "ibc-b", Authority: "connect-b", MinRequiredSignatures: 1,
+					IBCInstance: "ibc-b", Authority: "connect-b", MinRequiredSignatures: 1,
 				},
 			},
 		},
 		Attestors: []AttestorSpec{
-			{ID: "attestor-1", Client: "client-a", Authority: "attest-a"},
-			{ID: "attestor-2", Client: "client-b", Authority: "attest-b"},
+			{
+				ID: "attestor-1", Client: IBCClientRef{
+					Connection: "connection-ab", End: ConnectionEndA,
+				}, Authority: "attest-a",
+			},
+			{
+				ID: "attestor-2", Client: IBCClientRef{
+					Connection: "connection-ab", End: ConnectionEndB,
+				}, Authority: "attest-b",
+			},
 		},
 	}
 }
@@ -359,8 +409,8 @@ func validSpec() Spec {
 func existingConnectionSpec() ConnectionSpec {
 	return ConnectionSpec{
 		ID: "connection-ab",
-		A:  ExistingClient{ID: "client-a", IBCInstance: "ibc-a", Locator: "client-7"},
-		B:  ExistingClient{ID: "client-b", IBCInstance: "ibc-b", Locator: "client-9"},
+		A:  ExistingClient{IBCInstance: "ibc-a", Locator: "client-7"},
+		B:  ExistingClient{IBCInstance: "ibc-b", Locator: "client-9"},
 	}
 }
 

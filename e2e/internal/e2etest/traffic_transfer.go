@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
 
@@ -56,8 +57,8 @@ type Transfer struct {
 	sourceICS20  common.Address
 	sourceRouter common.Address
 	destICS20    common.Address
-	sourceClient string
-	destClient   string
+	sourceClient environment.IBCClientLocator
+	destClient   environment.IBCClientLocator
 }
 
 type PreparedTransfer struct {
@@ -148,7 +149,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		Denom:            p.app.sourceToken,
 		Amount:           p.request.Amount,
 		Receiver:         p.request.Receiver,
-		SourceClient:     p.app.sourceClient,
+		SourceClient:     string(p.app.sourceClient),
 		DestPort:         ics20DestPort,
 		TimeoutTimestamp: p.timeoutTimestamp,
 		Memo:             "",
@@ -299,7 +300,7 @@ func destinationTimeout(
 }
 
 func (i *Transfer) voucherDenom() string {
-	return "transfer/" + i.destClient + "/" + strings.ToLower(i.sourceToken.Hex())
+	return "transfer/" + string(i.destClient) + "/" + strings.ToLower(i.sourceToken.Hex())
 }
 
 func (i *Transfer) voucherBalance(ctx context.Context, holder string) (*big.Int, error) {
@@ -354,7 +355,7 @@ func awaitPacketTimeout(
 	ctx context.Context,
 	source endpoint,
 	router common.Address,
-	sourceClient string,
+	sourceClient environment.IBCClientLocator,
 	packetTx PacketTx,
 ) error {
 	definition := ics26ABI.Events[eventTimeoutPacket]
@@ -374,7 +375,7 @@ func awaitPacketTimeout(
 		},
 		func(event *ics26router.ContractTimeoutPacket) bool {
 			return event.Packet.Sequence == packetTx.Sequence &&
-				event.Packet.SourceClient == sourceClient
+				event.Packet.SourceClient == string(sourceClient)
 		},
 	)
 	return err

@@ -43,7 +43,7 @@ type IFT struct {
 	sourceIFT    common.Address
 	destIFT      common.Address
 	sourceRouter common.Address
-	sourceClient string
+	sourceClient environment.IBCClientLocator
 	batcher      common.Address
 }
 
@@ -85,7 +85,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := iftABI.Pack("iftTransfer", i.sourceClient, receiver.Hex(), amount, timeoutTimestamp)
+	data, err := iftABI.Pack("iftTransfer", string(i.sourceClient), receiver.Hex(), amount, timeoutTimestamp)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT iftTransfer: %w", err)
 	}
@@ -157,7 +157,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		total.Add(total, amount)
 	}
 
-	data, err := iftBatchShimABI.Pack("batchIftTransfer", i.sourceIFT, i.sourceClient, transfers)
+	data, err := iftBatchShimABI.Pack("batchIftTransfer", i.sourceIFT, string(i.sourceClient), transfers)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT batchIftTransfer: %w", err)
 	}
@@ -475,7 +475,7 @@ func (i *IFT) pendingTransfer(
 	ctx context.Context,
 	client *environment.EVM,
 	contract common.Address,
-	clientID string,
+	clientID environment.IBCClientLocator,
 	sequence uint64,
 ) (ift.IIFTMsgsPendingTransfer, error) {
 	var record ift.IIFTMsgsPendingTransfer
@@ -484,7 +484,7 @@ func (i *IFT) pendingTransfer(
 		if err != nil {
 			return fmt.Errorf("e2etest: bind IFT %s: %w", contract, err)
 		}
-		record, err = bound.GetPendingTransfer(&bind.CallOpts{Context: ctx}, clientID, sequence)
+		record, err = bound.GetPendingTransfer(&bind.CallOpts{Context: ctx}, string(clientID), sequence)
 		return err
 	})
 	if err != nil {

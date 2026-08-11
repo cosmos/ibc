@@ -67,12 +67,20 @@ func TestStartRejectsAttestorSignerReuseAcrossClientsBeforeAcquisition(t *testin
 		},
 		Connections: []ConnectionSpec{{
 			ID: "connection-ab",
-			A:  ExistingClient{ID: "client-a", IBCInstance: "ibc-a", Locator: "existing-a"},
-			B:  ExistingClient{ID: "client-b", IBCInstance: "ibc-b", Locator: "existing-b"},
+			A:  ExistingClient{IBCInstance: "ibc-a", Locator: "existing-a"},
+			B:  ExistingClient{IBCInstance: "ibc-b", Locator: "existing-b"},
 		}},
 		Attestors: []AttestorSpec{
-			{ID: "attestor-a", Client: "client-a", Authority: "signer-a"},
-			{ID: "attestor-b", Client: "client-b", Authority: "signer-b"},
+			{
+				ID: "attestor-a", Client: IBCClientRef{
+					Connection: "connection-ab", End: ConnectionEndA,
+				}, Authority: "signer-a",
+			},
+			{
+				ID: "attestor-b", Client: IBCClientRef{
+					Connection: "connection-ab", End: ConnectionEndB,
+				}, Authority: "signer-b",
+			},
 		},
 	}
 	runtime := Runtime{
@@ -95,7 +103,7 @@ func TestStartRejectsAttestorSignerReuseAcrossClientsBeforeAcquisition(t *testin
 	require.ErrorContains(
 		t,
 		err,
-		`Attestors "attestor-a" for IBC Client "client-a" and "attestor-b" for IBC Client "client-b" resolve to the same signer address`,
+		`Attestors "attestor-a" for IBC Client "connection-ab/A" and "attestor-b" for IBC Client "connection-ab/B" resolve to the same signer address`,
 	)
 	require.False(t, called)
 }
@@ -115,7 +123,7 @@ func TestStartRejectsUnauthorizedNewClientBeforeAcquisition(t *testing.T) {
 	require.ErrorContains(
 		t,
 		err,
-		`new IBC Client "client-a" authority must resolve to the new IBC Instance "ibc-a" admin address`,
+		`new IBC Client "connection-ab/A" authority must resolve to the new IBC Instance "ibc-a" admin address`,
 	)
 	require.False(t, called)
 }

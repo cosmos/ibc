@@ -46,11 +46,11 @@ func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
 	return i.ics27GMP
 }
 
-// IBCClient is one resolved end of an IBC Connection. ID is the stable
-// authored identity; Locator is the actual client identifier registered in
-// the host IBC Instance.
+// IBCClient is one resolved end of an IBC Connection. Ref is its stable graph
+// identity; Locator is the actual client identifier registered in the host
+// IBC Instance.
 type IBCClient struct {
-	id                    ClientID
+	ref                   IBCClientRef
 	instance              *IBCInstance
 	locator               IBCClientLocator
 	lightClient           EVMAddress
@@ -59,7 +59,7 @@ type IBCClient struct {
 	minRequiredSignatures uint8
 }
 
-func (c *IBCClient) ID() ClientID                          { return c.id }
+func (c *IBCClient) Ref() IBCClientRef                     { return c.ref }
 func (c *IBCClient) IBCInstance() *IBCInstance             { return c.instance }
 func (c *IBCClient) Locator() IBCClientLocator             { return c.locator }
 func (c *IBCClient) LightClientAddress() EVMAddress        { return c.lightClient }

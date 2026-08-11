@@ -204,8 +204,8 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 		}
 	}
 	for _, connection := range spec.Connections {
-		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			client, ok := declaration.(NewClient)
+		for _, end := range connection.ends() {
+			client, ok := end.declaration.(NewClient)
 			if !ok {
 				continue
 			}
@@ -218,7 +218,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 			if instanceAuthority.Address() != clientAuthority.Address() {
 				return fmt.Errorf(
 					"environment: new IBC Client %q authority must resolve to the new IBC Instance %q admin address",
-					client.ID,
+					end.ref,
 					instance.ID,
 				)
 			}
@@ -227,7 +227,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 
 	type attestorUse struct {
 		id     AttestorID
-		client ClientID
+		client IBCClientRef
 	}
 	// Solidity IBC v3 attestations do not yet include domain separation. Reusing one
 	// signer across Clients would allow the same signed bytes to be replayed in

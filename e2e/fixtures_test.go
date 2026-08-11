@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,16 +35,22 @@ func attestedMesh(chains []environment.ChainSpec) (environment.Spec, environment
 	for i, a := range chainIDs {
 		for _, b := range chainIDs[i+1:] {
 			connectionID := fixtureConnectionID(a, b)
-			spec.Connections = append(spec.Connections, environment.ConnectionSpec{
+			connection := environment.ConnectionSpec{
 				ID: connectionID,
-				A:  meshClient(connectionID, "a", a),
-				B:  meshClient(connectionID, "b", b),
-			})
-			for _, end := range []string{"a", "b"} {
+				A:  meshClient(a),
+				B:  meshClient(b),
+			}
+			spec.Connections = append(spec.Connections, connection)
+			for _, end := range []environment.ConnectionEnd{environment.ConnectionEndA, environment.ConnectionEndB} {
 				attestor := meshAttestorID(connectionID, end)
 				authority := environment.AuthorityID(attestor)
 				spec.Attestors = append(spec.Attestors, environment.AttestorSpec{
-					ID: attestor, Client: fixtureClientID(connectionID, end), Authority: authority,
+					ID: attestor,
+					Client: environment.IBCClientRef{
+						Connection: connectionID,
+						End:        end,
+					},
+					Authority: authority,
 				})
 				authorities[authority] = environment.EVMAuthority{
 					PrivateKeyHex: fmt.Sprintf("%064x", nextKey),
@@ -55,25 +62,24 @@ func attestedMesh(chains []environment.ChainSpec) (environment.Spec, environment
 	return spec, e2etest.RuntimeWithProtocolDeployer(environment.Runtime{Authorities: authorities})
 }
 
-func meshClient(connection environment.ConnectionID, end string, chain environment.ChainID) environment.NewClient {
+func meshClient(chain environment.ChainID) environment.NewClient {
 	return environment.NewClient{
-		ID:                    fixtureClientID(connection, end),
 		IBCInstance:           fixtureInstanceID(chain),
 		Authority:             e2etest.ProtocolAuthorityID,
 		MinRequiredSignatures: 1,
 	}
 }
 
-func meshAttestorID(connection environment.ConnectionID, end string) environment.AttestorID {
-	return environment.AttestorID(fmt.Sprintf("%s-attestor", fixtureClientID(connection, end)))
+func meshAttestorID(connection environment.ConnectionID, end environment.ConnectionEnd) environment.AttestorID {
+	return environment.AttestorID(fmt.Sprintf("%s-%s-attestor", connection, strings.ToLower(end.String())))
 }
 
 // meshAttestorFor returns the Attestor backing the mesh Client hosted on chain
 // and tracking counterparty, hiding that end labels follow sort order.
 func meshAttestorFor(chain, counterparty environment.ChainID) environment.AttestorID {
-	end := "a"
+	end := environment.ConnectionEndA
 	if counterparty < chain {
-		end = "b"
+		end = environment.ConnectionEndB
 	}
 	return meshAttestorID(fixtureConnectionID(chain, counterparty), end)
 }
@@ -104,10 +110,6 @@ func fixtureConnectionID(a, b environment.ChainID) environment.ConnectionID {
 	return environment.ConnectionID(fmt.Sprintf("conn-%s-%s", a, b))
 }
 
-func fixtureClientID(connection environment.ConnectionID, end string) environment.ClientID {
-	return environment.ClientID(fmt.Sprintf("%s-%s", connection, end))
-}
-
 func TestAttestedMesh(t *testing.T) {
 	chains := []environment.ChainSpec{
 		environment.ManagedAnvil{ID: "chain-b", EVMChainID: 2},
@@ -128,13 +130,11 @@ func TestAttestedMesh(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "conn-chain-a-chain-b",
 			A: environment.NewClient{
-				ID:                    "conn-chain-a-chain-b-a",
 				IBCInstance:           "ibc-chain-a",
 				Authority:             e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
 			},
 			B: environment.NewClient{
-				ID:                    "conn-chain-a-chain-b-b",
 				IBCInstance:           "ibc-chain-b",
 				Authority:             e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
@@ -142,13 +142,17 @@ func TestAttestedMesh(t *testing.T) {
 		}},
 		Attestors: []environment.AttestorSpec{
 			{
-				ID:        "conn-chain-a-chain-b-a-attestor",
-				Client:    "conn-chain-a-chain-b-a",
+				ID: "conn-chain-a-chain-b-a-attestor",
+				Client: environment.IBCClientRef{
+					Connection: "conn-chain-a-chain-b", End: environment.ConnectionEndA,
+				},
 				Authority: "conn-chain-a-chain-b-a-attestor",
 			},
 			{
-				ID:        "conn-chain-a-chain-b-b-attestor",
-				Client:    "conn-chain-a-chain-b-b",
+				ID: "conn-chain-a-chain-b-b-attestor",
+				Client: environment.IBCClientRef{
+					Connection: "conn-chain-a-chain-b", End: environment.ConnectionEndB,
+				},
 				Authority: "conn-chain-a-chain-b-b-attestor",
 			},
 		},

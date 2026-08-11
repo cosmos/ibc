@@ -19,7 +19,7 @@ type RouteID string
 type PacketTx struct {
 	RouteID      RouteID
 	Source       environment.ChainID
-	SourceClient string
+	SourceClient environment.IBCClientLocator
 	SourceTxHash string
 	Sequence     uint64
 }
@@ -45,7 +45,7 @@ type sendResult struct {
 func newSendResult(
 	routeID RouteID,
 	source endpoint,
-	sourceClient string,
+	sourceClient environment.IBCClientLocator,
 	receipt *types.Receipt,
 	sequence uint64,
 ) sendResult {

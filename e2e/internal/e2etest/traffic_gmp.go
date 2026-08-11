@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
 )
 
@@ -36,8 +37,8 @@ type GMP struct {
 	sourceGMP    common.Address
 	sourceRouter common.Address
 	counter      common.Address
-	sourceClient string
-	destClient   string
+	sourceClient environment.IBCClientLocator
+	destClient   environment.IBCClientLocator
 	destGMP      common.Address
 	destToken    common.Address
 	defaultCall  []byte
@@ -73,7 +74,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return nil, err
 	}
 	msg := ics27gmp.IICS27GMPMsgsSendCallMsg{
-		SourceClient:     g.sourceClient,
+		SourceClient:     string(g.sourceClient),
 		Receiver:         receiver,
 		Salt:             request.Salt,
 		Payload:          payload,
@@ -142,7 +143,7 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 // constructs on the destination chain for a call sent by sender with salt:
 func (g *GMP) AccountIdentifier(sender common.Address, salt []byte) ics27gmp.IICS27GMPMsgsAccountIdentifier {
 	return ics27gmp.IICS27GMPMsgsAccountIdentifier{
-		ClientId: g.destClient,
+		ClientId: string(g.destClient),
 		Sender:   sender.Hex(),
 		Salt:     salt,
 	}

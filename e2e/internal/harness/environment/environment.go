@@ -16,7 +16,7 @@ type Environment struct {
 	chains      map[ChainID]*Chain
 	instances   map[IBCInstanceID]*IBCInstance
 	connections map[ConnectionID]*Connection
-	clients     map[ClientID]*IBCClient
+	clients     map[IBCClientRef]*IBCClient
 	attestors   map[AttestorID]*Attestor
 
 	effects *effectJournal
@@ -93,10 +93,10 @@ func (e *Environment) Connections() []ConnectionID {
 	return ids
 }
 
-func (e *Environment) IBCClient(id ClientID) (*IBCClient, error) {
-	client, ok := e.clients[id]
+func (e *Environment) IBCClient(ref IBCClientRef) (*IBCClient, error) {
+	client, ok := e.clients[ref]
 	if !ok {
-		return nil, fmt.Errorf("environment: no IBC Client %q", id)
+		return nil, fmt.Errorf("environment: no IBC Client %q", ref)
 	}
 	return client, nil
 }
