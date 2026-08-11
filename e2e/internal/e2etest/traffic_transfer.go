@@ -276,7 +276,7 @@ func (t *TransferSend) VerifyAcknowledgementWritten(ctx context.Context, txHash 
 	}
 	matches := 0
 	for _, event := range events {
-		if event.Packet.SourceClient == t.app.sourceClient && event.Packet.Sequence == t.packetTx.Sequence {
+		if event.Packet.SourceClient == t.app.sourceClientID && event.Packet.Sequence == t.packetTx.Sequence {
 			matches++
 		}
 	}
