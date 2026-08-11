@@ -275,10 +275,10 @@ func validateTerminalStatus(
 			return fmt.Errorf("e2etest: %s packet %s has no timeout transaction", state, packet)
 		}
 		if observed.GetRecvTx().GetTxHash() != "" {
-			return fmt.Errorf("e2etest: %s packet %s has a receive transaction", state, packetID)
+			return fmt.Errorf("e2etest: %s packet %s has a receive transaction", state, packet)
 		}
 		if observed.GetAckTx().GetTxHash() != "" {
-			return fmt.Errorf("e2etest: %s packet %s has an acknowledgement transaction", state, packetID)
+			return fmt.Errorf("e2etest: %s packet %s has an acknowledgement transaction", state, packet)
 		}
 	case relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
 		relayerv2.PacketState_PACKET_STATE_REJECTED:
