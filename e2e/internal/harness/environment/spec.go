@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Graph identities are distinct types so references to different resource
@@ -24,48 +26,7 @@ type (
 	// Existing resource locators are authored identifiers whose concrete
 	// interpretation belongs to realization, not to the desired graph.
 	IBCInstanceLocator string
-	IBCClientLocator   string
 )
-
-// ConnectionEnd identifies one side of an IBC Connection.
-type ConnectionEnd uint8
-
-const (
-	ConnectionEndA ConnectionEnd = iota + 1
-	ConnectionEndB
-)
-
-func (e ConnectionEnd) String() string {
-	switch e {
-	case ConnectionEndA:
-		return "A"
-	case ConnectionEndB:
-		return "B"
-	default:
-		return fmt.Sprintf("ConnectionEnd(%d)", e)
-	}
-}
-
-// IBCClientRef is the stable graph identity of one Connection end. It is
-// derived from graph structure rather than supplied as a separate client name.
-type IBCClientRef struct {
-	Connection ConnectionID
-	End        ConnectionEnd
-}
-
-func (r IBCClientRef) String() string {
-	return fmt.Sprintf("%s/%s", r.Connection, r.End)
-}
-
-func (r IBCClientRef) validate() error {
-	if err := requireValue("IBC Client reference connection", string(r.Connection)); err != nil {
-		return err
-	}
-	if r.End != ConnectionEndA && r.End != ConnectionEndB {
-		return errorsf("IBC Client reference %q has invalid Connection end %s", r, r.End)
-	}
-	return nil
-}
 
 // Spec is the desired IBC resource graph. Typed references determine dependency
 // order; protocol declarations retain authored order while Chains start concurrently.
@@ -73,15 +34,18 @@ type Spec struct {
 	Chains       []ChainSpec
 	IBCInstances []IBCInstanceSpec
 	Connections  []ConnectionSpec
-	Attestors    []AttestorSpec
 }
 
 func (s Spec) snapshot() Spec {
 	out := Spec{
 		Chains:       slices.Clone(s.Chains),
 		IBCInstances: slices.Clone(s.IBCInstances),
-		Connections:  slices.Clone(s.Connections),
-		Attestors:    slices.Clone(s.Attestors),
+		Connections:  make([]ConnectionSpec, len(s.Connections)),
+	}
+	for i, connection := range s.Connections {
+		connection.A = snapshotClient(connection.A)
+		connection.B = snapshotClient(connection.B)
+		out.Connections[i] = connection
 	}
 	return out
 }
@@ -250,17 +214,12 @@ func (i ExistingIBCInstance) validateIBCInstance() error {
 	return requireValue(fmt.Sprintf("IBC Instance %q locator", i.ID), string(i.Locator))
 }
 
-// clientIdentityValue is the common internal identity carried by both Client
-// declaration variants.
-type clientIdentityValue struct {
-	IBCInstance IBCInstanceID
-}
-
 // ClientSpec is sealed because creating an IBC Client and using explicitly
 // identified existing state have different durability and mutation semantics.
 // A Connection may combine either variant at each end.
 type ClientSpec interface {
 	clientSpec()
+	clientAttestors() []AttestorSpec
 }
 
 // NewClient declares an attestation IBC Client to create on its host IBC
@@ -271,128 +230,137 @@ type NewClient struct {
 	IBCInstance           IBCInstanceID
 	Authority             AuthorityID
 	MinRequiredSignatures uint8
+	Attestors             []AttestorSpec
 }
 
-func (NewClient) clientSpec() {}
+func (NewClient) clientSpec()                       {}
+func (c NewClient) clientAttestors() []AttestorSpec { return c.Attestors }
 
-// ExistingClient identifies an already-created IBC Client.
+// ExistingClient identifies an already-created IBC Client by its protocol ID.
 type ExistingClient struct {
 	IBCInstance IBCInstanceID
-	Locator     IBCClientLocator
+	ID          string
+	Attestors   []AttestorSpec
 }
 
-func (ExistingClient) clientSpec() {}
+func (ExistingClient) clientSpec()                       {}
+func (c ExistingClient) clientAttestors() []AttestorSpec { return c.Attestors }
+
+func snapshotClient(spec ClientSpec) ClientSpec {
+	switch client := spec.(type) {
+	case NewClient:
+		client.Attestors = slices.Clone(client.Attestors)
+		return client
+	case ExistingClient:
+		client.Attestors = slices.Clone(client.Attestors)
+		return client
+	default:
+		return spec
+	}
+}
 
 // ConnectionSpec is a reciprocal pair of IBC Clients. Each end independently
-// declares whether the authored Client identity will be created or resolved
-// from an existing protocol locator.
+// declares whether its Client will be created or resolved from an existing
+// protocol ID.
 type ConnectionSpec struct {
 	ID ConnectionID
 	A  ClientSpec
 	B  ClientSpec
 }
 
-func (c ConnectionSpec) ARef() IBCClientRef {
-	return IBCClientRef{Connection: c.ID, End: ConnectionEndA}
-}
-
-func (c ConnectionSpec) BRef() IBCClientRef {
-	return IBCClientRef{Connection: c.ID, End: ConnectionEndB}
-}
-
 type clientEnd struct {
-	ref         IBCClientRef
+	label       string
 	declaration ClientSpec
 }
 
 func (c ConnectionSpec) ends() [2]clientEnd {
 	return [2]clientEnd{
-		{ref: c.ARef(), declaration: c.A},
-		{ref: c.BRef(), declaration: c.B},
+		{label: "A", declaration: c.A},
+		{label: "B", declaration: c.B},
 	}
+}
+
+func clientLabel(connection ConnectionID, end string) string {
+	return fmt.Sprintf("%s/%s", connection, end)
 }
 
 func (c ConnectionSpec) validate() error {
 	if err := requireValue("IBC Connection id", string(c.ID)); err != nil {
 		return err
 	}
-	a, err := validateClientSpec(c.ARef(), c.A)
+	a, err := validateClientSpec(c.ID, "A", c.A)
 	if err != nil {
 		return err
 	}
-	b, err := validateClientSpec(c.BRef(), c.B)
+	b, err := validateClientSpec(c.ID, "B", c.B)
 	if err != nil {
 		return err
 	}
-	if a.IBCInstance == b.IBCInstance {
+	if a == b {
 		return errorsf("IBC Connection %q: clients must belong to distinct IBC Instances", c.ID)
 	}
 	return nil
 }
 
-func validateClientSpec(ref IBCClientRef, spec ClientSpec) (clientIdentityValue, error) {
+func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) (IBCInstanceID, error) {
 	var (
-		client       clientIdentityValue
+		instance     IBCInstanceID
 		variantField string
 		variantValue string
 	)
 	switch declaration := spec.(type) {
 	case NewClient:
-		client = clientIdentityValue{IBCInstance: declaration.IBCInstance}
+		instance = declaration.IBCInstance
 		variantField = "authority"
 		variantValue = string(declaration.Authority)
 		if declaration.MinRequiredSignatures == 0 {
-			return clientIdentityValue{}, errorsf(
-				"IBC Connection %q client %q minimum required signatures must be greater than zero",
-				ref.Connection,
-				ref,
+			return "", errorsf(
+				"IBC Client %q minimum required signatures must be greater than zero",
+				clientLabel(connectionID, end),
 			)
 		}
 	case ExistingClient:
-		client = clientIdentityValue{IBCInstance: declaration.IBCInstance}
-		variantField = "locator"
-		variantValue = string(declaration.Locator)
+		instance = declaration.IBCInstance
+		variantField = "id"
+		variantValue = declaration.ID
 	default:
-		return clientIdentityValue{}, errorsf(
+		return "", errorsf(
 			"IBC Connection %q end %s: unsupported declaration %T; use a concrete value",
-			ref.Connection,
-			ref.End,
+			connectionID,
+			end,
 			spec,
 		)
 	}
 
 	if err := requireValue(
-		fmt.Sprintf("IBC Client %q IBC Instance", ref),
-		string(client.IBCInstance),
+		fmt.Sprintf("IBC Client %q IBC Instance", clientLabel(connectionID, end)),
+		string(instance),
 	); err != nil {
-		return clientIdentityValue{}, err
+		return "", err
 	}
 	if err := requireValue(
-		fmt.Sprintf("IBC Client %q %s", ref, variantField),
+		fmt.Sprintf("IBC Client %q %s", clientLabel(connectionID, end), variantField),
 		variantValue,
 	); err != nil {
-		return clientIdentityValue{}, err
+		return "", err
 	}
-	return client, nil
+	return instance, nil
 }
 
-func clientIdentity(spec ClientSpec) clientIdentityValue {
+func clientIBCInstance(spec ClientSpec) IBCInstanceID {
 	switch declaration := spec.(type) {
 	case NewClient:
-		return clientIdentityValue{IBCInstance: declaration.IBCInstance}
+		return declaration.IBCInstance
 	case ExistingClient:
-		return clientIdentityValue{IBCInstance: declaration.IBCInstance}
+		return declaration.IBCInstance
 	default:
 		panic(fmt.Sprintf("environment: unsupported validated IBC Client declaration %T", spec))
 	}
 }
 
-// AttestorSpec declares an Attestor scoped to one authored IBC Client. It signs
-// that Client's attestations using a stable runtime authority binding. Its
-// observed counterparty IBC Instance is derived from the Client's Connection.
+// AttestorSpec declares an Attestor for the Client that contains it.
 type AttestorSpec struct {
 	ID        AttestorID
-	Client    IBCClientRef
 	Authority AuthorityID
 }
 
@@ -456,10 +424,14 @@ func (s Spec) validate() error {
 			)
 		}
 		if existing, ok := instance.(ExistingIBCInstance); ok {
+			locator := existing.Locator
+			if common.IsHexAddress(string(locator)) {
+				locator = IBCInstanceLocator(common.HexToAddress(string(locator)).Hex())
+			}
 			key := struct {
 				chain   ChainID
 				locator IBCInstanceLocator
-			}{chain: existing.Chain, locator: existing.Locator}
+			}{chain: existing.Chain, locator: locator}
 			if previous, exists := existingInstanceLocators[key]; exists {
 				return errorsf(
 					"existing IBC Instances %q and %q on Chain %q reference duplicate locator %q",
@@ -475,8 +447,8 @@ func (s Spec) validate() error {
 	}
 
 	connections := make(map[ConnectionID]struct{}, len(s.Connections))
-	clients := make(map[IBCClientRef]ClientSpec, 2*len(s.Connections))
-	locatorsByInstance := make(map[IBCInstanceID]map[IBCClientLocator]IBCClientRef)
+	clientIDsByInstance := make(map[IBCInstanceID]map[string]string)
+	attestors := make(map[AttestorID]struct{})
 	for _, connection := range s.Connections {
 		if err := connection.validate(); err != nil {
 			return err
@@ -485,78 +457,62 @@ func (s Spec) validate() error {
 			return errorsf("duplicate IBC Connection id %q", connection.ID)
 		}
 		for _, end := range connection.ends() {
-			client := clientIdentity(end.declaration)
-			if !contains(instances, client.IBCInstance) {
+			label := clientLabel(connection.ID, end.label)
+			instance := clientIBCInstance(end.declaration)
+			if !contains(instances, instance) {
 				return errorsf(
 					"IBC Client %q references unknown IBC Instance %q",
-					end.ref,
-					client.IBCInstance,
+					label,
+					instance,
 				)
 			}
-			if _, existing := end.declaration.(ExistingClient); existing && contains(newInstances, client.IBCInstance) {
+			if _, existing := end.declaration.(ExistingClient); existing && contains(newInstances, instance) {
 				return errorsf(
 					"existing IBC Client %q cannot belong to new IBC Instance %q",
-					end.ref,
-					client.IBCInstance,
+					label,
+					instance,
 				)
 			}
-			locator := clientLocator(end.ref, end.declaration)
-			locators := locatorsByInstance[client.IBCInstance]
-			if locators == nil {
-				locators = make(map[IBCClientLocator]IBCClientRef)
-				locatorsByInstance[client.IBCInstance] = locators
+			id := clientID(connection.ID, end.label, end.declaration)
+			ids := clientIDsByInstance[instance]
+			if ids == nil {
+				ids = make(map[string]string)
+				clientIDsByInstance[instance] = ids
 			}
-			if previous, exists := locators[locator]; exists {
+			if previous, exists := ids[id]; exists {
 				return errorsf(
-					"IBC Clients %q and %q on IBC Instance %q resolve to duplicate locator %q",
-					previous, end.ref, client.IBCInstance, locator,
+					"IBC Clients %q and %q on IBC Instance %q resolve to duplicate id %q",
+					previous, label, instance, id,
 				)
 			}
-			locators[locator] = end.ref
-			clients[end.ref] = end.declaration
-		}
-		connections[connection.ID] = struct{}{}
-	}
+			ids[id] = label
 
-	attestors := make(map[AttestorID]struct{}, len(s.Attestors))
-	attestorsByClient := make(map[IBCClientRef]int, len(s.Attestors))
-	for _, attestor := range s.Attestors {
-		if err := requireValue("Attestor id", string(attestor.ID)); err != nil {
-			return err
-		}
-		if _, exists := attestors[attestor.ID]; exists {
-			return errorsf("duplicate Attestor id %q", attestor.ID)
-		}
-		if err := attestor.Client.validate(); err != nil {
-			return err
-		}
-		if _, exists := clients[attestor.Client]; !exists {
-			return errorsf("Attestor %q references unknown IBC Client %q", attestor.ID, attestor.Client)
-		}
-		if err := requireValue(
-			fmt.Sprintf("Attestor %q authority", attestor.ID),
-			string(attestor.Authority),
-		); err != nil {
-			return err
-		}
-		attestors[attestor.ID] = struct{}{}
-		attestorsByClient[attestor.Client]++
-	}
-	for _, connection := range s.Connections {
-		for _, end := range connection.ends() {
-			client, isNew := end.declaration.(NewClient)
-			if isNew && attestorsByClient[end.ref] == 0 {
-				return errorsf("IBC Client %q must have at least one Attestor", end.ref)
+			clientAttestors := end.declaration.clientAttestors()
+			for _, attestor := range clientAttestors {
+				if err := requireValue("Attestor id", string(attestor.ID)); err != nil {
+					return err
+				}
+				if _, exists := attestors[attestor.ID]; exists {
+					return errorsf("duplicate Attestor id %q", attestor.ID)
+				}
+				if err := requireValue(
+					fmt.Sprintf("Attestor %q authority", attestor.ID),
+					string(attestor.Authority),
+				); err != nil {
+					return err
+				}
+				attestors[attestor.ID] = struct{}{}
 			}
-			if isNew && int(client.MinRequiredSignatures) > attestorsByClient[end.ref] {
+			if newClient, isNew := end.declaration.(NewClient); isNew && len(clientAttestors) == 0 {
+				return errorsf("IBC Client %q must have at least one Attestor", label)
+			} else if isNew && int(newClient.MinRequiredSignatures) > len(clientAttestors) {
 				return errorsf(
 					"IBC Client %q requires %d signatures from %d Attestors",
-					end.ref,
-					client.MinRequiredSignatures,
-					attestorsByClient[end.ref],
+					label, newClient.MinRequiredSignatures, len(clientAttestors),
 				)
 			}
 		}
+		connections[connection.ID] = struct{}{}
 	}
 
 	return nil

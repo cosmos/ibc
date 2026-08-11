@@ -23,9 +23,8 @@ import (
 
 type connectionDependencies struct {
 	instances       map[IBCInstanceID]*IBCInstance
-	attestorSpecs   map[IBCClientRef][]AttestorSpec
-	existingClients map[IBCClientRef]*IBCClient
-	preparedClients map[IBCClientRef]*solidityibc.PreparedClient
+	existingClients map[string]*IBCClient
+	preparedClients map[string]*solidityibc.PreparedClient
 }
 
 type attestorDependencies struct {
@@ -68,52 +67,63 @@ func acquireConnections(
 	d drivers,
 ) (
 	map[ConnectionID]*Connection,
-	map[IBCClientRef]*IBCClient,
 	error,
 ) {
 	connections := make(map[ConnectionID]*Connection, len(spec.Connections))
-	clients := make(map[IBCClientRef]*IBCClient, 2*len(spec.Connections))
-	attestorUse := make(map[EVMAddress]IBCClientRef)
-	attestorSpecsByClient := make(map[IBCClientRef][]AttestorSpec)
-	for _, declaration := range spec.Attestors {
-		attestorSpecsByClient[declaration.Client] = append(
-			attestorSpecsByClient[declaration.Client],
-			declaration,
-		)
-	}
-	dependencies := connectionDependencies{
-		instances: instances, attestorSpecs: attestorSpecsByClient,
-	}
+	attestorUse := make(map[EVMAddress]string)
+	dependencies := connectionDependencies{instances: instances}
 	if d.prepareConnections != nil {
 		prepared, err := d.prepareConnections(ctx, spec, dependencies, runtime)
 		if err != nil {
-			return nil, nil, fmt.Errorf("prepare IBC Connections failed: %w", err)
+			return nil, fmt.Errorf("prepare IBC Connections failed: %w", err)
 		}
 		dependencies = prepared
+		if err := validatePreparedAttestorUse(spec, dependencies, runtime); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, declaration := range spec.Connections {
 		connection, err := d.acquireConnection(ctx, declaration, dependencies, runtime)
 		if err != nil {
-			return nil, nil, fmt.Errorf("start IBC Connection %q failed: %w", declaration.ID, err)
+			return nil, fmt.Errorf("start IBC Connection %q failed: %w", declaration.ID, err)
 		}
 		if connection == nil || connection.a == nil || connection.b == nil {
-			return nil, nil, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"environment: IBC Connection %q adapter returned an incomplete resolved value",
 				declaration.ID,
 			)
 		}
 		if err := recordResolvedAttestorUse(attestorUse, connection.a, connection.b); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		connections[declaration.ID] = connection
-		clients[connection.a.ref] = connection.a
-		clients[connection.b.ref] = connection.b
 	}
-	return connections, clients, nil
+	return connections, nil
 }
 
-func recordResolvedAttestorUse(seen map[EVMAddress]IBCClientRef, clients ...*IBCClient) error {
+func validatePreparedAttestorUse(spec Spec, dependencies connectionDependencies, runtime Runtime) error {
+	seen := make(map[EVMAddress]string)
+	for _, connection := range spec.Connections {
+		for _, end := range connection.ends() {
+			label := clientLabel(connection.ID, end.label)
+			client := dependencies.existingClients[label]
+			if client == nil {
+				client = &IBCClient{label: label}
+				for _, attestor := range end.declaration.clientAttestors() {
+					account, _ := runtime.evmAccount(attestor.Authority)
+					client.attestors = append(client.attestors, EVMAddress(account.Address().Hex()))
+				}
+			}
+			if err := recordResolvedAttestorUse(seen, client); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func recordResolvedAttestorUse(seen map[EVMAddress]string, clients ...*IBCClient) error {
 	for _, client := range clients {
 		for _, address := range client.attestors {
 			if previous, exists := seen[address]; exists {
@@ -121,10 +131,10 @@ func recordResolvedAttestorUse(seen map[EVMAddress]IBCClientRef, clients ...*IBC
 					"attestor signer %s is reused by resolved IBC Clients %q and %q",
 					address,
 					previous,
-					client.ref,
+					client.label,
 				)
 			}
-			seen[address] = client.ref
+			seen[address] = client.label
 		}
 	}
 	return nil
@@ -133,8 +143,7 @@ func recordResolvedAttestorUse(seen map[EVMAddress]IBCClientRef, clients ...*IBC
 func acquireAttestors(
 	ctx context.Context,
 	spec Spec,
-	instances map[IBCInstanceID]*IBCInstance,
-	clients map[IBCClientRef]*IBCClient,
+	connections map[ConnectionID]*Connection,
 	runtime Runtime,
 	ws workspace,
 	d drivers,
@@ -143,20 +152,37 @@ func acquireAttestors(
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	acquired := make([]attestorAcquisition, len(spec.Attestors))
-	errs := make([]error, len(spec.Attestors))
+	type attestorJob struct {
+		declaration  AttestorSpec
+		dependencies attestorDependencies
+	}
+	var jobs []attestorJob
+	for _, declaration := range spec.Connections {
+		connection := connections[declaration.ID]
+		for _, attestor := range declaration.A.clientAttestors() {
+			jobs = append(jobs, attestorJob{
+				declaration: attestor,
+				dependencies: attestorDependencies{
+					client: connection.a, observed: connection.b.instance,
+				},
+			})
+		}
+		for _, attestor := range declaration.B.clientAttestors() {
+			jobs = append(jobs, attestorJob{
+				declaration: attestor,
+				dependencies: attestorDependencies{
+					client: connection.b, observed: connection.a.instance,
+				},
+			})
+		}
+	}
+
+	acquired := make([]attestorAcquisition, len(jobs))
+	errs := make([]error, len(jobs))
 	var wg sync.WaitGroup
-	for i, declaration := range spec.Attestors {
+	for i, job := range jobs {
 		wg.Go(func() {
-			observed, err := observedInstanceForClient(spec.Connections, declaration.Client, instances)
-			if err != nil {
-				errs[i] = err
-				cancel()
-				return
-			}
-			acquisition, err := d.acquireAttestor(ctx, declaration, attestorDependencies{
-				client: clients[declaration.Client], observed: observed,
-			}, runtime, ws)
+			acquisition, err := d.acquireAttestor(ctx, job.declaration, job.dependencies, runtime, ws)
 			if err != nil {
 				if acquisition.release != nil {
 					effects.append(cleanupEffect{
@@ -164,14 +190,14 @@ func acquireAttestors(
 						release:     acquisition.release,
 					})
 				}
-				errs[i] = fmt.Errorf("start Attestor %q failed: %w", declaration.ID, err)
+				errs[i] = fmt.Errorf("start Attestor %q failed: %w", job.declaration.ID, err)
 				cancel()
 				return
 			}
 			if acquisition.attestor == nil || acquisition.release == nil {
 				errs[i] = fmt.Errorf(
 					"environment: Attestor %q adapter returned an incomplete acquisition",
-					declaration.ID,
+					job.declaration.ID,
 				)
 				cancel()
 				return
@@ -190,28 +216,9 @@ func acquireAttestors(
 	}
 	attestors := make(map[AttestorID]*Attestor, len(acquired))
 	for i, acquisition := range acquired {
-		attestors[spec.Attestors[i].ID] = acquisition.attestor
+		attestors[jobs[i].declaration.ID] = acquisition.attestor
 	}
 	return attestors, nil
-}
-
-func observedInstanceForClient(
-	connections []ConnectionSpec,
-	ref IBCClientRef,
-	instances map[IBCInstanceID]*IBCInstance,
-) (*IBCInstance, error) {
-	for _, connection := range connections {
-		if connection.ID != ref.Connection {
-			continue
-		}
-		switch ref.End {
-		case ConnectionEndA:
-			return instances[clientIdentity(connection.B).IBCInstance], nil
-		case ConnectionEndB:
-			return instances[clientIdentity(connection.A).IBCInstance], nil
-		}
-	}
-	return nil, fmt.Errorf("environment: no counterparty IBC Instance for Client %q", ref)
 }
 
 func acquireIBCInstance(
@@ -271,54 +278,57 @@ func prepareConnections(
 	dependencies connectionDependencies,
 	runtime Runtime,
 ) (connectionDependencies, error) {
-	dependencies.existingClients = make(map[IBCClientRef]*IBCClient)
-	dependencies.preparedClients = make(map[IBCClientRef]*solidityibc.PreparedClient)
+	dependencies.existingClients = make(map[string]*IBCClient)
+	dependencies.preparedClients = make(map[string]*solidityibc.PreparedClient)
 
 	for _, connection := range spec.Connections {
 		ends := connection.ends()
-		locators := map[ConnectionEnd]IBCClientLocator{
-			ConnectionEndA: clientLocator(connection.ARef(), connection.A),
-			ConnectionEndB: clientLocator(connection.BRef(), connection.B),
+		clientIDs := map[string]string{
+			"A": clientID(connection.ID, "A", connection.A),
+			"B": clientID(connection.ID, "B", connection.B),
 		}
 		for index, end := range ends {
 			counterpartyEnd := ends[1-index]
-			identity := clientIdentity(end.declaration)
+			label := clientLabel(connection.ID, end.label)
+			instanceID := clientIBCInstance(end.declaration)
 			switch client := end.declaration.(type) {
 			case ExistingClient:
 				resolved, err := acquireIBCClient(
 					ctx,
-					end.ref,
+					connection.ID,
+					end.label,
 					client,
-					locators,
+					clientIDs,
 					dependencies,
 					runtime,
 				)
 				if err != nil {
 					return dependencies, fmt.Errorf(
 						"prepare existing IBC Client %q: %w",
-						end.ref,
+						label,
 						err,
 					)
 				}
-				dependencies.existingClients[end.ref] = resolved
+				dependencies.existingClients[label] = resolved
 			case NewClient:
-				instance := dependencies.instances[identity.IBCInstance]
+				instance := dependencies.instances[instanceID]
 				setup, err := solidityIBCSetup(ctx, instance.chain)
 				if err != nil {
 					return dependencies, err
 				}
 				authority, _ := runtime.evmAccount(client.Authority)
-				counterparty := clientIdentity(counterpartyEnd.declaration)
-				header, err := evmHeader(ctx, dependencies.instances[counterparty.IBCInstance].chain)
+				counterparty := clientIBCInstance(counterpartyEnd.declaration)
+				header, err := evmHeader(ctx, dependencies.instances[counterparty].chain)
 				if err != nil {
 					return dependencies, fmt.Errorf(
 						"prepare IBC Client %q counterparty header: %w",
-						end.ref,
+						label,
 						err,
 					)
 				}
-				attestors := make([]common.Address, 0, len(dependencies.attestorSpecs[end.ref]))
-				for _, declaration := range dependencies.attestorSpecs[end.ref] {
+				attestorSpecs := end.declaration.clientAttestors()
+				attestors := make([]common.Address, 0, len(attestorSpecs))
+				for _, declaration := range attestorSpecs {
 					account, _ := runtime.evmAccount(declaration.Authority)
 					attestors = append(attestors, account.Address())
 				}
@@ -327,8 +337,8 @@ func prepareConnections(
 					authority,
 					common.HexToAddress(string(instance.locator)),
 					solidityibc.AttestationClientConfig{
-						ID:                    string(locators[end.ref.End]),
-						CounterpartyClientID:  string(locators[counterpartyEnd.ref.End]),
+						ID:                    clientIDs[end.label],
+						CounterpartyClientID:  clientIDs[counterpartyEnd.label],
 						Attestors:             attestors,
 						MinRequiredSignatures: client.MinRequiredSignatures,
 						InitialHeight:         header.Number.Uint64(),
@@ -336,9 +346,9 @@ func prepareConnections(
 					},
 				)
 				if err != nil {
-					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", end.ref, err)
+					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", label, err)
 				}
-				dependencies.preparedClients[end.ref] = prepared
+				dependencies.preparedClients[label] = prepared
 			}
 		}
 	}
@@ -351,24 +361,24 @@ func acquireConnection(
 	dependencies connectionDependencies,
 	runtime Runtime,
 ) (*Connection, error) {
-	locators := map[ConnectionEnd]IBCClientLocator{
-		ConnectionEndA: clientLocator(declaration.ARef(), declaration.A),
-		ConnectionEndB: clientLocator(declaration.BRef(), declaration.B),
+	clientIDs := map[string]string{
+		"A": clientID(declaration.ID, "A", declaration.A),
+		"B": clientID(declaration.ID, "B", declaration.B),
 	}
 
 	a, err := acquireIBCClient(
-		ctx, declaration.ARef(), declaration.A, locators, dependencies, runtime,
+		ctx, declaration.ID, "A", declaration.A, clientIDs, dependencies, runtime,
 	)
 	if err != nil {
 		return nil, err
 	}
 	b, err := acquireIBCClient(
-		ctx, declaration.BRef(), declaration.B, locators, dependencies, runtime,
+		ctx, declaration.ID, "B", declaration.B, clientIDs, dependencies, runtime,
 	)
 	if err != nil {
 		return nil, err
 	}
-	if a.counterparty != b.locator || b.counterparty != a.locator {
+	if a.counterpartyID != b.id || b.counterpartyID != a.id {
 		return nil, fmt.Errorf("resolved IBC Clients are not reciprocal")
 	}
 	return &Connection{id: declaration.ID, a: a, b: b}, nil
@@ -376,16 +386,17 @@ func acquireConnection(
 
 func acquireIBCClient(
 	ctx context.Context,
-	ref IBCClientRef,
+	connectionID ConnectionID,
+	end string,
 	declaration ClientSpec,
-	locators map[ConnectionEnd]IBCClientLocator,
+	clientIDs map[string]string,
 	dependencies connectionDependencies,
 	runtime Runtime,
 ) (*IBCClient, error) {
-	identity := clientIdentity(declaration)
-	instance := dependencies.instances[identity.IBCInstance]
-	counterpartyLocator := locators[counterpartyEnd(ref.End)]
-	if resolved := dependencies.existingClients[ref]; resolved != nil {
+	instance := dependencies.instances[clientIBCInstance(declaration)]
+	label := clientLabel(connectionID, end)
+	counterpartyID := clientIDs[counterpartyEnd(end)]
+	if resolved := dependencies.existingClients[label]; resolved != nil {
 		return resolved, nil
 	}
 
@@ -402,31 +413,31 @@ func acquireIBCClient(
 		resolved, err = setup.AttachClient(
 			ctx,
 			common.HexToAddress(string(instance.locator)),
-			string(client.Locator),
-			string(counterpartyLocator),
+			client.ID,
+			counterpartyID,
 		)
 		if err != nil {
 			return nil, err
 		}
 		if attestorErr := requireDeclaredAttestors(
-			ref,
+			label,
 			resolved.Attestors,
-			dependencies.attestorSpecs[ref],
+			declaration.clientAttestors(),
 			runtime,
 		); attestorErr != nil {
 			return nil, attestorErr
 		}
 	case NewClient:
-		prepared := dependencies.preparedClients[ref]
+		prepared := dependencies.preparedClients[label]
 		if prepared == nil {
-			return nil, fmt.Errorf("IBC Client %q was not prepared", ref)
+			return nil, fmt.Errorf("IBC Client %q was not prepared", label)
 		}
 		authority, err := runtime.evmAccount(client.Authority)
 		if err != nil {
 			return nil, err
 		}
 		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, authority); fundingErr != nil {
-			return nil, fmt.Errorf("fund IBC Client %q authority: %w", ref, fundingErr)
+			return nil, fmt.Errorf("fund IBC Client %q authority: %w", label, fundingErr)
 		}
 		resolved, err = prepared.Deploy(ctx)
 		if err != nil {
@@ -441,11 +452,11 @@ func acquireIBCClient(
 		attestors[i] = EVMAddress(address.Hex())
 	}
 	return &IBCClient{
-		ref:                   ref,
+		label:                 label,
 		instance:              instance,
-		locator:               IBCClientLocator(resolved.ID),
+		id:                    resolved.ID,
 		lightClient:           EVMAddress(resolved.Address.Hex()),
-		counterparty:          IBCClientLocator(resolved.CounterpartyClientID),
+		counterpartyID:        resolved.CounterpartyClientID,
 		attestors:             attestors,
 		minRequiredSignatures: resolved.MinRequiredSignatures,
 	}, nil
@@ -468,11 +479,11 @@ func ensureProtocolAuthorityFunded(ctx context.Context, chain *Chain, authority 
 	return funding.EnsureEOABalance(ctx, authority.Address(), minimum)
 }
 
-func counterpartyEnd(end ConnectionEnd) ConnectionEnd {
-	if end == ConnectionEndA {
-		return ConnectionEndB
+func counterpartyEnd(end string) string {
+	if end == "A" {
+		return "B"
 	}
-	return ConnectionEndA
+	return "A"
 }
 
 func acquireAttestor(
@@ -559,16 +570,16 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 	return header, err
 }
 
-func clientLocator(ref IBCClientRef, declaration ClientSpec) IBCClientLocator {
+func clientID(connectionID ConnectionID, end string, declaration ClientSpec) string {
 	if existing, ok := declaration.(ExistingClient); ok {
-		return existing.Locator
+		return existing.ID
 	}
-	hash := sha256.Sum256([]byte("environment-ibc-client-v1\x00" + string(ref.Connection) + "\x00" + ref.End.String()))
-	return IBCClientLocator("link-" + hex.EncodeToString(hash[:]))
+	hash := sha256.Sum256([]byte("environment-ibc-client-v1\x00" + string(connectionID) + "\x00" + end))
+	return "link-" + hex.EncodeToString(hash[:])
 }
 
 func requireDeclaredAttestors(
-	ref IBCClientRef,
+	label string,
 	onChain []common.Address,
 	declarations []AttestorSpec,
 	runtime Runtime,
@@ -584,7 +595,7 @@ func requireDeclaredAttestors(
 				"Attestor %q signer %s is not registered for existing IBC Client %q",
 				declaration.ID,
 				account.Address(),
-				ref,
+				label,
 			)
 		}
 	}

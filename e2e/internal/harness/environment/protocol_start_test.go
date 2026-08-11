@@ -147,7 +147,6 @@ func TestStartRealizesMixedProtocolGraphWithInjectedDrivers(t *testing.T) {
 		},
 		acquireConnection: func(_ context.Context, declaration ConnectionSpec, dependencies connectionDependencies, _ Runtime) (*Connection, error) {
 			require.EqualValues(t, 2, instancesReady.Load())
-			require.Equal(t, []AttestorSpec{spec.Attestors[0]}, dependencies.attestorSpecs[spec.Connections[0].ARef()])
 			connectionReady.Store(true)
 			return resolvedMixedConnection(
 				declaration.ID,
@@ -157,7 +156,7 @@ func TestStartRealizesMixedProtocolGraphWithInjectedDrivers(t *testing.T) {
 		},
 		acquireAttestor: func(_ context.Context, declaration AttestorSpec, dependencies attestorDependencies, _ Runtime, _ workspace) (attestorAcquisition, error) {
 			require.True(t, connectionReady.Load())
-			require.Equal(t, spec.Connections[0].ARef(), dependencies.client.Ref())
+			require.Equal(t, "client-a-onchain", dependencies.client.ID())
 			require.Equal(t, IBCInstanceID("ibc-b"), dependencies.observed.ID())
 			return attestorAcquisition{
 				attestor: &Attestor{
@@ -176,8 +175,7 @@ func TestStartRealizesMixedProtocolGraphWithInjectedDrivers(t *testing.T) {
 
 	connection, err := env.Connection("connection-ab")
 	require.NoError(t, err)
-	require.Equal(t, IBCClientLocator("existing-client-b"), connection.A().CounterpartyLocator())
-	require.Same(t, connection.A(), mustIBCClient(t, env, spec.Connections[0].ARef()))
+	require.Equal(t, "existing-client-b", connection.A().CounterpartyID())
 
 	attestor, err := env.Attestor("attestor-a")
 	require.NoError(t, err)
@@ -227,14 +225,37 @@ func TestConnectionFailureStopsBeforeAttestorsAndCleansChains(t *testing.T) {
 
 func TestResolvedClientsRejectAttestorSignerReuse(t *testing.T) {
 	const signer EVMAddress = "0x1000000000000000000000000000000000000001"
-	seen := make(map[EVMAddress]IBCClientRef)
+	seen := make(map[EVMAddress]string)
 	require.NoError(t, recordResolvedAttestorUse(seen, &IBCClient{
-		ref: IBCClientRef{Connection: "one", End: ConnectionEndA}, attestors: []EVMAddress{signer},
+		label: "one/A", attestors: []EVMAddress{signer},
 	}))
 	err := recordResolvedAttestorUse(seen, &IBCClient{
-		ref: IBCClientRef{Connection: "two", End: ConnectionEndA}, attestors: []EVMAddress{signer},
+		label: "two/A", attestors: []EVMAddress{signer},
 	})
 	require.ErrorContains(t, err, `attestor signer 0x1000000000000000000000000000000000000001 is reused`)
+}
+
+func TestPreparedClientsRejectExistingSignerReuseBeforeDeployment(t *testing.T) {
+	runtime := Runtime{Authorities: map[AuthorityID]EVMAuthority{
+		"new-signer": {PrivateKeyHex: testPrimaryPrivateKeyHex},
+	}}
+	account, err := runtime.evmAccount("new-signer")
+	require.NoError(t, err)
+	spec := Spec{Connections: []ConnectionSpec{{
+		ID: "connection-ab",
+		A:  ExistingClient{ID: "existing", IBCInstance: "ibc-a"},
+		B: NewClient{
+			IBCInstance: "ibc-b", Attestors: []AttestorSpec{{ID: "new", Authority: "new-signer"}},
+		},
+	}}}
+	dependencies := connectionDependencies{existingClients: map[string]*IBCClient{
+		"connection-ab/A": {
+			label: "connection-ab/A", attestors: []EVMAddress{EVMAddress(account.Address().Hex())},
+		},
+	}}
+
+	err = validatePreparedAttestorUse(spec, dependencies, runtime)
+	require.ErrorContains(t, err, "is reused by resolved IBC Clients")
 }
 
 func TestExistingClientRequiresDeclaredAttestorSignerMembership(t *testing.T) {
@@ -246,33 +267,31 @@ func TestExistingClientRequiresDeclaredAttestorSignerMembership(t *testing.T) {
 	require.NoError(t, err)
 	onChain := []common.Address{registered.Address()}
 
-	ref := IBCClientRef{Connection: "connection-ab", End: ConnectionEndA}
-	require.NoError(t, requireDeclaredAttestors(ref, onChain, []AttestorSpec{{
-		ID: "attestor-a", Client: ref, Authority: "registered",
+	label := "connection-ab/A"
+	require.NoError(t, requireDeclaredAttestors(label, onChain, []AttestorSpec{{
+		ID: "attestor-a", Authority: "registered",
 	}}, runtime))
-	err = requireDeclaredAttestors(ref, onChain, []AttestorSpec{{
-		ID: "attestor-a", Client: ref, Authority: "absent",
+	err = requireDeclaredAttestors(label, onChain, []AttestorSpec{{
+		ID: "attestor-a", Authority: "absent",
 	}}, runtime)
 	require.ErrorContains(t, err, `is not registered for existing IBC Client "connection-ab/A"`)
 }
 
-func TestClientLocatorUsesStableReference(t *testing.T) {
-	refA := IBCClientRef{Connection: "connection-ab", End: ConnectionEndA}
-	refB := IBCClientRef{Connection: "connection-ab", End: ConnectionEndB}
+func TestClientIDUsesStableConnectionEnd(t *testing.T) {
 	client := NewClient{IBCInstance: "ibc-a", Authority: "owner", MinRequiredSignatures: 1}
 
-	locator := clientLocator(refA, client)
+	id := clientID("connection-ab", "A", client)
 	require.Equal(
 		t,
-		IBCClientLocator("link-8b79fc938a76adf41b710b8f6a70dc97b29bef1e82ce7492840cdb8f4663512f"),
-		locator,
+		"link-8b79fc938a76adf41b710b8f6a70dc97b29bef1e82ce7492840cdb8f4663512f",
+		id,
 	)
-	require.Equal(t, locator, clientLocator(refA, NewClient{
+	require.Equal(t, id, clientID("connection-ab", "A", NewClient{
 		IBCInstance: "different-instance", Authority: "different-owner", MinRequiredSignatures: 2,
 	}))
-	require.NotEqual(t, locator, clientLocator(refB, client))
-	require.NotEqual(t, locator, clientLocator(IBCClientRef{Connection: "other", End: ConnectionEndA}, client))
-	require.Equal(t, IBCClientLocator("existing"), clientLocator(refA, ExistingClient{Locator: "existing"}))
+	require.NotEqual(t, id, clientID("connection-ab", "B", client))
+	require.NotEqual(t, id, clientID("other", "A", client))
+	require.Equal(t, "existing", clientID("connection-ab", "A", ExistingClient{ID: "existing"}))
 }
 
 func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {
@@ -281,8 +300,8 @@ func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {
 		"ibc-a": {id: "ibc-a"},
 		"ibc-b": {id: "ibc-b"},
 	}
-	clients := map[IBCClientRef]*IBCClient{
-		spec.Connections[0].ARef(): {ref: spec.Connections[0].ARef(), instance: instances["ibc-a"]},
+	connections := map[ConnectionID]*Connection{
+		"connection-ab": resolvedMixedConnection("connection-ab", instances, "signer"),
 	}
 	effects := &effectJournal{}
 	var releases atomic.Int32
@@ -291,8 +310,7 @@ func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {
 	_, err := acquireAttestors(
 		t.Context(),
 		spec,
-		instances,
-		clients,
+		connections,
 		mixedProtocolRuntime(),
 		workspace{privateDir: t.TempDir(), diagnosticsDir: t.TempDir()},
 		drivers{acquireAttestor: func(
@@ -329,16 +347,12 @@ func mixedProtocolSpec() Spec {
 		},
 		Connections: []ConnectionSpec{{
 			ID: "connection-ab",
-			A:  NewClient{IBCInstance: "ibc-a", Authority: "client-owner", MinRequiredSignatures: 1},
-			B:  ExistingClient{IBCInstance: "ibc-b", Locator: "existing-client-b"},
-		}},
-		Attestors: []AttestorSpec{
-			{
-				ID: "attestor-a", Client: IBCClientRef{
-					Connection: "connection-ab", End: ConnectionEndA,
-				}, Authority: "attestor-signer",
+			A: NewClient{
+				IBCInstance: "ibc-a", Authority: "client-owner", MinRequiredSignatures: 1,
+				Attestors: []AttestorSpec{{ID: "attestor-a", Authority: "attestor-signer"}},
 			},
-		},
+			B: ExistingClient{IBCInstance: "ibc-b", ID: "existing-client-b"},
+		}},
 	}
 }
 
@@ -361,25 +375,18 @@ func resolvedMixedConnection(
 	attestor EVMAddress,
 ) *Connection {
 	a := &IBCClient{
-		ref:         IBCClientRef{Connection: id, End: ConnectionEndA},
+		label:       clientLabel(id, "A"),
 		instance:    instances["ibc-a"],
-		locator:     "client-a-onchain",
-		lightClient: "0x2000000000000000000000000000000000000002", counterparty: "existing-client-b",
+		id:          "client-a-onchain",
+		lightClient: "0x2000000000000000000000000000000000000002", counterpartyID: "existing-client-b",
 		attestors: []EVMAddress{attestor}, minRequiredSignatures: 1,
 	}
 	b := &IBCClient{
-		ref:         IBCClientRef{Connection: id, End: ConnectionEndB},
+		label:       clientLabel(id, "B"),
 		instance:    instances["ibc-b"],
-		locator:     "existing-client-b",
-		lightClient: "0x3000000000000000000000000000000000000003", counterparty: "client-a-onchain",
+		id:          "existing-client-b",
+		lightClient: "0x3000000000000000000000000000000000000003", counterpartyID: "client-a-onchain",
 		minRequiredSignatures: 1,
 	}
 	return &Connection{id: id, a: a, b: b}
-}
-
-func mustIBCClient(t *testing.T, env *Environment, ref IBCClientRef) *IBCClient {
-	t.Helper()
-	client, err := env.IBCClient(ref)
-	require.NoError(t, err)
-	return client
 }

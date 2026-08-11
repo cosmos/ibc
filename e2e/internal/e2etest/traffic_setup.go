@@ -81,10 +81,10 @@ type ChainDeployment struct {
 	ICS26Router            common.Address
 }
 
-// RouteClients holds the realized client locators for one directed route.
+// RouteClients holds the protocol client IDs for one directed route.
 type RouteClients struct {
-	SourceClient environment.IBCClientLocator
-	DestClient   environment.IBCClientLocator
+	SourceClientID string
+	DestClientID   string
 }
 
 // Deployment is the e2e traffic-layer view of protocol apps and test tokens.
@@ -271,8 +271,8 @@ func deployApps(
 		sourceClient, destClient, err := resolveRouteClients(env, route)
 		require.NoError(t, err, "e2etest: resolve clients for route %q", route.ID)
 		deployment.routes[route.ID] = RouteClients{
-			SourceClient: sourceClient,
-			DestClient:   destClient,
+			SourceClientID: sourceClient,
+			DestClientID:   destClient,
 		}
 	}
 
@@ -294,12 +294,12 @@ func registerIFTBridges(
 		clients := deployment.routes[route.ID]
 		ends := []struct {
 			chain         environment.ChainID
-			client        environment.IBCClientLocator
+			client        string
 			counterparty  environment.ChainID
 			isDestination bool
 		}{
-			{chain: route.Source, client: clients.SourceClient, counterparty: route.Destination},
-			{chain: route.Destination, client: clients.DestClient, counterparty: route.Source, isDestination: true},
+			{chain: route.Source, client: clients.SourceClientID, counterparty: route.Destination},
+			{chain: route.Destination, client: clients.DestClientID, counterparty: route.Source, isDestination: true},
 		}
 		for _, end := range ends {
 			if end.isDestination && route.SkipDestinationIFTBridge {
@@ -326,12 +326,12 @@ func registerIFTBridge(
 	deployer Signer,
 	chain environment.ChainID,
 	iftToken common.Address,
-	client environment.IBCClientLocator,
+	client string,
 	counterpartyIFT common.Address,
 	callConstructor common.Address,
 ) {
 	t.Helper()
-	data, err := iftABI.Pack("registerIFTBridge", string(client), counterpartyIFT.Hex(), callConstructor)
+	data, err := iftABI.Pack("registerIFTBridge", client, counterpartyIFT.Hex(), callConstructor)
 	require.NoError(t, err, "e2etest: pack IFT registerIFTBridge")
 	_, err = evmAccess.BroadcastTx(t.Context(), deployer.account, &iftToken, data, nil)
 	require.NoError(t, err, "e2etest: register IFT bridge for client %q on Chain %q", client, chain)
@@ -379,7 +379,7 @@ func buildConfig(
 		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
 		client := attestor.IBCClient()
 		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
-		key := chainID + "/" + string(client.Locator())
+		key := chainID + "/" + client.ID()
 		set := attestorSets[key]
 		if set == nil {
 			set = &ibclink.RelayerAttestorSet{Threshold: int(client.MinRequiredSignatures())}
@@ -409,9 +409,9 @@ func buildConfig(
 		destinationChain := options.ChainIDs[string(route.Destination)]
 		connection := ibclink.RelayerConnection{
 			ChainA:  sourceChain,
-			ClientA: string(clients.SourceClient),
+			ClientA: clients.SourceClientID,
 			ChainB:  destinationChain,
-			ClientB: string(clients.DestClient),
+			ClientB: clients.DestClientID,
 		}
 		if connection.ChainB+"/"+connection.ClientB < connection.ChainA+"/"+connection.ClientA {
 			connection.ChainA, connection.ClientA, connection.ChainB, connection.ClientB = connection.ChainB, connection.ClientB, connection.ChainA, connection.ClientA
@@ -426,7 +426,7 @@ func buildConfig(
 
 		config.Routes = append(config.Routes, ibclink.RelayerRoute{
 			SourceChain:  sourceChain,
-			SourceClient: string(clients.SourceClient),
+			SourceClient: clients.SourceClientID,
 		})
 	}
 	return config, options
@@ -447,7 +447,7 @@ func routeWaitPolicy(source, destination environment.Timing) ibclink.WaitPolicy 
 func resolveRouteClients(
 	env *environment.Environment,
 	route Route,
-) (environment.IBCClientLocator, environment.IBCClientLocator, error) {
+) (string, string, error) {
 	for _, id := range env.Connections() {
 		connection, err := env.Connection(id)
 		if err != nil {
@@ -457,9 +457,9 @@ func resolveRouteClients(
 		bChain := connection.B().IBCInstance().Chain().ID()
 		switch {
 		case aChain == route.Source && bChain == route.Destination:
-			return connection.A().Locator(), connection.B().Locator(), nil
+			return connection.A().ID(), connection.B().ID(), nil
 		case bChain == route.Source && aChain == route.Destination:
-			return connection.B().Locator(), connection.A().Locator(), nil
+			return connection.B().ID(), connection.A().ID(), nil
 		}
 	}
 	return "", "", fmt.Errorf(

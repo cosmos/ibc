@@ -46,30 +46,27 @@ func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
 	return i.ics27GMP
 }
 
-// IBCClient is one resolved end of an IBC Connection. Ref is its stable graph
-// identity; Locator is the actual client identifier registered in the host
-// IBC Instance.
+// IBCClient is one resolved end of an IBC Connection. ID is the protocol
+// identifier registered in the host IBC Instance.
 type IBCClient struct {
-	ref                   IBCClientRef
+	label                 string
 	instance              *IBCInstance
-	locator               IBCClientLocator
+	id                    string
 	lightClient           EVMAddress
-	counterparty          IBCClientLocator
+	counterpartyID        string
 	attestors             []EVMAddress
 	minRequiredSignatures uint8
 }
 
-func (c *IBCClient) Ref() IBCClientRef                     { return c.ref }
-func (c *IBCClient) IBCInstance() *IBCInstance             { return c.instance }
-func (c *IBCClient) Locator() IBCClientLocator             { return c.locator }
-func (c *IBCClient) LightClientAddress() EVMAddress        { return c.lightClient }
-func (c *IBCClient) CounterpartyLocator() IBCClientLocator { return c.counterparty }
-func (c *IBCClient) AttestorAddresses() []EVMAddress       { return slices.Clone(c.attestors) }
-func (c *IBCClient) MinRequiredSignatures() uint8          { return c.minRequiredSignatures }
+func (c *IBCClient) ID() string                      { return c.id }
+func (c *IBCClient) IBCInstance() *IBCInstance       { return c.instance }
+func (c *IBCClient) LightClientAddress() EVMAddress  { return c.lightClient }
+func (c *IBCClient) CounterpartyID() string          { return c.counterpartyID }
+func (c *IBCClient) AttestorAddresses() []EVMAddress { return slices.Clone(c.attestors) }
+func (c *IBCClient) MinRequiredSignatures() uint8    { return c.minRequiredSignatures }
 
 // Connection is a ready reciprocal IBC Client pair. A and B preserve the
-// authored end labels; callers can also locate either Client directly through
-// Environment.IBCClient.
+// authored end labels.
 type Connection struct {
 	id ConnectionID
 	a  *IBCClient

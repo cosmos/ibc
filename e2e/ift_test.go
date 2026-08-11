@@ -53,34 +53,20 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 			A: environment.NewClient{
 				IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{
+					ID: attestorAID, Authority: attestorAAuthority,
+				}},
 			},
 			B: environment.NewClient{
 				IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 2,
+				Attestors: []environment.AttestorSpec{
+					{ID: attestorBID, Authority: attestorBAuthority},
+					{ID: attestorCID, Authority: attestorCAuthority},
+					{ID: attestorDID, Authority: attestorDAuthority},
+				},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{
-				ID: attestorAID, Client: environment.IBCClientRef{
-					Connection: "quorum-connection", End: environment.ConnectionEndA,
-				}, Authority: attestorAAuthority,
-			},
-			{
-				ID: attestorBID, Client: environment.IBCClientRef{
-					Connection: "quorum-connection", End: environment.ConnectionEndB,
-				}, Authority: attestorBAuthority,
-			},
-			{
-				ID: attestorCID, Client: environment.IBCClientRef{
-					Connection: "quorum-connection", End: environment.ConnectionEndB,
-				}, Authority: attestorCAuthority,
-			},
-			{
-				ID: attestorDID, Client: environment.IBCClientRef{
-					Connection: "quorum-connection", End: environment.ConnectionEndB,
-				}, Authority: attestorDAuthority,
-			},
-		},
 	}
 	runtime := e2etest.RuntimeWithProtocolDeployer(
 		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
