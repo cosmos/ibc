@@ -4,7 +4,7 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: "/"
-    target-branch: development
+    target-branch: main
     schedule:
       interval: weekly
 
@@ -12,6 +12,6 @@ updates:
     directories:
       - "/link"
       - "/e2e"
-    target-branch: development
+    target-branch: main
     schedule:
       interval: weekly
