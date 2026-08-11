@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # CLI development (located in cmd/ibc/)
 
 1. Use a single `init()` function in main.go to wire all subcommands. Never create init() per CLI file.

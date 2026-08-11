@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2e_test
 
 import (
@@ -48,7 +50,7 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	_, err = chainB.Height(ctx)
 	require.NoError(t, err, "after node restart the destination must be reachable again")
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

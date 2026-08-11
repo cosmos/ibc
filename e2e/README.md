@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Repository E2E Test Surface
 
 This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
@@ -67,7 +69,7 @@ func TestTransfer_AutoRelay(t *testing.T) {
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-    _, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+    _, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
         relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyDelivered(ctx))

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package evm implements txbuilder.TxBuilder for EVM chains: it packs an
 // ICS26Router.updateClient call plus one recvPacket/ackPacket/timeoutPacket
 // call per packet relay item into a single ICS26Router.multicall transaction.

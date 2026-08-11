@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package chains defines chain-agnostic clients for reading chain state.
 package chains
 

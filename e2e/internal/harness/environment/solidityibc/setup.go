@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package solidityibc
 
 import (
@@ -6,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
@@ -33,12 +36,14 @@ type contractBackend interface {
 // Setup performs Solidity IBC setup transactions on one EVM Chain. It borrows the
 // client and never closes it.
 type Setup struct {
-	backend contractBackend
-	chainID *big.Int
+	backend       contractBackend
+	chainID       *big.Int
+	miningTimeout time.Duration
 }
 
 // NewSetup binds Solidity IBC realization to an already-connected EVM client.
-func NewSetup(ctx context.Context, client *ethclient.Client) (*Setup, error) {
+// The mining timeout bounds every setup transaction's mining observation.
+func NewSetup(ctx context.Context, client *ethclient.Client, miningTimeout time.Duration) (*Setup, error) {
 	if client == nil {
 		return nil, fmt.Errorf("solidity IBC setup: nil EVM client")
 	}
@@ -46,17 +51,20 @@ func NewSetup(ctx context.Context, client *ethclient.Client) (*Setup, error) {
 	if err != nil {
 		return nil, fmt.Errorf("solidity IBC setup: query chain id: %w", err)
 	}
-	return newSetup(client, chainID)
+	return newSetup(client, chainID, miningTimeout)
 }
 
-func newSetup(backend contractBackend, chainID *big.Int) (*Setup, error) {
+func newSetup(backend contractBackend, chainID *big.Int, miningTimeout time.Duration) (*Setup, error) {
 	if backend == nil {
 		return nil, fmt.Errorf("solidity IBC setup: nil contract backend")
 	}
 	if chainID == nil || chainID.Sign() <= 0 {
 		return nil, fmt.Errorf("solidity IBC setup: invalid EVM chain id")
 	}
-	return &Setup{backend: backend, chainID: new(big.Int).Set(chainID)}, nil
+	if miningTimeout <= 0 {
+		return nil, fmt.Errorf("solidity IBC setup: mining timeout must be positive")
+	}
+	return &Setup{backend: backend, chainID: new(big.Int).Set(chainID), miningTimeout: miningTimeout}, nil
 }
 
 // DeployInstance deploys AccessManager, ICS26Router implementation, and an
@@ -646,6 +654,8 @@ func (s *Setup) send(
 	return address, tx, nil
 }
 
+// awaitMined waits for the transaction receipt, bounded by the Setup's mining
+// timeout so a lost transaction fails this setup instead of hanging the caller.
 func (s *Setup) awaitMined(
 	ctx context.Context,
 	stage string,
@@ -654,7 +664,9 @@ func (s *Setup) awaitMined(
 	if tx == nil {
 		return nil, fmt.Errorf("solidity IBC %s: transaction was not returned", stage)
 	}
-	receipt, err := bind.WaitMined(ctx, s.backend, tx)
+	waitCtx, cancel := context.WithTimeout(ctx, s.miningTimeout)
+	defer cancel()
+	receipt, err := bind.WaitMined(waitCtx, s.backend, tx)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"solidity IBC %s: wait for transaction %s: %w",

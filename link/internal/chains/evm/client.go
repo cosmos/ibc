@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package evm implements the chain client for EVM chains.
 package evm
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2etest
 
 import (
@@ -73,11 +75,11 @@ func TestRouteWaitPolicy(t *testing.T) {
 }
 
 func TestAwaitStateRequiresRouteWaitPolicy(t *testing.T) {
-	_, err := AwaitState(context.Background(), &ibclink.Relayer{}, Packet{Sequence: 7},
+	_, err := AwaitState(context.Background(), &ibclink.Relayer{}, PacketTx{Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.EqualError(t, err, "e2etest: packet sequence 7 has no route id")
 
-	_, err = AwaitState(context.Background(), &ibclink.Relayer{}, Packet{RouteID: "missing", Sequence: 7},
+	_, err = AwaitState(context.Background(), &ibclink.Relayer{}, PacketTx{RouteID: "missing", Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.EqualError(t, err, `e2etest: packet missing-7 has no wait policy for route "missing"`)
 }
@@ -88,7 +90,7 @@ func TestAwaitStableUsesFreshWindowAfterStateReached(t *testing.T) {
 		StatusPoll:       10 * time.Millisecond,
 		StabilityWindow:  40 * time.Millisecond,
 	}
-	packet := Packet{RouteID: "route", Sequence: 1}
+	packet := PacketTx{RouteID: "route", Sequence: 1}
 	calls := 0
 	started := time.Now()
 	err := awaitStablePacketState(context.Background(), packet,
@@ -112,7 +114,7 @@ func TestAwaitStableRejectsStateChangeDuringWindow(t *testing.T) {
 		StabilityWindow:  time.Second,
 	}
 	calls := 0
-	err := awaitStablePacketState(context.Background(), Packet{RouteID: "route", Sequence: 2},
+	err := awaitStablePacketState(context.Background(), PacketTx{RouteID: "route", Sequence: 2},
 		relayerv2.PacketState_PACKET_STATE_PENDING, policy,
 		func(context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
 			calls++
@@ -131,7 +133,7 @@ func TestAwaitStableObservesAtWindowEnd(t *testing.T) {
 		StabilityWindow:  time.Millisecond,
 	}
 	calls := 0
-	err := awaitStablePacketState(context.Background(), Packet{RouteID: "route", Sequence: 3},
+	err := awaitStablePacketState(context.Background(), PacketTx{RouteID: "route", Sequence: 3},
 		relayerv2.PacketState_PACKET_STATE_PENDING, policy,
 		func(context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
 			calls++
@@ -150,7 +152,7 @@ func TestAwaitStableRevalidatesTerminalStatus(t *testing.T) {
 		StatusPoll:       time.Hour,
 		StabilityWindow:  time.Millisecond,
 	}
-	packet := Packet{RouteID: "route", Sequence: 4, SourceTxHash: "send"}
+	packet := PacketTx{RouteID: "route", Sequence: 4, SourceTxHash: "send"}
 	calls := 0
 	err := awaitStablePacketState(context.Background(), packet,
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED, policy,
@@ -172,7 +174,7 @@ func TestAwaitStableRevalidatesTerminalStatus(t *testing.T) {
 func TestAwaitStableDoesNotTreatParentCancellationAsSuccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	calls := 0
-	err := awaitStablePacketState(ctx, Packet{RouteID: "route", Sequence: 3},
+	err := awaitStablePacketState(ctx, PacketTx{RouteID: "route", Sequence: 3},
 		relayerv2.PacketState_PACKET_STATE_PENDING,
 		ibclink.WaitPolicy{
 			CompletionBudget: time.Second,

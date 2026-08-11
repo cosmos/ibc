@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package livevalidate exercises every network-dependent check a relayer
 // config implies, without starting a runnable process.
 package livevalidate

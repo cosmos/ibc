@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package environment
 
 import (
@@ -541,7 +543,7 @@ func solidityIBCSetup(ctx context.Context, chain *Chain) (*solidityibc.Setup, er
 	var setup *solidityibc.Setup
 	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
 		var setupErr error
-		setup, setupErr = solidityibc.NewSetup(ctx, client.Client())
+		setup, setupErr = solidityibc.NewSetup(ctx, client.Client(), chain.timing.CompletionBudget)
 		return setupErr
 	})
 	if !ok {

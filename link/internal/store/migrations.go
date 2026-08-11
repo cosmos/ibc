@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package store
 
 import (
@@ -16,7 +18,9 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 )
 
-const migrationTemplate = `-- +migrate Up
+const migrationTemplate = `-- SPDX-License-Identifier: Apache-2.0
+
+-- +migrate Up
 -- todo write your migration up here
 -- +migrate Down
 -- todo write your migration down here

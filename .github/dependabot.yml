@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: main
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: gomod
+    directories:
+      - "/link"
+      - "/e2e"
+    target-branch: main
+    schedule:
+      interval: weekly

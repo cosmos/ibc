@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package config contains config and flag parsing logic
 package config
 
@@ -509,18 +511,6 @@ func (c AttestorConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// Locals returns the subset of attestors this process runs itself.
-func (a Attestors) Locals() []AttestorConfig {
-	var locals []AttestorConfig
-	for _, attestor := range a {
-		if attestor.Type == AttestorTypeLocal {
-			locals = append(locals, attestor)
-		}
-	}
-
-	return locals
 }
 
 func (c Signers) Validate() error {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Package deploy is the target-agnostic deployment engine: manifest-driven,
 // idempotent steps over a per-target Target implementation.
 package deploy

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2etest
 
 import (
@@ -44,9 +46,11 @@ type GMP struct {
 // Token returns the destination-chain TestERC20 bound to this GMP.
 func (g *GMP) Token() common.Address { return g.destToken }
 
+// GMPCall is the result of a GMP Call: the packet it emitted plus the Counter
+// baseline its Verify methods compare against.
 type GMPCall struct {
+	sendResult
 	app    *GMP
-	packet Packet
 	before *big.Int
 }
 
@@ -80,7 +84,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack GMP sendCall: %w", err)
 	}
-	txHash, sequence, err := send(
+	receipt, sequence, err := send(
 		ctx,
 		g.source.evm,
 		g.sender,
@@ -92,19 +96,11 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return nil, fmt.Errorf("e2etest: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
-		app: g,
-		packet: Packet{
-			RouteID:      g.routeID,
-			Source:       g.source.chain.ID(),
-			SourceClient: g.sourceClient,
-			SourceTxHash: txHash,
-			Sequence:     sequence,
-		},
-		before: before,
+		sendResult: newSendResult(g.routeID, g.source, g.sourceClient, receipt, sequence),
+		app:        g,
+		before:     before,
 	}, nil
 }
-
-func (c *GMPCall) Packet() Packet { return c.packet }
 
 // VerifyCounterExecuted waits for the destination Counter to change exactly
 // once. Only meaningful when the call's receiver was the bound Counter.
@@ -113,7 +109,7 @@ func (c *GMPCall) VerifyCounterExecuted(ctx context.Context) error {
 	return awaitBalance(
 		ctx,
 		c.app.destination.chain,
-		fmt.Sprintf("GMP packet %s Counter execution", c.packet.reference()),
+		fmt.Sprintf("GMP packet %s Counter execution", c.packetTx.reference()),
 		c.app.count,
 		want,
 	)
@@ -248,7 +244,7 @@ func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) 
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
 			"e2etest: GMP packet %s target %s %s count: got %s, want %s",
-			c.packet.reference(),
+			c.packetTx.reference(),
 			c.app.counter.Hex(),
 			state,
 			got,

@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+
 -- +migrate Up
 
 create table if not exists relayer_tx_submissions (

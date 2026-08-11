@@ -1,8 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+
 help: ## List repository commands
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
+LICENSE_EYE_VERSION ?= 0.8.0
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
@@ -78,12 +81,15 @@ check-test-apps: ## Fail if typed Go contract bindings are stale
 			exit 1; \
 		}
 
+check-license-headers: ## Check SPDX license headers
+	go run github.com/apache/skywalking-eyes/cmd/license-eye@v$(LICENSE_EYE_VERSION) --config .licenserc.yaml header check
+
 check-link: ## Run Link-local checks
 	$(MAKE) -C link check
 
 check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps test-e2e check-e2e-matrix ## Run all repository e2e checks
 
-check: check-link check-e2e ## Run Link and repository e2e checks
+check: check-license-headers check-link check-e2e ## Run license, Link, and repository e2e checks
 
 .PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e \
-	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-link check-e2e check
+	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-license-headers check-link check-e2e check

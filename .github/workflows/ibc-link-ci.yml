@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 name: Link CI
 
 on:
@@ -11,8 +13,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: read-all
 
 defaults:
   run:
@@ -30,8 +31,8 @@ jobs:
       sql: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.sql }}
       proto: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.proto }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
           filters: |
@@ -52,14 +53,16 @@ jobs:
     needs: changes
     if: needs.changes.outputs.link == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
-      - uses: golangci/golangci-lint-action@v9
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.12.2
           working-directory: link
@@ -69,10 +72,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.link == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
@@ -86,13 +91,15 @@ jobs:
     needs: changes
     if: needs.changes.outputs.link == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 30
     env:
       # creates postgres docker container for testing
       TEST_POSTGRES: "true"
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: link/go.mod
           cache-dependency-path: link/go.sum
@@ -104,16 +111,18 @@ jobs:
     needs: changes
     if: needs.changes.outputs.sql == 'true' || needs.changes.outputs.proto == 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: sqlc-dev/setup-sqlc@v5
+      - uses: sqlc-dev/setup-sqlc@bac53b7fb28c039a6c7f5736fd1e89744021bdd6 # v5
         if: needs.changes.outputs.sql == 'true'
         with:
           sqlc-version: "1.30.0"
 
-      - uses: bufbuild/buf-action@v1
+      - uses: bufbuild/buf-action@8c6a16e16f12ba20b6470afa9c2ba9b5ba8c97c3 # v1
         if: needs.changes.outputs.proto == 'true'
         with:
           setup_only: true
@@ -144,6 +153,7 @@ jobs:
     if: always()
     needs: [changes, lint, build, test, verify-codegen]
     runs-on: depot-ubuntu-24.04-4
+    permissions: {}
     steps:
       - name: Check required jobs
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

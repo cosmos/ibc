@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 SQLC_VERSION ?= 1.30.0
 BUF_VERSION ?= 1.70.0
 

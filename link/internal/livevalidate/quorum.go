@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package livevalidate
 
 import (
@@ -17,14 +19,9 @@ import (
 // connection can currently satisfy its attestor quorum against on-chain
 // state.
 func checkAttestorQuorum(ctx context.Context, cfg config.Config, clientSet *chains.ClientSet) error {
-	var signers *signer.Set
-	if len(cfg.Attestors.Locals()) > 0 {
-		var err error
-
-		signers, err = signer.NewSetFromConfig(ctx, cfg.Signers)
-		if err != nil {
-			return errors.Wrap(err, "signers")
-		}
+	signers, err := signer.NewSetFromConfig(ctx, cfg.Signers)
+	if err != nil {
+		return errors.Wrap(err, "signers")
 	}
 
 	local, remote, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers)

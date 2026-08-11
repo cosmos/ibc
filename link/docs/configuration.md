@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Configuration reference
 
 `ibc` reads a single YAML file (filename specified via `--config`, relative to `--home`; default

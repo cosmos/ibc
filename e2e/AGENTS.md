@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Repository E2E Tests Guide for AI Agents
 
 This module contains one root repository-level acceptance package: linear Go tests over the

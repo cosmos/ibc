@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+
 -- +migrate Up
 
 create table if not exists packet_tx_submissions (

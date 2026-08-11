@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2etest
 
 import (
@@ -67,9 +69,11 @@ type PreparedTransfer struct {
 	submitted         bool
 }
 
-type TransferPacket struct {
+// TransferSend is the result of a Transfer Send or Submit: the packet it
+// emitted plus the balance baselines its Verify methods compare against.
+type TransferSend struct {
+	sendResult
 	app               *Transfer
-	packet            Packet
 	receiver          string
 	amount            *big.Int
 	sourceBefore      *big.Int
@@ -78,7 +82,7 @@ type TransferPacket struct {
 
 var errTransferAlreadySubmitted = errors.New("e2etest: prepared Transfer has already been submitted")
 
-func (i *Transfer) Send(ctx context.Context, request TransferRequest) (*TransferPacket, error) {
+func (i *Transfer) Send(ctx context.Context, request TransferRequest) (*TransferSend, error) {
 	prepared, err := i.Prepare(ctx, request)
 	if err != nil {
 		return nil, err
@@ -120,7 +124,7 @@ func (i *Transfer) Prepare(ctx context.Context, request TransferRequest) (*Prepa
 
 // Submit consumes the prepared transfer before broadcasting. A failed attempt
 // cannot be retried because its balance baselines may no longer be current.
-func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferPacket, error) {
+func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 	if p.submitted {
 		return nil, errTransferAlreadySubmitted
 	}
@@ -153,7 +157,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferPacket, error) 
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack ICS20 sendTransfer: %w", err)
 	}
-	txHash, sequence, err := send(
+	receipt, sequence, err := send(
 		ctx,
 		p.app.source.evm,
 		p.app.sender,
@@ -164,15 +168,15 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferPacket, error) 
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send Transfer on route %q: %w", p.app.routeID, err)
 	}
-	return &TransferPacket{
-		app: p.app,
-		packet: Packet{
-			RouteID:      p.app.routeID,
-			Source:       p.app.source.chain.ID(),
-			SourceClient: p.app.sourceClient,
-			SourceTxHash: txHash,
-			Sequence:     sequence,
-		},
+	return &TransferSend{
+		sendResult: newSendResult(
+			p.app.routeID,
+			p.app.source,
+			p.app.sourceClient,
+			receipt,
+			sequence,
+		),
+		app:               p.app,
 		receiver:          p.request.Receiver,
 		amount:            new(big.Int).Set(p.request.Amount),
 		sourceBefore:      new(big.Int).Set(p.sourceBefore),
@@ -180,16 +184,14 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferPacket, error) 
 	}, nil
 }
 
-func (t *TransferPacket) Packet() Packet { return t.packet }
-
 // VerifyDelivered waits for the destination voucher balance to reflect the
 // submitted amount at the submitted receiver.
-func (t *TransferPacket) VerifyDelivered(ctx context.Context) error {
+func (t *TransferSend) VerifyDelivered(ctx context.Context) error {
 	want := new(big.Int).Add(t.destinationBefore, t.amount)
 	return awaitBalance(
 		ctx,
 		t.app.destination.chain,
-		fmt.Sprintf("Transfer packet %s voucher delivery", t.packet.reference()),
+		fmt.Sprintf("Transfer packet %s voucher delivery", t.packetTx.reference()),
 		func(ctx context.Context) (*big.Int, error) {
 			return t.app.voucherBalance(ctx, t.receiver)
 		},
@@ -197,7 +199,7 @@ func (t *TransferPacket) VerifyDelivered(ctx context.Context) error {
 	)
 }
 
-func (t *TransferPacket) VerifyEscrowed(ctx context.Context) error {
+func (t *TransferSend) VerifyEscrowed(ctx context.Context) error {
 	want := new(big.Int).Sub(t.sourceBefore, t.amount)
 	got, err := erc20BalanceOf(ctx, t.app.source.evm, t.app.sourceToken, t.app.sender.Address())
 	if err != nil {
@@ -206,7 +208,7 @@ func (t *TransferPacket) VerifyEscrowed(ctx context.Context) error {
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
 			"e2etest: Transfer packet %s escrowed balance of %s: got %s, want %s",
-			t.packet.reference(),
+			t.packetTx.reference(),
 			t.app.sender.Address().Hex(),
 			got,
 			want,
@@ -215,7 +217,7 @@ func (t *TransferPacket) VerifyEscrowed(ctx context.Context) error {
 	return nil
 }
 
-func (t *TransferPacket) VerifyNotMinted(ctx context.Context) error {
+func (t *TransferSend) VerifyNotMinted(ctx context.Context) error {
 	got, err := t.app.voucherBalance(ctx, t.receiver)
 	if err != nil {
 		return err
@@ -223,7 +225,7 @@ func (t *TransferPacket) VerifyNotMinted(ctx context.Context) error {
 	if got.Cmp(t.destinationBefore) != 0 {
 		return fmt.Errorf(
 			"e2etest: Transfer packet %s not minted balance of %s: got %s, want %s",
-			t.packet.reference(),
+			t.packetTx.reference(),
 			t.receiver,
 			got,
 			t.destinationBefore,
@@ -233,14 +235,14 @@ func (t *TransferPacket) VerifyNotMinted(ctx context.Context) error {
 }
 
 // VerifyRefunded waits for the source sender balance to be restored after timeout.
-func (t *TransferPacket) VerifyRefunded(ctx context.Context) error {
-	if err := awaitPacketTimeout(ctx, t.app.source, t.app.sourceRouter, t.app.sourceClient, t.packet); err != nil {
+func (t *TransferSend) VerifyRefunded(ctx context.Context) error {
+	if err := awaitPacketTimeout(ctx, t.app.source, t.app.sourceRouter, t.app.sourceClient, t.packetTx); err != nil {
 		return err
 	}
 	return awaitBalance(
 		ctx,
 		t.app.source.chain,
-		fmt.Sprintf("Transfer packet %s refund", t.packet.reference()),
+		fmt.Sprintf("Transfer packet %s refund", t.packetTx.reference()),
 		func(ctx context.Context) (*big.Int, error) {
 			return erc20BalanceOf(ctx, t.app.source.evm, t.app.sourceToken, t.app.sender.Address())
 		},
@@ -353,11 +355,11 @@ func awaitPacketTimeout(
 	source endpoint,
 	router common.Address,
 	sourceClient string,
-	packet Packet,
+	packetTx PacketTx,
 ) error {
 	definition := ics26ABI.Events[eventTimeoutPacket]
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
-	description := fmt.Sprintf("timeout for packet %s", packet.reference())
+	description := fmt.Sprintf("timeout for packet %s", packetTx.reference())
 	_, err := awaitEvent(
 		ctx,
 		eventSource{endpoint: source, contract: router},
@@ -371,7 +373,7 @@ func awaitPacketTimeout(
 			return event, nil
 		},
 		func(event *ics26router.ContractTimeoutPacket) bool {
-			return event.Packet.Sequence == packet.Sequence &&
+			return event.Packet.Sequence == packetTx.Sequence &&
 				event.Packet.SourceClient == sourceClient
 		},
 	)

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Store guidelines for AI Agents
 
 `store.Store` is the single entrypoint for other packages that rely on DB.

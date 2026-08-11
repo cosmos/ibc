@@ -1,6 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # editors
 .idea/
 .vscode/
 
 # macOS
 .DS_Store
+
+# besu-to-besu example: generated at setup time
+examples/besu-to-besu/chains/local/
+examples/besu-to-besu/logs/
