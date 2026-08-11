@@ -10,7 +10,7 @@ on:
       - ".github/workflows/spec.yml"
       - ".github/workflows/link-check-config.json"
   pull_request:
-    branches: [main, development]
+    branches: [main]
     paths:
       - "README.md"
       - "spec/**"
