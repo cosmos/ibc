@@ -364,19 +364,13 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
-	declaredAttestors := map[string]bool{}
 	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)
 		if err != nil {
 			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
 		}
-		name := string(attestor.ID())
-		if declaredAttestors[name] {
-			continue
-		}
-		declaredAttestors[name] = true
 		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
-			Name: name, Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
 		})
 	}
 
