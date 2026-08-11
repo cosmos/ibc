@@ -79,13 +79,6 @@ func TestRelayerConfig(t *testing.T) {
 
 		_, _, ok = config.Relayer.ClientEnd("999", "base-0")
 		assert.False(t, ok)
-
-		conn, ok := config.Relayer.ConnectionByAlias("eth-base")
-		assert.True(t, ok)
-		assert.Equal(t, "base-0", conn.ClientA.ClientID)
-
-		_, ok = config.Relayer.ConnectionByAlias("unknown")
-		assert.False(t, ok)
 	})
 
 	t.Run("Validate", func(t *testing.T) {

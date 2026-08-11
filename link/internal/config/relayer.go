@@ -101,17 +101,6 @@ func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty Cl
 	return ClientEnd{}, ClientEnd{}, false
 }
 
-// ConnectionByAlias returns the connection config for the given alias.
-func (c RelayerConfig) ConnectionByAlias(alias string) (ConnectionConfig, bool) {
-	for _, conn := range c.Connections {
-		if conn.Alias == alias {
-			return conn, true
-		}
-	}
-
-	return ConnectionConfig{}, false
-}
-
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
 	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
