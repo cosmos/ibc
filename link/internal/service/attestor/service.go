@@ -34,8 +34,6 @@ type Attestor interface {
 	// Address is the attestor's signing address.
 	Address() string
 
-	FinalityOffset() uint64
-
 	LatestHeight(ctx context.Context) (uint64, error)
 	StateAttestation(ctx context.Context, height uint64) (Attestation, error)
 	PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error)
@@ -43,9 +41,8 @@ type Attestor interface {
 
 // Info identifies one attestor.
 type Info struct {
-	ChainID        string
-	Address        string
-	FinalityOffset uint64
+	ChainID string
+	Address string
 }
 
 // PacketAttestationRequest is a request for packet commitment attestations.
@@ -128,9 +125,8 @@ func (s *Service) Info(alias string) (Info, bool) {
 	}
 
 	return Info{
-		ChainID:        a.ChainID(),
-		Address:        a.Address(),
-		FinalityOffset: a.FinalityOffset(),
+		ChainID: a.ChainID(),
+		Address: a.Address(),
 	}, true
 }
 

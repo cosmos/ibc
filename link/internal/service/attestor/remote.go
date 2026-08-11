@@ -15,12 +15,11 @@ import (
 // RemoteAttestor provides attestation data from a remote gRPC service.
 // Used in one-way A->B relaying path.
 type RemoteAttestor struct {
-	chainID        string
-	name           string
-	address        string
-	finalityOffset uint64
-	client         proto.AttestationServiceClient
-	logger         *slog.Logger
+	chainID string
+	name    string
+	address string
+	client  proto.AttestationServiceClient
+	logger  *slog.Logger
 }
 
 var _ Attestor = &RemoteAttestor{}
@@ -28,7 +27,7 @@ var _ Attestor = &RemoteAttestor{}
 const remoteRequestTimeout = 5 * time.Second
 
 // NewRemoteFromURL connects to the attestor at grpcURL and queries its Info
-// RPC to resolve its chain, address, and finality offset.
+// RPC to resolve its chain and address.
 func NewRemoteFromURL(ctx context.Context, grpcURL, name string) (*RemoteAttestor, error) {
 	var (
 		httpClient  = newConnectHTTPClient()
@@ -41,12 +40,11 @@ func NewRemoteFromURL(ctx context.Context, grpcURL, name string) (*RemoteAttesto
 	}
 
 	return &RemoteAttestor{
-		name:           name,
-		chainID:        info.ChainId,
-		address:        info.Address,
-		finalityOffset: info.FinalityOffset,
-		client:         protoClient,
-		logger:         slog.With("module", "attestor", "name", attestorFQN("remote", info.ChainId, name)),
+		name:    name,
+		chainID: info.ChainId,
+		address: info.Address,
+		client:  protoClient,
+		logger:  slog.With("module", "attestor", "name", attestorFQN("remote", info.ChainId, name)),
 	}, nil
 }
 
@@ -124,12 +122,11 @@ func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttest
 	return attestationFromProto(res.Msg.Attestation)
 }
 
-func (a *RemoteAttestor) Name() string           { return a.name }
-func (a *RemoteAttestor) Alias() string          { return a.name }
-func (a *RemoteAttestor) ChainID() string        { return a.chainID }
-func (a *RemoteAttestor) IsLocal() bool          { return false }
-func (a *RemoteAttestor) Address() string        { return a.address }
-func (a *RemoteAttestor) FinalityOffset() uint64 { return a.finalityOffset }
+func (a *RemoteAttestor) Name() string    { return a.name }
+func (a *RemoteAttestor) Alias() string   { return a.name }
+func (a *RemoteAttestor) ChainID() string { return a.chainID }
+func (a *RemoteAttestor) IsLocal() bool   { return false }
+func (a *RemoteAttestor) Address() string { return a.address }
 
 func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 	if a == nil {

@@ -31,7 +31,7 @@ func testConnection() config.ConnectionConfig {
 }
 
 // localCandidate builds a mock Attestor registered under the Service.
-func localCandidate(t *testing.T, alias, watchedChainID, address string, finalityOffset uint64) attestor.Attestor {
+func localCandidate(t *testing.T, alias, watchedChainID, address string) attestor.Attestor {
 	t.Helper()
 
 	a := attestor.NewMockAttestor(t)
@@ -39,7 +39,6 @@ func localCandidate(t *testing.T, alias, watchedChainID, address string, finalit
 	a.EXPECT().Alias().Return(alias).Maybe()
 	a.EXPECT().ChainID().Return(watchedChainID).Maybe()
 	a.EXPECT().Address().Return(address).Maybe()
-	a.EXPECT().FinalityOffset().Return(finalityOffset).Maybe()
 
 	return a
 }
@@ -68,8 +67,8 @@ func testConfig(t *testing.T) (config.Config, *chains.ClientSet, []attestor.Atte
 		conn.ClientB.ChainID: chainB,
 	})
 
-	watchesB := localCandidate(t, "watches-b", conn.ClientB.ChainID, "0xaaa", 0)
-	watchesA := localCandidate(t, "watches-a", conn.ClientA.ChainID, "0xbbb", 0)
+	watchesB := localCandidate(t, "watches-b", conn.ClientB.ChainID, "0xaaa")
+	watchesA := localCandidate(t, "watches-a", conn.ClientA.ChainID, "0xbbb")
 
 	cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 

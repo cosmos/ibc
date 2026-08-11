@@ -61,7 +61,6 @@ message InfoResponse {
   string chain_id = 1;
   // The attestor's signing address.
   string address = 2;
-  uint64 finality_offset = 3;
 }
 
 // Commitment type for packet attestation

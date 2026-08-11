@@ -429,10 +429,9 @@ type InfoResponse struct {
 	// The chain this attestor watches.
 	ChainId string `protobuf:"bytes,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
 	// The attestor's signing address.
-	Address        string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	FinalityOffset uint64 `protobuf:"varint,3,opt,name=finality_offset,json=finalityOffset,proto3" json:"finality_offset,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	Address       string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *InfoResponse) Reset() {
@@ -477,13 +476,6 @@ func (x *InfoResponse) GetAddress() string {
 		return x.Address
 	}
 	return ""
-}
-
-func (x *InfoResponse) GetFinalityOffset() uint64 {
-	if x != nil {
-		return x.FinalityOffset
-	}
-	return 0
 }
 
 // Attestation is a single attestation from a given block height
@@ -582,11 +574,10 @@ const file_attestor_proto_rawDesc = "" +
 	"\x14LatestHeightResponse\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\")\n" +
 	"\vInfoRequest\x12\x1a\n" +
-	"\battestor\x18\x01 \x01(\tR\battestor\"l\n" +
+	"\battestor\x18\x01 \x01(\tR\battestor\"C\n" +
 	"\fInfoResponse\x12\x19\n" +
 	"\bchain_id\x18\x01 \x01(\tR\achainId\x12\x18\n" +
-	"\aaddress\x18\x02 \x01(\tR\aaddress\x12'\n" +
-	"\x0ffinality_offset\x18\x03 \x01(\x04R\x0efinalityOffset\"\x99\x01\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\"\x99\x01\n" +
 	"\vAttestation\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12!\n" +
 	"\ttimestamp\x18\x02 \x01(\x04H\x00R\ttimestamp\x88\x01\x01\x12#\n" +

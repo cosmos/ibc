@@ -32,7 +32,7 @@ func testConnection() config.ConnectionConfig {
 }
 
 // localCandidate builds a mock Attestor registered under the Service.
-func localCandidate(t *testing.T, alias, watchedChainID, address string, finalityOffset uint64) attestor.Attestor {
+func localCandidate(t *testing.T, alias, watchedChainID, address string) attestor.Attestor {
 	t.Helper()
 
 	a := attestor.NewMockAttestor(t)
@@ -40,7 +40,6 @@ func localCandidate(t *testing.T, alias, watchedChainID, address string, finalit
 	a.EXPECT().Alias().Return(alias).Maybe()
 	a.EXPECT().ChainID().Return(watchedChainID).Maybe()
 	a.EXPECT().Address().Return(address).Maybe()
-	a.EXPECT().FinalityOffset().Return(finalityOffset).Maybe()
 
 	return a
 }
@@ -59,7 +58,7 @@ func TestResolveGenerator(t *testing.T) {
 			conn.ClientB.ChainID: mocks.NewMockClient(t),
 		})
 
-		candidate := localCandidate(t, "watches-b", conn.ClientB.ChainID, "0xAAA", 3)
+		candidate := localCandidate(t, "watches-b", conn.ClientB.ChainID, "0xAAA")
 
 		gen, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
 
@@ -77,7 +76,7 @@ func TestResolveGenerator(t *testing.T) {
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
 
-		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xaaa", 0)
+		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xaaa")
 
 		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
 
@@ -96,8 +95,8 @@ func TestResolveGenerator(t *testing.T) {
 		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
 
 		// same address (case-insensitive), configured under two different names
-		first := localCandidate(t, "watcher-1", conn.ClientB.ChainID, "0xaaa", 0)
-		second := localCandidate(t, "watcher-2", conn.ClientB.ChainID, "0xAAA", 0)
+		first := localCandidate(t, "watcher-1", conn.ClientB.ChainID, "0xaaa")
+		second := localCandidate(t, "watcher-2", conn.ClientB.ChainID, "0xAAA")
 
 		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{first, second})
 
@@ -113,7 +112,7 @@ func TestResolveGenerator(t *testing.T) {
 		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
 
 		// address not registered on-chain
-		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xdeadbeef", 0)
+		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xdeadbeef")
 
 		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
 
@@ -129,7 +128,7 @@ func TestResolveGenerator(t *testing.T) {
 		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
 
 		// wrong chain, despite matching address
-		candidate := localCandidate(t, "watcher", "some-other-chain", "0xaaa", 0)
+		candidate := localCandidate(t, "watcher", "some-other-chain", "0xaaa")
 
 		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
 

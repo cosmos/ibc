@@ -168,50 +168,6 @@ func (_c *MockAttestor_ChainID_Call) RunAndReturn(run func() string) *MockAttest
 	return _c
 }
 
-// FinalityOffset provides a mock function for the type MockAttestor
-func (_mock *MockAttestor) FinalityOffset() uint64 {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for FinalityOffset")
-	}
-
-	var r0 uint64
-	if returnFunc, ok := ret.Get(0).(func() uint64); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(uint64)
-	}
-	return r0
-}
-
-// MockAttestor_FinalityOffset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FinalityOffset'
-type MockAttestor_FinalityOffset_Call struct {
-	*mock.Call
-}
-
-// FinalityOffset is a helper method to define mock.On call
-func (_e *MockAttestor_Expecter) FinalityOffset() *MockAttestor_FinalityOffset_Call {
-	return &MockAttestor_FinalityOffset_Call{Call: _e.mock.On("FinalityOffset")}
-}
-
-func (_c *MockAttestor_FinalityOffset_Call) Run(run func()) *MockAttestor_FinalityOffset_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockAttestor_FinalityOffset_Call) Return(v uint64) *MockAttestor_FinalityOffset_Call {
-	_c.Call.Return(v)
-	return _c
-}
-
-func (_c *MockAttestor_FinalityOffset_Call) RunAndReturn(run func() uint64) *MockAttestor_FinalityOffset_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // IsLocal provides a mock function for the type MockAttestor
 func (_mock *MockAttestor) IsLocal() bool {
 	ret := _mock.Called()

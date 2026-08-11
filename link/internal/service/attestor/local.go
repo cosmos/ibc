@@ -258,12 +258,11 @@ func (a *LocalAttestor) packetCompact(
 	}, nil
 }
 
-func (a *LocalAttestor) Name() string           { return a.name }
-func (a *LocalAttestor) Alias() string          { return a.name }
-func (a *LocalAttestor) ChainID() string        { return a.chainID }
-func (a *LocalAttestor) IsLocal() bool          { return true }
-func (a *LocalAttestor) Address() string        { return a.address }
-func (a *LocalAttestor) FinalityOffset() uint64 { return uint64(a.finalityOffset) }
+func (a *LocalAttestor) Name() string    { return a.name }
+func (a *LocalAttestor) Alias() string   { return a.name }
+func (a *LocalAttestor) ChainID() string { return a.chainID }
+func (a *LocalAttestor) IsLocal() bool   { return true }
+func (a *LocalAttestor) Address() string { return a.address }
 
 func attestorFQN(connection, chainID, name string) string {
 	return fmt.Sprintf("%s-%s-%s", chainID, connection, name)

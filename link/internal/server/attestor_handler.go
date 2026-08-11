@@ -130,9 +130,8 @@ func (h *AttestorHandler) Info(
 	}
 
 	return connect.NewResponse(&proto.InfoResponse{
-		ChainId:        info.ChainID,
-		Address:        info.Address,
-		FinalityOffset: info.FinalityOffset,
+		ChainId: info.ChainID,
+		Address: info.Address,
 	}), nil
 }
 
