@@ -30,13 +30,13 @@ func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	mining, err := chainB.Mining()
 	require.NoError(t, err)
 
-	var transfer *e2etest.TransferPacket
+	var transfer *e2etest.TransferSend
 	require.NoError(t, mining.WithPaused(ctx, func() error {
 		transfer, err = transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(424_242)})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.Packet(),
+		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_PENDING))
 		require.NoError(t, transfer.VerifyNotMinted(ctx))
 		return nil
@@ -45,7 +45,7 @@ func TestPendingPacketStatusWhileDestinationMiningPaused(t *testing.T) {
 	// The relayer only submits to a chain whose clock is current and only
 	// counts blocks behind the tip as final, so delivery completes once the
 	// destination produces blocks again.
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

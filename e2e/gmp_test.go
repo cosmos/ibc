@@ -26,7 +26,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 
 	call, err := gmp.Call(ctx, e2etest.GMPRequest{})
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterExecuted(ctx))
@@ -63,7 +63,7 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 
 	call, err := gmp.Call(ctx, e2etest.GMPRequest{Receiver: token.Hex(), Salt: salt, Payload: payload})
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 
 	call, err := gmp.Call(ctx, e2etest.GMPRequest{Payload: invalidGMPPayload})
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, call.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterRejected(ctx))
