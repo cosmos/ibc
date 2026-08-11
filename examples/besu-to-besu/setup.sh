@@ -133,7 +133,6 @@ cmd_init() {
   # init_chains logs each chain's funded alloc set as it renders, so there is
   # no print_accounts call here — that would restate the same addresses.
   init_chains
-  warn_demo_keys
 }
 
 cmd_start() {
@@ -147,7 +146,7 @@ main() {
   case "${1:-}" in
     init)     cmd_init;       exit 0 ;;
     start)    cmd_start;      exit 0 ;;
-    accounts) print_accounts; warn_demo_keys; exit 0 ;;
+    accounts) print_accounts; exit 0 ;;
     status)   print_status;   exit 0 ;;
     clean)    clean;          exit 0 ;;
     "")

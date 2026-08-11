@@ -13,16 +13,6 @@ info() { echo -e "${CYAN}[$(date '+%H:%M:%S')]${NC} $*"; }
 warn() { echo -e "${YELLOW}[$(date '+%H:%M:%S')] WARN${NC} $*"; }
 die()  { echo -e "${RED}[$(date '+%H:%M:%S')] ERROR${NC} $*" >&2; exit 1; }
 
-# Printed wherever this example hands the operator a key or an address, so the
-# provenance travels with the material instead of living only in the README.
-warn_demo_keys() {
-  warn "DEMO KEYS — LOCAL DEVNET ONLY. Every mnemonic, private key, and address"
-  warn "above is derived from a publicly known BIP-39 test vector: anyone can"
-  warn "regenerate them in seconds and they are worthless by design."
-  warn "Never use them on any public, shared, or production network, never send"
-  warn "real funds to them, and never copy them into another project."
-}
-
 check_prerequisites() {
   log "Checking prerequisites..."
   command -v docker    >/dev/null || die "docker is required"
