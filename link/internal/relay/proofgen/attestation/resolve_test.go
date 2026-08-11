@@ -87,6 +87,23 @@ func TestResolveGenerator(t *testing.T) {
 		require.ErrorContains(t, err, "configured attestors: [watcher=0xaaa]")
 	})
 
+	t.Run("duplicateAttestorAddressErrors", func(t *testing.T) {
+		conn := testConnection()
+
+		selfChain := mocks.NewMockClient(t)
+		selfChain.EXPECT().GetAttestationSet(ctx, conn.ClientA.ClientID).Return([]string{"0xaaa"}, uint8(2), nil)
+
+		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
+
+		// same address (case-insensitive), configured under two different names
+		first := localCandidate(t, "watcher-1", conn.ClientB.ChainID, "0xaaa", 0)
+		second := localCandidate(t, "watcher-2", conn.ClientB.ChainID, "0xAAA", 0)
+
+		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{first, second})
+
+		require.ErrorContains(t, err, `attestors "watcher-1" and "watcher-2" share address "0xAAA"`)
+	})
+
 	t.Run("nonMatchingAddressExcluded", func(t *testing.T) {
 		conn := testConnection()
 

@@ -61,15 +61,26 @@ func MatchAttestors(
 	var matched []attestor.Attestor
 
 	configured := make([]string, 0, len(attestors))
+	seenAddresses := make(map[string]string, len(attestors))
 
 	for _, a := range attestors {
 		if a.ChainID() != counterparty.ChainID {
 			continue
 		}
 
+		address := strings.ToLower(a.Address())
+
+		if existingName, dup := seenAddresses[address]; dup {
+			return nil, 0, errors.Errorf(
+				"client %q: attestors %q and %q share address %q watching chain %q",
+				self.ClientID, existingName, a.Name(), a.Address(), counterparty.ChainID,
+			)
+		}
+		seenAddresses[address] = a.Name()
+
 		configured = append(configured, fmt.Sprintf("%s=%s", a.Name(), a.Address()))
 
-		if _, inOnChainSet := onChainSet[strings.ToLower(a.Address())]; !inOnChainSet {
+		if _, inOnChainSet := onChainSet[address]; !inOnChainSet {
 			continue
 		}
 
