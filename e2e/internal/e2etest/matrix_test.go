@@ -36,8 +36,10 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 			environment.AttachedEVM{ID: "b", EVMChainID: 2},
 		},
 		IBCInstances: make([]environment.IBCInstanceSpec, 2),
-		Connections:  make([]environment.ConnectionSpec, 1),
-		Attestors:    make([]environment.AttestorSpec, 3),
+		Connections: []environment.ConnectionSpec{{
+			A: environment.NewClient{Attestors: make([]environment.AttestorSpec, 1)},
+			B: environment.NewClient{Attestors: make([]environment.AttestorSpec, 2)},
+		}},
 	})
 	if err := collector.recordSpec("TestMesh/subtest", ModeProduction, summary); err != nil {
 		t.Fatal(err)

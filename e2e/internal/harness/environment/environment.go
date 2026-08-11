@@ -16,7 +16,6 @@ type Environment struct {
 	chains      map[ChainID]*Chain
 	instances   map[IBCInstanceID]*IBCInstance
 	connections map[ConnectionID]*Connection
-	clients     map[ClientID]*IBCClient
 	attestors   map[AttestorID]*Attestor
 
 	effects *effectJournal
@@ -91,14 +90,6 @@ func (e *Environment) Connections() []ConnectionID {
 	}
 	slices.Sort(ids)
 	return ids
-}
-
-func (e *Environment) IBCClient(id ClientID) (*IBCClient, error) {
-	client, ok := e.clients[id]
-	if !ok {
-		return nil, fmt.Errorf("environment: no IBC Client %q", id)
-	}
-	return client, nil
 }
 
 func (e *Environment) Attestor(id AttestorID) (*Attestor, error) {

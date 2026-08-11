@@ -36,15 +36,15 @@ type IFTRequest struct {
 
 // IFT drives the Interchain Fungible Token pair on a single directed route.
 type IFT struct {
-	routeID      RouteID
-	source       endpoint
-	destination  endpoint
-	sender       evm.Account
-	sourceIFT    common.Address
-	destIFT      common.Address
-	sourceRouter common.Address
-	sourceClient string
-	batcher      common.Address
+	routeID        RouteID
+	source         endpoint
+	destination    endpoint
+	sender         evm.Account
+	sourceIFT      common.Address
+	destIFT        common.Address
+	sourceRouter   common.Address
+	sourceClientID string
+	batcher        common.Address
 }
 
 // IFTSend is the result of an IFT Send: the packet it emitted plus the balance
@@ -85,7 +85,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := iftABI.Pack("iftTransfer", i.sourceClient, receiver.Hex(), amount, timeoutTimestamp)
+	data, err := iftABI.Pack("iftTransfer", i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT iftTransfer: %w", err)
 	}
@@ -101,7 +101,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 		return nil, fmt.Errorf("e2etest: send IFT on route %q: %w", i.routeID, err)
 	}
 	return &IFTSend{
-		sendResult:              newSendResult(i.routeID, i.source, i.sourceClient, receipt, sequence),
+		sendResult:              newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
 		app:                     i,
 		receiver:                receiver,
 		amount:                  amount,
@@ -157,7 +157,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		total.Add(total, amount)
 	}
 
-	data, err := iftBatchShimABI.Pack("batchIftTransfer", i.sourceIFT, i.sourceClient, transfers)
+	data, err := iftBatchShimABI.Pack("batchIftTransfer", i.sourceIFT, i.sourceClientID, transfers)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT batchIftTransfer: %w", err)
 	}
@@ -181,7 +181,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	sends := make([]*IFTSend, len(requests))
 	for k, sequence := range sequences {
 		sends[k] = &IFTSend{
-			sendResult:        newSendResult(i.routeID, i.source, i.sourceClient, receipt, sequence),
+			sendResult:        newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
 			app:               i,
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
@@ -336,7 +336,7 @@ func (p *IFTSend) awaitPendingCleared(ctx context.Context) error {
 				ctx,
 				p.app.source.evm,
 				p.app.sourceIFT,
-				p.app.sourceClient,
+				p.app.sourceClientID,
 				p.packetTx.Sequence,
 			)
 			switch {
@@ -371,7 +371,7 @@ func (p *IFTSend) VerifyPending(ctx context.Context) error {
 		ctx,
 		p.app.source.evm,
 		p.app.sourceIFT,
-		p.app.sourceClient,
+		p.app.sourceClientID,
 		p.packetTx.Sequence,
 	)
 	if err != nil {
@@ -399,7 +399,7 @@ func (p *IFTSend) VerifyPending(ctx context.Context) error {
 // VerifyPendingCleared checks that no pending-transfer record exists for
 // this packet's sequence on the source IFT contract.
 func (p *IFTSend) VerifyPendingCleared(ctx context.Context) error {
-	_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClient, p.packetTx.Sequence)
+	_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClientID, p.packetTx.Sequence)
 	if err == nil {
 		return fmt.Errorf(
 			"e2etest: IFT packet %s pending transfer still present, want cleared",

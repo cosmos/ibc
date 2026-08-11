@@ -25,8 +25,6 @@ var zeroAddressReceiver = (common.Address{}).Hex()
 func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	t.Parallel()
 	const (
-		clientAID          environment.ClientID    = "quorum-client-a"
-		clientBID          environment.ClientID    = "quorum-client-b"
 		attestorAID        environment.AttestorID  = "attestor-a"
 		attestorBID        environment.AttestorID  = "attestor-b"
 		attestorCID        environment.AttestorID  = "attestor-c"
@@ -53,20 +51,22 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "quorum-connection",
 			A: environment.NewClient{
-				ID: clientAID, IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
+				IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{
+					ID: attestorAID, Authority: attestorAAuthority,
+				}},
 			},
 			B: environment.NewClient{
-				ID: clientBID, IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
+				IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 2,
+				Attestors: []environment.AttestorSpec{
+					{ID: attestorBID, Authority: attestorBAuthority},
+					{ID: attestorCID, Authority: attestorCAuthority},
+					{ID: attestorDID, Authority: attestorDAuthority},
+				},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: attestorAID, Client: clientAID, Authority: attestorAAuthority},
-			{ID: attestorBID, Client: clientBID, Authority: attestorBAuthority},
-			{ID: attestorCID, Client: clientBID, Authority: attestorCAuthority},
-			{ID: attestorDID, Client: clientBID, Authority: attestorDAuthority},
-		},
 	}
 	runtime := e2etest.RuntimeWithProtocolDeployer(
 		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{

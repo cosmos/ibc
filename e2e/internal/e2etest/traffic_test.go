@@ -84,6 +84,16 @@ func TestAwaitStateRequiresRouteWaitPolicy(t *testing.T) {
 	require.EqualError(t, err, `e2etest: packet missing-7 has no wait policy for route "missing"`)
 }
 
+func TestStatusForPacketMatchesTypedClientLocator(t *testing.T) {
+	statuses := []*relayerv2.PacketStatus{
+		{SourceClientId: "other", SequenceNumber: 7},
+		{SourceClientId: "client-a", SequenceNumber: 7},
+	}
+	packet := PacketTx{SourceClientID: "client-a", Sequence: 7}
+
+	require.Same(t, statuses[1], statusForPacket(statuses, packet))
+}
+
 func TestAwaitStableUsesFreshWindowAfterStateReached(t *testing.T) {
 	policy := ibclink.WaitPolicy{
 		CompletionBudget: 200 * time.Millisecond,

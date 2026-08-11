@@ -25,16 +25,16 @@ func NewTransfer(
 	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
 	require.NoError(t, err, "e2etest: resolve endpoints for Transfer on route %q", route.ID)
 	return &Transfer{
-		routeID:      route.ID,
-		source:       sourceEndpoint,
-		destination:  destinationEndpoint,
-		sender:       sender.account,
-		sourceToken:  sourceApps.Token,
-		sourceICS20:  sourceApps.ICS20Transfer,
-		sourceRouter: sourceApps.ICS26Router,
-		destICS20:    destinationApps.ICS20Transfer,
-		sourceClient: clients.SourceClient,
-		destClient:   clients.DestClient,
+		routeID:        route.ID,
+		source:         sourceEndpoint,
+		destination:    destinationEndpoint,
+		sender:         sender.account,
+		sourceToken:    sourceApps.Token,
+		sourceICS20:    sourceApps.ICS20Transfer,
+		sourceRouter:   sourceApps.ICS26Router,
+		destICS20:      destinationApps.ICS20Transfer,
+		sourceClientID: clients.SourceClientID,
+		destClientID:   clients.DestClientID,
 	}
 }
 
@@ -52,15 +52,15 @@ func NewIFT(
 	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
 	require.NoError(t, err, "e2etest: resolve endpoints for IFT on route %q", route.ID)
 	return &IFT{
-		routeID:      route.ID,
-		source:       sourceEndpoint,
-		destination:  destinationEndpoint,
-		sender:       sender.account,
-		sourceIFT:    sourceApps.IFT,
-		destIFT:      destinationApps.IFT,
-		sourceRouter: sourceApps.ICS26Router,
-		sourceClient: clients.SourceClient,
-		batcher:      sourceApps.IFTBatchShim,
+		routeID:        route.ID,
+		source:         sourceEndpoint,
+		destination:    destinationEndpoint,
+		sender:         sender.account,
+		sourceIFT:      sourceApps.IFT,
+		destIFT:        destinationApps.IFT,
+		sourceRouter:   sourceApps.ICS26Router,
+		sourceClientID: clients.SourceClientID,
+		batcher:        sourceApps.IFTBatchShim,
 	}
 }
 
@@ -92,25 +92,25 @@ func DeployIFTTokenPair(
 
 	registerIFTBridge(
 		t, sourceEndpoint.evm, deployer, route.Source,
-		sourceIFT, clients.SourceClient, destinationIFT, sourceApps.IFTSendCallConstructor,
+		sourceIFT, clients.SourceClientID, destinationIFT, sourceApps.IFTSendCallConstructor,
 	)
 	if !route.SkipDestinationIFTBridge {
 		registerIFTBridge(
 			t, destinationEndpoint.evm, deployer, route.Destination,
-			destinationIFT, clients.DestClient, sourceIFT, destinationApps.IFTSendCallConstructor,
+			destinationIFT, clients.DestClientID, sourceIFT, destinationApps.IFTSendCallConstructor,
 		)
 	}
 
 	return &IFT{
-		routeID:      route.ID,
-		source:       sourceEndpoint,
-		destination:  destinationEndpoint,
-		sender:       deployer.account,
-		sourceIFT:    sourceIFT,
-		destIFT:      destinationIFT,
-		sourceRouter: sourceApps.ICS26Router,
-		sourceClient: clients.SourceClient,
-		batcher:      batcher,
+		routeID:        route.ID,
+		source:         sourceEndpoint,
+		destination:    destinationEndpoint,
+		sender:         deployer.account,
+		sourceIFT:      sourceIFT,
+		destIFT:        destinationIFT,
+		sourceRouter:   sourceApps.ICS26Router,
+		sourceClientID: clients.SourceClientID,
+		batcher:        batcher,
 	}
 }
 
@@ -130,18 +130,18 @@ func NewGMP(
 	defaultCall, err := mustABI(counter.CounterMetaData).Pack("increment")
 	require.NoError(t, err, "e2etest: pack Counter.increment()")
 	return &GMP{
-		routeID:      route.ID,
-		source:       sourceEndpoint,
-		destination:  destinationEndpoint,
-		sender:       sender.account,
-		sourceGMP:    sourceApps.ICS27GMP,
-		sourceRouter: sourceApps.ICS26Router,
-		counter:      destinationApps.Counter,
-		sourceClient: clients.SourceClient,
-		destClient:   clients.DestClient,
-		destGMP:      destinationApps.ICS27GMP,
-		destToken:    destinationApps.Token,
-		defaultCall:  defaultCall,
+		routeID:        route.ID,
+		source:         sourceEndpoint,
+		destination:    destinationEndpoint,
+		sender:         sender.account,
+		sourceGMP:      sourceApps.ICS27GMP,
+		sourceRouter:   sourceApps.ICS26Router,
+		counter:        destinationApps.Counter,
+		sourceClientID: clients.SourceClientID,
+		destClientID:   clients.DestClientID,
+		destGMP:        destinationApps.ICS27GMP,
+		destToken:      destinationApps.Token,
+		defaultCall:    defaultCall,
 	}
 }
 
