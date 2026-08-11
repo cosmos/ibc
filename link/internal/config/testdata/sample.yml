@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  listenAddr: 0.0.0.0:3000
+signers:
+  - alias: "relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "relayer-key-id"
+db:
+  type: sqlite
+  url: ibc.db
+chains:
+  - chainId: "1"
+    evm:
+      rpc: https://ethereum-rpc.example.com
+      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+  - chainId: "8453"
+    evm:
+      rpc: https://base-rpc.example.com
+      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+relayer:
+  dispatchPollInterval: 3s
+  chainOverrides:
+    - chainId: "1"
+      evm:
+        gasFeeCapMultiplier: 1.5
+        gasTipCapMultiplier: 1.5
+      txSubmissionDelay: 2s
+      packetBatchSize: 20
+      packetBatchTimeout: 10s
+    - chainId: "8453"
+  clients:
+    - alias: "eth-to-base"
+      clientId: "base-0"
+      chainId: "1"
+      counterpartyChainId: "8453"
+      counterpartyClientId: "ethereum-0"
+      type: "attestation"
+      attestorSet:
+        counterpartyChainFinalityOffset: 1
+        threshold: 2
+        attestors:
+          - name: "attestor-alice-base"
+            type: remote
+            grpc: attestor-alice.example.com:3000
+          - name: "attestor-bob-base"
+            type: remote
+            grpc: attestor-bob.example.com:3000
+          - name: "attestor-dan-base"
+            type: local
+    - alias: "base-to-eth"
+      clientId: "ethereum-0"
+      chainId: "8453"
+      counterpartyChainId: "1"
+      counterpartyClientId: "base-0"
+      type: "attestation"
+      attestorSet:
+        threshold: 1
+        attestors:
+          - name: "attestor-dan-ethereum"
+            type: local
+  routesToRelay:
+    - sourceClient: "eth-to-base"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"
+      autoRelay:
+        enabled: false
+        lookback: 100
+    - sourceClient: "base-to-eth"
+      sourceSignerAlias: "relayer-key"
+      destSignerAlias: "relayer-key"

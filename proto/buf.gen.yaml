@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    revision: 1
+    out: ../link
+    opt: module=github.com/cosmos/ibc/link
+  - remote: buf.build/connectrpc/go:v1.20.0
+    revision: 1
+    out: ../link
+    opt: module=github.com/cosmos/ibc/link,package_suffix
+
+inputs:
+  - directory: link

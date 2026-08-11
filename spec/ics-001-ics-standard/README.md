@@ -44,7 +44,7 @@ An ICS header contains metadata relevant to the ICS.
 
 `title` - ICS title (keep it short & sweet)
 
-`stage` - Current ICS stage, see [PROCESS.md](../../meta/PROCESS.md) for the list of possible stages.
+`stage` - Current ICS stage, see [PROCESS.md](../PROCESS.md) for the list of possible stages.
 
 See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
@@ -120,7 +120,7 @@ An ICS should include a copyright section waiving rights via [Apache 2.0](https:
 
 ICS specifications must be written in GitHub-flavoured Markdown.
 
-For a GitHub-flavoured Markdown cheat sheet, see [here](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [here](https://github.com/joeyespo/grip).
+For a GitHub-flavoured Markdown cheat sheet, see [adam-p's Markdown cheat sheet](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [grip](https://github.com/joeyespo/grip).
 
 ### Language
 

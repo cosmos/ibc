@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+
+bin/
+
+go.work
+go.work.sum

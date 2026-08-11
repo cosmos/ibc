@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Shared lint config for all modules in this repo (link, e2e).
+# golangci-lint walks up parent directories, so `golangci-lint run` from any
+# module dir finds this. It takes the strictest setting from each module.
+# https://github.com/golangci/golangci-lint/blob/6b274d25c1e38f136ab75ac9b9e4785fc22f9421/.golangci.reference.yml
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 30m
+  tests: true
+
+issues:
+  max-same-issues: 50
+
+# https://golangci-lint.run/usage/formatters
+formatters:
+  enable: [gci, gofmt, gofumpt, golines]
+  exclusions:
+    generated: lax
+  settings:
+    gci:
+      # this order matches gci's fixed default output order; localmodule is not
+      # used because it would split first-party imports across modules (e2e vs link)
+      sections:
+        - "standard"
+        - "default"
+        - "prefix(github.com/cosmos/ibc)"
+        - "blank" # e.g. sql drivers
+    gofmt:
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+    golines:
+      max-len: 120
+
+# https://golangci-lint.run/usage/linters
+linters:
+  enable:
+    # todo: depguard enable eventually
+    - asciicheck
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
+    - goconst
+    - govet
+    - gocritic
+    - misspell
+    - nakedret
+    - nolintlint
+    - staticcheck
+    - unconvert
+    - unused
+    - revive
+    - errcheck
+    - errorlint
+    - testifylint
+
+  settings:
+    dogsled:
+      max-blank-identifiers: 3
+    misspell:
+      locale: US
+    govet:
+      # https://golangci-lint.run/docs/linters/configuration/#govet
+      enable: [shadow]
+    revive:
+      # https://golangci-lint.run/docs/linters/configuration/#revive
+      enable-default-rules: true
+      rules:
+        - name: package-comments
+          disabled: true
+          # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#exported
+        - name: exported
+          arguments:
+            # force comments on pubic structs, relax on functions and methods
+            - disable-checks-on-functions
+            - disable-checks-on-methods
+  exclusions:
+    generated: lax
+    rules:
+      # repeated literals and near-identical cases in tests are usually clearer
+      # inline than forced behind an abstraction
+      - path: _test\.go
+        linters: [goconst, dupl]
+      # the e2e helpers are private test infrastructure, not public API
+      - path: ^e2e/internal/
+        linters: [revive]
+        text: "exported:"

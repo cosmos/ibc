@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: E2E
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      lint: ${{ steps.filter.outputs.lint }}
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: filter
+        with:
+          filters: |
+            lint:
+              - "e2e/**"
+              - ".golangci.yml"
+              - ".github/workflows/e2e.yml"
+            code:
+              - "link/**"
+              - "e2e/**"
+              - "proto/**"
+              - "Makefile"
+              - ".github/workflows/e2e.yml"
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: e2e/go.sum
+      - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v2.12.2
+          working-directory: e2e
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: |
+            link/go.sum
+            e2e/go.sum
+      - run: make build-link
+      - run: docker info
+      - run: go test -count=1 ./internal/... ./cmd/...
+        working-directory: e2e
+        env:
+          IBC_BIN: ${{ github.workspace }}/link/bin/ibc
+
+  e2e:
+    needs: changes
+    if: github.event_name == 'schedule' || needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      E2E_MODE: ${{ github.event_name == 'schedule' && 'production' || 'complete' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: |
+            link/go.sum
+            e2e/go.sum
+      - run: docker info
+      - run: make test-e2e
+
+  matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: e2e/go.sum
+      - run: docker info
+      - run: make check-e2e-matrix

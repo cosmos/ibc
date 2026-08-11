@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ibc.v2.relayer;
+
+option go_package = "github.com/cosmos/ibc/link/api/v2/relayer";
+
+service RelayerApiService {
+  // Relay tracks the packets emitted by a source transaction and submits the
+  // transactions required to complete them.
+  rpc Relay(RelayRequest) returns (RelayResponse) {}
+
+  // Status returns per-packet relay status for a transaction previously
+  // submitted via Relay.
+  rpc Status(StatusRequest) returns (StatusResponse) {}
+}
+
+message RelayRequest {
+  string tx_hash = 1;
+  string source_chain_id = 2;
+}
+
+message RelayResponse {}
+
+message StatusRequest {
+  string tx_hash = 1;
+  string source_chain_id = 2;
+}
+
+message StatusResponse {
+  repeated PacketStatus packet_statuses = 1;
+}
+
+enum PacketState {
+  PACKET_STATE_UNSPECIFIED = 0;
+  // The relayer is still processing the packet.
+  PACKET_STATE_PENDING = 1;
+  // The packet completed with a successful acknowledgement on the source
+  // chain.
+  PACKET_STATE_SUCCEEDED = 2;
+  // The packet completed with a timeout refund on the source chain.
+  PACKET_STATE_TIMED_OUT = 3;
+  // The packet completed with an error acknowledgement on the source chain.
+  PACKET_STATE_REJECTED = 4;
+  // A permanent error prevents the relayer from processing the packet.
+  PACKET_STATE_RELAY_FAILED = 5;
+}
+
+message TransactionInfo {
+  string tx_hash = 1;
+  string chain_id = 2;
+}
+
+message PacketStatus {
+  PacketState state = 1;
+  // Together with source_client_id, identifies the packet.
+  uint64 sequence_number = 2;
+  // Together with sequence_number, identifies the packet.
+  string source_client_id = 3;
+  // The source-chain SendPacket transaction. Always present.
+  TransactionInfo send_tx = 4;
+  // The destination-chain receive transaction, once submitted or discovered.
+  TransactionInfo recv_tx = 5;
+  // The source-chain acknowledgement transaction. Present for succeeded and
+  // rejected packets, and may be present while pending.
+  TransactionInfo ack_tx = 6;
+  // The source-chain timeout transaction. Present for timed-out packets, and
+  // may be present while pending.
+  TransactionInfo timeout_tx = 7;
+}

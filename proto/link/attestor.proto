@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ibc.v2.attestor;
+
+option go_package = "github.com/cosmos/ibc/link/api/v2/attestor";
+
+// Service definition for retrieving attestations.
+service AttestationService {
+  // Retrieves an attestation for a state at a given height.
+  rpc StateAttestation(StateAttestationRequest) returns (StateAttestationResponse);
+
+  // Retrieves an attestation for a set of packets.
+  rpc PacketAttestation(PacketAttestationRequest) returns (PacketAttestationResponse);
+
+  // Returns the latest height the attestor will generate attestations for.
+  rpc LatestHeight(LatestHeightRequest) returns (LatestHeightResponse);
+}
+
+message StateAttestationRequest {
+  string attestor = 1;
+  uint64 height = 2;
+}
+
+message StateAttestationResponse { Attestation attestation = 1; }
+
+// Request message for getting an attestation for a set of packets.
+// This request's parameters does not include a height at the moment, because
+// we are currently only attesting to the latest height, and using the returned
+// height to request a state attestation.
+message PacketAttestationRequest {
+  string attestor = 1;
+
+  // The packets to attest to
+  repeated bytes packets = 2;
+
+  // The height to attest to the packets at
+  uint64 height = 3;
+
+  // The type of commitment to attest (packet or acknowledgment)
+  // Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward
+  // compatibility)
+  CommitmentType commitment_type = 4;
+}
+
+// Response message for getting an attestation for a set of packets.
+message PacketAttestationResponse {
+  Attestation attestation = 1;
+}
+
+message LatestHeightRequest { string attestor = 1; }
+
+message LatestHeightResponse { uint64 height = 1; }
+
+// Commitment type for packet attestation
+enum CommitmentType {
+  // Packet commitment (for SendPacket events)
+  COMMITMENT_TYPE_PACKET = 0;
+  // Acknowledgment commitment (for WriteAcknowledgement events)
+  COMMITMENT_TYPE_ACK = 1;
+  // Receipt commitment (for Timeout events - non-membership proof)
+  COMMITMENT_TYPE_RECEIPT = 2;
+}
+
+// Attestation is a single attestation from a given block height
+// for the requested data.
+message Attestation {
+  // The height of the attestation
+  uint64 height = 1;
+  // The timestamp of the block
+  optional uint64 timestamp = 2;
+  // The attested data
+  bytes attested_data = 3;
+  // The attestation signature
+  bytes signature = 4;
+}
