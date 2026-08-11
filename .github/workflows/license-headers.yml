@@ -4,7 +4,7 @@ name: License Headers
 
 on:
   push:
-    branches: [main, development]
+    branches: [main]
   pull_request:
   merge_group:
   workflow_dispatch:
