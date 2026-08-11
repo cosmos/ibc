@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 func TestSignerSet(t *testing.T) {
@@ -66,4 +67,20 @@ func TestNewSignerFromConfigRequiresExactFilePath(t *testing.T) {
 		File:  filepath.Join(dir, "signer"),
 	})
 	require.Error(t, err)
+}
+
+func TestEVMAddressOf(t *testing.T) {
+	key, err := GenerateLocalKey(keyfile.ECDSA)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "deployer.json")
+	require.NoError(t, key.StoreToFile(path))
+	want, err := PublicKeyToEVMAddress(key.PublicKey())
+	require.NoError(t, err)
+
+	got, err := EVMAddressOf(config.SignerConfig{Alias: "d", Type: config.SignerLocal, File: path})
+	require.NoError(t, err)
+	require.Equal(t, want, got)
+
+	_, err = EVMAddressOf(config.SignerConfig{Alias: "kms", Type: config.SignerRemote})
+	require.ErrorContains(t, err, "remote signer")
 }

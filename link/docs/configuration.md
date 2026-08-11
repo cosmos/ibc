@@ -47,10 +47,11 @@ Chains the attestor and relayer can reference by `chainId`. Declare every
 chain used elsewhere in the config here first. `relayer.connections[].clientA/clientB.chainId`
 and `relayer.chainOverrides[].chainId` are validated against this list.
 
-| Field     | Type   | Description |
-|-----------|--------|-------------|
-| `chainId` | string | Unique chain identifier (e.g. `"11155111"` for an EVM chain ID). |
-| `evm`     | object | EVM-specific connection details. Currently the only supported chain type. |
+| Field      | Type   | Description |
+|------------|--------|-------------|
+| `chainId`  | string | Unique chain identifier (e.g. `"11155111"` for an EVM chain ID). |
+| `evm`      | object | EVM-specific connection details. Currently the only supported chain type. |
+| `deployer` | string | Optional. Signer alias (from `signers`) used by `ibc deploy` to sign deployment transactions on this chain. Must be a local ECDSA signer. |
 
 ### `chains[].evm`
 
@@ -191,3 +192,44 @@ signers:
     type: local
     file: keys/my-key.json
 ```
+
+## Deployment
+
+`ibc deploy` provisions IBC on a chain and records what it deployed. Two
+pieces tie into the rest of the config:
+
+- `chains[].deployer` — the signer alias `ibc deploy` uses to sign
+  deployment transactions on that chain. Must reference a `local` ECDSA
+  signer in `signers` (deployment tooling needs the raw key, not just a
+  remote signing call). Overridable per-invocation with `--deployer`.
+  `deploy status` and `deploy render-config` are read-only and work without
+  a configured deployer.
+- `--manifest-dir` (default `deployments`, relative to `--home`) — where
+  `ibc deploy` writes one JSON manifest per chain recording what was
+  deployed (router address, registered clients). Manifests are
+  machine-generated: `ibc deploy` reads and rewrites them on every run to
+  stay idempotent, so hand edits are lost and can desync the recorded state
+  from what's actually on chain.
+- attestor sets — `--attestors` values may be attestor names, signer
+  aliases, or raw addresses; aliases resolve through local key files (remote
+  signers error — pass their address directly), and any value matching no
+  alias passes through as an address, validated by the chain's deployment
+  driver. When the flag is omitted,
+  the set for a client tracking chain X defaults to every
+  `attestors[]` entry with `chainId: X`. Reusing one attestor
+  set for both directions of a connection is discouraged — configure
+  distinct sets per tracked chain.
+
+A connection is two mirrored `deploy client` invocations (one per chain,
+each tracking the other). Both default to the same client id
+(`link-<chainA>-<chainB>`; ids are per-chain namespaces, so the shared name
+is unambiguous) and so pair up without explicit id flags. Rerunning with
+the same id continues a completed or partially-deployed connection;
+rerunning with different attestors/threshold under the same id fails —
+deployed client parameters are constructor-fixed — with the differences
+listed, as does a client registered on-chain but missing from the manifest
+(a deployment interrupted before its record was written; the deployed
+parameters cannot be recovered from chain). In either case, pass a new
+`--client-id` (and matching `--counterparty-client-id`) to deploy a new
+client pair.
+

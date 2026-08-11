@@ -101,3 +101,28 @@ func PublicKeyToEVMAddress(pk []byte) (string, error) {
 func DecodeHex(raw string) ([]byte, error) {
 	return hex.DecodeString(strings.TrimPrefix(raw, "0x"))
 }
+
+// EVMAddressOf derives the EVM address of a configured signer. Only local
+// ECDSA signers resolve; remote signers would need a KMS round trip for
+// their public key and are rejected.
+func EVMAddressOf(cfg config.SignerConfig) (string, error) {
+	if cfg.Type != config.SignerLocal {
+		return "", errors.Errorf("cannot derive an address for remote signer %q", cfg.Alias)
+	}
+
+	path, err := config.ExpandHome(cfg.File)
+	if err != nil {
+		return "", err
+	}
+
+	key, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+	if err != nil {
+		return "", errors.Wrapf(err, "signer %q", cfg.Alias)
+	}
+
+	if key.Type() != keyfile.ECDSA {
+		return "", errors.Errorf("signer %q is not an ecdsa key", cfg.Alias)
+	}
+
+	return PublicKeyToEVMAddress(key.PublicKey())
+}

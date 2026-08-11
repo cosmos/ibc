@@ -6,10 +6,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
-
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 var (

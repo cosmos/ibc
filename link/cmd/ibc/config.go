@@ -85,7 +85,7 @@ func configValidate(cmd *cobra.Command, _ []string) error {
 	// todo: it still logs store's log, we need to add config.logging{} params
 	// to truly suppress logging (in followup PRs)
 	if !globalFlags.Quiet {
-		return config.PrintJSON(map[string]any{"status": "valid"})
+		return config.PrintJSON(map[string]any{useStatus: "valid"})
 	}
 
 	return nil

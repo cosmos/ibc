@@ -64,38 +64,37 @@ func TestLocalEd25519Signer(t *testing.T) {
 	})
 
 	t.Run("fileImportInvalidKey", func(t *testing.T) {
-		t.Run("ecdsaKey", func(t *testing.T) {
-			// ARRANGE
-			ecdsaSigner, err := GenerateLocalSecp256k1Signer()
-			require.NoError(t, err)
+		ecdsaSigner, err := GenerateLocalSecp256k1Signer()
+		require.NoError(t, err)
 
-			path := writeFileJSON(t, "ed25519.json", map[string]string{
-				"type":             string(EDDSA),
-				"privateKeyBase64": base64.StdEncoding.EncodeToString(ecdsaSigner.PrivateKey()),
-			})
+		testFileImportInvalidContents(t, string(EDDSA), ecdsaSigner.PrivateKey())
+	})
+}
 
-			// ACT
-			_, err = LocalKeyFromFile(path)
+func TestLocalKeyFromFileNotFound(t *testing.T) {
+	_, err := LocalKeyFromFile(filepath.Join(t.TempDir(), "missing.json"))
+	require.Error(t, err)
+}
 
-			// ASSERT
-			require.Error(t, err)
+func testFileImportInvalidContents(t *testing.T, fileType string, wrongTypeKey []byte) {
+	t.Helper()
+
+	t.Run("wrongKeyType", func(t *testing.T) {
+		path := writeFileJSON(t, "key.json", map[string]string{
+			"type":             fileType,
+			"privateKeyBase64": base64.StdEncoding.EncodeToString(wrongTypeKey),
 		})
+		_, err := LocalKeyFromFile(path)
+		require.Error(t, err)
+	})
 
-		t.Run("notFound", func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "missing.json")
-			_, err := LocalKeyFromFile(path)
-			require.Error(t, err)
+	t.Run("bytesMismatch", func(t *testing.T) {
+		path := writeFileJSON(t, "key.json", map[string]string{
+			"type":             fileType,
+			"privateKeyBase64": base64.StdEncoding.EncodeToString([]byte("too short")),
 		})
-
-		t.Run("bytesMismatch", func(t *testing.T) {
-			path := writeFileJSON(t, "ed25519.json", map[string]string{
-				"type":             string(EDDSA),
-				"privateKeyBase64": base64.StdEncoding.EncodeToString([]byte("too short")),
-			})
-
-			_, err := LocalKeyFromFile(path)
-			require.Error(t, err)
-		})
+		_, err := LocalKeyFromFile(path)
+		require.Error(t, err)
 	})
 }
 

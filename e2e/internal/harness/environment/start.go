@@ -28,6 +28,12 @@ func Start(ctx context.Context, spec Spec, runtime Runtime) (*Environment, error
 	return start(ctx, spec, runtime, productionDrivers())
 }
 
+// Validate checks an Environment declaration and its runtime bindings without
+// acquiring resources.
+func Validate(spec Spec, runtime Runtime) error {
+	return validateInputs(spec.snapshot(), runtime.snapshot())
+}
+
 type drivers struct {
 	validatePrerequisites func(Spec, Runtime) error
 	acquireChain          func(context.Context, ChainSpec, Runtime, workspace) (chainAcquisition, error)
@@ -52,10 +58,7 @@ type attestorAcquisition struct {
 func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environment, error) {
 	spec = spec.snapshot()
 	runtime = runtime.snapshot()
-	if err := spec.validate(); err != nil {
-		return nil, err
-	}
-	if err := validateRuntime(spec, runtime); err != nil {
+	if err := validateInputs(spec, runtime); err != nil {
 		return nil, err
 	}
 	if d.validatePrerequisites != nil {
@@ -107,6 +110,16 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		ws:          ws,
 		lease:       lease,
 	}, nil
+}
+
+func validateInputs(spec Spec, runtime Runtime) error {
+	if err := spec.validate(); err != nil {
+		return err
+	}
+	if err := validateRuntime(spec, runtime); err != nil {
+		return err
+	}
+	return nil
 }
 
 func abortStart(
@@ -168,10 +181,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	}
 	for _, connection := range spec.Connections {
 		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			switch client := declaration.(type) {
-			case NewClient:
-				requiredAuthorities[client.Authority] = struct{}{}
-			case DummyClient:
+			if client, ok := declaration.(NewClient); ok {
 				requiredAuthorities[client.Authority] = struct{}{}
 			}
 		}
@@ -193,29 +203,20 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	}
 	for _, connection := range spec.Connections {
 		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			var (
-				clientID    ClientID
-				authorityID AuthorityID
-				instanceID  IBCInstanceID
-			)
-			switch client := declaration.(type) {
-			case NewClient:
-				clientID, authorityID, instanceID = client.ID, client.Authority, client.IBCInstance
-			case DummyClient:
-				clientID, authorityID, instanceID = client.ID, client.Authority, client.IBCInstance
-			default:
+			client, ok := declaration.(NewClient)
+			if !ok {
 				continue
 			}
-			instance, isNew := newInstances[instanceID]
+			instance, isNew := newInstances[client.IBCInstance]
 			if !isNew {
 				continue
 			}
 			instanceAuthority, _ := runtime.evmAccount(instance.Authority)
-			clientAuthority, _ := runtime.evmAccount(authorityID)
+			clientAuthority, _ := runtime.evmAccount(client.Authority)
 			if instanceAuthority.Address() != clientAuthority.Address() {
 				return fmt.Errorf(
 					"environment: new IBC Client %q authority must resolve to the new IBC Instance %q admin address",
-					clientID,
+					client.ID,
 					instance.ID,
 				)
 			}
@@ -262,9 +263,7 @@ func acquireChains(
 	errs := make([]error, len(declarations))
 	var wg sync.WaitGroup
 	for i, declaration := range declarations {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			acquisition, err := d.acquireChain(ctx, declaration, runtime, ws)
 			if err != nil {
 				errs[i] = fmt.Errorf("start Chain %q failed: %w", declaration.chainID(), err)
@@ -277,7 +276,7 @@ func acquireChains(
 				release:     acquisition.release,
 			})
 			acquired[i] = acquisition
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -340,31 +339,24 @@ func acquireChain(
 
 func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAcquisition, error) {
 	adapter, err := anvil.Start(ctx, anvil.Spec{
-		ID:        string(spec.ID),
-		ChainID:   spec.EVMChainID,
-		LogPath:   filepath.Join(ws.diagnosticsDir, "anvil-"+resourcePathToken(string(spec.ID))+".log"),
-		RunID:     ws.runID,
-		BlockTime: spec.BlockInterval,
+		ID:      string(spec.ID),
+		ChainID: spec.EVMChainID,
+		LogPath: filepath.Join(ws.diagnosticsDir, "anvil-"+resourcePathToken(string(spec.ID))+".log"),
+		RunID:   ws.runID,
 	})
 	if err != nil {
 		return chainAcquisition{}, err
 	}
 
-	timing := instantTiming()
-	if spec.BlockInterval > 0 {
-		timing = blockTiming(spec.BlockInterval)
-	}
 	resolved := &Chain{
 		id:         spec.ID,
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
-		timing:     timing,
+		timing:     blockTiming(time.Second),
 		impl:       adapter,
+		mining:     &Mining{controller: adapter},
 		node:       &NodeLifecycle{controller: adapter},
 		funding:    &Funding{controller: adapter},
-	}
-	if spec.BlockInterval == 0 {
-		resolved.mining = &Mining{controller: adapter}
 	}
 	return chainAcquisition{
 		chain:       resolved,

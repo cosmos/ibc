@@ -21,9 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/link/keyfile"
-
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
+	"github.com/cosmos/ibc/link/keyfile"
 )
 
 const testPrivateKey = "0000000000000000000000000000000000000000000000000000000000000006"
@@ -171,6 +170,10 @@ func runAttestorHelper() error {
 	}
 	if len(config.Attestors) != 1 || config.Attestors[0].Name != "attestor-a" {
 		return fmt.Errorf("helper received unexpected attestor config: %+v", config.Attestors)
+	}
+	if config.Attestors[0].FinalityOffset != HarnessFinalityOffset {
+		return fmt.Errorf("helper received finality offset %d, want %d",
+			config.Attestors[0].FinalityOffset, HarnessFinalityOffset)
 	}
 	if len(config.Signers) != 1 || config.Signers[0].Alias != signerAlias {
 		return fmt.Errorf("helper received unexpected signer config: %+v", config.Signers)

@@ -1,7 +1,6 @@
 package environment
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -116,18 +115,6 @@ func TestSpecValidateNewClientRequiresAttestor(t *testing.T) {
 	spec := validSpec()
 	spec.Attestors = spec.Attestors[:1]
 	require.ErrorContains(t, spec.validate(), "client \"client-b\" must have at least one Attestor")
-}
-
-func TestSpecValidateDummyClientRejectsAttestors(t *testing.T) {
-	spec := validSpec()
-	connection := spec.Connections[0]
-	connection.A = DummyClient{ID: "client-a", IBCInstance: "ibc-a", Authority: "deploy-a"}
-	connection.B = DummyClient{ID: "client-b", IBCInstance: "ibc-b", Authority: "deploy-b"}
-	spec.Connections[0] = connection
-	require.ErrorContains(t, spec.validate(), `Attestor "attestor-1" references DummyClient "client-a"`)
-
-	spec.Attestors = nil
-	require.NoError(t, spec.validate())
 }
 
 func TestSpecValidateNewClientQuorumDoesNotExceedAttestors(t *testing.T) {
@@ -312,13 +299,7 @@ func TestSpecValidateDoesNotMutate(t *testing.T) {
 	spec := validSpec()
 	want := validSpec()
 	require.NoError(t, spec.validate())
-	require.True(t, reflect.DeepEqual(want, spec))
-}
-
-func TestSpecValidateRejectsUnrepresentableAnvilTiming(t *testing.T) {
-	spec := validSpec()
-	spec.Chains[0] = ManagedAnvil{ID: "chain-a", EVMChainID: 31337, BlockInterval: 1500 * time.Millisecond}
-	require.ErrorContains(t, spec.validate(), "block interval must be a whole number of seconds")
+	require.Equal(t, want, spec)
 }
 
 func TestSpecSnapshotOwnsCollections(t *testing.T) {
@@ -347,7 +328,6 @@ func validSpec() Spec {
 				Timing: Timing{
 					BlockInterval:    2 * time.Second,
 					CompletionBudget: 40 * time.Second,
-					SettleWindow:     4 * time.Second,
 					PollInterval:     250 * time.Millisecond,
 				},
 			},

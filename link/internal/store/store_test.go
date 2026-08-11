@@ -49,7 +49,7 @@ func TestStore(t *testing.T) {
 			db, err := NewSqlite(filename)
 			require.NoError(t, err)
 
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 
 			// Ensure migrations are applied
 			ensureMigrated(t, db)
@@ -71,7 +71,7 @@ func TestStore(t *testing.T) {
 		db, err := NewSqliteInMemory()
 		require.NoError(t, err)
 
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		testMigrationIdempotency(t, db)
 
@@ -95,7 +95,7 @@ func TestStore(t *testing.T) {
 		db, err := NewPostgres(ctx, pg.URL(dbName))
 		require.NoError(t, err)
 
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 
 		// Ensure migrations are applied
 		testMigrationIdempotency(t, db)
@@ -199,8 +199,8 @@ func testRepoReadWrite(t *testing.T, s Store) {
 
 		// A successful fn commits every write
 		err = s.Transact(ctx, func(repo Repository) error {
-			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
-				return err
+			if createErr := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); createErr != nil {
+				return createErr
 			}
 
 			return repo.CreatePacket(ctx, packet)
@@ -318,7 +318,10 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		// recv tx set and cleared
 		recvTime := time.Date(2026, 7, 14, 12, 1, 0, 0, time.UTC)
 		require.NoError(t, s.UpdatePacketStatus(ctx, key, RelayStatusDeliverRecvPacket))
-		require.NoError(t, s.UpdatePacketRecvTx(ctx, key, PacketTx{Hash: "0xrecv", Time: recvTime, RelayerAddress: "0xrelayer"}))
+		require.NoError(
+			t,
+			s.UpdatePacketRecvTx(ctx, key, PacketTx{Hash: "0xrecv", Time: recvTime, RelayerAddress: "0xrelayer"}),
+		)
 
 		got := fetch()
 		assert.Equal(t, RelayStatusDeliverRecvPacket, got.Status)
@@ -335,14 +338,24 @@ func testRepoReadWrite(t *testing.T, s Store) {
 
 		// write ack
 		ackTime := time.Date(2026, 7, 14, 12, 2, 0, 0, time.UTC)
-		require.NoError(t, s.UpdatePacketWriteAck(ctx, key, WriteAck{TxHash: "0xwriteack", TxTime: ackTime, Status: WriteAckStatusSuccess}))
+		require.NoError(
+			t,
+			s.UpdatePacketWriteAck(
+				ctx,
+				key,
+				WriteAck{TxHash: "0xwriteack", TxTime: ackTime, Status: WriteAckStatusSuccess},
+			),
+		)
 		got = fetch()
 		assert.Equal(t, "0xwriteack", *got.WriteAckTxHash)
 		assert.Equal(t, ackTime, got.WriteAckTxTime.UTC())
 		assert.Equal(t, WriteAckStatusSuccess, *got.WriteAckStatus)
 
 		// ack tx set and cleared
-		require.NoError(t, s.UpdatePacketAckTx(ctx, key, PacketTx{Hash: "0xack", Time: ackTime, RelayerAddress: "0xrelayer"}))
+		require.NoError(
+			t,
+			s.UpdatePacketAckTx(ctx, key, PacketTx{Hash: "0xack", Time: ackTime, RelayerAddress: "0xrelayer"}),
+		)
 		got = fetch()
 		assert.Equal(t, "0xack", *got.AckTxHash)
 
@@ -353,7 +366,10 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Nil(t, got.AckTxRelayerAddress)
 
 		// timeout tx set and cleared
-		require.NoError(t, s.UpdatePacketTimeoutTx(ctx, key, PacketTx{Hash: "0xtimeout", Time: ackTime, RelayerAddress: "0xrelayer"}))
+		require.NoError(
+			t,
+			s.UpdatePacketTimeoutTx(ctx, key, PacketTx{Hash: "0xtimeout", Time: ackTime, RelayerAddress: "0xrelayer"}),
+		)
 		got = fetch()
 		assert.Equal(t, "0xtimeout", *got.TimeoutTxHash)
 
@@ -367,7 +383,10 @@ func testRepoReadWrite(t *testing.T, s Store) {
 
 		// updates to a different key are noops for this packet
 		other := PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 78}
-		require.NoError(t, s.UpdatePacketRecvTx(ctx, other, PacketTx{Hash: "0xother", Time: recvTime, RelayerAddress: "0xrelayer"}))
+		require.NoError(
+			t,
+			s.UpdatePacketRecvTx(ctx, other, PacketTx{Hash: "0xother", Time: recvTime, RelayerAddress: "0xrelayer"}),
+		)
 		assert.Nil(t, fetch().RecvTxHash)
 	})
 }

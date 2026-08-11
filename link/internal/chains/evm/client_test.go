@@ -8,7 +8,6 @@ import (
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -222,7 +221,6 @@ func TestTxPacketEvents(t *testing.T) {
 		// ASSERT
 		require.ErrorContains(t, err, "invalid ics26 router address")
 	})
-
 }
 
 func TestGetBlockHeader(t *testing.T) {
@@ -360,7 +358,12 @@ func TestGetCommitment(t *testing.T) {
 }
 
 // writeAckLog ABI-encodes a WriteAcknowledgement event log as the router contract emits it.
-func writeAckLog(t *testing.T, address common.Address, packet ics26router.IICS26RouterMsgsPacket, acks [][]byte) *types.Log {
+func writeAckLog(
+	t *testing.T,
+	address common.Address,
+	packet ics26router.IICS26RouterMsgsPacket,
+	acks [][]byte,
+) *types.Log {
 	t.Helper()
 
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
@@ -426,7 +429,10 @@ func TestFindPacketTx(t *testing.T) {
 
 		log := types.Log{TxHash: txHash, BlockNumber: 100}
 		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return([]types.Log{log}, nil).Once()
-		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(&types.Header{Time: 1752000000, Number: big.NewInt(100)}, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(ctx, big.NewInt(100)).
+			Return(&types.Header{Time: 1752000000, Number: big.NewInt(100)}, nil).
+			Once()
 		// sender lookup failures are tolerated
 		eth.EXPECT().TransactionByHash(ctx, txHash).Return(nil, false, errors.New("pruned")).Once()
 
@@ -474,7 +480,13 @@ func TestPacketWriteAckStatus(t *testing.T) {
 		client, eth := newTestClient(t)
 		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receiptWithAcks(t, [][]byte{{0x01}}), nil).Once()
 
-		status, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient)
+		status, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.String(),
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestClient,
+		)
 
 		require.NoError(t, err)
 		assert.Equal(t, v2.WriteAckStatusSuccess, status)
@@ -482,9 +494,18 @@ func TestPacketWriteAckStatus(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		client, eth := newTestClient(t)
-		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receiptWithAcks(t, [][]byte{errorAcknowledgement[:]}), nil).Once()
+		eth.EXPECT().
+			TransactionReceipt(ctx, txHash).
+			Return(receiptWithAcks(t, [][]byte{errorAcknowledgement[:]}), nil).
+			Once()
 
-		status, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient)
+		status, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.String(),
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestClient,
+		)
 
 		require.NoError(t, err)
 		assert.Equal(t, v2.WriteAckStatusError, status)
@@ -494,7 +515,13 @@ func TestPacketWriteAckStatus(t *testing.T) {
 		client, eth := newTestClient(t)
 		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receiptWithAcks(t, [][]byte{{0x01}}), nil).Once()
 
-		_, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence+1, packet.SourceClient, packet.DestClient)
+		_, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.String(),
+			packet.Sequence+1,
+			packet.SourceClient,
+			packet.DestClient,
+		)
 
 		require.ErrorIs(t, err, v2.ErrWriteAckNotFoundForPacket)
 	})
@@ -503,7 +530,13 @@ func TestPacketWriteAckStatus(t *testing.T) {
 		client, eth := newTestClient(t)
 		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, ethereum.NotFound).Once()
 
-		_, err := client.PacketWriteAckStatus(ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient)
+		_, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.String(),
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestClient,
+		)
 
 		require.ErrorIs(t, err, v2.ErrTxNotFound)
 	})
@@ -605,7 +638,10 @@ func TestWaitForChain(t *testing.T) {
 
 	client, eth := newTestClient(t)
 	future := uint64(time.Now().Add(time.Hour).Unix())
-	eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Number: big.NewInt(1), Time: future}, nil).Once()
+	eth.EXPECT().
+		HeaderByNumber(ctx, (*big.Int)(nil)).
+		Return(&types.Header{Number: big.NewInt(1), Time: future}, nil).
+		Once()
 
 	require.NoError(t, client.WaitForChain(ctx))
 }

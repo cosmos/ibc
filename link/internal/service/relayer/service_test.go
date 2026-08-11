@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
@@ -107,7 +106,7 @@ func TestRelay(t *testing.T) {
 		// request and packets land in one transaction; hash normalized to lowercase
 		st.EXPECT().
 			Transact(ctx, mock.AnythingOfType("func(store.Repository) error")).
-			RunAndReturn(func(ctx context.Context, fn func(store.Repository) error) error {
+			RunAndReturn(func(_ context.Context, fn func(store.Repository) error) error {
 				return fn(repo)
 			}).
 			Once()

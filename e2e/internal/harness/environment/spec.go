@@ -53,13 +53,10 @@ type ChainSpec interface {
 	validateChain() error
 }
 
-// ManagedAnvil declares an environment-owned Anvil Chain. A zero
-// BlockInterval selects the launcher's instant-mining behavior; positive
-// intervals must use the launcher's whole-second granularity.
+// ManagedAnvil declares an environment-owned Anvil Chain.
 type ManagedAnvil struct {
-	ID            ChainID
-	EVMChainID    uint64
-	BlockInterval time.Duration
+	ID         ChainID
+	EVMChainID uint64
 }
 
 func (ManagedAnvil) chainSpec() {}
@@ -73,12 +70,6 @@ func (c ManagedAnvil) validateChain() error {
 	}
 	if c.EVMChainID == 0 {
 		return errorsf("chain %q: EVM chain id must be greater than zero", c.ID)
-	}
-	if c.BlockInterval < 0 {
-		return errorsf("chain %q: block interval must not be negative", c.ID)
-	}
-	if c.BlockInterval > 0 && c.BlockInterval%time.Second != 0 {
-		return errorsf("chain %q: block interval must be a whole number of seconds", c.ID)
 	}
 	return nil
 }
@@ -132,14 +123,12 @@ func (c AttachedEVM) validateChain() error {
 	return c.Timing.validate(c.ID)
 }
 
-// Timing describes the end-to-end wait behavior workflows need without
-// assuming Anvil or Besu defaults. SettleWindow must cover chain progress and
-// harness-managed relayer and attestor delays. BlockInterval may be zero for
-// instant mining; all wait budgets must be positive.
+// Timing describes endpoint wait behavior without assuming Anvil or Besu
+// defaults. BlockInterval may be zero for attached chains whose cadence is
+// unknown; all wait budgets must be positive.
 type Timing struct {
 	BlockInterval    time.Duration
 	CompletionBudget time.Duration
-	SettleWindow     time.Duration
 	PollInterval     time.Duration
 }
 
@@ -149,9 +138,6 @@ func (t Timing) validate(id ChainID) error {
 	}
 	if t.CompletionBudget <= 0 {
 		return errorsf("chain %q timing: completion budget must be greater than zero", id)
-	}
-	if t.SettleWindow <= 0 {
-		return errorsf("chain %q timing: settle window must be greater than zero", id)
 	}
 	if t.PollInterval <= 0 {
 		return errorsf("chain %q timing: poll interval must be greater than zero", id)
@@ -250,17 +236,6 @@ type NewClient struct {
 
 func (NewClient) clientSpec() {}
 
-// DummyClient declares a permissive light client end that accepts every
-// packet without attestors. When IBCInstance refers to a NewIBCInstance,
-// Authority must resolve to the same address as that Instance's Authority.
-type DummyClient struct {
-	ID          ClientID
-	IBCInstance IBCInstanceID
-	Authority   AuthorityID
-}
-
-func (DummyClient) clientSpec() {}
-
 // ExistingClient identifies an already-created IBC Client.
 type ExistingClient struct {
 	ID          ClientID
@@ -318,10 +293,6 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 				client.ID,
 			)
 		}
-	case DummyClient:
-		client = clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
-		variantField = "authority"
-		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		client = clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
 		variantField = "locator"
@@ -356,8 +327,6 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 func clientIdentity(spec ClientSpec) clientIdentityValue {
 	switch declaration := spec.(type) {
 	case NewClient:
-		return clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
-	case DummyClient:
 		return clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
 	case ExistingClient:
 		return clientIdentityValue{ID: declaration.ID, IBCInstance: declaration.IBCInstance}
@@ -473,14 +442,6 @@ func (s Spec) validate() error {
 
 	attestors := make(map[AttestorID]struct{}, len(s.Attestors))
 	attestorsByClient := make(map[ClientID]int, len(s.Attestors))
-	dummyClients := make(map[ClientID]struct{})
-	for _, connection := range s.Connections {
-		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			if client, ok := declaration.(DummyClient); ok {
-				dummyClients[client.ID] = struct{}{}
-			}
-		}
-	}
 	for _, attestor := range s.Attestors {
 		if err := requireValue("Attestor id", string(attestor.ID)); err != nil {
 			return err
@@ -493,9 +454,6 @@ func (s Spec) validate() error {
 		}
 		if _, exists := clients[attestor.Client]; !exists {
 			return errorsf("Attestor %q references unknown IBC Client %q", attestor.ID, attestor.Client)
-		}
-		if _, isDummy := dummyClients[attestor.Client]; isDummy {
-			return errorsf("Attestor %q references DummyClient %q", attestor.ID, attestor.Client)
 		}
 		if err := requireValue(
 			fmt.Sprintf("Attestor %q authority", attestor.ID),

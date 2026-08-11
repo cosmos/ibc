@@ -139,6 +139,10 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 		toProcess = append(toProcess, input)
 	}
 
+	if len(toProcess) == 0 {
+		return notProcessing, nil
+	}
+
 	output, err := mw.internal.Process(ctx, toProcess)
 	if err != nil {
 		// on shutdown the outer processor cancels for us

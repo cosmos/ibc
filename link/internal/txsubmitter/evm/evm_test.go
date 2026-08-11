@@ -24,7 +24,10 @@ const (
 	toAddress  = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 )
 
-func newTestTxSubmitter(t *testing.T, opts ChainOptions) (*TxSubmitter, *mocks.MockTxSubmitterETHClient, signer.Signer) {
+func newTestTxSubmitter(
+	t *testing.T,
+	opts ChainOptions,
+) (*TxSubmitter, *mocks.MockTxSubmitterETHClient, signer.Signer) {
 	t.Helper()
 
 	eth := mocks.NewMockTxSubmitterETHClient(t)
@@ -113,7 +116,10 @@ func TestShouldRetry(t *testing.T) {
 	t.Run("pendingNotExpired", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(ctx, (*big.Int)(nil)).
+			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
 
@@ -124,7 +130,10 @@ func TestShouldRetry(t *testing.T) {
 	t.Run("pendingExpired", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
 		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(ctx, (*big.Int)(nil)).
+			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now().Add(-time.Hour))
 
@@ -134,7 +143,10 @@ func TestShouldRetry(t *testing.T) {
 
 	t.Run("reverted", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).Once()
+		eth.EXPECT().
+			TransactionReceipt(ctx, mock.Anything).
+			Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
 
@@ -144,7 +156,10 @@ func TestShouldRetry(t *testing.T) {
 
 	t.Run("confirmed", func(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).Once()
+		eth.EXPECT().
+			TransactionReceipt(ctx, mock.Anything).
+			Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).
+			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
 

@@ -118,8 +118,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		processSigner.File = cfg.SignerKeyFile
 	}
 	file := fileConfig{
-		Server:  serverConfig{ListenAddress: "127.0.0.1:0"},
-		DB:      dbConfig{Type: "sqlite", URL: cfg.DBPath},
+		Server:  serverConfig{ListenAddress: loopbackAnyPort},
+		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
 		Signers: []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},

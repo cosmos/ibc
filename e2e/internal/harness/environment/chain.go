@@ -7,13 +7,13 @@ import (
 	"math/big"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	chainimpl "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	ethereum "github.com/ethereum/go-ethereum"
 )
 
 var (
@@ -194,8 +194,7 @@ func (e *EVM) use(use func(*chainevm.EVMClient) error) error {
 }
 
 // Mining returns explicit mining control only when the selected declaration
-// and adapter guarantee it. Attached Chains never receive it from connectivity
-// alone, and interval-mining Anvil does not expose manual mining control.
+// and adapter guarantee it. Attached Chains never receive it from connectivity alone.
 func (c *Chain) Mining() (*Mining, error) {
 	err := c.use(func() error {
 		if c.mining == nil {
@@ -299,19 +298,10 @@ func (n *NodeLifecycle) Start(ctx context.Context) error {
 	return n.chain.use(func() error { return n.controller.StartNode(ctx) })
 }
 
-func instantTiming() Timing {
-	return Timing{
-		CompletionBudget: 60 * time.Second,
-		SettleWindow:     1500 * time.Millisecond,
-		PollInterval:     100 * time.Millisecond,
-	}
-}
-
 func blockTiming(block time.Duration) Timing {
 	return Timing{
 		BlockInterval:    block,
 		CompletionBudget: 20 * block,
-		SettleWindow:     2 * block,
 		PollInterval:     clampPoll(block / 4),
 	}
 }

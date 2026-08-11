@@ -28,7 +28,7 @@ var (
 	}
 
 	cmdMigrateStatus = &cobra.Command{
-		Use:   "status",
+		Use:   useStatus,
 		Short: "Print migration status",
 		RunE:  migrateStatus,
 	}

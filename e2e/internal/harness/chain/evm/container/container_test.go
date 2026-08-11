@@ -4,10 +4,9 @@ import (
 	"net/netip"
 	"testing"
 
+	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/stretchr/testify/require"
-
-	containertypes "github.com/moby/moby/api/types/container"
 )
 
 func TestNamePrefixSanitizesDockerNames(t *testing.T) {

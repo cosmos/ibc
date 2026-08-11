@@ -40,17 +40,26 @@ type timeoutAttestationClient struct {
 	t *testing.T
 }
 
-func (c timeoutAttestationClient) LatestHeight(ctx context.Context, _ *connect.Request[proto.LatestHeightRequest]) (*connect.Response[proto.LatestHeightResponse], error) {
+func (c timeoutAttestationClient) LatestHeight(
+	ctx context.Context,
+	_ *connect.Request[proto.LatestHeightRequest],
+) (*connect.Response[proto.LatestHeightResponse], error) {
 	c.requireTimeout(ctx)
 	return connect.NewResponse(&proto.LatestHeightResponse{}), nil
 }
 
-func (c timeoutAttestationClient) StateAttestation(ctx context.Context, _ *connect.Request[proto.StateAttestationRequest]) (*connect.Response[proto.StateAttestationResponse], error) {
+func (c timeoutAttestationClient) StateAttestation(
+	ctx context.Context,
+	_ *connect.Request[proto.StateAttestationRequest],
+) (*connect.Response[proto.StateAttestationResponse], error) {
 	c.requireTimeout(ctx)
 	return connect.NewResponse(&proto.StateAttestationResponse{Attestation: &proto.Attestation{}}), nil
 }
 
-func (c timeoutAttestationClient) PacketAttestation(ctx context.Context, _ *connect.Request[proto.PacketAttestationRequest]) (*connect.Response[proto.PacketAttestationResponse], error) {
+func (c timeoutAttestationClient) PacketAttestation(
+	ctx context.Context,
+	_ *connect.Request[proto.PacketAttestationRequest],
+) (*connect.Response[proto.PacketAttestationResponse], error) {
 	c.requireTimeout(ctx)
 	return connect.NewResponse(&proto.PacketAttestationResponse{Attestation: &proto.Attestation{}}), nil
 }

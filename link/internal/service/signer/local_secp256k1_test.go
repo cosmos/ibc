@@ -3,7 +3,6 @@ package signer
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"path/filepath"
 	"testing"
 
@@ -73,38 +72,10 @@ func TestLocalSecp256k1Signer(t *testing.T) {
 	})
 
 	t.Run("fileImportInvalidKey", func(t *testing.T) {
-		t.Run("eddsaKey", func(t *testing.T) {
-			// ARRANGE
-			ed25519Signer, err := GenerateLocalEd25519Signer()
-			require.NoError(t, err)
+		ed25519Signer, err := GenerateLocalEd25519Signer()
+		require.NoError(t, err)
 
-			path := writeFileJSON(t, "secp256k1.json", map[string]string{
-				"type":             string(ECDSA),
-				"privateKeyBase64": base64.StdEncoding.EncodeToString(ed25519Signer.PrivateKey()),
-			})
-
-			// ACT
-			_, err = LocalKeyFromFile(path)
-
-			// ASSERT
-			require.Error(t, err)
-		})
-
-		t.Run("notFound", func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "missing.json")
-			_, err := LocalKeyFromFile(path)
-			require.Error(t, err)
-		})
-
-		t.Run("bytesMismatch", func(t *testing.T) {
-			path := writeFileJSON(t, "secp256k1.json", map[string]string{
-				"type":             string(ECDSA),
-				"privateKeyBase64": base64.StdEncoding.EncodeToString([]byte("too short")),
-			})
-
-			_, err := LocalKeyFromFile(path)
-			require.Error(t, err)
-		})
+		testFileImportInvalidContents(t, string(ECDSA), ed25519Signer.PrivateKey())
 	})
 }
 

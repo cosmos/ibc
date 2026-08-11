@@ -24,7 +24,7 @@ type GMPRequest struct {
 	Salt []byte
 }
 
-// GMP binds ICS27 GMP and its default Counter and TestERC20 targets on a
+// GMP drives ICS27 GMP and its default Counter and TestERC20 targets on a
 // single directed route.
 type GMP struct {
 	routeID      RouteID

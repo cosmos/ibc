@@ -13,17 +13,16 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
+	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 )
 
 // This deterministic identity is not one of Anvil's provider-default funded accounts.
 const testDeployerPrivateKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
-func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
+func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 	requireDocker(t)
 	requireIBCLinkBinary(t)
 
@@ -95,6 +94,14 @@ func TestStartRealizesSolidityIBCConnectionAndAttestors(t *testing.T) {
 	require.True(t, common.IsHexAddress(string(resolvedInstanceB.Locator())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.AccessManagerAddress())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.AccessManagerAddress())))
+
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.ICS20TransferAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceA.ICS27GMPAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.ICS20TransferAddress())))
+	require.NotEqual(t, common.Address{}, common.HexToAddress(string(resolvedInstanceB.ICS27GMPAddress())))
+	byChainA, err := env.IBCInstanceForChain(chainA)
+	require.NoError(t, err)
+	require.Same(t, resolvedInstanceA, byChainA)
 
 	connection, err := env.Connection(connectionID)
 	require.NoError(t, err)
@@ -390,7 +397,6 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 			Endpoint:   attachedRPC,
 			Timing: environment.Timing{
 				CompletionBudget: 30 * time.Second,
-				SettleWindow:     time.Second,
 				PollInterval:     100 * time.Millisecond,
 			},
 		},
@@ -409,6 +415,7 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 
 	_, err = managed.Height(t.Context())
 	require.NoError(t, err, "managed Chain is ready")
+	require.Equal(t, time.Second, managed.Timing().BlockInterval)
 	_, err = attached.Height(t.Context())
 	require.NoError(t, err, "attached Chain is ready")
 
@@ -457,6 +464,10 @@ func TestStartMixedManagedAndAttachedEVM(t *testing.T) {
 	headerAfterRestart, err := evmClient.HeaderByNumber(t.Context(), nil)
 	require.NoError(t, err, "an EVM handle created before restart must resolve the replacement client")
 	require.GreaterOrEqual(t, headerAfterRestart.Number.Uint64(), headerBeforeRestart.Number.Uint64())
+	require.Eventually(t, func() bool {
+		height, heightErr := managed.Height(t.Context())
+		return heightErr == nil && height > headerAfterRestart.Number.Uint64()
+	}, 3*time.Second, 50*time.Millisecond, "restarted managed Anvil must resume idle progress")
 
 	funding, err = attached.Funding()
 	require.Nil(t, funding)
@@ -584,7 +595,7 @@ func requireIBCLinkBinary(t *testing.T) {
 	}
 	if info.Mode()&0o111 == 0 {
 		if os.Getenv("IBC_BIN") != "" {
-			t.Fatalf("explicit IBC_BIN is not executable: %s", path)
+			require.FailNow(t, "explicit IBC_BIN is not executable: "+path)
 		}
 		t.Skipf("IBC Link binary is not executable: %s; run `make -C link build`", path)
 	}
@@ -605,7 +616,6 @@ func startOutOfBandAnvil(t *testing.T, id string, chainID uint64) *anvil.Chain {
 func attachedTiming() environment.Timing {
 	return environment.Timing{
 		CompletionBudget: 30 * time.Second,
-		SettleWindow:     time.Second,
 		PollInterval:     100 * time.Millisecond,
 	}
 }

@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	migrate "github.com/rubenv/sql-migrate"
 
 	"github.com/cosmos/ibc/link/internal/config"
-
-	migrate "github.com/rubenv/sql-migrate"
 )
 
 const migrationTemplate = `-- +migrate Up

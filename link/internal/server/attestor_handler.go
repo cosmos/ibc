@@ -8,9 +8,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/service/attestor"
-
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
+	"github.com/cosmos/ibc/link/internal/service/attestor"
 )
 
 // AttestorHandler handles attestor RPC requests.

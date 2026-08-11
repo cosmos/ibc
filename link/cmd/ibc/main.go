@@ -10,11 +10,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/deploy"
 	"github.com/cosmos/ibc/link/internal/pkg/logging"
 )
 
 // global globalFlags, loaded in config.DeclarePersistentFlags()
 var globalFlags = config.DefaultFlagSet()
+
+// useStatus is the shared "status" subcommand name and status-field key,
+// factored out to satisfy goconst across cmd/ibc.
+const useStatus = "status"
 
 var rootCmd = &cobra.Command{
 	Use:   "ibc",
@@ -50,6 +55,7 @@ func init() {
 		cmdQuery,
 		cmdMigrate,
 		cmdKeys,
+		cmdDeploy,
 	)
 
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
@@ -75,4 +81,32 @@ func init() {
 
 	// Migrate commands
 	cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)
+
+	// Deploy commands
+	cmdDeploy.AddCommand(
+		cmdDeployCore, cmdDeployClient,
+		cmdDeployStatus, cmdDeployRenderConfig,
+	)
+	dpf := cmdDeploy.PersistentFlags()
+	dpf.StringVar(&flagDeployManifestDir, "manifest-dir", "deployments", "manifest directory relative to home")
+	dpf.StringVar(&flagDeployDeployer, "deployer", "", "signer alias override for deployment transactions")
+	dpf.StringVar(&flagDeployChain, "chain", "", "chain ID for the chain being deployed to")
+	dpf.BoolVar(&flagDeployDryRun, "dry-run", false, "print the step plan without submitting transactions")
+	dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")
+
+	cmdDeployClient.Flags().
+		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
+	cmdDeployClient.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
+	cmdDeployClient.Flags().
+		StringSliceVar(&flagDeployAttestors, "attestors", nil,
+			"attestors for the new client: addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
+	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
+	cmdDeployClient.Flags().
+		StringVar(&flagDeployClientID, "client-id", "", "client id (default: link-<a>-<b>, chain ids sorted)")
+	cmdDeployClient.Flags().
+		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default: link-<a>-<b>, chain ids sorted)")
+	cmdDeployClient.Flags().
+		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
+	cmdDeployClient.Flags().
+		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
 }

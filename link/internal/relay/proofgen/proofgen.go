@@ -9,12 +9,11 @@ import (
 
 	"github.com/pkg/errors"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen/attestation"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 

@@ -36,7 +36,15 @@ type Driver struct {
 
 // ConfigureRelayer stores the identifier mappings StartRelayer adapts the
 // relayer's wire contract with. Callers set it when writing the config file.
-func (r *Driver) ConfigureRelayer(opts RelayerOptions) { r.relayerOpts = opts }
+func (r *Driver) ConfigureRelayer(opts RelayerOptions) error {
+	for route, policy := range opts.WaitPolicies {
+		if policy.CompletionBudget <= 0 || policy.StatusPoll <= 0 || policy.StabilityWindow <= 0 {
+			return fmt.Errorf("ibclink: route %q has invalid wait policy: %+v", route, policy)
+		}
+	}
+	r.relayerOpts = opts
+	return nil
+}
 
 func NewDriver(configPath string) (*Driver, error) {
 	if configPath == "" {
@@ -51,7 +59,7 @@ func NewDriver(configPath string) (*Driver, error) {
 
 func (r *Driver) MigrateUp(ctx context.Context) error {
 	args := append([]string{"migrate", "up"}, r.configArgs()...)
-	res, err := r.exec(ctx, r.bin, "migrate up", args...)
+	res, err := r.exec(ctx, r.bin, "migrate up", defaultCommandTimeout, args...)
 	if err != nil {
 		return err
 	}
