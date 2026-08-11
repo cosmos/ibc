@@ -1,21 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+
 name: DCO Check
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 concurrency:
   group: dco-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  pull-requests: write
+permissions: read-all
 
 jobs:
   dco:
     name: DCO
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
     env:
       ALLOW_COMMITTER_EMAIL: "true"
       COMMENT_MARKER: "<!-- dco-check -->"
@@ -29,7 +33,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # All commits in the PR (gh merges pages into one JSON array).
           commits="$(gh api --paginate "repos/$REPO/pulls/$PR/commits")"
           failed_rows=()   # markdown rows for the summary/comment
           annotate=()      # inline ::error:: annotations
@@ -42,8 +45,8 @@ jobs:
             author_type="$(jq -r '.author.type // ""' <<<"$commit")"
             author_email="$(jq -r '.commit.author.email' <<<"$commit" | lc)"
             committer_email="$(jq -r '.commit.committer.email' <<<"$commit" | lc)"
-            subject="$(jq -r '.commit.message' <<<"$commit" | head -n1)"
             message="$(jq -r '.commit.message' <<<"$commit")"
+            subject="${message%%$'\n'*}"; subject="${subject%$'\r'}"
 
             # Skip merge commits and bot-authored commits (Probot DCO default).
             if [ "$parents" -gt 1 ]; then echo "skip  $short  (merge)"; continue; fi
@@ -96,16 +99,20 @@ jobs:
             echo ""
             echo "_Tip: run \`git config alias.cs 'commit -s'\` so \`git cs\` always signs off._"
           }
-          post_comment() {
-            local body="$1"
-            local id
-            id="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-                   --jq "map(select(.body|contains(\"$COMMENT_MARKER\")))|.[0].id" \
-                   2>/dev/null || true)"
-            if [ -n "$id" ] && [ "$id" != "null" ]; then
-              gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null 2>&1 || true
-            else
-              gh api -X POST  "repos/$REPO/issues/$PR/comments"   -f body="$body" >/dev/null 2>&1 || true
+
+          find_comment() {
+            gh api "repos/$REPO/issues/$PR/comments" --paginate --slurp \
+              --jq "(add // []) | map(select(.body|contains(\"$COMMENT_MARKER\"))) | .[0].id // empty" \
+              2>/dev/null || true
+          }
+
+          upsert_comment() {
+            local body="$1" create="$2" id
+            id="$(find_comment)"
+            if [ -n "$id" ]; then
+              gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null || true
+            elif [ "$create" = "true" ]; then
+              gh api -X POST "repos/$REPO/issues/$PR/comments" -f body="$body" >/dev/null || true
             fi
           }
 
@@ -113,13 +120,13 @@ jobs:
             printf '%s\n' "${annotate[@]}"
             body="$(build_body)"
             echo "$body" >> "$GITHUB_STEP_SUMMARY"
-            post_comment "$body"
+            upsert_comment "$body" true
             echo ""
             echo "DCO failed for ${#failed_rows[@]} commit(s)."
             exit 1
           fi
 
           # Passing: clear a stale failure comment if we left one earlier.
-          post_comment "$COMMENT_MARKER"$'\n'"### ✅ DCO check passed — all commits are signed off."
+          upsert_comment "$COMMENT_MARKER"$'\n'"### ✅ DCO check passed — all commits are signed off." false
           echo "### ✅ DCO check passed" >> "$GITHUB_STEP_SUMMARY"
           echo "All commits carry a valid Signed-off-by line."
