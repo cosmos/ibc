@@ -128,7 +128,7 @@ func (c *GMPCall) VerifyCounterUnchanged(ctx context.Context) error {
 // VerifyTimeoutExecuted checks that txHash succeeded with a TimeoutPacket for this packet.
 func (c *GMPCall) VerifyTimeoutExecuted(ctx context.Context, txHash string) error {
 	return verifyPacketTimeout(
-		ctx, c.app.source, c.app.sourceRouter, c.app.sourceClient, c.packet, txHash,
+		ctx, c.app.source, c.app.sourceRouter, c.app.sourceClientID, c.packetTx, txHash,
 	)
 }
 

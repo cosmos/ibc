@@ -56,7 +56,7 @@ func TestGMPCall_Timeout(t *testing.T) {
 	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	status, err := e2etest.AwaitState(ctx, relayer, call.Packet(),
+	status, err := e2etest.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyTimeoutExecuted(ctx, status.GetTimeoutTx().GetTxHash()))
