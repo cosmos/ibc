@@ -1,0 +1,128 @@
+name: DCO Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: dco-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    env:
+      ALLOW_COMMITTER_EMAIL: "true"
+      COMMENT_MARKER: "<!-- dco-check -->"
+    steps:
+      - name: Verify Signed-off-by on all commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          # All commits in the PR (gh merges pages into one JSON array).
+          commits="$(gh api --paginate "repos/$REPO/pulls/$PR/commits")"
+          failed_rows=()   # markdown rows for the summary/comment
+          annotate=()      # inline ::error:: annotations
+          lc() { tr '[:upper:]' '[:lower:]'; }
+
+          while read -r commit; do
+            sha="$(jq -r '.sha' <<<"$commit")"
+            short="${sha:0:8}"
+            parents="$(jq '.parents | length' <<<"$commit")"
+            author_type="$(jq -r '.author.type // ""' <<<"$commit")"
+            author_email="$(jq -r '.commit.author.email' <<<"$commit" | lc)"
+            committer_email="$(jq -r '.commit.committer.email' <<<"$commit" | lc)"
+            subject="$(jq -r '.commit.message' <<<"$commit" | head -n1)"
+            message="$(jq -r '.commit.message' <<<"$commit")"
+
+            # Skip merge commits and bot-authored commits (Probot DCO default).
+            if [ "$parents" -gt 1 ]; then echo "skip  $short  (merge)"; continue; fi
+            if [ "$author_type" = "Bot" ]; then echo "skip  $short  (bot)"; continue; fi
+
+            # Extract emails from well-formed sign-off trailers: a non-empty
+            # name followed by <email>. Malformed lines don't count.
+            mapfile -t signoff_emails < <(
+              printf '%s\n' "$message" \
+                | grep -iE '^Signed-off-by:[[:space:]]+.+[[:space:]]+<[^>]+>[[:space:]]*$' \
+                | sed -E 's/.*<([^>]+)>.*/\1/' | lc
+            )
+
+            match=0
+            for e in "${signoff_emails[@]:-}"; do
+              [ "$e" = "$author_email" ] && { match=1; break; }
+              if [ "$ALLOW_COMMITTER_EMAIL" = "true" ] && [ "$e" = "$committer_email" ]; then
+                match=1; break
+              fi
+            done
+
+            if [ "$match" -eq 1 ]; then
+              echo "ok    $short  $subject"
+            else
+              echo "FAIL  $short  $subject"
+              annotate+=("::error title=DCO — missing sign-off::$short \"$subject\" needs: Signed-off-by: <name> <$author_email>")
+              failed_rows+=("| \`$short\` | ${subject//|/\\|} | \`Signed-off-by: Your Name <$author_email>\` |")
+            fi
+          done < <(jq -c '.[]' <<<"$commits")
+
+          # ---- report -----------------------------------------------------
+          build_body() {
+            echo "$COMMENT_MARKER"
+            echo "### ❌ DCO check failed"
+            echo ""
+            echo "Every commit needs a \`Signed-off-by\` line certifying the [DCO](https://developercertificate.org/). These don't have a valid one:"
+            echo ""
+            echo "| Commit | Subject | Expected trailer |"
+            echo "|---|---|---|"
+            for r in "${failed_rows[@]}"; do echo "$r"; done
+            echo ""
+            echo "**Fix the latest commit**"
+            echo '```sh'
+            echo "git commit --amend --signoff && git push --force-with-lease"
+            echo '```'
+            echo "**Fix all commits in the branch**"
+            echo '```sh'
+            echo "git rebase --signoff origin/${BASE_REF:-main} && git push --force-with-lease"
+            echo '```'
+            echo ""
+            echo "_Tip: run \`git config alias.cs 'commit -s'\` so \`git cs\` always signs off._"
+          }
+
+          # Best-effort sticky comment. Never fails the run (fork PRs get a
+          # read-only token and simply skip this; the check status still blocks).
+          post_comment() {
+            local body="$1"
+            local id
+            id="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                   --jq "map(select(.body|contains(\"$COMMENT_MARKER\")))|.[0].id" \
+                   2>/dev/null || true)"
+            if [ -n "$id" ] && [ "$id" != "null" ]; then
+              gh api -X PATCH "repos/$REPO/issues/comments/$id" -f body="$body" >/dev/null 2>&1 || true
+            else
+              gh api -X POST  "repos/$REPO/issues/$PR/comments"   -f body="$body" >/dev/null 2>&1 || true
+            fi
+          }
+
+          if [ "${#failed_rows[@]}" -gt 0 ]; then
+            printf '%s\n' "${annotate[@]}"
+            body="$(build_body)"
+            echo "$body" >> "$GITHUB_STEP_SUMMARY"
+            post_comment "$body"
+            echo ""
+            echo "DCO failed for ${#failed_rows[@]} commit(s)."
+            exit 1
+          fi
+
+          # Passing: clear a stale failure comment if we left one earlier.
+          post_comment "$COMMENT_MARKER"$'\n'"### ✅ DCO check passed — all commits are signed off."
+          echo "### ✅ DCO check passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "All commits carry a valid Signed-off-by line."
