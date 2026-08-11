@@ -74,7 +74,7 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 
 		attached, chainErr := env.Chain(e2etest.ChainB)
 		require.NoError(t, chainErr)
-		_, awaitErr := e2etest.AwaitState(rctx, relayer, transfer.Packet(),
+		_, awaitErr := e2etest.AwaitState(rctx, relayer, transfer.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, awaitErr)
 		require.NoError(t, transfer.VerifyDelivered(rctx))
