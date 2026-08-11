@@ -13,6 +13,12 @@ import (
 func resolveAttestorToken(cfg config.Config, token string) (string, error) {
 	alias := token
 	if attestor, ok := cfg.AttestorByName(token); ok {
+		if attestor.Type == config.AttestorTypeRemote {
+			return "", errors.Errorf(
+				"attestor %q is remote: its address isn't known statically, pass the address directly",
+				token,
+			)
+		}
 		alias = attestor.Signer
 	}
 	if sc, ok := cfg.Signer(alias); ok {

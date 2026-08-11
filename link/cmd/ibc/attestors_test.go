@@ -31,6 +31,7 @@ func attestorFixture(t *testing.T) (config.Config, string) {
 		Attestors: config.Attestors{
 			{ChainID: "2", Name: "watcher-2", Type: config.AttestorTypeLocal, Signer: "watcher-key"},
 			{ChainID: "9", Name: "watcher-9", Type: config.AttestorTypeLocal, Signer: "kms"},
+			{Name: "watcher-remote", Type: config.AttestorTypeRemote, GRPC: "attestor.example.com:3000"},
 		},
 	}
 	return cfg, address
@@ -64,6 +65,11 @@ func TestResolveAttestorToken(t *testing.T) {
 	// through to address passthrough
 	_, err = resolveAttestorToken(cfg, "kms")
 	require.ErrorContains(t, err, "remote signer")
+
+	// a remote attestor's address isn't known statically — fail clearly
+	// rather than falling through to address passthrough
+	_, err = resolveAttestorToken(cfg, "watcher-remote")
+	require.ErrorContains(t, err, `attestor "watcher-remote" is remote`)
 }
 
 func TestAttestorsForChain(t *testing.T) {
