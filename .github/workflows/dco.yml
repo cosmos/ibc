@@ -96,9 +96,6 @@ jobs:
             echo ""
             echo "_Tip: run \`git config alias.cs 'commit -s'\` so \`git cs\` always signs off._"
           }
-
-          # Best-effort sticky comment. Never fails the run (fork PRs get a
-          # read-only token and simply skip this; the check status still blocks).
           post_comment() {
             local body="$1"
             local id
