@@ -37,7 +37,6 @@ func localCandidate(t *testing.T, alias, watchedChainID, address string) attesto
 
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(alias).Maybe()
-	a.EXPECT().Alias().Return(alias).Maybe()
 	a.EXPECT().ChainID().Return(watchedChainID).Maybe()
 	a.EXPECT().Address().Return(address).Maybe()
 

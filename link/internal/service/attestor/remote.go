@@ -123,7 +123,6 @@ func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttest
 }
 
 func (a *RemoteAttestor) Name() string    { return a.name }
-func (a *RemoteAttestor) Alias() string   { return a.name }
 func (a *RemoteAttestor) ChainID() string { return a.chainID }
 func (a *RemoteAttestor) IsLocal() bool   { return false }
 func (a *RemoteAttestor) Address() string { return a.address }

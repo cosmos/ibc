@@ -115,7 +115,6 @@ func TestLocal(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, attestor)
 				assert.Equal(t, tt.attestorName, attestor.Name())
-				assert.Equal(t, tt.attestorName, attestor.Alias())
 				assert.Equal(t, tt.chainID, attestor.ChainID())
 				assert.True(t, attestor.IsLocal())
 			})

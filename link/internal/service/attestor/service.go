@@ -20,13 +20,9 @@ type Attestor interface {
 	// ChainID returns the chain ID.
 	ChainID() string
 
-	// Name is the name of the attestor. It is NOT unique across the service
-	// Imagine there are 5 remote attestors and inside each they announce same `eth-1-attestor` name
+	// Name is the name of the attestor, used to key it uniquely within this
+	// process's Service.
 	Name() string
-
-	// Alias is the internal unique name of the attestors within THIS process.
-	// Should be unique.
-	Alias() string
 
 	// IsLocal returns true if the attestor is local.
 	IsLocal() bool
@@ -87,17 +83,17 @@ var (
 	ErrReceiptExists      = errors.New("receipt exists")
 )
 
-// New Service constructor. Attestors should have unique aliases
+// New Service constructor. Attestors should have unique names.
 func New(attestors []Attestor) (*Service, error) {
 	set := make(map[string]Attestor)
 	for _, attestor := range attestors {
-		alias := attestor.Alias()
+		name := attestor.Name()
 
-		if _, alreadyExists := set[alias]; alreadyExists {
-			return nil, fmt.Errorf("attestor with alias %s already exists", alias)
+		if _, alreadyExists := set[name]; alreadyExists {
+			return nil, fmt.Errorf("attestor with alias %s already exists", name)
 		}
 
-		set[alias] = attestor
+		set[name] = attestor
 	}
 
 	return &Service{

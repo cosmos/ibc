@@ -80,50 +80,6 @@ func (_c *MockAttestor_Address_Call) RunAndReturn(run func() string) *MockAttest
 	return _c
 }
 
-// Alias provides a mock function for the type MockAttestor
-func (_mock *MockAttestor) Alias() string {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Alias")
-	}
-
-	var r0 string
-	if returnFunc, ok := ret.Get(0).(func() string); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	return r0
-}
-
-// MockAttestor_Alias_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Alias'
-type MockAttestor_Alias_Call struct {
-	*mock.Call
-}
-
-// Alias is a helper method to define mock.On call
-func (_e *MockAttestor_Expecter) Alias() *MockAttestor_Alias_Call {
-	return &MockAttestor_Alias_Call{Call: _e.mock.On("Alias")}
-}
-
-func (_c *MockAttestor_Alias_Call) Run(run func()) *MockAttestor_Alias_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockAttestor_Alias_Call) Return(s string) *MockAttestor_Alias_Call {
-	_c.Call.Return(s)
-	return _c
-}
-
-func (_c *MockAttestor_Alias_Call) RunAndReturn(run func() string) *MockAttestor_Alias_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // ChainID provides a mock function for the type MockAttestor
 func (_mock *MockAttestor) ChainID() string {
 	ret := _mock.Called()

@@ -32,7 +32,7 @@ func TestResolveFromConfig(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, local, 1)
-		require.Equal(t, "alice", local[0].Alias())
+		require.Equal(t, "alice", local[0].Name())
 		require.Empty(t, remote, "an unreachable remote is skipped, not fatal")
 	})
 
