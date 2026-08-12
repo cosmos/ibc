@@ -34,8 +34,6 @@ func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 		instanceA    environment.IBCInstanceID = "ibc-a"
 		instanceB    environment.IBCInstanceID = "ibc-b"
 		connectionID environment.ConnectionID  = "a-b"
-		clientA      environment.ClientID      = "client-a"
-		clientB      environment.ClientID      = "client-b"
 		attestorA    environment.AttestorID    = "attestor-a"
 		attestorB    environment.AttestorID    = "attestor-b"
 		deployer     environment.AuthorityID   = "deployer"
@@ -61,22 +59,18 @@ func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: connectionID,
 			A: environment.NewClient{
-				ID:                    clientA,
 				IBCInstance:           instanceA,
 				Authority:             deployer,
 				MinRequiredSignatures: 1,
+				Attestors:             []environment.AttestorSpec{{ID: attestorA, Authority: signerA}},
 			},
 			B: environment.NewClient{
-				ID:                    clientB,
 				IBCInstance:           instanceB,
 				Authority:             deployer,
 				MinRequiredSignatures: 1,
+				Attestors:             []environment.AttestorSpec{{ID: attestorB, Authority: signerB}},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: attestorA, Client: clientA, Authority: signerA},
-			{ID: attestorB, Client: clientB, Authority: signerB},
-		},
 	}
 	runtime := environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
 		deployer: {PrivateKeyHex: testDeployerPrivateKeyHex},
@@ -107,12 +101,10 @@ func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 
 	connection, err := env.Connection(connectionID)
 	require.NoError(t, err)
-	require.Equal(t, clientA, connection.A().ID())
-	require.Equal(t, clientB, connection.B().ID())
-	require.NotEmpty(t, connection.A().Locator())
-	require.NotEmpty(t, connection.B().Locator())
-	require.Equal(t, connection.B().Locator(), connection.A().CounterpartyLocator())
-	require.Equal(t, connection.A().Locator(), connection.B().CounterpartyLocator())
+	require.NotEmpty(t, connection.A().ID())
+	require.NotEmpty(t, connection.B().ID())
+	require.Equal(t, connection.B().ID(), connection.A().CounterpartyID())
+	require.Equal(t, connection.A().ID(), connection.B().CounterpartyID())
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(connection.A().LightClientAddress())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(connection.B().LightClientAddress())))
 
@@ -199,16 +191,14 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "created-connection",
 			A: environment.NewClient{
-				ID: "created-client-a", IBCInstance: "created-ibc-a", Authority: deployer, MinRequiredSignatures: 1,
+				IBCInstance: "created-ibc-a", Authority: deployer, MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{ID: "created-attestor-a", Authority: signerA}},
 			},
 			B: environment.NewClient{
-				ID: "created-client-b", IBCInstance: "created-ibc-b", Authority: deployer, MinRequiredSignatures: 1,
+				IBCInstance: "created-ibc-b", Authority: deployer, MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{ID: "created-attestor-b", Authority: signerB}},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: "created-attestor-a", Client: "created-client-a", Authority: signerA},
-			{ID: "created-attestor-b", Client: "created-client-b", Authority: signerB},
-		},
 	}, environment.Runtime{
 		Endpoints: endpoints,
 		Authorities: map[environment.AuthorityID]environment.EVMAuthority{
@@ -240,16 +230,14 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "attached-connection",
 			A: environment.ExistingClient{
-				ID: "attached-client-a", IBCInstance: "attached-ibc-a", Locator: createdConnection.A().Locator(),
+				IBCInstance: "attached-ibc-a", ID: createdConnection.A().ID(),
+				Attestors: []environment.AttestorSpec{{ID: "attached-attestor-a", Authority: signerA}},
 			},
 			B: environment.ExistingClient{
-				ID: "attached-client-b", IBCInstance: "attached-ibc-b", Locator: createdConnection.B().Locator(),
+				IBCInstance: "attached-ibc-b", ID: createdConnection.B().ID(),
+				Attestors: []environment.AttestorSpec{{ID: "attached-attestor-b", Authority: signerB}},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: "attached-attestor-a", Client: "attached-client-a", Authority: signerA},
-			{ID: "attached-attestor-b", Client: "attached-client-b", Authority: signerB},
-		},
 	}, environment.Runtime{
 		Endpoints: endpoints,
 		Authorities: map[environment.AuthorityID]environment.EVMAuthority{
@@ -262,16 +250,16 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 
 	attachedConnection, err := attached.Connection("attached-connection")
 	require.NoError(t, err)
-	require.Equal(t, createdConnection.A().Locator(), attachedConnection.A().Locator())
-	require.Equal(t, createdConnection.B().Locator(), attachedConnection.B().Locator())
-	require.Equal(t, createdConnection.B().Locator(), attachedConnection.A().CounterpartyLocator())
-	require.Equal(t, createdConnection.A().Locator(), attachedConnection.B().CounterpartyLocator())
+	require.Equal(t, createdConnection.A().ID(), attachedConnection.A().ID())
+	require.Equal(t, createdConnection.B().ID(), attachedConnection.B().ID())
+	require.Equal(t, createdConnection.B().ID(), attachedConnection.A().CounterpartyID())
+	require.Equal(t, createdConnection.A().ID(), attachedConnection.B().CounterpartyID())
 
 	require.NoError(t, attached.Close(t.Context()))
 
-	// Reuse the original A end against a fresh B router. Keeping the authored
-	// Connection, Client, and Instance identities stable reproduces the exact
-	// reciprocal locator expected by the existing A Client on the new router.
+	// Reuse the original A end against a fresh B router. Keeping the Connection
+	// identity and end stable reproduces the exact
+	// reciprocal client ID expected by the existing A Client on the new router.
 	mixed, err := environment.Start(t.Context(), environment.Spec{
 		Chains: chains,
 		IBCInstances: []environment.IBCInstanceSpec{
@@ -285,17 +273,14 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "created-connection",
 			A: environment.ExistingClient{
-				ID: "created-client-a", IBCInstance: "created-ibc-a", Locator: createdConnection.A().Locator(),
+				IBCInstance: "created-ibc-a", ID: createdConnection.A().ID(),
 			},
 			B: environment.NewClient{
-				ID:                    "created-client-b",
 				IBCInstance:           "created-ibc-b",
 				Authority:             deployer,
 				MinRequiredSignatures: 1,
+				Attestors:             []environment.AttestorSpec{{ID: "mixed-attestor-b", Authority: signerC}},
 			},
-		}},
-		Attestors: []environment.AttestorSpec{{
-			ID: "mixed-attestor-b", Client: "created-client-b", Authority: signerC,
 		}},
 	}, environment.Runtime{
 		Endpoints: endpoints,
@@ -308,8 +293,8 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, mixed.Close(context.Background())) })
 	mixedConnection, err := mixed.Connection("created-connection")
 	require.NoError(t, err)
-	require.Equal(t, createdConnection.A().Locator(), mixedConnection.A().Locator())
-	require.Equal(t, createdConnection.B().Locator(), mixedConnection.B().Locator())
+	require.Equal(t, createdConnection.A().ID(), mixedConnection.A().ID())
+	require.Equal(t, createdConnection.B().ID(), mixedConnection.B().ID())
 	require.NoError(t, mixed.Close(t.Context()))
 
 	_, err = chainA.Height(t.Context())
@@ -344,16 +329,14 @@ func TestStartRealizesSolidityIBCConnectionAcrossAnvilAndBesu(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "anvil-besu",
 			A: environment.NewClient{
-				ID: "anvil-client", IBCInstance: "anvil-ibc", Authority: deployer, MinRequiredSignatures: 1,
+				IBCInstance: "anvil-ibc", Authority: deployer, MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{ID: "anvil-attestor", Authority: signerA}},
 			},
 			B: environment.NewClient{
-				ID: "besu-client", IBCInstance: "besu-ibc", Authority: deployer, MinRequiredSignatures: 1,
+				IBCInstance: "besu-ibc", Authority: deployer, MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{ID: "besu-attestor", Authority: signerB}},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: "anvil-attestor", Client: "anvil-client", Authority: signerA},
-			{ID: "besu-attestor", Client: "besu-client", Authority: signerB},
-		},
 	}
 
 	env, err := environment.Start(t.Context(), spec, runtime)
@@ -362,8 +345,8 @@ func TestStartRealizesSolidityIBCConnectionAcrossAnvilAndBesu(t *testing.T) {
 
 	connection, err := env.Connection("anvil-besu")
 	require.NoError(t, err)
-	require.Equal(t, connection.B().Locator(), connection.A().CounterpartyLocator())
-	require.Equal(t, connection.A().Locator(), connection.B().CounterpartyLocator())
+	require.Equal(t, connection.B().ID(), connection.A().CounterpartyID())
+	require.Equal(t, connection.A().ID(), connection.B().CounterpartyID())
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(connection.A().LightClientAddress())))
 	require.NotEqual(t, common.Address{}, common.HexToAddress(string(connection.B().LightClientAddress())))
 	require.NoError(t, env.Close(t.Context()))

@@ -48,16 +48,16 @@ type TransferRequest struct {
 
 // Transfer drives ICS20 Transfer on a single directed route.
 type Transfer struct {
-	routeID      RouteID
-	source       endpoint
-	destination  endpoint
-	sender       evm.Account
-	sourceToken  common.Address
-	sourceICS20  common.Address
-	sourceRouter common.Address
-	destICS20    common.Address
-	sourceClient string
-	destClient   string
+	routeID        RouteID
+	source         endpoint
+	destination    endpoint
+	sender         evm.Account
+	sourceToken    common.Address
+	sourceICS20    common.Address
+	sourceRouter   common.Address
+	destICS20      common.Address
+	sourceClientID string
+	destClientID   string
 }
 
 type PreparedTransfer struct {
@@ -148,7 +148,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		Denom:            p.app.sourceToken,
 		Amount:           p.request.Amount,
 		Receiver:         p.request.Receiver,
-		SourceClient:     p.app.sourceClient,
+		SourceClient:     p.app.sourceClientID,
 		DestPort:         ics20DestPort,
 		TimeoutTimestamp: p.timeoutTimestamp,
 		Memo:             "",
@@ -172,7 +172,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		sendResult: newSendResult(
 			p.app.routeID,
 			p.app.source,
-			p.app.sourceClient,
+			p.app.sourceClientID,
 			receipt,
 			sequence,
 		),
@@ -236,7 +236,7 @@ func (t *TransferSend) VerifyNotMinted(ctx context.Context) error {
 
 // VerifyRefunded waits for the source sender balance to be restored after timeout.
 func (t *TransferSend) VerifyRefunded(ctx context.Context) error {
-	if err := awaitPacketTimeout(ctx, t.app.source, t.app.sourceRouter, t.app.sourceClient, t.packetTx); err != nil {
+	if err := awaitPacketTimeout(ctx, t.app.source, t.app.sourceRouter, t.app.sourceClientID, t.packetTx); err != nil {
 		return err
 	}
 	return awaitBalance(
@@ -299,7 +299,7 @@ func destinationTimeout(
 }
 
 func (i *Transfer) voucherDenom() string {
-	return "transfer/" + i.destClient + "/" + strings.ToLower(i.sourceToken.Hex())
+	return "transfer/" + i.destClientID + "/" + strings.ToLower(i.sourceToken.Hex())
 }
 
 func (i *Transfer) voucherBalance(ctx context.Context, holder string) (*big.Int, error) {
@@ -354,7 +354,7 @@ func awaitPacketTimeout(
 	ctx context.Context,
 	source endpoint,
 	router common.Address,
-	sourceClient string,
+	sourceClientID string,
 	packetTx PacketTx,
 ) error {
 	definition := ics26ABI.Events[eventTimeoutPacket]
@@ -374,7 +374,7 @@ func awaitPacketTimeout(
 		},
 		func(event *ics26router.ContractTimeoutPacket) bool {
 			return event.Packet.Sequence == packetTx.Sequence &&
-				event.Packet.SourceClient == sourceClient
+				event.Packet.SourceClient == sourceClientID
 		},
 	)
 	return err
