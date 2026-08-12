@@ -19,6 +19,7 @@ header:
     - "LICENSE"
     - "NOTICE"
     - "**/go.sum"
+    - "go.work.sum"
     - "**/*.json"
     - "**/*.json.tmpl"
     - "**/*.jsonc"
@@ -32,6 +33,7 @@ header:
     - "link/internal/service/**/*.mock.go"
     - "link/internal/chains/evm/contracts/**"
     - "e2e/internal/harness/environment/solidityibc/*/contract.go"
+    - "gen/go/solidity-abi/*/contract.go"
 
     # Third-party and test Solidity sources retain their own SPDX identifiers.
     - "e2e/internal/harness/environment/solidityibc/contracts/src/**"

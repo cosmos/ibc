@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
+go 1.26.4
+
+use (
+	./e2e
+	./gen/go/solidity-abi
+	./link
+)

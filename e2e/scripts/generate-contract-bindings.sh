@@ -23,9 +23,10 @@ generate() {
 }
 
 solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
-generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$solidity_ibc/accessmanager/contract.go"
-generate "$solidity_ibc/contracts/out/Escrow.sol/Escrow.json" escrow Escrow "$solidity_ibc/escrow/contract.go"
-generate "$solidity_ibc/contracts/out/TestERC20.sol/TestERC20.json" testerc20 TestERC20 "$solidity_ibc/testerc20/contract.go"
-generate "$solidity_ibc/contracts/out/Counter.sol/Counter.json" counter Counter "$solidity_ibc/counter/contract.go"
-generate "$solidity_ibc/contracts/out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json" iftsendcallconstructor EVMIFTSendCallConstructor "$solidity_ibc/iftsendcallconstructor/contract.go"
-generate "$solidity_ibc/contracts/out/IFTBatchTransferShim.sol/IFTBatchTransferShim.json" iftbatchtransfershim IFTBatchTransferShim "$solidity_ibc/iftbatchtransfershim/contract.go"
+bindings="$repo_root/gen/go/solidity-abi"
+generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$bindings/accessmanager/contract.go"
+generate "$solidity_ibc/contracts/out/Escrow.sol/Escrow.json" escrow Escrow "$bindings/escrow/contract.go"
+generate "$solidity_ibc/contracts/out/TestERC20.sol/TestERC20.json" testerc20 TestERC20 "$bindings/testerc20/contract.go"
+generate "$solidity_ibc/contracts/out/Counter.sol/Counter.json" counter Counter "$bindings/counter/contract.go"
+generate "$solidity_ibc/contracts/out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json" iftsendcallconstructor EVMIFTSendCallConstructor "$bindings/iftsendcallconstructor/contract.go"
+generate "$solidity_ibc/contracts/out/IFTBatchTransferShim.sol/IFTBatchTransferShim.json" iftbatchtransfershim IFTBatchTransferShim "$bindings/iftbatchtransfershim/contract.go"

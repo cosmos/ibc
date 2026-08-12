@@ -9,7 +9,7 @@ LICENSE_EYE_VERSION ?= 0.8.0
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
-CONTRACT_BINDINGS := $(addprefix $(HARNESS_DIR)/environment/solidityibc/,\
+CONTRACT_BINDINGS := $(addprefix gen/go/solidity-abi/,\
 	accessmanager escrow testerc20 counter iftsendcallconstructor iftbatchtransfershim)
 
 build-link: ## Build the Link binary
@@ -43,9 +43,9 @@ generate-e2e-matrix: ## Regenerate the E2E provider and topology matrix (require
 check-e2e-matrix: ## Check that the E2E provider and topology matrix is current (requires Docker)
 	go -C $(E2E_DIR) run ./cmd/e2e-matrix -check test-matrix.md
 
-lint: lint-link lint-e2e ## Lint all Go modules
+lint: lint-link lint-e2e lint-gen ## Lint all Go modules
 
-lint-fix: lint-fix-link lint-fix-e2e ## Lint all Go modules and fix errors
+lint-fix: lint-fix-link lint-fix-e2e lint-fix-gen ## Lint all Go modules and fix errors
 
 lint-link: ## Lint the Link module
 	$(MAKE) -C link lint
@@ -58,6 +58,15 @@ lint-e2e: ## Lint the e2e module, harness included
 
 lint-fix-e2e: ## Lint the e2e module, harness included, and fix errors
 	cd $(E2E_DIR) && golangci-lint run --fix
+
+lint-gen: ## Lint generated Solidity Go binding packages
+	cd gen/go/solidity-abi && golangci-lint run
+
+lint-fix-gen: ## Lint generated Solidity Go binding packages and fix errors
+	cd gen/go/solidity-abi && golangci-lint run --fix
+
+test-gen: ## Compile generated Solidity Go binding packages
+	go -C gen/go/solidity-abi test ./...
 
 clean-e2e-dry-run: ## Preview e2e processes and Docker resources
 	$(E2E_DIR)/scripts/clean.sh --dry-run
@@ -89,7 +98,7 @@ check-link: ## Run Link-local checks
 
 check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps test-e2e check-e2e-matrix ## Run all repository e2e checks
 
-check: check-license-headers check-link check-e2e ## Run license, Link, and repository e2e checks
+check: check-license-headers check-link test-gen check-e2e ## Run license, Link, generated binding, and repository e2e checks
 
-.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e \
+.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e lint-gen lint-fix-gen test-gen \
 	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-license-headers check-link check-e2e check
