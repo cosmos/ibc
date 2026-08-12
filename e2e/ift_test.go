@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -134,6 +135,71 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, pending.VerifyDelivered(ctx))
+}
+
+func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
+	t.Parallel()
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	destinationAttestorID := meshAttestorFor(route.Destination, route.Source)
+	destinationAttestorKey := runtime.Authorities[environment.AuthorityID(destinationAttestorID)].PrivateKeyHex
+
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	destinationAttestor, err := env.Attestor(destinationAttestorID)
+	require.NoError(t, err)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	destinationClient := destinationAttestor.IBCClient()
+	clientAddress := destinationClient.LightClientAddress()
+	initialState := attestedClientState(t, destinationEVM, clientAddress)
+
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+
+	installedState := attestedClientState(t, destinationEVM, clientAddress)
+	require.Greater(t, installedState.LatestHeight, initialState.LatestHeight)
+	height := installedState.LatestHeight
+	trustedTimestamp := attestedConsensusTimestamp(t, destinationEVM, clientAddress, height)
+	proof := signedStateAttestationProof(t, destinationAttestorKey, height, trustedTimestamp+1)
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	updateClient, err := routerABI.Pack("updateClient", destinationClient.ID(), proof)
+	require.NoError(t, err)
+	router := common.HexToAddress(string(destinationClient.IBCInstance().Locator()))
+	require.NoError(t, sender.BroadcastTx(ctx, destinationEVM, router, updateClient))
+
+	frozenState := attestedClientState(t, destinationEVM, clientAddress)
+	require.True(t, frozenState.IsFrozen)
+	require.Equal(t, height, frozenState.LatestHeight)
+	require.Equal(t, trustedTimestamp, attestedConsensusTimestamp(t, destinationEVM, clientAddress, height))
+
+	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
+	require.NoError(t, err)
+	require.NoError(t, pending.VerifyBurned(ctx))
+	require.NoError(t, e2etest.Relay(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_PENDING))
+	status, err := e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_PENDING)
+	require.NoError(t, err)
+	require.Empty(t, status.GetRecvTx().GetTxHash())
+	require.NoError(t, pending.VerifyPending(ctx))
+	require.NoError(t, pending.VerifyNotMinted(ctx))
 }
 
 // TestIFTTimeout_RefundUsesFinalizedDestinationAnchor proves timeouts anchor
