@@ -272,7 +272,7 @@ type ChainSignerPair struct {
 
 // RelayerChainSignerPairs resolves the unique (chain, signer) pairs across
 // every configured connection's two client ends.
-func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
+func RelayerChainSignerPairs(c Config) []ChainSignerPair {
 	seen := make(map[ChainSignerPair]struct{})
 
 	var pairs []ChainSignerPair
@@ -289,7 +289,7 @@ func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
 		}
 	}
 
-	return pairs, nil
+	return pairs
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are
