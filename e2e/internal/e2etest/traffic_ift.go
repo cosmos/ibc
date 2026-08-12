@@ -20,8 +20,9 @@ import (
 )
 
 var (
-	iftABI          = mustABI(ift.ContractMetaData)
-	iftBatchShimABI = mustABI(iftbatchtransfershim.IFTBatchTransferShimMetaData)
+	iftABI                 = mustABI(ift.ContractMetaData)
+	iftTransactor          = mustBinding(ift.NewContractTransactor(common.Address{}, nil))
+	iftBatchShimTransactor = mustBinding(iftbatchtransfershim.NewIFTBatchTransferShimTransactor(common.Address{}, nil))
 )
 
 type IFTRequest struct {
@@ -85,7 +86,9 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := iftABI.Pack("iftTransfer", i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.IftTransfer(opts, i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT iftTransfer: %w", err)
 	}
@@ -157,7 +160,9 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		total.Add(total, amount)
 	}
 
-	data, err := iftBatchShimABI.Pack("batchIftTransfer", i.sourceIFT, i.sourceClientID, transfers)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT batchIftTransfer: %w", err)
 	}

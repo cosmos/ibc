@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 )
 
 const (
@@ -28,8 +27,8 @@ const (
 )
 
 var (
-	ics20ABI = mustABI(ics20transfer.ContractMetaData)
-	tokenABI = mustABI(testerc20.TestERC20MetaData)
+	ics20ABI        = mustABI(ics20transfer.ContractMetaData)
+	ics20Transactor = mustBinding(ics20transfer.NewContractTransactor(common.Address{}, nil))
 )
 
 type TransferRequest struct {
@@ -127,7 +126,9 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 	}
 	p.submitted = true
 
-	approve, err := tokenABI.Pack("approve", p.app.sourceICS20, p.request.Amount)
+	approve, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return testERC20Transactor.Approve(opts, p.app.sourceICS20, p.request.Amount)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack ERC20 approve: %w", err)
 	}
@@ -150,7 +151,9 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		TimeoutTimestamp: p.timeoutTimestamp,
 		Memo:             "",
 	}
-	data, err := ics20ABI.Pack("sendTransfer", msg)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return ics20Transactor.SendTransfer(opts, msg)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack ICS20 sendTransfer: %w", err)
 	}
