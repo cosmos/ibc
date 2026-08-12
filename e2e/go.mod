@@ -9,8 +9,10 @@ go 1.26.4
 ignore ./internal/harness/environment/solidityibc/contracts/node_modules
 
 require (
+	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/stretchr/testify v1.11.1
+	google.golang.org/grpc v1.82.1
 )
 
 require (
@@ -70,6 +72,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
