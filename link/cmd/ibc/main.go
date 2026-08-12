@@ -72,11 +72,22 @@ func init() {
 	cmdKeysImport.Flags().StringVar(&flagKeysImportPrivateKey, "private-key", "", "hex-encoded private key")
 
 	// Relayer commands
-	cmdRelayer.AddCommand(cmdRelayerRun)
+	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus)
 	cmdRelayerRun.Flags().BoolVarP(&flagRelayerNoMigrate, "no-migrate", "", false, "skip database migrations")
+	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
+		c.Flags().StringVar(&flagRelayerHost, "host", "", "dial this address instead of resolving from config")
+		c.Flags().StringVar(&flagRelayerTxHash, "tx-hash", "", "source transaction hash")
+		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
+		_ = c.MarkFlagRequired("tx-hash")
+		_ = c.MarkFlagRequired("chain-id")
+	}
 
 	// Attestor commands
-	cmdAttestor.AddCommand(cmdAttestorRun)
+	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)
+	for _, c := range []*cobra.Command{cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation} {
+		c.Flags().StringVar(&flagAttestorHost, "host", "", "dial this address instead of resolving from config")
+	}
+	cmdAttestorStateAttestation.Flags().Uint64Var(&flagAttestorHeight, "height", 0, "height to attest")
 
 	// Query commands
 	// todo

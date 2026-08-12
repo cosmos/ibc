@@ -3,13 +3,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 
+	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
+	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
@@ -24,9 +27,26 @@ var (
 		Short: "Run the relayer",
 		RunE:  relayerRun,
 	}
+
+	cmdRelayerRelay = &cobra.Command{
+		Use:   "relay",
+		Short: "Trigger relaying of the packets emitted by a source transaction",
+		RunE:  relayerRelay,
+	}
+
+	cmdRelayerStatus = &cobra.Command{
+		Use:   useStatus,
+		Short: "Query per-packet relay status for a source transaction",
+		RunE:  relayerStatus,
+	}
 )
 
-var flagRelayerNoMigrate bool
+var (
+	flagRelayerNoMigrate     bool
+	flagRelayerHost          string
+	flagRelayerTxHash        string
+	flagRelayerSourceChainID string
+)
 
 func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
@@ -88,4 +108,48 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 
 	// blocking
 	return graceful.WaitShutdown()
+}
+
+func relayerRelay(cmd *cobra.Command, _ []string) error {
+	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Relay, &relayerv2.RelayRequest{
+		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
+	})
+}
+
+func relayerStatus(cmd *cobra.Command, _ []string) error {
+	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Status, &relayerv2.StatusRequest{
+		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
+	})
+}
+
+// relayerCall resolves this config's relayer address, sends req via call,
+// and prints the response as JSON.
+func relayerCall[Req, Resp any](
+	cmd *cobra.Command,
+	call func(relayerv2.RelayerApiServiceClient, context.Context, *connect.Request[Req]) (*connect.Response[Resp], error),
+	req *Req,
+) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+
+	address := flagRelayerHost
+	if address == "" {
+		if cfg.Server.ListenAddress == "" {
+			return errors.New("server.listenAddr is not configured; pass --host to target a server directly")
+		}
+		address = cfg.Server.ListenAddress
+	}
+
+	client := relayerv2.NewRelayerApiServiceClient(
+		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
+	)
+
+	res, err := call(client, cmd.Context(), connect.NewRequest(req))
+	if err != nil {
+		return errors.Wrap(err, cmd.Name())
+	}
+
+	return config.PrintJSON(res.Msg)
 }
