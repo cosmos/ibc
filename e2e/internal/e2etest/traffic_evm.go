@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 
-	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +31,29 @@ func mustBinding[T any](binding T, err error) T {
 		panic(fmt.Sprintf("e2etest: construct generated contract binding: %v", err))
 	}
 	return binding
+}
+
+func receiptEvents[T any](
+	receipt *types.Receipt,
+	contract common.Address,
+	parse func(types.Log) (*T, error),
+) ([]*T, error) {
+	var events []*T
+	for _, log := range receipt.Logs {
+		if log.Address != contract {
+			continue
+		}
+		event, err := parse(*log)
+		switch {
+		case errors.Is(err, bind.ErrNoEventSignature), errors.Is(err, bind.ErrEventSignatureMismatch):
+			continue
+		case err != nil:
+			return nil, err
+		default:
+			events = append(events, event)
+		}
+	}
+	return events, nil
 }
 
 // NewAddress generates a fresh, unfunded EVM address for use as a test
@@ -114,50 +136,6 @@ func send(
 		)
 	}
 	return receipt, sequence, nil
-}
-
-type eventSource struct {
-	endpoint endpoint
-	contract common.Address
-}
-
-func awaitEvent[T any](
-	ctx context.Context,
-	source eventSource,
-	topic common.Hash,
-	description string,
-	decode func(types.Log) (T, error),
-	match func(T) bool,
-) (T, error) {
-	query := ethereum.FilterQuery{
-		FromBlock: big.NewInt(0),
-		Addresses: []common.Address{source.contract},
-		Topics:    [][]common.Hash{{topic}},
-	}
-	timing := source.endpoint.chain.Timing()
-	return await(
-		ctx,
-		timing.CompletionBudget,
-		timing.PollInterval,
-		description,
-		func(ctx context.Context) (T, bool, error) {
-			var zero T
-			logs, err := source.endpoint.evm.Logs(ctx, query)
-			if err != nil {
-				return zero, false, err
-			}
-			for _, log := range logs {
-				event, err := decode(log)
-				if err != nil {
-					return zero, true, err
-				}
-				if match(event) {
-					return event, true, nil
-				}
-			}
-			return zero, false, nil
-		},
-	)
 }
 
 func awaitBalance(
