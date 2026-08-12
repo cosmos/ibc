@@ -52,16 +52,7 @@ Ensure that you base and target your PR on the `master` branch.
 Install the repository's DCO check once after cloning:
 
 ```sh
-if hooks_path=$(git config --get core.hooksPath); then
-	printf 'core.hooksPath is configured as %s; integrate .githooks/commit-msg into that setup manually\n' "$hooks_path"
-else
-	hook=$(git rev-parse --git-path hooks)/commit-msg
-	if test -e "$hook"; then
-		echo "$hook already exists; merge .githooks/commit-msg into it"
-	else
-		cp .githooks/commit-msg "$hook"
-	fi
-fi
+cp -i .githooks/commit-msg .git/hooks/commit-msg
 ```
 
 The hook rejects non-merge commits without your `Signed-off-by` trailer. Read
