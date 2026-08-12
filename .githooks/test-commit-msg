@@ -39,7 +39,7 @@ printf 'Test\n' >"$message"
 git init --quiet "$repository"
 git -C "$repository" config user.name 'DCO Test'
 git -C "$repository" config user.email 'dco@example.com'
-git -C "$repository" -c commit.gpgsign=false commit --allow-empty --quiet -m 'Test'
+git -C "$repository" -c commit.gpgsign=false -c core.hooksPath=/dev/null commit --allow-empty --quiet -m 'Test'
 git -C "$repository" rev-parse HEAD >"$repository/.git/MERGE_HEAD"
 GIT_DIR="$repository/.git" "$hook" "$message"
 
