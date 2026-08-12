@@ -191,7 +191,7 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
 	require.NoError(t, err)
 	require.NoError(t, pending.VerifyBurned(ctx))
-	require.NoError(t, e2etest.Relay(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, e2etest.RelayAll(ctx, relayer, pending.PacketTx()))
 	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING))
 	status, err := e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
