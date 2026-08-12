@@ -155,22 +155,20 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		ends := make(map[string]clientEndFileConfig, 2)
-		for _, end := range []struct{ chain, client string }{
-			{connection.ChainA, connection.ClientA},
-			{connection.ChainB, connection.ClientB},
-		} {
-			ends[end.chain+"/"+end.client] = clientEndFileConfig{
-				ChainID:  end.chain,
-				Signer:   cfg.SignerAlias,
-				ClientID: end.client,
-				Type:     "attestation",
-			}
-		}
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
-			Alias:   connection.ClientA + "-" + connection.ClientB,
-			ClientA: ends[connection.ChainA+"/"+connection.ClientA],
-			ClientB: ends[connection.ChainB+"/"+connection.ClientB],
+			Alias: connection.ClientA + "-" + connection.ClientB,
+			ClientA: clientEndFileConfig{
+				ChainID:  connection.ChainA,
+				Signer:   cfg.SignerAlias,
+				ClientID: connection.ClientA,
+				Type:     "attestation",
+			},
+			ClientB: clientEndFileConfig{
+				ChainID:  connection.ChainB,
+				Signer:   cfg.SignerAlias,
+				ClientID: connection.ClientB,
+				Type:     "attestation",
+			},
 		})
 	}
 	return file, nil
