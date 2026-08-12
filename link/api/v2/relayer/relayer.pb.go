@@ -27,36 +27,41 @@ type PacketState int32
 
 const (
 	PacketState_PACKET_STATE_UNSPECIFIED PacketState = 0
+	// The packet was discovered but has not been selected by this relayer
+	// instance. Another relayer may still deliver it.
+	PacketState_PACKET_STATE_NOT_SELECTED PacketState = 1
 	// The relayer is still processing the packet.
-	PacketState_PACKET_STATE_PENDING PacketState = 1
+	PacketState_PACKET_STATE_PENDING PacketState = 2
 	// The packet completed with a successful acknowledgement on the source
 	// chain.
-	PacketState_PACKET_STATE_SUCCEEDED PacketState = 2
+	PacketState_PACKET_STATE_SUCCEEDED PacketState = 3
 	// The packet completed with a timeout refund on the source chain.
-	PacketState_PACKET_STATE_TIMED_OUT PacketState = 3
+	PacketState_PACKET_STATE_TIMED_OUT PacketState = 4
 	// The packet completed with an error acknowledgement on the source chain.
-	PacketState_PACKET_STATE_REJECTED PacketState = 4
+	PacketState_PACKET_STATE_REJECTED PacketState = 5
 	// A permanent error prevents the relayer from processing the packet.
-	PacketState_PACKET_STATE_RELAY_FAILED PacketState = 5
+	PacketState_PACKET_STATE_RELAY_FAILED PacketState = 6
 )
 
 // Enum value maps for PacketState.
 var (
 	PacketState_name = map[int32]string{
 		0: "PACKET_STATE_UNSPECIFIED",
-		1: "PACKET_STATE_PENDING",
-		2: "PACKET_STATE_SUCCEEDED",
-		3: "PACKET_STATE_TIMED_OUT",
-		4: "PACKET_STATE_REJECTED",
-		5: "PACKET_STATE_RELAY_FAILED",
+		1: "PACKET_STATE_NOT_SELECTED",
+		2: "PACKET_STATE_PENDING",
+		3: "PACKET_STATE_SUCCEEDED",
+		4: "PACKET_STATE_TIMED_OUT",
+		5: "PACKET_STATE_REJECTED",
+		6: "PACKET_STATE_RELAY_FAILED",
 	}
 	PacketState_value = map[string]int32{
 		"PACKET_STATE_UNSPECIFIED":  0,
-		"PACKET_STATE_PENDING":      1,
-		"PACKET_STATE_SUCCEEDED":    2,
-		"PACKET_STATE_TIMED_OUT":    3,
-		"PACKET_STATE_REJECTED":     4,
-		"PACKET_STATE_RELAY_FAILED": 5,
+		"PACKET_STATE_NOT_SELECTED": 1,
+		"PACKET_STATE_PENDING":      2,
+		"PACKET_STATE_SUCCEEDED":    3,
+		"PACKET_STATE_TIMED_OUT":    4,
+		"PACKET_STATE_REJECTED":     5,
+		"PACKET_STATE_RELAY_FAILED": 6,
 	}
 )
 
@@ -91,6 +96,14 @@ type RelayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
 	SourceChainId string                 `protobuf:"bytes,2,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
+	// Selection controls only this relayer instance; IBC relaying remains
+	// permissionless.
+	//
+	// Types that are valid to be assigned to Selection:
+	//
+	//	*RelayRequest_AllPackets
+	//	*RelayRequest_SelectedPackets
+	Selection     isRelayRequest_Selection `protobuf_oneof:"selection"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -139,6 +152,182 @@ func (x *RelayRequest) GetSourceChainId() string {
 	return ""
 }
 
+func (x *RelayRequest) GetSelection() isRelayRequest_Selection {
+	if x != nil {
+		return x.Selection
+	}
+	return nil
+}
+
+func (x *RelayRequest) GetAllPackets() *AllPackets {
+	if x != nil {
+		if x, ok := x.Selection.(*RelayRequest_AllPackets); ok {
+			return x.AllPackets
+		}
+	}
+	return nil
+}
+
+func (x *RelayRequest) GetSelectedPackets() *SelectedPackets {
+	if x != nil {
+		if x, ok := x.Selection.(*RelayRequest_SelectedPackets); ok {
+			return x.SelectedPackets
+		}
+	}
+	return nil
+}
+
+type isRelayRequest_Selection interface {
+	isRelayRequest_Selection()
+}
+
+type RelayRequest_AllPackets struct {
+	AllPackets *AllPackets `protobuf:"bytes,3,opt,name=all_packets,json=allPackets,proto3,oneof"`
+}
+
+type RelayRequest_SelectedPackets struct {
+	SelectedPackets *SelectedPackets `protobuf:"bytes,4,opt,name=selected_packets,json=selectedPackets,proto3,oneof"`
+}
+
+func (*RelayRequest_AllPackets) isRelayRequest_Selection() {}
+
+func (*RelayRequest_SelectedPackets) isRelayRequest_Selection() {}
+
+// AllPackets selects every packet in the transaction for which this relayer
+// has a configured client and route; packets without one are skipped, and the
+// request succeeds even if that leaves nothing to relay.
+type AllPackets struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllPackets) Reset() {
+	*x = AllPackets{}
+	mi := &file_relayer_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllPackets) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllPackets) ProtoMessage() {}
+
+func (x *AllPackets) ProtoReflect() protoreflect.Message {
+	mi := &file_relayer_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllPackets.ProtoReflect.Descriptor instead.
+func (*AllPackets) Descriptor() ([]byte, []int) {
+	return file_relayer_proto_rawDescGZIP(), []int{1}
+}
+
+type SelectedPackets struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Packets       []*PacketSelector      `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectedPackets) Reset() {
+	*x = SelectedPackets{}
+	mi := &file_relayer_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectedPackets) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectedPackets) ProtoMessage() {}
+
+func (x *SelectedPackets) ProtoReflect() protoreflect.Message {
+	mi := &file_relayer_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectedPackets.ProtoReflect.Descriptor instead.
+func (*SelectedPackets) Descriptor() ([]byte, []int) {
+	return file_relayer_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SelectedPackets) GetPackets() []*PacketSelector {
+	if x != nil {
+		return x.Packets
+	}
+	return nil
+}
+
+type PacketSelector struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SourceClientId string                 `protobuf:"bytes,1,opt,name=source_client_id,json=sourceClientId,proto3" json:"source_client_id,omitempty"`
+	SequenceNumber uint64                 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PacketSelector) Reset() {
+	*x = PacketSelector{}
+	mi := &file_relayer_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PacketSelector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PacketSelector) ProtoMessage() {}
+
+func (x *PacketSelector) ProtoReflect() protoreflect.Message {
+	mi := &file_relayer_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PacketSelector.ProtoReflect.Descriptor instead.
+func (*PacketSelector) Descriptor() ([]byte, []int) {
+	return file_relayer_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PacketSelector) GetSourceClientId() string {
+	if x != nil {
+		return x.SourceClientId
+	}
+	return ""
+}
+
+func (x *PacketSelector) GetSequenceNumber() uint64 {
+	if x != nil {
+		return x.SequenceNumber
+	}
+	return 0
+}
+
 type RelayResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -147,7 +336,7 @@ type RelayResponse struct {
 
 func (x *RelayResponse) Reset() {
 	*x = RelayResponse{}
-	mi := &file_relayer_proto_msgTypes[1]
+	mi := &file_relayer_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -159,7 +348,7 @@ func (x *RelayResponse) String() string {
 func (*RelayResponse) ProtoMessage() {}
 
 func (x *RelayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[1]
+	mi := &file_relayer_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -172,7 +361,7 @@ func (x *RelayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelayResponse.ProtoReflect.Descriptor instead.
 func (*RelayResponse) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{1}
+	return file_relayer_proto_rawDescGZIP(), []int{4}
 }
 
 type StatusRequest struct {
@@ -185,7 +374,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_relayer_proto_msgTypes[2]
+	mi := &file_relayer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -197,7 +386,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[2]
+	mi := &file_relayer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -210,7 +399,7 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{2}
+	return file_relayer_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StatusRequest) GetTxHash() string {
@@ -236,7 +425,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_relayer_proto_msgTypes[3]
+	mi := &file_relayer_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -248,7 +437,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[3]
+	mi := &file_relayer_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -261,7 +450,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{3}
+	return file_relayer_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *StatusResponse) GetPacketStatuses() []*PacketStatus {
@@ -281,7 +470,7 @@ type TransactionInfo struct {
 
 func (x *TransactionInfo) Reset() {
 	*x = TransactionInfo{}
-	mi := &file_relayer_proto_msgTypes[4]
+	mi := &file_relayer_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -293,7 +482,7 @@ func (x *TransactionInfo) String() string {
 func (*TransactionInfo) ProtoMessage() {}
 
 func (x *TransactionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[4]
+	mi := &file_relayer_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +495,7 @@ func (x *TransactionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionInfo.ProtoReflect.Descriptor instead.
 func (*TransactionInfo) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{4}
+	return file_relayer_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TransactionInfo) GetTxHash() string {
@@ -346,7 +535,7 @@ type PacketStatus struct {
 
 func (x *PacketStatus) Reset() {
 	*x = PacketStatus{}
-	mi := &file_relayer_proto_msgTypes[5]
+	mi := &file_relayer_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -358,7 +547,7 @@ func (x *PacketStatus) String() string {
 func (*PacketStatus) ProtoMessage() {}
 
 func (x *PacketStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[5]
+	mi := &file_relayer_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -371,7 +560,7 @@ func (x *PacketStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PacketStatus.ProtoReflect.Descriptor instead.
 func (*PacketStatus) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{5}
+	return file_relayer_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PacketStatus) GetState() PacketState {
@@ -427,10 +616,21 @@ var File_relayer_proto protoreflect.FileDescriptor
 
 const file_relayer_proto_rawDesc = "" +
 	"\n" +
-	"\rrelayer.proto\x12\x0eibc.v2.relayer\"O\n" +
+	"\rrelayer.proto\x12\x0eibc.v2.relayer\"\xe9\x01\n" +
 	"\fRelayRequest\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12&\n" +
-	"\x0fsource_chain_id\x18\x02 \x01(\tR\rsourceChainId\"\x0f\n" +
+	"\x0fsource_chain_id\x18\x02 \x01(\tR\rsourceChainId\x12=\n" +
+	"\vall_packets\x18\x03 \x01(\v2\x1a.ibc.v2.relayer.AllPacketsH\x00R\n" +
+	"allPackets\x12L\n" +
+	"\x10selected_packets\x18\x04 \x01(\v2\x1f.ibc.v2.relayer.SelectedPacketsH\x00R\x0fselectedPacketsB\v\n" +
+	"\tselection\"\f\n" +
+	"\n" +
+	"AllPackets\"K\n" +
+	"\x0fSelectedPackets\x128\n" +
+	"\apackets\x18\x01 \x03(\v2\x1e.ibc.v2.relayer.PacketSelectorR\apackets\"c\n" +
+	"\x0ePacketSelector\x12(\n" +
+	"\x10source_client_id\x18\x01 \x01(\tR\x0esourceClientId\x12'\n" +
+	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\"\x0f\n" +
 	"\rRelayResponse\"P\n" +
 	"\rStatusRequest\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12&\n" +
@@ -448,14 +648,15 @@ const file_relayer_proto_rawDesc = "" +
 	"\arecv_tx\x18\x05 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x06recvTx\x126\n" +
 	"\x06ack_tx\x18\x06 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x05ackTx\x12>\n" +
 	"\n" +
-	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx*\xb7\x01\n" +
+	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx*\xd6\x01\n" +
 	"\vPacketState\x12\x1c\n" +
-	"\x18PACKET_STATE_UNSPECIFIED\x10\x00\x12\x18\n" +
-	"\x14PACKET_STATE_PENDING\x10\x01\x12\x1a\n" +
-	"\x16PACKET_STATE_SUCCEEDED\x10\x02\x12\x1a\n" +
-	"\x16PACKET_STATE_TIMED_OUT\x10\x03\x12\x19\n" +
-	"\x15PACKET_STATE_REJECTED\x10\x04\x12\x1d\n" +
-	"\x19PACKET_STATE_RELAY_FAILED\x10\x052\xa6\x01\n" +
+	"\x18PACKET_STATE_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19PACKET_STATE_NOT_SELECTED\x10\x01\x12\x18\n" +
+	"\x14PACKET_STATE_PENDING\x10\x02\x12\x1a\n" +
+	"\x16PACKET_STATE_SUCCEEDED\x10\x03\x12\x1a\n" +
+	"\x16PACKET_STATE_TIMED_OUT\x10\x04\x12\x19\n" +
+	"\x15PACKET_STATE_REJECTED\x10\x05\x12\x1d\n" +
+	"\x19PACKET_STATE_RELAY_FAILED\x10\x062\xa6\x01\n" +
 	"\x11RelayerApiService\x12F\n" +
 	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00\x12I\n" +
 	"\x06Status\x12\x1d.ibc.v2.relayer.StatusRequest\x1a\x1e.ibc.v2.relayer.StatusResponse\"\x00B+Z)github.com/cosmos/ibc/link/api/v2/relayerb\x06proto3"
@@ -473,32 +674,38 @@ func file_relayer_proto_rawDescGZIP() []byte {
 }
 
 var file_relayer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_relayer_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_relayer_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_relayer_proto_goTypes = []any{
 	(PacketState)(0),        // 0: ibc.v2.relayer.PacketState
 	(*RelayRequest)(nil),    // 1: ibc.v2.relayer.RelayRequest
-	(*RelayResponse)(nil),   // 2: ibc.v2.relayer.RelayResponse
-	(*StatusRequest)(nil),   // 3: ibc.v2.relayer.StatusRequest
-	(*StatusResponse)(nil),  // 4: ibc.v2.relayer.StatusResponse
-	(*TransactionInfo)(nil), // 5: ibc.v2.relayer.TransactionInfo
-	(*PacketStatus)(nil),    // 6: ibc.v2.relayer.PacketStatus
+	(*AllPackets)(nil),      // 2: ibc.v2.relayer.AllPackets
+	(*SelectedPackets)(nil), // 3: ibc.v2.relayer.SelectedPackets
+	(*PacketSelector)(nil),  // 4: ibc.v2.relayer.PacketSelector
+	(*RelayResponse)(nil),   // 5: ibc.v2.relayer.RelayResponse
+	(*StatusRequest)(nil),   // 6: ibc.v2.relayer.StatusRequest
+	(*StatusResponse)(nil),  // 7: ibc.v2.relayer.StatusResponse
+	(*TransactionInfo)(nil), // 8: ibc.v2.relayer.TransactionInfo
+	(*PacketStatus)(nil),    // 9: ibc.v2.relayer.PacketStatus
 }
 var file_relayer_proto_depIdxs = []int32{
-	6, // 0: ibc.v2.relayer.StatusResponse.packet_statuses:type_name -> ibc.v2.relayer.PacketStatus
-	0, // 1: ibc.v2.relayer.PacketStatus.state:type_name -> ibc.v2.relayer.PacketState
-	5, // 2: ibc.v2.relayer.PacketStatus.send_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	5, // 3: ibc.v2.relayer.PacketStatus.recv_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	5, // 4: ibc.v2.relayer.PacketStatus.ack_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	5, // 5: ibc.v2.relayer.PacketStatus.timeout_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	1, // 6: ibc.v2.relayer.RelayerApiService.Relay:input_type -> ibc.v2.relayer.RelayRequest
-	3, // 7: ibc.v2.relayer.RelayerApiService.Status:input_type -> ibc.v2.relayer.StatusRequest
-	2, // 8: ibc.v2.relayer.RelayerApiService.Relay:output_type -> ibc.v2.relayer.RelayResponse
-	4, // 9: ibc.v2.relayer.RelayerApiService.Status:output_type -> ibc.v2.relayer.StatusResponse
-	8, // [8:10] is the sub-list for method output_type
-	6, // [6:8] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	2,  // 0: ibc.v2.relayer.RelayRequest.all_packets:type_name -> ibc.v2.relayer.AllPackets
+	3,  // 1: ibc.v2.relayer.RelayRequest.selected_packets:type_name -> ibc.v2.relayer.SelectedPackets
+	4,  // 2: ibc.v2.relayer.SelectedPackets.packets:type_name -> ibc.v2.relayer.PacketSelector
+	9,  // 3: ibc.v2.relayer.StatusResponse.packet_statuses:type_name -> ibc.v2.relayer.PacketStatus
+	0,  // 4: ibc.v2.relayer.PacketStatus.state:type_name -> ibc.v2.relayer.PacketState
+	8,  // 5: ibc.v2.relayer.PacketStatus.send_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	8,  // 6: ibc.v2.relayer.PacketStatus.recv_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	8,  // 7: ibc.v2.relayer.PacketStatus.ack_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	8,  // 8: ibc.v2.relayer.PacketStatus.timeout_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	1,  // 9: ibc.v2.relayer.RelayerApiService.Relay:input_type -> ibc.v2.relayer.RelayRequest
+	6,  // 10: ibc.v2.relayer.RelayerApiService.Status:input_type -> ibc.v2.relayer.StatusRequest
+	5,  // 11: ibc.v2.relayer.RelayerApiService.Relay:output_type -> ibc.v2.relayer.RelayResponse
+	7,  // 12: ibc.v2.relayer.RelayerApiService.Status:output_type -> ibc.v2.relayer.StatusResponse
+	11, // [11:13] is the sub-list for method output_type
+	9,  // [9:11] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_relayer_proto_init() }
@@ -506,13 +713,17 @@ func file_relayer_proto_init() {
 	if File_relayer_proto != nil {
 		return
 	}
+	file_relayer_proto_msgTypes[0].OneofWrappers = []any{
+		(*RelayRequest_AllPackets)(nil),
+		(*RelayRequest_SelectedPackets)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_relayer_proto_rawDesc), len(file_relayer_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -116,6 +116,17 @@ func (c RelayerConfig) ClientByAlias(alias string) (ClientConfig, bool) {
 	return ClientConfig{}, false
 }
 
+// RouteBySourceClient returns the relay route for a source client alias.
+func (c RelayerConfig) RouteBySourceClient(sourceClient string) (RouteConfig, bool) {
+	for _, route := range c.Routes {
+		if route.SourceClient == sourceClient {
+			return route, true
+		}
+	}
+
+	return RouteConfig{}, false
+}
+
 func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
 	for _, client := range c.Clients {
 		if client.ChainID == chainID && client.ClientID == clientID {

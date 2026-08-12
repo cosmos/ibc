@@ -54,7 +54,7 @@ func TestTransfer_ManualRelay(t *testing.T) {
 	require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
-	require.NoError(t, e2etest.Relay(ctx, relayer, transfer.PacketTx()))
+	require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)

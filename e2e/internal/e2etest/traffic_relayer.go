@@ -187,13 +187,13 @@ func packetWaitPolicy(relayer *ibclink.Relayer, packet PacketTx) (ibclink.WaitPo
 	return policy, nil
 }
 
-// Relay submits the packet's source transaction for relaying and confirms the
-// relayer enumerated the packet.
-func Relay(ctx context.Context, relayer *ibclink.Relayer, packet PacketTx) error {
+// RelayAll submits every packet in the packet's source transaction and
+// confirms the relayer enumerated this packet.
+func RelayAll(ctx context.Context, relayer *ibclink.Relayer, packet PacketTx) error {
 	if relayer == nil {
 		return errors.New("e2etest: relayer is required")
 	}
-	if err := relayer.Relay(ctx, string(packet.Source), packet.SourceTxHash); err != nil {
+	if err := relayer.RelayAll(ctx, string(packet.Source), packet.SourceTxHash); err != nil {
 		return err
 	}
 	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
@@ -210,6 +210,29 @@ func Relay(ctx context.Context, relayer *ibclink.Relayer, packet PacketTx) error
 	return nil
 }
 
+// RelaySelected submits explicit packets from one source transaction.
+func RelaySelected(ctx context.Context, relayer *ibclink.Relayer, packets ...PacketTx) error {
+	if relayer == nil {
+		return errors.New("e2etest: relayer is required")
+	}
+	if len(packets) == 0 {
+		return errors.New("e2etest: selected packets are required")
+	}
+
+	source := packets[0]
+	selectors := make([]*relayerv2.PacketSelector, len(packets))
+	for i, packet := range packets {
+		if packet.Source != source.Source || packet.SourceTxHash != source.SourceTxHash {
+			return errors.New("e2etest: selected packets must share a source transaction")
+		}
+		selectors[i] = &relayerv2.PacketSelector{
+			SourceClientId: packet.SourceClientID,
+			SequenceNumber: packet.Sequence,
+		}
+	}
+	return relayer.RelaySelected(ctx, string(source.Source), source.SourceTxHash, selectors...)
+}
+
 // observeStatus reports the relayer's wire status for the packet. A nil
 // status with ok set means the relayer has no record of the source
 // transaction yet: the packet reads as pending; on non-manual routes it is
@@ -223,7 +246,7 @@ func observeStatus(
 	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
 	if ibclink.IsStatusNotFound(err) {
 		if !relayer.ManualRoute(string(packet.RouteID)) {
-			if relayErr := relayer.Relay(ctx, string(packet.Source), packet.SourceTxHash); relayErr != nil {
+			if relayErr := relayer.RelayAll(ctx, string(packet.Source), packet.SourceTxHash); relayErr != nil {
 				return nil, 0, false, relayErr
 			}
 		}

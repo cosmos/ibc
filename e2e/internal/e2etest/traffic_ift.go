@@ -232,6 +232,36 @@ func (b *IFTBatch) VerifyDelivered(ctx context.Context) error {
 	return nil
 }
 
+// VerifyBalances checks exact destination receiver balances. delivered
+// contains packet indexes.
+func (b *IFTBatch) VerifyBalances(ctx context.Context, delivered []int) error {
+	deliveredSet := make(map[int]struct{}, len(delivered))
+	for _, index := range delivered {
+		deliveredSet[index] = struct{}{}
+	}
+
+	for index, send := range b.sends {
+		want := new(big.Int).Set(send.destinationBefore)
+		if _, ok := deliveredSet[index]; ok {
+			want.Add(want, send.amount)
+		}
+		got, balanceErr := b.app.balance(ctx, b.app.destination.evm, b.app.destIFT, send.receiver)
+		if balanceErr != nil {
+			return balanceErr
+		}
+		if got.Cmp(want) != 0 {
+			return fmt.Errorf(
+				"e2etest: IFT batch destination balance for packet %d: got %s, want %s",
+				index,
+				got,
+				want,
+			)
+		}
+	}
+
+	return nil
+}
+
 // VerifyBurned checks that the batcher's balance decreased by the sum of the
 // batch's amounts.
 func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
