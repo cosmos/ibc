@@ -32,8 +32,6 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 		instanceA    environment.IBCInstanceID = "quorum-ibc-a"
 		instanceB    environment.IBCInstanceID = "quorum-ibc-b"
 		connectionID environment.ConnectionID  = "quorum-a-b"
-		clientA      environment.ClientID      = "quorum-client-a"
-		clientB      environment.ClientID      = "quorum-client-b"
 		attestorA1   environment.AttestorID    = "quorum-attestor-a1"
 		attestorA2   environment.AttestorID    = "quorum-attestor-a2"
 		attestorB    environment.AttestorID    = "quorum-attestor-b"
@@ -58,21 +56,23 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 			environment.NewIBCInstance{ID: instanceA, Chain: chainA, Authority: deployer},
 			environment.NewIBCInstance{ID: instanceB, Chain: chainB, Authority: deployer},
 		},
+		// attestorA1/attestorA2 back clientA (requires 2); attestorB backs clientB (requires 1).
 		Connections: []environment.ConnectionSpec{{
 			ID: connectionID,
 			A: environment.NewClient{
-				ID: clientA, IBCInstance: instanceA, Authority: deployer, MinRequiredSignatures: 2,
+				IBCInstance: instanceA, Authority: deployer, MinRequiredSignatures: 2,
+				Attestors: []environment.AttestorSpec{
+					{ID: attestorA1, Authority: signerA1},
+					{ID: attestorA2, Authority: signerA2},
+				},
 			},
 			B: environment.NewClient{
-				ID: clientB, IBCInstance: instanceB, Authority: deployer, MinRequiredSignatures: 1,
+				IBCInstance: instanceB, Authority: deployer, MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{
+					{ID: attestorB, Authority: signerB},
+				},
 			},
 		}},
-		// attestorA1/attestorA2 back clientA (requires 2); attestorB backs clientB (requires 1).
-		Attestors: []environment.AttestorSpec{
-			{ID: attestorA1, Client: clientA, Authority: signerA1},
-			{ID: attestorA2, Client: clientA, Authority: signerA2},
-			{ID: attestorB, Client: clientB, Authority: signerB},
-		},
 	}
 	runtime := environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
 		deployer: {PrivateKeyHex: testDeployerPrivateKeyHex},
@@ -148,8 +148,8 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 				{ChainID: chainBID, RPC: chainBRPC, ICS26Router: string(resolvedInstanceB.Locator())},
 			},
 			Connections: []ibclink.RelayerConnection{{
-				ChainA: chainAID, ClientA: string(connection.A().Locator()),
-				ChainB: chainBID, ClientB: string(connection.B().Locator()),
+				ChainA: chainAID, ClientA: connection.A().ID(),
+				ChainB: chainBID, ClientB: connection.B().ID(),
 			}},
 			Attestors: attestors,
 		}

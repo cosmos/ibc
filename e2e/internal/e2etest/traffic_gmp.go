@@ -29,18 +29,18 @@ type GMPRequest struct {
 // GMP drives ICS27 GMP and its default Counter and TestERC20 targets on a
 // single directed route.
 type GMP struct {
-	routeID      RouteID
-	source       endpoint
-	destination  endpoint
-	sender       evm.Account
-	sourceGMP    common.Address
-	sourceRouter common.Address
-	counter      common.Address
-	sourceClient string
-	destClient   string
-	destGMP      common.Address
-	destToken    common.Address
-	defaultCall  []byte
+	routeID        RouteID
+	source         endpoint
+	destination    endpoint
+	sender         evm.Account
+	sourceGMP      common.Address
+	sourceRouter   common.Address
+	counter        common.Address
+	sourceClientID string
+	destClientID   string
+	destGMP        common.Address
+	destToken      common.Address
+	defaultCall    []byte
 }
 
 // Token returns the destination-chain TestERC20 bound to this GMP.
@@ -73,7 +73,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return nil, err
 	}
 	msg := ics27gmp.IICS27GMPMsgsSendCallMsg{
-		SourceClient:     g.sourceClient,
+		SourceClient:     g.sourceClientID,
 		Receiver:         receiver,
 		Salt:             request.Salt,
 		Payload:          payload,
@@ -96,7 +96,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return nil, fmt.Errorf("e2etest: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
-		sendResult: newSendResult(g.routeID, g.source, g.sourceClient, receipt, sequence),
+		sendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
 		app:        g,
 		before:     before,
 	}, nil
@@ -142,7 +142,7 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 // constructs on the destination chain for a call sent by sender with salt:
 func (g *GMP) AccountIdentifier(sender common.Address, salt []byte) ics27gmp.IICS27GMPMsgsAccountIdentifier {
 	return ics27gmp.IICS27GMPMsgsAccountIdentifier{
-		ClientId: g.destClient,
+		ClientId: g.destClientID,
 		Sender:   sender.Hex(),
 		Salt:     salt,
 	}
