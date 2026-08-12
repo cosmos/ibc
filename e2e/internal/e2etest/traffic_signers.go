@@ -3,6 +3,7 @@
 package e2etest
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -30,6 +32,19 @@ func NewSigner(t testing.TB) Signer {
 	t.Helper()
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err, "e2etest: generate signer key")
+	return signerFromKey(t, key)
+}
+
+// NewSignerFromHex creates a deterministically keyed local identity.
+func NewSignerFromHex(t testing.TB, privateKeyHex string) Signer {
+	t.Helper()
+	key, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err, "e2etest: parse signer key")
+	return signerFromKey(t, key)
+}
+
+func signerFromKey(t testing.TB, key *ecdsa.PrivateKey) Signer {
+	t.Helper()
 	account, err := evm.AccountFromHex(hex.EncodeToString(crypto.FromECDSA(key)))
 	require.NoError(t, err, "e2etest: create signer account")
 	return Signer{key: key, account: account}
@@ -38,6 +53,17 @@ func NewSigner(t testing.TB) Signer {
 // Address returns the signer's public identity.
 func (s Signer) Address() common.Address {
 	return s.account.Address()
+}
+
+// BroadcastTx signs, submits, and waits for a zero-value transaction from the signer.
+func (s Signer) BroadcastTx(
+	ctx context.Context,
+	evm *environment.EVM,
+	to common.Address,
+	data []byte,
+) error {
+	_, err := evm.BroadcastTx(ctx, s.account, &to, data, nil)
+	return err
 }
 
 // String renders only the public signer address.

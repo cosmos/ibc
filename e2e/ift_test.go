@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -136,6 +137,71 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.NoError(t, pending.VerifyDelivered(ctx))
 }
 
+func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
+	t.Parallel()
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	destinationAttestorID := meshAttestorFor(route.Destination, route.Source)
+	destinationAttestorKey := runtime.Authorities[environment.AuthorityID(destinationAttestorID)].PrivateKeyHex
+
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	destinationAttestor, err := env.Attestor(destinationAttestorID)
+	require.NoError(t, err)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	destinationClient := destinationAttestor.IBCClient()
+	clientAddress := destinationClient.LightClientAddress()
+	initialState := attestedClientState(t, destinationEVM, clientAddress)
+
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+
+	installedState := attestedClientState(t, destinationEVM, clientAddress)
+	require.Greater(t, installedState.LatestHeight, initialState.LatestHeight)
+	height := installedState.LatestHeight
+	trustedTimestamp := attestedConsensusTimestamp(t, destinationEVM, clientAddress, height)
+	proof := signedStateAttestationProof(t, destinationAttestorKey, height, trustedTimestamp+1)
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	updateClient, err := routerABI.Pack("updateClient", destinationClient.ID(), proof)
+	require.NoError(t, err)
+	router := common.HexToAddress(string(destinationClient.IBCInstance().Locator()))
+	require.NoError(t, sender.BroadcastTx(ctx, destinationEVM, router, updateClient))
+
+	frozenState := attestedClientState(t, destinationEVM, clientAddress)
+	require.True(t, frozenState.IsFrozen)
+	require.Equal(t, height, frozenState.LatestHeight)
+	require.Equal(t, trustedTimestamp, attestedConsensusTimestamp(t, destinationEVM, clientAddress, height))
+
+	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
+	require.NoError(t, err)
+	require.NoError(t, pending.VerifyBurned(ctx))
+	require.NoError(t, e2etest.Relay(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_PENDING))
+	status, err := e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_PENDING)
+	require.NoError(t, err)
+	require.Empty(t, status.GetRecvTx().GetTxHash())
+	require.NoError(t, pending.VerifyPending(ctx))
+	require.NoError(t, pending.VerifyNotMinted(ctx))
+}
+
 // TestIFTTimeout_RefundUsesFinalizedDestinationAnchor proves timeouts anchor
 // on the finalized destination header the attested client tracks — including
 // when the source chain is far ahead of the destination.
@@ -172,12 +238,12 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	require.NoError(t, relayer.Stop(ctx))
 	asymmetricTransfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(4_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 	require.NoError(t, asymmetricTransfer.VerifyBurned(ctx))
 	require.NoError(t, asymmetricTransfer.VerifyPending(ctx))
-	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, destinationMining.AdvanceTime(ctx, packetTimeoutAdvance))
 	require.NoError(t, destinationMining.Mine(ctx, 1))
 	destinationHeight, err := destination.Height(ctx)
 	require.NoError(t, err)
@@ -298,7 +364,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
@@ -361,7 +427,7 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	require.NoError(t, mining.WithPaused(ctx, func() error {
 		transfer, err = iftApp.Send(ctx, e2etest.IFTRequest{
 			Amount:  big.NewInt(3_000_000),
-			Timeout: transferTimeout,
+			Timeout: packetTimeout,
 		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
@@ -624,39 +690,36 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 		require.Equal(t, send.PacketTx().Sequence, statuses[0].SequenceNumber)
 	}
 
-	recvTxCounts := make(map[string]int, packetCount)
-	ackTxCounts := make(map[string]int, packetCount)
+	recvTxSequences := make(map[string][]uint64, packetCount)
+	ackTxSequences := make(map[string][]uint64, packetCount)
 	for _, send := range sends {
-		_, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
+		status, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 		require.NoError(t, send.VerifyDelivered(ctx))
 
-		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), send.TxHash())
-		require.NoError(t, err)
-		require.Len(t, statuses, 1)
-		recvTxCounts[statuses[0].GetRecvTx().GetTxHash()]++
-		ackTxCounts[statuses[0].GetAckTx().GetTxHash()]++
+		sequence := send.PacketTx().Sequence
+		recvHash := status.GetRecvTx().GetTxHash()
+		ackHash := status.GetAckTx().GetTxHash()
+		recvTxSequences[recvHash] = append(recvTxSequences[recvHash], sequence)
+		ackTxSequences[ackHash] = append(ackTxSequences[ackHash], sequence)
 	}
 	require.NoError(t, sends[packetCount-1].VerifyBurned(ctx), "successful acks must not refund")
 
-	require.Lessf(t, len(recvTxCounts), packetCount,
-		"expected batched recv, got one recv tx per packet: %v", recvTxCounts)
-	require.Lessf(t, len(ackTxCounts), packetCount,
-		"expected batched ack, got one ack tx per packet: %v", ackTxCounts)
-	require.Truef(t, hasBatchedTx(recvTxCounts), "no recv tx carried multiple packets: %v", recvTxCounts)
-	require.Truef(t, hasBatchedTx(ackTxCounts), "no ack tx carried multiple packets: %v", ackTxCounts)
-}
-
-// hasBatchedTx reports whether any transaction hash in counts covers more
-// than one packet.
-func hasBatchedTx(counts map[string]int) bool {
-	for _, count := range counts {
-		if count >= 2 {
-			return true
-		}
+	for txHash, want := range recvTxSequences {
+		got, err := iftApp.WriteAcknowledgementSequences(ctx, txHash)
+		require.NoError(t, err)
+		require.ElementsMatchf(t, want, got, "receive transaction %s packet sequences", txHash)
 	}
-	return false
+	for txHash, want := range ackTxSequences {
+		got, err := iftApp.AckPacketSequences(ctx, txHash)
+		require.NoError(t, err)
+		require.ElementsMatchf(t, want, got, "acknowledgement transaction %s packet sequences", txHash)
+	}
+	require.Lessf(t, len(recvTxSequences), packetCount,
+		"expected batched recv, got one recv tx per packet: %v", recvTxSequences)
+	require.Lessf(t, len(ackTxSequences), packetCount,
+		"expected batched ack, got one ack tx per packet: %v", ackTxSequences)
 }
 
 // TestIFTTransfer_BatchedTimeout sends more IFT transfers
@@ -680,7 +743,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	for i := range sends {
 		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 			Amount:  big.NewInt(int64(1_000_000 + i)),
-			Timeout: transferTimeout,
+			Timeout: packetTimeout,
 		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
@@ -691,7 +754,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := destination.Mining()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
 
 	relayErrs := make([]error, packetCount)
 	var wg sync.WaitGroup
@@ -707,20 +770,22 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 		require.NoErrorf(t, err, "relay call for packet %d (seq %d) failed", i, sends[i].PacketTx().Sequence)
 	}
 
-	timeoutTxCounts := make(map[string]int, packetCount)
+	timeoutTxSequences := make(map[string][]uint64, packetCount)
 	for _, send := range sends {
-		_, err = e2etest.AwaitState(ctx, relayer, send.PacketTx(),
+		status, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 		require.NoError(t, err)
 		require.NoError(t, send.VerifyNotMinted(ctx))
 
-		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), send.TxHash())
-		require.NoError(t, err)
-		require.Len(t, statuses, 1)
-		timeoutTxCounts[statuses[0].GetTimeoutTx().GetTxHash()]++
+		txHash := status.GetTimeoutTx().GetTxHash()
+		timeoutTxSequences[txHash] = append(timeoutTxSequences[txHash], send.PacketTx().Sequence)
 	}
 
-	require.Lessf(t, len(timeoutTxCounts), packetCount,
-		"expected batched timeouts, got one timeout tx per packet: %v", timeoutTxCounts)
-	require.Truef(t, hasBatchedTx(timeoutTxCounts), "no timeout tx carried multiple packets: %v", timeoutTxCounts)
+	for txHash, want := range timeoutTxSequences {
+		got, err := iftApp.TimeoutPacketSequences(ctx, txHash)
+		require.NoError(t, err)
+		require.ElementsMatchf(t, want, got, "timeout transaction %s packet sequences", txHash)
+	}
+	require.Lessf(t, len(timeoutTxSequences), packetCount,
+		"expected batched timeouts, got one timeout tx per packet: %v", timeoutTxSequences)
 }

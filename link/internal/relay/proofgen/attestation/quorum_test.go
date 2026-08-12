@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
