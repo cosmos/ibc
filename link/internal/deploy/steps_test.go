@@ -402,7 +402,7 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
-	tok, ok := m.Token("FOO")
+	tok, ok := m.TokenByAddress("0xift-FOO")
 	require.True(t, ok)
 	require.Equal(t, "0xift-FOO", tok.Address)
 
@@ -467,7 +467,7 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
 	require.Equal(t, "0xctor", m.EVMSendCallConstructor)
-	tok, _ := m.Token("FOO")
+	tok, _ := m.TokenByAddress("0xift-FOO")
 	b, ok := tok.Bridge("link-2")
 	require.True(t, ok)
 	require.Equal(t, "0xcp", b.CounterpartyIFT)
@@ -506,7 +506,7 @@ func TestIFTBridgeStepsOverrideSkipsConstructor(t *testing.T) {
 
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
-	tok, _ := m.Token("FOO")
+	tok, _ := m.TokenByAddress("0xift-FOO")
 	b, _ := tok.Bridge("link-2")
 	require.Equal(t, "0xoverride", b.SendCallConstructor)
 }
@@ -548,7 +548,7 @@ func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
-	tok, _ := m.Token("FOO")
+	tok, _ := m.TokenByAddress("0xift-FOO")
 	b, ok := tok.Bridge("link-2")
 	require.True(t, ok)
 	require.Equal(t, "0xctorB", b.SendCallConstructor)

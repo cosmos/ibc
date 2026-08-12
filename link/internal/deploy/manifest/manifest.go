@@ -137,15 +137,6 @@ type Bridge struct {
 	SendCallConstructor string `json:"sendCallConstructor"`
 }
 
-func (m *Manifest) Token(symbol string) (Token, bool) {
-	for _, t := range m.Tokens {
-		if t.Symbol == symbol {
-			return t, true
-		}
-	}
-	return Token{}, false
-}
-
 // TokenByAddress returns the token deployed at address (case-insensitive)
 func (m *Manifest) TokenByAddress(address string) (Token, bool) {
 	for _, t := range m.Tokens {
@@ -182,11 +173,11 @@ func (m *Manifest) UpsertToken(t Token) {
 	m.Tokens = append(m.Tokens, t)
 }
 
-// UpsertBridge adds or replaces a bridge on the token with the given symbol,
-// returning false if no such token exists.
-func (m *Manifest) UpsertBridge(symbol string, b Bridge) bool {
+// UpsertBridge adds or replaces a bridge on the token at iftAddr
+// (case-insensitive), returning false if no such token exists.
+func (m *Manifest) UpsertBridge(iftAddr string, b Bridge) bool {
 	for i := range m.Tokens {
-		if m.Tokens[i].Symbol == symbol {
+		if strings.EqualFold(m.Tokens[i].Address, iftAddr) {
 			m.Tokens[i].upsertBridge(b)
 			return true
 		}

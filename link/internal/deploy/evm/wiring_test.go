@@ -245,7 +245,10 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 	m.UpsertToken(manifest.Token{Symbol: "FOO", Name: "Foo", Address: token.Address, Owner: owner.Hex()})
 	require.True(
 		t,
-		m.UpsertBridge("FOO", manifest.Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor}),
+		m.UpsertBridge(
+			token.Address,
+			manifest.Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor},
+		),
 	)
 
 	report, err := d.Verify(ctx, m)

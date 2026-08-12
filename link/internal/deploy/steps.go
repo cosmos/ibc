@@ -386,14 +386,13 @@ func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec B
 				if regErr := t.RegisterIFTBridge(ctx, iftAddr, full); regErr != nil {
 					return regErr
 				}
-				// best-effort record: iftAddr may be an unrecorded external token
-				if tok, ok := m.TokenByAddress(iftAddr); ok {
-					m.UpsertBridge(tok.Symbol, manifest.Bridge{
-						ClientID:            spec.ClientID,
-						CounterpartyIFT:     spec.CounterpartyIFT,
-						SendCallConstructor: ctor,
-					})
-				}
+				// best-effort record: a no-op when iftAddr is an unrecorded
+				// external token
+				m.UpsertBridge(iftAddr, manifest.Bridge{
+					ClientID:            spec.ClientID,
+					CounterpartyIFT:     spec.CounterpartyIFT,
+					SendCallConstructor: ctor,
+				})
 				return m.Save(dir)
 			},
 		},

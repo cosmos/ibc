@@ -55,7 +55,7 @@ func TestTokenAndBridgeHelpers(t *testing.T) {
 	// same identity (symbol+name+owner) updates in place, not append
 	m.UpsertToken(Token{Symbol: "FOO", Name: "Foo", Address: "0xfoo2", Owner: "0xowner"})
 	require.Len(t, m.Tokens, 1)
-	tok, ok := m.Token("FOO")
+	tok, ok := m.TokenByIdentity("FOO", "Foo", "0xowner")
 	require.True(t, ok)
 	require.Equal(t, "0xfoo2", tok.Address)
 
@@ -66,13 +66,13 @@ func TestTokenAndBridgeHelpers(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "0xbar", byID.Address)
 
-	// bridge upsert on a known symbol
+	// bridge upsert keyed by token address; unknown address returns false
 	require.True(
 		t,
-		m.UpsertBridge("FOO", Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: "0xctor"}),
+		m.UpsertBridge("0xfoo2", Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: "0xctor"}),
 	)
-	require.False(t, m.UpsertBridge("BAR", Bridge{ClientID: "link-2"}))
-	tok, _ = m.Token("FOO")
+	require.False(t, m.UpsertBridge("0xmissing", Bridge{ClientID: "link-2"}))
+	tok, _ = m.TokenByAddress("0xfoo2")
 	b, ok := tok.Bridge("link-2")
 	require.True(t, ok)
 	require.Equal(t, "0xcp", b.CounterpartyIFT)
@@ -83,7 +83,7 @@ func TestTokenAndBridgeHelpers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0xgmp", loaded.GMP.Address)
 	require.Equal(t, "0xctor", loaded.EVMSendCallConstructor)
-	lt, ok := loaded.Token("FOO")
+	lt, ok := loaded.TokenByAddress("0xfoo2")
 	require.True(t, ok)
 	require.Len(t, lt.Bridges, 1)
 }
