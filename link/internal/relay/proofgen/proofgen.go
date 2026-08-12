@@ -122,7 +122,7 @@ func NewSetFromConfig(
 }
 
 // resolveAttestor resolves one configured attestor-set entry to the
-// attestor.Attestor abstraction. watchedChainID is the chain
+// internal attestor abstraction. watchedChainID is the chain
 // the attestor is expected to be attesting
 func resolveAttestor(
 	entry config.AttestorEntry,

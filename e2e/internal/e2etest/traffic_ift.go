@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -43,6 +44,7 @@ type IFT struct {
 	sourceIFT      common.Address
 	destIFT        common.Address
 	sourceRouter   common.Address
+	destRouter     common.Address
 	sourceClientID string
 	batcher        common.Address
 }
@@ -282,6 +284,57 @@ func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
 }
 
 func (p *IFTSend) TimeoutTimestamp() uint64 { return p.timeoutTimestamp }
+
+// WriteAcknowledgementSequences returns the packet sequences written by a destination receive transaction.
+func (i *IFT) WriteAcknowledgementSequences(ctx context.Context, txHash string) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(i.destRouter, nil))
+	sequences, err := transactionEventSequences(
+		ctx,
+		i.destination,
+		i.destRouter,
+		txHash,
+		parser.ParseWriteAcknowledgement,
+		func(event *ics26router.ContractWriteAcknowledgement) uint64 { return event.Packet.Sequence },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read IFT WriteAcknowledgement events: %w", err)
+	}
+	return sequences, nil
+}
+
+// AckPacketSequences returns the packet sequences acknowledged by a source acknowledgement transaction.
+func (i *IFT) AckPacketSequences(ctx context.Context, txHash string) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(i.sourceRouter, nil))
+	sequences, err := transactionEventSequences(
+		ctx,
+		i.source,
+		i.sourceRouter,
+		txHash,
+		parser.ParseAckPacket,
+		func(event *ics26router.ContractAckPacket) uint64 { return event.Packet.Sequence },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read IFT AckPacket events: %w", err)
+	}
+	return sequences, nil
+}
+
+// TimeoutPacketSequences returns the packet sequences timed out by a source timeout transaction.
+func (i *IFT) TimeoutPacketSequences(ctx context.Context, txHash string) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(i.sourceRouter, nil))
+	sequences, err := transactionEventSequences(
+		ctx,
+		i.source,
+		i.sourceRouter,
+		txHash,
+		parser.ParseTimeoutPacket,
+		func(event *ics26router.ContractTimeoutPacket) uint64 { return event.Packet.Sequence },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read IFT TimeoutPacket events: %w", err)
+	}
+	return sequences, nil
+}
 
 // VerifyBurned checks that the submitted amount left the source sender balance.
 func (p *IFTSend) VerifyBurned(ctx context.Context) error {

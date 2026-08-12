@@ -9,9 +9,10 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
+	"github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
@@ -51,10 +52,7 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 		)
 	}
 
-	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
-		AttestationData: result.AttestationData,
-		Signatures:      result.Signatures,
-	})
+	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
 		return nil, errors.Wrap(err, "encoding state attestation proof")
 	}
@@ -76,7 +74,7 @@ func (g *Generator) PacketProofs(
 	encodedPackets := make([][]byte, len(packets))
 
 	for i, packet := range packets {
-		encoded, errEnc := attestorevm.EncodePacket(packet)
+		encoded, errEnc := ibc.EncodePacket(packet)
 		if errEnc != nil {
 			return nil, errors.Wrapf(errEnc, "encoding packet sequence %d", packet.Sequence)
 		}
@@ -110,10 +108,7 @@ func (g *Generator) PacketProofs(
 		)
 	}
 
-	proof, err := attestorevm.EncodeAttestationProof(attestorevm.AttestationProof{
-		AttestationData: result.AttestationData,
-		Signatures:      result.Signatures,
-	})
+	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
 		return nil, errors.Wrap(err, "encoding packet attestation proof")
 	}

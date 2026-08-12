@@ -18,10 +18,11 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
+	"github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -298,7 +299,7 @@ func TestLocal(t *testing.T) {
 
 	t.Run("PacketAttestation", func(t *testing.T) {
 		validPacket := sampleEvmPacket(t)
-		decodedPacket, err := attestorevm.DecodePacket(validPacket)
+		decodedPacket, err := ibc.DecodePacket(validPacket)
 		require.NoError(t, err)
 		pathHash := [32]byte(
 			crypto.Keccak256Hash(hostv2.PacketCommitmentKey(decodedPacket.SourceClient, decodedPacket.Sequence)),
