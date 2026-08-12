@@ -90,7 +90,7 @@ var (
 	}
 
 	cmdDeployIFT = &cobra.Command{
-		Use:   "ift",
+		Use:   useIFT,
 		Short: "Deploy an IFT token on one chain",
 		RunE:  deployIFT,
 	}

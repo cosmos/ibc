@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -22,6 +23,10 @@ var globalFlags = config.DefaultFlagSet()
 // useStatus is the shared "status" subcommand name and status-field key,
 // factored out to satisfy goconst across cmd/ibc.
 const useStatus = "status"
+
+// useIFT is the shared "ift" subcommand name, factored out to satisfy
+// goconst across cmd/ibc.
+const useIFT = "ift"
 
 var rootCmd = &cobra.Command{
 	Use:   "ibc",
@@ -58,6 +63,7 @@ func init() {
 		cmdMigrate,
 		cmdKeys,
 		cmdDeploy,
+		cmdTx,
 	)
 
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
@@ -147,4 +153,17 @@ func init() {
 	cmdDeployIFTBridge.Flags().
 		StringVar(&flagDeployBridgeCtorB, "send-call-constructor-b", "",
 			"send call constructor address on chain B (default: deploy or reuse the EVM constructor)")
+
+	// Tx commands
+	cmdTx.AddCommand(cmdTxIFT)
+	cmdTxIFT.AddCommand(cmdTxIFTMint, cmdTxIFTSend)
+	tpf := cmdTxIFT.PersistentFlags()
+	tpf.StringVar(&flagTxIFTChain, "chain", "", "chain ID the IFT token is deployed on")
+	tpf.StringVar(&flagTxIFTAddress, "ift", "", "IFT token address")
+	tpf.StringVar(&flagTxIFTFrom, "from", "", "signer alias to submit the transaction with")
+	for _, req := range []string{"chain", useIFT, "from"} {
+		_ = cmdTxIFT.MarkPersistentFlagRequired(req)
+	}
+	cmdTxIFTSend.Flags().
+		DurationVar(&flagTxIFTTimeout, "timeout", 15*time.Minute, "relative send timeout")
 }
