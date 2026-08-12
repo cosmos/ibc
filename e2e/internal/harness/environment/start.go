@@ -89,12 +89,12 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		return nil, abortStart(ctx, startErr, ws, effects)
 	}
 
-	connections, clients, startErr := acquireConnections(ctx, spec, instances, runtime, d)
+	connections, startErr := acquireConnections(ctx, spec, instances, runtime, d)
 	if startErr != nil {
 		return nil, abortStart(ctx, startErr, ws, effects)
 	}
 
-	attestors, startErr := acquireAttestors(ctx, spec, instances, clients, runtime, ws, d, effects)
+	attestors, startErr := acquireAttestors(ctx, spec, connections, runtime, ws, d, effects)
 	if startErr != nil {
 		return nil, abortStart(ctx, startErr, ws, effects)
 	}
@@ -106,7 +106,6 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		chains:      chains,
 		instances:   instances,
 		connections: connections,
-		clients:     clients,
 		attestors:   attestors,
 		effects:     effects,
 		ws:          ws,
@@ -186,10 +185,10 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 			if client, ok := declaration.(NewClient); ok {
 				requiredAuthorities[client.Authority] = struct{}{}
 			}
+			for _, attestor := range declaration.clientAttestors() {
+				requiredAuthorities[attestor.Authority] = struct{}{}
+			}
 		}
-	}
-	for _, attestor := range spec.Attestors {
-		requiredAuthorities[attestor.Authority] = struct{}{}
 	}
 	for authority := range requiredAuthorities {
 		if _, err := runtime.evmAccount(authority); err != nil {
@@ -204,8 +203,8 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 		}
 	}
 	for _, connection := range spec.Connections {
-		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			client, ok := declaration.(NewClient)
+		for _, end := range connection.ends() {
+			client, ok := end.declaration.(NewClient)
 			if !ok {
 				continue
 			}
@@ -218,7 +217,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 			if instanceAuthority.Address() != clientAuthority.Address() {
 				return fmt.Errorf(
 					"environment: new IBC Client %q authority must resolve to the new IBC Instance %q admin address",
-					client.ID,
+					clientLabel(connection.ID, end.label),
 					instance.ID,
 				)
 			}
@@ -227,25 +226,30 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 
 	type attestorUse struct {
 		id     AttestorID
-		client ClientID
+		client string
 	}
 	// Solidity IBC v3 attestations do not yet include domain separation. Reusing one
 	// signer across Clients would allow the same signed bytes to be replayed in
 	// another Client context, so signer isolation is a graph-wide invariant.
-	attestorAddresses := make(map[string]attestorUse, len(spec.Attestors))
-	for _, attestor := range spec.Attestors {
-		account, _ := runtime.evmAccount(attestor.Authority)
-		address := account.Address().Hex()
-		if previous, exists := attestorAddresses[address]; exists {
-			return fmt.Errorf(
-				"environment: Attestors %q for IBC Client %q and %q for IBC Client %q resolve to the same signer address",
-				previous.id,
-				previous.client,
-				attestor.ID,
-				attestor.Client,
-			)
+	attestorAddresses := make(map[string]attestorUse)
+	for _, connection := range spec.Connections {
+		for _, end := range connection.ends() {
+			label := clientLabel(connection.ID, end.label)
+			for _, attestor := range end.declaration.clientAttestors() {
+				account, _ := runtime.evmAccount(attestor.Authority)
+				address := account.Address().Hex()
+				if previous, exists := attestorAddresses[address]; exists {
+					return fmt.Errorf(
+						"environment: Attestors %q for IBC Client %q and %q for IBC Client %q resolve to the same signer address",
+						previous.id,
+						previous.client,
+						attestor.ID,
+						label,
+					)
+				}
+				attestorAddresses[address] = attestorUse{id: attestor.ID, client: label}
+			}
 		}
-		attestorAddresses[address] = attestorUse{id: attestor.ID, client: attestor.Client}
 	}
 	return nil
 }
@@ -304,7 +308,14 @@ func productionDrivers() drivers {
 }
 
 func validateProductionPrerequisites(spec Spec, _ Runtime) error {
-	if len(spec.Attestors) == 0 {
+	hasAttestors := false
+	for _, connection := range spec.Connections {
+		if len(connection.A.clientAttestors()) != 0 || len(connection.B.clientAttestors()) != 0 {
+			hasAttestors = true
+			break
+		}
+	}
+	if !hasAttestors {
 		return nil
 	}
 	path, err := filepath.Abs(ibclink.ResolvedBin())

@@ -34,17 +34,16 @@ func attestedMesh(chains []environment.ChainSpec) (environment.Spec, environment
 	for i, a := range chainIDs {
 		for _, b := range chainIDs[i+1:] {
 			connectionID := fixtureConnectionID(a, b)
-			spec.Connections = append(spec.Connections, environment.ConnectionSpec{
+			attestorA := meshAttestorID(connectionID, "a")
+			attestorB := meshAttestorID(connectionID, "b")
+			connection := environment.ConnectionSpec{
 				ID: connectionID,
-				A:  meshClient(connectionID, "a", a),
-				B:  meshClient(connectionID, "b", b),
-			})
-			for _, end := range []string{"a", "b"} {
-				attestor := meshAttestorID(connectionID, end)
+				A:  meshClient(a, attestorA),
+				B:  meshClient(b, attestorB),
+			}
+			spec.Connections = append(spec.Connections, connection)
+			for _, attestor := range []environment.AttestorID{attestorA, attestorB} {
 				authority := environment.AuthorityID(attestor)
-				spec.Attestors = append(spec.Attestors, environment.AttestorSpec{
-					ID: attestor, Client: fixtureClientID(connectionID, end), Authority: authority,
-				})
 				authorities[authority] = environment.EVMAuthority{
 					PrivateKeyHex: fmt.Sprintf("%064x", nextKey),
 				}
@@ -55,17 +54,19 @@ func attestedMesh(chains []environment.ChainSpec) (environment.Spec, environment
 	return spec, e2etest.RuntimeWithProtocolDeployer(environment.Runtime{Authorities: authorities})
 }
 
-func meshClient(connection environment.ConnectionID, end string, chain environment.ChainID) environment.NewClient {
+func meshClient(chain environment.ChainID, attestor environment.AttestorID) environment.NewClient {
 	return environment.NewClient{
-		ID:                    fixtureClientID(connection, end),
 		IBCInstance:           fixtureInstanceID(chain),
 		Authority:             e2etest.ProtocolAuthorityID,
 		MinRequiredSignatures: 1,
+		Attestors: []environment.AttestorSpec{{
+			ID: attestor, Authority: environment.AuthorityID(attestor),
+		}},
 	}
 }
 
 func meshAttestorID(connection environment.ConnectionID, end string) environment.AttestorID {
-	return environment.AttestorID(fmt.Sprintf("%s-attestor", fixtureClientID(connection, end)))
+	return environment.AttestorID(fmt.Sprintf("%s-%s-attestor", connection, end))
 }
 
 // meshAttestorFor returns the Attestor backing the mesh Client hosted on chain
@@ -104,10 +105,6 @@ func fixtureConnectionID(a, b environment.ChainID) environment.ConnectionID {
 	return environment.ConnectionID(fmt.Sprintf("conn-%s-%s", a, b))
 }
 
-func fixtureClientID(connection environment.ConnectionID, end string) environment.ClientID {
-	return environment.ClientID(fmt.Sprintf("%s-%s", connection, end))
-}
-
 func TestAttestedMesh(t *testing.T) {
 	chains := []environment.ChainSpec{
 		environment.ManagedAnvil{ID: "chain-b", EVMChainID: 2},
@@ -128,30 +125,22 @@ func TestAttestedMesh(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "conn-chain-a-chain-b",
 			A: environment.NewClient{
-				ID:                    "conn-chain-a-chain-b-a",
 				IBCInstance:           "ibc-chain-a",
 				Authority:             e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{
+					ID: "conn-chain-a-chain-b-a-attestor", Authority: "conn-chain-a-chain-b-a-attestor",
+				}},
 			},
 			B: environment.NewClient{
-				ID:                    "conn-chain-a-chain-b-b",
 				IBCInstance:           "ibc-chain-b",
 				Authority:             e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{
+					ID: "conn-chain-a-chain-b-b-attestor", Authority: "conn-chain-a-chain-b-b-attestor",
+				}},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{
-				ID:        "conn-chain-a-chain-b-a-attestor",
-				Client:    "conn-chain-a-chain-b-a",
-				Authority: "conn-chain-a-chain-b-a-attestor",
-			},
-			{
-				ID:        "conn-chain-a-chain-b-b-attestor",
-				Client:    "conn-chain-a-chain-b-b",
-				Authority: "conn-chain-a-chain-b-b-attestor",
-			},
-		},
 	}
 	require.Equal(t, want, spec)
 
@@ -164,7 +153,7 @@ func TestAttestedMesh(t *testing.T) {
 	for _, authority := range runtime.Authorities {
 		keys[authority.PrivateKeyHex] = struct{}{}
 	}
-	require.Len(t, keys, len(spec.Attestors)+1, "attestor keys must be distinct from each other and the deployer")
+	require.Len(t, keys, len(runtime.Authorities), "attestor keys must be distinct from each other and the deployer")
 	require.NoError(t, environment.Validate(spec, runtime))
 }
 

@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	attestorevm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 )
 
 // quorumResult the aggregated, quorum-verified attestation for one claim:

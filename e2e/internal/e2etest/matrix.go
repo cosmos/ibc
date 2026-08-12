@@ -155,6 +155,7 @@ func (c *matrixCollector) emit(record *MatrixRecord) error {
 
 func summarizeSpec(spec environment.Spec) MatrixSpec {
 	counts := make(map[string]int)
+	attestors := 0
 	for _, chain := range spec.Chains {
 		switch chain.(type) {
 		case environment.ManagedAnvil:
@@ -176,10 +177,20 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 	for _, typ := range types {
 		chains = append(chains, MatrixChain{Type: typ, Count: counts[typ]})
 	}
+	for _, connection := range spec.Connections {
+		for _, declaration := range []environment.ClientSpec{connection.A, connection.B} {
+			switch client := declaration.(type) {
+			case environment.NewClient:
+				attestors += len(client.Attestors)
+			case environment.ExistingClient:
+				attestors += len(client.Attestors)
+			}
+		}
+	}
 	return MatrixSpec{
 		Chains:       chains,
 		IBCInstances: len(spec.IBCInstances),
 		Connections:  len(spec.Connections),
-		Attestors:    len(spec.Attestors),
+		Attestors:    attestors,
 	}
 }

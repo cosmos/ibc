@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -24,23 +25,26 @@ type GMPRequest struct {
 	Receiver string
 	// Salt defaults to empty, matching sendCall's default account identifier.
 	Salt []byte
+	// Timeout is the destination-relative packet lifetime. Non-positive selects
+	// a far-future-but-valid default; positive values are rounded up to whole seconds.
+	Timeout time.Duration
 }
 
 // GMP drives ICS27 GMP and its default Counter and TestERC20 targets on a
 // single directed route.
 type GMP struct {
-	routeID      RouteID
-	source       endpoint
-	destination  endpoint
-	sender       evm.Account
-	sourceGMP    common.Address
-	sourceRouter common.Address
-	counter      common.Address
-	sourceClient string
-	destClient   string
-	destGMP      common.Address
-	destToken    common.Address
-	defaultCall  []byte
+	routeID        RouteID
+	source         endpoint
+	destination    endpoint
+	sender         evm.Account
+	sourceGMP      common.Address
+	sourceRouter   common.Address
+	counter        common.Address
+	sourceClientID string
+	destClientID   string
+	destGMP        common.Address
+	destToken      common.Address
+	defaultCall    []byte
 }
 
 // Token returns the destination-chain TestERC20 bound to this GMP.
@@ -68,12 +72,12 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 	if err != nil {
 		return nil, err
 	}
-	timeoutTimestamp, err := destinationTimeout(ctx, g.destination, 0)
+	timeoutTimestamp, err := destinationTimeout(ctx, g.destination, request.Timeout)
 	if err != nil {
 		return nil, err
 	}
 	msg := ics27gmp.IICS27GMPMsgsSendCallMsg{
-		SourceClient:     g.sourceClient,
+		SourceClient:     g.sourceClientID,
 		Receiver:         receiver,
 		Salt:             request.Salt,
 		Payload:          payload,
@@ -96,7 +100,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return nil, fmt.Errorf("e2etest: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
-		sendResult: newSendResult(g.routeID, g.source, g.sourceClient, receipt, sequence),
+		sendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
 		app:        g,
 		before:     before,
 	}, nil
@@ -115,11 +119,17 @@ func (c *GMPCall) VerifyCounterExecuted(ctx context.Context) error {
 	)
 }
 
-// VerifyCounterRejected checks that the destination Counter did not change
-// after an error acknowledgement. Only meaningful when the call's receiver
-// was the bound Counter.
-func (c *GMPCall) VerifyCounterRejected(ctx context.Context) error {
+// VerifyCounterUnchanged checks that the destination Counter did not change.
+// Only meaningful when the call's receiver was the bound Counter.
+func (c *GMPCall) VerifyCounterUnchanged(ctx context.Context) error {
 	return c.verifyCount(ctx, c.before, "unchanged")
+}
+
+// VerifyTimeoutExecuted checks that txHash succeeded with a TimeoutPacket for this packet.
+func (c *GMPCall) VerifyTimeoutExecuted(ctx context.Context, txHash string) error {
+	return verifyPacketTimeout(
+		ctx, c.app.source, c.app.sourceRouter, c.app.sourceClientID, c.packetTx, txHash,
+	)
 }
 
 func (g *GMP) count(ctx context.Context) (*big.Int, error) {
@@ -142,7 +152,7 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 // constructs on the destination chain for a call sent by sender with salt:
 func (g *GMP) AccountIdentifier(sender common.Address, salt []byte) ics27gmp.IICS27GMPMsgsAccountIdentifier {
 	return ics27gmp.IICS27GMPMsgsAccountIdentifier{
-		ClientId: g.destClient,
+		ClientId: g.destClientID,
 		Sender:   sender.Hex(),
 		Salt:     salt,
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,8 +26,6 @@ var zeroAddressReceiver = (common.Address{}).Hex()
 func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	t.Parallel()
 	const (
-		clientAID          environment.ClientID    = "quorum-client-a"
-		clientBID          environment.ClientID    = "quorum-client-b"
 		attestorAID        environment.AttestorID  = "attestor-a"
 		attestorBID        environment.AttestorID  = "attestor-b"
 		attestorCID        environment.AttestorID  = "attestor-c"
@@ -53,20 +52,22 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "quorum-connection",
 			A: environment.NewClient{
-				ID: clientAID, IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
+				IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
+				Attestors: []environment.AttestorSpec{{
+					ID: attestorAID, Authority: attestorAAuthority,
+				}},
 			},
 			B: environment.NewClient{
-				ID: clientBID, IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
+				IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
 				MinRequiredSignatures: 2,
+				Attestors: []environment.AttestorSpec{
+					{ID: attestorBID, Authority: attestorBAuthority},
+					{ID: attestorCID, Authority: attestorCAuthority},
+					{ID: attestorDID, Authority: attestorDAuthority},
+				},
 			},
 		}},
-		Attestors: []environment.AttestorSpec{
-			{ID: attestorAID, Client: clientAID, Authority: attestorAAuthority},
-			{ID: attestorBID, Client: clientBID, Authority: attestorBAuthority},
-			{ID: attestorCID, Client: clientBID, Authority: attestorCAuthority},
-			{ID: attestorDID, Client: clientBID, Authority: attestorDAuthority},
-		},
 	}
 	runtime := e2etest.RuntimeWithProtocolDeployer(
 		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
@@ -136,6 +137,71 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.NoError(t, pending.VerifyDelivered(ctx))
 }
 
+func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
+	t.Parallel()
+	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	destinationAttestorID := meshAttestorFor(route.Destination, route.Source)
+	destinationAttestorKey := runtime.Authorities[environment.AuthorityID(destinationAttestorID)].PrivateKeyHex
+
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	destinationAttestor, err := env.Attestor(destinationAttestorID)
+	require.NoError(t, err)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	destinationEVM, err := destination.EVM()
+	require.NoError(t, err)
+	destinationClient := destinationAttestor.IBCClient()
+	clientAddress := destinationClient.LightClientAddress()
+	initialState := attestedClientState(t, destinationEVM, clientAddress)
+
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyBurned(ctx))
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+
+	installedState := attestedClientState(t, destinationEVM, clientAddress)
+	require.Greater(t, installedState.LatestHeight, initialState.LatestHeight)
+	height := installedState.LatestHeight
+	trustedTimestamp := attestedConsensusTimestamp(t, destinationEVM, clientAddress, height)
+	proof := signedStateAttestationProof(t, destinationAttestorKey, height, trustedTimestamp+1)
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	updateClient, err := routerABI.Pack("updateClient", destinationClient.ID(), proof)
+	require.NoError(t, err)
+	router := common.HexToAddress(string(destinationClient.IBCInstance().Locator()))
+	require.NoError(t, sender.BroadcastTx(ctx, destinationEVM, router, updateClient))
+
+	frozenState := attestedClientState(t, destinationEVM, clientAddress)
+	require.True(t, frozenState.IsFrozen)
+	require.Equal(t, height, frozenState.LatestHeight)
+	require.Equal(t, trustedTimestamp, attestedConsensusTimestamp(t, destinationEVM, clientAddress, height))
+
+	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
+	require.NoError(t, err)
+	require.NoError(t, pending.VerifyBurned(ctx))
+	require.NoError(t, e2etest.Relay(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_PENDING))
+	status, err := e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_PENDING)
+	require.NoError(t, err)
+	require.Empty(t, status.GetRecvTx().GetTxHash())
+	require.NoError(t, pending.VerifyPending(ctx))
+	require.NoError(t, pending.VerifyNotMinted(ctx))
+}
+
 // TestIFTTimeout_RefundUsesFinalizedDestinationAnchor proves timeouts anchor
 // on the finalized destination header the attested client tracks — including
 // when the source chain is far ahead of the destination.
@@ -172,12 +238,12 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	require.NoError(t, relayer.Stop(ctx))
 	asymmetricTransfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(4_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 	require.NoError(t, asymmetricTransfer.VerifyBurned(ctx))
 	require.NoError(t, asymmetricTransfer.VerifyPending(ctx))
-	require.NoError(t, destinationMining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, destinationMining.AdvanceTime(ctx, packetTimeoutAdvance))
 	require.NoError(t, destinationMining.Mine(ctx, 1))
 	destinationHeight, err := destination.Height(ctx)
 	require.NoError(t, err)
@@ -298,7 +364,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
-		Timeout: transferTimeout,
+		Timeout: packetTimeout,
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
@@ -361,7 +427,7 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	require.NoError(t, mining.WithPaused(ctx, func() error {
 		transfer, err = iftApp.Send(ctx, e2etest.IFTRequest{
 			Amount:  big.NewInt(3_000_000),
-			Timeout: transferTimeout,
+			Timeout: packetTimeout,
 		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
@@ -680,7 +746,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	for i := range sends {
 		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
 			Amount:  big.NewInt(int64(1_000_000 + i)),
-			Timeout: transferTimeout,
+			Timeout: packetTimeout,
 		})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
@@ -691,7 +757,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	require.NoError(t, err)
 	mining, err := destination.Mining()
 	require.NoError(t, err)
-	require.NoError(t, mining.AdvanceTime(ctx, transferTimeoutAdvance))
+	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
 
 	relayErrs := make([]error, packetCount)
 	var wg sync.WaitGroup

@@ -25,13 +25,10 @@ import (
 const (
 	ics20DestPort         = "transfer"
 	defaultTimeoutHorizon = 12 * time.Hour
-	eventSendPacket       = "SendPacket"
-	eventTimeoutPacket    = "TimeoutPacket"
 )
 
 var (
 	ics20ABI = mustABI(ics20transfer.ContractMetaData)
-	ics26ABI = mustABI(ics26router.ContractMetaData)
 	tokenABI = mustABI(testerc20.TestERC20MetaData)
 )
 
@@ -48,16 +45,16 @@ type TransferRequest struct {
 
 // Transfer drives ICS20 Transfer on a single directed route.
 type Transfer struct {
-	routeID      RouteID
-	source       endpoint
-	destination  endpoint
-	sender       evm.Account
-	sourceToken  common.Address
-	sourceICS20  common.Address
-	sourceRouter common.Address
-	destICS20    common.Address
-	sourceClient string
-	destClient   string
+	routeID        RouteID
+	source         endpoint
+	destination    endpoint
+	sender         evm.Account
+	sourceToken    common.Address
+	sourceICS20    common.Address
+	sourceRouter   common.Address
+	destICS20      common.Address
+	sourceClientID string
+	destClientID   string
 }
 
 type PreparedTransfer struct {
@@ -148,7 +145,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		Denom:            p.app.sourceToken,
 		Amount:           p.request.Amount,
 		Receiver:         p.request.Receiver,
-		SourceClient:     p.app.sourceClient,
+		SourceClient:     p.app.sourceClientID,
 		DestPort:         ics20DestPort,
 		TimeoutTimestamp: p.timeoutTimestamp,
 		Memo:             "",
@@ -172,7 +169,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		sendResult: newSendResult(
 			p.app.routeID,
 			p.app.source,
-			p.app.sourceClient,
+			p.app.sourceClientID,
 			receipt,
 			sequence,
 		),
@@ -235,8 +232,10 @@ func (t *TransferSend) VerifyNotMinted(ctx context.Context) error {
 }
 
 // VerifyRefunded waits for the source sender balance to be restored after timeout.
-func (t *TransferSend) VerifyRefunded(ctx context.Context) error {
-	if err := awaitPacketTimeout(ctx, t.app.source, t.app.sourceRouter, t.app.sourceClient, t.packetTx); err != nil {
+func (t *TransferSend) VerifyRefunded(ctx context.Context, txHash string) error {
+	if err := verifyPacketTimeout(
+		ctx, t.app.source, t.app.sourceRouter, t.app.sourceClientID, t.packetTx, txHash,
+	); err != nil {
 		return err
 	}
 	return awaitBalance(
@@ -299,7 +298,7 @@ func destinationTimeout(
 }
 
 func (i *Transfer) voucherDenom() string {
-	return "transfer/" + i.destClient + "/" + strings.ToLower(i.sourceToken.Hex())
+	return "transfer/" + i.destClientID + "/" + strings.ToLower(i.sourceToken.Hex())
 }
 
 func (i *Transfer) voucherBalance(ctx context.Context, holder string) (*big.Int, error) {
@@ -348,53 +347,53 @@ func isICS20DenomNotFound(err error) bool {
 	return lookupErr == nil && contractErr.Name == "ICS20DenomNotFound"
 }
 
-// awaitPacketTimeout waits for the source router to emit TimeoutPacket for the
-// given packet.
-func awaitPacketTimeout(
+// verifyPacketTimeout checks that txHash succeeded with one TimeoutPacket for the packet.
+func verifyPacketTimeout(
 	ctx context.Context,
 	source endpoint,
 	router common.Address,
-	sourceClient string,
+	sourceClientID string,
 	packetTx PacketTx,
+	txHash string,
 ) error {
-	definition := ics26ABI.Events[eventTimeoutPacket]
+	receipt, err := source.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
+	if err != nil {
+		return fmt.Errorf("e2etest: fetch packet %s timeout transaction %s: %w", packetTx.reference(), txHash, err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return fmt.Errorf("e2etest: packet %s timeout transaction %s failed", packetTx.reference(), txHash)
+	}
+
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
-	description := fmt.Sprintf("timeout for packet %s", packetTx.reference())
-	_, err := awaitEvent(
-		ctx,
-		eventSource{endpoint: source, contract: router},
-		definition.ID,
-		description,
-		func(log types.Log) (*ics26router.ContractTimeoutPacket, error) {
-			event, err := parser.ParseTimeoutPacket(log)
-			if err != nil {
-				return nil, fmt.Errorf("e2etest: decode TimeoutPacket: %w", err)
-			}
-			return event, nil
-		},
-		func(event *ics26router.ContractTimeoutPacket) bool {
-			return event.Packet.Sequence == packetTx.Sequence &&
-				event.Packet.SourceClient == sourceClient
-		},
-	)
-	return err
+	events, err := receiptEvents(receipt, router, parser.ParseTimeoutPacket)
+	if err != nil {
+		return fmt.Errorf("e2etest: decode TimeoutPacket: %w", err)
+	}
+	matches := 0
+	for _, event := range events {
+		if event.Packet.SourceClient == sourceClientID && event.Packet.Sequence == packetTx.Sequence {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return fmt.Errorf(
+			"e2etest: packet %s timeout transaction %s emitted %d matching TimeoutPacket events, want 1",
+			packetTx.reference(), txHash, matches,
+		)
+	}
+	return nil
 }
 
 func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, bool, error) {
-	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	return func(receipt *types.Receipt) (uint64, bool, error) {
-		definition := ics26ABI.Events[eventSendPacket]
-		for _, log := range receipt.Logs {
-			if log.Address != router || len(log.Topics) == 0 || log.Topics[0] != definition.ID {
-				continue
-			}
-			event, err := parser.ParseSendPacket(*log)
-			if err != nil {
-				return 0, false, fmt.Errorf("e2etest: decode SendPacket: %w", err)
-			}
-			return event.Packet.Sequence, true, nil
+		sequences, err := sendPacketSequences(router, receipt)
+		if err != nil {
+			return 0, false, err
 		}
-		return 0, false, nil
+		if len(sequences) == 0 {
+			return 0, false, nil
+		}
+		return sequences[0], true, nil
 	}
 }
 
@@ -402,17 +401,13 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 // in one receipt, in log order
 func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
-	definition := ics26ABI.Events[eventSendPacket]
-	var sequences []uint64
-	for _, log := range receipt.Logs {
-		if log.Address != router || len(log.Topics) == 0 || log.Topics[0] != definition.ID {
-			continue
-		}
-		event, err := parser.ParseSendPacket(*log)
-		if err != nil {
-			return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
-		}
-		sequences = append(sequences, event.Packet.Sequence)
+	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
+	}
+	sequences := make([]uint64, len(events))
+	for i, event := range events {
+		sequences[i] = event.Packet.Sequence
 	}
 	return sequences, nil
 }
