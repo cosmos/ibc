@@ -96,8 +96,8 @@ type RelayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
 	SourceChainId string                 `protobuf:"bytes,2,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
-	// Selection controls only this relayer instance; IBC relaying remains
-	// permissionless.
+	// Selection is required and controls only this relayer instance; IBC
+	// relaying remains permissionless.
 	//
 	// Types that are valid to be assigned to Selection:
 	//
@@ -232,6 +232,8 @@ func (*AllPackets) Descriptor() ([]byte, []int) {
 	return file_relayer_proto_rawDescGZIP(), []int{1}
 }
 
+// SelectedPackets selects exactly the listed packets. The request fails if any
+// packet is absent, not configured and routed, or permanently failed.
 type SelectedPackets struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Packets       []*PacketSelector      `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`

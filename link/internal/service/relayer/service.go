@@ -220,6 +220,26 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
 			if errUpsert := repo.UpsertPacket(ctx, packet); errUpsert != nil {
 				return errors.Wrapf(errUpsert, "upserting packet %d", packet.PacketSequenceNumber)
 			}
+			if request.Selection != SelectionExplicit || packet.Status != store.RelayStatusPending {
+				continue
+			}
+
+			status, errStatus := repo.GetPacketStatus(ctx, store.PacketKey{
+				SourceChainID:  chainID,
+				SourceClientID: selector.SourceClientID,
+				Sequence:       selector.SequenceNumber,
+			})
+			if errStatus != nil {
+				return errors.Wrapf(errStatus, "getting packet %d status", packet.PacketSequenceNumber)
+			}
+			if status == store.RelayStatusFailed {
+				return errors.Wrapf(
+					ErrFailedPrecondition,
+					"packet %s/%d has permanently failed",
+					selector.SourceClientID,
+					selector.SequenceNumber,
+				)
+			}
 		}
 
 		return nil

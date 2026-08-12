@@ -40,6 +40,7 @@ type Repository interface {
 	// modified.
 	UpsertPacket(ctx context.Context, input UpsertPacket) error
 
+	GetPacketStatus(ctx context.Context, key PacketKey) (RelayStatus, error)
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
@@ -64,6 +65,19 @@ type PacketKey struct {
 	SourceChainID  string
 	SourceClientID string
 	Sequence       uint64
+}
+
+func (k PacketKey) Validate() error {
+	switch {
+	case k.SourceChainID == "":
+		return errors.New("source chain id is required")
+	case k.SourceClientID == "":
+		return errors.New("source client id is required")
+	case k.Sequence == 0:
+		return errors.New("sequence is required")
+	default:
+		return nil
+	}
 }
 
 // PacketTx a relay transaction recorded on a packet.

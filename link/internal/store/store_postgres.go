@@ -198,6 +198,20 @@ func (db *PostgresDB) UpsertPacket(ctx context.Context, input UpsertPacket) erro
 	})
 }
 
+func (db *PostgresDB) GetPacketStatus(ctx context.Context, key PacketKey) (RelayStatus, error) {
+	if err := key.Validate(); err != nil {
+		return "", errors.Wrap(err, "invalid packet key")
+	}
+
+	status, err := db.repo.GetPacketStatus(ctx, postgres.GetPacketStatusParams{
+		SourceChainID:        key.SourceChainID,
+		PacketSourceClientID: key.SourceClientID,
+		PacketSequenceNumber: int64(key.Sequence),
+	})
+
+	return RelayStatus(status), errNormalize(err)
+}
+
 func (db *PostgresDB) ListPacketsBySourceTx(
 	ctx context.Context,
 	chainID string,

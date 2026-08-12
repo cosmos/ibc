@@ -19,8 +19,8 @@ service RelayerApiService {
 message RelayRequest {
   string tx_hash = 1;
   string source_chain_id = 2;
-  // Selection controls only this relayer instance; IBC relaying remains
-  // permissionless.
+  // Selection is required and controls only this relayer instance; IBC
+  // relaying remains permissionless.
   oneof selection {
     AllPackets all_packets = 3;
     SelectedPackets selected_packets = 4;
@@ -32,6 +32,8 @@ message RelayRequest {
 // request succeeds even if that leaves nothing to relay.
 message AllPackets {}
 
+// SelectedPackets selects exactly the listed packets. The request fails if any
+// packet is absent, not configured and routed, or permanently failed.
 message SelectedPackets {
   repeated PacketSelector packets = 1;
 }
