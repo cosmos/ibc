@@ -59,6 +59,7 @@ func NewIFT(
 		sourceIFT:      sourceApps.IFT,
 		destIFT:        destinationApps.IFT,
 		sourceRouter:   sourceApps.ICS26Router,
+		destRouter:     destinationApps.ICS26Router,
 		sourceClientID: clients.SourceClientID,
 		batcher:        sourceApps.IFTBatchShim,
 	}
@@ -109,6 +110,7 @@ func DeployIFTTokenPair(
 		sourceIFT:      sourceIFT,
 		destIFT:        destinationIFT,
 		sourceRouter:   sourceApps.ICS26Router,
+		destRouter:     destinationApps.ICS26Router,
 		sourceClientID: clients.SourceClientID,
 		batcher:        batcher,
 	}
