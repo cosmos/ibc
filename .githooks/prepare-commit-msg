@@ -1,4 +1,7 @@
 #!/bin/sh
+
+# SPDX-License-Identifier: Apache-2.0
+
 set -eu
 
 signoff=$(git var GIT_COMMITTER_IDENT)
