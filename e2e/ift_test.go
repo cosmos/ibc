@@ -166,7 +166,7 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.Packet(),
+	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -178,7 +178,7 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	proof := signedStateAttestationProof(t, destinationAttestorKey, height, trustedTimestamp+1)
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
-	updateClient, err := routerABI.Pack("updateClient", string(destinationClient.Locator()), proof)
+	updateClient, err := routerABI.Pack("updateClient", destinationClient.ID(), proof)
 	require.NoError(t, err)
 	router := common.HexToAddress(string(destinationClient.IBCInstance().Locator()))
 	require.NoError(t, sender.BroadcastTx(ctx, destinationEVM, router, updateClient))
@@ -191,10 +191,10 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
 	require.NoError(t, err)
 	require.NoError(t, pending.VerifyBurned(ctx))
-	require.NoError(t, e2etest.Relay(ctx, relayer, pending.Packet()))
-	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.Packet(),
+	require.NoError(t, e2etest.Relay(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING))
-	status, err := e2etest.AwaitState(ctx, relayer, pending.Packet(),
+	status, err := e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.NoError(t, err)
 	require.Empty(t, status.GetRecvTx().GetTxHash())
