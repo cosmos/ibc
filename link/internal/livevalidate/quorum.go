@@ -9,7 +9,7 @@ import (
 
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen/attestation"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 )
@@ -33,22 +33,8 @@ func checkAttestorQuorum(ctx context.Context, cfg config.Config, clientSet *chai
 	attestors = append(attestors, local...)
 	attestors = append(attestors, remote...)
 
-	for _, conn := range cfg.Relayer.Connections {
-		for _, end := range []struct {
-			self, counterparty config.ClientEnd
-		}{
-			{conn.ClientA, conn.ClientB},
-			{conn.ClientB, conn.ClientA},
-		} {
-			if end.self.Type != config.ClientTypeAttestation {
-				continue
-			}
-
-			_, _, err := attestation.MatchAttestors(ctx, end.self, end.counterparty, clientSet, attestors)
-			if err != nil {
-				return errors.Wrap(err, "attestor quorum")
-			}
-		}
+	if _, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, attestors); err != nil {
+		return errors.Wrap(err, "attestor quorum")
 	}
 
 	return nil

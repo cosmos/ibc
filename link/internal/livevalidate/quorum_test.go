@@ -131,17 +131,14 @@ func TestCheckAttestorQuorum(t *testing.T) {
 		require.ErrorContains(t, err, "on-chain quorum requires 2")
 	})
 
-	t.Run("nonAttestationClientEndsSkipped", func(t *testing.T) {
-		// ARRANGE -- checkAttestorQuorum isn't the right place to reject
-		// unsupported client types (that's proofgen's dispatch job); it just
-		// skips them.
+	t.Run("nonAttestationClientEndsRejected", func(t *testing.T) {
 		conn := testConnection()
 		conn.ClientA.Type = "tendermint"
 		conn.ClientB.Type = "tendermint"
 
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
-		// ACT + ASSERT -- an empty ClientSet proves neither end was looked up.
-		require.NoError(t, checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil)))
+		err := checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil))
+		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
 	})
 }
