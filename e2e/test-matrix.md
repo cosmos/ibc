@@ -14,6 +14,7 @@
 | `TestGMPCall_AutoRelay` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestGMPCall_ErrorAcknowledgement` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestGMPCall_ICS27AccountTransfer` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
+| `TestGMPCall_Timeout` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestIFTTimeout_Refund` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestIFTTimeout_RefundUsesFinalizedDestinationAnchor` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestIFTTimeout_WaitsForFinality` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
