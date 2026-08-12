@@ -117,6 +117,9 @@ func txIFTSend(cmd *cobra.Command, args []string) error {
 	}
 	opts.Context = cmd.Context()
 
+	if flagTxIFTTimeout <= 0 {
+		return errors.Errorf("invalid --timeout %s: must be positive", flagTxIFTTimeout)
+	}
 	timeout := uint64(time.Now().Add(flagTxIFTTimeout).Unix())
 
 	tx, err := contract.IftTransfer(opts, clientID, receiver, amount, timeout)
@@ -158,6 +161,9 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 	chain, ok := cfg.Chain(flagTxIFTChain)
 	if !ok {
 		return nil, nil, nil, errors.Errorf("chain %q not declared in config", flagTxIFTChain)
+	}
+	if chain.Type() != config.ChainTypeEVM {
+		return nil, nil, nil, errors.Errorf("chain %q is not an EVM chain", flagTxIFTChain)
 	}
 
 	keyHex, err := deployerKeyHex(cfg, flagTxIFTFrom)
