@@ -178,11 +178,10 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		)
 	}
 
-	sends := make([]*IFTSend, len(requests))
+	packets := make([]iftBatchPacket, len(requests))
 	for k, sequence := range sequences {
-		sends[k] = &IFTSend{
-			sendResult:        newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
-			app:               i,
+		packets[k] = iftBatchPacket{
+			packetTx:          newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence).PacketTx(),
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
 			destinationBefore: destinationsBefore[k],
@@ -190,18 +189,25 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	}
 	return &IFTBatch{
 		app:           i,
-		sends:         sends,
+		packets:       packets,
 		receipt:       receipt,
 		batcherBefore: batcherBefore,
 		total:         total,
 	}, nil
 }
 
+type iftBatchPacket struct {
+	packetTx          PacketTx
+	receiver          common.Address
+	amount            *big.Int
+	destinationBefore *big.Int
+}
+
 // IFTBatch is the result of a SendBatch call: several IFT packets emitted
 // from a single source transaction.
 type IFTBatch struct {
 	app           *IFT
-	sends         []*IFTSend
+	packets       []iftBatchPacket
 	receipt       *types.Receipt
 	batcherBefore *big.Int
 	total         *big.Int
@@ -210,9 +216,9 @@ type IFTBatch struct {
 // PacketTxs locates every packet the batch emitted, in send order. They all
 // share the batch's single source transaction.
 func (b *IFTBatch) PacketTxs() []PacketTx {
-	packetTxs := make([]PacketTx, len(b.sends))
-	for k, s := range b.sends {
-		packetTxs[k] = s.PacketTx()
+	packetTxs := make([]PacketTx, len(b.packets))
+	for k, packet := range b.packets {
+		packetTxs[k] = packet.packetTx
 	}
 	return packetTxs
 }
@@ -224,8 +230,18 @@ func (b *IFTBatch) TxHash() string { return b.receipt.TxHash.Hex() }
 func (b *IFTBatch) Receipt() *types.Receipt { return b.receipt }
 
 func (b *IFTBatch) VerifyDelivered(ctx context.Context) error {
-	for _, s := range b.sends {
-		if err := s.VerifyDelivered(ctx); err != nil {
+	for _, packet := range b.packets {
+		want := new(big.Int).Add(packet.destinationBefore, packet.amount)
+		err := awaitBalance(
+			ctx,
+			b.app.destination.chain,
+			fmt.Sprintf("IFT packet %s mint delivery", packet.packetTx.reference()),
+			func(ctx context.Context) (*big.Int, error) {
+				return b.app.balance(ctx, b.app.destination.evm, b.app.destIFT, packet.receiver)
+			},
+			want,
+		)
+		if err != nil {
 			return err
 		}
 	}
