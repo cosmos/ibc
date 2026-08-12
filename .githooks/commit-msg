@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# SPDX-License-Identifier: Apache-2.0
+
+set -eu
+
+signoff=$(git var GIT_COMMITTER_IDENT)
+signoff=${signoff% *}
+signoff=${signoff% *}
+
+git interpret-trailers --parse "$1" |
+	grep -iFqx "Signed-off-by: $signoff" && exit 0
+
+printf >&2 'Missing DCO sign-off. Retry with: git commit --signoff\n'
+exit 1

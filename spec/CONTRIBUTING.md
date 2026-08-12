@@ -49,13 +49,19 @@ Ensure that you base and target your PR on the `master` branch.
 
 ### Development Procedure
 
-Enable the repository's Git hooks once after cloning:
+Install the repository's DCO check once after cloning:
 
 ```sh
-git config --local core.hooksPath .githooks
+hook=$(git rev-parse --git-path hooks)/commit-msg
+if test -e "$hook"; then
+  echo "$hook already exists; merge .githooks/commit-msg into it"
+else
+  cp .githooks/commit-msg "$hook"
+fi
 ```
 
-This automatically adds the required `Signed-off-by` trailer to commits.
+The hook rejects commits without your `Signed-off-by` trailer. Add it with
+`git commit --signoff`; see [why Git requires sign-off to be intentional](https://git-scm.com/docs/gitfaq#Documentation/gitfaq.txt-Whynotcodecommitsignoffcodeandotherconfigurationvariables).
 
 - The latest state of development is on `master`.
 - Create a development branch either on `github.com/cosmos/ibc` or your fork (using `git remote add fork`).

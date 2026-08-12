@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# SPDX-License-Identifier: Apache-2.0
+
+set -eu
+
+hook=$(dirname "$0")/commit-msg
+message=$(mktemp)
+trap 'rm -f "$message"' EXIT
+
+export GIT_COMMITTER_NAME='DCO Test'
+export GIT_COMMITTER_EMAIL='dco@example.com'
+
+printf 'Test\n\nSigned-off-by: DCO Test <dco@example.com>\n' >"$message"
+"$hook" "$message"
+
+printf 'Test\n' >"$message"
+if "$hook" "$message" 2>/dev/null; then
+	printf >&2 'Unsigned commit message was accepted\n'
+	exit 1
+fi
