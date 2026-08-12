@@ -19,16 +19,25 @@ func TestRuntimeWithProtocolDeployer(t *testing.T) {
 			ProtocolAuthorityID: {PrivateKeyHex: "old"},
 			"other":             {PrivateKeyHex: "other-key"},
 		},
+		RemoteAttestorSigners: map[environment.AttestorID]environment.RemoteSignerBinding{
+			"attestor": {GRPC: "kms.example:9090", KeyID: "attestor-key"},
+		},
 	}
 	got := RuntimeWithProtocolDeployer(input)
 	got.Endpoints["new"] = environment.EndpointBinding{RPCURL: "http://new.test"}
 	got.Authorities["new"] = environment.EVMAuthority{PrivateKeyHex: "new-key"}
+	got.RemoteAttestorSigners["attestor"] = environment.RemoteSignerBinding{
+		GRPC: "changed.example:9090", KeyID: "changed-key",
+	}
 
 	require.Equal(t, protocolAuthorityKeyHex, got.Authorities[ProtocolAuthorityID].PrivateKeyHex)
 	require.Equal(t, "old", input.Authorities[ProtocolAuthorityID].PrivateKeyHex)
 	require.Empty(t, input.Authorities["new"].PrivateKeyHex)
 	require.Empty(t, input.Endpoints["new"].RPCURL)
 	require.Equal(t, input.Endpoints["rpc"], got.Endpoints["rpc"])
+	require.Equal(t, environment.RemoteSignerBinding{
+		GRPC: "kms.example:9090", KeyID: "attestor-key",
+	}, input.RemoteAttestorSigners["attestor"])
 }
 
 func TestResolveMode(t *testing.T) {

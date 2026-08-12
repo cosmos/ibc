@@ -11,8 +11,9 @@ import (
 
 // Runtime contains process-local bindings that are separate from the durable Spec.
 type Runtime struct {
-	Endpoints   map[EndpointBindingID]EndpointBinding
-	Authorities map[AuthorityID]EVMAuthority
+	Endpoints             map[EndpointBindingID]EndpointBinding
+	Authorities           map[AuthorityID]EVMAuthority
+	RemoteAttestorSigners map[AttestorID]RemoteSignerBinding
 }
 
 type EndpointBinding struct {
@@ -21,6 +22,11 @@ type EndpointBinding struct {
 
 type EVMAuthority struct {
 	PrivateKeyHex string
+}
+
+type RemoteSignerBinding struct {
+	GRPC  string
+	KeyID string
 }
 
 func (r Runtime) endpoint(id EndpointBindingID) (EndpointBinding, bool) {
@@ -47,7 +53,8 @@ func (r Runtime) evmAccount(id AuthorityID) (evm.Account, error) {
 
 func (r Runtime) snapshot() Runtime {
 	return Runtime{
-		Endpoints:   maps.Clone(r.Endpoints),
-		Authorities: maps.Clone(r.Authorities),
+		Endpoints:             maps.Clone(r.Endpoints),
+		Authorities:           maps.Clone(r.Authorities),
+		RemoteAttestorSigners: maps.Clone(r.RemoteAttestorSigners),
 	}
 }

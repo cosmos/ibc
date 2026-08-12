@@ -19,8 +19,11 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
@@ -83,6 +86,68 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	require.Contains(t, string(logs), "helper stopped")
 }
 
+func TestStartWritesRemoteSignerWithoutLocalKey(t *testing.T) {
+	binary := helperBinary(t)
+	workDir := filepath.Join(t.TempDir(), "attestor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	expectedAddress := common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141")
+	remoteSignerEndpoint := startAttestorRemoteSigner(t, testPrivateKey)
+
+	process, err := StartAttestor(ctx, AttestorLaunch{
+		BinaryPath:            binary,
+		WorkDir:               workDir,
+		Name:                  "attestor-a",
+		ChainID:               "observed-chain-1",
+		RPCURL:                "http://127.0.0.1:8545",
+		ICS26Router:           "0x0000000000000000000000000000000000000001",
+		SignerType:            RelayerSignerRemote,
+		SignerGRPC:            remoteSignerEndpoint,
+		SignerRemoteKeyID:     "attestor-key",
+		ExpectedSignerAddress: expectedAddress,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer stopCancel()
+		require.NoError(t, process.Stop(stopCtx))
+	})
+	require.Equal(t, expectedAddress, process.SignerAddress())
+
+	configData, err := os.ReadFile(filepath.Join(workDir, configFilename))
+	require.NoError(t, err)
+	var config fileConfig
+	require.NoError(t, yaml.Unmarshal(configData, &config))
+	require.Equal(t, []signerConfig{{
+		Alias:       signerAlias,
+		Type:        RelayerSignerRemote,
+		GRPC:        remoteSignerEndpoint,
+		RemoteKeyID: "attestor-key",
+	}}, config.Signers)
+	_, err = os.Stat(filepath.Join(workDir, "keys", keyFilename))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestStartRejectsMismatchedRemoteSignerBeforeCreatingWorkspace(t *testing.T) {
+	workDir := filepath.Join(t.TempDir(), "attestor")
+	_, err := StartAttestor(t.Context(), AttestorLaunch{
+		BinaryPath:            "/ibc",
+		WorkDir:               workDir,
+		Name:                  "attestor-a",
+		ChainID:               "observed-chain-1",
+		RPCURL:                "http://127.0.0.1:8545",
+		ICS26Router:           "0x0000000000000000000000000000000000000001",
+		SignerType:            RelayerSignerRemote,
+		SignerGRPC:            startAttestorRemoteSigner(t, testPrivateKey),
+		SignerRemoteKeyID:     "attestor-key",
+		ExpectedSignerAddress: common.HexToAddress("0x0000000000000000000000000000000000000001"),
+	})
+	require.ErrorContains(t, err, "remote signer address")
+	require.ErrorContains(t, err, "does not match expected address")
+	_, statErr := os.Stat(workDir)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
 func TestStartReportsEarlyProcessExitWithLogs(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "ibc-fail")
 	require.NoError(t, os.WriteFile(binary, []byte("#!/bin/sh\necho deliberate-start-failure >&2\nexit 17\n"), 0o700))
@@ -133,6 +198,57 @@ func TestStartRequiresFreshPrivateWorkspace(t *testing.T) {
 	require.ErrorContains(t, err, "create private work dir")
 }
 
+func TestValidateAttestorLaunchRejectsMixedSignerConfig(t *testing.T) {
+	validRemote := AttestorLaunch{
+		BinaryPath:            "/ibc",
+		WorkDir:               "/work",
+		Name:                  "attestor-a",
+		ChainID:               "observed-chain-1",
+		RPCURL:                "http://127.0.0.1:8545",
+		ICS26Router:           "0x0000000000000000000000000000000000000001",
+		SignerType:            RelayerSignerRemote,
+		SignerGRPC:            "127.0.0.1:9090",
+		SignerRemoteKeyID:     "attestor-key",
+		ExpectedSignerAddress: common.HexToAddress("0x0000000000000000000000000000000000000001"),
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*AttestorLaunch)
+		want   string
+	}{
+		{
+			name:   "remote with private key",
+			change: func(launch *AttestorLaunch) { launch.PrivateKeyHex = testPrivateKey },
+			want:   "private key is not allowed for remote signer",
+		},
+		{
+			name:   "remote without endpoint",
+			change: func(launch *AttestorLaunch) { launch.SignerGRPC = "" },
+			want:   "gRPC endpoint is required for remote signer",
+		},
+		{
+			name:   "remote without key ID",
+			change: func(launch *AttestorLaunch) { launch.SignerRemoteKeyID = "" },
+			want:   "key id is required for remote signer",
+		},
+		{
+			name: "local with remote fields",
+			change: func(launch *AttestorLaunch) {
+				launch.SignerType = RelayerSignerLocal
+				launch.PrivateKeyHex = testPrivateKey
+			},
+			want: "remote signer fields are not allowed for local signer",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			launch := validRemote
+			test.change(&launch)
+			_, _, err := validateAttestorLaunch(launch)
+			require.ErrorContains(t, err, test.want)
+		})
+	}
+}
+
 func TestIBCLinkAttestorHelperProcess(_ *testing.T) {
 	if os.Getenv("IBC_LINK_ATTESTOR_HELPER") != "1" {
 		return
@@ -155,6 +271,37 @@ IBC_LINK_ATTESTOR_HELPER=1 exec "$IBC_LINK_ATTESTOR_TEST_BINARY" -test.run '^Tes
 `
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o700))
 	return path
+}
+
+type attestorRemoteSigner struct {
+	signerservice.UnimplementedSignerServiceServer
+	publicKey []byte
+}
+
+func (s attestorRemoteSigner) GetKey(
+	_ context.Context,
+	request *signerservice.GetKeyRequest,
+) (*signerservice.GetKeyResponse, error) {
+	return &signerservice.GetKeyResponse{Key: &signerservice.Key{
+		Id:     request.GetId(),
+		Pubkey: s.publicKey,
+		Scheme: signerservice.SignatureScheme_ECDSA_SECP256K1ETH,
+	}}, nil
+}
+
+func startAttestorRemoteSigner(t testing.TB, privateKeyHex string) string {
+	t.Helper()
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
+	require.NoError(t, err)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	server := grpc.NewServer()
+	signerservice.RegisterSignerServiceServer(server, attestorRemoteSigner{
+		publicKey: crypto.CompressPubkey(&privateKey.PublicKey),
+	})
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(server.Stop)
+	return listener.Addr().String()
 }
 
 func runAttestorHelper() error {
@@ -180,8 +327,17 @@ func runAttestorHelper() error {
 	if len(config.Signers) != 1 || config.Signers[0].Alias != signerAlias {
 		return fmt.Errorf("helper received unexpected signer config: %+v", config.Signers)
 	}
-	if _, readErr := os.ReadFile(config.Signers[0].File); readErr != nil {
-		return fmt.Errorf("helper read signer key: %w", readErr)
+	switch signer := config.Signers[0]; signer.Type {
+	case RelayerSignerLocal:
+		if _, readErr := os.ReadFile(signer.File); readErr != nil {
+			return fmt.Errorf("helper read signer key: %w", readErr)
+		}
+	case RelayerSignerRemote:
+		if signer.File != "" || signer.GRPC == "" || signer.RemoteKeyID == "" {
+			return fmt.Errorf("helper received invalid remote signer config: %+v", signer)
+		}
+	default:
+		return fmt.Errorf("helper received unsupported signer config: %+v", signer)
 	}
 
 	listener, err := net.Listen("tcp", config.Server.ListenAddress)
