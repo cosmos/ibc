@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+signoff=$(git var GIT_COMMITTER_IDENT)
+signoff=${signoff% *}
+signoff=${signoff% *}
+
+git interpret-trailers --in-place \
+	--if-exists addIfDifferent \
+	--if-missing add \
+	--trailer "Signed-off-by: $signoff" \
+	"$1"

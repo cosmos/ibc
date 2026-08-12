@@ -49,6 +49,14 @@ Ensure that you base and target your PR on the `master` branch.
 
 ### Development Procedure
 
+Enable the repository's Git hooks once after cloning:
+
+```sh
+git config --local core.hooksPath .githooks
+```
+
+This automatically adds the required `Signed-off-by` trailer to commits.
+
 - The latest state of development is on `master`.
 - Create a development branch either on `github.com/cosmos/ibc` or your fork (using `git remote add fork`).
   - To ensure a clear ownership of branches on the ibc repo, branches must be named with the convention `{moniker}/{issue#}-branch-name`
