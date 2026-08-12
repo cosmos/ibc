@@ -16,8 +16,14 @@ import (
 type fakeTarget struct {
 	hasCode    map[string]bool
 	registered map[string]string // clientID -> address
+	apps       map[string]string // port -> app address
+	bridges    map[string]string // ift|clientID -> counterparty ift
 	provisions int
 	registers  int
+
+	gmpProvisions  int
+	iftProvisions  int
+	ctorProvisions int
 }
 
 func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error) {
@@ -51,7 +57,47 @@ func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error)
 func (f *fakeTarget) SupportedClientTypes() []string { return []string{ClientTypeAttestation} }
 
 func newFakeTarget() *fakeTarget {
-	return &fakeTarget{hasCode: map[string]bool{}, registered: map[string]string{}}
+	return &fakeTarget{
+		hasCode:    map[string]bool{},
+		registered: map[string]string{},
+		apps:       map[string]string{},
+		bridges:    map[string]string{},
+	}
+}
+
+func (f *fakeTarget) ProvisionGMP(context.Context, string, string) (GMPRef, error) {
+	f.gmpProvisions++
+	return GMPRef{Address: "0xgmp", AccountLogic: "0xlogic"}, nil
+}
+
+func (f *fakeTarget) RegisterApp(_ context.Context, _, app, port string) error {
+	f.apps[port] = app
+	return nil
+}
+
+func (f *fakeTarget) AppRegistered(_ context.Context, _, port string) (string, bool, error) {
+	addr, ok := f.apps[port]
+	return addr, ok, nil
+}
+
+func (f *fakeTarget) ProvisionIFT(_ context.Context, _ string, spec IFTSpec) (IFTRef, error) {
+	f.iftProvisions++
+	return IFTRef{Address: "0xift-" + spec.Symbol}, nil
+}
+
+func (f *fakeTarget) ProvisionSendCallConstructor(context.Context) (string, error) {
+	f.ctorProvisions++
+	return "0xctor", nil
+}
+
+func (f *fakeTarget) RegisterIFTBridge(_ context.Context, ift string, spec BridgeSpec) error {
+	f.bridges[ift+"|"+spec.ClientID] = spec.CounterpartyIFT
+	return nil
+}
+
+func (f *fakeTarget) IFTBridge(_ context.Context, ift, clientID string) (string, bool, error) {
+	cp, ok := f.bridges[ift+"|"+clientID]
+	return cp, ok, nil
 }
 
 func TestRunStepsDryRun(t *testing.T) {
@@ -239,6 +285,63 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 // change every invocation; they are launch-time trusted state, not client
 // identity, so a rerun differing only in them skips cleanly and leaves the
 // deploy-time values in the manifest.
+func TestGMPStepsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.hasCode["0xrouter"] = true
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.TargetData = map[string]string{"accessManager": "0xam"}
+	require.NoError(t, m.Save(dir))
+
+	res, err := RunSteps(context.Background(), slog.Default(), false, GMPSteps(target, dir, "1"))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[0].Action)
+	require.Equal(t, 1, target.gmpProvisions)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.NotNil(t, m.GMP)
+	require.Equal(t, "0xgmp", m.GMP.Address)
+	require.Equal(t, GMPPortID, m.GMP.Port)
+
+	// second run skips: gmp recorded, has code, app registered
+	target.hasCode["0xgmp"] = true
+	res, err = RunSteps(context.Background(), slog.Default(), false, GMPSteps(target, dir, "1"))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, 1, target.gmpProvisions)
+}
+
+func TestGMPStepsRequiresCore(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	_, err := RunSteps(context.Background(), slog.Default(), false, GMPSteps(target, dir, "1"))
+	require.ErrorContains(t, err, "run `ibc deploy core` first")
+}
+
+// An interrupted GMP deploy — app registered on-chain but not yet saved to
+// the manifest — must fail loudly on rerun, not silently re-provision (the
+// fixed "gmpport" cannot be re-registered).
+func TestGMPStepsInterruptedDeploy(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.hasCode["0xrouter"] = true
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.TargetData = map[string]string{"accessManager": "0xam"}
+	require.NoError(t, m.Save(dir))
+
+	// app registered on-chain at the fixed port, but manifest has no GMP
+	target.apps[GMPPortID] = "0xlive"
+
+	_, err := RunSteps(context.Background(), slog.Default(), false, GMPSteps(target, dir, "1"))
+	require.ErrorContains(t, err, "missing from the manifest")
+	require.Equal(t, 0, target.gmpProvisions)
+}
+
 func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -279,4 +382,212 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	c, _ := m.Client("link-1-2")
 	require.InDelta(t, 5, c.Params["initialHeight"], 0)
 	require.InDelta(t, 500, c.Params["initialTimestamp"], 0)
+}
+
+func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.GMP = &manifest.GMP{Address: "0xgmp", Port: GMPPortID}
+	require.NoError(t, m.Save(dir))
+
+	spec := IFTSpec{Owner: "0xowner", Name: "Foo", Symbol: "FOO"}
+
+	res, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[0].Action)
+	require.Equal(t, 1, target.iftProvisions)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	tok, ok := m.TokenByAddress("0xift-FOO")
+	require.True(t, ok)
+	require.Equal(t, "0xift-FOO", tok.Address)
+
+	// rerun with identical inputs skips: same symbol+name+owner, has code
+	target.hasCode["0xift-FOO"] = true
+	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, 1, target.iftProvisions)
+
+	// same symbol, different name deploys a second token (symbol is not unique)
+	other := IFTSpec{Owner: "0xowner", Name: "Bar", Symbol: "FOO"}
+	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", other))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[0].Action)
+	require.Equal(t, 2, target.iftProvisions)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.Len(t, m.Tokens, 2)
+}
+
+func TestIFTStepsRequiresGMP(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	require.NoError(t, m.Save(dir))
+
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTSteps(target, dir, "1", IFTSpec{Owner: "0xowner", Name: "Foo", Symbol: "FOO"}))
+	require.ErrorContains(t, err, "run `ibc deploy gmp` first")
+}
+
+func iftBridgeManifest(t *testing.T, dir string) {
+	t.Helper()
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.GMP = &manifest.GMP{Address: "0xgmp", Port: GMPPortID}
+	m.UpsertToken(manifest.Token{Symbol: "FOO", Name: "Foo", Address: "0xift-FOO", Owner: "0xowner"})
+	require.NoError(t, m.Save(dir))
+}
+
+func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient" // client deployed on the router
+	iftBridgeManifest(t, dir)
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	res, err := RunSteps(
+		context.Background(),
+		slog.Default(),
+		false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "", spec),
+	)
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[0].Action) // constructor deployed
+	require.Equal(t, "executed", res[1].Action) // bridge registered
+	require.Equal(t, 1, target.ctorProvisions)
+
+	m, err := manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.Equal(t, "0xctor", m.EVMSendCallConstructor)
+	tok, _ := m.TokenByAddress("0xift-FOO")
+	b, ok := tok.Bridge("link-2")
+	require.True(t, ok)
+	require.Equal(t, "0xcp", b.CounterpartyIFT)
+	require.Equal(t, "0xctor", b.SendCallConstructor)
+
+	// rerun skips both: constructor recorded, bridge registered on-chain
+	res, err = RunSteps(
+		context.Background(),
+		slog.Default(),
+		false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "", spec),
+	)
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, "skipped", res[1].Action)
+	require.Equal(t, 1, target.ctorProvisions)
+}
+
+func TestIFTBridgeStepsOverrideSkipsConstructor(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
+	iftBridgeManifest(t, dir)
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	res, err := RunSteps(
+		context.Background(),
+		slog.Default(),
+		false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec),
+	)
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action) // constructor step skipped: override supplied
+	require.Equal(t, "executed", res[1].Action)
+	require.Equal(t, 0, target.ctorProvisions)
+
+	m, err := manifest.Load(dir, "1")
+	require.NoError(t, err)
+	tok, _ := m.TokenByAddress("0xift-FOO")
+	b, _ := tok.Bridge("link-2")
+	require.Equal(t, "0xoverride", b.SendCallConstructor)
+}
+
+// A bridge already registered on-chain to a different counterparty than
+// requested must fail loudly rather than skip or overwrite.
+func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
+	iftBridgeManifest(t, dir)
+	// on-chain bridge points at a different counterparty
+	target.bridges["0xift-FOO|link-2"] = "0xother"
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
+	require.ErrorContains(t, err, "already registered to counterparty")
+}
+
+// A rerun with the same client and counterparty but a different constructor
+// must re-register (the contract allows overwriting) rather than silently skip.
+func TestIFTBridgeStepsConstructorChange(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
+	iftBridgeManifest(t, dir)
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorA", spec))
+	require.NoError(t, err)
+
+	// rerun with a different constructor re-registers the bridge step
+	res, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorB", spec))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[1].Action)
+
+	m, err := manifest.Load(dir, "1")
+	require.NoError(t, err)
+	tok, _ := m.TokenByAddress("0xift-FOO")
+	b, ok := tok.Bridge("link-2")
+	require.True(t, ok)
+	require.Equal(t, "0xctorB", b.SendCallConstructor)
+
+	// rerun with the same constructor skips
+	res, err = RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorB", spec))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[1].Action)
+}
+
+func TestIFTBridgeStepsRequiresClient(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	iftBridgeManifest(t, dir) // token present, but no client registered
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
+	require.ErrorContains(t, err, "run `ibc deploy client` first")
+}
+
+// An IFT address not recorded in the manifest still registers (address-based);
+// the bridge record is best-effort and simply omitted.
+func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	require.NoError(t, m.Save(dir))
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	res, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xexternal", "0xoverride", spec))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[1].Action)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.Empty(t, m.Tokens) // nothing recorded for an unrecorded token
 }

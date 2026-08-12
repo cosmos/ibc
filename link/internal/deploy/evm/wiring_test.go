@@ -163,3 +163,102 @@ func TestClientRegisteredNonRouter(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, registered)
 }
+
+func TestProvisionGMPRegister(t *testing.T) {
+	d, _, _ := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+
+	ref, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+	require.NotEmpty(t, ref.Address)
+	require.NotEmpty(t, ref.AccountLogic)
+
+	_, registered, err := d.AppRegistered(ctx, core.Router, deploy.GMPPortID)
+	require.NoError(t, err)
+	require.False(t, registered)
+
+	require.NoError(t, d.RegisterApp(ctx, core.Router, ref.Address, deploy.GMPPortID))
+
+	got, registered, err := d.AppRegistered(ctx, core.Router, deploy.GMPPortID)
+	require.NoError(t, err)
+	require.True(t, registered)
+	require.Equal(t, ref.Address, got)
+}
+
+func TestProvisionIFTAndBridge(t *testing.T) {
+	d, _, owner := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+	gmp, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+
+	token, err := d.ProvisionIFT(ctx, gmp.Address, deploy.IFTSpec{Owner: owner.Hex(), Name: "Foo", Symbol: "FOO"})
+	require.NoError(t, err)
+	require.NotEmpty(t, token.Address)
+
+	_, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	require.NoError(t, err)
+	require.False(t, registered)
+
+	ctor, err := d.ProvisionSendCallConstructor(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, ctor)
+
+	require.NoError(t, d.RegisterIFTBridge(ctx, token.Address, deploy.BridgeSpec{
+		ClientID:            "link-2",
+		CounterpartyIFT:     "0x00000000000000000000000000000000000000cp",
+		SendCallConstructor: ctor,
+	}))
+
+	cp, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	require.NoError(t, err)
+	require.True(t, registered)
+	require.Equal(t, "0x00000000000000000000000000000000000000cp", cp)
+}
+
+func TestVerifyGMPAndIFT(t *testing.T) {
+	d, _, owner := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+	gmp, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+	require.NoError(t, d.RegisterApp(ctx, core.Router, gmp.Address, deploy.GMPPortID))
+	token, err := d.ProvisionIFT(ctx, gmp.Address, deploy.IFTSpec{Owner: owner.Hex(), Name: "Foo", Symbol: "FOO"})
+	require.NoError(t, err)
+	ctor, err := d.ProvisionSendCallConstructor(ctx)
+	require.NoError(t, err)
+	require.NoError(t, d.RegisterIFTBridge(ctx, token.Address, deploy.BridgeSpec{
+		ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor,
+	}))
+
+	m := manifest.New("1337", "evm")
+	m.Core.Router = core.Router
+	m.TargetData = core.TargetData
+	m.GMP = &manifest.GMP{Address: gmp.Address, AccountLogic: gmp.AccountLogic, Port: deploy.GMPPortID}
+	m.UpsertToken(manifest.Token{Symbol: "FOO", Name: "Foo", Address: token.Address, Owner: owner.Hex()})
+	require.True(
+		t,
+		m.UpsertBridge(
+			token.Address,
+			manifest.Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor},
+		),
+	)
+
+	report, err := d.Verify(ctx, m)
+	require.NoError(t, err)
+	require.Empty(t, report.Failed())
+
+	// drift: wrong gmp address fails
+	broken := *m
+	broken.GMP = &manifest.GMP{Address: "0x0000000000000000000000000000000000000123", Port: deploy.GMPPortID}
+	report, err = d.Verify(ctx, &broken)
+	require.NoError(t, err)
+	require.NotEmpty(t, report.Failed())
+}
