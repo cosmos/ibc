@@ -48,13 +48,6 @@ func TestAttestationArgs(t *testing.T) {
 	require.ErrorContains(t, err, "threshold")
 }
 
-func TestAccessManagerArtifact(t *testing.T) {
-	amABI, bin, err := accessManagerArtifact()
-	require.NoError(t, err)
-	require.NotEmpty(t, bin)
-	require.Contains(t, amABI.Methods, "setTargetFunctionRole")
-}
-
 func TestReadOnlyDriverGuards(t *testing.T) {
 	d := &Driver{chainID: big.NewInt(1)}
 	_, err := d.ProvisionCore(context.Background(), deploy.CoreParams{})

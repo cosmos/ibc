@@ -19,7 +19,8 @@ generate() {
 	mkdir -p "$(dirname "$output")"
 	jq -c '.abi' "$artifact" > "$abi_file"
 	jq -r '.bytecode.object' "$artifact" > "$bin_file"
-	abigen --abi "$abi_file" --bin "$bin_file" --pkg "$package" --type "$type_name" --out "$output"
+	abigen \
+		--abi "$abi_file" --bin "$bin_file" --pkg "$package" --type "$type_name" --out "$output"
 }
 
 solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
