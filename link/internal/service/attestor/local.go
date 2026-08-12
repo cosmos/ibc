@@ -12,9 +12,10 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	"github.com/cosmos/ibc/link/attestor/evm"
+	"github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
-	evm "github.com/cosmos/ibc/link/internal/service/attestor/evm"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -140,7 +141,7 @@ func (a *LocalAttestor) PacketAttestation(ctx context.Context, req PacketAttesta
 	// 2. decode packets
 	packets := make([]channeltypesv2.Packet, len(req.Packets))
 	for i, encoded := range req.Packets {
-		packet, err := evm.DecodePacket(encoded)
+		packet, err := ibc.DecodePacket(encoded)
 		if err != nil {
 			return Attestation{}, errors.Wrapf(ErrInvalidInput, "decode packet %d: %s", i, err)
 		}
