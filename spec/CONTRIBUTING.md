@@ -60,8 +60,10 @@ else
 fi
 ```
 
-The hook rejects commits without your `Signed-off-by` trailer. Add it with
-`git commit --signoff`; see [why Git requires sign-off to be intentional](https://git-scm.com/docs/gitfaq#Documentation/gitfaq.txt-Whynotcodecommitsignoffcodeandotherconfigurationvariables).
+The hook rejects non-merge commits without your `Signed-off-by` trailer. Read
+the [Developer Certificate of Origin](https://developercertificate.org/), then
+re-run your commit command with `--signoff`. To repair the latest commit, use
+`git commit --amend --signoff`. Git explains [why sign-off must be intentional](https://git-scm.com/docs/gitfaq#Documentation/gitfaq.txt-Whynotcodecommitsignoffcodeandotherconfigurationvariables).
 
 - The latest state of development is on `master`.
 - Create a development branch either on `github.com/cosmos/ibc` or your fork (using `git remote add fork`).

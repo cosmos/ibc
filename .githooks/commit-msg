@@ -4,12 +4,14 @@
 
 set -eu
 
+git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && exit 0
+
 signoff=$(git var GIT_COMMITTER_IDENT)
 signoff=${signoff% *}
 signoff=${signoff% *}
 
-git interpret-trailers --parse "$1" |
+git -c trailer.separators=: interpret-trailers --parse --no-divider "$1" |
 	grep -iFqx "Signed-off-by: $signoff" && exit 0
 
-printf >&2 'Missing DCO sign-off. Retry with: git commit --signoff\n'
+printf >&2 'Missing DCO sign-off. Re-run your commit command with --signoff.\n'
 exit 1
