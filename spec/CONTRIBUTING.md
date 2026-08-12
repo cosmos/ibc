@@ -52,11 +52,15 @@ Ensure that you base and target your PR on the `master` branch.
 Install the repository's DCO check once after cloning:
 
 ```sh
-hook=$(git rev-parse --git-path hooks)/commit-msg
-if test -e "$hook"; then
-  echo "$hook already exists; merge .githooks/commit-msg into it"
+if hooks_path=$(git config --get core.hooksPath); then
+	printf 'core.hooksPath is configured as %s; integrate .githooks/commit-msg into that setup manually\n' "$hooks_path"
 else
-  cp .githooks/commit-msg "$hook"
+	hook=$(git rev-parse --git-path hooks)/commit-msg
+	if test -e "$hook"; then
+		echo "$hook already exists; merge .githooks/commit-msg into it"
+	else
+		cp .githooks/commit-msg "$hook"
+	fi
 fi
 ```
 
