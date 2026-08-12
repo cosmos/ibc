@@ -467,6 +467,7 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client) config.ClientEnd
 func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, error) {
 	var out renderedDeployment
 	out.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
+	baseAlias := a.ChainID + "-" + b.ChainID
 	for _, ca := range a.Clients {
 		if ca.CounterpartyChainID != b.ChainID {
 			continue
@@ -475,8 +476,12 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 		if !ok || cb.CounterpartyChainID != a.ChainID || cb.CounterpartyClientID != ca.ClientID {
 			continue
 		}
+		alias := baseAlias
+		if seq := len(out.Relayer.Connections); seq > 0 {
+			alias = fmt.Sprintf("%s-%d", baseAlias, seq)
+		}
 		out.Relayer.Connections = append(out.Relayer.Connections, config.ConnectionConfig{
-			Alias:   ca.ClientID,
+			Alias:   alias,
 			ClientA: renderedClientEnd(a, ca),
 			ClientB: renderedClientEnd(b, cb),
 		})
