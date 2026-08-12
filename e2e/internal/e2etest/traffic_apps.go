@@ -32,6 +32,7 @@ func NewTransfer(
 		sourceToken:    sourceApps.Token,
 		sourceICS20:    sourceApps.ICS20Transfer,
 		sourceRouter:   sourceApps.ICS26Router,
+		destRouter:     destinationApps.ICS26Router,
 		destICS20:      destinationApps.ICS20Transfer,
 		sourceClientID: clients.SourceClientID,
 		destClientID:   clients.DestClientID,
