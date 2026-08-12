@@ -49,15 +49,22 @@ func TestTokenAndBridgeHelpers(t *testing.T) {
 	dir := t.TempDir()
 	m := New("1", "evm")
 	m.GMP = &GMP{Address: "0xgmp", AccountLogic: "0xlogic", Port: "gmpport"}
-	m.SendCallConstructor = "0xctor"
+	m.EVMSendCallConstructor = "0xctor"
 	m.UpsertToken(Token{Symbol: "FOO", Name: "Foo", Address: "0xfoo", Owner: "0xowner"})
 
-	// update in place, not append
+	// same identity (symbol+name+owner) updates in place, not append
 	m.UpsertToken(Token{Symbol: "FOO", Name: "Foo", Address: "0xfoo2", Owner: "0xowner"})
 	require.Len(t, m.Tokens, 1)
 	tok, ok := m.Token("FOO")
 	require.True(t, ok)
 	require.Equal(t, "0xfoo2", tok.Address)
+
+	// same symbol, different name is a distinct token (symbol is not unique)
+	m.UpsertToken(Token{Symbol: "FOO", Name: "Bar", Address: "0xbar", Owner: "0xowner"})
+	require.Len(t, m.Tokens, 2)
+	byID, ok := m.TokenByIdentity("FOO", "Bar", "0xOWNER")
+	require.True(t, ok)
+	require.Equal(t, "0xbar", byID.Address)
 
 	// bridge upsert on a known symbol
 	require.True(
@@ -75,7 +82,7 @@ func TestTokenAndBridgeHelpers(t *testing.T) {
 	loaded, err := Load(dir, "1")
 	require.NoError(t, err)
 	require.Equal(t, "0xgmp", loaded.GMP.Address)
-	require.Equal(t, "0xctor", loaded.SendCallConstructor)
+	require.Equal(t, "0xctor", loaded.EVMSendCallConstructor)
 	lt, ok := loaded.Token("FOO")
 	require.True(t, ok)
 	require.Len(t, lt.Bridges, 1)

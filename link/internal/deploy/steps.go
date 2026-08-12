@@ -260,19 +260,10 @@ func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
 			if err != nil || m == nil {
 				return false, err
 			}
-			tok, ok := m.Token(spec.Symbol)
-			if !ok {
-				return false, nil
-			}
-			// token symbol identifies the deployment; a rerun that disagrees on
-			// name or owner cannot be satisfied by skipping (constructor-fixed)
-			if diffs := tokenConflicts(tok, spec); len(diffs) > 0 {
-				return false, fmt.Errorf(
-					"token %q on chain %s is already deployed with different values (%s); pass a new --symbol",
-					spec.Symbol, chainID, strings.Join(diffs, "; "),
-				)
-			}
-			if tok.Address == "" {
+			// A token is identified by symbol+name+owner.
+			// An identical rerun skips while a same-symbol/different token deploys a new one
+			tok, ok := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
+			if !ok || tok.Address == "" {
 				return false, nil
 			}
 			return t.HasCode(ctx, tok.Address)
@@ -301,9 +292,11 @@ func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
 }
 
 // IFTBridgeSteps deploys the EVM send-call constructor (unless an override is
-// supplied or one is already recorded) and registers a bridge on the symbol's
-// token. Requires the ift and client steps to have run.
-func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec BridgeSpec) []Step {
+// supplied or one is already recorded) and registers a bridge on iftAddr
+// pointing at spec.CounterpartyIFT over spec.ClientID.
+// Requires core and a registered client on chainID. The bridge is recorded on
+// the manifest token matching iftAddr when one exists.
+func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec BridgeSpec) []Step {
 	return []Step{
 		{
 			Name: fmt.Sprintf("send call constructor on chain %s", chainID),
@@ -315,7 +308,7 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 				if err != nil || m == nil {
 					return false, err
 				}
-				return m.SendCallConstructor != "", nil
+				return m.EVMSendCallConstructor != "", nil
 			},
 			Run: func(ctx context.Context) error {
 				m, err := manifest.Load(dir, chainID)
@@ -329,22 +322,18 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 				if err != nil {
 					return err
 				}
-				m.SendCallConstructor = addr
+				m.EVMSendCallConstructor = addr
 				return m.Save(dir)
 			},
 		},
 		{
-			Name: fmt.Sprintf("ift bridge %s to client %s on chain %s", symbol, spec.ClientID, chainID),
+			Name: fmt.Sprintf("ift bridge %s to client %s on chain %s", iftAddr, spec.ClientID, chainID),
 			Done: func(ctx context.Context) (bool, error) {
 				m, err := manifest.Load(dir, chainID)
 				if err != nil || m == nil {
 					return false, err
 				}
-				tok, ok := m.Token(symbol)
-				if !ok || tok.Address == "" {
-					return false, nil // Run reports the missing-token error
-				}
-				cp, registered, err := t.IFTBridge(ctx, tok.Address, spec.ClientID)
+				cp, registered, err := t.IFTBridge(ctx, iftAddr, spec.ClientID)
 				if err != nil || !registered {
 					return false, err
 				}
@@ -353,7 +342,7 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 						"bridge for client %s on token %s (chain %s) is already registered to counterparty %s, requested %s; "+
 							"register a new client pair",
 						spec.ClientID,
-						symbol,
+						iftAddr,
 						chainID,
 						cp,
 						spec.CounterpartyIFT,
@@ -364,9 +353,11 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 				if err != nil {
 					return false, err
 				}
-				if existing, ok := tok.Bridge(spec.ClientID); ok &&
-					!strings.EqualFold(existing.SendCallConstructor, ctor) {
-					return false, nil
+				if tok, ok := m.TokenByAddress(iftAddr); ok {
+					if existing, ok := tok.Bridge(spec.ClientID); ok &&
+						!strings.EqualFold(existing.SendCallConstructor, ctor) {
+						return false, nil
+					}
 				}
 				return true, nil
 			},
@@ -376,15 +367,7 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 					return err
 				}
 				if m == nil || m.Core.Router == "" {
-					return fmt.Errorf("no core deployment recorded for chain %s", chainID)
-				}
-				tok, ok := m.Token(symbol)
-				if !ok || tok.Address == "" {
-					return fmt.Errorf(
-						"no ift token %q recorded on chain %s: run `ibc deploy ift` first",
-						symbol,
-						chainID,
-					)
+					return fmt.Errorf("no core deployment recorded for chain %s: run `ibc deploy core` first", chainID)
 				}
 				_, registered, err := t.ClientRegistered(ctx, m.Core.Router, spec.ClientID)
 				if err != nil {
@@ -400,14 +383,17 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 				}
 				full := spec
 				full.SendCallConstructor = ctor
-				if regErr := t.RegisterIFTBridge(ctx, tok.Address, full); regErr != nil {
+				if regErr := t.RegisterIFTBridge(ctx, iftAddr, full); regErr != nil {
 					return regErr
 				}
-				m.UpsertBridge(symbol, manifest.Bridge{
-					ClientID:            spec.ClientID,
-					CounterpartyIFT:     spec.CounterpartyIFT,
-					SendCallConstructor: ctor,
-				})
+				// best-effort record: iftAddr may be an unrecorded external token
+				if tok, ok := m.TokenByAddress(iftAddr); ok {
+					m.UpsertBridge(tok.Symbol, manifest.Bridge{
+						ClientID:            spec.ClientID,
+						CounterpartyIFT:     spec.CounterpartyIFT,
+						SendCallConstructor: ctor,
+					})
+				}
 				return m.Save(dir)
 			},
 		},
@@ -415,28 +401,15 @@ func IFTBridgeSteps(t Target, dir, chainID, symbol, ctorOverride string, spec Br
 }
 
 // resolveConstructor returns the send-call constructor address: the override
-// when set, else the manifest's recorded singleton.
+// when set, else the chain-level EVM singleton deployed by step 1.
 func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
 	if override != "" {
 		return override, nil
 	}
-	if m.SendCallConstructor != "" {
-		return m.SendCallConstructor, nil
+	if m.EVMSendCallConstructor != "" {
+		return m.EVMSendCallConstructor, nil
 	}
-	return "", fmt.Errorf("no send call constructor recorded; rerun without --send-call-constructor to deploy one")
-}
-
-// tokenConflicts reports the identity fields on which spec disagrees with an
-// already-recorded token. Address is deployed-derived, not compared.
-func tokenConflicts(existing manifest.Token, spec IFTSpec) []string {
-	var diffs []string
-	if existing.Name != spec.Name {
-		diffs = append(diffs, fmt.Sprintf("name: deployed %q, requested %q", existing.Name, spec.Name))
-	}
-	if !strings.EqualFold(existing.Owner, spec.Owner) {
-		diffs = append(diffs, fmt.Sprintf("owner: deployed %s, requested %s", existing.Owner, spec.Owner))
-	}
-	return diffs
+	return "", fmt.Errorf("no send call constructor recorded")
 }
 
 // specToClient converts a ClientSpec and its provisioned address into the

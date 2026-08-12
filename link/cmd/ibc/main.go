@@ -99,6 +99,7 @@ func init() {
 
 	cmdDeployClient.Flags().
 		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
+	_ = cmdDeployClient.MarkFlagRequired("counterparty-chain")
 	cmdDeployClient.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
 	cmdDeployClient.Flags().
 		StringSliceVar(&flagDeployAttestors, "attestors", nil,
@@ -115,14 +116,24 @@ func init() {
 
 	// IFT commands
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTName, "name", "", "ERC20 token name")
-	cmdDeployIFT.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "ERC20 token symbol (per-chain token key)")
+	cmdDeployIFT.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "ERC20 token symbol (need not be unique)")
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTOwner, "owner", "", "token owner address (default: deployer)")
+	_ = cmdDeployIFT.MarkFlagRequired("name")
+	_ = cmdDeployIFT.MarkFlagRequired("symbol")
 
-	cmdDeployIFTBridge.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "symbol of the token to wire")
-	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeClientID, "client-id", "", "client id the bridge relays over")
+	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeChainA, "chain-a", "", "first chain id")
+	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeIFTA, "ift-a", "", "IFT token address on chain A")
+	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeChainB, "chain-b", "", "second chain id")
+	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeIFTB, "ift-b", "", "IFT token address on chain B")
+	for _, req := range []string{"chain-a", "ift-a", "chain-b", "ift-b"} {
+		_ = cmdDeployIFTBridge.MarkFlagRequired(req)
+	}
 	cmdDeployIFTBridge.Flags().
-		StringVar(&flagDeployBridgeCounterparty, "counterparty-ift", "", "counterparty IFT token address")
+		StringVar(&flagDeployBridgeClientID, "client-id", "", "client id the bridge relays over (default: link-<a>-<b>)")
 	cmdDeployIFTBridge.Flags().
-		StringVar(&flagDeploySendCallConstructor, "send-call-constructor", "",
-			"send call constructor address (default: deploy/reuse the EVM constructor)")
+		StringVar(&flagDeployBridgeCtorA, "send-call-constructor-a", "",
+			"send call constructor address on chain A (default: deploy or reuse the EVM constructor)")
+	cmdDeployIFTBridge.Flags().
+		StringVar(&flagDeployBridgeCtorB, "send-call-constructor-b", "",
+			"send call constructor address on chain B (default: deploy or reuse the EVM constructor)")
 }

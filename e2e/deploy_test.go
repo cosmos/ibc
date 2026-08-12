@@ -193,9 +193,9 @@ func TestDeployConnection(t *testing.T) {
 }
 
 // TestDeployIFTBridge drives the app-layer deploy commands end-to-end: core +
-// client + gmp + ift on each of two chains, then ift-bridge on each side
-// pointing at the other's token. Asserts executed-then-skipped idempotency and
-// that status passes.
+// client + gmp + ift on each of two chains, then a single ift-bridge that
+// registers both sides. Asserts executed-then-skipped idempotency and that
+// status passes.
 func TestDeployIFTBridge(t *testing.T) {
 	t.Parallel()
 
@@ -285,43 +285,22 @@ func TestDeployIFTBridge(t *testing.T) {
 	require.NotNil(t, manifestA.GMP)
 	require.Equal(t, "gmpport", manifestA.GMP.Port)
 
-	sharedClientID := "link-" + chainAID + "-" + chainBID
-	bridges := [][]string{
-		{
-			"ift-bridge",
-			"--chain",
-			chainAID,
-			"--symbol",
-			"FOO",
-			"--client-id",
-			sharedClientID,
-			"--counterparty-ift",
-			iftB,
-			"--yes",
-		},
-		{
-			"ift-bridge",
-			"--chain",
-			chainBID,
-			"--symbol",
-			"FOO",
-			"--client-id",
-			sharedClientID,
-			"--counterparty-ift",
-			iftA,
-			"--yes",
-		},
+	// one command registers both sides; the client id defaults to the same
+	// sorted name `deploy client` derived.
+	bridge := []string{
+		"ift-bridge",
+		"--chain-a", chainAID, "--ift-a", iftA,
+		"--chain-b", chainBID, "--ift-b", iftB,
+		"--yes",
 	}
-	for _, args := range bridges {
-		stdout, deployErr := driver.Deploy(ctx, args...)
-		require.NoErrorf(t, deployErr, "deploy %v", args)
-		for _, r := range decodeStepResults(t, stdout) {
-			require.Equalf(t, "executed", r.Action, "step %q", r.Name)
-		}
+	stdout, deployErr := driver.Deploy(ctx, bridge...)
+	require.NoErrorf(t, deployErr, "deploy %v", bridge)
+	for _, r := range decodeStepResults(t, stdout) {
+		require.Equalf(t, "executed", r.Action, "step %q", r.Name)
 	}
 
-	// idempotency: rerun bring-up + bridges, everything skips
-	for _, args := range append(bringUp, bridges...) {
+	// idempotency: rerun bring-up + bridge, everything skips
+	for _, args := range append(bringUp, bridge) {
 		stdout, deployErr := driver.Deploy(ctx, args...)
 		require.NoErrorf(t, deployErr, "rerun %v", args)
 		for _, r := range decodeStepResults(t, stdout) {

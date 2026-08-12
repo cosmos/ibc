@@ -39,12 +39,16 @@ var (
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
 
-	flagDeployIFTName             string
-	flagDeployIFTSymbol           string
-	flagDeployIFTOwner            string
-	flagDeployBridgeClientID      string
-	flagDeployBridgeCounterparty  string
-	flagDeploySendCallConstructor string
+	flagDeployIFTName        string
+	flagDeployIFTSymbol      string
+	flagDeployIFTOwner       string
+	flagDeployBridgeChainA   string
+	flagDeployBridgeIFTA     string
+	flagDeployBridgeChainB   string
+	flagDeployBridgeIFTB     string
+	flagDeployBridgeClientID string
+	flagDeployBridgeCtorA    string
+	flagDeployBridgeCtorB    string
 )
 
 var (
@@ -92,7 +96,7 @@ var (
 
 	cmdDeployIFTBridge = &cobra.Command{
 		Use:   "ift-bridge",
-		Short: "Register an IFT bridge to a counterparty token over a client",
+		Short: "Register both sides of an IFT bridge between two chains' tokens",
 		RunE:  deployIFTBridge,
 	}
 )
@@ -320,8 +324,8 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if flagDeployChain == "" || flagDeployCounterparty == "" {
-		return errors.New("--chain and --counterparty-chain are required")
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
@@ -559,9 +563,6 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" {
 		return errors.New("--chain is required")
 	}
-	if flagDeployIFTName == "" || flagDeployIFTSymbol == "" {
-		return errors.New("--name and --symbol are required")
-	}
 	chain, ok := cfg.Chain(flagDeployChain)
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagDeployChain)
@@ -581,22 +582,32 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	return planThenRun(cmd.Context(), deploy.IFTSteps(target, flagDeployManifestDir, flagDeployChain, spec))
 }
 
+// deployIFTBridge registers both sides of an IFT bridge in one invocation:
+// contract --ift-a on --chain-a and contract --ift-b on --chain-b each register
+// a bridge over the shared client, pointing at the other. Both chains must be
+// EVM chains this tool can deploy to.
 func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
 	}
-	if flagDeployChain == "" {
-		return errors.New("--chain is required")
-	}
-	if flagDeployIFTSymbol == "" || flagDeployBridgeClientID == "" || flagDeployBridgeCounterparty == "" {
-		return errors.New("--symbol, --client-id and --counterparty-ift are required")
-	}
-	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	targetA, err := newTarget(cmd.Context(), cfg, flagDeployBridgeChainA, flagDeployDeployer, true)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainA)
 	}
-	spec := deploy.BridgeSpec{ClientID: flagDeployBridgeClientID, CounterpartyIFT: flagDeployBridgeCounterparty}
-	return planThenRun(cmd.Context(), deploy.IFTBridgeSteps(
-		target, flagDeployManifestDir, flagDeployChain, flagDeployIFTSymbol, flagDeploySendCallConstructor, spec))
+	targetB, err := newTarget(cmd.Context(), cfg, flagDeployBridgeChainB, flagDeployDeployer, true)
+	if err != nil {
+		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainB)
+	}
+	clientID := flagDeployBridgeClientID
+	if clientID == "" {
+		clientID = defaultClientID(flagDeployBridgeChainA, flagDeployBridgeChainB)
+	}
+	stepsA := deploy.IFTBridgeSteps(
+		targetA, flagDeployManifestDir, flagDeployBridgeChainA, flagDeployBridgeIFTA, flagDeployBridgeCtorA,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTB})
+	stepsB := deploy.IFTBridgeSteps(
+		targetB, flagDeployManifestDir, flagDeployBridgeChainB, flagDeployBridgeIFTB, flagDeployBridgeCtorB,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTA})
+	return planThenRun(cmd.Context(), append(stepsA, stepsB...))
 }

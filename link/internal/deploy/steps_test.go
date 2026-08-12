@@ -384,7 +384,7 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	require.InDelta(t, 500, c.Params["initialTimestamp"], 0)
 }
 
-func TestIFTStepsIdempotentAndConflict(t *testing.T) {
+func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
 
@@ -406,18 +406,23 @@ func TestIFTStepsIdempotentAndConflict(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "0xift-FOO", tok.Address)
 
-	// rerun skips: token recorded and has code
+	// rerun with identical inputs skips: same symbol+name+owner, has code
 	target.hasCode["0xift-FOO"] = true
 	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
 	require.Equal(t, 1, target.iftProvisions)
 
-	// same symbol, different name conflicts
-	conflicting := IFTSpec{Owner: "0xowner", Name: "Bar", Symbol: "FOO"}
-	_, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", conflicting))
-	require.ErrorContains(t, err, "already deployed with different values")
-	require.ErrorContains(t, err, "--symbol")
+	// same symbol, different name deploys a second token (symbol is not unique)
+	other := IFTSpec{Owner: "0xowner", Name: "Bar", Symbol: "FOO"}
+	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", other))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[0].Action)
+	require.Equal(t, 2, target.iftProvisions)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.Len(t, m.Tokens, 2)
 }
 
 func TestIFTStepsRequiresGMP(t *testing.T) {
@@ -448,7 +453,12 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 	iftBridgeManifest(t, dir)
 
 	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
-	res, err := RunSteps(context.Background(), slog.Default(), false, IFTBridgeSteps(target, dir, "1", "FOO", "", spec))
+	res, err := RunSteps(
+		context.Background(),
+		slog.Default(),
+		false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "", spec),
+	)
 	require.NoError(t, err)
 	require.Equal(t, "executed", res[0].Action) // constructor deployed
 	require.Equal(t, "executed", res[1].Action) // bridge registered
@@ -456,7 +466,7 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
-	require.Equal(t, "0xctor", m.SendCallConstructor)
+	require.Equal(t, "0xctor", m.EVMSendCallConstructor)
 	tok, _ := m.Token("FOO")
 	b, ok := tok.Bridge("link-2")
 	require.True(t, ok)
@@ -464,7 +474,12 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 	require.Equal(t, "0xctor", b.SendCallConstructor)
 
 	// rerun skips both: constructor recorded, bridge registered on-chain
-	res, err = RunSteps(context.Background(), slog.Default(), false, IFTBridgeSteps(target, dir, "1", "FOO", "", spec))
+	res, err = RunSteps(
+		context.Background(),
+		slog.Default(),
+		false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "", spec),
+	)
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
 	require.Equal(t, "skipped", res[1].Action)
@@ -482,7 +497,7 @@ func TestIFTBridgeStepsOverrideSkipsConstructor(t *testing.T) {
 		context.Background(),
 		slog.Default(),
 		false,
-		IFTBridgeSteps(target, dir, "1", "FOO", "0xoverride", spec),
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec),
 	)
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action) // constructor step skipped: override supplied
@@ -508,7 +523,7 @@ func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
 
 	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
-		IFTBridgeSteps(target, dir, "1", "FOO", "0xoverride", spec))
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
 	require.ErrorContains(t, err, "already registered to counterparty")
 }
 
@@ -522,12 +537,12 @@ func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 
 	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
-		IFTBridgeSteps(target, dir, "1", "FOO", "0xctorA", spec))
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorA", spec))
 	require.NoError(t, err)
 
 	// rerun with a different constructor re-registers the bridge step
 	res, err := RunSteps(context.Background(), slog.Default(), false,
-		IFTBridgeSteps(target, dir, "1", "FOO", "0xctorB", spec))
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorB", spec))
 	require.NoError(t, err)
 	require.Equal(t, "executed", res[1].Action)
 
@@ -540,37 +555,39 @@ func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 
 	// rerun with the same constructor skips
 	res, err = RunSteps(context.Background(), slog.Default(), false,
-		IFTBridgeSteps(target, dir, "1", "FOO", "0xctorB", spec))
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorB", spec))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[1].Action)
 }
 
-func TestIFTBridgeStepsRequiresClientAndToken(t *testing.T) {
+func TestIFTBridgeStepsRequiresClient(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
 	iftBridgeManifest(t, dir) // token present, but no client registered
 
 	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
-	_, err := RunSteps(
-		context.Background(),
-		slog.Default(),
-		false,
-		IFTBridgeSteps(target, dir, "1", "FOO", "0xoverride", spec),
-	)
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
 	require.ErrorContains(t, err, "run `ibc deploy client` first")
+}
 
-	// missing token
-	dir2 := t.TempDir()
+// An IFT address not recorded in the manifest still registers (address-based);
+// the bridge record is best-effort and simply omitted.
+func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
 	m := manifest.New("1", "test")
 	m.Core.Router = "0xrouter"
-	require.NoError(t, m.Save(dir2))
-	target2 := newFakeTarget()
-	target2.registered["link-2"] = "0xclient"
-	_, err = RunSteps(
-		context.Background(),
-		slog.Default(),
-		false,
-		IFTBridgeSteps(target2, dir2, "1", "FOO", "0xoverride", spec),
-	)
-	require.ErrorContains(t, err, "run `ibc deploy ift` first")
+	require.NoError(t, m.Save(dir))
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	res, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xexternal", "0xoverride", spec))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[1].Action)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.Empty(t, m.Tokens) // nothing recorded for an unrecorded token
 }
