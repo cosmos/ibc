@@ -475,6 +475,9 @@ func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID st
 			Name:    fmt.Sprintf("attestor-%s-%s", watchedChainID, address),
 			Type:    config.AttestorTypeLocal,
 			Signer:  alias,
+			// 1 is a safe default for most chains; CollectComments still
+			// flags it for review since not every chain needs it.
+			FinalityOffset: 1,
 		})
 	}
 	return out

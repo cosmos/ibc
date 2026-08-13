@@ -673,7 +673,7 @@ func PrintYAMLWithComments(v any, comments map[string]string) error {
 // finalityOffsetTODO is attached to every local attestor's finalityOffset,
 // unconditionally: zero is both the default and a legitimate value, so
 // there's no "blank" state to detect the way there is for signer/router.
-const finalityOffsetTODO = `TODO: verify -- chains without a live "finalized" tag (e.g. Besu QBFT) need this set to 1+`
+const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
 
 // CollectComments builds TODO comments for every field in cfg that's left
 // for the operator to fill in by hand, keyed by YAML path for

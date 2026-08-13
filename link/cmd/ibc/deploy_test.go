@@ -149,8 +149,10 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "attestor-2-"+watcherAddress, out.Attestors[0].Name)
 	require.Equal(t, "attestor-watching-2", out.Attestors[0].Signer)
 	require.Equal(t, config.AttestorTypeLocal, out.Attestors[0].Type)
+	require.EqualValues(t, 1, out.Attestors[0].FinalityOffset)
 	require.Equal(t, "attestor-2-0xUnresolvedAddress", out.Attestors[1].Name)
 	require.Empty(t, out.Attestors[1].Signer)
+	require.EqualValues(t, 1, out.Attestors[1].FinalityOffset)
 
 	// no mutual pair: B has no client tracking A back
 	empty := manifest.New("2", "evm")
