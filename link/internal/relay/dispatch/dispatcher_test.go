@@ -31,18 +31,22 @@ var testRoute = processors.Route{
 func routedConfig() config.Config {
 	return config.Config{
 		Relayer: config.RelayerConfig{
-			Clients: []config.ClientConfig{
+			Connections: []config.ConnectionConfig{
 				{
-					Alias:                "test-route",
-					ClientID:             testRoute.SourceClientID,
-					ChainID:              testRoute.SourceChainID,
-					CounterpartyChainID:  testRoute.DestinationChainID,
-					CounterpartyClientID: testRoute.DestinationClientID,
-					Type:                 config.ClientTypeAttestation,
+					Alias: "test-route",
+					ClientA: config.ClientEnd{
+						ChainID:  testRoute.SourceChainID,
+						ClientID: testRoute.SourceClientID,
+						Signer:   "test-signer",
+						Type:     config.ClientTypeAttestation,
+					},
+					ClientB: config.ClientEnd{
+						ChainID:  testRoute.DestinationChainID,
+						ClientID: testRoute.DestinationClientID,
+						Signer:   "test-signer",
+						Type:     config.ClientTypeAttestation,
+					},
 				},
-			},
-			Routes: []config.RouteConfig{
-				{SourceClient: "test-route", SourceSignerAlias: "test-signer", DestSignerAlias: "test-signer"},
 			},
 		},
 	}

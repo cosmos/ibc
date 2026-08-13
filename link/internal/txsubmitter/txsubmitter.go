@@ -53,10 +53,7 @@ func (s *Set) Get(chainID, signerAlias string) (TxSubmitter, bool) {
 // chain carries several when different clients on it are relayed with
 // different signers.
 func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
-	pairs, err := config.RelayerChainSignerPairs(cfg)
-	if err != nil {
-		return nil, err
-	}
+	pairs := config.RelayerChainSignerPairs(cfg)
 
 	txSubmitters := make(map[config.ChainSignerPair]TxSubmitter, len(pairs))
 

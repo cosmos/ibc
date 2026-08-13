@@ -3,6 +3,8 @@
 package main
 
 import (
+	"io"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -43,23 +45,37 @@ func TestStatusChains(t *testing.T) {
 }
 
 func TestRenderRelayConfig(t *testing.T) {
+	// client ids follow defaultClientID's real convention: both ends of a
+	// connection share the same sorted "link-<a>-<b>" name.
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "link-2", Type: "attestation", Address: "0xca",
-		CounterpartyChainID: "2", CounterpartyClientID: "link-1",
+		ClientID: "link-1-2", Type: "attestation", Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "link-1-2",
 		Params: map[string]any{"threshold": float64(2)},
 	})
 	// stray client tracking another chain must not pair
 	a.UpsertClient(manifest.Client{
-		ClientID: "link-9", Type: "attestation",
-		CounterpartyChainID: "9", CounterpartyClientID: "link-1",
+		ClientID: "link-1-9", Type: "attestation",
+		CounterpartyChainID: "9", CounterpartyClientID: "link-1-9",
+	})
+	// a second, custom-named connection between the same chain pair --
+	// exercises the alias seqno suffix.
+	a.UpsertClient(manifest.Client{
+		ClientID: "custom-a", Type: "attestation", Address: "0xca2",
+		CounterpartyChainID: "2", CounterpartyClientID: "custom-b",
+		Params: map[string]any{"threshold": float64(2)},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "link-1", Type: "attestation", Address: "0xcb",
-		CounterpartyChainID: "1", CounterpartyClientID: "link-2",
+		ClientID: "link-1-2", Type: "attestation", Address: "0xcb",
+		CounterpartyChainID: "1", CounterpartyClientID: "link-1-2",
+		Params: map[string]any{"threshold": float64(2)},
+	})
+	b.UpsertClient(manifest.Client{
+		ClientID: "custom-b", Type: "attestation", Address: "0xcb2",
+		CounterpartyChainID: "1", CounterpartyClientID: "custom-a",
 		Params: map[string]any{"threshold": float64(2)},
 	})
 
@@ -79,16 +95,19 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
 	require.Empty(t, out.Chains[1].EVM.RPC)
 
-	require.Len(t, out.Relayer.Clients, 2)
-	ca := out.Relayer.Clients[0]
-	require.Equal(t, "1-link-2", ca.Alias)
-	require.Equal(t, "link-2", ca.ClientID)
-	require.Equal(t, "1", ca.ChainID)
-	require.Equal(t, "2", ca.CounterpartyChainID)
-	require.Equal(t, "link-1", ca.CounterpartyClientID)
-	require.NotNil(t, ca.AttestorSet)
-	require.Equal(t, 2, ca.AttestorSet.Threshold)
-	require.Equal(t, "link-1", out.Relayer.Clients[1].ClientID)
+	require.Len(t, out.Relayer.Connections, 2)
+	conn := out.Relayer.Connections[0]
+	require.Equal(t, "1-2", conn.Alias)
+	require.Equal(t, "link-1-2", conn.ClientA.ClientID)
+	require.Equal(t, "1", conn.ClientA.ChainID)
+	require.Equal(t, "link-1-2", conn.ClientB.ClientID)
+	require.Equal(t, "2", conn.ClientB.ChainID)
+
+	// second connection between the same chain pair gets a seqno suffix
+	conn2 := out.Relayer.Connections[1]
+	require.Equal(t, "1-2-1", conn2.Alias)
+	require.Equal(t, "custom-a", conn2.ClientA.ClientID)
+	require.Equal(t, "custom-b", conn2.ClientB.ClientID)
 
 	// no mutual pair: B has no client tracking A back
 	empty := manifest.New("2", "evm")
@@ -105,4 +124,74 @@ func TestRenderRelayConfig(t *testing.T) {
 	})
 	_, err = renderRelayConfig(cfg, a, mismatched)
 	require.ErrorContains(t, err, "no mutual client pair")
+}
+
+func TestSignerPlaceholderComments(t *testing.T) {
+	out := renderedDeployment{}
+	out.Relayer.Connections = []config.ConnectionConfig{
+		{
+			Alias:   "1-2",
+			ClientA: config.ClientEnd{ChainID: "1", ClientID: "link-1-2"},
+			ClientB: config.ClientEnd{ChainID: "2", ClientID: "link-1-2"},
+		},
+		{
+			Alias:   "1-2-1",
+			ClientA: config.ClientEnd{ChainID: "1", ClientID: "custom-a"},
+			ClientB: config.ClientEnd{ChainID: "2", ClientID: "custom-b"},
+		},
+	}
+
+	// every end of every connection is annotated, naming the chain whose
+	// transactions that signer pays for
+	require.Equal(t, map[string]string{
+		"$.relayer.connections[0].clientA.signer": "TODO: signers[] alias that submits relay txs on 1",
+		"$.relayer.connections[0].clientB.signer": "TODO: signers[] alias that submits relay txs on 2",
+		"$.relayer.connections[1].clientA.signer": "TODO: signers[] alias that submits relay txs on 1",
+		"$.relayer.connections[1].clientB.signer": "TODO: signers[] alias that submits relay txs on 2",
+	}, signerPlaceholderComments(out))
+}
+
+// goccy silently drops comments whose path doesn't resolve, so assert the
+// paths agree with the emitted document rather than just with each other.
+func TestRenderConfigEmitsSignerPlaceholders(t *testing.T) {
+	a := manifest.New("1", "evm")
+	a.Core.Router = "0xrouterA"
+	a.UpsertClient(manifest.Client{
+		ClientID: "link-1-2", Type: "attestation",
+		CounterpartyChainID: "2", CounterpartyClientID: "link-1-2",
+	})
+	b := manifest.New("2", "evm")
+	b.Core.Router = "0xrouterB"
+	b.UpsertClient(manifest.Client{
+		ClientID: "link-1-2", Type: "attestation",
+		CounterpartyChainID: "1", CounterpartyClientID: "link-1-2",
+	})
+
+	out, err := renderRelayConfig(config.Config{}, a, b)
+	require.NoError(t, err)
+
+	rendered := captureStdout(t, func() {
+		require.NoError(t, config.PrintYAMLWithComments(out, signerPlaceholderComments(out)))
+	})
+
+	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on 1`)
+	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on 2`)
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	orig := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+	require.NoError(t, w.Close())
+
+	bz, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	return string(bz)
 }

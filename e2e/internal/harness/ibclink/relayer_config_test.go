@@ -29,16 +29,6 @@ chains:
       evm:
         rpc: http://chain-2
         ics26Router: router-2
-attestor:
-    attestations:
-        - chainId: "1"
-          name: local-attestor-1
-          signer: local-attestor-1-signer
-          finalityOffset: 3
-        - chainId: "2"
-          name: local-attestor-2
-          signer: local-attestor-2-signer
-          finalityOffset: 3
 relayer:
     dispatchPollInterval: 100ms
     chainOverrides:
@@ -48,35 +38,29 @@ relayer:
         - chainId: "2"
           txSubmissionDelay: 10ms
           packetBatchSize: 1
-    clients:
-        - alias: client-1
-          clientId: client-1
-          chainId: "1"
-          counterpartyChainId: "2"
-          counterpartyClientId: client-2
-          type: attestation
-          attestorSet:
-            counterpartyChainFinalityOffset: 3
-            threshold: 1
-            attestors:
-                - name: local-attestor-2
-                  type: local
-        - alias: client-2
-          clientId: client-2
-          chainId: "2"
-          counterpartyChainId: "1"
-          counterpartyClientId: client-1
-          type: attestation
-          attestorSet:
-            counterpartyChainFinalityOffset: 3
-            threshold: 1
-            attestors:
-                - name: local-attestor-1
-                  type: local
-    routesToRelay:
-        - sourceClient: client-1
-          sourceSignerAlias: tx
-          destSignerAlias: tx
+    connections:
+        - alias: client-1-client-2
+          clientA:
+            chainId: "1"
+            signer: tx
+            clientId: client-1
+            type: attestation
+          clientB:
+            chainId: "2"
+            signer: tx
+            clientId: client-2
+            type: attestation
+attestors:
+    - name: local-attestor-1
+      chainId: "1"
+      type: local
+      signer: local-attestor-1-signer
+      finalityOffset: 3
+    - name: local-attestor-2
+      chainId: "2"
+      type: local
+      signer: local-attestor-2-signer
+      finalityOffset: 3
 signers:
     - alias: tx
       type: local
@@ -90,19 +74,6 @@ signers:
 `, string(data))
 }
 
-func TestRelayerConfigEmitsHarnessFinalityOffset(t *testing.T) {
-	cfg := testRelayerConfig()
-	cfg.FinalityOffset = HarnessFinalityOffset
-	file, err := buildRelayerFileConfig(cfg)
-	require.NoError(t, err)
-	for _, attestation := range file.Attestor.Attestations {
-		require.Equal(t, uint(HarnessFinalityOffset), attestation.FinalityOffset)
-	}
-	for _, client := range file.Relayer.Clients {
-		require.Equal(t, uint64(HarnessFinalityOffset), client.AttestorSet.CounterpartyChainFinalityOffset)
-	}
-}
-
 func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg := testRelayerConfig()
 	cfg.SignerType = RelayerSignerRemote
@@ -111,16 +82,10 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg.SignerRemoteKeyID = "relay-key"
 	cfg.Chains[0].PacketBatchSize = 7
 	cfg.Chains[0].PacketBatchTimeout = 250 * time.Millisecond
-	cfg.Connections[0].AttestorSetA = &RelayerAttestorSet{
-		Threshold: 2,
-		Attestors: []RelayerAttestor{
-			{Name: "alice", Type: RelayerAttestorLocal, KeyFile: "/tmp/alice.key"},
-			{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
-		},
-	}
-	cfg.Connections[0].AttestorSetB = &RelayerAttestorSet{
-		Threshold: 1,
-		Attestors: []RelayerAttestor{{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"}},
+	cfg.Attestors = []RelayerAttestor{
+		{Name: "alice", Type: RelayerAttestorLocal, ChainID: "2", KeyFile: "/tmp/alice.key"},
+		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
+		{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
 	}
 
 	file, err := buildRelayerFileConfig(cfg)
@@ -133,18 +98,16 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},
 		{Alias: "alice-signer", Type: RelayerSignerLocal, File: "/tmp/alice.key"},
 	}, file.Signers)
-	require.Equal(t, []attestationConfig{{
-		ChainID: "2", Name: "alice", Signer: "alice-signer", FinalityOffset: 3,
-	}}, file.Attestor.Attestations)
-	require.Equal(t, []attestorEntryFileConfig{
-		{Name: "alice", Type: RelayerAttestorLocal},
+	require.Equal(t, []attestorFileConfig{
+		{Name: "alice", ChainID: "2", Type: RelayerAttestorLocal, Signer: "alice-signer", FinalityOffset: 3},
 		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
-	}, file.Relayer.Clients[0].AttestorSet.Attestors)
-	require.Equal(t, cfg.SignerAlias, file.Relayer.Routes[0].SourceSignerAlias)
-	require.Equal(t, cfg.SignerAlias, file.Relayer.Routes[0].DestSignerAlias)
+		{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
+	}, file.Attestors)
+	require.Equal(t, cfg.SignerAlias, file.Relayer.Connections[0].ClientA.Signer)
+	require.Equal(t, cfg.SignerAlias, file.Relayer.Connections[0].ClientB.Signer)
 }
 
-func TestRemoteSignerBacksLegacyAttestors(t *testing.T) {
+func TestRemoteSignerBacksDefaultLocalAttestors(t *testing.T) {
 	cfg := testRelayerConfig()
 	cfg.SignerType = RelayerSignerRemote
 	cfg.SignerKeyFile = ""
@@ -166,28 +129,19 @@ func TestRemoteSignerBacksLegacyAttestors(t *testing.T) {
 	}, file.Signers)
 }
 
-func TestMixedAttestorSetsEmitOnlyReferencedLocals(t *testing.T) {
+func TestExplicitAttestorsSuppressDefaultLocalAttestors(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.SignerType = RelayerSignerRemote
-	cfg.SignerKeyFile = ""
-	cfg.SignerGRPC = "kms:9090"
-	cfg.SignerRemoteKeyID = "relay-key"
-	cfg.Connections[0].AttestorSetA = &RelayerAttestorSet{
-		Threshold: 1,
-		Attestors: []RelayerAttestor{{
-			Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080",
-		}},
-	}
+	cfg.Attestors = []RelayerAttestor{{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"}}
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, []attestationConfig{{
-		ChainID: "1", Name: "local-attestor-1", Signer: "local-attestor-1-signer", FinalityOffset: 3,
-	}}, file.Attestor.Attestations)
-	require.Equal(t, signerConfig{
-		Alias: "local-attestor-1-signer", Type: RelayerSignerRemote,
-		GRPC: "kms:9090", RemoteKeyID: "relay-key",
-	}, file.Signers[1])
+	// Explicit attestors suppress defaults for every chain, not just the ones referenced.
+	require.Equal(t, []attestorFileConfig{
+		{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
+	}, file.Attestors)
+	require.Equal(t, []signerConfig{
+		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
+	}, file.Signers)
 }
 
 func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
@@ -197,22 +151,15 @@ func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 		err  string
 	}{
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
-		{"local key", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal}},
-			}
-		}, "local attestor \"a\" key file is required"},
-		{"local conflict", func(c *RelayerConfig) {
-			c.Connections[0].AttestorSetA = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
-			}
-			c.Connections[0].AttestorSetB = &RelayerAttestorSet{
-				Threshold: 1,
-				Attestors: []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}},
-			}
-		}, "local attestor \"a\" has conflicting chain or key file"},
+		{"attestor key required", func(c *RelayerConfig) {
+			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, ChainID: "1"}}
+		}, "key file is required for local attestors"},
+		{"attestor chainId required", func(c *RelayerConfig) {
+			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, KeyFile: "key"}}
+		}, "chainId is required for local attestors"},
+		{"unsupported attestor type", func(c *RelayerConfig) {
+			c.Attestors = []RelayerAttestor{{Name: "a", Type: "hybrid"}}
+		}, `unsupported attestor type "hybrid"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -234,6 +181,5 @@ func testRelayerConfig() RelayerConfig {
 		Connections: []RelayerConnection{{
 			ChainA: "1", ClientA: "client-1", ChainB: "2", ClientB: "client-2",
 		}},
-		Routes: []RelayerRoute{{SourceChain: "1", SourceClient: "client-1"}},
 	}
 }
