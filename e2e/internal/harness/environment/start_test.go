@@ -134,12 +134,14 @@ func TestValidateChecksSpecAndRuntime(t *testing.T) {
 	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `no runtime endpoint binding for "chain-b-rpc"`)
 
 	badRuntime = mixedProtocolRuntime()
-	badRuntime.RemoteAttestorSigners = map[AttestorID]RemoteSignerBinding{
-		"attestor-a": {KeyID: "attestor-key"},
-	}
+	authority := badRuntime.Authorities["attestor-signer"]
+	authority.SignerRemoteKeyID = "attestor-key"
+	badRuntime.Authorities["attestor-signer"] = authority
 	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `Attestor "attestor-a" has no gRPC endpoint`)
 
-	badRuntime.RemoteAttestorSigners["attestor-a"] = RemoteSignerBinding{GRPC: "127.0.0.1:9090"}
+	authority.SignerRemoteKeyID = ""
+	authority.SignerGRPC = "127.0.0.1:9090"
+	badRuntime.Authorities["attestor-signer"] = authority
 	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `Attestor "attestor-a" has no key id`)
 }
 
@@ -390,15 +392,10 @@ func TestStartAcquiresIndependentChainsConcurrently(t *testing.T) {
 func TestStartSnapshotsRuntimeBindingsBeforeAcquisition(t *testing.T) {
 	entered := make(chan struct{})
 	proceed := make(chan struct{})
-	seen := make(chan Runtime, 1)
-	runtime := Runtime{
-		Endpoints: map[EndpointBindingID]EndpointBinding{
-			"rpc": {RPCURL: "http://original.invalid"},
-		},
-		RemoteAttestorSigners: map[AttestorID]RemoteSignerBinding{
-			"attestor": {GRPC: "original.invalid:9090", KeyID: "original-key"},
-		},
-	}
+	seen := make(chan string, 1)
+	runtime := Runtime{Endpoints: map[EndpointBindingID]EndpointBinding{
+		"rpc": {RPCURL: "http://original.invalid"},
+	}}
 	spec := Spec{Chains: []ChainSpec{AttachedEVM{
 		ID: "attached", EVMChainID: 31338, Endpoint: "rpc", Timing: testTiming(),
 	}}}
@@ -408,7 +405,7 @@ func TestStartSnapshotsRuntimeBindingsBeforeAcquisition(t *testing.T) {
 			acquireChain: func(_ context.Context, _ ChainSpec, snapshot Runtime, _ workspace) (chainAcquisition, error) {
 				close(entered)
 				<-proceed
-				seen <- snapshot
+				seen <- snapshot.Endpoints["rpc"].RPCURL
 				return fakeAcquisition(
 					"attached",
 					func(context.Context) error {
@@ -425,15 +422,8 @@ func TestStartSnapshotsRuntimeBindingsBeforeAcquisition(t *testing.T) {
 
 	<-entered
 	runtime.Endpoints["rpc"] = EndpointBinding{RPCURL: "http://mutated.invalid"}
-	runtime.RemoteAttestorSigners["attestor"] = RemoteSignerBinding{
-		GRPC: "mutated.invalid:9090", KeyID: "mutated-key",
-	}
 	close(proceed)
-	snapshot := <-seen
-	require.Equal(t, "http://original.invalid", snapshot.Endpoints["rpc"].RPCURL)
-	require.Equal(t, RemoteSignerBinding{
-		GRPC: "original.invalid:9090", KeyID: "original-key",
-	}, snapshot.RemoteAttestorSigners["attestor"])
+	require.Equal(t, "http://original.invalid", <-seen)
 	require.NoError(t, <-done)
 }
 

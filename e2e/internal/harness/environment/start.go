@@ -187,14 +187,15 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 			}
 			for _, attestor := range declaration.clientAttestors() {
 				requiredAuthorities[attestor.Authority] = struct{}{}
-				if remote, ok := runtime.RemoteAttestorSigners[attestor.ID]; ok {
+				if authority, ok := runtime.authority(attestor.Authority); ok &&
+					(authority.SignerGRPC != "" || authority.SignerRemoteKeyID != "") {
 					switch {
-					case remote.GRPC == "":
+					case authority.SignerGRPC == "":
 						return fmt.Errorf(
 							"environment: remote signer for Attestor %q has no gRPC endpoint",
 							attestor.ID,
 						)
-					case remote.KeyID == "":
+					case authority.SignerRemoteKeyID == "":
 						return fmt.Errorf(
 							"environment: remote signer for Attestor %q has no key id",
 							attestor.ID,

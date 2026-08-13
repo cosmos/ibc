@@ -7,8 +7,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"net"
-	"slices"
-	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/cosmos/kms/gen/signerservice"
@@ -27,18 +26,18 @@ import (
 )
 
 const (
-	remoteSignerKeyID         = "e2e-relayer"
-	remoteAttestorSignerKeyID = "e2e-attestor"
-	remoteSignerPrivateKeyHex = "000000000000000000000000000000000000000000000000000000000000000a"
+	remoteSignerKeyID          = "e2e-relayer"
+	remoteAttestorSignerKeyID  = "e2e-attestor"
+	remoteSignerPrivateKeyHex  = "000000000000000000000000000000000000000000000000000000000000000a"
+	rotatedSignerPrivateKeyHex = "000000000000000000000000000000000000000000000000000000000000000b"
 )
 
 type remoteSignerService struct {
 	signerservice.UnimplementedSignerServiceServer
-	keyID         string
-	privateKey    *ecdsa.PrivateKey
-	mu            sync.Mutex
-	getKeyCallIDs []string
-	signCallIDs   []string
+	keyID        string
+	privateKey   atomic.Pointer[ecdsa.PrivateKey]
+	getKeyCalled atomic.Bool
+	signCalled   atomic.Bool
 }
 
 func newRemoteSignerService(keyID, privateKeyHex string) (*remoteSignerService, error) {
@@ -46,7 +45,9 @@ func newRemoteSignerService(keyID, privateKeyHex string) (*remoteSignerService, 
 	if err != nil {
 		return nil, err
 	}
-	return &remoteSignerService{keyID: keyID, privateKey: privateKey}, nil
+	service := &remoteSignerService{keyID: keyID}
+	service.privateKey.Store(privateKey)
+	return service, nil
 }
 
 func (s *remoteSignerService) requireKey(id string) error {
@@ -63,12 +64,10 @@ func (s *remoteSignerService) GetKey(
 	if err := s.requireKey(request.GetId()); err != nil {
 		return nil, err
 	}
-	s.mu.Lock()
-	s.getKeyCallIDs = append(s.getKeyCallIDs, request.GetId())
-	s.mu.Unlock()
+	s.getKeyCalled.Store(true)
 	return &signerservice.GetKeyResponse{Key: &signerservice.Key{
 		Id:     s.keyID,
-		Pubkey: crypto.CompressPubkey(&s.privateKey.PublicKey),
+		Pubkey: crypto.CompressPubkey(&s.privateKey.Load().PublicKey),
 		Scheme: signerservice.SignatureScheme_ECDSA_SECP256K1ETH,
 	}}, nil
 }
@@ -87,20 +86,12 @@ func (s *remoteSignerService) Sign(
 			"ECDSA_SECP256K1ETH payload must be a 32-byte digest",
 		)
 	}
-	signature, err := crypto.Sign(digest, s.privateKey)
+	signature, err := crypto.Sign(digest, s.privateKey.Load())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "sign: %v", err)
 	}
-	s.mu.Lock()
-	s.signCallIDs = append(s.signCallIDs, request.GetKeyId())
-	s.mu.Unlock()
+	s.signCalled.Store(true)
 	return &signerservice.SignResponse{Signature: signature}, nil
-}
-
-func (s *remoteSignerService) calls() (getKeyIDs, signIDs []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return slices.Clone(s.getKeyCallIDs), slices.Clone(s.signCallIDs)
 }
 
 func startRemoteSignerFixture(
@@ -237,12 +228,10 @@ func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 		remoteAttestorSignerKeyID,
 		remoteAttestorKey,
 	)
-	runtime.RemoteAttestorSigners = map[environment.AttestorID]environment.RemoteSignerBinding{
-		remoteAttestorID: {
-			GRPC:  remoteSignerEndpoint,
-			KeyID: remoteAttestorSignerKeyID,
-		},
-	}
+	authority := runtime.Authorities[environment.AuthorityID(remoteAttestorID)]
+	authority.SignerGRPC = remoteSignerEndpoint
+	authority.SignerRemoteKeyID = remoteAttestorSignerKeyID
+	runtime.Authorities[environment.AuthorityID(remoteAttestorID)] = authority
 
 	env := e2etest.Start(t, spec, runtime)
 	remoteAttestor, err := env.Attestor(remoteAttestorID)
@@ -273,7 +262,11 @@ func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyBurned(ctx), "a successful ack must not also refund")
 
-	getKeyIDs, signIDs := remoteSigner.calls()
-	require.Contains(t, getKeyIDs, remoteAttestorSignerKeyID)
-	require.Contains(t, signIDs, remoteAttestorSignerKeyID)
+	require.True(t, remoteSigner.getKeyCalled.Load())
+	require.True(t, remoteSigner.signCalled.Load())
+
+	rotatedKey, err := crypto.HexToECDSA(rotatedSignerPrivateKeyHex)
+	require.NoError(t, err)
+	remoteSigner.privateKey.Store(rotatedKey)
+	require.ErrorContains(t, remoteAttestor.Restart(ctx), "signer address")
 }

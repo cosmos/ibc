@@ -497,21 +497,20 @@ func acquireAttestor(
 	if err != nil {
 		return attestorAcquisition{}, err
 	}
+	binding, _ := runtime.authority(declaration.Authority)
 	launch := ibclink.AttestorLaunch{
-		BinaryPath:  ibclink.ResolvedBin(),
-		WorkDir:     filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
-		Name:        string(declaration.ID),
-		ChainID:     strconv.FormatUint(dependencies.observed.chain.evmChainID, 10),
-		RPCURL:      dependencies.observed.chain.rpcURL,
-		ICS26Router: string(dependencies.observed.locator),
+		BinaryPath:        ibclink.ResolvedBin(),
+		WorkDir:           filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
+		Name:              string(declaration.ID),
+		ChainID:           strconv.FormatUint(dependencies.observed.chain.evmChainID, 10),
+		PrivateKeyHex:     binding.PrivateKeyHex,
+		SignerGRPC:        binding.SignerGRPC,
+		SignerRemoteKeyID: binding.SignerRemoteKeyID,
+		RPCURL:            dependencies.observed.chain.rpcURL,
+		ICS26Router:       string(dependencies.observed.locator),
 	}
-	if remote, ok := runtime.RemoteAttestorSigners[declaration.ID]; ok {
-		launch.SignerType = ibclink.RelayerSignerRemote
-		launch.SignerGRPC = remote.GRPC
-		launch.SignerRemoteKeyID = remote.KeyID
-		launch.ExpectedSignerAddress = authority.Address()
-	} else {
-		launch.PrivateKeyHex = runtime.Authorities[declaration.Authority].PrivateKeyHex
+	if binding.SignerGRPC != "" || binding.SignerRemoteKeyID != "" {
+		launch.PrivateKeyHex = ""
 	}
 	process, err := ibclink.StartAttestor(ctx, launch)
 	if err != nil {

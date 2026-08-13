@@ -196,7 +196,6 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtime {
 	runtime.Endpoints = maps.Clone(runtime.Endpoints)
 	runtime.Authorities = maps.Clone(runtime.Authorities)
-	runtime.RemoteAttestorSigners = maps.Clone(runtime.RemoteAttestorSigners)
 	if runtime.Authorities == nil {
 		runtime.Authorities = map[environment.AuthorityID]environment.EVMAuthority{}
 	}

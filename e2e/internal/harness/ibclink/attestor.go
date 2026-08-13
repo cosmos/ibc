@@ -59,13 +59,11 @@ type AttestorLaunch struct {
 	ChainID     string
 	RPCURL      string
 	ICS26Router string
-	// SignerType defaults to local. Local signers require PrivateKeyHex;
-	// remote signers require GRPC, RemoteKeyID, and ExpectedSignerAddress.
-	SignerType            string
-	PrivateKeyHex         string
-	SignerGRPC            string
-	SignerRemoteKeyID     string
-	ExpectedSignerAddress common.Address
+	// Local signers require PrivateKeyHex; remote signers require GRPC and
+	// RemoteKeyID instead.
+	PrivateKeyHex     string
+	SignerGRPC        string
+	SignerRemoteKeyID string
 	// ListenAddress defaults to an ephemeral loopback port. Restarts pass the
 	// previously announced address so a running relayer config stays valid.
 	ListenAddress string
@@ -101,13 +99,6 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 		signerAddress, err = remoteSignerAddress(ctx, launch.SignerGRPC, launch.SignerRemoteKeyID)
 		if err != nil {
 			return nil, err
-		}
-		if signerAddress != launch.ExpectedSignerAddress {
-			return nil, fmt.Errorf(
-				"start IBC Link attestor: remote signer address %s does not match expected address %s",
-				signerAddress,
-				launch.ExpectedSignerAddress,
-			)
 		}
 	}
 	binaryPath, err := filepath.Abs(launch.BinaryPath)
@@ -175,7 +166,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	return p, nil
 }
 
-// SignerAddress is the expected Ethereum address of the configured signer.
+// SignerAddress is the Ethereum address of the configured signer.
 func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
 // Endpoint is the attestor's announced listen address as a bare host:port,
@@ -324,11 +315,8 @@ func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, common.Addr
 		return nil, common.Address{}, errors.New("start IBC Link attestor: ICS26 router address is required")
 	}
 
-	signerType := spec.SignerType
-	if signerType == "" {
-		signerType = RelayerSignerLocal
-	}
-	if signerType == RelayerSignerRemote {
+	remote := spec.SignerGRPC != "" || spec.SignerRemoteKeyID != ""
+	if remote {
 		switch {
 		case spec.PrivateKeyHex != "":
 			return nil, common.Address{}, errors.New(
@@ -342,27 +330,11 @@ func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, common.Addr
 			return nil, common.Address{}, errors.New(
 				"start IBC Link attestor: key id is required for remote signer",
 			)
-		case spec.ExpectedSignerAddress == (common.Address{}):
-			return nil, common.Address{}, errors.New(
-				"start IBC Link attestor: expected address is required for remote signer",
-			)
 		}
-		return nil, spec.ExpectedSignerAddress, nil
+		return nil, common.Address{}, nil
 	}
-	if signerType != RelayerSignerLocal {
-		return nil, common.Address{}, fmt.Errorf(
-			"start IBC Link attestor: unsupported signer type %q",
-			spec.SignerType,
-		)
-	}
-	switch {
-	case spec.PrivateKeyHex == "":
+	if spec.PrivateKeyHex == "" {
 		return nil, common.Address{}, errors.New("start IBC Link attestor: private key is required")
-	case spec.SignerGRPC != "" || spec.SignerRemoteKeyID != "" ||
-		spec.ExpectedSignerAddress != (common.Address{}):
-		return nil, common.Address{}, errors.New(
-			"start IBC Link attestor: remote signer fields are not allowed for local signer",
-		)
 	}
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(spec.PrivateKeyHex, "0x"))
 	if err != nil {

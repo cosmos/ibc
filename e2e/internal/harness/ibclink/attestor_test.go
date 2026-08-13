@@ -95,16 +95,14 @@ func TestStartWritesRemoteSignerWithoutLocalKey(t *testing.T) {
 	remoteSignerEndpoint := startAttestorRemoteSigner(t, testPrivateKey)
 
 	process, err := StartAttestor(ctx, AttestorLaunch{
-		BinaryPath:            binary,
-		WorkDir:               workDir,
-		Name:                  "attestor-a",
-		ChainID:               "observed-chain-1",
-		RPCURL:                "http://127.0.0.1:8545",
-		ICS26Router:           "0x0000000000000000000000000000000000000001",
-		SignerType:            RelayerSignerRemote,
-		SignerGRPC:            remoteSignerEndpoint,
-		SignerRemoteKeyID:     "attestor-key",
-		ExpectedSignerAddress: expectedAddress,
+		BinaryPath:        binary,
+		WorkDir:           workDir,
+		Name:              "attestor-a",
+		ChainID:           "observed-chain-1",
+		RPCURL:            "http://127.0.0.1:8545",
+		ICS26Router:       "0x0000000000000000000000000000000000000001",
+		SignerGRPC:        remoteSignerEndpoint,
+		SignerRemoteKeyID: "attestor-key",
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -126,26 +124,6 @@ func TestStartWritesRemoteSignerWithoutLocalKey(t *testing.T) {
 	}}, config.Signers)
 	_, err = os.Stat(filepath.Join(workDir, "keys", keyFilename))
 	require.ErrorIs(t, err, os.ErrNotExist)
-}
-
-func TestStartRejectsMismatchedRemoteSignerBeforeCreatingWorkspace(t *testing.T) {
-	workDir := filepath.Join(t.TempDir(), "attestor")
-	_, err := StartAttestor(t.Context(), AttestorLaunch{
-		BinaryPath:            "/ibc",
-		WorkDir:               workDir,
-		Name:                  "attestor-a",
-		ChainID:               "observed-chain-1",
-		RPCURL:                "http://127.0.0.1:8545",
-		ICS26Router:           "0x0000000000000000000000000000000000000001",
-		SignerType:            RelayerSignerRemote,
-		SignerGRPC:            startAttestorRemoteSigner(t, testPrivateKey),
-		SignerRemoteKeyID:     "attestor-key",
-		ExpectedSignerAddress: common.HexToAddress("0x0000000000000000000000000000000000000001"),
-	})
-	require.ErrorContains(t, err, "remote signer address")
-	require.ErrorContains(t, err, "does not match expected address")
-	_, statErr := os.Stat(workDir)
-	require.ErrorIs(t, statErr, os.ErrNotExist)
 }
 
 func TestStartReportsEarlyProcessExitWithLogs(t *testing.T) {
@@ -200,16 +178,14 @@ func TestStartRequiresFreshPrivateWorkspace(t *testing.T) {
 
 func TestValidateAttestorLaunchRejectsMixedSignerConfig(t *testing.T) {
 	validRemote := AttestorLaunch{
-		BinaryPath:            "/ibc",
-		WorkDir:               "/work",
-		Name:                  "attestor-a",
-		ChainID:               "observed-chain-1",
-		RPCURL:                "http://127.0.0.1:8545",
-		ICS26Router:           "0x0000000000000000000000000000000000000001",
-		SignerType:            RelayerSignerRemote,
-		SignerGRPC:            "127.0.0.1:9090",
-		SignerRemoteKeyID:     "attestor-key",
-		ExpectedSignerAddress: common.HexToAddress("0x0000000000000000000000000000000000000001"),
+		BinaryPath:        "/ibc",
+		WorkDir:           "/work",
+		Name:              "attestor-a",
+		ChainID:           "observed-chain-1",
+		RPCURL:            "http://127.0.0.1:8545",
+		ICS26Router:       "0x0000000000000000000000000000000000000001",
+		SignerGRPC:        "127.0.0.1:9090",
+		SignerRemoteKeyID: "attestor-key",
 	}
 	for _, test := range []struct {
 		name   string
@@ -230,14 +206,6 @@ func TestValidateAttestorLaunchRejectsMixedSignerConfig(t *testing.T) {
 			name:   "remote without key ID",
 			change: func(launch *AttestorLaunch) { launch.SignerRemoteKeyID = "" },
 			want:   "key id is required for remote signer",
-		},
-		{
-			name: "local with remote fields",
-			change: func(launch *AttestorLaunch) {
-				launch.SignerType = RelayerSignerLocal
-				launch.PrivateKeyHex = testPrivateKey
-			},
-			want: "remote signer fields are not allowed for local signer",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -327,17 +295,11 @@ func runAttestorHelper() error {
 	if len(config.Signers) != 1 || config.Signers[0].Alias != signerAlias {
 		return fmt.Errorf("helper received unexpected signer config: %+v", config.Signers)
 	}
-	switch signer := config.Signers[0]; signer.Type {
-	case RelayerSignerLocal:
+	signer := config.Signers[0]
+	if signer.Type == RelayerSignerLocal {
 		if _, readErr := os.ReadFile(signer.File); readErr != nil {
 			return fmt.Errorf("helper read signer key: %w", readErr)
 		}
-	case RelayerSignerRemote:
-		if signer.File != "" || signer.GRPC == "" || signer.RemoteKeyID == "" {
-			return fmt.Errorf("helper received invalid remote signer config: %+v", signer)
-		}
-	default:
-		return fmt.Errorf("helper received unsupported signer config: %+v", signer)
 	}
 
 	listener, err := net.Listen("tcp", config.Server.ListenAddress)
