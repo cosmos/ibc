@@ -253,11 +253,7 @@ func keysImport(_ *cobra.Command, args []string) error {
 
 // addSignerToConfig appends a local signer entry for the given key to the
 // config file, so a freshly created/imported key is immediately usable as a
-// `signers:` alias without a manual edit. File is stored as the short-form
-// key name (not an absolute path) -- KeyFileFallbacks resolves that back to
-// <home>/keys/<name>.json, so the config stays portable across homes.
-// A no-op if the alias is already configured, so callers can populate the
-// config for a preexisting key without erroring.
+// `signers:` alias without a manual edit.
 func addSignerToConfig(cfg config.Config, alias string) error {
 	if _, ok := cfg.Signer(alias); ok {
 		return nil

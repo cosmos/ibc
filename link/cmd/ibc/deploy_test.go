@@ -86,11 +86,15 @@ func TestRenderRelayConfig(t *testing.T) {
 		CounterpartyChainID: "9", CounterpartyClientID: "link-1-9",
 	})
 	// a second, custom-named connection between the same chain pair --
-	// exercises the alias seqno suffix.
+	// exercises the alias seqno suffix, and reuses the same attestor address
+	// watching chain 2 to exercise cross-connection attestor deduplication.
 	a.UpsertClient(manifest.Client{
 		ClientID: "custom-a", Type: "attestation", Address: "0xca2",
 		CounterpartyChainID: "2", CounterpartyClientID: "custom-b",
-		Params: map[string]any{"threshold": float64(2)},
+		Params: map[string]any{
+			"threshold": float64(2),
+			"attestors": []any{watcherAddress},
+		},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
@@ -142,8 +146,8 @@ func TestRenderRelayConfig(t *testing.T) {
 
 	// A's first client has two attestor addresses: one resolves to a
 	// configured signer, one doesn't -- both still get an entry, watching
-	// chain 2 (the chain that client tracks); every other client has no
-	// configured attestors at all to project
+	// chain 2 (the chain that client tracks). A's second client (custom-a)
+	// reuses watcherAddress and must not produce a duplicate entry.
 	require.Len(t, out.Attestors, 2)
 	require.Equal(t, "2", out.Attestors[0].ChainID)
 	require.Equal(t, "attestor-2-"+watcherAddress, out.Attestors[0].Name)

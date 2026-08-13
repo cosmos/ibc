@@ -71,13 +71,11 @@ type AttestorConfig struct {
 	Type AttestorType `yaml:"type"`
 
 	// Signer required for type: local only -- the signer used to sign
-	// attestations. Not omitempty: a blank local signer needs to render so
-	// CollectComments' TODO on it actually shows up.
+	// attestations.
 	Signer string `yaml:"signer"`
 
 	// FinalityOffset local only. Zero attests up to the chain's "finalized"
-	// tag; n > 0 attests up to "latest" - n instead. Not omitempty: zero is
-	// also the un-set value, and CollectComments' TODO needs it to render.
+	// tag; n > 0 attests up to "latest" - n instead.
 	FinalityOffset uint `yaml:"finalityOffset"`
 
 	// GRPC required for type: remote only. Bare host:port.
@@ -629,8 +627,7 @@ func PrintJSON(v any) error {
 }
 
 // PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
-// fields by name (e.g. "PACKET_STATE_PENDING") instead of their numeric
-// value, and keeping proto_name field naming to match PrintJSON's output.
+// fields by name
 func PrintProtoJSON(msg proto.Message) error {
 	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
 	if err != nil {
@@ -656,9 +653,7 @@ func PrintYAML(v any) error {
 
 // PrintYAMLWithComments prints v as YAML to stdout, attaching a line comment
 // to every field addressed by a YAML path in comments, keyed as
-// "$.relayer.connections[0].clientA.signer". v need not be a Config -- e.g.
-// render-config prints a smaller projection than the Config comments were
-// collected against, as long as the two share the same field paths.
+// "$.relayer.connections[0].clientA.signer".
 func PrintYAMLWithComments(v any, comments map[string]string) error {
 	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(toCommentMap(comments)))
 	if err != nil {
@@ -670,17 +665,11 @@ func PrintYAMLWithComments(v any, comments map[string]string) error {
 	return nil
 }
 
-// finalityOffsetTODO is attached to every local attestor's finalityOffset,
-// unconditionally: zero is both the default and a legitimate value, so
-// there's no "blank" state to detect the way there is for signer/router.
 const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
 
 // CollectComments builds TODO comments for every field in cfg that's left
 // for the operator to fill in by hand, keyed by YAML path for
-// PrintYAMLWithComments/StoreToFileWithComments. Kept as one explicit
-// function (not a generic path-walker) so a test can pin the exact set of
-// paths and messages and fail immediately if the config schema or these
-// paths drift.
+// PrintYAMLWithComments/StoreToFileWithComments.
 func CollectComments(cfg Config) map[string]string {
 	comments := map[string]string{}
 

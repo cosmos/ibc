@@ -458,8 +458,7 @@ func deployShow(_ *cobra.Command, args []string) error {
 }
 
 // attestorsFromClient projects one client's on-chain attestor addresses into
-// attestors: entries watching watchedChainID -- the chain that client
-// tracks
+// attestors
 func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
 	addresses, _ := c.Params["attestors"].([]any)
 
@@ -475,12 +474,27 @@ func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID st
 			Name:    fmt.Sprintf("attestor-%s-%s", watchedChainID, address),
 			Type:    config.AttestorTypeLocal,
 			Signer:  alias,
-			// 1 is a safe default for most chains; CollectComments still
-			// flags it for review since not every chain needs it.
+			// default to 1 so it doesn't wait for native chain finality;
+			// CollectComments still flags it for review.
 			FinalityOffset: 1,
 		})
 	}
 	return out
+}
+
+func appendUniqueAttestors(
+	existing config.Attestors,
+	seen map[string]struct{},
+	additional config.Attestors,
+) config.Attestors {
+	for _, a := range additional {
+		if _, dup := seen[a.Name]; dup {
+			continue
+		}
+		seen[a.Name] = struct{}{}
+		existing = append(existing, a)
+	}
+	return existing
 }
 
 // signerAliasForAddress finds the local signer in cfg whose derived EVM
@@ -542,6 +556,7 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 	full.Attestors = nil
 
 	baseAlias := a.ChainID + "-" + b.ChainID
+	seenAttestors := make(map[string]struct{})
 	for _, ca := range a.Clients {
 		if ca.CounterpartyChainID != b.ChainID {
 			continue
@@ -559,8 +574,8 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 			ClientA: renderedClientEnd(a, ca),
 			ClientB: renderedClientEnd(b, cb),
 		})
-		full.Attestors = append(full.Attestors, attestorsFromClient(cfg, ca, b.ChainID)...)
-		full.Attestors = append(full.Attestors, attestorsFromClient(cfg, cb, a.ChainID)...)
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
 	}
 	if len(full.Relayer.Connections) == 0 {
 		return renderedDeployment{}, nil, errors.Errorf(
