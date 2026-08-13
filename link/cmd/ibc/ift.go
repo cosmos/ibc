@@ -25,48 +25,45 @@ var (
 	cmdTxIFT = &cobra.Command{
 		Use:   useIFT,
 		Short: "IFT transaction subcommands",
-		Long: "IFT transaction subcommands. Each takes its core transfer arguments positionally " +
-			"(e.g. to/amount, client-id/receiver/amount) and --chain/--ift/--from as flags shared " +
-			"across mint and send -- run a subcommand's --help for its exact positional order.",
 	}
 
 	cmdTxIFTMint = &cobra.Command{
-		Use:   "mint [to] [amount]",
+		Use:   "mint",
 		Short: "Mint IFT supply to an address",
-		Long:  "Mint amount of the IFT token at --ift to the to address. The --from signer must be the token's owner.",
-		Example: "  ibc tx ift mint 0xRecipient... 1000000000000000000 \\\n" +
-			"    --chain 1 --ift 0xIFTTokenAddress... --from deployer",
-		Args: cobra.ExactArgs(2),
+		Long:  "Mint --amount of the IFT token at --ift to --to. The --from signer must be the token's owner.",
+		Example: "  ibc tx ift mint --chain 1 --ift 0xIFTTokenAddress... \\\n" +
+			"    --to 0xRecipient... --amount 1000000000000000000 --from deployer",
 		RunE: txIFTMint,
 	}
 
 	cmdTxIFTSend = &cobra.Command{
-		Use:   "send [client-id] [receiver] [amount]",
+		Use:   "send",
 		Short: "Send IFT across a bridge to a counterparty chain",
-		Long: "Initiate a cross-chain transfer of amount of the IFT token at --ift, over the bridge " +
-			"registered for client-id, to receiver on the counterparty chain.",
-		Example: "  ibc tx ift send link-1-2 0xReceiver... 500000000000000000 \\\n" +
-			"    --chain 1 --ift 0xIFTTokenAddress... --from deployer",
-		Args: cobra.ExactArgs(3),
+		Long: "Initiate a cross-chain transfer of --amount of the IFT token at --ift, over the bridge " +
+			"registered for --client-id, to --to on the counterparty chain.",
+		Example: "  ibc tx ift send --chain 1 --ift 0xIFTTokenAddress... --client-id link-1-2 \\\n" +
+			"    --to 0xReceiver... --amount 500000000000000000 --from deployer",
 		RunE: txIFTSend,
 	}
 )
 
 var (
-	flagTxIFTChain   string
-	flagTxIFTAddress string
-	flagTxIFTFrom    string
-	flagTxIFTTimeout time.Duration
+	flagTxIFTChain    string
+	flagTxIFTAddress  string
+	flagTxIFTFrom     string
+	flagTxIFTTimeout  time.Duration
+	flagTxIFTTo       string
+	flagTxIFTAmount   string
+	flagTxIFTClientID string
 )
 
-func txIFTMint(cmd *cobra.Command, args []string) error {
-	to := args[0]
-	amount := parseIFTAmount(args[1])
+func txIFTMint(cmd *cobra.Command, _ []string) error {
+	amount := parseIFTAmount(flagTxIFTAmount)
 	if amount == nil {
-		return errors.Errorf("invalid amount %q", args[1])
+		return errors.Errorf("invalid --amount %q", flagTxIFTAmount)
 	}
-	if !common.IsHexAddress(to) {
-		return errors.Errorf("invalid to address %q", to)
+	if !common.IsHexAddress(flagTxIFTTo) {
+		return errors.Errorf("invalid --to address %q", flagTxIFTTo)
 	}
 
 	backend, key, chainID, err := dialIFTChain(cmd.Context())
@@ -85,7 +82,7 @@ func txIFTMint(cmd *cobra.Command, args []string) error {
 	}
 	opts.Context = cmd.Context()
 
-	tx, err := contract.Mint(opts, common.HexToAddress(to), amount)
+	tx, err := contract.Mint(opts, common.HexToAddress(flagTxIFTTo), amount)
 	if err != nil {
 		return errors.Wrap(err, "mint")
 	}
@@ -101,11 +98,11 @@ func txIFTMint(cmd *cobra.Command, args []string) error {
 	return printTxHash(tx.Hash().Hex())
 }
 
-func txIFTSend(cmd *cobra.Command, args []string) error {
-	clientID, receiver := args[0], args[1]
-	amount := parseIFTAmount(args[2])
+func txIFTSend(cmd *cobra.Command, _ []string) error {
+	clientID, receiver := flagTxIFTClientID, flagTxIFTTo
+	amount := parseIFTAmount(flagTxIFTAmount)
 	if amount == nil {
-		return errors.Errorf("invalid amount %q", args[2])
+		return errors.Errorf("invalid --amount %q", flagTxIFTAmount)
 	}
 
 	backend, key, chainID, err := dialIFTChain(cmd.Context())

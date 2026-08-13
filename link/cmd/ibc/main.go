@@ -164,6 +164,17 @@ func init() {
 	for _, req := range []string{"chain", useIFT, "from"} {
 		_ = cmdTxIFT.MarkPersistentFlagRequired(req)
 	}
+	cmdTxIFTMint.Flags().StringVar(&flagTxIFTTo, "to", "", "recipient address")
+	cmdTxIFTMint.Flags().StringVar(&flagTxIFTAmount, "amount", "", "amount to mint, in the token's base unit")
+	for _, req := range []string{"to", "amount"} {
+		_ = cmdTxIFTMint.MarkFlagRequired(req)
+	}
+	cmdTxIFTSend.Flags().StringVar(&flagTxIFTClientID, "client-id", "", "client id the bridge is registered for")
+	cmdTxIFTSend.Flags().StringVar(&flagTxIFTTo, "to", "", "receiver address on the counterparty chain")
+	cmdTxIFTSend.Flags().StringVar(&flagTxIFTAmount, "amount", "", "amount to send, in the token's base unit")
 	cmdTxIFTSend.Flags().
 		DurationVar(&flagTxIFTTimeout, "timeout", 15*time.Minute, "relative send timeout")
+	for _, req := range []string{"client-id", "to", "amount"} {
+		_ = cmdTxIFTSend.MarkFlagRequired(req)
+	}
 }
