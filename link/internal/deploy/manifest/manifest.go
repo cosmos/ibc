@@ -147,7 +147,6 @@ func (m *Manifest) TokenByAddress(address string) (Token, bool) {
 	return Token{}, false
 }
 
-// sameToken compares a token against symbol, name, and owner.
 func sameToken(t Token, symbol, name, owner string) bool {
 	return t.Symbol == symbol && t.Name == name && strings.EqualFold(t.Owner, owner)
 }

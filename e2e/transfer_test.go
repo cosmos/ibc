@@ -25,14 +25,23 @@ func TestTransfer_AutoRelay(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)})
+	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+		Amount: amount,
+		Memo:   "transfer-auto-relay",
+	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
+	require.NoError(t, transfer.VerifyCommitmentCreated(ctx))
+	require.NoError(t, transfer.VerifyReceiptCreated(ctx))
+	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
+	require.NoError(t, transfer.VerifyAcknowledgementWritten(ctx, status.GetRecvTx().GetTxHash()))
+	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
 }
 
 func TestTransfer_ManualRelay(t *testing.T) {
@@ -103,4 +112,5 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx, status.GetTimeoutTx().GetTxHash()))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
+	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
 }

@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -543,8 +544,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 }
 
 // deployerAddress derives the deployer's EVM address, for use as the default
-// IFT owner. Reuses signer.EVMAddressOf (as the attestor path does) rather
-// than round-tripping the raw private key.
+// IFT owner.
 func deployerAddress(cfg config.Config, alias string) (string, error) {
 	if alias == "" {
 		return "", errors.New("no deployer configured: set chains[].deployer or pass --deployer")
@@ -607,6 +607,21 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if flagDeployBridgeChainA == flagDeployBridgeChainB {
+		return errors.New("--chain-a and --chain-b must differ")
+	}
+	for _, addr := range []string{flagDeployBridgeIFTA, flagDeployBridgeIFTB} {
+		if !common.IsHexAddress(addr) {
+			return errors.Errorf("invalid IFT address %q", addr)
+		}
+	}
+	clientID := flagDeployBridgeClientID
+	if clientID == "" {
+		clientID = defaultClientID(flagDeployBridgeChainA, flagDeployBridgeChainB)
+	}
+	if !deploy.ValidClientID(clientID) {
+		return errors.Errorf("invalid client id %q", clientID)
+	}
 	targetA, err := newTarget(cmd.Context(), cfg, flagDeployBridgeChainA, flagDeployDeployer, true)
 	if err != nil {
 		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainA)
@@ -614,10 +629,6 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 	targetB, err := newTarget(cmd.Context(), cfg, flagDeployBridgeChainB, flagDeployDeployer, true)
 	if err != nil {
 		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainB)
-	}
-	clientID := flagDeployBridgeClientID
-	if clientID == "" {
-		clientID = defaultClientID(flagDeployBridgeChainA, flagDeployBridgeChainB)
 	}
 	stepsA := deploy.IFTBridgeSteps(
 		targetA, flagDeployManifestDir, flagDeployBridgeChainA, flagDeployBridgeIFTA, flagDeployBridgeCtorA,
