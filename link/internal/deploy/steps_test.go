@@ -15,9 +15,9 @@ import (
 // fakeTarget satisfies Target for engine tests.
 type fakeTarget struct {
 	hasCode    map[string]bool
-	registered map[string]string // clientID -> address
-	apps       map[string]string // port -> app address
-	bridges    map[string]string // ift|clientID -> counterparty ift
+	registered map[string]string     // clientID -> address
+	apps       map[string]string     // port -> app address
+	bridges    map[string]fakeBridge // ift|clientID -> bridge
 	provisions int
 	registers  int
 
@@ -56,12 +56,15 @@ func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error)
 }
 func (f *fakeTarget) SupportedClientTypes() []string { return []string{ClientTypeAttestation} }
 
+// fakeBridge is the on-chain bridge state a fakeTarget records.
+type fakeBridge struct{ cp, ctor string }
+
 func newFakeTarget() *fakeTarget {
 	return &fakeTarget{
 		hasCode:    map[string]bool{},
 		registered: map[string]string{},
 		apps:       map[string]string{},
-		bridges:    map[string]string{},
+		bridges:    map[string]fakeBridge{},
 	}
 }
 
@@ -91,13 +94,13 @@ func (f *fakeTarget) ProvisionSendCallConstructor(context.Context) (string, erro
 }
 
 func (f *fakeTarget) RegisterIFTBridge(_ context.Context, ift string, spec BridgeSpec) error {
-	f.bridges[ift+"|"+spec.ClientID] = spec.CounterpartyIFT
+	f.bridges[ift+"|"+spec.ClientID] = fakeBridge{cp: spec.CounterpartyIFT, ctor: spec.SendCallConstructor}
 	return nil
 }
 
-func (f *fakeTarget) IFTBridge(_ context.Context, ift, clientID string) (string, bool, error) {
-	cp, ok := f.bridges[ift+"|"+clientID]
-	return cp, ok, nil
+func (f *fakeTarget) IFTBridge(_ context.Context, ift, clientID string) (string, string, bool, error) {
+	b, ok := f.bridges[ift+"|"+clientID]
+	return b.cp, b.ctor, ok, nil
 }
 
 func TestRunStepsDryRun(t *testing.T) {
@@ -321,9 +324,6 @@ func TestGMPStepsRequiresCore(t *testing.T) {
 	require.ErrorContains(t, err, "run `ibc deploy core` first")
 }
 
-// An interrupted GMP deploy — app registered on-chain but not yet saved to
-// the manifest — must fail loudly on rerun, not silently re-provision (the
-// fixed "gmpport" cannot be re-registered).
 func TestGMPStepsInterruptedDeploy(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -334,7 +334,7 @@ func TestGMPStepsInterruptedDeploy(t *testing.T) {
 	m.TargetData = map[string]string{"accessManager": "0xam"}
 	require.NoError(t, m.Save(dir))
 
-	// app registered on-chain at the fixed port, but manifest has no GMP
+	// registered on-chain but absent from the manifest
 	target.apps[GMPPortID] = "0xlive"
 
 	_, err := RunSteps(context.Background(), slog.Default(), false, GMPSteps(target, dir, "1"))
@@ -406,14 +406,14 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "0xift-FOO", tok.Address)
 
-	// rerun with identical inputs skips: same symbol+name+owner, has code
+	// identical rerun skips
 	target.hasCode["0xift-FOO"] = true
 	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
 	require.Equal(t, 1, target.iftProvisions)
 
-	// same symbol, different name deploys a second token (symbol is not unique)
+	// same symbol, different name is a new token
 	other := IFTSpec{Owner: "0xowner", Name: "Bar", Symbol: "FOO"}
 	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", other))
 	require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 	require.Equal(t, "0xcp", b.CounterpartyIFT)
 	require.Equal(t, "0xctor", b.SendCallConstructor)
 
-	// rerun skips both: constructor recorded, bridge registered on-chain
+	// rerun skips both
 	res, err = RunSteps(
 		context.Background(),
 		slog.Default(),
@@ -511,15 +511,13 @@ func TestIFTBridgeStepsOverrideSkipsConstructor(t *testing.T) {
 	require.Equal(t, "0xoverride", b.SendCallConstructor)
 }
 
-// A bridge already registered on-chain to a different counterparty than
-// requested must fail loudly rather than skip or overwrite.
 func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
 	target.registered["link-2"] = "0xclient"
 	iftBridgeManifest(t, dir)
 	// on-chain bridge points at a different counterparty
-	target.bridges["0xift-FOO|link-2"] = "0xother"
+	target.bridges["0xift-FOO|link-2"] = fakeBridge{cp: "0xother"}
 
 	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
@@ -527,8 +525,6 @@ func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
 	require.ErrorContains(t, err, "already registered to counterparty")
 }
 
-// A rerun with the same client and counterparty but a different constructor
-// must re-register (the contract allows overwriting) rather than silently skip.
 func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -540,7 +536,7 @@ func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorA", spec))
 	require.NoError(t, err)
 
-	// rerun with a different constructor re-registers the bridge step
+	// different constructor re-registers
 	res, err := RunSteps(context.Background(), slog.Default(), false,
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorB", spec))
 	require.NoError(t, err)
@@ -571,8 +567,39 @@ func TestIFTBridgeStepsRequiresClient(t *testing.T) {
 	require.ErrorContains(t, err, "run `ibc deploy client` first")
 }
 
-// An IFT address not recorded in the manifest still registers (address-based);
-// the bridge record is best-effort and simply omitted.
+func TestIFTBridgeStepsPlanRejectsMissingClient(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget() // no client registered
+	iftBridgeManifest(t, dir)
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	_, err := RunSteps(context.Background(), slog.Default(), true, // dry-run
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
+	require.ErrorContains(t, err, "run `ibc deploy client` first")
+	require.Empty(t, target.bridges)
+}
+
+func TestIFTBridgeStepsDryRunAfterOverride(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.registered["link-2"] = "0xclient"
+	iftBridgeManifest(t, dir)
+
+	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	_, err := RunSteps(context.Background(), slog.Default(), false,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
+	require.NoError(t, err)
+
+	m, err := manifest.Load(dir, "1")
+	require.NoError(t, err)
+	require.Empty(t, m.EVMSendCallConstructor)
+
+	res, err := RunSteps(context.Background(), slog.Default(), true,
+		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "", spec))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[1].Action)
+}
+
 func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -589,5 +616,5 @@ func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
 
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
-	require.Empty(t, m.Tokens) // nothing recorded for an unrecorded token
+	require.Empty(t, m.Tokens)
 }

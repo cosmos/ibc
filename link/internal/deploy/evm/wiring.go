@@ -262,7 +262,7 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			continue
 		}
 		for _, b := range tok.Bridges {
-			cp, registered, bridgeErr := d.IFTBridge(ctx, tok.Address, b.ClientID)
+			cp, _, registered, bridgeErr := d.IFTBridge(ctx, tok.Address, b.ClientID)
 			if bridgeErr != nil {
 				return report, bridgeErr
 			}
@@ -292,9 +292,7 @@ func customErrorSelector(md *bind.MetaData, name string) string {
 
 // isNotFoundRevert reports whether err is a contract revert for the custom
 // error identified by selectorHex/name (getIBCApp and getIFTBridge revert when
-// absent rather than returning zero). A revert whose data the provider stripped
-// is treated as a match: the caller's follow-up write fails loudly if the entry
-// actually exists.
+// absent rather than returning zero). A data-less revert is treated as a match.
 func isNotFoundRevert(err error, selectorHex, name string) bool {
 	if err == nil {
 		return false
@@ -373,18 +371,19 @@ func (d *Driver) RegisterIFTBridge(ctx context.Context, iftAddr string, spec dep
 	return d.awaitMined(ctx, "registerIFTBridge "+spec.ClientID, tx)
 }
 
-// IFTBridge queries the token for a bridge registered under clientID.
-func (d *Driver) IFTBridge(ctx context.Context, iftAddr, clientID string) (string, bool, error) {
+// IFTBridge queries the token for a bridge registered under clientID, returning
+// its counterparty address and send-call constructor.
+func (d *Driver) IFTBridge(ctx context.Context, iftAddr, clientID string) (string, string, bool, error) {
 	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
 	if err != nil {
-		return "", false, err
+		return "", "", false, err
 	}
 	bridge, err := contract.GetIFTBridge(&bind.CallOpts{Context: ctx}, clientID)
 	if err == nil {
-		return bridge.CounterpartyIFTAddress, true, nil
+		return bridge.CounterpartyIFTAddress, bridge.IftSendCallConstructor.Hex(), true, nil
 	}
 	if isNotFoundRevert(err, iftBridgeNotFoundSelector, "IFTBridgeNotFound") {
-		return "", false, nil
+		return "", "", false, nil
 	}
-	return "", false, err
+	return "", "", false, err
 }

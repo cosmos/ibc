@@ -146,6 +146,7 @@ type Target interface {
 	// RegisterIFTBridge registers a bridge on an IFT token.
 	RegisterIFTBridge(ctx context.Context, ift string, spec BridgeSpec) error
 	// IFTBridge reports whether a bridge for clientID exists on the token,
-	// returning the counterparty IFT address when it does.
-	IFTBridge(ctx context.Context, ift, clientID string) (string, bool, error)
+	// returning its counterparty IFT address and send-call constructor when it
+	// does.
+	IFTBridge(ctx context.Context, ift, clientID string) (counterparty, constructor string, registered bool, err error)
 }

@@ -193,9 +193,6 @@ func GMPSteps(t Target, dir, chainID string) []Step {
 				return false, nil // Run reports the missing-core error
 			}
 			if m.GMP == nil || m.GMP.Address == "" {
-				// an interrupted deploy can leave the app registered on-chain
-				// but unrecorded; the port is fixed, so a rerun cannot
-				// re-register it and would revert — surface it instead
 				_, registered, regErr := t.AppRegistered(ctx, m.Core.Router, GMPPortID)
 				if regErr != nil {
 					return false, regErr
@@ -260,8 +257,6 @@ func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
 			if err != nil || m == nil {
 				return false, err
 			}
-			// A token is identified by symbol+name+owner.
-			// An identical rerun skips while a same-symbol/different token deploys a new one
 			tok, ok := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
 			if !ok || tok.Address == "" {
 				return false, nil
@@ -333,9 +328,26 @@ func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec B
 				if err != nil || m == nil {
 					return false, err
 				}
-				cp, registered, err := t.IFTBridge(ctx, iftAddr, spec.ClientID)
-				if err != nil || !registered {
+				if m.Core.Router == "" {
+					return false, nil // Run reports the missing-core error
+				}
+				cp, onchainCtor, registered, err := t.IFTBridge(ctx, iftAddr, spec.ClientID)
+				if err != nil {
 					return false, err
+				}
+				if !registered {
+					_, clientOK, cerr := t.ClientRegistered(ctx, m.Core.Router, spec.ClientID)
+					if cerr != nil {
+						return false, cerr
+					}
+					if !clientOK {
+						return false, fmt.Errorf(
+							"client %q not registered on chain %s: run `ibc deploy client` first",
+							spec.ClientID,
+							chainID,
+						)
+					}
+					return false, nil
 				}
 				if cp != spec.CounterpartyIFT {
 					return false, fmt.Errorf(
@@ -348,16 +360,9 @@ func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec B
 						spec.CounterpartyIFT,
 					)
 				}
-				// a rerun requesting a different send-call constructor must re-register
-				ctor, err := resolveConstructor(m, ctorOverride)
-				if err != nil {
-					return false, err
-				}
-				if tok, ok := m.TokenByAddress(iftAddr); ok {
-					if existing, ok := tok.Bridge(spec.ClientID); ok &&
-						!strings.EqualFold(existing.SendCallConstructor, ctor) {
-						return false, nil
-					}
+				// only an explicit override changes an existing bridge's constructor
+				if ctorOverride != "" && !strings.EqualFold(onchainCtor, ctorOverride) {
+					return false, nil
 				}
 				return true, nil
 			},
@@ -369,14 +374,6 @@ func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec B
 				if m == nil || m.Core.Router == "" {
 					return fmt.Errorf("no core deployment recorded for chain %s: run `ibc deploy core` first", chainID)
 				}
-				_, registered, err := t.ClientRegistered(ctx, m.Core.Router, spec.ClientID)
-				if err != nil {
-					return err
-				}
-				if !registered {
-					return fmt.Errorf(
-						"client %q not registered on chain %s: run `ibc deploy client` first", spec.ClientID, chainID)
-				}
 				ctor, err := resolveConstructor(m, ctorOverride)
 				if err != nil {
 					return err
@@ -386,8 +383,7 @@ func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec B
 				if regErr := t.RegisterIFTBridge(ctx, iftAddr, full); regErr != nil {
 					return regErr
 				}
-				// best-effort record: a no-op when iftAddr is an unrecorded
-				// external token
+				// records the bridge only when iftAddr is a known token
 				m.UpsertBridge(iftAddr, manifest.Bridge{
 					ClientID:            spec.ClientID,
 					CounterpartyIFT:     spec.CounterpartyIFT,
@@ -400,7 +396,7 @@ func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec B
 }
 
 // resolveConstructor returns the send-call constructor address: the override
-// when set, else the chain-level EVM singleton deployed by step 1.
+// when set, else the chain-level EVM singleton.
 func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
 	if override != "" {
 		return override, nil

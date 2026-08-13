@@ -201,7 +201,7 @@ func TestProvisionIFTAndBridge(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, token.Address)
 
-	_, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	_, _, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
 	require.NoError(t, err)
 	require.False(t, registered)
 
@@ -215,10 +215,11 @@ func TestProvisionIFTAndBridge(t *testing.T) {
 		SendCallConstructor: ctor,
 	}))
 
-	cp, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	cp, gotCtor, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
 	require.NoError(t, err)
 	require.True(t, registered)
 	require.Equal(t, "0x00000000000000000000000000000000000000cp", cp)
+	require.Equal(t, ctor, gotCtor)
 }
 
 func TestVerifyGMPAndIFT(t *testing.T) {
