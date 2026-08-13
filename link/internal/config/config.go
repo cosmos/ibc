@@ -609,8 +609,7 @@ func PrintJSON(v any) error {
 }
 
 // PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
-// fields by name (e.g. "PACKET_STATE_PENDING") instead of their numeric
-// value, and keeping proto_name field naming to match PrintJSON's output.
+// fields by name
 func PrintProtoJSON(msg proto.Message) error {
 	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
 	if err != nil {
