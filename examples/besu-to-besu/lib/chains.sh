@@ -205,7 +205,7 @@ _init_chain() {
   # besu.toml and el-genesis.json hold no secrets and are set explicitly so a
   # restrictive host umask cannot render them unreadable to the container.
   chmod 755 "$out_dir"
-  chmod 644 "$out_dir/key"
+  chmod 600 "$out_dir/key"
   chmod 644 "$out_dir/besu.toml" "$out_dir/el-genesis.json"
 
   if command -v jq >/dev/null 2>&1; then
@@ -223,7 +223,7 @@ _init_chain() {
   # Spell out the alloc set. These are the only accounts that can pay for gas
   # on this chain, so a wrong or missing one is the first thing to check when a
   # tx fails with "insufficient funds".
-  local i funded role
+  local i funded role privkey
   log "[$name] genesis funds ${#CHAIN_ALLOC_ADDRS[@]} accounts with $(_genesis_balance_eth) each:"
   for (( i = 0; i < ${#CHAIN_ALLOC_ADDRS[@]}; i++ )); do
     funded="${CHAIN_ALLOC_ADDRS[$i]}"
@@ -231,9 +231,11 @@ _init_chain() {
     [[ "$funded" == "${CHAIN_ACCT_ADDRS[0]}" ]] && role+=" [deployer]"
     [[ "$funded" == "$addr" ]] && role+=" [validator]"
     if (( i < ${#CHAIN_ACCT_ADDRS[@]} )); then
-      log "  index $i  $funded${role}"
+      privkey="${CHAIN_ACCT_KEYS[$i]}"
+      log "  index $i  $funded${role}  privkey=0x${privkey}"
     else
-      log "  index $index  $funded${role}"
+      privkey="$pk"
+      log "  index $index  $funded${role}  privkey=0x${privkey}"
     fi
   done
 
@@ -329,7 +331,7 @@ print_accounts() {
       role=""
       [[ $i -eq 0 ]] && role+=" [deployer]"
       [[ $i -eq "$index" ]] && role+=" [validator]"
-      log "  index $i  ${CHAIN_ACCT_ADDRS[$i]}${role}"
+      log "  index $i  ${CHAIN_ACCT_ADDRS[$i]}${role}  privkey=0x${CHAIN_ACCT_KEYS[$i]}"
     done
   done
 }
