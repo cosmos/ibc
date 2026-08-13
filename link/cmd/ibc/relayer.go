@@ -113,7 +113,9 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 
 func relayerRelay(cmd *cobra.Command, _ []string) error {
 	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Relay, &relayerv2.RelayRequest{
-		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
+		TxHash:        flagRelayerTxHash,
+		SourceChainId: flagRelayerSourceChainID,
+		Selection:     &relayerv2.RelayRequest_AllPackets{AllPackets: &relayerv2.AllPackets{}},
 	})
 }
 
