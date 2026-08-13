@@ -18,7 +18,10 @@ import (
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
-var flagAttestorHost string
+var (
+	flagAttestorHost   string
+	flagAttestorHeight uint64
+)
 
 var (
 	cmdAttestor = &cobra.Command{
@@ -53,8 +56,6 @@ var (
 		RunE:  attestorStateAttestation,
 	}
 )
-
-var flagAttestorHeight uint64
 
 func attestorRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
