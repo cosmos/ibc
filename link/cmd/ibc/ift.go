@@ -25,14 +25,19 @@ var (
 	cmdTxIFT = &cobra.Command{
 		Use:   useIFT,
 		Short: "IFT transaction subcommands",
+		Long: "IFT transaction subcommands. Each takes its core transfer arguments positionally " +
+			"(e.g. to/amount, client-id/receiver/amount) and --chain/--ift/--from as flags shared " +
+			"across mint and send -- run a subcommand's --help for its exact positional order.",
 	}
 
 	cmdTxIFTMint = &cobra.Command{
 		Use:   "mint [to] [amount]",
 		Short: "Mint IFT supply to an address",
 		Long:  "Mint amount of the IFT token at --ift to the to address. The --from signer must be the token's owner.",
-		Args:  cobra.ExactArgs(2),
-		RunE:  txIFTMint,
+		Example: "  ibc tx ift mint 0xRecipient... 1000000000000000000 \\\n" +
+			"    --chain 1 --ift 0xIFTTokenAddress... --from deployer",
+		Args: cobra.ExactArgs(2),
+		RunE: txIFTMint,
 	}
 
 	cmdTxIFTSend = &cobra.Command{
@@ -40,6 +45,8 @@ var (
 		Short: "Send IFT across a bridge to a counterparty chain",
 		Long: "Initiate a cross-chain transfer of amount of the IFT token at --ift, over the bridge " +
 			"registered for client-id, to receiver on the counterparty chain.",
+		Example: "  ibc tx ift send link-1-2 0xReceiver... 500000000000000000 \\\n" +
+			"    --chain 1 --ift 0xIFTTokenAddress... --from deployer",
 		Args: cobra.ExactArgs(3),
 		RunE: txIFTSend,
 	}
