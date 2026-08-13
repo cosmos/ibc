@@ -130,7 +130,7 @@ func dispatcherStore(t *testing.T) *store.SqliteDB {
 func createStoredPacket(t *testing.T, db *store.SqliteDB, sequence uint64) {
 	t.Helper()
 
-	require.NoError(t, db.CreatePacket(context.Background(), store.CreatePacket{
+	require.NoError(t, db.UpsertPacket(context.Background(), store.UpsertPacket{
 		Status:                    store.RelayStatusPending,
 		SourceChainID:             testRoute.SourceChainID,
 		DestinationChainID:        testRoute.DestinationChainID,
@@ -146,7 +146,7 @@ func createStoredPacket(t *testing.T, db *store.SqliteDB, sequence uint64) {
 func TestRelayDispatcher(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("submitsUnfinishedPackets", func(t *testing.T) {
+	t.Run("submitsDispatchablePackets", func(t *testing.T) {
 		db := dispatcherStore(t)
 		createStoredPacket(t, db, 1)
 		createStoredPacket(t, db, 2)
@@ -154,7 +154,7 @@ func TestRelayDispatcher(t *testing.T) {
 		pipe := newFakePipeline(true)
 		dispatcher := NewRelayDispatcher(db, &fakePipelines{pipeline: pipe}, DefaultPollInterval, slog.Default())
 
-		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
+		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
 
 		assert.Equal(t, 2, pipe.pushCount())
 	})
@@ -166,13 +166,13 @@ func TestRelayDispatcher(t *testing.T) {
 		pipe := newFakePipeline(false) // rejects: already in pipeline
 		dispatcher := NewRelayDispatcher(db, &fakePipelines{pipeline: pipe}, DefaultPollInterval, slog.Default())
 
-		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
+		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
 
 		// the packet is not marked failed
-		unfinished, err := db.ListUnfinishedPackets(ctx)
+		dispatchable, err := db.ListDispatchablePackets(ctx)
 		require.NoError(t, err)
-		assert.Len(t, unfinished, 1)
-		assert.Equal(t, store.RelayStatusPending, unfinished[0].Status)
+		assert.Len(t, dispatchable, 1)
+		assert.Equal(t, store.RelayStatusPending, dispatchable[0].Status)
 	})
 
 	t.Run("submitErrorMarksPacketFailed", func(t *testing.T) {
@@ -186,11 +186,11 @@ func TestRelayDispatcher(t *testing.T) {
 			slog.Default(),
 		)
 
-		require.NoError(t, dispatcher.SubmitWaitingUnfinishedPackets(ctx))
+		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
 
-		unfinished, err := db.ListUnfinishedPackets(ctx)
+		dispatchable, err := db.ListDispatchablePackets(ctx)
 		require.NoError(t, err)
-		assert.Empty(t, unfinished)
+		assert.Empty(t, dispatchable)
 
 		packets, err := db.ListPacketsBySourceTx(ctx, testRoute.SourceChainID, recvTxHash)
 		require.NoError(t, err)

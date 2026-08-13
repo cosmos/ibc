@@ -22,7 +22,7 @@ type RelayerHandler struct {
 
 // RelayerService defines relayer business logic.
 type RelayerService interface {
-	Relay(ctx context.Context, chainID string, txHash string) error
+	Relay(ctx context.Context, request relayer.RelayRequest) error
 	Status(ctx context.Context, chainID string, txHash string) ([]relayer.PacketStatus, error)
 }
 
@@ -52,10 +52,26 @@ func (h *RelayerHandler) Relay(
 ) (*connect.Response[proto.RelayResponse], error) {
 	h.logger.Info("Relay", "sourceChainID", req.Msg.SourceChainId, "txHash", req.Msg.TxHash)
 
-	err := h.srv.Relay(ctx, req.Msg.SourceChainId, req.Msg.TxHash)
+	request := relayer.RelayRequest{ChainID: req.Msg.SourceChainId, TxHash: req.Msg.TxHash}
+	switch selection := req.Msg.Selection.(type) {
+	case *proto.RelayRequest_AllPackets:
+		request.Selection = relayer.SelectionAll
+	case *proto.RelayRequest_SelectedPackets:
+		request.Selection = relayer.SelectionExplicit
+		for _, packet := range selection.SelectedPackets.GetPackets() {
+			request.Packets = append(request.Packets, relayer.PacketSelector{
+				SourceClientID: packet.GetSourceClientId(),
+				SequenceNumber: packet.GetSequenceNumber(),
+			})
+		}
+	}
+
+	err := h.srv.Relay(ctx, request)
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, relayer.ErrFailedPrecondition):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	case errors.Is(err, relayer.ErrNotFound):
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	case err != nil:
@@ -103,6 +119,8 @@ func (h *RelayerHandler) Status(
 
 func packetStateToProto(state relayer.PacketState) proto.PacketState {
 	switch state {
+	case relayer.StateNotSelected:
+		return proto.PacketState_PACKET_STATE_NOT_SELECTED
 	case relayer.StatePending:
 		return proto.PacketState_PACKET_STATE_PENDING
 	case relayer.StateSucceeded:

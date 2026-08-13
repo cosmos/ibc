@@ -48,13 +48,9 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 	}
 
 	if sourceClient, ok := cfg.Relayer.Client(route.SourceChainID, route.SourceClientID); ok {
-		for _, r := range cfg.Relayer.Routes {
-			if r.SourceClient == sourceClient.Alias {
-				opts.SourceSignerAlias = r.SourceSignerAlias
-				opts.DestSignerAlias = r.DestSignerAlias
-
-				break
-			}
+		if configuredRoute, routed := cfg.Relayer.RouteBySourceClient(sourceClient.Alias); routed {
+			opts.SourceSignerAlias = configuredRoute.SourceSignerAlias
+			opts.DestSignerAlias = configuredRoute.DestSignerAlias
 		}
 
 		if sourceClient.AttestorSet != nil {
