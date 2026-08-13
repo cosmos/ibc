@@ -85,12 +85,7 @@ func (s *PipelineSet) Pipeline(ctx context.Context, tr *processors.Transfer) (pi
 }
 
 func (s *PipelineSet) isRouted(route processors.Route) bool {
-	client, ok := s.cfg.Relayer.Client(route.SourceChainID, route.SourceClientID)
-	if !ok {
-		return false
-	}
-
-	_, ok = s.cfg.Relayer.RouteBySourceClient(client.Alias)
+	_, _, ok := s.cfg.Relayer.ClientEnd(route.SourceChainID, route.SourceClientID)
 	return ok
 }
 

@@ -6,16 +6,16 @@
 `~/.ibc/ibc.yml`). Env vars are expanded before parsing (`os.ExpandEnv`), so
 `${VAR}` works anywhere in the file. Six top-level keys:
 
-| Key        | Used by            | Purpose                                                         |
-|------------|--------------------|-----------------------------------------------------------------|
-| `server`   | relayer, attestor  | gRPC/HTTP listener address                                      |
-| `db`       | relayer            | sqlite or postgres connection                                   |
-| `chains`   | relayer, attestor  | chain configs common to both relayer and attestor               |
-| `relayer`  | relayer            | configures routes to relay                                      |
-| `attestor` | attestor           | which chains to attest and with which signer                    |
-| `signers`  | relayer, attestor  | signing backends referenced in the relayer and attestor configs |
+| Key         | Used by            | Purpose                                                       |
+|-------------|--------------------|---------------------------------------------------------------|
+| `server`    | relayer, attestor  | gRPC/HTTP listener address                                    |
+| `db`        | relayer            | sqlite or postgres connection                                 |
+| `chains`    | relayer, attestor  | chain configs common to both relayer and attestor             |
+| `relayer`   | relayer            | connections to actively relay                                 |
+| `attestors` | relayer, attestor  | attestors - local and remote                              |
+| `signers`   | relayer, attestor  | signing backends referenced by client ends and local attestors |
 
-Running the relayer with the `attestor` block populated runs an attestor instance in-process.
+Running the relayer with at least one `type: local` entry in `attestors` runs an attestor instance in-process ("dual mode").
 
 ---
 
@@ -46,7 +46,7 @@ db:
 ## `chains`
 
 Chains the attestor and relayer can reference by `chainId`. Declare every
-chain used elsewhere in the config here first. `relayer.clients[].chainId`
+chain used elsewhere in the config here first. `relayer.connections[].clientA/clientB.chainId`
 and `relayer.chainOverrides[].chainId` are validated against this list.
 
 | Field      | Type   | Description |
@@ -78,8 +78,7 @@ chains:
 |------------------------|----------|--------------------------------------------------------------------------------|
 | `dispatchPollInterval` | duration | How often the dispatcher polls storage for dispatchable packets. Defaults to 5s. |
 | `chainOverrides`       | list     | Per-chain relaying overrides (see below).                                      |
-| `clients`              | list     | Light clients to relay for (see below).                                        |
-| `routesToRelay`        | list     | Which client pairs to actively relay, and with which signer (see below).       |
+| `connections`          | list     | Bidirectional connections to actively relay (see below).                       |
 
 ### `relayer.chainOverrides[]`
 
@@ -91,75 +90,91 @@ chains:
 | `packetBatchTimeout` | duration | Max time to wait for a batch to fill before flushing it anyway. |
 | `evm`                | object   | `gasFeeCapMultiplier`, `gasTipCapMultiplier` — multipliers applied to the chain's suggested EIP-1559 fee cap/tip. |
 
-### `relayer.clients[]`
+### `relayer.connections[]`
 
-One entry per light client the relayer knows about. **Both sides of a
-connection must be configured** — a client's counterparty must also appear
-as its own entry, referencing back.
+One entry per IBC connection the relayer actively relays, in both
+directions. Each connection has two client ends, `clientA` and `clientB`;
+each end's counterparty is simply the connection's other end.
 
-| Field                  | Type   | Description |
-|------------------------|--------|--------------|
-| `alias`                | string | Unique handle referenced by `routesToRelay`. |
-| `clientId`             | string | This client's on-chain ID, on `chainId`. |
-| `chainId`              | string | The chain this client is registered on. |
-| `counterpartyChainId`  | string | The chain this client tracks. |
-| `counterpartyClientId` | string | The client ID on `counterpartyChainId` that tracks `chainId` back. |
-| `type`                 | string | Only `attestation` is currently supported. |
-| `attestorSet`          | object | Required for `attestation` clients. See below. |
+| Field     | Type   | Description                        |
+|-----------|--------|-------------------------------------|
+| `alias`   | string | Unique handle for this connection.  |
+| `clientA` | object | One client end. See below.          |
+| `clientB` | object | The other client end. See below.    |
 
-#### `relayer.clients[].attestorSet`
+#### `relayer.connections[].clientA` / `.clientB`
 
-| Field                             | Type | Description                                                                                                                         |
-|-----------------------------------|------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `counterpartyChainFinalityOffset` | uint | Blocks to wait on the *counterparty* chain before treating state final enough to relay. Should match attestor's finality offset. |
-| `threshold`                       | int  | Minimum number of attestor signatures required.                                                                                     |
-| `attestors`                       | list | See below.                                                                                                                          |
+| Field         | Type   | Description |
+|---------------|--------|--------------|
+| `chainId`     | string | The chain this client end is registered on. |
+| `signer`      | string | Signer submitting relay transactions on `chainId` — this end's own chain. Must match a `signers[].alias`. |
+| `clientId`    | string | This end's on-chain client ID, on `chainId`. |
+| `type`        | string | Only `attestation` is currently supported. |
+| `autoRelay`   | object | `enabled` (bool), `lookback` (uint) — auto-relay settings for packets flowing FROM this end's chain TOWARD the counterparty end. |
 
-#### `relayer.clients[].attestorSet.attestors[]`
-
-| Field  | Type   | Description |
-|--------|--------|--------------|
-| `name` | string | Must match an `attestor.attestations[].name` — either in this process's own `attestor` block (`type: local`) or on the remote attestor being queried (`type: remote`). |
-| `type` | string | `local` or `remote`. |
-| `grpc` | string | Required for `remote`. Bare `host:port` (not a URL — a `://` here is rejected at validation). |
+`clientA` and `clientB` must be on different chains.
 
 ```yaml
 relayer:
-  clients:
-    - alias: "eth-to-base"
-      clientId: "base-0"
-      chainId: "1"
-      counterpartyChainId: "8453"
-      counterpartyClientId: "ethereum-0"
-      type: "attestation"
-      attestorSet:
-        counterpartyChainFinalityOffset: 1
-        threshold: 1
-        attestors:
-          - name: "attestor-base"   # watches chain 8453, this client's counterparty
-            type: remote
-            grpc: attestor.example.com:3000
+  connections:
+    - alias: "eth-base"
+      clientA:
+        chainId: "1"
+        signer: "relayer-key"
+        clientId: "base-0"
+        type: "attestation"
+        autoRelay:
+          enabled: true
+          lookback: 100
+      clientB:
+        chainId: "8453"
+        signer: "relayer-key"
+        clientId: "ethereum-0"
+        type: "attestation"
+        autoRelay:
+          enabled: true
+          lookback: 100
 ```
 
-### `relayer.routesToRelay[]`
+`ibc config validate --live` additionally confirms each connection's
+on-chain registered counterparty matches `clientA`/`clientB`, and runs the
+same attestor-quorum resolution described above.
 
-Packets sent from `sourceClient` are relayed through the full packet
-lifecycle (recv, ack, timeout) using the given signer aliases. Only packets
-whose source client has a route are eligible for relay selection and status
-tracking.
+---
 
-| Field              | Type   | Description |
-|--------------------|--------|--------------|
-| `sourceClient`      | string | Must match a `clients[].alias`. |
-| `sourceSignerAlias` | string | Signer submitting txs on the source chain (e.g. the ack). |
-| `destSignerAlias`   | string | Signer submitting txs on the destination chain (e.g. the recv). |
+## `attestors`
+
+Top-level list of attestors — both the ones this
+process runs itself (`type: local`) and the ones it queries over gRPC
+(`type: remote`).
+
+| Field            | Type   | Description |
+|------------------|--------|--------------|
+| `name`           | string | Identifies the attestor. |
+| `chainId`        | string | `local` only — which declared chain this attestor watches. Not set for `type: remote`; discovered live via its `Info` RPC instead. |
+| `type`           | string | `local` or `remote`. |
+| `signer`         | string | `local` only. Must reference a `signers[].alias`. |
+| `finalityOffset` | uint   | `local` only. `0` (default): attest up to the chain's `"finalized"` RPC tag. `n > 0`: attest up to `"latest" - n` instead. |
+| `grpc`           | string | `remote` only. Bare `host:port` (not a URL — a `://` here is rejected at validation). |
+
+```yaml
+attestors:
+  - name: "eth-watcher"
+    chainId: "1"
+    type: local
+    signer: "my-local-signer"
+    finalityOffset: 1
+  - name: "base-watcher"
+    type: remote
+    grpc: attestor.example.com:3000
+```
 
 ---
 
 ## `signers`
 
-Signing backends, referenced by alias from `relayer.routesToRelay` and
-`attestor.attestations`. Each needs a unique `alias`.
+Signing backends, referenced by alias from `relayer.connections[].clientA/clientB.signer`
+and `attestors[].signer` (for `type: local` attestors). Each needs a unique `alias`.
 
 | Field         | Type   | Description |
 |---------------|--------|-------------|
@@ -180,34 +195,6 @@ signers:
     file: keys/my-key.json
 ```
 
-## `attestor`
-
-Only needed when this process should attest — standalone (`ibc attestor
-run`) or alongside a relayer in the same process (populate this
-block *and* `relayer`, run `ibc relayer run`; `attestorSet.attestors[].type:
-local` entries then resolve against this block directly instead of over
-gRPC).
-
-### `attestor.attestations[]`
-
-Each `name` and `signer` must be unique across the list — the same signer
-can't back two attestations in one process.
-
-| Field            | Type   | Description                                                                                                                                                                                                       |
-|------------------|--------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `chainId`        | string | Which declared chain this attestation watches.                                                                                                                                                                    |
-| `name`           | string | Referenced by `relayer.clients[].attestorSet.attestors[].name` (for both remote and local).                                                                                                                       |
-| `signer`         | string | Must reference a `signers[].alias`.                                                                                                                                                                               |
-| `finalityOffset` | uint   | `0` (default): attest up to the chain's `"finalized"` RPC tag. `n > 0`: attest up to `"latest" - n` instead. Use this where `"finalized"` is slow or unsupported (e.g. Ethereum PoS lags ~12-15 min behind head). |
-
-```yaml
-attestor:
-  attestations:
-    - chainId: chain-a
-      name: attestation-a
-      signer: my-local-signer
-```
-
 ## Deployment
 
 `ibc deploy` provisions IBC on a chain and records what it deployed. Two
@@ -225,13 +212,13 @@ pieces tie into the rest of the config:
   machine-generated: `ibc deploy` reads and rewrites them on every run to
   stay idempotent, so hand edits are lost and can desync the recorded state
   from what's actually on chain.
-- attestor sets — `--attestors` values may be attestation names, signer
+- attestor sets — `--attestors` values may be attestor names, signer
   aliases, or raw addresses; aliases resolve through local key files (remote
   signers error — pass their address directly), and any value matching no
   alias passes through as an address, validated by the chain's deployment
   driver. When the flag is omitted,
   the set for a client tracking chain X defaults to every
-  `attestor.attestations[]` entry with `chainId: X`. Reusing one attestor
+  `attestors[]` entry with `chainId: X`. Reusing one attestor
   set for both directions of a connection is discouraged — configure
   distinct sets per tracked chain.
 

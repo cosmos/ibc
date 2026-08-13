@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/livevalidate"
 )
 
 // set in init()
@@ -72,15 +72,15 @@ func configNew(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func configValidate(_ *cobra.Command, _ []string) error {
+func configValidate(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return errors.Wrap(err, "setup home with config")
 	}
 
 	if flagConfigValidateLive {
-		if err := store.ValidateConfigLive(cfg); err != nil {
-			return errors.Wrap(err, "config live validation")
+		if err := livevalidate.Validate(cmd.Context(), cfg); err != nil {
+			return err
 		}
 	}
 

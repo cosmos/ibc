@@ -19,7 +19,7 @@ import (
 type RemoteAttestor struct {
 	chainID string
 	name    string
-	alias   string
+	address string
 	client  proto.AttestationServiceClient
 	logger  *slog.Logger
 }
@@ -28,23 +28,43 @@ var _ Attestor = &RemoteAttestor{}
 
 const remoteRequestTimeout = 5 * time.Second
 
-func NewRemoteFromURL(chainID, name, alias, grpcURL string) *RemoteAttestor {
+// NewRemoteFromURL connects to the attestor at grpcURL and queries its Info
+// RPC to resolve its chain and address.
+func NewRemoteFromURL(ctx context.Context, grpcURL, name string) (*RemoteAttestor, error) {
 	var (
 		httpClient  = newConnectHTTPClient()
 		protoClient = proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
 	)
 
-	return NewRemote(chainID, name, alias, protoClient)
+	info, err := queryAttestorInfo(ctx, protoClient, name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RemoteAttestor{
+		name:    name,
+		chainID: info.ChainId,
+		address: info.Address,
+		client:  protoClient,
+		logger:  slog.With("module", "attestor", "name", attestorFQN("remote", info.ChainId, name)),
+	}, nil
 }
 
-func NewRemote(chainID, name, alias string, client proto.AttestationServiceClient) *RemoteAttestor {
-	return &RemoteAttestor{
-		chainID: chainID,
-		name:    name,
-		alias:   alias,
-		client:  client,
-		logger:  slog.With("module", "attestor", "name", attestorFQN("remote", chainID, name)),
+// queryAttestorInfo queries name's Info RPC through client.
+func queryAttestorInfo(
+	ctx context.Context,
+	client proto.AttestationServiceClient,
+	name string,
+) (*proto.InfoResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, remoteRequestTimeout)
+	defer cancel()
+
+	res, err := client.Info(ctx, connect.NewRequest(&proto.InfoRequest{Attestor: name}))
+	if err != nil {
+		return nil, err
 	}
+
+	return res.Msg, nil
 }
 
 func (a *RemoteAttestor) LatestHeight(ctx context.Context) (uint64, error) {
@@ -105,9 +125,9 @@ func (a *RemoteAttestor) PacketAttestation(ctx context.Context, req PacketAttest
 }
 
 func (a *RemoteAttestor) Name() string    { return a.name }
-func (a *RemoteAttestor) Alias() string   { return a.alias }
 func (a *RemoteAttestor) ChainID() string { return a.chainID }
 func (a *RemoteAttestor) IsLocal() bool   { return false }
+func (a *RemoteAttestor) Address() string { return a.address }
 
 func attestationFromProto(a *proto.Attestation) (Attestation, error) {
 	if a == nil {

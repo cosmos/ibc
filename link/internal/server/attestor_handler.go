@@ -29,6 +29,7 @@ type AttestorService interface {
 		attestor string,
 		req attestor.PacketAttestationRequest,
 	) (attestor.Attestation, error)
+	Info(alias string) (attestor.Info, bool)
 }
 
 var (
@@ -118,6 +119,21 @@ func (h *AttestorHandler) PacketAttestation(
 
 	return connect.NewResponse(&proto.PacketAttestationResponse{
 		Attestation: attestationToProto(attestation),
+	}), nil
+}
+
+func (h *AttestorHandler) Info(
+	_ context.Context,
+	req *connect.Request[proto.InfoRequest],
+) (*connect.Response[proto.InfoResponse], error) {
+	info, ok := h.service.Info(req.Msg.Attestor)
+	if !ok {
+		return nil, connect.NewError(connect.CodeNotFound, attestor.ErrNotFound)
+	}
+
+	return connect.NewResponse(&proto.InfoResponse{
+		ChainId: info.ChainID,
+		Address: info.Address,
 	}), nil
 }
 

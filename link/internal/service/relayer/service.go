@@ -240,8 +240,8 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
 }
 
 // packetsFromEvents extracts the transaction's send packets. observed holds
-// every send packet; relayable holds the subset this instance has a client and
-// route configured for, as not-selected upsert inputs.
+// every send packet; relayable holds the subset this instance has a client
+// configured for, as not-selected upsert inputs.
 func (s *Service) packetsFromEvents(
 	chainID string,
 	txHash string,
@@ -261,7 +261,7 @@ func (s *Service) packetsFromEvents(
 		}
 		observed[selector] = struct{}{}
 
-		client, ok := s.cfg.Relayer.Client(chainID, event.Packet.SourceClient)
+		_, counterparty, ok := s.cfg.Relayer.ClientEnd(chainID, event.Packet.SourceClient)
 		if !ok {
 			s.logger.Warn(
 				"Skipping packet from unconfigured client",
@@ -272,17 +272,7 @@ func (s *Service) packetsFromEvents(
 
 			continue
 		}
-		if _, routed := s.cfg.Relayer.RouteBySourceClient(client.Alias); !routed {
-			s.logger.Warn(
-				"Skipping packet without configured relay route",
-				"chainID", chainID,
-				"clientID", event.Packet.SourceClient,
-				"sequence", event.Packet.Sequence,
-			)
-
-			continue
-		}
-		if event.Packet.DestinationClient != client.CounterpartyClientID {
+		if event.Packet.DestinationClient != counterparty.ClientID {
 			s.logger.Warn(
 				"Skipping packet with unconfigured destination client",
 				"chainID", chainID,
@@ -297,7 +287,7 @@ func (s *Service) packetsFromEvents(
 		relayable[selector] = store.UpsertPacket{
 			Status:                    store.RelayStatusNotSelected,
 			SourceChainID:             chainID,
-			DestinationChainID:        client.CounterpartyChainID,
+			DestinationChainID:        counterparty.ChainID,
 			SourceTxHash:              txHash,
 			SourceTxTime:              event.BlockTime,
 			PacketSequenceNumber:      event.Packet.Sequence,
