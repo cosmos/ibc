@@ -498,6 +498,24 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 	return out, nil
 }
 
+// signerPlaceholderComments annotates every rendered client end's blank
+// signer field.
+func signerPlaceholderComments(out renderedDeployment) map[string]string {
+	comments := make(map[string]string, 2*len(out.Relayer.Connections))
+	for i, conn := range out.Relayer.Connections {
+		ends := []struct {
+			field string
+			end   config.ClientEnd
+		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
+		for _, e := range ends {
+			path := fmt.Sprintf("$.relayer.connections[%d].%s.signer", i, e.field)
+			comments[path] = fmt.Sprintf("TODO: signers[] alias that submits relay txs on %s", e.end.ChainID)
+		}
+	}
+
+	return comments
+}
+
 func deployRenderConfig(_ *cobra.Command, args []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
@@ -521,7 +539,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return config.PrintYAML(out)
+	return config.PrintYAMLWithComments(out, signerPlaceholderComments(out))
 }
 
 // deployerAddress derives the deployer's EVM address, for use as the default

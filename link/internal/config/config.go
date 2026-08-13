@@ -613,6 +613,25 @@ func PrintYAML(v any) error {
 	return nil
 }
 
+// PrintYAMLWithComments prints anything as YAML to stdout, attaching a line
+// comment to every field addressed by a YAML path in comments, keyed as
+// "$.relayer.connections[0].clientA.signer".
+func PrintYAMLWithComments(v any, comments map[string]string) error {
+	cm := make(yaml.CommentMap, len(comments))
+	for path, text := range comments {
+		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
+	}
+
+	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(cm))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
+}
+
 func dbTypeFromURL(raw string) string {
 	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
 		return DBTypePostgres
