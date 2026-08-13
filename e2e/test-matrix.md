@@ -8,6 +8,7 @@
 | --- | --- | --- | --- | --- |
 | `TestAttachedChainRemainsCallerOwned` | EVM portable | environment: 1× Anvil; 1× Attached EVM; 2 IBC instances; 1 connection; 2 attestors | environment: 1× Anvil; 1× Attached EVM; 2 IBC instances; 1 connection; 2 attestors | environment: 1× Attached EVM; 1× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAttestedClient_MisbehaviourFreeze` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
+| `TestAttestedIFTTransfer_RemoteSigner` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAttestedMesh` | None | No environment | No environment | No environment |
 | `TestAttestedMeshConnectsEveryChainPair` | None | No environment | No environment | No environment |
 | `TestCrossRoutePacketsDoNotCollideBySequence` | EVM portable | 3× Anvil; 3 IBC instances; 3 connections; 6 attestors | 3× Anvil; 3 IBC instances; 3 connections; 6 attestors | 3× Besu; 3 IBC instances; 3 connections; 6 attestors |
