@@ -52,7 +52,7 @@ Ensure that you base and target your PR on the `master` branch.
 Install the repository's DCO check once after cloning:
 
 ```sh
-cp -i .githooks/commit-msg .git/hooks/commit-msg
+cp -i .githooks/commit-msg "$(git rev-parse --git-common-dir)/hooks/commit-msg"
 ```
 
 The hook rejects non-merge commits without your `Signed-off-by` trailer. Read
