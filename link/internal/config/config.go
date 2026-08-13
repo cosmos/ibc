@@ -12,6 +12,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/cosmos/ibc/link/internal/network"
 )
@@ -597,6 +599,19 @@ func KeyFileFallbacks(keyPath string) []string {
 // PrintJSON prints anything as JSON to stdout.
 func PrintJSON(v any) error {
 	bz, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
+}
+
+// PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
+// fields by name
+func PrintProtoJSON(msg proto.Message) error {
+	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
 	if err != nil {
 		return err
 	}

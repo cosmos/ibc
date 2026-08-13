@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -22,6 +23,10 @@ var globalFlags = config.DefaultFlagSet()
 // useStatus is the shared "status" subcommand name and status-field key,
 // factored out to satisfy goconst across cmd/ibc.
 const useStatus = "status"
+
+// useIFT is the shared "ift" subcommand name, factored out to satisfy
+// goconst across cmd/ibc.
+const useIFT = "ift"
 
 var rootCmd = &cobra.Command{
 	Use:   "ibc",
@@ -58,6 +63,7 @@ func init() {
 		cmdMigrate,
 		cmdKeys,
 		cmdDeploy,
+		cmdTx,
 	)
 
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
@@ -72,11 +78,22 @@ func init() {
 	cmdKeysImport.Flags().StringVar(&flagKeysImportPrivateKey, "private-key", "", "hex-encoded private key")
 
 	// Relayer commands
-	cmdRelayer.AddCommand(cmdRelayerRun)
+	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus)
 	cmdRelayerRun.Flags().BoolVarP(&flagRelayerNoMigrate, "no-migrate", "", false, "skip database migrations")
+	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
+		c.Flags().StringVar(&flagRelayerHost, "host", "", "dial this address instead of resolving from config")
+		c.Flags().StringVar(&flagRelayerTxHash, "tx-hash", "", "source transaction hash")
+		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
+		_ = c.MarkFlagRequired("tx-hash")
+		_ = c.MarkFlagRequired("chain-id")
+	}
 
 	// Attestor commands
-	cmdAttestor.AddCommand(cmdAttestorRun)
+	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)
+	for _, c := range []*cobra.Command{cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation} {
+		c.Flags().StringVar(&flagAttestorHost, "host", "", "dial this address instead of resolving from config")
+	}
+	cmdAttestorStateAttestation.Flags().Uint64Var(&flagAttestorHeight, "height", 0, "height to attest")
 
 	// Query commands
 	// todo
@@ -87,7 +104,7 @@ func init() {
 	// Deploy commands
 	cmdDeploy.AddCommand(
 		cmdDeployCore, cmdDeployClient,
-		cmdDeployStatus, cmdDeployRenderConfig,
+		cmdDeployStatus, cmdDeployShow, cmdDeployRenderConfig,
 		cmdDeployGMP, cmdDeployIFT, cmdDeployIFTBridge,
 	)
 	dpf := cmdDeploy.PersistentFlags()
@@ -136,4 +153,29 @@ func init() {
 	cmdDeployIFTBridge.Flags().
 		StringVar(&flagDeployBridgeCtorB, "send-call-constructor-b", "",
 			"send call constructor address on chain B (default: deploy or reuse the EVM constructor)")
+
+	// Tx commands
+	cmdTx.AddCommand(cmdTxIFT)
+	cmdTxIFT.AddCommand(cmdTxIFTMint, cmdTxIFTSend)
+	tpf := cmdTxIFT.PersistentFlags()
+	tpf.StringVar(&flagTxIFTChain, "chain", "", "chain ID the IFT token is deployed on")
+	tpf.StringVar(&flagTxIFTAddress, "ift", "", "IFT token address")
+	tpf.StringVar(&flagTxIFTFrom, "from", "", "signer alias to submit the transaction with")
+	for _, req := range []string{"chain", useIFT, "from"} {
+		_ = cmdTxIFT.MarkPersistentFlagRequired(req)
+	}
+	cmdTxIFTMint.Flags().StringVar(&flagTxIFTTo, "to", "", "recipient address, or a configured signer alias")
+	cmdTxIFTMint.Flags().StringVar(&flagTxIFTAmount, "amount", "", "amount to mint, in the token's base unit")
+	for _, req := range []string{"to", "amount"} {
+		_ = cmdTxIFTMint.MarkFlagRequired(req)
+	}
+	cmdTxIFTSend.Flags().StringVar(&flagTxIFTClientID, "client-id", "", "client id the bridge is registered for")
+	cmdTxIFTSend.Flags().
+		StringVar(&flagTxIFTTo, "to", "", "receiver address on the counterparty chain, or a configured signer alias")
+	cmdTxIFTSend.Flags().StringVar(&flagTxIFTAmount, "amount", "", "amount to send, in the token's base unit")
+	cmdTxIFTSend.Flags().
+		DurationVar(&flagTxIFTTimeout, "timeout", 15*time.Minute, "relative send timeout")
+	for _, req := range []string{"client-id", "to", "amount"} {
+		_ = cmdTxIFTSend.MarkFlagRequired(req)
+	}
 }
