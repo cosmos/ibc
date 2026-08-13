@@ -130,6 +130,17 @@ func (e *EVM) TransactionReceipt(ctx context.Context, hash common.Hash) (*types.
 	return receipt, err
 }
 
+func (e *EVM) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
+	var tx *types.Transaction
+	var pending bool
+	err := e.use(func(client *chainevm.EVMClient) error {
+		var err error
+		tx, pending, err = client.Client().TransactionByHash(ctx, hash)
+		return err
+	})
+	return tx, pending, err
+}
+
 // AwaitTransactionReceipt polls until hash is mined using the Chain's timing policy.
 func (e *EVM) AwaitTransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	var receipt *types.Receipt

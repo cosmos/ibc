@@ -2,7 +2,7 @@
   "name": "@ibc-link/solidity-ibc-contract-artifacts",
   "private": true,
   "dependencies": {
-    "@cosmos/solidity-ibc-eureka": "github:cosmos/solidity-ibc-eureka#39904319467b5fbdec8c34c43b66af6f1d256dba",
+    "@cosmos/solidity-ibc-eureka": "github:cosmos/ibc-contracts#39904319467b5fbdec8c34c43b66af6f1d256dba",
     "@openzeppelin/contracts": "5.6.1",
     "@openzeppelin/contracts-upgradeable": "5.6.1"
   }
