@@ -144,11 +144,6 @@ func TestRelay(t *testing.T) {
 			PacketDestinationClientID: "ethereum-0",
 			PacketTimeoutTimestamp:    time.Unix(1780000000, 0).UTC(),
 		}).Return(nil).Once()
-		repo.EXPECT().GetPacketStatus(ctx, store.PacketKey{
-			SourceChainID:  chainIDEth,
-			SourceClientID: "base-0",
-			Sequence:       42,
-		}).Return(store.RelayStatusPending, nil).Once()
 		repo.EXPECT().UpsertPacket(ctx, store.UpsertPacket{
 			Status:                    store.RelayStatusNotSelected,
 			SourceChainID:             chainIDEth,
@@ -173,7 +168,7 @@ func TestRelay(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("rejectsPermanentlyFailedSelection", func(t *testing.T) {
+	t.Run("allWithNoRelayablePackets", func(t *testing.T) {
 		ctx := context.Background()
 		st, err := store.NewSqliteInMemory()
 		require.NoError(t, err)
@@ -184,42 +179,81 @@ func TestRelay(t *testing.T) {
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
 		service := New(relayerConfig(), st, clients, nil)
-		blockTime := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
-		require.NoError(t, st.UpsertPacket(ctx, store.UpsertPacket{
-			Status:                    store.RelayStatusPending,
-			SourceChainID:             chainIDEth,
-			DestinationChainID:        chainIDBase,
-			SourceTxHash:              txHashLower,
-			SourceTxTime:              blockTime,
-			PacketSequenceNumber:      42,
-			PacketSourceClientID:      "base-0",
-			PacketDestinationClientID: "ethereum-0",
-			PacketTimeoutTimestamp:    time.Unix(1780000000, 0).UTC(),
-		}))
-		key := store.PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 42}
-		require.NoError(t, st.UpdatePacketStatus(ctx, key, store.RelayStatusFailed))
 
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return([]v2.PacketEvent{{
-			BlockTime: blockTime,
-			Kind:      v2.KindSendPacket,
+			Kind: v2.KindSendPacket,
 			Packet: channeltypesv2.Packet{
-				Sequence:          42,
-				SourceClient:      "base-0",
-				DestinationClient: "ethereum-0",
-				TimeoutTimestamp:  1780000000,
+				Sequence:     42,
+				SourceClient: "unknown-0",
 			},
 		}}, nil).Once()
 
-		err = service.Relay(ctx, relaySelected(chainIDEth, txHashLower, PacketSelector{
-			SourceClientID: "base-0",
-			SequenceNumber: 42,
-		}))
+		require.NoError(t, service.Relay(ctx, relayAll(chainIDEth, txHashLower)))
+		statuses, err := service.Status(ctx, chainIDEth, txHashLower)
+		require.NoError(t, err)
+		assert.Empty(t, statuses)
+	})
 
-		require.ErrorIs(t, err, ErrFailedPrecondition)
-		require.ErrorContains(t, err, "has permanently failed")
-		_, err = st.GetRelayRequest(ctx, chainIDEth, txHashLower)
-		require.ErrorIs(t, err, store.ErrNotFound)
+	t.Run("selectionIsIdempotent", func(t *testing.T) {
+		statuses := []store.RelayStatus{
+			store.RelayStatusPending,
+			store.RelayStatusDeliverRecvPacket,
+			store.RelayStatusCompleteWithAck,
+			store.RelayStatusFailed,
+		}
+		for i, status := range statuses {
+			t.Run(string(status), func(t *testing.T) {
+				ctx := context.Background()
+				st, err := store.NewSqliteInMemory()
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, st.Close()) })
+				_, err = st.MigrateUp()
+				require.NoError(t, err)
+
+				sequence := uint64(i + 1)
+				input := store.UpsertPacket{
+					Status:                    store.RelayStatusPending,
+					SourceChainID:             chainIDEth,
+					DestinationChainID:        chainIDBase,
+					SourceTxHash:              txHashLower,
+					SourceTxTime:              time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC),
+					PacketSequenceNumber:      sequence,
+					PacketSourceClientID:      "base-0",
+					PacketDestinationClientID: "ethereum-0",
+					PacketTimeoutTimestamp:    time.Unix(1780000000, 0).UTC(),
+				}
+				require.NoError(t, st.UpsertPacket(ctx, input))
+				key := store.PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: sequence}
+				require.NoError(t, st.UpdatePacketStatus(ctx, key, status))
+
+				client := mocks.NewMockClient(t)
+				clients := NewMockChainClients(t)
+				service := New(relayerConfig(), st, clients, nil)
+				clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
+				client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return([]v2.PacketEvent{{
+					BlockTime: input.SourceTxTime,
+					Kind:      v2.KindSendPacket,
+					Packet: channeltypesv2.Packet{
+						Sequence:          sequence,
+						SourceClient:      "base-0",
+						DestinationClient: "ethereum-0",
+						TimeoutTimestamp:  1780000000,
+					},
+				}}, nil).Once()
+
+				selector := PacketSelector{SourceClientID: "base-0", SequenceNumber: sequence}
+				selectors := []PacketSelector{selector}
+				if status == store.RelayStatusPending {
+					selectors = append(selectors, selector)
+				}
+				require.NoError(t, service.Relay(ctx, relaySelected(chainIDEth, txHashLower, selectors...)))
+				packets, err := st.ListPacketsBySourceTx(ctx, chainIDEth, txHashLower)
+				require.NoError(t, err)
+				require.Len(t, packets, 1)
+				assert.Equal(t, status, packets[0].Status)
+			})
+		}
 	})
 
 	t.Run("selectionValidation", func(t *testing.T) {

@@ -340,11 +340,6 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		require.NoError(t, s.UpdatePacketStatus(ctx, key, RelayStatusDeliverRecvPacket))
 		require.NoError(t, s.UpsertPacket(ctx, input))
 		assert.Equal(t, RelayStatusDeliverRecvPacket, fetch(txHashReplacement).Status)
-		status, err := s.GetPacketStatus(ctx, key)
-		require.NoError(t, err)
-		assert.Equal(t, RelayStatusDeliverRecvPacket, status)
-		_, err = s.GetPacketStatus(ctx, PacketKey{})
-		require.ErrorContains(t, err, "source chain id is required")
 	})
 
 	t.Run("packetLifecycle", func(t *testing.T) {

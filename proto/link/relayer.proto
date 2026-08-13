@@ -33,7 +33,8 @@ message RelayRequest {
 message AllPackets {}
 
 // SelectedPackets selects exactly the listed packets. The request fails if any
-// packet is absent, not configured and routed, or permanently failed.
+// packet is absent or not configured and routed. Packets already selected,
+// in flight, or terminal are successful no-ops.
 message SelectedPackets {
   repeated PacketSelector packets = 1;
 }

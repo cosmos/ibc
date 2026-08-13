@@ -233,7 +233,8 @@ func (*AllPackets) Descriptor() ([]byte, []int) {
 }
 
 // SelectedPackets selects exactly the listed packets. The request fails if any
-// packet is absent, not configured and routed, or permanently failed.
+// packet is absent or not configured and routed. Packets already selected,
+// in flight, or terminal are successful no-ops.
 type SelectedPackets struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Packets       []*PacketSelector      `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`

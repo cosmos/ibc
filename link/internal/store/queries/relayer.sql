@@ -45,12 +45,6 @@ ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) D
 WHERE packets.status = 'NOT_SELECTED'
 AND EXCLUDED.status IN ('NOT_SELECTED', 'PENDING');
 
--- name: GetPacketStatus :one
-SELECT status FROM packets
-WHERE source_chain_id = sqlc.arg(source_chain_id)
-AND packet_source_client_id = sqlc.arg(packet_source_client_id)
-AND packet_sequence_number = sqlc.arg(packet_sequence_number);
-
 -- name: ListPacketsBySourceTx :many
 SELECT * FROM packets
 WHERE source_chain_id = sqlc.arg(chain_id)

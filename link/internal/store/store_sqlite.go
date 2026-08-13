@@ -199,20 +199,6 @@ func (db *SqliteDB) UpsertPacket(ctx context.Context, input UpsertPacket) error 
 	})
 }
 
-func (db *SqliteDB) GetPacketStatus(ctx context.Context, key PacketKey) (RelayStatus, error) {
-	if err := key.Validate(); err != nil {
-		return "", errors.Wrap(err, "invalid packet key")
-	}
-
-	status, err := db.repo.GetPacketStatus(ctx, reposqlite.GetPacketStatusParams{
-		SourceChainID:        key.SourceChainID,
-		PacketSourceClientID: key.SourceClientID,
-		PacketSequenceNumber: int64(key.Sequence),
-	})
-
-	return RelayStatus(status), errNormalize(err)
-}
-
 func (db *SqliteDB) ListPacketsBySourceTx(
 	ctx context.Context,
 	chainID string,

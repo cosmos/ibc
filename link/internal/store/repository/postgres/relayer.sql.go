@@ -88,26 +88,6 @@ func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash
 	return err
 }
 
-const getPacketStatus = `-- name: GetPacketStatus :one
-SELECT status FROM packets
-WHERE source_chain_id = $1
-AND packet_source_client_id = $2
-AND packet_sequence_number = $3
-`
-
-type GetPacketStatusParams struct {
-	SourceChainID        string
-	PacketSourceClientID string
-	PacketSequenceNumber int64
-}
-
-func (q *Queries) GetPacketStatus(ctx context.Context, arg GetPacketStatusParams) (string, error) {
-	row := q.db.QueryRow(ctx, getPacketStatus, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
-	var status string
-	err := row.Scan(&status)
-	return status, err
-}
-
 const getRelayRequest = `-- name: GetRelayRequest :one
 /*
  * SPDX-License-Identifier: Apache-2.0
