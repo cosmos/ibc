@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
-// DefaultPollInterval how often the dispatcher polls for unfinished packets.
+// DefaultPollInterval how often the dispatcher polls for dispatchable packets.
 const DefaultPollInterval = 5 * time.Second
 
 // ErrTransferAlreadyInPipeline the transfer is already being relayed.
@@ -21,11 +21,11 @@ var ErrTransferAlreadyInPipeline = errors.New("transfer already in pipeline")
 
 // DispatcherStorage the persistence used by the dispatcher.
 type DispatcherStorage interface {
-	ListUnfinishedPackets(ctx context.Context) ([]store.Packet, error)
+	ListDispatchablePackets(ctx context.Context) ([]store.Packet, error)
 	UpdatePacketStatus(ctx context.Context, key store.PacketKey, status store.RelayStatus) error
 }
 
-// RelayDispatcher polls the store for unfinished packets and routes them to
+// RelayDispatcher polls the store for dispatchable packets and routes them to
 // their pipelines. The relay API couples to the dispatcher through the store:
 // it inserts packets, the dispatcher picks them up on the next poll.
 type RelayDispatcher struct {
@@ -53,7 +53,7 @@ func NewRelayDispatcher(
 }
 
 // Start begins the dispatch loop in its own goroutine.
-// Polls for unfinished packets until Stop is called.
+// Polls for dispatchable packets until Stop is called.
 func (d *RelayDispatcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	d.cancel = cancel
@@ -75,8 +75,8 @@ func (d *RelayDispatcher) Start() error {
 			case <-ticker.C:
 				ticker.Reset(d.pollInterval)
 
-				if err := d.SubmitWaitingUnfinishedPackets(ctx); err != nil {
-					d.logger.Error("Submitting unfinished packets", "err", err)
+				if err := d.SubmitWaitingDispatchablePackets(ctx); err != nil {
+					d.logger.Error("Submitting dispatchable packets", "err", err)
 				}
 			}
 		}
@@ -98,14 +98,14 @@ func (d *RelayDispatcher) Stop() error {
 	return nil
 }
 
-// SubmitWaitingUnfinishedPackets pushes every unfinished packet into its
-// pipeline. Packets that fail to submit for anything other than already being
-// in flight are marked failed: submission only fails on configuration errors
-// that will not resolve by retrying.
-func (d *RelayDispatcher) SubmitWaitingUnfinishedPackets(ctx context.Context) error {
-	packets, err := d.storage.ListUnfinishedPackets(ctx)
+// SubmitWaitingDispatchablePackets pushes every selected non-terminal packet
+// into its pipeline. Packets that fail to submit for anything other than already
+// being in flight are marked failed: submission only fails on configuration
+// errors that will not resolve by retrying.
+func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) error {
+	packets, err := d.storage.ListDispatchablePackets(ctx)
 	if err != nil {
-		return errors.Wrap(err, "listing unfinished packets")
+		return errors.Wrap(err, "listing dispatchable packets")
 	}
 
 	for _, packet := range packets {

@@ -77,61 +77,6 @@ func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeo
 	return err
 }
 
-const createPacket = `-- name: CreatePacket :execrows
-INSERT INTO packets (
-    status,
-    source_chain_id,
-    destination_chain_id,
-    source_tx_hash,
-    source_tx_time,
-    packet_sequence_number,
-    packet_source_client_id,
-    packet_destination_client_id,
-    packet_timeout_timestamp
-) VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9
-)
-ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO NOTHING
-`
-
-type CreatePacketParams struct {
-	Status                    string
-	SourceChainID             string
-	DestinationChainID        string
-	SourceTxHash              string
-	SourceTxTime              pgtype.Timestamptz
-	PacketSequenceNumber      int64
-	PacketSourceClientID      string
-	PacketDestinationClientID string
-	PacketTimeoutTimestamp    pgtype.Timestamptz
-}
-
-func (q *Queries) CreatePacket(ctx context.Context, arg CreatePacketParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createPacket,
-		arg.Status,
-		arg.SourceChainID,
-		arg.DestinationChainID,
-		arg.SourceTxHash,
-		arg.SourceTxTime,
-		arg.PacketSequenceNumber,
-		arg.PacketSourceClientID,
-		arg.PacketDestinationClientID,
-		arg.PacketTimeoutTimestamp,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const createRelayRequest = `-- name: CreateRelayRequest :exec
 INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES ($1, $2)
@@ -165,15 +110,20 @@ func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash st
 	return i, err
 }
 
-const listPacketsBySourceTx = `-- name: ListPacketsBySourceTx :many
+const listDispatchablePackets = `-- name: ListDispatchablePackets :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
-WHERE source_chain_id = $1
-AND source_tx_hash = $2
-ORDER BY packet_sequence_number
+WHERE status NOT IN (
+    'NOT_SELECTED',
+    'COMPLETE_WITH_ACK',
+    'COMPLETE_WITH_TIMEOUT',
+    'COMPLETE_WITH_WRITE_ACK_ERROR',
+    'FAILED'
+)
+ORDER BY id
 `
 
-func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error) {
-	rows, err := q.db.Query(ctx, listPacketsBySourceTx, chainID, txHash)
+func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
+	rows, err := q.db.Query(ctx, listDispatchablePackets)
 	if err != nil {
 		return nil, err
 	}
@@ -217,19 +167,15 @@ func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txH
 	return items, nil
 }
 
-const listUnfinishedPackets = `-- name: ListUnfinishedPackets :many
+const listPacketsBySourceTx = `-- name: ListPacketsBySourceTx :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
-WHERE status NOT IN (
-    'COMPLETE_WITH_ACK',
-    'COMPLETE_WITH_TIMEOUT',
-    'COMPLETE_WITH_WRITE_ACK_ERROR',
-    'FAILED'
-)
-ORDER BY id
+WHERE source_chain_id = $1
+AND source_tx_hash = $2
+ORDER BY packet_sequence_number
 `
 
-func (q *Queries) ListUnfinishedPackets(ctx context.Context) ([]Packet, error) {
-	rows, err := q.db.Query(ctx, listUnfinishedPackets)
+func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error) {
+	rows, err := q.db.Query(ctx, listPacketsBySourceTx, chainID, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -423,6 +369,67 @@ func (q *Queries) UpdatePacketWriteAck(ctx context.Context, arg UpdatePacketWrit
 		arg.SourceChainID,
 		arg.PacketSourceClientID,
 		arg.PacketSequenceNumber,
+	)
+	return err
+}
+
+const upsertPacket = `-- name: UpsertPacket :exec
+INSERT INTO packets (
+    status,
+    source_chain_id,
+    destination_chain_id,
+    source_tx_hash,
+    source_tx_time,
+    packet_sequence_number,
+    packet_source_client_id,
+    packet_destination_client_id,
+    packet_timeout_timestamp
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9
+)
+ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    destination_chain_id = EXCLUDED.destination_chain_id,
+    source_tx_hash = EXCLUDED.source_tx_hash,
+    source_tx_time = EXCLUDED.source_tx_time,
+    packet_destination_client_id = EXCLUDED.packet_destination_client_id,
+    packet_timeout_timestamp = EXCLUDED.packet_timeout_timestamp,
+    updated_at = CURRENT_TIMESTAMP
+WHERE packets.status = 'NOT_SELECTED'
+AND EXCLUDED.status IN ('NOT_SELECTED', 'PENDING')
+`
+
+type UpsertPacketParams struct {
+	Status                    string
+	SourceChainID             string
+	DestinationChainID        string
+	SourceTxHash              string
+	SourceTxTime              pgtype.Timestamptz
+	PacketSequenceNumber      int64
+	PacketSourceClientID      string
+	PacketDestinationClientID string
+	PacketTimeoutTimestamp    pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertPacket(ctx context.Context, arg UpsertPacketParams) error {
+	_, err := q.db.Exec(ctx, upsertPacket,
+		arg.Status,
+		arg.SourceChainID,
+		arg.DestinationChainID,
+		arg.SourceTxHash,
+		arg.SourceTxTime,
+		arg.PacketSequenceNumber,
+		arg.PacketSourceClientID,
+		arg.PacketDestinationClientID,
+		arg.PacketTimeoutTimestamp,
 	)
 	return err
 }

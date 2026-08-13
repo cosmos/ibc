@@ -134,10 +134,21 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.False(t, IsStatusNotFound(err))
 	require.ErrorContains(t, err, "no configured chain id")
 
-	require.NoError(t, relayer.Relay(ctx, "chain-b", "0xdef"))
+	require.NoError(t, relayer.RelayAll(ctx, "chain-b", "0xdef"))
 	require.Len(t, api.relayed, 1)
 	require.Equal(t, "31338", api.relayed[0].SourceChainId)
 	require.Equal(t, "0xdef", api.relayed[0].TxHash)
+	require.NotNil(t, api.relayed[0].GetAllPackets())
+
+	require.NoError(t, relayer.RelaySelected(ctx, "chain-a", "0x123", &relayerv2.PacketSelector{
+		SourceClientId: "client-0",
+		SequenceNumber: 7,
+	}))
+	require.Len(t, api.relayed, 2)
+	require.Equal(t, "31337", api.relayed[1].SourceChainId)
+	require.Equal(t, "0x123", api.relayed[1].TxHash)
+	require.Equal(t, []*relayerv2.PacketSelector{{SourceClientId: "client-0", SequenceNumber: 7}},
+		api.relayed[1].GetSelectedPackets().GetPackets())
 
 	require.True(t, relayer.ManualRoute("route-manual"))
 	require.False(t, relayer.ManualRoute("route-auto"))

@@ -90,13 +90,8 @@ func (s *PipelineSet) isRouted(route processors.Route) bool {
 		return false
 	}
 
-	for _, r := range s.cfg.Relayer.Routes {
-		if r.SourceClient == client.Alias {
-			return true
-		}
-	}
-
-	return false
+	_, ok = s.cfg.Relayer.RouteBySourceClient(client.Alias)
+	return ok
 }
 
 // Close closes every pipeline. The context the pipelines were created with

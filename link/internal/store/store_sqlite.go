@@ -174,9 +174,9 @@ func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHa
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-func (db *SqliteDB) CreatePacket(ctx context.Context, input CreatePacket) error {
+func (db *SqliteDB) UpsertPacket(ctx context.Context, input UpsertPacket) error {
 	db.logger.Debug(
-		"CreatePacket",
+		"UpsertPacket",
 		"chainID", input.SourceChainID,
 		"clientID", input.PacketSourceClientID,
 		"sequence", input.PacketSequenceNumber,
@@ -186,7 +186,7 @@ func (db *SqliteDB) CreatePacket(ctx context.Context, input CreatePacket) error 
 		return errors.Wrap(err, "invalid packet")
 	}
 
-	_, err := db.repo.CreatePacket(ctx, reposqlite.CreatePacketParams{
+	return db.repo.UpsertPacket(ctx, reposqlite.UpsertPacketParams{
 		Status:                    string(input.Status),
 		SourceChainID:             input.SourceChainID,
 		DestinationChainID:        input.DestinationChainID,
@@ -197,8 +197,6 @@ func (db *SqliteDB) CreatePacket(ctx context.Context, input CreatePacket) error 
 		PacketDestinationClientID: input.PacketDestinationClientID,
 		PacketTimeoutTimestamp:    input.PacketTimeoutTimestamp.UTC(),
 	})
-
-	return err
 }
 
 func (db *SqliteDB) ListPacketsBySourceTx(
@@ -333,10 +331,10 @@ func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
 	return u.String(), nil
 }
 
-func (db *SqliteDB) ListUnfinishedPackets(ctx context.Context) ([]Packet, error) {
-	db.logger.Debug("ListUnfinishedPackets")
+func (db *SqliteDB) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
+	db.logger.Debug("ListDispatchablePackets")
 
-	rows, err := db.repo.ListUnfinishedPackets(ctx)
+	rows, err := db.repo.ListDispatchablePackets(ctx)
 	if err != nil {
 		return nil, errNormalize(err)
 	}

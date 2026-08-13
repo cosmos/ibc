@@ -76,7 +76,7 @@ chains:
 
 | Field                  | Type     | Description                                                                    |
 |------------------------|----------|--------------------------------------------------------------------------------|
-| `dispatchPollInterval` | duration | How often the dispatcher polls storage for unfinished packets. Defaults to 5s. |
+| `dispatchPollInterval` | duration | How often the dispatcher polls storage for dispatchable packets. Defaults to 5s. |
 | `chainOverrides`       | list     | Per-chain relaying overrides (see below).                                      |
 | `clients`              | list     | Light clients to relay for (see below).                                        |
 | `routesToRelay`        | list     | Which client pairs to actively relay, and with which signer (see below).       |
@@ -144,7 +144,9 @@ relayer:
 ### `relayer.routesToRelay[]`
 
 Packets sent from `sourceClient` are relayed through the full packet
-lifecycle (recv, ack, timeout) using the given signer aliases.
+lifecycle (recv, ack, timeout) using the given signer aliases. Only packets
+whose source client has a route are eligible for relay selection and status
+tracking.
 
 | Field              | Type   | Description |
 |--------------------|--------|--------------|
