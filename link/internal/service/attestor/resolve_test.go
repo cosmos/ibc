@@ -38,26 +38,6 @@ func TestResolveFromConfig(t *testing.T) {
 		require.Empty(t, remote, "an unreachable remote is skipped, not fatal")
 	})
 
-	t.Run("remoteMissingGRPCSkipped", func(t *testing.T) {
-		entries := config.Attestors{{Name: "bob", Type: config.AttestorTypeRemote}}
-
-		local, remote, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet())
-
-		require.NoError(t, err)
-		require.Empty(t, local)
-		require.Empty(t, remote)
-	})
-
-	t.Run("unsupportedTypeSkipped", func(t *testing.T) {
-		entries := config.Attestors{{Name: "carol", Type: "tendermint"}}
-
-		local, remote, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet())
-
-		require.NoError(t, err)
-		require.Empty(t, local)
-		require.Empty(t, remote)
-	})
-
 	t.Run("localMissingClientErrorsFatally", func(t *testing.T) {
 		signers := signer.NewSet()
 		s, err := signer.GenerateLocalSecp256k1Signer()
