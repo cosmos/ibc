@@ -410,6 +410,21 @@ func TestAttestorsValidate(t *testing.T) {
 			},
 			errContains: `duplicate local attestor name: "same"`,
 		},
+		{
+			name: "duplicate local signer on the same chain",
+			attestors: Attestors{
+				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
+				{Name: "attestor-b", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
+			},
+			errContains: `duplicate local attestor signer "same" on chain "chain-a"`,
+		},
+		{
+			name: "same local signer across different chains is allowed",
+			attestors: Attestors{
+				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
+				{Name: "attestor-b", ChainID: "chain-b", Type: AttestorTypeLocal, Signer: "same"},
+			},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// ACT

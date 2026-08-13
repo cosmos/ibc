@@ -459,6 +459,10 @@ func DBConfigFromURL(url string) (DBConfig, error) {
 // Validate validates the attestors list. Allows empty.
 func (a Attestors) Validate() error {
 	localNames := make(map[string]struct{})
+	// keyed by chainId+signer: the same signer backing one operator's local
+	// attestor on two different chains is fine, but reusing it for two
+	// attestors on the same chain is always a redundant duplicate.
+	localChainSigners := make(map[string]struct{})
 	for i, attestor := range a {
 		if err := attestor.Validate(); err != nil {
 			return errors.Wrapf(err, "[%d]", i)
@@ -472,6 +476,12 @@ func (a Attestors) Validate() error {
 			return errors.Errorf("duplicate local attestor name: %q", attestor.Name)
 		}
 		localNames[attestor.Name] = struct{}{}
+
+		chainSigner := attestor.ChainID + "/" + attestor.Signer
+		if _, exists := localChainSigners[chainSigner]; exists {
+			return errors.Errorf("duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
+		}
+		localChainSigners[chainSigner] = struct{}{}
 	}
 
 	return nil
