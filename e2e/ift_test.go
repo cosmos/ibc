@@ -690,39 +690,36 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 		require.Equal(t, send.PacketTx().Sequence, statuses[0].SequenceNumber)
 	}
 
-	recvTxCounts := make(map[string]int, packetCount)
-	ackTxCounts := make(map[string]int, packetCount)
+	recvTxSequences := make(map[string][]uint64, packetCount)
+	ackTxSequences := make(map[string][]uint64, packetCount)
 	for _, send := range sends {
-		_, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
+		status, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 		require.NoError(t, send.VerifyDelivered(ctx))
 
-		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), send.TxHash())
-		require.NoError(t, err)
-		require.Len(t, statuses, 1)
-		recvTxCounts[statuses[0].GetRecvTx().GetTxHash()]++
-		ackTxCounts[statuses[0].GetAckTx().GetTxHash()]++
+		sequence := send.PacketTx().Sequence
+		recvHash := status.GetRecvTx().GetTxHash()
+		ackHash := status.GetAckTx().GetTxHash()
+		recvTxSequences[recvHash] = append(recvTxSequences[recvHash], sequence)
+		ackTxSequences[ackHash] = append(ackTxSequences[ackHash], sequence)
 	}
 	require.NoError(t, sends[packetCount-1].VerifyBurned(ctx), "successful acks must not refund")
 
-	require.Lessf(t, len(recvTxCounts), packetCount,
-		"expected batched recv, got one recv tx per packet: %v", recvTxCounts)
-	require.Lessf(t, len(ackTxCounts), packetCount,
-		"expected batched ack, got one ack tx per packet: %v", ackTxCounts)
-	require.Truef(t, hasBatchedTx(recvTxCounts), "no recv tx carried multiple packets: %v", recvTxCounts)
-	require.Truef(t, hasBatchedTx(ackTxCounts), "no ack tx carried multiple packets: %v", ackTxCounts)
-}
-
-// hasBatchedTx reports whether any transaction hash in counts covers more
-// than one packet.
-func hasBatchedTx(counts map[string]int) bool {
-	for _, count := range counts {
-		if count >= 2 {
-			return true
-		}
+	for txHash, want := range recvTxSequences {
+		got, err := iftApp.WriteAcknowledgementSequences(ctx, txHash)
+		require.NoError(t, err)
+		require.ElementsMatchf(t, want, got, "receive transaction %s packet sequences", txHash)
 	}
-	return false
+	for txHash, want := range ackTxSequences {
+		got, err := iftApp.AckPacketSequences(ctx, txHash)
+		require.NoError(t, err)
+		require.ElementsMatchf(t, want, got, "acknowledgement transaction %s packet sequences", txHash)
+	}
+	require.Lessf(t, len(recvTxSequences), packetCount,
+		"expected batched recv, got one recv tx per packet: %v", recvTxSequences)
+	require.Lessf(t, len(ackTxSequences), packetCount,
+		"expected batched ack, got one ack tx per packet: %v", ackTxSequences)
 }
 
 // TestIFTTransfer_BatchedTimeout sends more IFT transfers
@@ -773,20 +770,22 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 		require.NoErrorf(t, err, "relay call for packet %d (seq %d) failed", i, sends[i].PacketTx().Sequence)
 	}
 
-	timeoutTxCounts := make(map[string]int, packetCount)
+	timeoutTxSequences := make(map[string][]uint64, packetCount)
 	for _, send := range sends {
-		_, err = e2etest.AwaitState(ctx, relayer, send.PacketTx(),
+		status, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 		require.NoError(t, err)
 		require.NoError(t, send.VerifyNotMinted(ctx))
 
-		statuses, err := relayer.PacketStatuses(ctx, string(route.Source), send.TxHash())
-		require.NoError(t, err)
-		require.Len(t, statuses, 1)
-		timeoutTxCounts[statuses[0].GetTimeoutTx().GetTxHash()]++
+		txHash := status.GetTimeoutTx().GetTxHash()
+		timeoutTxSequences[txHash] = append(timeoutTxSequences[txHash], send.PacketTx().Sequence)
 	}
 
-	require.Lessf(t, len(timeoutTxCounts), packetCount,
-		"expected batched timeouts, got one timeout tx per packet: %v", timeoutTxCounts)
-	require.Truef(t, hasBatchedTx(timeoutTxCounts), "no timeout tx carried multiple packets: %v", timeoutTxCounts)
+	for txHash, want := range timeoutTxSequences {
+		got, err := iftApp.TimeoutPacketSequences(ctx, txHash)
+		require.NoError(t, err)
+		require.ElementsMatchf(t, want, got, "timeout transaction %s packet sequences", txHash)
+	}
+	require.Lessf(t, len(timeoutTxSequences), packetCount,
+		"expected batched timeouts, got one timeout tx per packet: %v", timeoutTxSequences)
 }

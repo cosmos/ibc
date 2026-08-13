@@ -181,6 +181,40 @@ func TestAwaitStableRevalidatesTerminalStatus(t *testing.T) {
 	require.Equal(t, 2, calls)
 }
 
+func TestValidateTimedOutStatusRejectsDeliveryTransactions(t *testing.T) {
+	tests := []struct {
+		name   string
+		status *relayerv2.PacketStatus
+		want   string
+	}{
+		{
+			name: "receive",
+			status: &relayerv2.PacketStatus{
+				TimeoutTx: &relayerv2.TransactionInfo{TxHash: "timeout"},
+				RecvTx:    &relayerv2.TransactionInfo{TxHash: "recv"},
+			},
+			want: "e2etest: PACKET_STATE_TIMED_OUT packet route-5 has a receive transaction",
+		},
+		{
+			name: "acknowledgement",
+			status: &relayerv2.PacketStatus{
+				TimeoutTx: &relayerv2.TransactionInfo{TxHash: "timeout"},
+				AckTx:     &relayerv2.TransactionInfo{TxHash: "ack"},
+			},
+			want: "e2etest: PACKET_STATE_TIMED_OUT packet route-5 has an acknowledgement transaction",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.EqualError(t, validateTerminalStatus(
+				PacketTx{RouteID: "route", Sequence: 5},
+				relayerv2.PacketState_PACKET_STATE_TIMED_OUT,
+				tt.status,
+			), tt.want)
+		})
+	}
+}
+
 func TestAwaitStableDoesNotTreatParentCancellationAsSuccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	calls := 0
