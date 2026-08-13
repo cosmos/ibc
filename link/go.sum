@@ -257,6 +257,8 @@ github.com/cosmos/ledger-cosmos-go v1.0.0 h1:jNKW89nPf0vR0EkjHG8Zz16h6p3zqwYEOxl
 github.com/cosmos/ledger-cosmos-go v1.0.0/go.mod h1:mGaw2wDOf+Z6SfRJsMGxU9DIrBa4du0MAiPlpPhLAOE=
 github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260618122836-39904319467b h1:wst+2QsydHKoplWYY7V07OqxKyCmL59hjFsDLQoqZ5I=
 github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260618122836-39904319467b/go.mod h1:ndpS//nq2Ghin4UFdp0Cg4lrHZwK1VS/QRmi6DL9H+g=
+github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260810020832-a40957eaf878 h1:Ga2jpeby5lrLwqtfl9mIOqnk5rfrKh/SflIdeH7X230=
+github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260810020832-a40957eaf878/go.mod h1:IS9pTp8DpPx4HO50Wh75lZ72hZHudx3RW6HgaxL9Hfo=
 github.com/cpuguy83/dockercfg v0.3.2 h1:DlJTyZGBDlXqUZ2Dk2Q3xHs/FtnooJJVaad2S9GKorA=
 github.com/cpuguy83/dockercfg v0.3.2/go.mod h1:sugsbF4//dDlL/i+S+rtpIWp+5h0BHJHfjj5/jFyUJc=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d/go.mod h1:maD7wRr/U5Z6m/iR4s+kqSMx2CaBsrgA7czyZG/E6dU=

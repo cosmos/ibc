@@ -173,9 +173,9 @@ func (db *PostgresDB) CreateRelayRequest(ctx context.Context, chainID string, tx
 	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
 }
 
-func (db *PostgresDB) CreatePacket(ctx context.Context, input CreatePacket) error {
+func (db *PostgresDB) UpsertPacket(ctx context.Context, input UpsertPacket) error {
 	db.logger.Debug(
-		"CreatePacket",
+		"UpsertPacket",
 		"chainID", input.SourceChainID,
 		"clientID", input.PacketSourceClientID,
 		"sequence", input.PacketSequenceNumber,
@@ -185,7 +185,7 @@ func (db *PostgresDB) CreatePacket(ctx context.Context, input CreatePacket) erro
 		return errors.Wrap(err, "invalid packet")
 	}
 
-	_, err := db.repo.CreatePacket(ctx, postgres.CreatePacketParams{
+	return db.repo.UpsertPacket(ctx, postgres.UpsertPacketParams{
 		Status:                    string(input.Status),
 		SourceChainID:             input.SourceChainID,
 		DestinationChainID:        input.DestinationChainID,
@@ -196,8 +196,6 @@ func (db *PostgresDB) CreatePacket(ctx context.Context, input CreatePacket) erro
 		PacketDestinationClientID: input.PacketDestinationClientID,
 		PacketTimeoutTimestamp:    pgTimestamp(input.PacketTimeoutTimestamp),
 	})
-
-	return err
 }
 
 func (db *PostgresDB) ListPacketsBySourceTx(
@@ -292,10 +290,10 @@ func pgTimePtr(ts pgtype.Timestamptz) *time.Time {
 	return &t
 }
 
-func (db *PostgresDB) ListUnfinishedPackets(ctx context.Context) ([]Packet, error) {
-	db.logger.Debug("ListUnfinishedPackets")
+func (db *PostgresDB) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
+	db.logger.Debug("ListDispatchablePackets")
 
-	rows, err := db.repo.ListUnfinishedPackets(ctx)
+	rows, err := db.repo.ListDispatchablePackets(ctx)
 	if err != nil {
 		return nil, errNormalize(err)
 	}

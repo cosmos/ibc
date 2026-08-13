@@ -70,6 +70,9 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
+	destProofGen := mocks.NewMockProofGenerator(t)
+	sourceProofGen := mocks.NewMockProofGenerator(t)
+
 	deps := pipeline.Deps{
 		Storage: db,
 		Chains: staticChains{
@@ -77,8 +80,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
 		ProofGenerators: staticProofGenerators{
-			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): mocks.NewMockProofGenerator(t),
-			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           mocks.NewMockProofGenerator(t),
+			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): destProofGen,
+			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           sourceProofGen,
 		},
 		TxBuilders: staticTxBuilders{
 			testRoute.SourceChainID:      mocks.NewMockTxBuilder(t),
@@ -97,7 +100,7 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 	t.Helper()
 
 	ctx := context.Background()
-	input := store.CreatePacket{
+	input := store.UpsertPacket{
 		Status:                    store.RelayStatusPending,
 		SourceChainID:             testRoute.SourceChainID,
 		DestinationChainID:        testRoute.DestinationChainID,
@@ -108,7 +111,7 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 		PacketDestinationClientID: testRoute.DestinationClientID,
 		PacketTimeoutTimestamp:    timeout,
 	}
-	require.NoError(t, env.store.CreatePacket(ctx, input))
+	require.NoError(t, env.store.UpsertPacket(ctx, input))
 
 	packets, err := env.store.ListPacketsBySourceTx(ctx, input.SourceChainID, input.SourceTxHash)
 	require.NoError(t, err)

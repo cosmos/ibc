@@ -9,3 +9,6 @@
 
 logs/
 examples/**/local/
+# besu-to-besu example: generated at setup time
+examples/besu-to-besu/chains/local/
+examples/besu-to-besu/logs/

@@ -7,6 +7,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"net"
+	"sync/atomic"
 	"testing"
 
 	"github.com/cosmos/kms/gen/signerservice"
@@ -25,25 +26,31 @@ import (
 )
 
 const (
-	remoteSignerKeyID         = "e2e-relayer"
-	remoteSignerPrivateKeyHex = "000000000000000000000000000000000000000000000000000000000000000a"
+	remoteSignerKeyID          = "e2e-relayer"
+	remoteAttestorSignerKeyID  = "e2e-attestor"
+	remoteSignerPrivateKeyHex  = "000000000000000000000000000000000000000000000000000000000000000a"
+	rotatedSignerPrivateKeyHex = "000000000000000000000000000000000000000000000000000000000000000b"
 )
 
 type remoteSignerService struct {
 	signerservice.UnimplementedSignerServiceServer
-	privateKey *ecdsa.PrivateKey
+	keyID      string
+	privateKey atomic.Pointer[ecdsa.PrivateKey]
+	signCalled atomic.Bool
 }
 
-func newRemoteSignerService() (*remoteSignerService, error) {
-	privateKey, err := crypto.HexToECDSA(remoteSignerPrivateKeyHex)
+func newRemoteSignerService(keyID, privateKeyHex string) (*remoteSignerService, error) {
+	privateKey, err := crypto.HexToECDSA(privateKeyHex)
 	if err != nil {
 		return nil, err
 	}
-	return &remoteSignerService{privateKey: privateKey}, nil
+	service := &remoteSignerService{keyID: keyID}
+	service.privateKey.Store(privateKey)
+	return service, nil
 }
 
 func (s *remoteSignerService) requireKey(id string) error {
-	if id != remoteSignerKeyID {
+	if id != s.keyID {
 		return status.Errorf(codes.NotFound, "key %q not found", id)
 	}
 	return nil
@@ -57,8 +64,8 @@ func (s *remoteSignerService) GetKey(
 		return nil, err
 	}
 	return &signerservice.GetKeyResponse{Key: &signerservice.Key{
-		Id:     remoteSignerKeyID,
-		Pubkey: crypto.CompressPubkey(&s.privateKey.PublicKey),
+		Id:     s.keyID,
+		Pubkey: crypto.CompressPubkey(&s.privateKey.Load().PublicKey),
 		Scheme: signerservice.SignatureScheme_ECDSA_SECP256K1ETH,
 	}}, nil
 }
@@ -77,16 +84,20 @@ func (s *remoteSignerService) Sign(
 			"ECDSA_SECP256K1ETH payload must be a 32-byte digest",
 		)
 	}
-	signature, err := crypto.Sign(digest, s.privateKey)
+	signature, err := crypto.Sign(digest, s.privateKey.Load())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "sign: %v", err)
 	}
+	s.signCalled.Store(true)
 	return &signerservice.SignResponse{Signature: signature}, nil
 }
 
-func startRemoteSignerFixture(t testing.TB) string {
+func startRemoteSignerFixture(
+	t testing.TB,
+	keyID, privateKeyHex string,
+) (string, *remoteSignerService) {
 	t.Helper()
-	service, err := newRemoteSignerService()
+	service, err := newRemoteSignerService(keyID, privateKeyHex)
 	require.NoError(t, err, "e2e: create remote signer service")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err, "e2e: listen for remote signer")
@@ -97,12 +108,12 @@ func startRemoteSignerFixture(t testing.TB) string {
 		_ = server.Serve(listener)
 	}()
 	t.Cleanup(server.Stop)
-	return listener.Addr().String()
+	return listener.Addr().String(), service
 }
 
 func TestRemoteSignerFixtureRequiresKeyID(t *testing.T) {
 	t.Parallel()
-	service, err := newRemoteSignerService()
+	service, err := newRemoteSignerService(remoteSignerKeyID, remoteSignerPrivateKeyHex)
 	require.NoError(t, err)
 	digest := make([]byte, 32)
 
@@ -136,7 +147,11 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 		e2etest.ChainB,
 	))
 	env := e2etest.Start(t, spec, runtime)
-	remoteSignerEndpoint := startRemoteSignerFixture(t)
+	remoteSignerEndpoint, _ := startRemoteSignerFixture(
+		t,
+		remoteSignerKeyID,
+		remoteSignerPrivateKeyHex,
+	)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSignerFromHex(t, remoteSignerPrivateKeyHex)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
@@ -193,4 +208,62 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 			require.Equal(t, relayerSigner.Address(), got)
 		})
 	}
+}
+
+func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
+	t.Parallel()
+	spec, runtime := attestedMesh(e2etest.EVMChains(
+		t,
+		e2etest.EVMRequirements{},
+		e2etest.ChainA,
+		e2etest.ChainB,
+	))
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	remoteAttestorID := meshAttestorFor(route.Destination, route.Source)
+	remoteAttestorKey := runtime.Authorities[environment.AuthorityID(remoteAttestorID)].PrivateKeyHex
+	remoteSignerEndpoint, remoteSigner := startRemoteSignerFixture(
+		t,
+		remoteAttestorSignerKeyID,
+		remoteAttestorKey,
+	)
+	authority := runtime.Authorities[environment.AuthorityID(remoteAttestorID)]
+	authority.SignerGRPC = remoteSignerEndpoint
+	authority.SignerRemoteKeyID = remoteAttestorSignerKeyID
+	runtime.Authorities[environment.AuthorityID(remoteAttestorID)] = authority
+
+	env := e2etest.Start(t, spec, runtime)
+	remoteAttestor, err := env.Attestor(remoteAttestorID)
+	require.NoError(t, err)
+	require.Equal(t, []environment.EVMAddress{
+		remoteAttestor.SignerAddress(),
+	}, remoteAttestor.IBCClient().AttestorAddresses())
+	require.EqualValues(t, 1, remoteAttestor.IBCClient().MinRequiredSignatures())
+
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	require.NoError(t, err)
+	status, err := e2etest.AwaitState(
+		ctx,
+		relayer,
+		transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, status.GetRecvTx().GetTxHash())
+	require.NotEmpty(t, status.GetAckTx().GetTxHash())
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+	require.NoError(t, transfer.VerifyBurned(ctx), "a successful ack must not also refund")
+
+	require.True(t, remoteSigner.signCalled.Load())
+
+	rotatedKey, err := crypto.HexToECDSA(rotatedSignerPrivateKeyHex)
+	require.NoError(t, err)
+	remoteSigner.privateKey.Store(rotatedKey)
+	require.ErrorContains(t, remoteAttestor.Restart(ctx), "signer address")
 }

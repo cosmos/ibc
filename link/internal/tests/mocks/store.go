@@ -208,63 +208,6 @@ func (_c *MockRepository_ClearPacketTimeoutTx_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
-// CreatePacket provides a mock function for the type MockRepository
-func (_mock *MockRepository) CreatePacket(ctx context.Context, input store.CreatePacket) error {
-	ret := _mock.Called(ctx, input)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CreatePacket")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.CreatePacket) error); ok {
-		r0 = returnFunc(ctx, input)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockRepository_CreatePacket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePacket'
-type MockRepository_CreatePacket_Call struct {
-	*mock.Call
-}
-
-// CreatePacket is a helper method to define mock.On call
-//   - ctx context.Context
-//   - input store.CreatePacket
-func (_e *MockRepository_Expecter) CreatePacket(ctx any, input any) *MockRepository_CreatePacket_Call {
-	return &MockRepository_CreatePacket_Call{Call: _e.mock.On("CreatePacket", ctx, input)}
-}
-
-func (_c *MockRepository_CreatePacket_Call) Run(run func(ctx context.Context, input store.CreatePacket)) *MockRepository_CreatePacket_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 store.CreatePacket
-		if args[1] != nil {
-			arg1 = args[1].(store.CreatePacket)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_CreatePacket_Call) Return(err error) *MockRepository_CreatePacket_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockRepository_CreatePacket_Call) RunAndReturn(run func(ctx context.Context, input store.CreatePacket) error) *MockRepository_CreatePacket_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // CreateRelayRequest provides a mock function for the type MockRepository
 func (_mock *MockRepository) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
 	ret := _mock.Called(ctx, chainID, txHash)
@@ -402,6 +345,68 @@ func (_c *MockRepository_GetRelayRequest_Call) RunAndReturn(run func(ctx context
 	return _c
 }
 
+// ListDispatchablePackets provides a mock function for the type MockRepository
+func (_mock *MockRepository) ListDispatchablePackets(ctx context.Context) ([]store.Packet, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListDispatchablePackets")
+	}
+
+	var r0 []store.Packet
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]store.Packet, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []store.Packet); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]store.Packet)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepository_ListDispatchablePackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListDispatchablePackets'
+type MockRepository_ListDispatchablePackets_Call struct {
+	*mock.Call
+}
+
+// ListDispatchablePackets is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockRepository_Expecter) ListDispatchablePackets(ctx any) *MockRepository_ListDispatchablePackets_Call {
+	return &MockRepository_ListDispatchablePackets_Call{Call: _e.mock.On("ListDispatchablePackets", ctx)}
+}
+
+func (_c *MockRepository_ListDispatchablePackets_Call) Run(run func(ctx context.Context)) *MockRepository_ListDispatchablePackets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_ListDispatchablePackets_Call) Return(packets []store.Packet, err error) *MockRepository_ListDispatchablePackets_Call {
+	_c.Call.Return(packets, err)
+	return _c
+}
+
+func (_c *MockRepository_ListDispatchablePackets_Call) RunAndReturn(run func(ctx context.Context) ([]store.Packet, error)) *MockRepository_ListDispatchablePackets_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListPacketsBySourceTx provides a mock function for the type MockRepository
 func (_mock *MockRepository) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error) {
 	ret := _mock.Called(ctx, chainID, txHash)
@@ -472,68 +477,6 @@ func (_c *MockRepository_ListPacketsBySourceTx_Call) Return(packets []store.Pack
 }
 
 func (_c *MockRepository_ListPacketsBySourceTx_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)) *MockRepository_ListPacketsBySourceTx_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListUnfinishedPackets provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListUnfinishedPackets(ctx context.Context) ([]store.Packet, error) {
-	ret := _mock.Called(ctx)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListUnfinishedPackets")
-	}
-
-	var r0 []store.Packet
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]store.Packet, error)); ok {
-		return returnFunc(ctx)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) []store.Packet); ok {
-		r0 = returnFunc(ctx)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]store.Packet)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = returnFunc(ctx)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_ListUnfinishedPackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUnfinishedPackets'
-type MockRepository_ListUnfinishedPackets_Call struct {
-	*mock.Call
-}
-
-// ListUnfinishedPackets is a helper method to define mock.On call
-//   - ctx context.Context
-func (_e *MockRepository_Expecter) ListUnfinishedPackets(ctx any) *MockRepository_ListUnfinishedPackets_Call {
-	return &MockRepository_ListUnfinishedPackets_Call{Call: _e.mock.On("ListUnfinishedPackets", ctx)}
-}
-
-func (_c *MockRepository_ListUnfinishedPackets_Call) Run(run func(ctx context.Context)) *MockRepository_ListUnfinishedPackets_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		run(
-			arg0,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ListUnfinishedPackets_Call) Return(packets []store.Packet, err error) *MockRepository_ListUnfinishedPackets_Call {
-	_c.Call.Return(packets, err)
-	return _c
-}
-
-func (_c *MockRepository_ListUnfinishedPackets_Call) RunAndReturn(run func(ctx context.Context) ([]store.Packet, error)) *MockRepository_ListUnfinishedPackets_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -849,6 +792,63 @@ func (_c *MockRepository_UpdatePacketWriteAck_Call) Return(err error) *MockRepos
 }
 
 func (_c *MockRepository_UpdatePacketWriteAck_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey, ack store.WriteAck) error) *MockRepository_UpdatePacketWriteAck_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpsertPacket provides a mock function for the type MockRepository
+func (_mock *MockRepository) UpsertPacket(ctx context.Context, input store.UpsertPacket) error {
+	ret := _mock.Called(ctx, input)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpsertPacket")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.UpsertPacket) error); ok {
+		r0 = returnFunc(ctx, input)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepository_UpsertPacket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpsertPacket'
+type MockRepository_UpsertPacket_Call struct {
+	*mock.Call
+}
+
+// UpsertPacket is a helper method to define mock.On call
+//   - ctx context.Context
+//   - input store.UpsertPacket
+func (_e *MockRepository_Expecter) UpsertPacket(ctx any, input any) *MockRepository_UpsertPacket_Call {
+	return &MockRepository_UpsertPacket_Call{Call: _e.mock.On("UpsertPacket", ctx, input)}
+}
+
+func (_c *MockRepository_UpsertPacket_Call) Run(run func(ctx context.Context, input store.UpsertPacket)) *MockRepository_UpsertPacket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 store.UpsertPacket
+		if args[1] != nil {
+			arg1 = args[1].(store.UpsertPacket)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_UpsertPacket_Call) Return(err error) *MockRepository_UpsertPacket_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepository_UpsertPacket_Call) RunAndReturn(run func(ctx context.Context, input store.UpsertPacket) error) *MockRepository_UpsertPacket_Call {
 	_c.Call.Return(run)
 	return _c
 }

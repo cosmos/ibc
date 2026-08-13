@@ -22,8 +22,11 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
@@ -39,22 +42,28 @@ const (
 
 	attestorStartupTimeout = 30 * time.Second
 	probeRequestTimeout    = 500 * time.Millisecond
+	signerProbeTimeout     = 5 * time.Second
 	attestorStopGrace      = 12 * time.Second
 	logFlushGrace          = 2 * time.Second
 	startupLogTailBytes    = 4096
 )
 
 // AttestorLaunch contains all process-local inputs needed to start one Link attestor.
-// WorkDir must name a path that does not already exist; StartAttestor creates it with
-// owner-only permissions and keeps the private key out of process arguments.
+// WorkDir must name a path that does not already exist; StartAttestor creates
+// it with owner-only permissions and keeps local private keys out of process
+// arguments.
 type AttestorLaunch struct {
-	BinaryPath    string
-	WorkDir       string
-	Name          string
-	ChainID       string
-	PrivateKeyHex string
-	RPCURL        string
-	ICS26Router   string
+	BinaryPath  string
+	WorkDir     string
+	Name        string
+	ChainID     string
+	RPCURL      string
+	ICS26Router string
+	// Local signers require PrivateKeyHex; remote signers require GRPC and
+	// RemoteKeyID instead.
+	PrivateKeyHex     string
+	SignerGRPC        string
+	SignerRemoteKeyID string
 	// ListenAddress defaults to an ephemeral loopback port. Restarts pass the
 	// previously announced address so a running relayer config stays valid.
 	ListenAddress string
@@ -78,12 +87,19 @@ type AttestorProcess struct {
 	handle        *processHandle
 }
 
-// StartAttestor writes a private Link configuration and ECDSA key, starts `ibc
-// attestor run`, and returns only after LatestHeight succeeds.
+// StartAttestor writes a private Link configuration, stores a local ECDSA key
+// when configured, starts `ibc attestor run`, and returns only after
+// LatestHeight succeeds.
 func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess, error) {
-	key, err := validateAttestorLaunch(launch)
+	key, signerAddress, err := validateAttestorLaunch(launch)
 	if err != nil {
 		return nil, err
+	}
+	if key == nil {
+		signerAddress, err = remoteSignerAddress(ctx, launch.SignerGRPC, launch.SignerRemoteKeyID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	binaryPath, err := filepath.Abs(launch.BinaryPath)
 	if err != nil {
@@ -131,7 +147,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	}()
 
 	p := &AttestorProcess{
-		signerAddress: crypto.PubkeyToAddress(key.PublicKey),
+		signerAddress: signerAddress,
 		name:          launch.Name,
 		out:           out,
 		readiness:     readiness,
@@ -150,8 +166,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	return p, nil
 }
 
-// SignerAddress is the Ethereum address derived from the private ECDSA key
-// loaded by the child process.
+// SignerAddress is the Ethereum address of the configured signer.
 func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
 // Endpoint is the attestor's announced listen address as a bare host:port,
@@ -284,28 +299,81 @@ func (p *AttestorProcess) logTail() string {
 	return strings.TrimSpace(string(p.out.tailSnapshot()))
 }
 
-func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, error) {
+func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, common.Address, error) {
 	switch {
 	case spec.BinaryPath == "":
-		return nil, errors.New("start IBC Link attestor: binary path is required")
+		return nil, common.Address{}, errors.New("start IBC Link attestor: binary path is required")
 	case spec.WorkDir == "":
-		return nil, errors.New("start IBC Link attestor: work dir is required")
+		return nil, common.Address{}, errors.New("start IBC Link attestor: work dir is required")
 	case spec.Name == "":
-		return nil, errors.New("start IBC Link attestor: name is required")
+		return nil, common.Address{}, errors.New("start IBC Link attestor: name is required")
 	case spec.ChainID == "":
-		return nil, errors.New("start IBC Link attestor: chain id is required")
-	case spec.PrivateKeyHex == "":
-		return nil, errors.New("start IBC Link attestor: private key is required")
+		return nil, common.Address{}, errors.New("start IBC Link attestor: chain id is required")
 	case spec.RPCURL == "":
-		return nil, errors.New("start IBC Link attestor: chain RPC URL is required")
+		return nil, common.Address{}, errors.New("start IBC Link attestor: chain RPC URL is required")
 	case spec.ICS26Router == "":
-		return nil, errors.New("start IBC Link attestor: ICS26 router address is required")
+		return nil, common.Address{}, errors.New("start IBC Link attestor: ICS26 router address is required")
+	}
+
+	remote := spec.SignerGRPC != "" || spec.SignerRemoteKeyID != ""
+	if remote {
+		switch {
+		case spec.PrivateKeyHex != "":
+			return nil, common.Address{}, errors.New(
+				"start IBC Link attestor: private key is not allowed for remote signer",
+			)
+		case spec.SignerGRPC == "":
+			return nil, common.Address{}, errors.New(
+				"start IBC Link attestor: gRPC endpoint is required for remote signer",
+			)
+		case spec.SignerRemoteKeyID == "":
+			return nil, common.Address{}, errors.New(
+				"start IBC Link attestor: key id is required for remote signer",
+			)
+		}
+		return nil, common.Address{}, nil
+	}
+	if spec.PrivateKeyHex == "" {
+		return nil, common.Address{}, errors.New("start IBC Link attestor: private key is required")
 	}
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(spec.PrivateKeyHex, "0x"))
 	if err != nil {
-		return nil, fmt.Errorf("start IBC Link attestor: parse private key: %w", err)
+		return nil, common.Address{}, fmt.Errorf("start IBC Link attestor: parse private key: %w", err)
 	}
-	return key, nil
+	return key, crypto.PubkeyToAddress(key.PublicKey), nil
+}
+
+func remoteSignerAddress(ctx context.Context, endpoint, keyID string) (common.Address, error) {
+	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return common.Address{}, fmt.Errorf("start IBC Link attestor: connect to remote signer: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	probeCtx, cancel := context.WithTimeout(ctx, signerProbeTimeout)
+	defer cancel()
+	response, err := signerservice.NewSignerServiceClient(conn).GetKey(
+		probeCtx,
+		&signerservice.GetKeyRequest{Id: keyID},
+	)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("start IBC Link attestor: get remote signer key %q: %w", keyID, err)
+	}
+	if response.GetKey().GetScheme() != signerservice.SignatureScheme_ECDSA_SECP256K1ETH {
+		return common.Address{}, fmt.Errorf(
+			"start IBC Link attestor: remote signer key %q is not ECDSA_SECP256K1ETH",
+			keyID,
+		)
+	}
+	publicKey, err := crypto.DecompressPubkey(response.GetKey().GetPubkey())
+	if err != nil {
+		return common.Address{}, fmt.Errorf(
+			"start IBC Link attestor: decode remote signer key %q: %w",
+			keyID,
+			err,
+		)
+	}
+	return crypto.PubkeyToAddress(*publicKey), nil
 }
 
 type workspacePaths struct {
@@ -326,9 +394,17 @@ func prepareAttestorWorkspace(
 		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: create private work dir %q: %w", dir, mkdirErr)
 	}
 
-	keyPath := filepath.Join(dir, "keys", keyFilename)
-	if writeErr := keyfile.Store(keyPath, keyfile.ECDSA, crypto.FromECDSA(key)); writeErr != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: write private key file: %w", writeErr)
+	signer := signerConfig{Alias: signerAlias, Type: RelayerSignerRemote}
+	if key != nil {
+		keyPath := filepath.Join(dir, "keys", keyFilename)
+		if writeErr := keyfile.Store(keyPath, keyfile.ECDSA, crypto.FromECDSA(key)); writeErr != nil {
+			return workspacePaths{}, fmt.Errorf("start IBC Link attestor: write private key file: %w", writeErr)
+		}
+		signer.Type = RelayerSignerLocal
+		signer.File = keyPath
+	} else {
+		signer.GRPC = spec.SignerGRPC
+		signer.RemoteKeyID = spec.SignerRemoteKeyID
 	}
 
 	config := fileConfig{
@@ -344,17 +420,14 @@ func prepareAttestorWorkspace(
 				ICS26Router: spec.ICS26Router,
 			},
 		}},
-		Attestor: attestorConfig{Attestations: []attestationConfig{{
-			ChainID:        spec.ChainID,
+		Attestors: []attestorFileConfig{{
 			Name:           spec.Name,
+			ChainID:        spec.ChainID,
+			Type:           RelayerAttestorLocal,
 			Signer:         signerAlias,
 			FinalityOffset: HarnessFinalityOffset,
-		}}},
-		Signers: []signerConfig{{
-			Alias: signerAlias,
-			Type:  RelayerSignerLocal,
-			File:  keyPath,
 		}},
+		Signers: []signerConfig{signer},
 	}
 	configData, err := yaml.Marshal(config)
 	if err != nil {
@@ -461,12 +534,12 @@ const (
 )
 
 type fileConfig struct {
-	Server   serverConfig       `yaml:"server"`
-	DB       dbConfig           `yaml:"db"`
-	Chains   []chainConfig      `yaml:"chains"`
-	Attestor attestorConfig     `yaml:"attestor"`
-	Relayer  *relayerFileConfig `yaml:"relayer,omitempty"`
-	Signers  []signerConfig     `yaml:"signers"`
+	Server    serverConfig         `yaml:"server"`
+	DB        dbConfig             `yaml:"db"`
+	Chains    []chainConfig        `yaml:"chains"`
+	Relayer   *relayerFileConfig   `yaml:"relayer,omitempty"`
+	Attestors []attestorFileConfig `yaml:"attestors"`
+	Signers   []signerConfig       `yaml:"signers"`
 }
 
 type chainConfig struct {
@@ -489,18 +562,16 @@ type dbConfig struct {
 	URL  string `yaml:"url"`
 }
 
-type attestorConfig struct {
-	Attestations []attestationConfig `yaml:"attestations"`
-}
-
-type attestationConfig struct {
-	ChainID string `yaml:"chainId"`
+type attestorFileConfig struct {
 	Name    string `yaml:"name"`
-	Signer  string `yaml:"signer"`
+	ChainID string `yaml:"chainId"`
+	Type    string `yaml:"type"`
+	Signer  string `yaml:"signer,omitempty"`
 
 	// FinalityOffset is kept at 1 ("latest" minus one block) because the dev
 	// chains behind the harness do not expose the "finalized" block tag.
-	FinalityOffset uint `yaml:"finalityOffset"`
+	FinalityOffset uint   `yaml:"finalityOffset,omitempty"`
+	GRPC           string `yaml:"grpc,omitempty"`
 }
 
 type signerConfig struct {
