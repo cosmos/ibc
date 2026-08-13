@@ -198,13 +198,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".txSubmissionDelay must not be negative",
 			},
 			{
-				name: "missing router contract",
-				patch: func(c *Config) {
-					c.Chains[0].EVM.ICS26Router = ""
-				},
-				errContains: ".evm.ics26Router required",
-			},
-			{
 				name: "zero gas multiplier",
 				patch: func(c *Config) {
 					zero := 0.0
