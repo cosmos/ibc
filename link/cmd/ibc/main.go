@@ -66,16 +66,29 @@ func init() {
 		cmdTx,
 	)
 
-	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate)
+	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate, cmdConfigAddChain)
 	cmdConfigNew.Flags().BoolVar(&flagConfigNewOut, "out", false, "output the config to stdout")
 	cmdConfigValidate.Flags().BoolVar(&flagConfigValidateLive, "live", false, "extra validation checks")
 	cmdConfigValidate.Flags().
 		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")
+	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainID, "chain-id", "", "chain ID")
+	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainRPC, "rpc", "", "chain RPC URL")
+	cmdConfigAddChain.Flags().
+		StringVar(&flagConfigAddChainRouter, "router", "", "ics26Router address (default: left blank, fill in via render-config)")
+	cmdConfigAddChain.Flags().
+		StringVar(&flagConfigAddChainDeployer, "deployer", "", "signer alias used by ibc deploy for this chain")
+	for _, req := range []string{"chain-id", "rpc"} {
+		_ = cmdConfigAddChain.MarkFlagRequired(req)
+	}
 
 	// Keys commands
 	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport, cmdKeysList)
 	cmdKeysShow.Flags().BoolVarP(&flagKeysShowPrivate, "private", "", false, "show private key")
 	cmdKeysImport.Flags().StringVar(&flagKeysImportPrivateKey, "private-key", "", "hex-encoded private key")
+	for _, c := range []*cobra.Command{cmdKeysNew, cmdKeysImport} {
+		c.Flags().
+			BoolVar(&flagKeysPopulateConfig, "populate-config", false, "append the resulting key as a signers entry in the config file")
+	}
 
 	// Relayer commands
 	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus)

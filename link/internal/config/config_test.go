@@ -630,3 +630,39 @@ func TestConfigAccessors(t *testing.T) {
 	require.Equal(t, "a3", forChain[1].Name)
 	require.Empty(t, cfg.AttestorsForChain("9"))
 }
+
+func TestCollectComments(t *testing.T) {
+	cfg := Config{
+		Chains: []ChainConfig{
+			{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: ""}},
+			{ChainID: "2", EVM: &EVMChainConfig{ICS26Router: "0xabc"}},
+		},
+		Relayer: RelayerConfig{Connections: []ConnectionConfig{
+			{ClientA: ClientEnd{ChainID: "1"}, ClientB: ClientEnd{ChainID: "2", Signer: "relayer-key"}},
+		}},
+		Attestors: Attestors{
+			{ChainID: "2", Name: "attestor-2-0xabc", Type: AttestorTypeLocal},
+			{ChainID: "1", Name: "attestor-1-0xdef", Type: AttestorTypeLocal, Signer: "watcher"},
+			{Name: "remote", Type: AttestorTypeRemote, GRPC: "attestor.example.com:3000"},
+		},
+	}
+
+	require.Equal(t, map[string]string{
+		"$.chains[0].evm.ics26Router":             "TODO: fill in",
+		"$.relayer.connections[0].clientA.signer": "TODO: signers[] alias that submits relay txs on chainA",
+		"$.attestors[0].signer":                   "TODO: signers[] alias backing this attestor's key",
+		"$.attestors[0].finalityOffset":           finalityOffsetTODO,
+		"$.attestors[1].finalityOffset":           finalityOffsetTODO,
+	}, CollectComments(cfg))
+
+	// nothing left blank -> only the always-on finalityOffset reminder remains
+	require.Equal(t, map[string]string{
+		"$.attestors[0].finalityOffset": finalityOffsetTODO,
+	}, CollectComments(Config{
+		Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: "0xabc"}}},
+		Relayer: RelayerConfig{Connections: []ConnectionConfig{
+			{ClientA: ClientEnd{ChainID: "1", Signer: "a"}, ClientB: ClientEnd{ChainID: "2", Signer: "b"}},
+		}},
+		Attestors: Attestors{{ChainID: "1", Name: "a", Type: AttestorTypeLocal, Signer: "watcher"}},
+	}))
+}

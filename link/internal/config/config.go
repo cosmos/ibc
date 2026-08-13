@@ -70,12 +70,15 @@ type AttestorConfig struct {
 
 	Type AttestorType `yaml:"type"`
 
-	// Signer required for type: local only -- the signer used to sign attestations.
-	Signer string `yaml:"signer,omitempty"`
+	// Signer required for type: local only -- the signer used to sign
+	// attestations. Not omitempty: a blank local signer needs to render so
+	// CollectComments' TODO on it actually shows up.
+	Signer string `yaml:"signer"`
 
 	// FinalityOffset local only. Zero attests up to the chain's "finalized"
-	// tag; n > 0 attests up to "latest" - n instead.
-	FinalityOffset uint `yaml:"finalityOffset,omitempty"`
+	// tag; n > 0 attests up to "latest" - n instead. Not omitempty: zero is
+	// also the un-set value, and CollectComments' TODO needs it to render.
+	FinalityOffset uint `yaml:"finalityOffset"`
 
 	// GRPC required for type: remote only. Bare host:port.
 	GRPC string `yaml:"grpc,omitempty"`
@@ -93,13 +96,13 @@ type SignerConfig struct {
 	Type string `yaml:"type"`
 
 	// File key file path for a local signer
-	File string `yaml:"file"`
+	File string `yaml:"file,omitempty"`
 
 	// GRPC address for a remote signer
-	GRPC string `yaml:"grpc"`
+	GRPC string `yaml:"grpc,omitempty"`
 
 	// RemoteKeyID KMS key ID for a remote signer
-	RemoteKeyID string `yaml:"remoteKeyId"`
+	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }
 
 // ChainType the execution environment of a chain.
@@ -391,20 +394,37 @@ func (c ChainConfig) Validate() error {
 }
 
 func (c Config) StoreToFile(path string) error {
+	return c.store(path, nil)
+}
+
+// StoreToFileWithComments writes c to path as YAML, with a TODO comment
+// attached to every field CollectComments flags as left for the operator to
+// fill in.
+func (c Config) StoreToFileWithComments(path string) error {
+	return c.store(path, CollectComments(c))
+}
+
+func (c Config) store(path string, comments map[string]string) error {
 	if err := EnsureDirectory(path); err != nil {
 		return err
 	}
 
-	bz, err := yaml.Marshal(c)
+	bz, err := yaml.MarshalWithOptions(c, yaml.WithComment(toCommentMap(comments)))
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(path, bz, 0o644); err != nil {
-		return err
-	}
+	return os.WriteFile(path, bz, 0o644)
+}
 
-	return nil
+// toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
+// of line comments, as PrintYAMLWithComments/store both need.
+func toCommentMap(comments map[string]string) yaml.CommentMap {
+	cm := make(yaml.CommentMap, len(comments))
+	for path, text := range comments {
+		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
+	}
+	return cm
 }
 
 func (c ServerConfig) Validate() error {
@@ -609,7 +629,8 @@ func PrintJSON(v any) error {
 }
 
 // PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
-// fields by name
+// fields by name (e.g. "PACKET_STATE_PENDING") instead of their numeric
+// value, and keeping proto_name field naming to match PrintJSON's output.
 func PrintProtoJSON(msg proto.Message) error {
 	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
 	if err != nil {
@@ -633,16 +654,13 @@ func PrintYAML(v any) error {
 	return nil
 }
 
-// PrintYAMLWithComments prints anything as YAML to stdout, attaching a line
-// comment to every field addressed by a YAML path in comments, keyed as
-// "$.relayer.connections[0].clientA.signer".
+// PrintYAMLWithComments prints v as YAML to stdout, attaching a line comment
+// to every field addressed by a YAML path in comments, keyed as
+// "$.relayer.connections[0].clientA.signer". v need not be a Config -- e.g.
+// render-config prints a smaller projection than the Config comments were
+// collected against, as long as the two share the same field paths.
 func PrintYAMLWithComments(v any, comments map[string]string) error {
-	cm := make(yaml.CommentMap, len(comments))
-	for path, text := range comments {
-		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
-	}
-
-	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(cm))
+	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(toCommentMap(comments)))
 	if err != nil {
 		return err
 	}
@@ -650,6 +668,53 @@ func PrintYAMLWithComments(v any, comments map[string]string) error {
 	fmt.Println(string(bz))
 
 	return nil
+}
+
+// finalityOffsetTODO is attached to every local attestor's finalityOffset,
+// unconditionally: zero is both the default and a legitimate value, so
+// there's no "blank" state to detect the way there is for signer/router.
+const finalityOffsetTODO = `TODO: verify -- chains without a live "finalized" tag (e.g. Besu QBFT) need this set to 1+`
+
+// CollectComments builds TODO comments for every field in cfg that's left
+// for the operator to fill in by hand, keyed by YAML path for
+// PrintYAMLWithComments/StoreToFileWithComments. Kept as one explicit
+// function (not a generic path-walker) so a test can pin the exact set of
+// paths and messages and fail immediately if the config schema or these
+// paths drift.
+func CollectComments(cfg Config) map[string]string {
+	comments := map[string]string{}
+
+	for i, chain := range cfg.Chains {
+		if chain.EVM != nil && chain.EVM.ICS26Router == "" {
+			path := fmt.Sprintf("$.chains[%d].evm.ics26Router", i)
+			comments[path] = "TODO: fill in"
+		}
+	}
+
+	for i, conn := range cfg.Relayer.Connections {
+		if conn.ClientA.Signer == "" {
+			path := fmt.Sprintf("$.relayer.connections[%d].clientA.signer", i)
+			comments[path] = "TODO: signers[] alias that submits relay txs on chainA"
+		}
+		if conn.ClientB.Signer == "" {
+			path := fmt.Sprintf("$.relayer.connections[%d].clientB.signer", i)
+			comments[path] = "TODO: signers[] alias that submits relay txs on chainB"
+		}
+	}
+
+	for i, attestor := range cfg.Attestors {
+		if attestor.Type != AttestorTypeLocal {
+			continue
+		}
+		if attestor.Signer == "" {
+			path := fmt.Sprintf("$.attestors[%d].signer", i)
+			comments[path] = "TODO: signers[] alias backing this attestor's key"
+		}
+		path := fmt.Sprintf("$.attestors[%d].finalityOffset", i)
+		comments[path] = finalityOffsetTODO
+	}
+
+	return comments
 }
 
 func dbTypeFromURL(raw string) string {
