@@ -76,7 +76,7 @@ chains:
 
 | Field                  | Type     | Description                                                                    |
 |------------------------|----------|--------------------------------------------------------------------------------|
-| `dispatchPollInterval` | duration | How often the dispatcher polls storage for unfinished packets. Defaults to 5s. |
+| `dispatchPollInterval` | duration | How often the dispatcher polls storage for dispatchable packets. Defaults to 5s. |
 | `chainOverrides`       | list     | Per-chain relaying overrides (see below).                                      |
 | `connections`          | list     | Bidirectional connections to actively relay (see below).                       |
 

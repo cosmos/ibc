@@ -381,13 +381,8 @@ func (c ChainConfig) Validate() error {
 		return errors.New(".chainId required")
 	}
 
-	if c.Type() == ChainTypeEVM {
-		switch {
-		case c.EVM.RPC == "":
-			return errors.New(".evm.rpc required")
-		case c.EVM.ICS26Router == "":
-			return errors.New(".evm.ics26Router required")
-		}
+	if c.Type() == ChainTypeEVM && c.EVM.RPC == "" {
+		return errors.New(".evm.rpc required")
 	}
 
 	return nil

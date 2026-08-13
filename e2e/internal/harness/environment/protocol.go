@@ -179,6 +179,15 @@ func (a *Attestor) restartProcess(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("environment: restart Attestor %q: %w", a.id, err)
 	}
+	if signer := EVMAddress(process.SignerAddress().Hex()); signer != a.signer {
+		return errors.Join(
+			fmt.Errorf(
+				"environment: restart Attestor %q: signer address %q, want %q",
+				a.id, signer, a.signer,
+			),
+			process.Stop(ctx),
+		)
+	}
 	if process.Endpoint() != a.endpoint {
 		return errors.Join(
 			fmt.Errorf(

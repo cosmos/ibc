@@ -275,6 +275,7 @@ func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
 			if err != nil {
 				return err
 			}
+			slog.Info("ift token deployed", "chain", chainID, "symbol", spec.Symbol, "address", ref.Address)
 			m.UpsertToken(manifest.Token{
 				Symbol:  spec.Symbol,
 				Name:    spec.Name,

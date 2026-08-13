@@ -20,7 +20,9 @@ type EndpointBinding struct {
 }
 
 type EVMAuthority struct {
-	PrivateKeyHex string
+	PrivateKeyHex     string
+	SignerGRPC        string
+	SignerRemoteKeyID string
 }
 
 func (r Runtime) endpoint(id EndpointBindingID) (EndpointBinding, bool) {

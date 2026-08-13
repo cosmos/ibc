@@ -100,7 +100,7 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 	t.Helper()
 
 	ctx := context.Background()
-	input := store.CreatePacket{
+	input := store.UpsertPacket{
 		Status:                    store.RelayStatusPending,
 		SourceChainID:             testRoute.SourceChainID,
 		DestinationChainID:        testRoute.DestinationChainID,
@@ -111,7 +111,7 @@ func (env *pipelineEnv) createPacket(t *testing.T, timeout time.Time) *processor
 		PacketDestinationClientID: testRoute.DestinationClientID,
 		PacketTimeoutTimestamp:    timeout,
 	}
-	require.NoError(t, env.store.CreatePacket(ctx, input))
+	require.NoError(t, env.store.UpsertPacket(ctx, input))
 
 	packets, err := env.store.ListPacketsBySourceTx(ctx, input.SourceChainID, input.SourceTxHash)
 	require.NoError(t, err)
