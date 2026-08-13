@@ -450,7 +450,8 @@ func deployShow(_ *cobra.Command, args []string) error {
 		return err
 	}
 	if m == nil {
-		return errors.Errorf("no manifest for chain %s in %s: run `ibc deploy` against it first", chainID, flagDeployManifestDir)
+		return errors.Errorf("no manifest for chain %s in %s: run `ibc deploy` against it first",
+			chainID, flagDeployManifestDir)
 	}
 
 	return config.PrintJSON(m)
