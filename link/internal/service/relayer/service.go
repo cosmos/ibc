@@ -282,6 +282,17 @@ func (s *Service) packetsFromEvents(
 
 			continue
 		}
+		if event.Packet.DestinationClient != client.CounterpartyClientID {
+			s.logger.Warn(
+				"Skipping packet with unconfigured destination client",
+				"chainID", chainID,
+				"clientID", event.Packet.SourceClient,
+				"destinationClientID", event.Packet.DestinationClient,
+				"sequence", event.Packet.Sequence,
+			)
+
+			continue
+		}
 
 		relayable[selector] = store.UpsertPacket{
 			Status:                    store.RelayStatusNotSelected,

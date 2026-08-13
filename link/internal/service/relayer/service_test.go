@@ -42,11 +42,12 @@ func relayerConfig() config.Config {
 		Relayer: config.RelayerConfig{
 			Clients: []config.ClientConfig{
 				{
-					Alias:               "base-client",
-					ClientID:            "base-0",
-					ChainID:             chainIDEth,
-					CounterpartyChainID: chainIDBase,
-					Type:                config.ClientTypeAttestation,
+					Alias:                "base-client",
+					ClientID:             "base-0",
+					ChainID:              chainIDEth,
+					CounterpartyChainID:  chainIDBase,
+					CounterpartyClientID: "ethereum-0",
+					Type:                 config.ClientTypeAttestation,
 				},
 			},
 			Routes: []config.RouteConfig{{
@@ -277,6 +278,12 @@ func TestRelay(t *testing.T) {
 			{Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 42, SourceClient: "base-0"}},
 			{Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 7, SourceClient: "unknown-0"}},
 			{Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 8, SourceClient: "unrouted-0"}},
+			{
+				Kind: v2.KindSendPacket,
+				Packet: channeltypesv2.Packet{
+					Sequence: 9, SourceClient: "base-0", DestinationClient: "other-0",
+				},
+			},
 		}
 
 		for _, tt := range []struct {
@@ -290,6 +297,10 @@ func TestRelay(t *testing.T) {
 			{
 				name: "unrouted", selector: PacketSelector{SourceClientID: "unrouted-0", SequenceNumber: 8},
 				want: ErrFailedPrecondition, unrouted: true,
+			},
+			{
+				name: "wrong destination", selector: PacketSelector{SourceClientID: "base-0", SequenceNumber: 9},
+				want: ErrFailedPrecondition,
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
