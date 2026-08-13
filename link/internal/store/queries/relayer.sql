@@ -12,7 +12,7 @@ INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES (sqlc.arg(chain_id), sqlc.arg(tx_hash))
 ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING;
 
--- name: CreatePacket :execrows
+-- name: UpsertPacket :exec
 INSERT INTO packets (
     status,
     source_chain_id,
@@ -34,7 +34,16 @@ INSERT INTO packets (
     sqlc.arg(packet_destination_client_id),
     sqlc.arg(packet_timeout_timestamp)
 )
-ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO NOTHING;
+ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    destination_chain_id = EXCLUDED.destination_chain_id,
+    source_tx_hash = EXCLUDED.source_tx_hash,
+    source_tx_time = EXCLUDED.source_tx_time,
+    packet_destination_client_id = EXCLUDED.packet_destination_client_id,
+    packet_timeout_timestamp = EXCLUDED.packet_timeout_timestamp,
+    updated_at = CURRENT_TIMESTAMP
+WHERE packets.status = 'NOT_SELECTED'
+AND EXCLUDED.status IN ('NOT_SELECTED', 'PENDING');
 
 -- name: ListPacketsBySourceTx :many
 SELECT * FROM packets
@@ -120,9 +129,10 @@ WHERE source_chain_id = sqlc.arg(source_chain_id)
 AND packet_source_client_id = sqlc.arg(packet_source_client_id)
 AND packet_sequence_number = sqlc.arg(packet_sequence_number);
 
--- name: ListUnfinishedPackets :many
+-- name: ListDispatchablePackets :many
 SELECT * FROM packets
 WHERE status NOT IN (
+    'NOT_SELECTED',
     'COMPLETE_WITH_ACK',
     'COMPLETE_WITH_TIMEOUT',
     'COMPLETE_WITH_WRITE_ACK_ERROR',

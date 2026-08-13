@@ -223,18 +223,40 @@ func (d *Relayer) WaitPolicy(routeID string) (WaitPolicy, bool) {
 	return policy, ok
 }
 
-// Relay submits the source transaction's packets for relaying. The source
-// Chain is named by its harness identifier and translated to the relayer's
-// wire chain id here.
-func (d *Relayer) Relay(ctx context.Context, sourceChainID, sourceTxHash string) error {
+// RelayAll submits every configured packet in the source transaction for
+// relaying.
+func (d *Relayer) RelayAll(ctx context.Context, sourceChainID, sourceTxHash string) error {
+	return d.relay(ctx, sourceChainID, &relayerv2.RelayRequest{
+		TxHash: sourceTxHash,
+		Selection: &relayerv2.RelayRequest_AllPackets{
+			AllPackets: &relayerv2.AllPackets{},
+		},
+	})
+}
+
+// RelaySelected submits only packets for the explicit source client and
+// sequence selectors.
+func (d *Relayer) RelaySelected(
+	ctx context.Context,
+	sourceChainID string,
+	sourceTxHash string,
+	packets ...*relayerv2.PacketSelector,
+) error {
+	return d.relay(ctx, sourceChainID, &relayerv2.RelayRequest{
+		TxHash: sourceTxHash,
+		Selection: &relayerv2.RelayRequest_SelectedPackets{
+			SelectedPackets: &relayerv2.SelectedPackets{Packets: packets},
+		},
+	})
+}
+
+func (d *Relayer) relay(ctx context.Context, sourceChainID string, request *relayerv2.RelayRequest) error {
 	chainID, err := d.wireChainID(sourceChainID)
 	if err != nil {
 		return fmt.Errorf("ibc relay: %w", err)
 	}
-	if _, err := d.client.Relay(ctx, connect.NewRequest(&relayerv2.RelayRequest{
-		SourceChainId: chainID,
-		TxHash:        sourceTxHash,
-	})); err != nil {
+	request.SourceChainId = chainID
+	if _, err := d.client.Relay(ctx, connect.NewRequest(request)); err != nil {
 		return fmt.Errorf("ibc relay: %w", err)
 	}
 	return nil
