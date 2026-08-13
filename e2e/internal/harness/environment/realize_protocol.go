@@ -503,14 +503,13 @@ func acquireAttestor(
 		WorkDir:           filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
 		Name:              string(declaration.ID),
 		ChainID:           strconv.FormatUint(dependencies.observed.chain.evmChainID, 10),
-		PrivateKeyHex:     binding.PrivateKeyHex,
 		SignerGRPC:        binding.SignerGRPC,
 		SignerRemoteKeyID: binding.SignerRemoteKeyID,
 		RPCURL:            dependencies.observed.chain.rpcURL,
 		ICS26Router:       string(dependencies.observed.locator),
 	}
-	if binding.SignerGRPC != "" || binding.SignerRemoteKeyID != "" {
-		launch.PrivateKeyHex = ""
+	if binding.SignerGRPC == "" {
+		launch.PrivateKeyHex = binding.PrivateKeyHex
 	}
 	process, err := ibclink.StartAttestor(ctx, launch)
 	if err != nil {

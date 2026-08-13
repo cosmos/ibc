@@ -91,7 +91,6 @@ func TestStartWritesRemoteSignerWithoutLocalKey(t *testing.T) {
 	workDir := filepath.Join(t.TempDir(), "attestor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	expectedAddress := common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141")
 	remoteSignerEndpoint := startAttestorRemoteSigner(t, testPrivateKey)
 
 	process, err := StartAttestor(ctx, AttestorLaunch{
@@ -110,7 +109,9 @@ func TestStartWritesRemoteSignerWithoutLocalKey(t *testing.T) {
 		defer stopCancel()
 		require.NoError(t, process.Stop(stopCtx))
 	})
-	require.Equal(t, expectedAddress, process.SignerAddress())
+	require.Equal(t,
+		common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141"),
+		process.SignerAddress())
 
 	configData, err := os.ReadFile(filepath.Join(workDir, configFilename))
 	require.NoError(t, err)
@@ -187,34 +188,21 @@ func TestValidateAttestorLaunchRejectsMixedSignerConfig(t *testing.T) {
 		SignerGRPC:        "127.0.0.1:9090",
 		SignerRemoteKeyID: "attestor-key",
 	}
-	for _, test := range []struct {
-		name   string
-		change func(*AttestorLaunch)
-		want   string
-	}{
-		{
-			name:   "remote with private key",
-			change: func(launch *AttestorLaunch) { launch.PrivateKeyHex = testPrivateKey },
-			want:   "private key is not allowed for remote signer",
-		},
-		{
-			name:   "remote without endpoint",
-			change: func(launch *AttestorLaunch) { launch.SignerGRPC = "" },
-			want:   "gRPC endpoint is required for remote signer",
-		},
-		{
-			name:   "remote without key ID",
-			change: func(launch *AttestorLaunch) { launch.SignerRemoteKeyID = "" },
-			want:   "key id is required for remote signer",
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			launch := validRemote
-			test.change(&launch)
-			_, _, err := validateAttestorLaunch(launch)
-			require.ErrorContains(t, err, test.want)
-		})
-	}
+
+	launch := validRemote
+	launch.PrivateKeyHex = testPrivateKey
+	_, _, err := validateAttestorLaunch(launch)
+	require.ErrorContains(t, err, "private key is not allowed for remote signer")
+
+	launch = validRemote
+	launch.SignerGRPC = ""
+	_, _, err = validateAttestorLaunch(launch)
+	require.ErrorContains(t, err, "gRPC endpoint is required for remote signer")
+
+	launch = validRemote
+	launch.SignerRemoteKeyID = ""
+	_, _, err = validateAttestorLaunch(launch)
+	require.ErrorContains(t, err, "key id is required for remote signer")
 }
 
 func TestIBCLinkAttestorHelperProcess(_ *testing.T) {

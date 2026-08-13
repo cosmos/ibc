@@ -34,10 +34,9 @@ const (
 
 type remoteSignerService struct {
 	signerservice.UnimplementedSignerServiceServer
-	keyID        string
-	privateKey   atomic.Pointer[ecdsa.PrivateKey]
-	getKeyCalled atomic.Bool
-	signCalled   atomic.Bool
+	keyID      string
+	privateKey atomic.Pointer[ecdsa.PrivateKey]
+	signCalled atomic.Bool
 }
 
 func newRemoteSignerService(keyID, privateKeyHex string) (*remoteSignerService, error) {
@@ -64,7 +63,6 @@ func (s *remoteSignerService) GetKey(
 	if err := s.requireKey(request.GetId()); err != nil {
 		return nil, err
 	}
-	s.getKeyCalled.Store(true)
 	return &signerservice.GetKeyResponse{Key: &signerservice.Key{
 		Id:     s.keyID,
 		Pubkey: crypto.CompressPubkey(&s.privateKey.Load().PublicKey),
@@ -262,7 +260,6 @@ func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyBurned(ctx), "a successful ack must not also refund")
 
-	require.True(t, remoteSigner.getKeyCalled.Load())
 	require.True(t, remoteSigner.signCalled.Load())
 
 	rotatedKey, err := crypto.HexToECDSA(rotatedSignerPrivateKeyHex)

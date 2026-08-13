@@ -137,12 +137,12 @@ func TestValidateChecksSpecAndRuntime(t *testing.T) {
 	authority := badRuntime.Authorities["attestor-signer"]
 	authority.SignerRemoteKeyID = "attestor-key"
 	badRuntime.Authorities["attestor-signer"] = authority
-	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `Attestor "attestor-a" has no gRPC endpoint`)
+	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `requires endpoint and key id`)
 
 	authority.SignerRemoteKeyID = ""
 	authority.SignerGRPC = "127.0.0.1:9090"
 	badRuntime.Authorities["attestor-signer"] = authority
-	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `Attestor "attestor-a" has no key id`)
+	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `requires endpoint and key id`)
 }
 
 func TestProductionPrerequisitesRequireExecutableAttestorBinary(t *testing.T) {
