@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/service/signer"
 )
 
 var (
@@ -62,11 +63,13 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 	if amount == nil {
 		return errors.Errorf("invalid --amount %q", flagTxIFTAmount)
 	}
-	if !common.IsHexAddress(flagTxIFTTo) {
-		return errors.Errorf("invalid --to address %q", flagTxIFTTo)
+
+	backend, key, chainID, cfg, err := dialIFTChain(cmd.Context())
+	if err != nil {
+		return err
 	}
 
-	backend, key, chainID, err := dialIFTChain(cmd.Context())
+	to, err := resolveToAddress(cfg, flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -82,7 +85,7 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 	}
 	opts.Context = cmd.Context()
 
-	tx, err := contract.Mint(opts, common.HexToAddress(flagTxIFTTo), amount)
+	tx, err := contract.Mint(opts, common.HexToAddress(to), amount)
 	if err != nil {
 		return errors.Wrap(err, "mint")
 	}
@@ -99,13 +102,18 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 }
 
 func txIFTSend(cmd *cobra.Command, _ []string) error {
-	clientID, receiver := flagTxIFTClientID, flagTxIFTTo
+	clientID := flagTxIFTClientID
 	amount := parseIFTAmount(flagTxIFTAmount)
 	if amount == nil {
 		return errors.Errorf("invalid --amount %q", flagTxIFTAmount)
 	}
 
-	backend, key, chainID, err := dialIFTChain(cmd.Context())
+	backend, key, chainID, cfg, err := dialIFTChain(cmd.Context())
+	if err != nil {
+		return err
+	}
+
+	receiver, err := resolveToAddress(cfg, flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -156,38 +164,51 @@ func parseIFTAmount(s string) *big.Int {
 
 // dialIFTChain resolves --chain's RPC and --from's signer from config, and
 // dials the chain.
-func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *big.Int, error) {
+func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *big.Int, config.Config, error) {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, config.Config{}, err
 	}
 
 	chain, ok := cfg.Chain(flagTxIFTChain)
 	if !ok {
-		return nil, nil, nil, errors.Errorf("chain %q not declared in config", flagTxIFTChain)
+		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q not declared in config", flagTxIFTChain)
 	}
 	if chain.Type() != config.ChainTypeEVM {
-		return nil, nil, nil, errors.Errorf("chain %q is not an EVM chain", flagTxIFTChain)
+		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q is not an EVM chain", flagTxIFTChain)
 	}
 
 	keyHex, err := deployerKeyHex(cfg, flagTxIFTFrom)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, config.Config{}, err
 	}
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(keyHex, "0x"))
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "signer key")
+		return nil, nil, nil, config.Config{}, errors.Wrap(err, "signer key")
 	}
 
 	backend, err := ethclient.DialContext(ctx, chain.EVM.RPC)
 	if err != nil {
-		return nil, nil, nil, errors.Wrapf(err, "dial %s", chain.EVM.RPC)
+		return nil, nil, nil, config.Config{}, errors.Wrapf(err, "dial %s", chain.EVM.RPC)
 	}
 
 	chainID, err := backend.ChainID(ctx)
 	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "query chain id")
+		return nil, nil, nil, config.Config{}, errors.Wrap(err, "query chain id")
 	}
 
-	return backend, key, chainID, nil
+	return backend, key, chainID, cfg, nil
+}
+
+// resolveToAddress accepts either a raw EVM address or a config signer
+// alias, resolving the alias to its derived EVM address.
+func resolveToAddress(cfg config.Config, to string) (string, error) {
+	if common.IsHexAddress(to) {
+		return to, nil
+	}
+	sc, ok := cfg.Signer(to)
+	if !ok {
+		return "", errors.Errorf("invalid --to %q: not a hex address or a configured signer alias", to)
+	}
+	return signer.EVMAddressOf(sc)
 }

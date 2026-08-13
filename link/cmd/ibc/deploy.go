@@ -76,6 +76,13 @@ var (
 		RunE:  deployStatus,
 	}
 
+	cmdDeployShow = &cobra.Command{
+		Use:   "show [chain-id]",
+		Short: "Print the recorded deployment manifest for a chain",
+		Args:  cobra.ExactArgs(1),
+		RunE:  deployShow,
+	}
+
 	cmdDeployRenderConfig = &cobra.Command{
 		Use:   "render-config [chainA] [chainB]",
 		Short: "Project two deployment manifests into config sections for relaying between them (stdout)",
@@ -430,6 +437,23 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 		return errors.New("verification failed")
 	}
 	return nil
+}
+
+func deployShow(_ *cobra.Command, args []string) error {
+	if _, err := setupHomeWithConfig(); err != nil {
+		return err
+	}
+
+	chainID := args[0]
+	m, err := manifest.Load(flagDeployManifestDir, chainID)
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return errors.Errorf("no manifest for chain %s in %s: run `ibc deploy` against it first", chainID, flagDeployManifestDir)
+	}
+
+	return config.PrintJSON(m)
 }
 
 // renderedDeployment is the subset of the config schema render-config emits,
