@@ -25,34 +25,25 @@ import (
 
 const simChainID = 1337 // ethclient/simulated fixed chain id
 
-// newSimBackend builds a simulated chain with the Bogota fork disabled.
-// Geth 1.17.5 activates Bogota on dev chains (simulated.NewBackend uses
-// params.AllDevChainProtocolChanges); under Bogota's state-gas rules the
-// gas estimator returns values that OOG on execution, so deploying the
-// AccessManager reverts. No real network schedules Bogota (BogotaTime is
-// nil across 1.17.5's shipped configs), so disabling it matches production.
-// ponytail: drop this once geth fixes estimate/execute consistency under
-// Bogota (or schedules it on real networks).
-func newSimBackend(t *testing.T, alloc types.GenesisAlloc) *simulated.Backend {
-	t.Helper()
-	conf := *params.AllDevChainProtocolChanges
-	conf.BogotaTime = nil
-	sim := simulated.NewBackend(alloc, func(_ *node.Config, ec *ethconfig.Config) {
-		ec.Genesis.Config = &conf
-	})
-	t.Cleanup(func() { _ = sim.Close() })
-	return sim
-}
-
 func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 	t.Helper()
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	sim := newSimBackend(t, types.GenesisAlloc{
+	// Geth 1.17.5 activates Bogota on dev chains (simulated.NewBackend uses
+	// params.AllDevChainProtocolChanges); under Bogota the gas estimator
+	// returns values that OOG on execution. No real network schedules Bogota,
+	// so disabling it matches production. ponytail: drop when geth fixes
+	// estimate/execute consistency under Bogota.
+	conf := *params.AllDevChainProtocolChanges
+	conf.BogotaTime = nil
+	sim := simulated.NewBackend(types.GenesisAlloc{
 		addr: {Balance: new(big.Int).Lsh(big.NewInt(1), 100)},
+	}, func(_ *node.Config, ec *ethconfig.Config) {
+		ec.Genesis.Config = &conf
 	})
+	t.Cleanup(func() { _ = sim.Close() })
 
 	// auto-mine so bind.WaitMined returns
 	stop := make(chan struct{})
