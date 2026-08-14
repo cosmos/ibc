@@ -26,6 +26,7 @@ import (
 type LocalAttestor struct {
 	chainID        string
 	name           string
+	address        string
 	finalityOffset uint
 
 	client chains.Client
@@ -36,7 +37,7 @@ type LocalAttestor struct {
 
 var _ Attestor = &LocalAttestor{}
 
-func NewLocal(cfg config.AttestationConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
+func NewLocal(cfg config.AttestorConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
 	switch {
 	case cfg.ChainID == "":
 		return nil, fmt.Errorf("chainID required")
@@ -52,12 +53,18 @@ func NewLocal(cfg config.AttestationConfig, client chains.Client, backingSigner 
 		return nil, fmt.Errorf("ECDSA signer required, got %s", backingSigner.Type())
 	}
 
+	address, err := signer.PublicKeyToEVMAddress(backingSigner.PublicKey())
+	if err != nil {
+		return nil, fmt.Errorf("derive address from signer public key: %w", err)
+	}
+
 	fqn := attestorFQN("local", cfg.ChainID, cfg.Name)
 	logger := slog.With("module", "attestor", "name", fqn)
 
 	return &LocalAttestor{
 		chainID:        cfg.ChainID,
 		name:           cfg.Name,
+		address:        address,
 		finalityOffset: cfg.FinalityOffset,
 
 		client: client,
@@ -254,11 +261,10 @@ func (a *LocalAttestor) packetCompact(
 	}, nil
 }
 
-// name and alias are identical for local attestors
 func (a *LocalAttestor) Name() string    { return a.name }
-func (a *LocalAttestor) Alias() string   { return a.name }
 func (a *LocalAttestor) ChainID() string { return a.chainID }
 func (a *LocalAttestor) IsLocal() bool   { return true }
+func (a *LocalAttestor) Address() string { return a.address }
 
 func attestorFQN(connection, chainID, name string) string {
 	return fmt.Sprintf("%s-%s-%s", chainID, connection, name)

@@ -382,6 +382,104 @@ func (x *LatestHeightResponse) GetHeight() uint64 {
 	return 0
 }
 
+type InfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Attestor      string                 `protobuf:"bytes,1,opt,name=attestor,proto3" json:"attestor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InfoRequest) Reset() {
+	*x = InfoRequest{}
+	mi := &file_attestor_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InfoRequest) ProtoMessage() {}
+
+func (x *InfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_attestor_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InfoRequest.ProtoReflect.Descriptor instead.
+func (*InfoRequest) Descriptor() ([]byte, []int) {
+	return file_attestor_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *InfoRequest) GetAttestor() string {
+	if x != nil {
+		return x.Attestor
+	}
+	return ""
+}
+
+type InfoResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The chain this attestor watches.
+	ChainId string `protobuf:"bytes,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	// The attestor's signing address.
+	Address       string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InfoResponse) Reset() {
+	*x = InfoResponse{}
+	mi := &file_attestor_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InfoResponse) ProtoMessage() {}
+
+func (x *InfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_attestor_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InfoResponse.ProtoReflect.Descriptor instead.
+func (*InfoResponse) Descriptor() ([]byte, []int) {
+	return file_attestor_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *InfoResponse) GetChainId() string {
+	if x != nil {
+		return x.ChainId
+	}
+	return ""
+}
+
+func (x *InfoResponse) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
 // Attestation is a single attestation from a given block height
 // for the requested data.
 type Attestation struct {
@@ -400,7 +498,7 @@ type Attestation struct {
 
 func (x *Attestation) Reset() {
 	*x = Attestation{}
-	mi := &file_attestor_proto_msgTypes[6]
+	mi := &file_attestor_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -412,7 +510,7 @@ func (x *Attestation) String() string {
 func (*Attestation) ProtoMessage() {}
 
 func (x *Attestation) ProtoReflect() protoreflect.Message {
-	mi := &file_attestor_proto_msgTypes[6]
+	mi := &file_attestor_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -425,7 +523,7 @@ func (x *Attestation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Attestation.ProtoReflect.Descriptor instead.
 func (*Attestation) Descriptor() ([]byte, []int) {
-	return file_attestor_proto_rawDescGZIP(), []int{6}
+	return file_attestor_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Attestation) GetHeight() uint64 {
@@ -476,7 +574,12 @@ const file_attestor_proto_rawDesc = "" +
 	"\x13LatestHeightRequest\x12\x1a\n" +
 	"\battestor\x18\x01 \x01(\tR\battestor\".\n" +
 	"\x14LatestHeightResponse\x12\x16\n" +
-	"\x06height\x18\x01 \x01(\x04R\x06height\"\x99\x01\n" +
+	"\x06height\x18\x01 \x01(\x04R\x06height\")\n" +
+	"\vInfoRequest\x12\x1a\n" +
+	"\battestor\x18\x01 \x01(\tR\battestor\"C\n" +
+	"\fInfoResponse\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\tR\achainId\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\"\x99\x01\n" +
 	"\vAttestation\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12!\n" +
 	"\ttimestamp\x18\x02 \x01(\x04H\x00R\ttimestamp\x88\x01\x01\x12#\n" +
@@ -487,11 +590,12 @@ const file_attestor_proto_rawDesc = "" +
 	"\x0eCommitmentType\x12\x1a\n" +
 	"\x16COMMITMENT_TYPE_PACKET\x10\x00\x12\x17\n" +
 	"\x13COMMITMENT_TYPE_ACK\x10\x01\x12\x1b\n" +
-	"\x17COMMITMENT_TYPE_RECEIPT\x10\x022\xc6\x02\n" +
+	"\x17COMMITMENT_TYPE_RECEIPT\x10\x022\x8b\x03\n" +
 	"\x12AttestationService\x12g\n" +
 	"\x10StateAttestation\x12(.ibc.v2.attestor.StateAttestationRequest\x1a).ibc.v2.attestor.StateAttestationResponse\x12j\n" +
 	"\x11PacketAttestation\x12).ibc.v2.attestor.PacketAttestationRequest\x1a*.ibc.v2.attestor.PacketAttestationResponse\x12[\n" +
-	"\fLatestHeight\x12$.ibc.v2.attestor.LatestHeightRequest\x1a%.ibc.v2.attestor.LatestHeightResponseB,Z*github.com/cosmos/ibc/link/api/v2/attestorb\x06proto3"
+	"\fLatestHeight\x12$.ibc.v2.attestor.LatestHeightRequest\x1a%.ibc.v2.attestor.LatestHeightResponse\x12C\n" +
+	"\x04Info\x12\x1c.ibc.v2.attestor.InfoRequest\x1a\x1d.ibc.v2.attestor.InfoResponseB,Z*github.com/cosmos/ibc/link/api/v2/attestorb\x06proto3"
 
 var (
 	file_attestor_proto_rawDescOnce sync.Once
@@ -506,7 +610,7 @@ func file_attestor_proto_rawDescGZIP() []byte {
 }
 
 var file_attestor_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_attestor_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_attestor_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_attestor_proto_goTypes = []any{
 	(CommitmentType)(0),               // 0: ibc.v2.attestor.CommitmentType
 	(*StateAttestationRequest)(nil),   // 1: ibc.v2.attestor.StateAttestationRequest
@@ -515,20 +619,24 @@ var file_attestor_proto_goTypes = []any{
 	(*PacketAttestationResponse)(nil), // 4: ibc.v2.attestor.PacketAttestationResponse
 	(*LatestHeightRequest)(nil),       // 5: ibc.v2.attestor.LatestHeightRequest
 	(*LatestHeightResponse)(nil),      // 6: ibc.v2.attestor.LatestHeightResponse
-	(*Attestation)(nil),               // 7: ibc.v2.attestor.Attestation
+	(*InfoRequest)(nil),               // 7: ibc.v2.attestor.InfoRequest
+	(*InfoResponse)(nil),              // 8: ibc.v2.attestor.InfoResponse
+	(*Attestation)(nil),               // 9: ibc.v2.attestor.Attestation
 }
 var file_attestor_proto_depIdxs = []int32{
-	7, // 0: ibc.v2.attestor.StateAttestationResponse.attestation:type_name -> ibc.v2.attestor.Attestation
+	9, // 0: ibc.v2.attestor.StateAttestationResponse.attestation:type_name -> ibc.v2.attestor.Attestation
 	0, // 1: ibc.v2.attestor.PacketAttestationRequest.commitment_type:type_name -> ibc.v2.attestor.CommitmentType
-	7, // 2: ibc.v2.attestor.PacketAttestationResponse.attestation:type_name -> ibc.v2.attestor.Attestation
+	9, // 2: ibc.v2.attestor.PacketAttestationResponse.attestation:type_name -> ibc.v2.attestor.Attestation
 	1, // 3: ibc.v2.attestor.AttestationService.StateAttestation:input_type -> ibc.v2.attestor.StateAttestationRequest
 	3, // 4: ibc.v2.attestor.AttestationService.PacketAttestation:input_type -> ibc.v2.attestor.PacketAttestationRequest
 	5, // 5: ibc.v2.attestor.AttestationService.LatestHeight:input_type -> ibc.v2.attestor.LatestHeightRequest
-	2, // 6: ibc.v2.attestor.AttestationService.StateAttestation:output_type -> ibc.v2.attestor.StateAttestationResponse
-	4, // 7: ibc.v2.attestor.AttestationService.PacketAttestation:output_type -> ibc.v2.attestor.PacketAttestationResponse
-	6, // 8: ibc.v2.attestor.AttestationService.LatestHeight:output_type -> ibc.v2.attestor.LatestHeightResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
+	7, // 6: ibc.v2.attestor.AttestationService.Info:input_type -> ibc.v2.attestor.InfoRequest
+	2, // 7: ibc.v2.attestor.AttestationService.StateAttestation:output_type -> ibc.v2.attestor.StateAttestationResponse
+	4, // 8: ibc.v2.attestor.AttestationService.PacketAttestation:output_type -> ibc.v2.attestor.PacketAttestationResponse
+	6, // 9: ibc.v2.attestor.AttestationService.LatestHeight:output_type -> ibc.v2.attestor.LatestHeightResponse
+	8, // 10: ibc.v2.attestor.AttestationService.Info:output_type -> ibc.v2.attestor.InfoResponse
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -539,14 +647,14 @@ func file_attestor_proto_init() {
 	if File_attestor_proto != nil {
 		return
 	}
-	file_attestor_proto_msgTypes[6].OneofWrappers = []any{}
+	file_attestor_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_attestor_proto_rawDesc), len(file_attestor_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
