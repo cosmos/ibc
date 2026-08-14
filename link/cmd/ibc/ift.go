@@ -86,7 +86,7 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	to, err := resolveEVMAddress(cfg, "to", flagTxIFTTo)
+	to, err := resolveAddress(cfg, flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func txIFTSend(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	receiver, err := resolveEVMAddress(cfg, "to", flagTxIFTTo)
+	receiver, err := resolveAddress(cfg, flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 		return errors.Errorf("chain %q is not an EVM chain", flagQueryIFTChain)
 	}
 
-	account, err := resolveEVMAddress(cfg, "address", flagQueryIFTAccount)
+	account, err := resolveAddress(cfg, flagQueryIFTAccount)
 	if err != nil {
 		return err
 	}
@@ -264,16 +264,15 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 	return backend, key, chainID, cfg, nil
 }
 
-// resolveEVMAddress accepts either a raw EVM address or a config signer
-// alias, resolving the alias to its derived EVM address. flagName names the
-// originating flag, for the error message only.
-func resolveEVMAddress(cfg config.Config, flagName, value string) (string, error) {
+// resolveAddress accepts either a raw EVM address or a config signer alias,
+// resolving the alias to its derived EVM address.
+func resolveAddress(cfg config.Config, value string) (string, error) {
 	if common.IsHexAddress(value) {
 		return value, nil
 	}
 	sc, ok := cfg.Signer(value)
 	if !ok {
-		return "", errors.Errorf("invalid --%s %q: not a hex address or a configured signer alias", flagName, value)
+		return "", errors.Errorf("invalid address %q: not a hex address or a configured signer alias", value)
 	}
 	return signer.EVMAddressOf(sc)
 }
