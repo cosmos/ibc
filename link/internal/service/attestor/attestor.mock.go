@@ -36,12 +36,12 @@ func (_m *MockAttestor) EXPECT() *MockAttestor_Expecter {
 	return &MockAttestor_Expecter{mock: &_m.Mock}
 }
 
-// Alias provides a mock function for the type MockAttestor
-func (_mock *MockAttestor) Alias() string {
+// Address provides a mock function for the type MockAttestor
+func (_mock *MockAttestor) Address() string {
 	ret := _mock.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for Alias")
+		panic("no return value specified for Address")
 	}
 
 	var r0 string
@@ -53,29 +53,29 @@ func (_mock *MockAttestor) Alias() string {
 	return r0
 }
 
-// MockAttestor_Alias_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Alias'
-type MockAttestor_Alias_Call struct {
+// MockAttestor_Address_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Address'
+type MockAttestor_Address_Call struct {
 	*mock.Call
 }
 
-// Alias is a helper method to define mock.On call
-func (_e *MockAttestor_Expecter) Alias() *MockAttestor_Alias_Call {
-	return &MockAttestor_Alias_Call{Call: _e.mock.On("Alias")}
+// Address is a helper method to define mock.On call
+func (_e *MockAttestor_Expecter) Address() *MockAttestor_Address_Call {
+	return &MockAttestor_Address_Call{Call: _e.mock.On("Address")}
 }
 
-func (_c *MockAttestor_Alias_Call) Run(run func()) *MockAttestor_Alias_Call {
+func (_c *MockAttestor_Address_Call) Run(run func()) *MockAttestor_Address_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run()
 	})
 	return _c
 }
 
-func (_c *MockAttestor_Alias_Call) Return(s string) *MockAttestor_Alias_Call {
+func (_c *MockAttestor_Address_Call) Return(s string) *MockAttestor_Address_Call {
 	_c.Call.Return(s)
 	return _c
 }
 
-func (_c *MockAttestor_Alias_Call) RunAndReturn(run func() string) *MockAttestor_Alias_Call {
+func (_c *MockAttestor_Address_Call) RunAndReturn(run func() string) *MockAttestor_Address_Call {
 	_c.Call.Return(run)
 	return _c
 }

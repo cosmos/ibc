@@ -1,0 +1,44 @@
+{
+  "config": {
+    "chainId": ${CHAIN_ID},
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "berlinBlock": 0,
+    "londonBlock": 0,
+    "arrowGlacierBlock": 0,
+    "grayGlacierBlock": 0,
+    "shanghaiTime": 0,
+    "cancunTime": 0,
+    "qbft": {
+      "blockperiodseconds": ${QBFT_BLOCK_PERIOD_SECONDS},
+      "epochlength": ${QBFT_EPOCH_LENGTH},
+      "requesttimeoutseconds": ${QBFT_REQUEST_TIMEOUT_SECONDS}
+    }
+  },
+  "nonce": "0x0",
+  "timestamp": "0x0",
+  "extraData": "${QBFT_EXTRADATA}",
+  "gasLimit": "0x1C9C380",
+  "difficulty": "0x1",
+  "mixHash": "0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365",
+  "coinbase": "0x0000000000000000000000000000000000000000",
+  "alloc": {
+${GENESIS_ALLOC}
+    "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02": {
+      "comment": "EIP-4788 beacon block root contract (required by Cancun)",
+      "balance": "0x0",
+      "nonce": "0x1",
+      "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500"
+    }
+  },
+  "baseFeePerGas": "0x7",
+  "number": "0x0",
+  "gasUsed": "0x0",
+  "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+}

@@ -4,40 +4,68 @@ package processors
 
 import (
 	"context"
+	"encoding/hex"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/internal/chains"
+	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
-// CheckWriteAckFinality gates ack relaying on the write ack tx being finalized
-// on the destination chain.
+// CheckWriteAckFinality gates ack relaying on the write ack tx's height
+// being at or before the height the source client's proof generator can
+// currently prove.
 type CheckWriteAckFinality struct {
-	chains         ChainClients
-	finalityOffset *uint64
+	destinationChainClient chains.Client
+	proofGen               proofgen.ProofGenerator
 }
 
-func NewCheckWriteAckFinality(chainClients ChainClients, finalityOffset *uint64) CheckWriteAckFinality {
-	return CheckWriteAckFinality{chains: chainClients, finalityOffset: finalityOffset}
+func NewCheckWriteAckFinality(
+	chainClients ChainClients,
+	proofGenerators ProofGenerators,
+	route Route,
+) (CheckWriteAckFinality, error) {
+	destinationChainClient, ok := chainClients.Get(route.DestinationChainID)
+	if !ok {
+		return CheckWriteAckFinality{}, errors.Errorf(
+			"no configured chain client for destination chain %s", route.DestinationChainID,
+		)
+	}
+
+	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+	if !ok {
+		return CheckWriteAckFinality{}, errors.Errorf(
+			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
+		)
+	}
+
+	return CheckWriteAckFinality{destinationChainClient: destinationChainClient, proofGen: proofGen}, nil
 }
 
 func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	client, ok := p.chains.Get(tr.DestinationChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
-	}
-
 	if tr.WriteAckTxHash == nil {
 		return nil, errors.New("transfer has no write ack tx hash, violates ShouldProcess")
 	}
 
-	finalized, err := client.IsTxFinalized(ctx, *tr.WriteAckTxHash, p.finalityOffset)
+	proofHeight, _, err := p.proofGen.LatestProvableHeight(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "checking finality of write ack tx %s", *tr.WriteAckTxHash)
+		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
 
-	if !finalized {
+	txID, err := hex.DecodeString(strings.TrimPrefix(*tr.WriteAckTxHash, "0x"))
+	if err != nil {
+		return nil, errors.Wrapf(err, "decoding tx hash %q", *tr.WriteAckTxHash)
+	}
+
+	txHeight, err := p.destinationChainClient.TxHeight(ctx, txID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reading tx height for tx %s", *tr.WriteAckTxHash)
+	}
+
+	if txHeight > proofHeight {
 		return nil, ErrWriteAckNotFinalized
 	}
 

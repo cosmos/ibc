@@ -21,15 +21,11 @@ func TestService(t *testing.T) {
 	sampleSigner, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)
 
-	t.Run("duplicateAliases", func(t *testing.T) {
+	t.Run("duplicateLocalNames", func(t *testing.T) {
 		// ARRANGE
 		attestors := []Attestor{
-			must(
-				NewLocal(config.AttestationConfig{ChainID: "1", Name: "alice"}, stubChainClient(t, "1"), sampleSigner),
-			),
-			must(
-				NewLocal(config.AttestationConfig{ChainID: "2", Name: "alice"}, stubChainClient(t, "2"), sampleSigner),
-			),
+			must(NewLocal(config.AttestorConfig{ChainID: "1", Name: "alice"}, stubChainClient(t, "1"), sampleSigner)),
+			must(NewLocal(config.AttestorConfig{ChainID: "2", Name: "alice"}, stubChainClient(t, "2"), sampleSigner)),
 		}
 
 		// ACT
@@ -80,36 +76,23 @@ func TestService(t *testing.T) {
 			"carol": 30,
 		}}
 		service, err := New([]Attestor{
-			NewRemote("ethereum", "alice", "eth-alice", client),
-			NewRemote("cosmos", "bob", "cosmos-bob", client),
-			NewRemote("solana", "carol", "solana-carol", client),
+			newTestRemoteAttestor("alice", client),
+			newTestRemoteAttestor("bob", client),
+			newTestRemoteAttestor("carol", client),
 		})
 		require.NoError(t, err)
 
 		for _, tt := range []struct {
 			name           string
-			alias          string
 			expectedHeight uint64
 		}{
-			{
-				name:           "alice",
-				alias:          "eth-alice",
-				expectedHeight: 10,
-			},
-			{
-				name:           "bob",
-				alias:          "cosmos-bob",
-				expectedHeight: 20,
-			},
-			{
-				name:           "carol",
-				alias:          "solana-carol",
-				expectedHeight: 30,
-			},
+			{name: "alice", expectedHeight: 10},
+			{name: "bob", expectedHeight: 20},
+			{name: "carol", expectedHeight: 30},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ACT
-				height, err := service.LatestHeight(ctx, tt.alias)
+				height, err := service.LatestHeight(ctx, tt.name)
 
 				// ASSERT
 				require.NoError(t, err)
@@ -132,15 +115,15 @@ func TestService(t *testing.T) {
 		ctx := context.Background()
 		client := attestationClient{heights: map[string]uint64{"bob": 20}}
 		service, err := New([]Attestor{
-			NewRemote("ethereum", "alice", "eth-alice", client),
-			NewRemote("cosmos", "bob", "cosmos-bob", client),
-			NewRemote("solana", "carol", "solana-carol", client),
+			newTestRemoteAttestor("alice", client),
+			newTestRemoteAttestor("bob", client),
+			newTestRemoteAttestor("carol", client),
 			stubLocalAttestor(t, "ethereum", "dave", sampleSigner),
 		})
 		require.NoError(t, err)
 
 		// ACT
-		remoteHeight, err := service.LatestHeight(ctx, "cosmos-bob")
+		remoteHeight, err := service.LatestHeight(ctx, "bob")
 
 		// ASSERT
 		require.NoError(t, err)
@@ -182,6 +165,13 @@ func (c attestationClient) PacketAttestation(
 	return nil, connect.NewError(connect.CodeUnimplemented, nil)
 }
 
+func (c attestationClient) Info(
+	_ context.Context,
+	_ *connect.Request[proto.InfoRequest],
+) (*connect.Response[proto.InfoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, nil)
+}
+
 func stubLocalAttestor(t *testing.T, chainID, name string, backingSigner signer.Signer) *LocalAttestor {
 	t.Helper()
 
@@ -192,7 +182,7 @@ func stubLocalAttestor(t *testing.T, chainID, name string, backingSigner signer.
 		Once()
 
 	attestor, err := NewLocal(
-		config.AttestationConfig{ChainID: chainID, Name: name},
+		config.AttestorConfig{ChainID: chainID, Name: name},
 		client,
 		backingSigner,
 	)

@@ -40,21 +40,21 @@ func relayerConfig() config.Config {
 			},
 		},
 		Relayer: config.RelayerConfig{
-			Clients: []config.ClientConfig{
+			Connections: []config.ConnectionConfig{
 				{
-					Alias:                "base-client",
-					ClientID:             "base-0",
-					ChainID:              chainIDEth,
-					CounterpartyChainID:  chainIDBase,
-					CounterpartyClientID: "ethereum-0",
-					Type:                 config.ClientTypeAttestation,
+					Alias: "base-client",
+					ClientA: config.ClientEnd{
+						ClientID: "base-0",
+						ChainID:  chainIDEth,
+						Type:     config.ClientTypeAttestation,
+					},
+					ClientB: config.ClientEnd{
+						ClientID: "ethereum-0",
+						ChainID:  chainIDBase,
+						Type:     config.ClientTypeAttestation,
+					},
 				},
 			},
-			Routes: []config.RouteConfig{{
-				SourceClient:      "base-client",
-				SourceSignerAlias: "source-signer",
-				DestSignerAlias:   "destination-signer",
-			}},
 		},
 	}
 }
@@ -277,7 +277,6 @@ func TestRelay(t *testing.T) {
 		events := []v2.PacketEvent{
 			{Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 42, SourceClient: "base-0"}},
 			{Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 7, SourceClient: "unknown-0"}},
-			{Kind: v2.KindSendPacket, Packet: channeltypesv2.Packet{Sequence: 8, SourceClient: "unrouted-0"}},
 			{
 				Kind: v2.KindSendPacket,
 				Packet: channeltypesv2.Packet{
@@ -290,14 +289,9 @@ func TestRelay(t *testing.T) {
 			name     string
 			selector PacketSelector
 			want     error
-			unrouted bool
 		}{
 			{name: "absent", selector: PacketSelector{SourceClientID: "base-0", SequenceNumber: 99}, want: ErrInvalidInput},
 			{name: "unconfigured", selector: PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 7}, want: ErrFailedPrecondition},
-			{
-				name: "unrouted", selector: PacketSelector{SourceClientID: "unrouted-0", SequenceNumber: 8},
-				want: ErrFailedPrecondition, unrouted: true,
-			},
 			{
 				name: "wrong destination", selector: PacketSelector{SourceClientID: "base-0", SequenceNumber: 9},
 				want: ErrFailedPrecondition,
@@ -308,12 +302,6 @@ func TestRelay(t *testing.T) {
 				client := mocks.NewMockClient(t)
 				clients := NewMockChainClients(t)
 				cfg := relayerConfig()
-				if tt.unrouted {
-					cfg.Relayer.Clients = append(cfg.Relayer.Clients, config.ClientConfig{
-						Alias: "unrouted-client", ClientID: "unrouted-0", ChainID: chainIDEth,
-						CounterpartyChainID: chainIDBase, Type: config.ClientTypeAttestation,
-					})
-				}
 				service := New(cfg, NewMockStore(t), clients, nil)
 				clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 				client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()

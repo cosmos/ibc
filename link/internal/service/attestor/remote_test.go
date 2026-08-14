@@ -4,6 +4,7 @@ package attestor
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -13,9 +14,17 @@ import (
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
 )
 
+func newTestRemoteAttestor(name string, client proto.AttestationServiceClient) *RemoteAttestor {
+	return &RemoteAttestor{
+		name:   name,
+		client: client,
+		logger: slog.With("module", "attestor", "name", name),
+	}
+}
+
 func TestRemoteAttestorRequestTimeout(t *testing.T) {
 	client := timeoutAttestationClient{t: t}
-	remote := NewRemote("chain", "name", "alias", client)
+	remote := newTestRemoteAttestor("name", client)
 
 	_, err := remote.LatestHeight(context.Background())
 	require.NoError(t, err)
@@ -24,6 +33,8 @@ func TestRemoteAttestorRequestTimeout(t *testing.T) {
 	_, err = remote.PacketAttestation(context.Background(), PacketAttestationRequest{
 		CommitmentType: CommitmentTypePacket,
 	})
+	require.NoError(t, err)
+	_, err = queryAttestorInfo(context.Background(), client, "name")
 	require.NoError(t, err)
 }
 
@@ -53,6 +64,14 @@ func (c timeoutAttestationClient) PacketAttestation(
 ) (*connect.Response[proto.PacketAttestationResponse], error) {
 	c.requireTimeout(ctx)
 	return connect.NewResponse(&proto.PacketAttestationResponse{Attestation: &proto.Attestation{}}), nil
+}
+
+func (c timeoutAttestationClient) Info(
+	ctx context.Context,
+	_ *connect.Request[proto.InfoRequest],
+) (*connect.Response[proto.InfoResponse], error) {
+	c.requireTimeout(ctx)
+	return connect.NewResponse(&proto.InfoResponse{}), nil
 }
 
 func (c timeoutAttestationClient) requireTimeout(ctx context.Context) {

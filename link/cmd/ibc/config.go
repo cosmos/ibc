@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/internal/livevalidate"
 )
 
 // set in init()
@@ -45,7 +45,46 @@ var (
 		Short: "Validate the config",
 		RunE:  configValidate,
 	}
+
+	cmdConfigAddChain = &cobra.Command{
+		Use:   "add-chain",
+		Short: "Add a chain entry to the config",
+		RunE:  configAddChain,
+	}
 )
+
+var (
+	flagConfigAddChainID       string
+	flagConfigAddChainRPC      string
+	flagConfigAddChainRouter   string
+	flagConfigAddChainDeployer string
+)
+
+func configAddChain(_ *cobra.Command, _ []string) error {
+	globalFlags.SkipConfigValidation()
+
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+
+	if _, ok := cfg.Chain(flagConfigAddChainID); ok {
+		return errors.Errorf("chain %q already exists in config", flagConfigAddChainID)
+	}
+
+	cfg.Chains = append(cfg.Chains, config.ChainConfig{
+		ChainID:  flagConfigAddChainID,
+		EVM:      &config.EVMChainConfig{RPC: flagConfigAddChainRPC, ICS26Router: flagConfigAddChainRouter},
+		Deployer: flagConfigAddChainDeployer,
+	})
+
+	configPath, err := globalFlags.ConfigPath()
+	if err != nil {
+		return err
+	}
+
+	return cfg.StoreToFileWithComments(configPath)
+}
 
 func configNew(_ *cobra.Command, _ []string) error {
 	configPath, err := globalFlags.ConfigPath()
@@ -72,15 +111,15 @@ func configNew(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func configValidate(_ *cobra.Command, _ []string) error {
+func configValidate(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return errors.Wrap(err, "setup home with config")
 	}
 
 	if flagConfigValidateLive {
-		if err := store.ValidateConfigLive(cfg); err != nil {
-			return errors.Wrap(err, "config live validation")
+		if err := livevalidate.Validate(cmd.Context(), cfg); err != nil {
+			return err
 		}
 	}
 
