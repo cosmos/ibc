@@ -109,7 +109,17 @@ func init() {
 	cmdAttestorStateAttestation.Flags().Uint64Var(&flagAttestorHeight, "height", 0, "height to attest")
 
 	// Query commands
-	// todo
+	cmdQuery.AddCommand(cmdQueryIFT)
+	cmdQueryIFT.AddCommand(cmdQueryIFTBalance)
+	qpf := cmdQueryIFT.PersistentFlags()
+	qpf.StringVar(&flagQueryIFTChain, "chain", "", "chain ID the IFT token is deployed on")
+	qpf.StringVar(&flagQueryIFTAddress, "ift", "", "IFT token address")
+	for _, req := range []string{"chain", useIFT} {
+		_ = cmdQueryIFT.MarkPersistentFlagRequired(req)
+	}
+	cmdQueryIFTBalance.Flags().
+		StringVar(&flagQueryIFTAccount, "address", "", "account address, or a configured signer alias")
+	_ = cmdQueryIFTBalance.MarkFlagRequired("address")
 
 	// Migrate commands
 	cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)

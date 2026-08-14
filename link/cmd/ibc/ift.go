@@ -46,6 +46,19 @@ var (
 			"    --to 0xReceiver... --amount 500000000000000000 --from deployer",
 		RunE: txIFTSend,
 	}
+
+	cmdQueryIFT = &cobra.Command{
+		Use:   useIFT,
+		Short: "IFT query subcommands",
+	}
+
+	cmdQueryIFTBalance = &cobra.Command{
+		Use:   "balance",
+		Short: "Query an address's IFT token balance",
+		Example: "  ibc query ift balance --chain 1 --ift 0xIFTTokenAddress... \\\n" +
+			"    --address 0xAccount...",
+		RunE: queryIFTBalance,
+	}
 )
 
 var (
@@ -56,6 +69,10 @@ var (
 	flagTxIFTTo       string
 	flagTxIFTAmount   string
 	flagTxIFTClientID string
+
+	flagQueryIFTChain   string
+	flagQueryIFTAddress string
+	flagQueryIFTAccount string
 )
 
 func txIFTMint(cmd *cobra.Command, _ []string) error {
@@ -69,7 +86,7 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	to, err := resolveToAddress(cfg, flagTxIFTTo)
+	to, err := resolveAddress(cfg, flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -113,7 +130,7 @@ func txIFTSend(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	receiver, err := resolveToAddress(cfg, flagTxIFTTo)
+	receiver, err := resolveAddress(cfg, flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -148,6 +165,56 @@ func txIFTSend(cmd *cobra.Command, _ []string) error {
 	}
 
 	return printTxHash(tx.Hash().Hex())
+}
+
+func queryIFTBalance(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+
+	chain, ok := cfg.Chain(flagQueryIFTChain)
+	if !ok {
+		return errors.Errorf("chain %q not declared in config", flagQueryIFTChain)
+	}
+	if chain.Type() != config.ChainTypeEVM {
+		return errors.Errorf("chain %q is not an EVM chain", flagQueryIFTChain)
+	}
+
+	account, err := resolveAddress(cfg, flagQueryIFTAccount)
+	if err != nil {
+		return err
+	}
+
+	backend, err := ethclient.DialContext(cmd.Context(), chain.EVM.RPC)
+	if err != nil {
+		return errors.Wrapf(err, "dial %s", chain.EVM.RPC)
+	}
+
+	if !common.IsHexAddress(flagQueryIFTAddress) {
+		return errors.Errorf("invalid IFT address %q", flagQueryIFTAddress)
+	}
+	contract, err := ift.NewContract(common.HexToAddress(flagQueryIFTAddress), backend)
+	if err != nil {
+		return err
+	}
+
+	opts := &bind.CallOpts{Context: cmd.Context()}
+
+	balance, err := contract.BalanceOf(opts, common.HexToAddress(account))
+	if err != nil {
+		return errors.Wrap(err, "balanceOf")
+	}
+	symbol, err := contract.Symbol(opts)
+	if err != nil {
+		return errors.Wrap(err, "symbol")
+	}
+
+	return config.PrintJSON(map[string]string{
+		"address": account,
+		"symbol":  symbol,
+		"balance": balance.String(),
+	})
 }
 
 func printTxHash(txHash string) error {
@@ -200,15 +267,15 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 	return backend, key, chainID, cfg, nil
 }
 
-// resolveToAddress accepts either a raw EVM address or a config signer
-// alias, resolving the alias to its derived EVM address.
-func resolveToAddress(cfg config.Config, to string) (string, error) {
-	if common.IsHexAddress(to) {
-		return to, nil
+// resolveAddress accepts either a raw EVM address or a config signer alias,
+// resolving the alias to its derived EVM address.
+func resolveAddress(cfg config.Config, value string) (string, error) {
+	if common.IsHexAddress(value) {
+		return value, nil
 	}
-	sc, ok := cfg.Signer(to)
+	sc, ok := cfg.Signer(value)
 	if !ok {
-		return "", errors.Errorf("invalid --to %q: not a hex address or a configured signer alias", to)
+		return "", errors.Errorf("invalid address %q: not a hex address or a configured signer alias", value)
 	}
 	return signer.EVMAddressOf(sc)
 }
