@@ -14,8 +14,8 @@ import (
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/attestor/evm/ibc"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )

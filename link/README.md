@@ -35,7 +35,7 @@ make build
 ## Configuration
 
 See [`docs/configuration.md`](docs/configuration.md) for the full config
-reference, or [`internal/config/ibc.yml`](internal/config/ibc.yml) for a
+reference, or [`config/ibc.yml`](config/ibc.yml) for a
 worked example.
 
 ## E2E

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	proto "github.com/cosmos/ibc/link/api/v2/attestor"
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )

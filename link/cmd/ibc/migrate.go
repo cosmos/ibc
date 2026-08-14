@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -49,7 +49,7 @@ func migrateUp(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return config.PrintJSON(map[string]any{
+	return printJSON(map[string]any{
 		"db":      cfg.DB.Label(),
 		"applied": applied,
 	})
@@ -67,7 +67,7 @@ func migrateDown(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return config.PrintJSON(map[string]any{
+	return printJSON(map[string]any{
 		"db":         cfg.DB.Label(),
 		"rolledBack": rolledBack,
 	})
@@ -85,7 +85,7 @@ func migrateStatus(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return config.PrintJSON(map[string]any{
+	return printJSON(map[string]any{
 		"db":         cfg.DB.Label(),
 		"migrations": statuses,
 	})

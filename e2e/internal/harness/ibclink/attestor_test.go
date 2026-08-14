@@ -24,9 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
+	linkconfig "github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -113,13 +113,14 @@ func TestStartWritesRemoteSignerWithoutLocalKey(t *testing.T) {
 		common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141"),
 		process.SignerAddress())
 
-	configData, err := os.ReadFile(filepath.Join(workDir, configFilename))
+	config, err := linkconfig.LoadFile(
+		filepath.Join(workDir, configFilename),
+		linkconfig.LoadOptions{SkipValidation: true},
+	)
 	require.NoError(t, err)
-	var config fileConfig
-	require.NoError(t, yaml.Unmarshal(configData, &config))
-	require.Equal(t, []signerConfig{{
+	require.Equal(t, linkconfig.Signers{{
 		Alias:       signerAlias,
-		Type:        RelayerSignerRemote,
+		Type:        linkconfig.SignerRemote,
 		GRPC:        remoteSignerEndpoint,
 		RemoteKeyID: "attestor-key",
 	}}, config.Signers)
@@ -265,13 +266,12 @@ func runAttestorHelper() error {
 	if err != nil {
 		return err
 	}
-	configData, err := os.ReadFile(filepath.Join(home, configName))
+	config, err := linkconfig.LoadFile(
+		filepath.Join(home, configName),
+		linkconfig.LoadOptions{SkipValidation: true},
+	)
 	if err != nil {
-		return fmt.Errorf("helper read config: %w", err)
-	}
-	var config fileConfig
-	if decodeErr := yaml.Unmarshal(configData, &config); decodeErr != nil {
-		return fmt.Errorf("helper decode config: %w", decodeErr)
+		return fmt.Errorf("helper load config: %w", err)
 	}
 	if len(config.Attestors) != 1 || config.Attestors[0].Name != "attestor-a" {
 		return fmt.Errorf("helper received unexpected attestor config: %+v", config.Attestors)
@@ -284,7 +284,7 @@ func runAttestorHelper() error {
 		return fmt.Errorf("helper received unexpected signer config: %+v", config.Signers)
 	}
 	signer := config.Signers[0]
-	if signer.Type == RelayerSignerLocal {
+	if signer.Type == linkconfig.SignerLocal {
 		if _, readErr := os.ReadFile(signer.File); readErr != nil {
 			return fmt.Errorf("helper read signer key: %w", readErr)
 		}

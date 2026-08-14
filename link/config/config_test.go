@@ -47,7 +47,7 @@ func TestConfig(t *testing.T) {
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
-				config := DefaultConfig()
+				config := Default()
 				if tt.patch != nil {
 					tt.patch(&config)
 				}
@@ -63,7 +63,7 @@ func TestConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("LoadFromFile", func(t *testing.T) {
+	t.Run("LoadFile", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
@@ -75,7 +75,7 @@ db:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.NoError(t, err)
@@ -93,7 +93,7 @@ server:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.NoError(t, err)
@@ -108,7 +108,7 @@ server:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.Error(t, err)
@@ -122,7 +122,7 @@ server:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.ErrorContains(t, err, "validation failed")
@@ -134,7 +134,7 @@ server:
 			path := filepath.Join(t.TempDir(), "missing.yml")
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.Error(t, err)
@@ -173,7 +173,7 @@ server:
 					path := writeTestConfig(t, tt.body)
 
 					// ACT
-					_, err := LoadFromFile(path, true, true)
+					_, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 					// ASSERT
 					require.ErrorContains(t, err, "unknown field")
@@ -189,7 +189,7 @@ server:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, false)
+			config, err := LoadFile(path, LoadOptions{})
 
 			// ASSERT
 			require.NoError(t, err)
@@ -212,7 +212,7 @@ attestors:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.NoError(t, err)
@@ -236,7 +236,7 @@ attestors:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 			// ASSERT
 			require.ErrorContains(t, err, `references unknown signer: "missing-signer"`)
@@ -569,7 +569,7 @@ func TestSignerConfigValidateRequiresExactLocalFilePath(t *testing.T) {
 }
 
 func TestChainDeployerCrossValidation(t *testing.T) {
-	base := DefaultConfig()
+	base := Default()
 	base.Chains = []ChainConfig{
 		{
 			ChainID:  "1",

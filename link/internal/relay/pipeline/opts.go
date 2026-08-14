@@ -5,7 +5,7 @@ package pipeline
 import (
 	"time"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
 )
 

@@ -6,8 +6,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"

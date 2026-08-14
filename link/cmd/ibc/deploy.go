@@ -17,10 +17,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/deploy"
 	"github.com/cosmos/ibc/link/internal/deploy/evm"
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
+	"github.com/cosmos/ibc/link/internal/fsutil"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/keyfile"
 )
@@ -135,11 +136,11 @@ func deployerKeyHex(cfg config.Config, alias string) (string, error) {
 	if sc.Type != config.SignerLocal {
 		return "", errors.Errorf("deployer signer %q must be a local key (deployment tooling needs the raw key)", alias)
 	}
-	path, err := config.ExpandHome(sc.File)
+	path, err := fsutil.ExpandHome(sc.File)
 	if err != nil {
 		return "", err
 	}
-	key, err := signer.LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+	key, err := signer.LocalKeyFromFile(fsutil.KeyFileFallbacks(path)...)
 	if err != nil {
 		return "", err
 	}
@@ -215,13 +216,13 @@ func planThenRun(ctx context.Context, steps []deploy.Step) error {
 		return err
 	}
 	if flagDeployDryRun {
-		return config.PrintJSON(preview)
+		return printJSON(preview)
 	}
 	if confirmErr := confirmOrAbort(preview); confirmErr != nil {
 		return confirmErr
 	}
 	results, err := deploy.RunSteps(ctx, log, false, steps)
-	if printErr := config.PrintJSON(results); printErr != nil {
+	if printErr := printJSON(results); printErr != nil {
 		return printErr
 	}
 	return err
@@ -430,7 +431,7 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 			failed = true
 		}
 	}
-	if err := config.PrintJSON(out); err != nil {
+	if err := printJSON(out); err != nil {
 		return err
 	}
 	if failed {
@@ -454,7 +455,7 @@ func deployShow(_ *cobra.Command, args []string) error {
 			chainID, flagDeployManifestDir)
 	}
 
-	return config.PrintJSON(m)
+	return printJSON(m)
 }
 
 // attestorsFromClient projects one client's on-chain attestor addresses into
@@ -616,7 +617,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return config.PrintYAMLWithComments(out, comments)
+	return printYAMLWithComments(out, comments)
 }
 
 // deployerAddress derives the deployer's EVM address, for use as the default

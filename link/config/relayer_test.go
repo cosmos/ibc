@@ -17,7 +17,7 @@ func TestRelayerConfig(t *testing.T) {
 		path := filepath.Join("testdata", "sample.yml")
 
 		// ACT
-		config, err := LoadFromFile(path, true, true)
+		config, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 
 		// ASSERT
 		require.NoError(t, err)
@@ -60,7 +60,7 @@ func TestRelayerConfig(t *testing.T) {
 	t.Run("Helpers", func(t *testing.T) {
 		// ARRANGE
 		path := filepath.Join("testdata", "sample.yml")
-		config, err := LoadFromFile(path, true, true)
+		config, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 		require.NoError(t, err)
 
 		// ACT / ASSERT
@@ -260,7 +260,7 @@ func TestRelayerConfig(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
 				path := filepath.Join("testdata", "sample.yml")
-				config, err := LoadFromFile(path, true, true)
+				config, err := LoadFile(path, LoadOptions{DisallowUnknownFields: true})
 				require.NoError(t, err)
 
 				tt.patch(&config)

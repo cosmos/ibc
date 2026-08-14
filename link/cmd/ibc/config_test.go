@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -17,10 +17,10 @@ func TestConfigValidate(t *testing.T) {
 
 	home := t.TempDir()
 	t.Chdir(home)
-	globalFlags = config.DefaultFlagSet()
+	globalFlags = defaultFlagSet()
 	globalFlags.Home = home
 	globalFlags.Quiet = true
 
-	require.NoError(t, config.DefaultConfig().StoreToFile(filepath.Join(home, globalFlags.Config)))
+	require.NoError(t, writeConfigFile(filepath.Join(home, globalFlags.Config), config.Default(), nil))
 	require.NoError(t, configValidate(nil, nil))
 }

@@ -13,8 +13,8 @@ import (
 	"github.com/spf13/cobra"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
@@ -146,7 +146,7 @@ func attestorCall[Req, Resp any](
 		return errors.Wrap(err, cmd.Name())
 	}
 
-	return config.PrintJSON(res.Msg)
+	return printJSON(res.Msg)
 }
 
 // requireLocalAttestor errors unless name is a locally-run attestor in cfg --

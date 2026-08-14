@@ -27,9 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/link/api/v2/attestor"
+	linkconfig "github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -394,42 +394,42 @@ func prepareAttestorWorkspace(
 		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: create private work dir %q: %w", dir, mkdirErr)
 	}
 
-	signer := signerConfig{Alias: signerAlias, Type: RelayerSignerRemote}
+	signer := linkconfig.SignerConfig{Alias: signerAlias, Type: linkconfig.SignerRemote}
 	if key != nil {
 		keyPath := filepath.Join(dir, "keys", keyFilename)
 		if writeErr := keyfile.Store(keyPath, keyfile.ECDSA, crypto.FromECDSA(key)); writeErr != nil {
 			return workspacePaths{}, fmt.Errorf("start IBC Link attestor: write private key file: %w", writeErr)
 		}
-		signer.Type = RelayerSignerLocal
+		signer.Type = linkconfig.SignerLocal
 		signer.File = keyPath
 	} else {
 		signer.GRPC = spec.SignerGRPC
 		signer.RemoteKeyID = spec.SignerRemoteKeyID
 	}
 
-	config := fileConfig{
-		Server: serverConfig{ListenAddress: listenAddress},
-		DB: dbConfig{
-			Type: dbTypeSQLite,
+	config := linkconfig.Config{
+		Server: linkconfig.ServerConfig{ListenAddress: listenAddress},
+		DB: linkconfig.DBConfig{
+			Type: linkconfig.DBTypeSQLite,
 			URL:  filepath.Join(dir, "ibc.db"),
 		},
-		Chains: []chainConfig{{
+		Chains: []linkconfig.ChainConfig{{
 			ChainID: spec.ChainID,
-			EVM: evmChainConfig{
+			EVM: &linkconfig.EVMChainConfig{
 				RPC:         spec.RPCURL,
 				ICS26Router: spec.ICS26Router,
 			},
 		}},
-		Attestors: []attestorFileConfig{{
+		Attestors: linkconfig.Attestors{{
 			Name:           spec.Name,
 			ChainID:        spec.ChainID,
-			Type:           RelayerAttestorLocal,
+			Type:           linkconfig.AttestorTypeLocal,
 			Signer:         signerAlias,
 			FinalityOffset: HarnessFinalityOffset,
 		}},
-		Signers: []signerConfig{signer},
+		Signers: linkconfig.Signers{signer},
 	}
-	configData, err := yaml.Marshal(config)
+	configData, err := linkconfig.MarshalYAML(config)
 	if err != nil {
 		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: encode config: %w", err)
 	}
@@ -527,57 +527,5 @@ func (w *logWriter) close() {
 	}
 }
 
-// Shared config-literal defaults for harness-written Link config files.
-const (
-	loopbackAnyPort = "127.0.0.1:0"
-	dbTypeSQLite    = "sqlite"
-)
-
-type fileConfig struct {
-	Server    serverConfig         `yaml:"server"`
-	DB        dbConfig             `yaml:"db"`
-	Chains    []chainConfig        `yaml:"chains"`
-	Relayer   *relayerFileConfig   `yaml:"relayer,omitempty"`
-	Attestors []attestorFileConfig `yaml:"attestors"`
-	Signers   []signerConfig       `yaml:"signers"`
-}
-
-type chainConfig struct {
-	ChainID  string         `yaml:"chainId"`
-	EVM      evmChainConfig `yaml:"evm"`
-	Deployer string         `yaml:"deployer,omitempty"`
-}
-
-type evmChainConfig struct {
-	RPC         string `yaml:"rpc"`
-	ICS26Router string `yaml:"ics26Router"`
-}
-
-type serverConfig struct {
-	ListenAddress string `yaml:"listenAddr"`
-}
-
-type dbConfig struct {
-	Type string `yaml:"type"`
-	URL  string `yaml:"url"`
-}
-
-type attestorFileConfig struct {
-	Name    string `yaml:"name"`
-	ChainID string `yaml:"chainId"`
-	Type    string `yaml:"type"`
-	Signer  string `yaml:"signer,omitempty"`
-
-	// FinalityOffset is kept at 1 ("latest" minus one block) because the dev
-	// chains behind the harness do not expose the "finalized" block tag.
-	FinalityOffset uint   `yaml:"finalityOffset,omitempty"`
-	GRPC           string `yaml:"grpc,omitempty"`
-}
-
-type signerConfig struct {
-	Alias       string `yaml:"alias"`
-	Type        string `yaml:"type"`
-	File        string `yaml:"file,omitempty"`
-	GRPC        string `yaml:"grpc,omitempty"`
-	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
-}
+// Shared config-literal default for harness-written Link config files.
+const loopbackAnyPort = "127.0.0.1:0"

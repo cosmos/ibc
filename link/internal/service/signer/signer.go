@@ -10,7 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
+	"github.com/cosmos/ibc/link/internal/fsutil"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -67,12 +68,12 @@ func (s *Set) Get(alias string) (Signer, bool) {
 func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer Signer, alias string, err error) {
 	switch cfg.Type {
 	case config.SignerLocal:
-		path, err := config.ExpandHome(cfg.File)
+		path, err := fsutil.ExpandHome(cfg.File)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "expand local signer file")
 		}
 
-		s, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+		s, err := LocalKeyFromFile(fsutil.KeyFileFallbacks(path)...)
 
 		return s, cfg.Alias, err
 	case config.SignerRemote:
@@ -112,12 +113,12 @@ func EVMAddressOf(cfg config.SignerConfig) (string, error) {
 		return "", errors.Errorf("cannot derive an address for remote signer %q", cfg.Alias)
 	}
 
-	path, err := config.ExpandHome(cfg.File)
+	path, err := fsutil.ExpandHome(cfg.File)
 	if err != nil {
 		return "", err
 	}
 
-	key, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+	key, err := LocalKeyFromFile(fsutil.KeyFileFallbacks(path)...)
 	if err != nil {
 		return "", errors.Wrapf(err, "signer %q", cfg.Alias)
 	}
