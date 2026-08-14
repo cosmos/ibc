@@ -6,14 +6,6 @@
 Two independent single-validator Besu QBFT chains (A and B), the substrate for a
 single IBC pair.
 
-> **DEMO KEYS — LOCAL DEVNET ONLY.** Every private key this example derives and
-> prints (to the console, the log files, and `chains/local/chains.env`) comes
-> from a publicly known BIP-39 test vector. They are worthless by design.
-> Never send real funds to any address here, never point `A_MNEMONIC`/
-> `B_MNEMONIC` at a phrase holding real funds, and never reuse these keys or
-> this key-handling approach outside this local example. See `setup.sh`'s
-> header for the full disclaimer.
-
 ## Prerequisites
 
 `docker` (with the compose v2 plugin), `curl`, `perl`.
@@ -54,17 +46,7 @@ Each invocation writes a timestamped log file to `logs/`.
 Each chain has its own mnemonic, but `B_MNEMONIC` defaults to the same phrase
 as `A_MNEMONIC`, so out of the box both chains fund the same account set:
 `FUNDED_ACCOUNTS` accounts (default 5) are funded with 1 000 000 ETH in each
-chain's genesis; index 0 is the deployer, index 1 the validator. Since the
-deployer and its nonce sequence match on both chains, identical `CREATE`
-deployments (core router, IFT tokens, ...) land at the same address on A and B.
-
-One key therefore works everywhere: import it once and reuse the same signer
-alias as deployer, relayer, and attestor signer on both chains. This is safe
-because the attestation light client this example bridges over trusts an
-explicitly configured attestor address set (`deploy client --attestors`), not
-either chain's own block-validator identity — sharing the validator carries no
-cross-chain signature-confusion risk.
-
+chain's genesis; index 0 is the deployer, index 1 the validator.
 Set `A_MNEMONIC` and `B_MNEMONIC` to different phrases if you want the chains
 to have fully independent account sets instead.
 

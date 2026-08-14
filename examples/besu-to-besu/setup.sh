@@ -92,11 +92,7 @@ export FOUNDRY_IMAGE="${FOUNDRY_IMAGE:-ghcr.io/foundry-rs/foundry:latest}"
 
 # Key material. One mnemonic per chain, independently overridable, but
 # defaulted to the same phrase so out of the box both chains fund the same
-# account set -- deployer, relayer, attestor signer, and validator alike -- and
-# one key works everywhere. Sharing the validator carries no cross-chain risk:
-# the attestation light client this example bridges over trusts an explicitly
-# configured attestor address set (`deploy client --attestors`), not either
-# chain's own block-validator identity.
+# account set.
 #
 # The default below is a standard BIP-39 test vector, published in the spec
 # itself — demo material, safe to commit precisely because it protects nothing.
