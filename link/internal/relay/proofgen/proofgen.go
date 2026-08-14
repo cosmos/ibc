@@ -67,88 +67,65 @@ func (s *Set) Get(chainID, clientID string) (ProofGenerator, bool) {
 	return generator, ok
 }
 
-// NewSetFromConfig resolves every configured client's attestor set. localAttestors
-// is this process's own attestor service when running in dual mode (nil
-// otherwise)
+// NewSetFromConfig resolves a ProofGenerator for every client end of every
+// configured connection, matching against attestors (this process's own
+// local attestors plus every resolved remote one).
 func NewSetFromConfig(
+	ctx context.Context,
 	cfg config.Config,
 	clientSet *chains.ClientSet,
-	localAttestors *attestor.Service,
+	attestors []attestor.Attestor,
 ) (*Set, error) {
-	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Clients))
+	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Connections)*2)
 
-	for _, clientCfg := range cfg.Relayer.Clients {
-		switch clientCfg.Type {
-		case config.ClientTypeAttestation:
-			if clientCfg.AttestorSet == nil {
-				return nil, errors.Errorf("client %q: attestorSet required for attestation clients", clientCfg.Alias)
-			}
-
-			attestors := make([]attestor.Attestor, 0, len(clientCfg.AttestorSet.Attestors))
-
-			for _, entry := range clientCfg.AttestorSet.Attestors {
-				a, err := resolveAttestor(entry, clientCfg.CounterpartyChainID, localAttestors)
-				if err != nil {
-					return nil, errors.Wrapf(err, "client %q attestor %q", clientCfg.Alias, entry.Name)
-				}
-
-				attestors = append(attestors, a)
-			}
-
-			counterpartyChain, ok := clientSet.Get(clientCfg.CounterpartyChainID)
-			if !ok {
-				return nil, errors.Errorf(
-					"client %q: no configured chain client for counterparty chain %q",
-					clientCfg.Alias,
-					clientCfg.CounterpartyChainID,
-				)
-			}
-
-			generators[Key(clientCfg.ChainID, clientCfg.ClientID)] = attestation.New(
-				attestors,
-				clientCfg.AttestorSet.Threshold,
-				counterpartyChain,
-			)
-		default:
-			return nil, errors.Errorf(
-				"client %q: unsupported client type %q for proof generation",
-				clientCfg.Alias,
-				clientCfg.Type,
-			)
-		}
+	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
+		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return NewSet(generators), nil
 }
 
-// resolveAttestor resolves one configured attestor-set entry to the
-// internal attestor abstraction. watchedChainID is the chain
-// the attestor is expected to be attesting
-func resolveAttestor(
-	entry config.AttestorEntry,
-	watchedChainID string,
-	localAttestors *attestor.Service,
-) (attestor.Attestor, error) {
-	switch entry.Type {
-	case config.AttestorTypeRemote:
-		if entry.GRPC == "" {
-			return nil, errors.New("no grpc address configured")
+// forEachClientEnd calls fn once per client end of every configured
+// connection, in both directions.
+func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counterparty config.ClientEnd) error) error {
+	for _, conn := range cfg.Relayer.Connections {
+		for _, end := range []struct {
+			self, counterparty config.ClientEnd
+		}{
+			{conn.ClientA, conn.ClientB},
+			{conn.ClientB, conn.ClientA},
+		} {
+			if err := fn(conn.Alias, end.self, end.counterparty); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func addGenerator(
+	ctx context.Context,
+	generators map[string]ProofGenerator,
+	connAlias string,
+	client, clientCounterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+	attestors []attestor.Attestor,
+) error {
+	switch client.Type {
+	case config.ClientTypeAttestation:
+		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, attestors)
+		if err != nil {
+			return err
 		}
 
-		// TODO: Support TLS
-		return attestor.NewRemoteFromURL(watchedChainID, entry.Name, entry.Name, "http://"+entry.GRPC), nil
-	case config.AttestorTypeLocal:
-		if localAttestors == nil {
-			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)
-		}
+		generators[Key(client.ChainID, client.ClientID)] = gen
 
-		a, ok := localAttestors.Get(entry.Name)
-		if !ok {
-			return nil, errors.Errorf("no local attestor configuration found for %q", entry.Name)
-		}
-
-		return a, nil
+		return nil
 	default:
-		return nil, errors.Errorf("type %q not yet supported for proof generation", entry.Type)
+		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
 	}
 }

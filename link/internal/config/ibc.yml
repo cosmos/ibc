@@ -30,49 +30,43 @@ relayer:
       txSubmissionDelay: 5s
       packetBatchSize: 50
 
-  # a client and its counterparty both need to be configured
-  clients:
-    - alias: "eth-to-base"
-      clientId: "base-0"
-      chainId: "1"
-      counterpartyChainId: "8453"
-      counterpartyClientId: "ethereum-0"
-      type: "attestation"
-      # the attestors referenced here must attest to the counterparty chain (chain id "8453")
-      attestorSet:
-        counterpartyChainFinalityOffset: 1
-        threshold: 1
-        attestors:
-          - name: "attestor-base"
-            type: remote
-            grpc: attestor.example.com:3000
-    - alias: "base-to-eth"
-      clientId: "ethereum-0"
-      chainId: "8453"
-      counterpartyChainId: "1"
-      counterpartyClientId: "base-0"
-      type: "attestation"
-      # the attestors referenced here must attest to the counterparty chain (chain id "1")
-      attestorSet:
-        counterpartyChainFinalityOffset: 1
-        threshold: 1
-        attestors:
-          - name: "attestor-ethereum"
-            type: remote
-            grpc: attestor.example.com:3000
+  # each connection is relayed bidirectionally: clientA's counterparty is
+  # simply clientB, and vice versa
+  connections:
+    - alias: "eth-base"
+      clientA:
+        chainId: "1"
+        signer: "eth-relayer-key"
+        clientId: "base-0"
+        type: "attestation"
+        autoRelay:
+          enabled: true
+          lookback: 100
+      clientB:
+        chainId: "8453"
+        signer: "base-relayer-key"
+        clientId: "ethereum-0"
+        type: "attestation"
+        autoRelay:
+          enabled: true
+          lookback: 100
 
-  # packets sent from the source client are relayed through the entire packet
-  # lifecycle: recv, ack, timeout; the signer aliases submit the relay
-  # transactions on the route's source and destination chains
-  routesToRelay:
-    - sourceClient: "eth-to-base"
-      sourceSignerAlias: "eth-relayer-key"
-      destSignerAlias: "base-relayer-key"
-    - sourceClient: "base-to-eth"
-      sourceSignerAlias: "base-relayer-key"
-      destSignerAlias: "eth-relayer-key"
+# attestors -- both the ones this process runs itself (type: local)
+#  and the ones it queries over gRPC (type: remote).
+attestors:
+  - name: "attestor-base"
+    type: remote
+    grpc: attestor.example.com:3000
+  - name: "attestor-ethereum"
+    type: remote
+    grpc: attestor.example.com:3000
+#  - name: "my-local-attestor"
+#    chainId: "1"
+#    type: local
+#    signer: my-local-signer
+#    finalityOffset: 1
 
-# signers define signing backends referenced by attestations and the relayer
+# signers define signing backends referenced by attestors and the relayer
 #
 # NOTE: each signer should have a unique alias
 signers:
@@ -87,17 +81,3 @@ signers:
 #   - alias: my-local-signer
 #     type: local
 #     file: keys/my-key.json
-
-# This section specifies ATTESTOR process configuration for `ibc attestor run`.
-# Also enables attestor sub-process with grpc server even for relayer (`ibc relayer run`)
-# if attestors list is not empty ("dual" relayer + attestor mode)
-#
-# NOTE: each attestation should have a unique name and reference a unique signer
-attestor:
-#  attestations:
-#     - chainId: chain-a
-#       name: attestation-a
-#       signer: my-local-signer
-#     - chainId: chain-b
-#       name: attestation-b
-#       signer: my-remote-signer

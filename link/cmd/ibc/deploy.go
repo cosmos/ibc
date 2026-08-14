@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
@@ -38,6 +39,17 @@ var (
 	flagDeployThreshold       uint8
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
+
+	flagDeployIFTName        string
+	flagDeployIFTSymbol      string
+	flagDeployIFTOwner       string
+	flagDeployBridgeChainA   string
+	flagDeployBridgeIFTA     string
+	flagDeployBridgeChainB   string
+	flagDeployBridgeIFTB     string
+	flagDeployBridgeClientID string
+	flagDeployBridgeCtorA    string
+	flagDeployBridgeCtorB    string
 )
 
 var (
@@ -64,11 +76,36 @@ var (
 		RunE:  deployStatus,
 	}
 
+	cmdDeployShow = &cobra.Command{
+		Use:   "show [chain-id]",
+		Short: "Print the recorded deployment manifest for a chain",
+		Args:  cobra.ExactArgs(1),
+		RunE:  deployShow,
+	}
+
 	cmdDeployRenderConfig = &cobra.Command{
 		Use:   "render-config [chainA] [chainB]",
 		Short: "Project two deployment manifests into config sections for relaying between them (stdout)",
 		Args:  cobra.ExactArgs(2),
 		RunE:  deployRenderConfig,
+	}
+
+	cmdDeployGMP = &cobra.Command{
+		Use:   "gmp",
+		Short: "Deploy the ICS27-GMP app on one chain",
+		RunE:  deployGMP,
+	}
+
+	cmdDeployIFT = &cobra.Command{
+		Use:   useIFT,
+		Short: "Deploy an IFT token on one chain",
+		RunE:  deployIFT,
+	}
+
+	cmdDeployIFTBridge = &cobra.Command{
+		Use:   "ift-bridge",
+		Short: "Register both sides of an IFT bridge between two chains' tokens",
+		RunE:  deployIFTBridge,
 	}
 )
 
@@ -295,8 +332,8 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if flagDeployChain == "" || flagDeployCounterparty == "" {
-		return errors.New("--chain and --counterparty-chain are required")
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
@@ -402,13 +439,80 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// renderedDeployment is the subset of the config schema render-config emits,
-// so the output can be merged into ibc.yml without zero-valued sections.
-type renderedDeployment struct {
-	Chains  []config.ChainConfig `yaml:"chains"`
-	Relayer struct {
-		Clients []config.ClientConfig `yaml:"clients"`
-	} `yaml:"relayer"`
+func deployShow(_ *cobra.Command, args []string) error {
+	if _, err := setupHomeWithConfig(); err != nil {
+		return err
+	}
+
+	chainID := args[0]
+	m, err := manifest.Load(flagDeployManifestDir, chainID)
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return errors.Errorf("no manifest for chain %s in %s: run `ibc deploy` against it first",
+			chainID, flagDeployManifestDir)
+	}
+
+	return config.PrintJSON(m)
+}
+
+// attestorsFromClient projects one client's on-chain attestor addresses into
+// attestors
+func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
+	addresses, _ := c.Params["attestors"].([]any)
+
+	out := make(config.Attestors, 0, len(addresses))
+	for _, raw := range addresses {
+		address, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		alias, _ := signerAliasForAddress(cfg, address)
+		out = append(out, config.AttestorConfig{
+			ChainID: watchedChainID,
+			Name:    fmt.Sprintf("attestor-%s-%s", watchedChainID, address),
+			Type:    config.AttestorTypeLocal,
+			Signer:  alias,
+			// default to 1 so it doesn't wait for native chain finality;
+			// CollectComments still flags it for review.
+			FinalityOffset: 1,
+		})
+	}
+	return out
+}
+
+func appendUniqueAttestors(
+	existing config.Attestors,
+	seen map[string]struct{},
+	additional config.Attestors,
+) config.Attestors {
+	for _, a := range additional {
+		if _, dup := seen[a.Name]; dup {
+			continue
+		}
+		seen[a.Name] = struct{}{}
+		existing = append(existing, a)
+	}
+	return existing
+}
+
+// signerAliasForAddress finds the local signer in cfg whose derived EVM
+// address matches address, case-insensitively.
+func signerAliasForAddress(cfg config.Config, address string) (string, bool) {
+	for _, sc := range cfg.Signers {
+		if sc.Type != config.SignerLocal {
+			continue
+		}
+		derived, err := signer.EVMAddressOf(sc)
+		if err != nil {
+			continue
+		}
+		if strings.EqualFold(derived, address) {
+			return sc.Alias, true
+		}
+	}
+	return "", false
 }
 
 // renderedChain copies the operated-on chain's config (if declared) and sets
@@ -425,30 +529,34 @@ func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	return chain
 }
 
-func renderedClient(m *manifest.Manifest, c manifest.Client) config.ClientConfig {
-	client := config.ClientConfig{
-		Alias:                m.ChainID + "-" + c.ClientID,
-		ClientID:             c.ClientID,
-		ChainID:              m.ChainID,
-		CounterpartyChainID:  c.CounterpartyChainID,
-		CounterpartyClientID: c.CounterpartyClientID,
-		Type:                 config.ClientType(c.Type),
+func renderedClientEnd(m *manifest.Manifest, c manifest.Client) config.ClientEnd {
+	return config.ClientEnd{
+		ChainID:  m.ChainID,
+		ClientID: c.ClientID,
+		Type:     config.ClientType(c.Type),
 	}
-	if c.Type == deploy.ClientTypeAttestation {
-		// render-config only sees Load()ed manifests, so JSON numbers are
-		// float64. Attestor names cannot be derived from the addresses in
-		// params; the operator fills them in to match attestor config.
-		threshold, _ := c.Params["threshold"].(float64)
-		client.AttestorSet = &config.AttestorSetConfig{Threshold: int(threshold)}
-	}
-	return client
+}
+
+// renderedDeployment is the subset of the config schema render-config emits,
+// so the output can be merged into ibc.yml without unrelated sections.
+type renderedDeployment struct {
+	Chains  []config.ChainConfig `yaml:"chains"`
+	Relayer struct {
+		Connections []config.ConnectionConfig `yaml:"connections"`
+	} `yaml:"relayer"`
+	Attestors config.Attestors `yaml:"attestors"`
 }
 
 // renderRelayConfig projects two deployment manifests into the config
 // sections needed to relay between them for every mutual client pair.
-func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, error) {
-	var out renderedDeployment
-	out.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
+func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, map[string]string, error) {
+	full := cfg
+	full.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
+	full.Relayer.Connections = nil
+	full.Attestors = nil
+
+	baseAlias := a.ChainID + "-" + b.ChainID
+	seenAttestors := make(map[string]struct{})
 	for _, ca := range a.Clients {
 		if ca.CounterpartyChainID != b.ChainID {
 			continue
@@ -457,10 +565,20 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 		if !ok || cb.CounterpartyChainID != a.ChainID || cb.CounterpartyClientID != ca.ClientID {
 			continue
 		}
-		out.Relayer.Clients = append(out.Relayer.Clients, renderedClient(a, ca), renderedClient(b, cb))
+		alias := baseAlias
+		if seq := len(full.Relayer.Connections); seq > 0 {
+			alias = fmt.Sprintf("%s-%d", baseAlias, seq)
+		}
+		full.Relayer.Connections = append(full.Relayer.Connections, config.ConnectionConfig{
+			Alias:   alias,
+			ClientA: renderedClientEnd(a, ca),
+			ClientB: renderedClientEnd(b, cb),
+		})
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
 	}
-	if len(out.Relayer.Clients) == 0 {
-		return renderedDeployment{}, errors.Errorf(
+	if len(full.Relayer.Connections) == 0 {
+		return renderedDeployment{}, nil, errors.Errorf(
 			"no mutual client pair between chains %s and %s: run `ibc deploy client` on each chain first (chains %s and %s)",
 			a.ChainID,
 			b.ChainID,
@@ -468,7 +586,11 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 			b.ChainID,
 		)
 	}
-	return out, nil
+
+	out := renderedDeployment{Chains: full.Chains, Attestors: full.Attestors}
+	out.Relayer.Connections = full.Relayer.Connections
+
+	return out, config.CollectComments(full), nil
 }
 
 func deployRenderConfig(_ *cobra.Command, args []string) error {
@@ -490,9 +612,105 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		}
 		manifests[i] = m
 	}
-	out, err := renderRelayConfig(cfg, manifests[0], manifests[1])
+	out, comments, err := renderRelayConfig(cfg, manifests[0], manifests[1])
 	if err != nil {
 		return err
 	}
-	return config.PrintYAML(out)
+	return config.PrintYAMLWithComments(out, comments)
+}
+
+// deployerAddress derives the deployer's EVM address, for use as the default
+// IFT owner.
+func deployerAddress(cfg config.Config, alias string) (string, error) {
+	if alias == "" {
+		return "", errors.New("no deployer configured: set chains[].deployer or pass --deployer")
+	}
+	sc, ok := cfg.Signer(alias)
+	if !ok {
+		return "", errors.Errorf("deployer signer %q not found in config", alias)
+	}
+	return signer.EVMAddressOf(sc)
+}
+
+func deployGMP(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
+	}
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	if err != nil {
+		return err
+	}
+	return planThenRun(cmd.Context(), deploy.GMPSteps(target, flagDeployManifestDir, flagDeployChain))
+}
+
+func deployIFT(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+	if flagDeployChain == "" {
+		return errors.New("--chain is required")
+	}
+	chain, ok := cfg.Chain(flagDeployChain)
+	if !ok {
+		return errors.Errorf("chain %q not declared in config", flagDeployChain)
+	}
+	owner := flagDeployIFTOwner
+	if owner == "" {
+		owner, err = deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+		if err != nil {
+			return err
+		}
+	}
+	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
+	if err != nil {
+		return err
+	}
+	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol}
+	return planThenRun(cmd.Context(), deploy.IFTSteps(target, flagDeployManifestDir, flagDeployChain, spec))
+}
+
+// deployIFTBridge registers both sides of an IFT bridge in one invocation:
+// contract --ift-a on --chain-a and contract --ift-b on --chain-b each register
+// a bridge over the shared client, pointing at the other. Both chains must be
+// EVM chains this tool can deploy to.
+func deployIFTBridge(cmd *cobra.Command, _ []string) error {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return err
+	}
+	if flagDeployBridgeChainA == flagDeployBridgeChainB {
+		return errors.New("--chain-a and --chain-b must differ")
+	}
+	for _, addr := range []string{flagDeployBridgeIFTA, flagDeployBridgeIFTB} {
+		if !common.IsHexAddress(addr) {
+			return errors.Errorf("invalid IFT address %q", addr)
+		}
+	}
+	clientID := flagDeployBridgeClientID
+	if clientID == "" {
+		clientID = defaultClientID(flagDeployBridgeChainA, flagDeployBridgeChainB)
+	}
+	if !deploy.ValidClientID(clientID) {
+		return errors.Errorf("invalid client id %q", clientID)
+	}
+	targetA, err := newTarget(cmd.Context(), cfg, flagDeployBridgeChainA, flagDeployDeployer, true)
+	if err != nil {
+		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainA)
+	}
+	targetB, err := newTarget(cmd.Context(), cfg, flagDeployBridgeChainB, flagDeployDeployer, true)
+	if err != nil {
+		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainB)
+	}
+	stepsA := deploy.IFTBridgeSteps(
+		targetA, flagDeployManifestDir, flagDeployBridgeChainA, flagDeployBridgeIFTA, flagDeployBridgeCtorA,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTB})
+	stepsB := deploy.IFTBridgeSteps(
+		targetB, flagDeployManifestDir, flagDeployBridgeChainB, flagDeployBridgeIFTB, flagDeployBridgeCtorB,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTA})
+	return planThenRun(cmd.Context(), append(stepsA, stepsB...))
 }

@@ -9,10 +9,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
-	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/service/signer"
 )
 
 // Service manages configured attestors.
@@ -26,20 +22,25 @@ type Attestor interface {
 	// ChainID returns the chain ID.
 	ChainID() string
 
-	// Name is the name of the attestor. It is NOT unique across the service
-	// Imagine there are 5 remote attestors and inside each they announce same `eth-1-attestor` name
+	// Name is the name of the attestor, used to key it uniquely within this
+	// process's Service.
 	Name() string
-
-	// Alias is the internal unique name of the attestors within THIS process.
-	// Should be unique.
-	Alias() string
 
 	// IsLocal returns true if the attestor is local.
 	IsLocal() bool
 
+	// Address is the attestor's signing address.
+	Address() string
+
 	LatestHeight(ctx context.Context) (uint64, error)
 	StateAttestation(ctx context.Context, height uint64) (Attestation, error)
 	PacketAttestation(ctx context.Context, req PacketAttestationRequest) (Attestation, error)
+}
+
+// Info identifies one attestor.
+type Info struct {
+	ChainID string
+	Address string
 }
 
 // PacketAttestationRequest is a request for packet commitment attestations.
@@ -84,56 +85,17 @@ var (
 	ErrReceiptExists      = errors.New("receipt exists")
 )
 
-// NewFromConfig creates a new attestor service from the configuration.
-// Because config represents our local binary, ALL attestors are local.
-func NewFromConfig(cfg config.Config, clients *chains.ClientSet, signers *signer.Set) (*Service, error) {
-	if len(cfg.Attestor.Attestations) == 0 {
-		return nil, ErrNoAttestations
-	}
-
-	attestorsSpecs := make([]Attestor, 0, len(cfg.Attestor.Attestations))
-
-	add := func(spec config.AttestationConfig) error {
-		client, ok := clients.Get(spec.ChainID)
-		if !ok {
-			return fmt.Errorf("client not found for chain %s", spec.ChainID)
-		}
-
-		signer, ok := signers.Get(spec.Signer)
-		if !ok {
-			return fmt.Errorf("unknown signer %s", spec.Signer)
-		}
-
-		a, err := NewLocal(spec, client, signer)
-		if err != nil {
-			return err
-		}
-
-		attestorsSpecs = append(attestorsSpecs, a)
-
-		return nil
-	}
-
-	for _, spec := range cfg.Attestor.Attestations {
-		if err := add(spec); err != nil {
-			return nil, fmt.Errorf("attestor %s: %w", spec.Name, err)
-		}
-	}
-
-	return New(attestorsSpecs)
-}
-
-// New Service constructor. Attestors should have unique aliases
+// New Service constructor. Attestors should have unique names.
 func New(attestors []Attestor) (*Service, error) {
 	set := make(map[string]Attestor)
 	for _, attestor := range attestors {
-		alias := attestor.Alias()
+		name := attestor.Name()
 
-		if _, alreadyExists := set[alias]; alreadyExists {
-			return nil, fmt.Errorf("attestor with alias %s already exists", alias)
+		if _, alreadyExists := set[name]; alreadyExists {
+			return nil, fmt.Errorf("attestor with alias %s already exists", name)
 		}
 
-		set[alias] = attestor
+		set[name] = attestor
 	}
 
 	return &Service{
@@ -151,6 +113,19 @@ func (s *Service) Add(id string, attestor Attestor) {
 func (s *Service) Get(alias string) (Attestor, bool) {
 	a, ok := s.attestors[alias]
 	return a, ok
+}
+
+// Info returns identity information for the attestor registered under alias.
+func (s *Service) Info(alias string) (Info, bool) {
+	a, ok := s.attestors[alias]
+	if !ok {
+		return Info{}, false
+	}
+
+	return Info{
+		ChainID: a.ChainID(),
+		Address: a.Address(),
+	}, true
 }
 
 func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {

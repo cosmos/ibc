@@ -37,7 +37,7 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-		require.NoError(t, e2etest.Relay(ctx, relayer, transfer.PacketTx()))
+		require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
 		require.NoError(t, relayer.Stop(ctx))
 		relayer = e2etest.StartRelayer(t, driver, env)
 

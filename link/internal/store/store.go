@@ -33,13 +33,17 @@ type Repository interface {
 	// CreateRelayRequest records a relay request; duplicates are a noop.
 	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
 
-	// CreatePacket records a packet; duplicate packets are a noop.
-	CreatePacket(ctx context.Context, input CreatePacket) error
+	// UpsertPacket records a packet. A new packet is inserted; an existing
+	// NOT_SELECTED packet is refreshed with the input's metadata and status,
+	// but only when the input status is NOT_SELECTED or PENDING, the latter
+	// selecting it for relay. Existing packets in any other status are never
+	// modified.
+	UpsertPacket(ctx context.Context, input UpsertPacket) error
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 
-	// ListUnfinishedPackets returns packets that have not reached a terminal status.
-	ListUnfinishedPackets(ctx context.Context) ([]Packet, error)
+	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
+	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 
 	UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error
 
@@ -134,6 +138,7 @@ type RelayStatus string
 
 // Packet statuses
 const (
+	RelayStatusNotSelected                RelayStatus = "NOT_SELECTED"
 	RelayStatusPending                    RelayStatus = "PENDING"
 	RelayStatusAwaitingSendFinality       RelayStatus = "AWAITING_SEND_FINALITY"
 	RelayStatusCheckRecvPacketDelivery    RelayStatus = "CHECK_RECV_PACKET_DELIVERY"
@@ -199,9 +204,9 @@ type Packet struct {
 	TimeoutTxRelayerAddress *string
 }
 
-// CreatePacket the fields callers provide when recording a packet; the
+// UpsertPacket the fields callers provide when recording a packet; the
 // remaining Packet fields are database-assigned or set later in the lifecycle.
-type CreatePacket struct {
+type UpsertPacket struct {
 	Status                    RelayStatus
 	SourceChainID             string
 	DestinationChainID        string
@@ -213,10 +218,12 @@ type CreatePacket struct {
 	PacketTimeoutTimestamp    time.Time
 }
 
-func (t CreatePacket) Validate() error {
+func (t UpsertPacket) Validate() error {
 	switch {
 	case t.Status == "":
 		return errors.New("status is required")
+	case t.Status != RelayStatusNotSelected && t.Status != RelayStatusPending:
+		return errors.New("status must be NOT_SELECTED or PENDING")
 	case t.SourceChainID == "":
 		return errors.New("source chain id is required")
 	case t.DestinationChainID == "":

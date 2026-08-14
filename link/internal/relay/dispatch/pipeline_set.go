@@ -85,18 +85,8 @@ func (s *PipelineSet) Pipeline(ctx context.Context, tr *processors.Transfer) (pi
 }
 
 func (s *PipelineSet) isRouted(route processors.Route) bool {
-	client, ok := s.cfg.Relayer.Client(route.SourceChainID, route.SourceClientID)
-	if !ok {
-		return false
-	}
-
-	for _, r := range s.cfg.Relayer.Routes {
-		if r.SourceClient == client.Alias {
-			return true
-		}
-	}
-
-	return false
+	_, _, ok := s.cfg.Relayer.ClientEnd(route.SourceChainID, route.SourceClientID)
+	return ok
 }
 
 // Close closes every pipeline. The context the pipelines were created with
