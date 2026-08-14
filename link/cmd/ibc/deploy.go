@@ -457,13 +457,62 @@ func deployShow(_ *cobra.Command, args []string) error {
 	return config.PrintJSON(m)
 }
 
-// renderedDeployment is the subset of the config schema render-config emits,
-// so the output can be merged into ibc.yml without zero-valued sections.
-type renderedDeployment struct {
-	Chains  []config.ChainConfig `yaml:"chains"`
-	Relayer struct {
-		Connections []config.ConnectionConfig `yaml:"connections"`
-	} `yaml:"relayer"`
+// attestorsFromClient projects one client's on-chain attestor addresses into
+// attestors
+func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
+	addresses, _ := c.Params["attestors"].([]any)
+
+	out := make(config.Attestors, 0, len(addresses))
+	for _, raw := range addresses {
+		address, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		alias, _ := signerAliasForAddress(cfg, address)
+		out = append(out, config.AttestorConfig{
+			ChainID: watchedChainID,
+			Name:    fmt.Sprintf("attestor-%s-%s", watchedChainID, address),
+			Type:    config.AttestorTypeLocal,
+			Signer:  alias,
+			// default to 1 so it doesn't wait for native chain finality;
+			// CollectComments still flags it for review.
+			FinalityOffset: 1,
+		})
+	}
+	return out
+}
+
+func appendUniqueAttestors(
+	existing config.Attestors,
+	seen map[string]struct{},
+	additional config.Attestors,
+) config.Attestors {
+	for _, a := range additional {
+		if _, dup := seen[a.Name]; dup {
+			continue
+		}
+		seen[a.Name] = struct{}{}
+		existing = append(existing, a)
+	}
+	return existing
+}
+
+// signerAliasForAddress finds the local signer in cfg whose derived EVM
+// address matches address, case-insensitively.
+func signerAliasForAddress(cfg config.Config, address string) (string, bool) {
+	for _, sc := range cfg.Signers {
+		if sc.Type != config.SignerLocal {
+			continue
+		}
+		derived, err := signer.EVMAddressOf(sc)
+		if err != nil {
+			continue
+		}
+		if strings.EqualFold(derived, address) {
+			return sc.Alias, true
+		}
+	}
+	return "", false
 }
 
 // renderedChain copies the operated-on chain's config (if declared) and sets
@@ -488,12 +537,26 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client) config.ClientEnd
 	}
 }
 
+// renderedDeployment is the subset of the config schema render-config emits,
+// so the output can be merged into ibc.yml without unrelated sections.
+type renderedDeployment struct {
+	Chains  []config.ChainConfig `yaml:"chains"`
+	Relayer struct {
+		Connections []config.ConnectionConfig `yaml:"connections"`
+	} `yaml:"relayer"`
+	Attestors config.Attestors `yaml:"attestors"`
+}
+
 // renderRelayConfig projects two deployment manifests into the config
 // sections needed to relay between them for every mutual client pair.
-func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, error) {
-	var out renderedDeployment
-	out.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
+func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, map[string]string, error) {
+	full := cfg
+	full.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
+	full.Relayer.Connections = nil
+	full.Attestors = nil
+
 	baseAlias := a.ChainID + "-" + b.ChainID
+	seenAttestors := make(map[string]struct{})
 	for _, ca := range a.Clients {
 		if ca.CounterpartyChainID != b.ChainID {
 			continue
@@ -503,17 +566,19 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 			continue
 		}
 		alias := baseAlias
-		if seq := len(out.Relayer.Connections); seq > 0 {
+		if seq := len(full.Relayer.Connections); seq > 0 {
 			alias = fmt.Sprintf("%s-%d", baseAlias, seq)
 		}
-		out.Relayer.Connections = append(out.Relayer.Connections, config.ConnectionConfig{
+		full.Relayer.Connections = append(full.Relayer.Connections, config.ConnectionConfig{
 			Alias:   alias,
 			ClientA: renderedClientEnd(a, ca),
 			ClientB: renderedClientEnd(b, cb),
 		})
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
 	}
-	if len(out.Relayer.Connections) == 0 {
-		return renderedDeployment{}, errors.Errorf(
+	if len(full.Relayer.Connections) == 0 {
+		return renderedDeployment{}, nil, errors.Errorf(
 			"no mutual client pair between chains %s and %s: run `ibc deploy client` on each chain first (chains %s and %s)",
 			a.ChainID,
 			b.ChainID,
@@ -521,25 +586,11 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 			b.ChainID,
 		)
 	}
-	return out, nil
-}
 
-// signerPlaceholderComments annotates every rendered client end's blank
-// signer field.
-func signerPlaceholderComments(out renderedDeployment) map[string]string {
-	comments := make(map[string]string, 2*len(out.Relayer.Connections))
-	for i, conn := range out.Relayer.Connections {
-		ends := []struct {
-			field string
-			end   config.ClientEnd
-		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
-		for _, e := range ends {
-			path := fmt.Sprintf("$.relayer.connections[%d].%s.signer", i, e.field)
-			comments[path] = fmt.Sprintf("TODO: signers[] alias that submits relay txs on %s", e.end.ChainID)
-		}
-	}
+	out := renderedDeployment{Chains: full.Chains, Attestors: full.Attestors}
+	out.Relayer.Connections = full.Relayer.Connections
 
-	return comments
+	return out, config.CollectComments(full), nil
 }
 
 func deployRenderConfig(_ *cobra.Command, args []string) error {
@@ -561,11 +612,11 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		}
 		manifests[i] = m
 	}
-	out, err := renderRelayConfig(cfg, manifests[0], manifests[1])
+	out, comments, err := renderRelayConfig(cfg, manifests[0], manifests[1])
 	if err != nil {
 		return err
 	}
-	return config.PrintYAMLWithComments(out, signerPlaceholderComments(out))
+	return config.PrintYAMLWithComments(out, comments)
 }
 
 // deployerAddress derives the deployer's EVM address, for use as the default
