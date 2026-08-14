@@ -69,7 +69,7 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	to, err := resolveToAddress(cfg, flagTxIFTTo)
+	to, err := resolveEVMAddress(cfg, "to", flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func txIFTSend(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	receiver, err := resolveToAddress(cfg, flagTxIFTTo)
+	receiver, err := resolveEVMAddress(cfg, "to", flagTxIFTTo)
 	if err != nil {
 		return err
 	}
@@ -200,15 +200,16 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 	return backend, key, chainID, cfg, nil
 }
 
-// resolveToAddress accepts either a raw EVM address or a config signer
-// alias, resolving the alias to its derived EVM address.
-func resolveToAddress(cfg config.Config, to string) (string, error) {
-	if common.IsHexAddress(to) {
-		return to, nil
+// resolveEVMAddress accepts either a raw EVM address or a config signer
+// alias, resolving the alias to its derived EVM address. flagName names the
+// originating flag, for the error message only.
+func resolveEVMAddress(cfg config.Config, flagName, value string) (string, error) {
+	if common.IsHexAddress(value) {
+		return value, nil
 	}
-	sc, ok := cfg.Signer(to)
+	sc, ok := cfg.Signer(value)
 	if !ok {
-		return "", errors.Errorf("invalid --to %q: not a hex address or a configured signer alias", to)
+		return "", errors.Errorf("invalid --%s %q: not a hex address or a configured signer alias", flagName, value)
 	}
 	return signer.EVMAddressOf(sc)
 }
