@@ -38,19 +38,17 @@ Each invocation writes a timestamped log file to `logs/`.
 
 ## Chains and accounts
 
-| Chain | Chain ID | Validator source | Validator (default phrases) |
+| Chain | Chain ID | Validator source | Validator (default phrase) |
 |-------|---------:|------------------|-----------------------------|
 | A     |    41001 | `A_MNEMONIC` index 1 | `0x0D3eB21b6b21833A4939Cfff4810E9AE0758e12C` |
-| B     |    41002 | `B_MNEMONIC` index 1 | `0x45A1eF7572a5B9998b46E54AA5Dce838965acB35` |
+| B     |    41002 | `B_MNEMONIC` index 1 | `0x0D3eB21b6b21833A4939Cfff4810E9AE0758e12C` |
 
-Each chain has its own mnemonic and every account on it derives from that phrase,
-so the two chains share no accounts. `FUNDED_ACCOUNTS` accounts (default 5) are
-derived per chain and funded with 1 000 000 ETH in that chain's genesis and
-nowhere else; index 0 is that chain's deployer, index 1 its validator. Because
-the deployers differ, a contract deployed to both chains will **not** land at the
-same address — `CREATE` derives it from sender and nonce. Set `A_MNEMONIC` and
-`B_MNEMONIC` to the same value if you want shared accounts and matching contract
-addresses.
+Each chain has its own mnemonic, but `B_MNEMONIC` defaults to the same phrase
+as `A_MNEMONIC`, so out of the box both chains fund the same account set:
+`FUNDED_ACCOUNTS` accounts (default 5) are funded with 1 000 000 ETH in each
+chain's genesis; index 0 is the deployer, index 1 the validator.
+Set `A_MNEMONIC` and `B_MNEMONIC` to different phrases if you want the chains
+to have fully independent account sets instead.
 
 
 ## Ports

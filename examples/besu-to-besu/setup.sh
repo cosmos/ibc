@@ -51,8 +51,9 @@
 # Environment (optional):
 #   A_MNEMONIC           BIP-39 phrase every chain A account derives from
 #   B_MNEMONIC           BIP-39 phrase every chain B account derives from
-#                        (each chain has its own phrase, distinct from the
-#                        other's, so the chains share no accounts)
+#                        (defaults to the same phrase as A_MNEMONIC, so both
+#                        chains share the same account set, including the
+#                        validator; override independently for separate sets)
 #   A_VALIDATOR_INDEX    index of chain A's validator within A_MNEMONIC (1)
 #   B_VALIDATOR_INDEX    index of chain B's validator within B_MNEMONIC (1)
 #                        Index 0 of each phrase is that chain's deployer and is
@@ -89,25 +90,19 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$SCRIPT_DIR")}"
 export BESU_IMAGE="${BESU_IMAGE:-hyperledger/besu:25.4.0}"
 export FOUNDRY_IMAGE="${FOUNDRY_IMAGE:-ghcr.io/foundry-rs/foundry:latest}"
 
-# Key material. One mnemonic per chain, both publicly known devnet phrases.
-# Every account on a chain — deployer, validator, and the rest of the pre-funded
-# set — derives from that chain's phrase, so the two chains share no accounts.
+# Key material. One mnemonic per chain, independently overridable, but
+# defaulted to the same phrase so out of the box both chains fund the same
+# account set.
 #
-# The phrases are deliberately distinct rather than two indices of one mnemonic.
-# A QBFT light client trusts the counterparty's validator set by address, so if
-# A and B shared a validator, a header signed for one chain would be
-# signature-valid against the other's client. Distinct phrases make that
-# impossible by construction.
-#
-# Both defaults below are standard BIP-39 test vectors, published in the spec
-# itself — demo material, safe to commit precisely because they protect nothing.
+# The default below is a standard BIP-39 test vector, published in the spec
+# itself — demo material, safe to commit precisely because it protects nothing.
 #
 # Never point either of these at a mnemonic holding real funds, on any network.
 # Everything derived from them is written to chains/local/<chain>/ unencrypted
 # for Besu to read, and their addresses are printed to the console and the log
 # file on every run.
 export A_MNEMONIC="${A_MNEMONIC:-legal winner thank year wave sausage worth useful legal winner thank yellow}"
-export B_MNEMONIC="${B_MNEMONIC:-letter advice cage absurd amount doctor acoustic avoid letter advice cage above}"
+export B_MNEMONIC="${B_MNEMONIC:-$A_MNEMONIC}"
 # Index 0 is the deployer on both chains and index 1 is the validator on both,
 # so no chain's block proposer is also the account sending txs. A validator is
 # its chain's coinbase and pockets the priority fee, which would otherwise make
