@@ -65,6 +65,12 @@ codegen-abi: ## Generate Go bindings for EVM contract ABIs
 		--pkg ics26router \
 		--type Contract \
 		--out internal/chains/evm/contracts/ics26router/ics26router.go
+	mkdir -p internal/chains/evm/contracts/attestation
+	go tool abigen \
+		--abi internal/chains/evm/abi/attestation_light_client.json \
+		--pkg attestation \
+		--type Contract \
+		--out internal/chains/evm/contracts/attestation/attestation.go
 
 test: ## Run tests
 	go test ./... -v

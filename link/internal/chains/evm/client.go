@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"log/slog"
 	"math/big"
+	"strings"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -23,6 +24,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/attestation"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -169,6 +171,21 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 	return events, nil
 }
 
+func (c *Client) TxHeight(ctx context.Context, rawTxHash []byte) (uint64, error) {
+	if len(rawTxHash) != common.HashLength {
+		return 0, errors.Errorf("invalid tx hash length %d, expected %d", len(rawTxHash), common.HashLength)
+	}
+
+	txHash := common.BytesToHash(rawTxHash)
+
+	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
+	if err != nil {
+		return 0, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+	}
+
+	return receipt.BlockNumber.Uint64(), nil
+}
+
 func (c *Client) GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error) {
 	header, err := c.eth.HeaderByNumber(ctx, heightToBigInt(height))
 	switch {
@@ -196,6 +213,43 @@ func (c *Client) GetCommitment(ctx context.Context, height uint64, hashedPath [3
 	}
 
 	return commitment, nil
+}
+
+// GetCounterparty returns the client ID this chain's router has registered
+// as clientID's on-chain counterparty.
+func (c *Client) GetCounterparty(ctx context.Context, clientID string) (string, error) {
+	info, err := c.router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return "", errors.Wrapf(err, "querying on-chain counterparty for client %q on chain %s", clientID, c.chainID)
+	}
+
+	return info.ClientId, nil
+}
+
+// GetAttestationSet returns clientID's on-chain attestor addresses and
+// minimum required signature count.
+func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]string, uint8, error) {
+	lightClientAddr, err := c.router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "resolving light client address for %q on chain %s", clientID, c.chainID)
+	}
+
+	lightClient, err := attestation.NewContract(lightClientAddr, c.eth)
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "binding attestation light client %q on chain %s", clientID, c.chainID)
+	}
+
+	set, err := lightClient.GetAttestationSet(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, 0, errors.Wrapf(err, "querying attestation set for client %q on chain %s", clientID, c.chainID)
+	}
+
+	addresses := make([]string, len(set.AttestorAddresses))
+	for i, addr := range set.AttestorAddresses {
+		addresses[i] = strings.ToLower(addr.Hex())
+	}
+
+	return addresses, set.MinRequiredSigs, nil
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
@@ -380,72 +434,6 @@ func (c *Client) PacketWriteAckStatus(
 	}
 
 	return v2.WriteAckStatusUnknown, v2.ErrWriteAckNotFoundForPacket
-}
-
-func (c *Client) IsTxFinalized(ctx context.Context, txHash string, finalityOffset *uint64) (bool, error) {
-	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
-	if err != nil {
-		if errors.Is(err, ethereum.NotFound) {
-			return false, v2.ErrTxNotFound
-		}
-
-		return false, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
-	}
-
-	if finalityOffset == nil {
-		finalized, errHeader := c.eth.HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
-		if errHeader != nil {
-			return false, errors.Wrapf(errHeader, "getting finalized header on chain %s", c.chainID)
-		}
-
-		return receipt.BlockNumber.Cmp(finalized.Number) <= 0, nil
-	}
-
-	latest, err := c.eth.HeaderByNumber(ctx, nil)
-	if err != nil {
-		return false, errors.Wrapf(err, "getting latest header on chain %s", c.chainID)
-	}
-
-	txBlock := receipt.BlockNumber.Uint64()
-	latestBlock := latest.Number.Uint64()
-
-	return latestBlock >= txBlock && latestBlock-txBlock >= *finalityOffset, nil
-}
-
-func (c *Client) IsTimestampFinalized(ctx context.Context, timestamp time.Time, finalityOffset *uint64) (bool, error) {
-	var header *types.Header
-
-	if finalityOffset == nil {
-		finalized, errHeader := c.eth.HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
-		if errHeader != nil {
-			return false, errors.Wrapf(errHeader, "getting finalized header on chain %s", c.chainID)
-		}
-
-		header = finalized
-	} else {
-		latest, errHeader := c.eth.HeaderByNumber(ctx, nil)
-		if errHeader != nil {
-			return false, errors.Wrapf(errHeader, "getting latest header on chain %s", c.chainID)
-		}
-
-		if latest.Number.Uint64() < *finalityOffset {
-			return false, nil
-		}
-
-		finalized, errHeader := c.eth.HeaderByNumber(
-			ctx,
-			new(big.Int).SetUint64(latest.Number.Uint64()-*finalityOffset),
-		)
-		if errHeader != nil {
-			return false, errors.Wrapf(errHeader, "getting offset header on chain %s", c.chainID)
-		}
-
-		header = finalized
-	}
-
-	blockTime := time.Unix(int64(header.Time), 0)
-
-	return !blockTime.Before(timestamp), nil
 }
 
 func (c *Client) WaitForChain(ctx context.Context) error {

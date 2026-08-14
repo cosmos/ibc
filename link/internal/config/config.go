@@ -12,6 +12,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/cosmos/ibc/link/internal/network"
 )
@@ -33,12 +35,12 @@ const sqliteInMemory = ":memory:"
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	DB       DBConfig       `yaml:"db"`
-	Chains   []ChainConfig  `yaml:"chains"`
-	Relayer  RelayerConfig  `yaml:"relayer"`
-	Attestor AttestorConfig `yaml:"attestor"`
-	Signers  Signers        `yaml:"signers"`
+	Server    ServerConfig  `yaml:"server"`
+	DB        DBConfig      `yaml:"db"`
+	Chains    []ChainConfig `yaml:"chains"`
+	Relayer   RelayerConfig `yaml:"relayer"`
+	Attestors Attestors     `yaml:"attestors"`
+	Signers   Signers       `yaml:"signers"`
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -52,9 +54,32 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
-// AttestorConfig represents the entrypoint for running the process as an attestor
+// Attestors is the list of attestors, used both by the relayer
+// (to resolve who to query) and the attestor binary (to know what it
+// serves locally).
+type Attestors []AttestorConfig
+
+// AttestorConfig describes one attestor, either run by this process
+// (type: local) or reachable over gRPC (type: remote).
 type AttestorConfig struct {
-	Attestations []AttestationConfig `yaml:"attestations"`
+	// ChainID is the chain this attestor watches.
+	ChainID string `yaml:"chainId,omitempty"`
+
+	// Name is the attestor's own self-reported identity. Not required unique.
+	Name string `yaml:"name"`
+
+	Type AttestorType `yaml:"type"`
+
+	// Signer required for type: local only -- the signer used to sign
+	// attestations.
+	Signer string `yaml:"signer"`
+
+	// FinalityOffset local only. Zero attests up to the chain's "finalized"
+	// tag; n > 0 attests up to "latest" - n instead.
+	FinalityOffset uint `yaml:"finalityOffset"`
+
+	// GRPC required for type: remote only. Bare host:port.
+	GRPC string `yaml:"grpc,omitempty"`
 }
 
 // Signers is the list of configured signer backends.
@@ -69,28 +94,13 @@ type SignerConfig struct {
 	Type string `yaml:"type"`
 
 	// File key file path for a local signer
-	File string `yaml:"file"`
+	File string `yaml:"file,omitempty"`
 
 	// GRPC address for a remote signer
-	GRPC string `yaml:"grpc"`
+	GRPC string `yaml:"grpc,omitempty"`
 
 	// RemoteKeyID KMS key ID for a remote signer
-	RemoteKeyID string `yaml:"remoteKeyId"`
-}
-
-// AttestationConfig represents a single attestation configuration when the binary runs attestors.
-// Name should be unique within the config.
-type AttestationConfig struct {
-	ChainID string `yaml:"chainId"`
-	Name    string `yaml:"name"`
-
-	// Signer reference to .signers section in the config
-	// Should be unique across all attestations!
-	Signer string `yaml:"signer"`
-
-	// Finality offset is the number of blocks to wait before attesting a block.
-	// Zero returns the "finalized" block. Otherwise we use `"latest" - finalityOffset`
-	FinalityOffset uint `yaml:"finalityOffset"`
+	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }
 
 // ChainType the execution environment of a chain.
@@ -138,11 +148,10 @@ func DefaultConfig() Config {
 		Chains: []ChainConfig{},
 		Relayer: RelayerConfig{
 			ChainOverrides: []RelayerChainOverride{},
+			Connections:    []ConnectionConfig{},
 		},
-		Attestor: AttestorConfig{
-			Attestations: []AttestationConfig{},
-		},
-		Signers: Signers{},
+		Attestors: Attestors{},
+		Signers:   Signers{},
 	}
 }
 
@@ -203,8 +212,8 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".relayer")
 	}
 
-	if err := c.Attestor.Validate(); err != nil {
-		return errors.Wrap(err, ".attestor")
+	if err := c.Attestors.Validate(); err != nil {
+		return errors.Wrap(err, ".attestors")
 	}
 
 	if err := c.Signers.Validate(); err != nil {
@@ -220,13 +229,12 @@ func (c Config) crossValidate() error {
 		signerSet[signer.Alias] = struct{}{}
 	}
 
-	for i, attestation := range c.Attestor.Attestations {
-		if _, exists := signerSet[attestation.Signer]; !exists {
-			return errors.Errorf(
-				".attestor.attestations[%d].signer references unknown signer: %q",
-				i,
-				attestation.Signer,
-			)
+	for i, a := range c.Attestors {
+		if a.Type != AttestorTypeLocal {
+			continue
+		}
+		if _, exists := signerSet[a.Signer]; !exists {
+			return errors.Errorf(".attestors[%d].signer references unknown signer: %q", i, a.Signer)
 		}
 	}
 
@@ -243,51 +251,38 @@ func (c Config) crossValidate() error {
 		return err
 	}
 
-	if err := c.validateRelayerSigners(signerSet); err != nil {
-		return errors.Wrap(err, ".relayer.routesToRelay")
+	if err := c.validateConnectionSigners(signerSet); err != nil {
+		return errors.Wrap(err, ".relayer.connections")
 	}
 
 	return nil
 }
 
-// validateRelayerSigners ensures every route's signer aliases resolve to a
-// configured signer.
-func (c Config) validateRelayerSigners(signerSet map[string]struct{}) error {
-	for _, route := range c.Relayer.Routes {
-		for _, alias := range []string{route.SourceSignerAlias, route.DestSignerAlias} {
-			if _, exists := signerSet[alias]; !exists {
-				return errors.Errorf("route %q references unknown signer %q", route.SourceClient, alias)
-			}
-		}
-	}
-
-	return nil
+type namedClientEnd struct {
+	label string
+	cfg   ClientEnd
 }
 
-// ChainSignerPair one (chain, signer alias) pair a route submits with.
+func connectionEnds(conn ConnectionConfig) []namedClientEnd {
+	return []namedClientEnd{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
+}
+
+// ChainSignerPair one (chain, signer alias) pair a client end submits with.
 type ChainSignerPair struct {
 	ChainID     string
 	SignerAlias string
 }
 
-// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across all
-// configured routes. A chain may appear with multiple signers when different
-// clients on it are relayed by different routes.
-func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
+// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across
+// every configured connection's two client ends.
+func RelayerChainSignerPairs(c Config) []ChainSignerPair {
 	seen := make(map[ChainSignerPair]struct{})
 
 	var pairs []ChainSignerPair
 
-	for _, route := range c.Relayer.Routes {
-		client, ok := c.Relayer.ClientByAlias(route.SourceClient)
-		if !ok {
-			return nil, errors.Errorf("route references unknown client %q", route.SourceClient)
-		}
-
-		for _, pair := range []ChainSignerPair{
-			{ChainID: client.ChainID, SignerAlias: route.SourceSignerAlias},
-			{ChainID: client.CounterpartyChainID, SignerAlias: route.DestSignerAlias},
-		} {
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
+			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
 			if _, dup := seen[pair]; dup {
 				continue
 			}
@@ -297,7 +292,7 @@ func RelayerChainSignerPairs(c Config) ([]ChainSignerPair, error) {
 		}
 	}
 
-	return pairs, nil
+	return pairs
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are
@@ -309,12 +304,31 @@ func (c Config) validateChainReferences() error {
 		}
 	}
 
-	for _, client := range c.Relayer.Clients {
-		if _, ok := c.Chain(client.ChainID); client.ChainID != "" && !ok {
-			return errors.Errorf(
-				".clients[%s] chainId %q not declared in top-level chains",
-				client.ClientID, client.ChainID,
-			)
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
+				return errors.Errorf(
+					".connections[%s].%s chainId %q not declared in top-level chains",
+					conn.Alias, end.label, end.cfg.ChainID,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateConnectionSigners ensures every client end's signer resolves to a
+// configured signer.
+func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, exists := signerSet[end.cfg.Signer]; !exists {
+				return errors.Errorf(
+					"connection %q %s references unknown signer %q",
+					conn.Alias, end.label, end.cfg.Signer,
+				)
+			}
 		}
 	}
 
@@ -342,27 +356,27 @@ func (c Config) Signer(alias string) (SignerConfig, bool) {
 	return SignerConfig{}, false
 }
 
-// AttestationByName returns the attestation with the given name.
-func (c Config) AttestationByName(name string) (AttestationConfig, bool) {
-	for _, attestation := range c.Attestor.Attestations {
-		if attestation.Name == name {
-			return attestation, true
+// AttestorByName returns the configured attestor with the given name.
+func (c Config) AttestorByName(name string) (AttestorConfig, bool) {
+	for _, attestor := range c.Attestors {
+		if attestor.Name == name {
+			return attestor, true
 		}
 	}
 
-	return AttestationConfig{}, false
+	return AttestorConfig{}, false
 }
 
-// AttestationsForChain returns every attestation configured for chainID.
-func (c Config) AttestationsForChain(chainID string) []AttestationConfig {
-	var attestations []AttestationConfig
-	for _, attestation := range c.Attestor.Attestations {
-		if attestation.ChainID == chainID {
-			attestations = append(attestations, attestation)
+// AttestorsForChain returns every configured attestor watching chainID.
+func (c Config) AttestorsForChain(chainID string) []AttestorConfig {
+	var attestors []AttestorConfig
+	for _, attestor := range c.Attestors {
+		if attestor.ChainID == chainID {
+			attestors = append(attestors, attestor)
 		}
 	}
 
-	return attestations
+	return attestors
 }
 
 func (c ChainConfig) Validate() error {
@@ -378,20 +392,37 @@ func (c ChainConfig) Validate() error {
 }
 
 func (c Config) StoreToFile(path string) error {
+	return c.store(path, nil)
+}
+
+// StoreToFileWithComments writes c to path as YAML, with a TODO comment
+// attached to every field CollectComments flags as left for the operator to
+// fill in.
+func (c Config) StoreToFileWithComments(path string) error {
+	return c.store(path, CollectComments(c))
+}
+
+func (c Config) store(path string, comments map[string]string) error {
 	if err := EnsureDirectory(path); err != nil {
 		return err
 	}
 
-	bz, err := yaml.Marshal(c)
+	bz, err := yaml.MarshalWithOptions(c, yaml.WithComment(toCommentMap(comments)))
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(path, bz, 0o644); err != nil {
-		return err
-	}
+	return os.WriteFile(path, bz, 0o644)
+}
 
-	return nil
+// toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
+// of line comments, as PrintYAMLWithComments/store both need.
+func toCommentMap(comments map[string]string) yaml.CommentMap {
+	cm := make(yaml.CommentMap, len(comments))
+	for path, text := range comments {
+		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
+	}
+	return cm
 }
 
 func (c ServerConfig) Validate() error {
@@ -440,39 +471,68 @@ func DBConfigFromURL(url string) (DBConfig, error) {
 	return db, db.Validate()
 }
 
-// Validate validates the attestor config. Allows empty attestations.
-func (c AttestorConfig) Validate() error {
-	nameSet := make(map[string]struct{})
-	signerSet := make(map[string]struct{})
-
-	for i, attestation := range c.Attestations {
-		if err := attestation.Validate(); err != nil {
-			return errors.Wrapf(err, ".attestations[%d]", i)
+// Validate validates the attestors list. Allows empty.
+func (a Attestors) Validate() error {
+	localNames := make(map[string]struct{})
+	// keyed by chainId+signer: the same signer backing one operator's local
+	// attestor on two different chains is fine, but reusing it for two
+	// attestors on the same chain is always a redundant duplicate.
+	localChainSigners := make(map[string]struct{})
+	for i, attestor := range a {
+		if err := attestor.Validate(); err != nil {
+			return errors.Wrapf(err, "[%d]", i)
 		}
 
-		if _, exists := nameSet[attestation.Name]; exists {
-			return errors.Errorf(".attestations[%d] duplicate name: %q", i, attestation.Name)
+		if attestor.Type != AttestorTypeLocal {
+			continue
 		}
 
-		if _, exists := signerSet[attestation.Signer]; exists {
-			return errors.Errorf(".attestations[%d] duplicate signer: %q", i, attestation.Signer)
+		if _, exists := localNames[attestor.Name]; exists {
+			return errors.Errorf("duplicate local attestor name: %q", attestor.Name)
 		}
+		localNames[attestor.Name] = struct{}{}
 
-		nameSet[attestation.Name] = struct{}{}
-		signerSet[attestation.Signer] = struct{}{}
+		chainSigner := attestor.ChainID + "/" + attestor.Signer
+		if _, exists := localChainSigners[chainSigner]; exists {
+			return errors.Errorf("duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
+		}
+		localChainSigners[chainSigner] = struct{}{}
 	}
 
 	return nil
 }
 
-func (c AttestationConfig) Validate() error {
+func (c AttestorConfig) Validate() error {
 	switch {
-	case c.ChainID == "":
-		return errors.Errorf(".chainId required")
 	case c.Name == "":
-		return errors.Errorf(".name required")
-	case c.Signer == "":
-		return errors.Errorf(".signer required")
+		return errors.New(".name required")
+	case c.Type != AttestorTypeLocal && c.Type != AttestorTypeRemote:
+		return errors.Errorf(".type unknown attestor type: %q", c.Type)
+	}
+
+	switch c.Type {
+	case AttestorTypeLocal:
+		switch {
+		case c.ChainID == "":
+			return errors.New(".chainId required for local attestors")
+		case c.Signer == "":
+			return errors.New(".signer required for local attestors")
+		case c.GRPC != "":
+			return errors.New(".grpc must not be set for local attestors")
+		}
+	case AttestorTypeRemote:
+		switch {
+		case c.GRPC == "":
+			return errors.New(".grpc required for remote attestors")
+		case strings.Contains(c.GRPC, "://"):
+			return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
+		case c.ChainID != "":
+			return errors.New(".chainId must not be set for remote attestors")
+		case c.Signer != "":
+			return errors.New(".signer must not be set for remote attestors")
+		case c.FinalityOffset != 0:
+			return errors.New(".finalityOffset must not be set for remote attestors")
+		}
 	}
 
 	return nil
@@ -566,6 +626,19 @@ func PrintJSON(v any) error {
 	return nil
 }
 
+// PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
+// fields by name
+func PrintProtoJSON(msg proto.Message) error {
+	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
+}
+
 // PrintYAML prints anything as YAML to stdout.
 func PrintYAML(v any) error {
 	bz, err := yaml.Marshal(v)
@@ -576,6 +649,61 @@ func PrintYAML(v any) error {
 	fmt.Println(string(bz))
 
 	return nil
+}
+
+// PrintYAMLWithComments prints v as YAML to stdout, attaching a line comment
+// to every field addressed by a YAML path in comments, keyed as
+// "$.relayer.connections[0].clientA.signer".
+func PrintYAMLWithComments(v any, comments map[string]string) error {
+	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(toCommentMap(comments)))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(bz))
+
+	return nil
+}
+
+const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
+
+// CollectComments builds TODO comments for every field in cfg that's left
+// for the operator to fill in by hand, keyed by YAML path for
+// PrintYAMLWithComments/StoreToFileWithComments.
+func CollectComments(cfg Config) map[string]string {
+	comments := map[string]string{}
+
+	for i, chain := range cfg.Chains {
+		if chain.EVM != nil && chain.EVM.ICS26Router == "" {
+			path := fmt.Sprintf("$.chains[%d].evm.ics26Router", i)
+			comments[path] = "TODO: fill in"
+		}
+	}
+
+	for i, conn := range cfg.Relayer.Connections {
+		if conn.ClientA.Signer == "" {
+			path := fmt.Sprintf("$.relayer.connections[%d].clientA.signer", i)
+			comments[path] = "TODO: signers[] alias that submits relay txs on chainA"
+		}
+		if conn.ClientB.Signer == "" {
+			path := fmt.Sprintf("$.relayer.connections[%d].clientB.signer", i)
+			comments[path] = "TODO: signers[] alias that submits relay txs on chainB"
+		}
+	}
+
+	for i, attestor := range cfg.Attestors {
+		if attestor.Type != AttestorTypeLocal {
+			continue
+		}
+		if attestor.Signer == "" {
+			path := fmt.Sprintf("$.attestors[%d].signer", i)
+			comments[path] = "TODO: signers[] alias backing this attestor's key"
+		}
+		path := fmt.Sprintf("$.attestors[%d].finalityOffset", i)
+		comments[path] = finalityOffsetTODO
+	}
+
+	return comments
 }
 
 func dbTypeFromURL(raw string) string {
