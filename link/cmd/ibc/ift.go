@@ -191,6 +191,9 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 		return errors.Wrapf(err, "dial %s", chain.EVM.RPC)
 	}
 
+	if !common.IsHexAddress(flagQueryIFTAddress) {
+		return errors.Errorf("invalid IFT address %q", flagQueryIFTAddress)
+	}
 	contract, err := ift.NewContract(common.HexToAddress(flagQueryIFTAddress), backend)
 	if err != nil {
 		return err
