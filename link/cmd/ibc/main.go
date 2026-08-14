@@ -111,13 +111,15 @@ func init() {
 	// Query commands
 	cmdQuery.AddCommand(cmdQueryIFT)
 	cmdQueryIFT.AddCommand(cmdQueryIFTBalance)
-	cmdQueryIFTBalance.Flags().StringVar(&flagQueryIFTChain, "chain", "", "chain ID the IFT token is deployed on")
-	cmdQueryIFTBalance.Flags().StringVar(&flagQueryIFTAddress, "ift", "", "IFT token address")
+	qpf := cmdQueryIFT.PersistentFlags()
+	qpf.StringVar(&flagQueryIFTChain, "chain", "", "chain ID the IFT token is deployed on")
+	qpf.StringVar(&flagQueryIFTAddress, "ift", "", "IFT token address")
+	for _, req := range []string{"chain", useIFT} {
+		_ = cmdQueryIFT.MarkPersistentFlagRequired(req)
+	}
 	cmdQueryIFTBalance.Flags().
 		StringVar(&flagQueryIFTAccount, "address", "", "account address, or a configured signer alias")
-	for _, req := range []string{"chain", useIFT, "address"} {
-		_ = cmdQueryIFTBalance.MarkFlagRequired(req)
-	}
+	_ = cmdQueryIFTBalance.MarkFlagRequired("address")
 
 	// Migrate commands
 	cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)
