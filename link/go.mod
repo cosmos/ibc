@@ -40,6 +40,8 @@ require (
 	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/DataDog/datadog-go v4.8.3+incompatible // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260116142910-60249400e523 // indirect
+	github.com/RaduBerinde/axisds v0.1.0 // indirect
+	github.com/RaduBerinde/btreemap v0.0.0-20250419174037-3d62b7205d54 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.18.0 // indirect
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/bgentry/speakeasy v0.2.0 // indirect
@@ -50,6 +52,9 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
+	github.com/cockroachdb/crlib v0.0.0-20241112164430-1264a2edc35b // indirect
+	github.com/cockroachdb/pebble/v2 v2.1.4 // indirect
+	github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b // indirect
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/cosmos/btree v1.0.0 // indirect
@@ -72,7 +77,7 @@ require (
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
 	github.com/dvsekhvalnov/jose2go v1.8.0 // indirect
 	github.com/emicklei/dot v1.11.0 // indirect
-	github.com/ethereum/c-kzg-4844/v2 v2.1.6 // indirect
+	github.com/ethereum/c-kzg-4844/v2 v2.1.8 // indirect
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/ferranbt/fastssz v0.1.4 // indirect
@@ -116,6 +121,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
+	github.com/minio/minlz v1.0.1-0.20250507153514-87eb42fe8882 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/pointerstructure v1.2.0 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
@@ -214,7 +220,7 @@ require (
 	github.com/dunglas/httpsfv v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
-	github.com/ethereum/go-ethereum v1.17.4
+	github.com/ethereum/go-ethereum v1.17.5
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/getsentry/sentry-go v0.46.0 // indirect
@@ -228,7 +234,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
+	github.com/golang/snappy v1.0.1-0.20260716114414-9ae09f520e93 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
