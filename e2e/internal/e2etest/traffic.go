@@ -17,11 +17,12 @@ type RouteID string
 // route it travels, the source transaction that emitted it, and its sequence
 // within that transaction's client. It carries no packet wire data.
 type PacketTx struct {
-	RouteID        RouteID
-	Source         environment.ChainID
-	SourceClientID string
-	SourceTxHash   string
-	Sequence       uint64
+	RouteID           RouteID
+	Source            environment.ChainID
+	SourceClientID    string
+	SourceTxHash      string
+	SourceBlockNumber uint64
+	Sequence          uint64
 }
 
 // String renders the route-scoped label used in relayer status messages.
@@ -51,11 +52,12 @@ func newSendResult(
 ) sendResult {
 	return sendResult{
 		packetTx: PacketTx{
-			RouteID:        routeID,
-			Source:         source.chain.ID(),
-			SourceClientID: sourceClientID,
-			SourceTxHash:   receipt.TxHash.Hex(),
-			Sequence:       sequence,
+			RouteID:           routeID,
+			Source:            source.chain.ID(),
+			SourceClientID:    sourceClientID,
+			SourceTxHash:      receipt.TxHash.Hex(),
+			SourceBlockNumber: receipt.BlockNumber.Uint64(),
+			Sequence:          sequence,
 		},
 		receipt: receipt,
 	}

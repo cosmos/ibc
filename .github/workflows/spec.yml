@@ -27,12 +27,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: tj-actions/changed-files@716b1e13042866565e00e85fd4ec490e186c4a2f # v41
+      - uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
         id: changed-files
         with:
           files: "README.md,spec/**/*.md"
           separator: ","
-      - uses: DavidAnson/markdownlint-cli2-action@ed4dec634fd2ef689c7061d5647371d8248064f1 # v13
+      - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
         if: steps.changed-files.outputs.any_changed == 'true'
         with:
           config: "spec/.markdownlint.jsonc"

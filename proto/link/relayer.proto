@@ -19,6 +19,29 @@ service RelayerApiService {
 message RelayRequest {
   string tx_hash = 1;
   string source_chain_id = 2;
+  // Selection is required and controls only this relayer instance; IBC
+  // relaying remains permissionless.
+  oneof selection {
+    AllPackets all_packets = 3;
+    SelectedPackets selected_packets = 4;
+  }
+}
+
+// AllPackets selects every packet in the transaction for which this relayer
+// has a configured client and route; packets without one are skipped, and the
+// request succeeds even if that leaves nothing to relay.
+message AllPackets {}
+
+// SelectedPackets selects exactly the listed packets. The request fails if any
+// packet is absent or not configured and routed. Packets already selected,
+// in flight, or terminal are successful no-ops.
+message SelectedPackets {
+  repeated PacketSelector packets = 1;
+}
+
+message PacketSelector {
+  string source_client_id = 1;
+  uint64 sequence_number = 2;
 }
 
 message RelayResponse {}
@@ -34,17 +57,20 @@ message StatusResponse {
 
 enum PacketState {
   PACKET_STATE_UNSPECIFIED = 0;
+  // The packet was discovered but has not been selected by this relayer
+  // instance. Another relayer may still deliver it.
+  PACKET_STATE_NOT_SELECTED = 1;
   // The relayer is still processing the packet.
-  PACKET_STATE_PENDING = 1;
+  PACKET_STATE_PENDING = 2;
   // The packet completed with a successful acknowledgement on the source
   // chain.
-  PACKET_STATE_SUCCEEDED = 2;
+  PACKET_STATE_SUCCEEDED = 3;
   // The packet completed with a timeout refund on the source chain.
-  PACKET_STATE_TIMED_OUT = 3;
+  PACKET_STATE_TIMED_OUT = 4;
   // The packet completed with an error acknowledgement on the source chain.
-  PACKET_STATE_REJECTED = 4;
+  PACKET_STATE_REJECTED = 5;
   // A permanent error prevents the relayer from processing the packet.
-  PACKET_STATE_RELAY_FAILED = 5;
+  PACKET_STATE_RELAY_FAILED = 6;
 }
 
 message TransactionInfo {

@@ -29,9 +29,6 @@ type Options struct {
 	AckBatchTimeout     time.Duration
 	TimeoutBatchSize    int
 	TimeoutBatchTimeout time.Duration
-
-	SourceFinalityOffset      *uint64
-	DestinationFinalityOffset *uint64
 }
 
 // OptionsFromConfig maps chain overrides onto pipeline options: recv batching
@@ -47,26 +44,9 @@ func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 		TimeoutBatchTimeout: DefaultTimeoutBatchTimeout,
 	}
 
-	if sourceClient, ok := cfg.Relayer.Client(route.SourceChainID, route.SourceClientID); ok {
-		for _, r := range cfg.Relayer.Routes {
-			if r.SourceClient == sourceClient.Alias {
-				opts.SourceSignerAlias = r.SourceSignerAlias
-				opts.DestSignerAlias = r.DestSignerAlias
-
-				break
-			}
-		}
-
-		if sourceClient.AttestorSet != nil {
-			offset := sourceClient.AttestorSet.CounterpartyChainFinalityOffset
-			opts.DestinationFinalityOffset = &offset
-		}
-	}
-
-	if destClient, ok := cfg.Relayer.Client(route.DestinationChainID, route.DestinationClientID); ok &&
-		destClient.AttestorSet != nil {
-		offset := destClient.AttestorSet.CounterpartyChainFinalityOffset
-		opts.SourceFinalityOffset = &offset
+	if sourceEnd, destEnd, ok := cfg.Relayer.ClientEnd(route.SourceChainID, route.SourceClientID); ok {
+		opts.SourceSignerAlias = sourceEnd.Signer
+		opts.DestSignerAlias = destEnd.Signer
 	}
 
 	if src, ok := cfg.Relayer.ChainOverride(route.SourceChainID); ok {

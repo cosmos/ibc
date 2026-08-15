@@ -167,7 +167,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	t.Run("transact", func(t *testing.T) {
 		const txHashAtomic = "0xa70m1c"
 
-		packet := CreatePacket{
+		packet := UpsertPacket{
 			Status:                    RelayStatusPending,
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
@@ -184,7 +184,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
 				return err
 			}
-			if err := repo.CreatePacket(ctx, packet); err != nil {
+			if err := repo.UpsertPacket(ctx, packet); err != nil {
 				return err
 			}
 
@@ -205,7 +205,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 				return createErr
 			}
 
-			return repo.CreatePacket(ctx, packet)
+			return repo.UpsertPacket(ctx, packet)
 		})
 		require.NoError(t, err)
 
@@ -219,7 +219,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 	})
 
 	t.Run("packets", func(t *testing.T) {
-		packet := CreatePacket{
+		packet := UpsertPacket{
 			Status:                    RelayStatusPending,
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
@@ -237,15 +237,15 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Empty(t, packets)
 
 		// Insert a packet
-		require.NoError(t, s.CreatePacket(ctx, packet))
+		require.NoError(t, s.UpsertPacket(ctx, packet))
 
 		// Insert the same packet again (noop)
-		require.NoError(t, s.CreatePacket(ctx, packet))
+		require.NoError(t, s.UpsertPacket(ctx, packet))
 
 		// Insert a second packet from the same tx
 		second := packet
 		second.PacketSequenceNumber = 43
-		require.NoError(t, s.CreatePacket(ctx, second))
+		require.NoError(t, s.UpsertPacket(ctx, second))
 
 		// List packets for the source tx
 		packets, err = s.ListPacketsBySourceTx(ctx, chainIDEth, txHashEth)
@@ -271,7 +271,10 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		// Invalid packet is rejected
 		invalid := packet
 		invalid.SourceChainID = ""
-		require.ErrorContains(t, s.CreatePacket(ctx, invalid), "source chain id is required")
+		require.ErrorContains(t, s.UpsertPacket(ctx, invalid), "source chain id is required")
+		invalid = packet
+		invalid.Status = RelayStatusFailed
+		require.ErrorContains(t, s.UpsertPacket(ctx, invalid), "status must be NOT_SELECTED or PENDING")
 
 		// Unknown tx returns empty list, not an error
 		packets, err = s.ListPacketsBySourceTx(ctx, chainIDEth, "0xunknown")
@@ -279,10 +282,70 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Empty(t, packets)
 	})
 
+	t.Run("packetSelection", func(t *testing.T) {
+		const (
+			txHashSelection   = "0xselection"
+			txHashReplacement = "0xreplacement"
+		)
+		input := UpsertPacket{
+			Status:                    RelayStatusNotSelected,
+			SourceChainID:             chainIDEth,
+			DestinationChainID:        chainIDBase,
+			SourceTxHash:              txHashSelection,
+			SourceTxTime:              time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC),
+			PacketSequenceNumber:      76,
+			PacketSourceClientID:      "base-0",
+			PacketDestinationClientID: "ethereum-0",
+			PacketTimeoutTimestamp:    time.Date(2026, 7, 13, 13, 0, 0, 0, time.UTC),
+		}
+		require.NoError(t, s.UpsertPacket(ctx, input))
+		key := PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 76}
+		fetch := func(txHash string) Packet {
+			packets, err := s.ListPacketsBySourceTx(ctx, chainIDEth, txHash)
+			require.NoError(t, err)
+			require.Len(t, packets, 1)
+			return packets[0]
+		}
+
+		dispatchable, err := s.ListDispatchablePackets(ctx)
+		require.NoError(t, err)
+		for _, packet := range dispatchable {
+			assert.NotEqual(t, txHashSelection, packet.SourceTxHash)
+		}
+
+		input.DestinationChainID = "10"
+		input.SourceTxHash = txHashReplacement
+		input.SourceTxTime = input.SourceTxTime.Add(time.Hour)
+		input.PacketDestinationClientID = "optimism-0"
+		input.PacketTimeoutTimestamp = input.PacketTimeoutTimestamp.Add(time.Hour)
+		require.NoError(t, s.UpsertPacket(ctx, input))
+
+		packets, err := s.ListPacketsBySourceTx(ctx, chainIDEth, txHashSelection)
+		require.NoError(t, err)
+		assert.Empty(t, packets)
+		unselected := fetch(txHashReplacement)
+		assert.Equal(t, RelayStatusNotSelected, unselected.Status)
+		assert.Equal(t, input.DestinationChainID, unselected.DestinationChainID)
+		assert.Equal(t, input.SourceTxTime, unselected.SourceTxTime)
+		assert.Equal(t, input.PacketDestinationClientID, unselected.PacketDestinationClientID)
+		assert.Equal(t, input.PacketTimeoutTimestamp, unselected.PacketTimeoutTimestamp)
+
+		input.Status = RelayStatusPending
+		input.PacketTimeoutTimestamp = input.PacketTimeoutTimestamp.Add(time.Hour)
+		require.NoError(t, s.UpsertPacket(ctx, input))
+		selected := fetch(txHashReplacement)
+		assert.Equal(t, RelayStatusPending, selected.Status)
+		assert.Equal(t, input.PacketTimeoutTimestamp, selected.PacketTimeoutTimestamp)
+
+		require.NoError(t, s.UpdatePacketStatus(ctx, key, RelayStatusDeliverRecvPacket))
+		require.NoError(t, s.UpsertPacket(ctx, input))
+		assert.Equal(t, RelayStatusDeliverRecvPacket, fetch(txHashReplacement).Status)
+	})
+
 	t.Run("packetLifecycle", func(t *testing.T) {
 		const txHashLifecycle = "0xlifecycle"
 
-		input := CreatePacket{
+		input := UpsertPacket{
 			Status:                    RelayStatusPending,
 			SourceChainID:             chainIDEth,
 			DestinationChainID:        chainIDBase,
@@ -293,7 +356,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			PacketDestinationClientID: "ethereum-0",
 			PacketTimeoutTimestamp:    time.Date(2026, 7, 14, 13, 0, 0, 0, time.UTC),
 		}
-		require.NoError(t, s.CreatePacket(ctx, input))
+		require.NoError(t, s.UpsertPacket(ctx, input))
 
 		key := PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 77}
 		fetch := func() Packet {
@@ -303,10 +366,10 @@ func testRepoReadWrite(t *testing.T, s Store) {
 
 			return packets[0]
 		}
-		inUnfinished := func() bool {
-			unfinished, err := s.ListUnfinishedPackets(ctx)
+		inDispatchable := func() bool {
+			dispatchable, err := s.ListDispatchablePackets(ctx)
 			require.NoError(t, err)
-			for _, p := range unfinished {
+			for _, p := range dispatchable {
 				if p.SourceTxHash == txHashLifecycle {
 					return true
 				}
@@ -315,7 +378,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			return false
 		}
 
-		require.True(t, inUnfinished())
+		require.True(t, inDispatchable())
 
 		// recv tx set and cleared
 		recvTime := time.Date(2026, 7, 14, 12, 1, 0, 0, time.UTC)
@@ -379,9 +442,9 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		got = fetch()
 		assert.Nil(t, got.TimeoutTxHash)
 
-		// terminal status leaves the unfinished set
+		// terminal status leaves the dispatchable set
 		require.NoError(t, s.UpdatePacketStatus(ctx, key, RelayStatusCompleteWithAck))
-		assert.False(t, inUnfinished())
+		assert.False(t, inDispatchable())
 
 		// updates to a different key are noops for this packet
 		other := PacketKey{SourceChainID: chainIDEth, SourceClientID: "base-0", Sequence: 78}

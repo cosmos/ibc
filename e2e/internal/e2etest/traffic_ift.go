@@ -6,8 +6,10 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +46,7 @@ type IFT struct {
 	sourceIFT      common.Address
 	destIFT        common.Address
 	sourceRouter   common.Address
+	destRouter     common.Address
 	sourceClientID string
 	batcher        common.Address
 }
@@ -117,11 +120,6 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 
 // SendBatch emits multiple IFT transfers from a single source transaction
 func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
-	batcherBefore, balanceErr := i.balance(ctx, i.source.evm, i.sourceIFT, i.batcher)
-	if balanceErr != nil {
-		return nil, balanceErr
-	}
-
 	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))
 	destinationsBefore := make([]*big.Int, len(requests))
 	seenReceivers := make(map[common.Address]struct{}, len(requests))
@@ -160,6 +158,14 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		total.Add(total, amount)
 	}
 
+	batcherBefore, err := i.balance(ctx, i.source.evm, i.sourceIFT, i.batcher)
+	if err != nil {
+		return nil, err
+	}
+	destinationSupplyBefore, err := i.totalSupply(ctx, i.destination.evm, i.destIFT)
+	if err != nil {
+		return nil, err
+	}
 	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
 	})
@@ -183,41 +189,51 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		)
 	}
 
-	sends := make([]*IFTSend, len(requests))
+	packets := make([]iftBatchPacket, len(requests))
 	for k, sequence := range sequences {
-		sends[k] = &IFTSend{
-			sendResult:        newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
-			app:               i,
+		packets[k] = iftBatchPacket{
+			packetTx:          newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence).PacketTx(),
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
 			destinationBefore: destinationsBefore[k],
+			timeoutTimestamp:  transfers[k].TimeoutTimestamp,
 		}
 	}
 	return &IFTBatch{
-		app:           i,
-		sends:         sends,
-		receipt:       receipt,
-		batcherBefore: batcherBefore,
-		total:         total,
+		app:                     i,
+		packets:                 packets,
+		receipt:                 receipt,
+		batcherBefore:           batcherBefore,
+		destinationSupplyBefore: destinationSupplyBefore,
+		total:                   total,
 	}, nil
+}
+
+type iftBatchPacket struct {
+	packetTx          PacketTx
+	receiver          common.Address
+	amount            *big.Int
+	destinationBefore *big.Int
+	timeoutTimestamp  uint64
 }
 
 // IFTBatch is the result of a SendBatch call: several IFT packets emitted
 // from a single source transaction.
 type IFTBatch struct {
-	app           *IFT
-	sends         []*IFTSend
-	receipt       *types.Receipt
-	batcherBefore *big.Int
-	total         *big.Int
+	app                     *IFT
+	packets                 []iftBatchPacket
+	receipt                 *types.Receipt
+	batcherBefore           *big.Int
+	destinationSupplyBefore *big.Int
+	total                   *big.Int
 }
 
 // PacketTxs locates every packet the batch emitted, in send order. They all
 // share the batch's single source transaction.
 func (b *IFTBatch) PacketTxs() []PacketTx {
-	packetTxs := make([]PacketTx, len(b.sends))
-	for k, s := range b.sends {
-		packetTxs[k] = s.PacketTx()
+	packetTxs := make([]PacketTx, len(b.packets))
+	for k, packet := range b.packets {
+		packetTxs[k] = packet.packetTx
 	}
 	return packetTxs
 }
@@ -228,12 +244,122 @@ func (b *IFTBatch) TxHash() string { return b.receipt.TxHash.Hex() }
 // Receipt is the batch's source transaction receipt.
 func (b *IFTBatch) Receipt() *types.Receipt { return b.receipt }
 
+// LatestTimeoutTimestamp returns the latest packet timeout in the batch.
+func (b *IFTBatch) LatestTimeoutTimestamp() uint64 {
+	var latest uint64
+	for _, packet := range b.packets {
+		latest = max(latest, packet.timeoutTimestamp)
+	}
+	return latest
+}
+
 func (b *IFTBatch) VerifyDelivered(ctx context.Context) error {
-	for _, s := range b.sends {
-		if err := s.VerifyDelivered(ctx); err != nil {
+	for _, packet := range b.packets {
+		want := new(big.Int).Add(packet.destinationBefore, packet.amount)
+		err := awaitBalance(
+			ctx,
+			b.app.destination.chain,
+			fmt.Sprintf("IFT packet %s mint delivery", packet.packetTx.reference()),
+			func(ctx context.Context) (*big.Int, error) {
+				return b.app.balance(ctx, b.app.destination.evm, b.app.destIFT, packet.receiver)
+			},
+			want,
+		)
+		if err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// VerifyState checks exact source refunds, destination mints and pending
+// records. delivered and refunded contain packet indexes.
+func (b *IFTBatch) VerifyState(ctx context.Context, delivered, refunded []int) error {
+	deliveredTotal := new(big.Int)
+	for _, index := range delivered {
+		if slices.Contains(refunded, index) {
+			return fmt.Errorf("e2etest: IFT batch packet index %d is both delivered and refunded", index)
+		}
+		deliveredTotal.Add(deliveredTotal, b.packets[index].amount)
+	}
+	refundedTotal := new(big.Int)
+	for _, index := range refunded {
+		refundedTotal.Add(refundedTotal, b.packets[index].amount)
+	}
+
+	wantSource := new(big.Int).Sub(new(big.Int).Set(b.batcherBefore), b.total)
+	wantSource.Add(wantSource, refundedTotal)
+	gotSource, err := b.app.balance(ctx, b.app.source.evm, b.app.sourceIFT, b.app.batcher)
+	if err != nil {
+		return err
+	}
+	if gotSource.Cmp(wantSource) != 0 {
+		return fmt.Errorf("e2etest: IFT batch source balance: got %s, want %s", gotSource, wantSource)
+	}
+
+	for index, packet := range b.packets {
+		want := new(big.Int).Set(packet.destinationBefore)
+		if slices.Contains(delivered, index) {
+			want.Add(want, packet.amount)
+		}
+		got, balanceErr := b.app.balance(ctx, b.app.destination.evm, b.app.destIFT, packet.receiver)
+		if balanceErr != nil {
+			return balanceErr
+		}
+		if got.Cmp(want) != 0 {
+			return fmt.Errorf(
+				"e2etest: IFT batch destination balance for packet %d: got %s, want %s",
+				index,
+				got,
+				want,
+			)
+		}
+
+		isDelivered := slices.Contains(delivered, index)
+		isRefunded := slices.Contains(refunded, index)
+		record, pendingErr := b.app.pendingTransfer(
+			ctx,
+			b.app.source.evm,
+			b.app.sourceIFT,
+			b.app.sourceClientID,
+			packet.packetTx.Sequence,
+		)
+		if isDelivered || isRefunded {
+			if pendingErr == nil {
+				return fmt.Errorf(
+					"e2etest: IFT batch packet %d pending transfer still present, want cleared",
+					index,
+				)
+			}
+			if !isIFTPendingTransferNotFound(pendingErr) {
+				return fmt.Errorf("e2etest: IFT batch packet %d pending transfer: %w", index, pendingErr)
+			}
+			continue
+		}
+		if pendingErr != nil {
+			return fmt.Errorf("e2etest: IFT batch packet %d pending transfer: %w", index, pendingErr)
+		}
+		if record.Sender != b.app.batcher || record.Amount.Cmp(packet.amount) != 0 {
+			return fmt.Errorf(
+				"e2etest: IFT batch packet %d pending transfer: got sender %s amount %s, want sender %s amount %s",
+				index,
+				record.Sender.Hex(),
+				record.Amount,
+				b.app.batcher.Hex(),
+				packet.amount,
+			)
+		}
+	}
+
+	wantSupply := new(big.Int).Add(new(big.Int).Set(b.destinationSupplyBefore), deliveredTotal)
+	gotSupply, err := b.app.totalSupply(ctx, b.app.destination.evm, b.app.destIFT)
+	if err != nil {
+		return err
+	}
+	if gotSupply.Cmp(wantSupply) != 0 {
+		return fmt.Errorf("e2etest: IFT batch destination supply: got %s, want %s", gotSupply, wantSupply)
+	}
+
 	return nil
 }
 
@@ -257,6 +383,57 @@ func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
 }
 
 func (p *IFTSend) TimeoutTimestamp() uint64 { return p.timeoutTimestamp }
+
+// WriteAcknowledgementSequences returns the packet sequences written by a destination receive transaction.
+func (i *IFT) WriteAcknowledgementSequences(ctx context.Context, txHash string) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(i.destRouter, nil))
+	sequences, err := transactionEventSequences(
+		ctx,
+		i.destination,
+		i.destRouter,
+		txHash,
+		parser.ParseWriteAcknowledgement,
+		func(event *ics26router.ContractWriteAcknowledgement) uint64 { return event.Packet.Sequence },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read IFT WriteAcknowledgement events: %w", err)
+	}
+	return sequences, nil
+}
+
+// AckPacketSequences returns the packet sequences acknowledged by a source acknowledgement transaction.
+func (i *IFT) AckPacketSequences(ctx context.Context, txHash string) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(i.sourceRouter, nil))
+	sequences, err := transactionEventSequences(
+		ctx,
+		i.source,
+		i.sourceRouter,
+		txHash,
+		parser.ParseAckPacket,
+		func(event *ics26router.ContractAckPacket) uint64 { return event.Packet.Sequence },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read IFT AckPacket events: %w", err)
+	}
+	return sequences, nil
+}
+
+// TimeoutPacketSequences returns the packet sequences timed out by a source timeout transaction.
+func (i *IFT) TimeoutPacketSequences(ctx context.Context, txHash string) ([]uint64, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(i.sourceRouter, nil))
+	sequences, err := transactionEventSequences(
+		ctx,
+		i.source,
+		i.sourceRouter,
+		txHash,
+		parser.ParseTimeoutPacket,
+		func(event *ics26router.ContractTimeoutPacket) uint64 { return event.Packet.Sequence },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read IFT TimeoutPacket events: %w", err)
+	}
+	return sequences, nil
+}
 
 // VerifyBurned checks that the submitted amount left the source sender balance.
 func (p *IFTSend) VerifyBurned(ctx context.Context) error {

@@ -16,6 +16,9 @@ service AttestationService {
 
   // Returns the latest height the attestor will generate attestations for.
   rpc LatestHeight(LatestHeightRequest) returns (LatestHeightResponse);
+
+  // Returns identity information about a configured attestor.
+  rpc Info(InfoRequest) returns (InfoResponse);
 }
 
 message StateAttestationRequest {
@@ -52,6 +55,15 @@ message PacketAttestationResponse {
 message LatestHeightRequest { string attestor = 1; }
 
 message LatestHeightResponse { uint64 height = 1; }
+
+message InfoRequest { string attestor = 1; }
+
+message InfoResponse {
+  // The chain this attestor watches.
+  string chain_id = 1;
+  // The attestor's signing address.
+  string address = 2;
+}
 
 // Commitment type for packet attestation
 enum CommitmentType {

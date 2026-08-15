@@ -71,6 +71,32 @@ func receiptEvents[T any](
 	return events, nil
 }
 
+func transactionEventSequences[T any](
+	ctx context.Context,
+	target endpoint,
+	contract common.Address,
+	txHash string,
+	parse func(types.Log) (*T, error),
+	sequence func(*T) uint64,
+) ([]uint64, error) {
+	receipt, err := target.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
+	if err != nil {
+		return nil, fmt.Errorf("fetch transaction %s: %w", txHash, err)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return nil, fmt.Errorf("transaction %s failed", txHash)
+	}
+	events, err := receiptEvents(receipt, contract, parse)
+	if err != nil {
+		return nil, err
+	}
+	sequences := make([]uint64, len(events))
+	for i, event := range events {
+		sequences[i] = sequence(event)
+	}
+	return sequences, nil
+}
+
 // NewAddress generates a fresh, unfunded EVM address for use as a test
 // recipient (e.g. an ERC20 transfer target).
 func NewAddress() (common.Address, error) {

@@ -132,6 +132,17 @@ func TestValidateChecksSpecAndRuntime(t *testing.T) {
 	badRuntime := mixedProtocolRuntime()
 	delete(badRuntime.Endpoints, "chain-b-rpc")
 	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `no runtime endpoint binding for "chain-b-rpc"`)
+
+	badRuntime = mixedProtocolRuntime()
+	authority := badRuntime.Authorities["attestor-signer"]
+	authority.SignerRemoteKeyID = "attestor-key"
+	badRuntime.Authorities["attestor-signer"] = authority
+	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `requires endpoint and key id`)
+
+	authority.SignerRemoteKeyID = ""
+	authority.SignerGRPC = "127.0.0.1:9090"
+	badRuntime.Authorities["attestor-signer"] = authority
+	require.ErrorContains(t, Validate(mixedProtocolSpec(), badRuntime), `requires endpoint and key id`)
 }
 
 func TestProductionPrerequisitesRequireExecutableAttestorBinary(t *testing.T) {

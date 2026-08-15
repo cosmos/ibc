@@ -378,20 +378,12 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
-	attestorIDs := env.Attestors()
-	attestorSets := make(map[string]*ibclink.RelayerAttestorSet, len(attestorIDs))
-	for _, id := range attestorIDs {
+	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)
-		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
-		client := attestor.IBCClient()
-		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
-		key := chainID + "/" + client.ID()
-		set := attestorSets[key]
-		if set == nil {
-			set = &ibclink.RelayerAttestorSet{Threshold: int(client.MinRequiredSignatures())}
-			attestorSets[key] = set
+		if err != nil {
+			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
 		}
-		set.Attestors = append(set.Attestors, ibclink.RelayerAttestor{
+		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
 			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
 		})
 	}
@@ -425,15 +417,8 @@ func buildConfig(
 		key := connection.ChainA + "/" + connection.ClientA
 		if !connections[key] {
 			connections[key] = true
-			connection.AttestorSetA = attestorSets[key]
-			connection.AttestorSetB = attestorSets[connection.ChainB+"/"+connection.ClientB]
 			config.Connections = append(config.Connections, connection)
 		}
-
-		config.Routes = append(config.Routes, ibclink.RelayerRoute{
-			SourceChain:  sourceChain,
-			SourceClient: clients.SourceClientID,
-		})
 	}
 	return config, options
 }
