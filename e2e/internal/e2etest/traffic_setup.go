@@ -22,10 +22,10 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/iftbatchtransfershim"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/iftsendcallconstructor"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/testerc20"
+	"github.com/cosmos/ibc/solidity-abi/counter"
+	"github.com/cosmos/ibc/solidity-abi/iftbatchtransfershim"
+	"github.com/cosmos/ibc/solidity-abi/iftsendcallconstructor"
+	"github.com/cosmos/ibc/solidity-abi/testerc20"
 )
 
 var testERC20Transactor = mustBinding(testerc20.NewTestERC20Transactor(common.Address{}, nil))

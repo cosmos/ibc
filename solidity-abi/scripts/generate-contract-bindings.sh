@@ -23,7 +23,7 @@ generate() {
 }
 
 solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
-bindings="$repo_root/gen/go/solidity-abi"
+bindings="$repo_root/solidity-abi"
 generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$bindings/accessmanager/contract.go"
 generate "$solidity_ibc/contracts/out/Escrow.sol/Escrow.json" escrow Escrow "$bindings/escrow/contract.go"
 generate "$solidity_ibc/contracts/out/TestERC20.sol/TestERC20.json" testerc20 TestERC20 "$bindings/testerc20/contract.go"
