@@ -12,6 +12,7 @@ updates:
     directories:
       - "/link"
       - "/e2e"
+      - "/solidity-abi"
     target-branch: main
     schedule:
       interval: weekly

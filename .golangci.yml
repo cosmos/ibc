@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Shared lint config for all modules in this repo (link, e2e).
+# Shared lint config for all modules in this repo (link, e2e, solidity-abi).
 # golangci-lint walks up parent directories, so `golangci-lint run` from any
 # module dir finds this. It takes the strictest setting from each module.
 # https://github.com/golangci/golangci-lint/blob/6b274d25c1e38f136ab75ac9b9e4785fc22f9421/.golangci.reference.yml

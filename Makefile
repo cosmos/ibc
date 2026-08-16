@@ -97,9 +97,11 @@ check-license-headers: ## Check SPDX license headers
 check-link: ## Run Link-local checks
 	$(MAKE) -C link check
 
+check-solidity-abi: lint-solidity-abi test-solidity-abi ## Run all generated Solidity binding checks
+
 check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps test-e2e check-e2e-matrix ## Run all repository e2e checks
 
-check: check-license-headers check-link test-solidity-abi check-e2e ## Run license, Link, generated binding, and repository e2e checks
+check: check-license-headers check-link check-solidity-abi check-e2e ## Run license, Link, generated binding, and repository e2e checks
 
 .PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e lint-solidity-abi lint-fix-solidity-abi test-solidity-abi \
-	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-license-headers check-link check-e2e check
+	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-license-headers check-link check-solidity-abi check-e2e check
