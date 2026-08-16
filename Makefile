@@ -10,6 +10,7 @@ LICENSE_EYE_VERSION ?= 0.8.0
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
 GEN_SOLIDITY_ABI_DIR := gen/go/solidity-abi
+SCRIPTS_DIR := scripts
 CONTRACT_BINDINGS := $(addprefix $(GEN_SOLIDITY_ABI_DIR)/,\
 	accessmanager escrow testerc20 counter iftsendcallconstructor iftbatchtransfershim)
 
@@ -78,12 +79,12 @@ clean-e2e: ## Kill e2e processes and remove Docker resources
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build --root $(HARNESS_DIR)/environment/solidityibc/contracts
-	$(GEN_SOLIDITY_ABI_DIR)/scripts/generate-contract-bindings.sh
+	$(SCRIPTS_DIR)/generate-contract-bindings.sh
 
 check-test-apps: ## Fail if typed Go contract bindings are stale
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build --force --root $(HARNESS_DIR)/environment/solidityibc/contracts
-	$(GEN_SOLIDITY_ABI_DIR)/scripts/generate-contract-bindings.sh
+	$(SCRIPTS_DIR)/generate-contract-bindings.sh
 	@status="$$(git status --porcelain --untracked-files=all -- $(CONTRACT_BINDINGS))"; \
 		test -z "$$status" || { \
 			echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; \

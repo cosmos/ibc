@@ -37,6 +37,7 @@ jobs:
               - "e2e/**"
               - "gen/go/solidity-abi/**"
               - "proto/**"
+              - "scripts/**"
               - "Makefile"
               - ".github/workflows/e2e.yml"
 
