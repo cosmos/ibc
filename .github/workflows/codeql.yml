@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: |
             link/go.sum
             e2e/go.sum
-            solidity-abi/go.sum
+            gen/go/solidity-abi/go.sum
       - uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         with:
           languages: ${{ matrix.language }}

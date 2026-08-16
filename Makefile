@@ -9,8 +9,8 @@ LICENSE_EYE_VERSION ?= 0.8.0
 
 E2E_DIR := e2e
 HARNESS_DIR := $(E2E_DIR)/internal/harness
-SOLIDITY_ABI_DIR := solidity-abi
-CONTRACT_BINDINGS := $(addprefix $(SOLIDITY_ABI_DIR)/,\
+GEN_SOLIDITY_ABI_DIR := gen/go/solidity-abi
+CONTRACT_BINDINGS := $(addprefix $(GEN_SOLIDITY_ABI_DIR)/,\
 	accessmanager escrow testerc20 counter iftsendcallconstructor iftbatchtransfershim)
 
 build-link: ## Build the Link binary
@@ -44,9 +44,9 @@ generate-e2e-matrix: ## Regenerate the E2E provider and topology matrix (require
 check-e2e-matrix: ## Check that the E2E provider and topology matrix is current (requires Docker)
 	go -C $(E2E_DIR) run ./cmd/e2e-matrix -check test-matrix.md
 
-lint: lint-link lint-e2e lint-solidity-abi ## Lint all Go modules
+lint: lint-link lint-e2e lint-gen ## Lint all Go modules
 
-lint-fix: lint-fix-link lint-fix-e2e lint-fix-solidity-abi ## Lint all Go modules and fix errors
+lint-fix: lint-fix-link lint-fix-e2e lint-fix-gen ## Lint all Go modules and fix errors
 
 lint-link: ## Lint the Link module
 	$(MAKE) -C link lint
@@ -60,14 +60,14 @@ lint-e2e: ## Lint the e2e module, harness included
 lint-fix-e2e: ## Lint the e2e module, harness included, and fix errors
 	cd $(E2E_DIR) && golangci-lint run --fix
 
-lint-solidity-abi: ## Lint generated Solidity Go binding packages
-	cd $(SOLIDITY_ABI_DIR) && golangci-lint run
+lint-gen: ## Lint generated Solidity Go binding packages
+	cd $(GEN_SOLIDITY_ABI_DIR) && golangci-lint run
 
-lint-fix-solidity-abi: ## Lint generated Solidity Go binding packages and fix errors
-	cd $(SOLIDITY_ABI_DIR) && golangci-lint run --fix
+lint-fix-gen: ## Lint generated Solidity Go binding packages and fix errors
+	cd $(GEN_SOLIDITY_ABI_DIR) && golangci-lint run --fix
 
-test-solidity-abi: ## Compile generated Solidity Go binding packages
-	go -C $(SOLIDITY_ABI_DIR) test ./...
+test-gen: ## Compile generated Solidity Go binding packages
+	go -C $(GEN_SOLIDITY_ABI_DIR) test ./...
 
 clean-e2e-dry-run: ## Preview e2e processes and Docker resources
 	$(E2E_DIR)/scripts/clean.sh --dry-run
@@ -78,12 +78,12 @@ clean-e2e: ## Kill e2e processes and remove Docker resources
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build --root $(HARNESS_DIR)/environment/solidityibc/contracts
-	$(SOLIDITY_ABI_DIR)/scripts/generate-contract-bindings.sh
+	$(GEN_SOLIDITY_ABI_DIR)/scripts/generate-contract-bindings.sh
 
 check-test-apps: ## Fail if typed Go contract bindings are stale
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build --force --root $(HARNESS_DIR)/environment/solidityibc/contracts
-	$(SOLIDITY_ABI_DIR)/scripts/generate-contract-bindings.sh
+	$(GEN_SOLIDITY_ABI_DIR)/scripts/generate-contract-bindings.sh
 	@status="$$(git status --porcelain --untracked-files=all -- $(CONTRACT_BINDINGS))"; \
 		test -z "$$status" || { \
 			echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; \
@@ -97,11 +97,11 @@ check-license-headers: ## Check SPDX license headers
 check-link: ## Run Link-local checks
 	$(MAKE) -C link check
 
-check-solidity-abi: lint-solidity-abi test-solidity-abi ## Run all generated Solidity binding checks
+check-gen: lint-gen test-gen ## Run all generated Solidity binding checks
 
 check-e2e: doctor-e2e doctor-e2e-tools test-harness lint-e2e check-test-apps test-e2e check-e2e-matrix ## Run all repository e2e checks
 
-check: check-license-headers check-link check-solidity-abi check-e2e ## Run license, Link, generated binding, and repository e2e checks
+check: check-license-headers check-link check-gen check-e2e ## Run license, Link, generated binding, and repository e2e checks
 
-.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e lint-solidity-abi lint-fix-solidity-abi test-solidity-abi \
-	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-license-headers check-link check-solidity-abi check-e2e check
+.PHONY: help build-link doctor-e2e doctor-e2e-tools test-harness test-e2e generate-e2e-matrix check-e2e-matrix lint lint-fix lint-link lint-fix-link lint-e2e lint-fix-e2e lint-gen lint-fix-gen test-gen \
+	clean-e2e-dry-run clean-e2e test-apps check-test-apps check-license-headers check-link check-gen check-e2e check

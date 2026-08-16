@@ -56,7 +56,7 @@ jobs:
           go-version-file: link/go.mod
           cache-dependency-path: |
             link/go.sum
-            solidity-abi/go.sum
+            gen/go/solidity-abi/go.sum
       - name: Build
         env:
           CGO_ENABLED: "0"

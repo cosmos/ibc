@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/solidity-abi/accessmanager"
+	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 const testMiningTimeout = 30 * time.Second

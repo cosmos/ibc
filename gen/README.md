@@ -1,11 +1,13 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Solidity Go bindings
+# Generated code
 
-This module contains committed Go bindings generated from Solidity contract artifacts, shared by the other
-modules in this repository. The generated packages must not be edited by hand.
+This directory contains committed, shared code generated from canonical schemas and contract artifacts.
+Generated packages must not be edited by hand.
 
-The bindings are generated from the Foundry artifacts built in
+## Solidity Go bindings
+
+`go/solidity-abi` contains Go bindings generated from the Foundry artifacts built in
 `e2e/internal/harness/environment/solidityibc/contracts`. Run `make test-apps` from the repository root to
 regenerate them. `make check-test-apps` rebuilds the artifacts and fails when the committed bindings are stale.
 

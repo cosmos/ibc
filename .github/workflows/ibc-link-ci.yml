@@ -38,7 +38,7 @@ jobs:
           filters: |
             link:
               - 'link/**'
-              - 'solidity-abi/**'
+              - 'gen/go/solidity-abi/**'
               - '.golangci.yml'
               - '.github/workflows/ibc-link-ci.yml'
             sql:
@@ -64,7 +64,7 @@ jobs:
           go-version-file: link/go.mod
           cache-dependency-path: |
             link/go.sum
-            solidity-abi/go.sum
+            gen/go/solidity-abi/go.sum
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.12.2
@@ -85,7 +85,7 @@ jobs:
           go-version-file: link/go.mod
           cache-dependency-path: |
             link/go.sum
-            solidity-abi/go.sum
+            gen/go/solidity-abi/go.sum
       - name: Download dependencies
         run: go mod download
       - name: Build
@@ -109,7 +109,7 @@ jobs:
           go-version-file: link/go.mod
           cache-dependency-path: |
             link/go.sum
-            solidity-abi/go.sum
+            gen/go/solidity-abi/go.sum
       - name: Test
         run: make test
 
