@@ -33,6 +33,21 @@ func mustBinding[T any](binding T, err error) T {
 	return binding
 }
 
+func calldata(call func(*bind.TransactOpts) (*types.Transaction, error)) ([]byte, error) {
+	opts := &bind.TransactOpts{
+		Nonce:    new(big.Int),
+		Signer:   func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) { return tx, nil },
+		GasLimit: 1,
+		GasPrice: big.NewInt(1),
+		NoSend:   true,
+	}
+	tx, err := call(opts)
+	if err != nil {
+		return nil, err
+	}
+	return tx.Data(), nil
+}
+
 func receiptEvents[T any](
 	receipt *types.Receipt,
 	contract common.Address,

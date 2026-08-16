@@ -5,6 +5,7 @@ package evm
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
@@ -12,6 +13,16 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
+
+var routerABI = mustRouterABI()
+
+func mustRouterABI() *abi.ABI {
+	parsed, err := ics26router.ContractMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
 
 func testPacket() ics26router.IICS26RouterMsgsPacket {
 	return ics26router.IICS26RouterMsgsPacket{
