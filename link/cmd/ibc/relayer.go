@@ -55,7 +55,9 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	app, err := bootstrap.BuildRelayer(cfg)
+	// nil: the CLI registers no client types beyond the built-ins. Callers
+	// embedding the relayer pass their own registry via link/app.
+	app, err := bootstrap.BuildRelayer(cfg, nil)
 	if err != nil {
 		return err
 	}

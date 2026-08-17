@@ -17,6 +17,7 @@ require (
 )
 
 require (
+	connectrpc.com/grpcreflect v1.3.0 // indirect
 	cosmossdk.io/api v1.0.0 // indirect
 	cosmossdk.io/collections v1.4.0 // indirect
 	cosmossdk.io/core v1.1.0 // indirect
@@ -41,6 +42,7 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cockroachdb/crlib v0.0.0-20241112164430-1264a2edc35b // indirect
 	github.com/cockroachdb/errors v1.13.0 // indirect
@@ -69,6 +71,7 @@ require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
+	github.com/deliveryhero/pipeline/v2 v2.2.0 // indirect
 	github.com/desertbit/timer v1.0.1 // indirect
 	github.com/dgraph-io/badger/v4 v4.9.1 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.4.0 // indirect
@@ -82,10 +85,12 @@ require (
 	github.com/fjl/jsonw v0.1.0 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/getsentry/sentry-go v0.46.0 // indirect
+	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
 	github.com/go-kit/kit v0.13.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
@@ -122,6 +127,10 @@ require (
 	github.com/improbable-eng/grpc-web v0.15.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/go-cid v0.5.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.10.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
@@ -164,6 +173,7 @@ require (
 	github.com/multiformats/go-multistream v0.6.1 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20251114093237-2ab5a27a1729 // indirect
 	github.com/oklog/run v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -198,9 +208,11 @@ require (
 	github.com/quic-go/quic-go v0.60.0 // indirect
 	github.com/quic-go/webtransport-go v0.11.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/rs/zerolog v1.35.0 // indirect
+	github.com/rubenv/sql-migrate v1.8.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.9 // indirect
@@ -211,6 +223,7 @@ require (
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spf13/viper v1.21.0 // indirect
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d // indirect
 	github.com/tendermint/go-amino v0.16.0 // indirect
@@ -271,6 +284,10 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
+	modernc.org/libc v1.73.4 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.53.0 // indirect
 	nhooyr.io/websocket v1.8.17 // indirect
 	pgregory.net/rapid v1.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
@@ -347,3 +364,9 @@ require (
 )
 
 replace github.com/cosmos/ibc/link => ../link
+
+// Mirrors link/go.mod. Replace directives are not inherited from dependency
+// modules, so importing link/app — which compiles link's signer stack — makes
+// this module resolve stock cometbft, which lacks privval.ParseNoiseAddr and
+// breaks github.com/cosmos/kms/config.
+replace github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336

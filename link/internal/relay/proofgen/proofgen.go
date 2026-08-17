@@ -7,41 +7,20 @@ package proofgen
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen/attestation"
-	"github.com/cosmos/ibc/link/internal/service/attestor"
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	pgen "github.com/cosmos/ibc/link/proofgen"
 )
 
 // ProofGenerator generates packet membership/non-membership proofs and state
 // proofs for one configured light client.
-type ProofGenerator interface {
-	// LatestProvableHeight resolves the highest height a subsequent StateProof
-	// and PacketProofs call sharing that height can currently succeed at,
-	// along with that height's counterparty-chain timestamp
-	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
-
-	// StateProof proves the light client's counterparty state at height.
-	StateProof(ctx context.Context, height uint64) ([]byte, error)
-
-	// PacketProofs proves each packet's membership or non-membership at
-	// height, one proof per packet with indices aligned to packets. Returns
-	// an error if a proof cannot be generated for any packet
-	PacketProofs(
-		ctx context.Context,
-		height uint64,
-		kind v2.ProofKind,
-		packets []channeltypesv2.Packet,
-	) ([][]byte, error)
-}
-
-var _ ProofGenerator = (*attestation.Generator)(nil)
+//
+// Defined in the public proofgen package so custom light clients can implement
+// it; aliased here so internal callers are unaffected.
+type ProofGenerator = pgen.ProofGenerator
 
 // Key identifies one configured light client by the chain it lives on and
 // its client id, the composite key ProofGenerator instances are scoped by.
@@ -68,18 +47,18 @@ func (s *Set) Get(chainID, clientID string) (ProofGenerator, bool) {
 }
 
 // NewSetFromConfig resolves a ProofGenerator for every client end of every
-// configured connection, matching against attestors (this process's own
-// local attestors plus every resolved remote one).
+// configured connection, dispatching to the factory registered for each end's
+// client type.
 func NewSetFromConfig(
 	ctx context.Context,
 	cfg config.Config,
 	clientSet *chains.ClientSet,
-	attestors []attestor.Attestor,
+	reg *pgen.Registry,
 ) (*Set, error) {
 	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors)
+		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, reg)
 	})
 	if err != nil {
 		return nil, err
@@ -113,19 +92,44 @@ func addGenerator(
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
-	attestors []attestor.Attestor,
+	reg *pgen.Registry,
 ) error {
-	switch client.Type {
-	case config.ClientTypeAttestation:
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, attestors)
-		if err != nil {
-			return err
-		}
+	factory, ok := reg.Get(string(client.Type))
+	if !ok {
+		return errors.Errorf(
+			"connection %q: no proof generator registered for client type %q (registered: %v)",
+			connAlias, client.Type, reg.Types(),
+		)
+	}
 
-		generators[Key(client.ChainID, client.ClientID)] = gen
+	counterpartyChain, ok := clientSet.Get(clientCounterparty.ChainID)
+	if !ok {
+		return errors.Errorf(
+			"connection %q: no configured chain client for counterparty chain %q",
+			connAlias, clientCounterparty.ChainID,
+		)
+	}
 
-		return nil
-	default:
-		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
+	gen, err := factory.New(
+		ctx,
+		pgen.Deps{Counterparty: counterpartyChain},
+		toPublicEnd(client),
+		toPublicEnd(clientCounterparty),
+	)
+	if err != nil {
+		return errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	generators[Key(client.ChainID, client.ClientID)] = gen
+
+	return nil
+}
+
+func toPublicEnd(end config.ClientEnd) pgen.ClientEnd {
+	return pgen.ClientEnd{
+		ChainID:  end.ChainID,
+		ClientID: end.ClientID,
+		Type:     string(end.Type),
+		Params:   end.Params,
 	}
 }

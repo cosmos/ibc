@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/link/proofgen"
 )
 
 // ClientType the light client type.
@@ -63,6 +65,11 @@ type ClientEnd struct {
 	Signer   string     `yaml:"signer"`
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
+
+	// Params is the client-type-specific config block, captured verbatim and
+	// interpreted by the proof generator factory registered for Type. A
+	// pointer so that adding it keeps ClientEnd comparable.
+	Params *proofgen.RawParams `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -185,8 +192,8 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".clientId required")
 	case c.Signer == "":
 		return errors.New(".signer required")
-	case c.Type != ClientTypeAttestation:
-		return errors.Errorf(".type unknown client type: %q", c.Type)
+	case c.Type == "":
+		return errors.New(".type required")
 	}
 
 	return nil

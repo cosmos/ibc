@@ -4,14 +4,16 @@ package v2
 
 import (
 	"math"
-	"time"
+
+	"github.com/cosmos/ibc/link/proofgen"
 )
 
-// BlockHeader represents a minimal subset of fields that IBC client needs for *attestation*.
-type BlockHeader struct {
-	Height    uint64
-	Timestamp time.Time
-}
+// BlockHeader is the minimal view of a block the attestor and proof generators
+// need: a height and its timestamp.
+//
+// Defined in the public proofgen package so custom light clients can implement
+// against it; aliased here so internal callers are unaffected.
+type BlockHeader = proofgen.BlockHeader
 
 // Special markers for different block heights.
 const (
