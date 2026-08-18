@@ -13,10 +13,10 @@ import (
 	"github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
-	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// Generator implements proofgen.ProofGenerator for one configured
+// Generator implements lightclient.ProofGenerator for one configured
 // attestation light client: LatestProvableHeight/StateProof/PacketProofs all
 // query the same fixed attestor set with the same quorum threshold
 type Generator struct {
@@ -63,7 +63,7 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 func (g *Generator) PacketProofs(
 	ctx context.Context,
 	height uint64,
-	kind v2.ProofKind,
+	kind lightclient.ProofKind,
 	packets []channeltypesv2.Packet,
 ) ([][]byte, error) {
 	commitmentType, err := commitmentTypeOf(kind)
@@ -124,13 +124,13 @@ func (g *Generator) PacketProofs(
 	return proofs, nil
 }
 
-func commitmentTypeOf(kind v2.ProofKind) (attestor.CommitmentType, error) {
+func commitmentTypeOf(kind lightclient.ProofKind) (attestor.CommitmentType, error) {
 	switch kind {
-	case v2.ProofKindPacketCommitment:
+	case lightclient.ProofKindPacketCommitment:
 		return attestor.CommitmentTypePacket, nil
-	case v2.ProofKindAcknowledgement:
+	case lightclient.ProofKindAcknowledgement:
 		return attestor.CommitmentTypeAck, nil
-	case v2.ProofKindReceiptAbsence:
+	case lightclient.ProofKindReceiptAbsence:
 		return attestor.CommitmentTypeReceipt, nil
 	default:
 		return 0, errors.Errorf("unsupported proof kind %v", kind)

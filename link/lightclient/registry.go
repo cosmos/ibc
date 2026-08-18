@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package proofgen
+package lightclient
 
 import (
 	"context"
@@ -18,13 +18,13 @@ type Factory interface {
 	// rejected.
 	ValidateParams(params *RawParams) error
 
-	// New builds a generator for self, which tracks counterparty. Params have
-	// already passed ValidateParams.
-	New(ctx context.Context, deps Deps, self, counterparty ClientEnd) (ProofGenerator, error)
+	// New builds a generator for Client, which tracks Counterparty. ClientParams
+	// have already passed ValidateParams.
+	New(ctx context.Context, options FactoryOptions) (ProofGenerator, error)
 }
 
-// Registry resolves a Factory by client type name. The relayer registers its
-// built-in types; callers add their own before starting a relayer.
+// Registry resolves custom light-client factories by config type name.
+// Built-in client types are resolved internally by the relayer.
 //
 // A Registry is not safe for concurrent registration. Build it fully during
 // startup, then treat it as read-only.
@@ -64,22 +64,6 @@ func (r *Registry) Get(clientType string) (Factory, bool) {
 	f, ok := r.factories[clientType]
 
 	return f, ok
-}
-
-// Merge registers every entry of other into r, failing on any name r already
-// has. Used to fold caller-supplied custom types into the relayer's built-ins.
-func (r *Registry) Merge(other *Registry) error {
-	if other == nil {
-		return nil
-	}
-
-	for name, f := range other.factories {
-		if err := r.Register(name, f); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Types lists every registered client type, sorted. Useful for error messages.

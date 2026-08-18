@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/proofgen"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 type stubParams struct {
@@ -21,7 +21,7 @@ type stubFactory struct {
 	requireParams bool
 }
 
-func (f stubFactory) ValidateParams(params *proofgen.RawParams) error {
+func (f stubFactory) ValidateParams(params *lightclient.RawParams) error {
 	if !f.requireParams {
 		return nil
 	}
@@ -39,8 +39,8 @@ func (f stubFactory) ValidateParams(params *proofgen.RawParams) error {
 }
 
 func (f stubFactory) New(
-	context.Context, proofgen.Deps, proofgen.ClientEnd, proofgen.ClientEnd,
-) (proofgen.ProofGenerator, error) {
+	context.Context, lightclient.FactoryOptions,
+) (lightclient.ProofGenerator, error) {
 	return nil, nil
 }
 
@@ -63,22 +63,15 @@ func TestValidateClients(t *testing.T) {
 	t.Run("registered type passes", func(t *testing.T) {
 		config := loadSample(t)
 
-		reg := proofgen.NewRegistry()
-		require.NoError(t, reg.Register(string(ClientTypeAttestation), stubFactory{}))
-
-		require.NoError(t, config.ValidateClients(reg))
+		require.NoError(t, config.ValidateClients(nil))
 	})
 
 	t.Run("unregistered type fails and lists what is registered", func(t *testing.T) {
 		config := loadSample(t)
 		config.Relayer.Connections[0].ClientA.Type = "tendermint"
 
-		reg := proofgen.NewRegistry()
-		require.NoError(t, reg.Register(string(ClientTypeAttestation), stubFactory{}))
-
-		err := config.ValidateClients(reg)
+		err := config.ValidateClients(nil)
 		require.ErrorContains(t, err, `unknown client type "tendermint"`)
-		require.ErrorContains(t, err, "attestation")
 	})
 
 	t.Run("arbitrary type name resolves once registered", func(t *testing.T) {
@@ -88,7 +81,7 @@ func TestValidateClients(t *testing.T) {
 			config.Relayer.Connections[i].ClientB.Type = "myclient"
 		}
 
-		reg := proofgen.NewRegistry()
+		reg := lightclient.NewRegistry()
 		require.NoError(t, reg.Register("myclient", stubFactory{}))
 
 		require.NoError(t, config.ValidateClients(reg))
@@ -96,19 +89,38 @@ func TestValidateClients(t *testing.T) {
 
 	t.Run("factory params error is surfaced", func(t *testing.T) {
 		config := loadSample(t)
+		for i := range config.Relayer.Connections {
+			config.Relayer.Connections[i].ClientA.Type = "myclient"
+			config.Relayer.Connections[i].ClientB.Type = "myclient"
+		}
 
-		reg := proofgen.NewRegistry()
-		require.NoError(t, reg.Register(string(ClientTypeAttestation), stubFactory{requireParams: true}))
+		reg := lightclient.NewRegistry()
+		require.NoError(t, reg.Register("myclient", stubFactory{requireParams: true}))
 
 		err := config.ValidateClients(reg)
-		require.ErrorContains(t, err, ".params")
+		require.ErrorContains(t, err, ".clientParams")
 		require.ErrorContains(t, err, "proverUrl required")
 	})
 
-	t.Run("nil registry is an error, not a silent pass", func(t *testing.T) {
+	t.Run("nil registry supports built-in attestation", func(t *testing.T) {
 		config := loadSample(t)
 
-		require.Error(t, config.ValidateClients(nil))
+		require.NoError(t, config.ValidateClients(nil))
+	})
+
+	t.Run("attestation name cannot be overridden", func(t *testing.T) {
+		config := loadSample(t)
+		reg := lightclient.NewRegistry()
+		require.NoError(t, reg.Register(string(ClientTypeAttestation), stubFactory{}))
+
+		require.ErrorContains(t, config.ValidateClients(reg), "cannot be overridden")
+	})
+
+	t.Run("attestation params are rejected without a factory", func(t *testing.T) {
+		config := loadSample(t)
+		config.Relayer.Connections[0].ClientA.ClientParams = lightclient.NewRawParams([]byte("extra: true\n"))
+
+		require.ErrorContains(t, config.ValidateClients(nil), "attestation clients take no params")
 	})
 }
 
@@ -116,7 +128,7 @@ func TestValidateClients(t *testing.T) {
 // value: the top-level decode's DisallowUnknownField cannot see inside a
 // captured params block, so RawParams.Decode has to re-apply it.
 func TestRawParamsRejectsUnknownField(t *testing.T) {
-	params := proofgen.NewRawParams([]byte("proverURL: https://example.com\n"))
+	params := lightclient.NewRawParams([]byte("proverURL: https://example.com\n"))
 
 	var p stubParams
 	require.ErrorContains(t, params.Decode(&p), "proverURL")
@@ -124,7 +136,7 @@ func TestRawParamsRejectsUnknownField(t *testing.T) {
 }
 
 func TestRawParamsRoundTrip(t *testing.T) {
-	params := proofgen.NewRawParams([]byte("proverUrl: https://example.com\n"))
+	params := lightclient.NewRawParams([]byte("proverUrl: https://example.com\n"))
 
 	var p stubParams
 	require.NoError(t, params.Decode(&p))
@@ -132,7 +144,7 @@ func TestRawParamsRoundTrip(t *testing.T) {
 }
 
 func TestRawParamsEmptyDecodeIsNoOp(t *testing.T) {
-	var params *proofgen.RawParams
+	var params *lightclient.RawParams
 
 	var p stubParams
 	require.NoError(t, params.Decode(&p))

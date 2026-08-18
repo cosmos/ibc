@@ -7,24 +7,16 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/proofgen"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// ValidateClients is the second validation stage: it checks that every
-// configured client end names a registered light client type and that its
-// params satisfy that type's factory.
+// ValidateClients checks built-in attestation parameters and validates custom
+// client ends through the caller-supplied registry.
 //
-// It is separate from Validate because it needs a populated registry, and the
-// attestation factory can only be built once attestors have been resolved from
-// the config Validate already checked. Keeping the structural checks in
-// Validate means a malformed database URL or unknown signer alias still fails
-// immediately at load, before any chain access.
-//
-// Every entry point that builds a relayer must call this; link/app does it for
-// external callers.
-func (c Config) ValidateClients(reg *proofgen.Registry) error {
-	if reg == nil {
-		return errors.New("client type registry required")
+// Every entry point that builds a relayer must call this.
+func (c Config) ValidateClients(reg *lightclient.Registry) error {
+	if _, shadowsBuiltin := reg.Get(string(ClientTypeAttestation)); shadowsBuiltin {
+		return errors.Errorf("client type %q is built in and cannot be overridden", ClientTypeAttestation)
 	}
 
 	for _, conn := range c.Relayer.Connections {
@@ -38,18 +30,27 @@ func (c Config) ValidateClients(reg *proofgen.Registry) error {
 	return nil
 }
 
-func validateClientEnd(reg *proofgen.Registry, end ClientEnd) error {
+func validateClientEnd(reg *lightclient.Registry, end ClientEnd) error {
+	if end.Type == ClientTypeAttestation {
+		if !end.ClientParams.IsEmpty() {
+			return errors.New(".clientParams attestation clients take no params; configure attestors under .attestors")
+		}
+
+		return nil
+	}
+
 	factory, ok := reg.Get(string(end.Type))
 	if !ok {
+		registered := append([]string{string(ClientTypeAttestation)}, reg.Types()...)
 		return errors.Errorf(
 			".type unknown client type %q (registered: [%s])",
 			end.Type,
-			strings.Join(reg.Types(), ", "),
+			strings.Join(registered, ", "),
 		)
 	}
 
-	if err := factory.ValidateParams(end.Params); err != nil {
-		return errors.Wrap(err, ".params")
+	if err := factory.ValidateParams(end.ClientParams); err != nil {
+		return errors.Wrap(err, ".clientParams")
 	}
 
 	return nil

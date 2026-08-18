@@ -7,8 +7,6 @@ import (
 	"time"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-
-	"github.com/cosmos/ibc/link/proofgen"
 )
 
 // EventKind the kind of packet event.
@@ -29,20 +27,6 @@ const (
 	WriteAckStatusUnknown WriteAckStatus = iota
 	WriteAckStatusSuccess
 	WriteAckStatusError
-)
-
-// ProofKind the kind of packet claim a proof attests to.
-//
-// Defined in the public proofgen package so custom light clients can implement
-// against it; aliased here so internal callers are unaffected.
-type ProofKind = proofgen.ProofKind
-
-// Proof kinds
-const (
-	ProofKindUnknown          = proofgen.ProofKindUnknown
-	ProofKindPacketCommitment = proofgen.ProofKindPacketCommitment
-	ProofKindAcknowledgement  = proofgen.ProofKindAcknowledgement
-	ProofKindReceiptAbsence   = proofgen.ProofKindReceiptAbsence
 )
 
 // RelayKind the packet operation one PacketRelayItem asks to perform.

@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // findPacketEvent returns the event among events matching sequence and clientID
@@ -52,16 +53,16 @@ func findPacketEventAtOrBeforeHeight(
 }
 
 // proofKindFor maps relayKind to the proof claim it requires
-func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
+func proofKindFor(relayKind v2.RelayKind) lightclient.ProofKind {
 	switch relayKind {
 	case v2.RelayKindRecv:
-		return v2.ProofKindPacketCommitment
+		return lightclient.ProofKindPacketCommitment
 	case v2.RelayKindAck:
-		return v2.ProofKindAcknowledgement
+		return lightclient.ProofKindAcknowledgement
 	case v2.RelayKindTimeout:
-		return v2.ProofKindReceiptAbsence
+		return lightclient.ProofKindReceiptAbsence
 	default:
-		return v2.ProofKindUnknown
+		return lightclient.ProofKindUnknown
 	}
 }
 

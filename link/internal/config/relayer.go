@@ -7,7 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/proofgen"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // ClientType the light client type.
@@ -69,7 +69,7 @@ type ClientEnd struct {
 	// Params is the client-type-specific config block, captured verbatim and
 	// interpreted by the proof generator factory registered for Type. A
 	// pointer so that adding it keeps ClientEnd comparable.
-	Params *proofgen.RawParams `yaml:"params,omitempty"`
+	ClientParams *lightclient.RawParams `yaml:"clientParams,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.

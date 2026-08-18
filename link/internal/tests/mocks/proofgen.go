@@ -7,7 +7,7 @@ package mocks
 import (
 	"context"
 	"github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	"github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 	mock "github.com/stretchr/testify/mock"
 	"time"
 )
@@ -106,7 +106,7 @@ func (_c *MockProofGenerator_LatestProvableHeight_Call) RunAndReturn(run func(ct
 }
 
 // PacketProofs provides a mock function for the type MockProofGenerator
-func (_mock *MockProofGenerator) PacketProofs(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error) {
+func (_mock *MockProofGenerator) PacketProofs(ctx context.Context, height uint64, kind lightclient.ProofKind, packets []types.Packet) ([][]byte, error) {
 	ret := _mock.Called(ctx, height, kind, packets)
 
 	if len(ret) == 0 {
@@ -115,17 +115,17 @@ func (_mock *MockProofGenerator) PacketProofs(ctx context.Context, height uint64
 
 	var r0 [][]byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) ([][]byte, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, lightclient.ProofKind, []types.Packet) ([][]byte, error)); ok {
 		return returnFunc(ctx, height, kind, packets)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) [][]byte); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, lightclient.ProofKind, []types.Packet) [][]byte); ok {
 		r0 = returnFunc(ctx, height, kind, packets)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([][]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64, v2.ProofKind, []types.Packet) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64, lightclient.ProofKind, []types.Packet) error); ok {
 		r1 = returnFunc(ctx, height, kind, packets)
 	} else {
 		r1 = ret.Error(1)
@@ -141,13 +141,13 @@ type MockProofGenerator_PacketProofs_Call struct {
 // PacketProofs is a helper method to define mock.On call
 //   - ctx context.Context
 //   - height uint64
-//   - kind v2.ProofKind
+//   - kind lightclient.ProofKind
 //   - packets []types.Packet
 func (_e *MockProofGenerator_Expecter) PacketProofs(ctx any, height any, kind any, packets any) *MockProofGenerator_PacketProofs_Call {
 	return &MockProofGenerator_PacketProofs_Call{Call: _e.mock.On("PacketProofs", ctx, height, kind, packets)}
 }
 
-func (_c *MockProofGenerator_PacketProofs_Call) Run(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet)) *MockProofGenerator_PacketProofs_Call {
+func (_c *MockProofGenerator_PacketProofs_Call) Run(run func(ctx context.Context, height uint64, kind lightclient.ProofKind, packets []types.Packet)) *MockProofGenerator_PacketProofs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -157,9 +157,9 @@ func (_c *MockProofGenerator_PacketProofs_Call) Run(run func(ctx context.Context
 		if args[1] != nil {
 			arg1 = args[1].(uint64)
 		}
-		var arg2 v2.ProofKind
+		var arg2 lightclient.ProofKind
 		if args[2] != nil {
-			arg2 = args[2].(v2.ProofKind)
+			arg2 = args[2].(lightclient.ProofKind)
 		}
 		var arg3 []types.Packet
 		if args[3] != nil {
@@ -180,7 +180,7 @@ func (_c *MockProofGenerator_PacketProofs_Call) Return(bytess [][]byte, err erro
 	return _c
 }
 
-func (_c *MockProofGenerator_PacketProofs_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error)) *MockProofGenerator_PacketProofs_Call {
+func (_c *MockProofGenerator_PacketProofs_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind lightclient.ProofKind, packets []types.Packet) ([][]byte, error)) *MockProofGenerator_PacketProofs_Call {
 	_c.Call.Return(run)
 	return _c
 }

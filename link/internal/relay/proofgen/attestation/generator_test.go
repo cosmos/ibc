@@ -15,6 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // signedStateAttestor builds a attestor.MockAttestor that answers
@@ -122,7 +123,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 
 		gen := New(attestors, 2, nil)
 
-		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
+		proofs, err := gen.PacketProofs(ctx, 20, lightclient.ProofKindPacketCommitment, packets)
 		require.NoError(t, err)
 		require.Len(t, proofs, len(packets))
 		require.Equal(t, proofs[0], proofs[1], "the shared attestation blob is duplicated across every packet index")
@@ -133,7 +134,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		// attestor, so the generator here is given no attestors at all.
 		gen := New(nil, 2, nil)
 
-		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
+		_, err := gen.PacketProofs(ctx, 20, lightclient.ProofKindUnknown, packets)
 		require.Error(t, err)
 	})
 }

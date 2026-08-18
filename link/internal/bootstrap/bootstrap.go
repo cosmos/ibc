@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/clienttypes"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
@@ -21,7 +20,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
-	pgen "github.com/cosmos/ibc/link/proofgen"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // Services is an outcome of IBC Link wiring (dep inject)
@@ -37,11 +36,15 @@ type Services struct {
 	AttestorService *attestor.Service
 }
 
+// RelayerOptions supplies optional relayer extensions.
+type RelayerOptions struct {
+	// LightClients contains custom client types. Built-in attestation clients
+	// are resolved internally.
+	LightClients *lightclient.Registry
+}
+
 // BuildRelayer converts config into a runnable relayer process with all of the deps provisioned.
-//
-// custom carries light client types registered by the caller beyond the
-// built-ins; it may be nil.
-func BuildRelayer(cfg config.Config, custom *pgen.Registry) (*Services, error) {
+func BuildRelayer(cfg config.Config, opts RelayerOptions) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
 
@@ -85,20 +88,14 @@ func BuildRelayer(cfg config.Config, custom *pgen.Registry) (*Services, error) {
 		}
 	}
 
-	// Light client types: built-ins plus any the caller registered. Client
-	// types and their params are validated here rather than at load, because
-	// building the built-in factories needs the attestors resolved above.
-	clientRegistry, err := clienttypes.Builtins(clientSet, append(local, remote...), custom)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = cfg.ValidateClients(clientRegistry); err != nil {
+	if err = cfg.ValidateClients(opts.LightClients); err != nil {
 		return nil, errors.Wrap(err, "validation failed")
 	}
 
 	// Proof generators
-	proofGenerators, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, clientRegistry)
+	proofGenerators, err := proofgen.NewSetFromConfig(
+		ctx, cfg, clientSet, append(local, remote...), opts.LightClients,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/clienttypes"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
@@ -34,16 +33,11 @@ func checkAttestorQuorum(ctx context.Context, cfg config.Config, clientSet *chai
 	attestors = append(attestors, local...)
 	attestors = append(attestors, remote...)
 
-	reg, err := clienttypes.Builtins(clientSet, attestors, nil)
-	if err != nil {
-		return errors.Wrap(err, "client types")
-	}
-
-	if err := cfg.ValidateClients(reg); err != nil {
+	if err := cfg.ValidateClients(nil); err != nil {
 		return errors.Wrap(err, "client config")
 	}
 
-	if _, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, reg); err != nil {
+	if _, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, attestors, nil); err != nil {
 		return errors.Wrap(err, "attestor quorum")
 	}
 

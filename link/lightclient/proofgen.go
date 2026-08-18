@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package proofgen is the public extension point for light client proof
+// Package lightclient is the public extension point for light client proof
 // generation. Implement ProofGenerator and Factory here, register the factory
-// under a client type name, and start a relayer with it via link/app.
+// under a client type name, and supply it through link/cli.
 //
 // This package must not import anything under link/internal. Everything it
 // exposes is deliberately narrow: proofs are opaque bytes, and the relayer
 // never interprets them.
-package proofgen
+package lightclient
 
 import (
 	"context"
@@ -51,37 +51,19 @@ const (
 	ProofKindReceiptAbsence
 )
 
-// BlockHeader is the minimal view of a counterparty block a proof generator
-// needs to reason about heights and timestamps.
-type BlockHeader struct {
-	Height    uint64
-	Timestamp time.Time
+// ClientInfo describes one configured light-client instance from the
+// perspective of the Factory responsible for its type.
+type ClientInfo struct {
+	ChainID             string
+	CounterpartyChainID string
+	ClientID            string
+	Type                string
+	ClientParams        *RawParams
 }
 
-// CounterpartyChain reads state from the chain a light client tracks. It is a
-// deliberately narrow view of the relayer's full chain client; it may gain
-// methods over time, which is safe because implementations live in the relayer
-// and generators only consume it.
-type CounterpartyChain interface {
-	ChainID() string
-
-	// GetBlockHeader returns the header at height. The special height markers
-	// used internally by the relayer are not part of this contract; pass a
-	// concrete height.
-	GetBlockHeader(ctx context.Context, height uint64) (BlockHeader, error)
-}
-
-// Deps are the relayer-provided dependencies handed to a Factory.
-type Deps struct {
-	// Counterparty reads the chain this client tracks.
-	Counterparty CounterpartyChain
-}
-
-// ClientEnd is one side of a configured connection: a light client on ChainID,
-// tracking the connection's other end as its counterparty.
-type ClientEnd struct {
-	ChainID  string
-	ClientID string
-	Type     string
-	Params   *RawParams
+// FactoryOptions describes the configured light-client instance a Factory
+// constructs. Additional shared construction dependencies may be added here
+// as the extension API evolves.
+type FactoryOptions struct {
+	Client ClientInfo
 }

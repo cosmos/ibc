@@ -21,6 +21,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 type staticChains map[string]chains.Client
@@ -104,7 +105,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	proofGen := mocks.NewMockProofGenerator(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -201,7 +202,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	proofGen := mocks.NewMockProofGenerator(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -306,7 +307,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	proofGen := mocks.NewMockProofGenerator(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)

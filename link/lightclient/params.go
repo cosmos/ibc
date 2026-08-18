@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package proofgen
+package lightclient
 
 import (
 	"github.com/goccy/go-yaml"
@@ -26,7 +26,7 @@ func NewRawParams(raw []byte) *RawParams {
 // UnmarshalYAML captures the params block without interpreting it.
 func (p *RawParams) UnmarshalYAML(b []byte) error {
 	if p == nil {
-		return errors.New("proofgen: UnmarshalYAML on nil RawParams")
+		return errors.New("lightclient: UnmarshalYAML on nil RawParams")
 	}
 
 	p.raw = append([]byte(nil), b...)
