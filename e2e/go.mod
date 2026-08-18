@@ -366,7 +366,7 @@ require (
 replace github.com/cosmos/ibc/link => ../link
 
 // Mirrors link/go.mod. Replace directives are not inherited from dependency
-// modules, so importing link/app — which compiles link's signer stack — makes
+// modules, so importing link/cli — which compiles link's signer stack — makes
 // this module resolve stock cometbft, which lacks privval.ParseNoiseAddr and
 // breaks github.com/cosmos/kms/config.
 replace github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
