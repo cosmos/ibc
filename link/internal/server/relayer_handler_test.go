@@ -12,11 +12,13 @@ import (
 
 	proto "github.com/cosmos/ibc/link/api/v2/relayer"
 	relayerservice "github.com/cosmos/ibc/link/internal/service/relayer"
+	"github.com/cosmos/ibc/link/internal/store"
 )
 
 type relayerServiceStub struct {
-	relay  func(relayerservice.RelayRequest) error
-	status []relayerservice.PacketStatus
+	relay   func(relayerservice.RelayRequest) error
+	status  []relayerservice.PacketStatus
+	packets func(relayerservice.PacketFilter, store.Page) ([]relayerservice.PacketStatus, uint64, error)
 }
 
 func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.RelayRequest) error {
@@ -25,6 +27,18 @@ func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.Rel
 
 func (s *relayerServiceStub) Status(context.Context, string, string) ([]relayerservice.PacketStatus, error) {
 	return s.status, nil
+}
+
+func (s *relayerServiceStub) Packets(
+	_ context.Context,
+	filter relayerservice.PacketFilter,
+	page store.Page,
+) ([]relayerservice.PacketStatus, uint64, error) {
+	if s.packets == nil {
+		return s.status, uint64(len(s.status)), nil
+	}
+
+	return s.packets(filter, page)
 }
 
 func TestRelayerHandlerRelaySelection(t *testing.T) {

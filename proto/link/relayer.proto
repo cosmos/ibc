@@ -13,7 +13,16 @@ service RelayerApiService {
 
   // Status returns per-packet relay status for a transaction previously
   // submitted via Relay.
+  //
+  // Deprecated: use Packets with a filter of {source_chain_id, source_tx_hash},
+  // which returns the same packets. Status will be removed.
   rpc Status(StatusRequest) returns (StatusResponse) {}
+
+  // Packets lists the packets this relayer is aware of, most recent first.
+  // It is a superset of Status: filtering on source_chain_id and
+  // source_tx_hash returns exactly the packets Status returns for the same
+  // transaction.
+  rpc Packets(PacketsRequest) returns (PacketsResponse) {}
 }
 
 message RelayRequest {
@@ -55,6 +64,44 @@ message StatusResponse {
   repeated PacketStatus packet_statuses = 1;
 }
 
+message PacketsRequest {
+  // Absent filter matches every packet.
+  PacketFilter filter = 1;
+  // Maximum packets to return. Zero applies the default of 100; values above
+  // 1000 are capped.
+  uint32 limit = 2;
+  // Packets to skip, for paging. Results are ordered most recent first, so a
+  // packet inserted between two pages can shift later pages; paging is not a
+  // consistent snapshot.
+  uint32 offset = 3;
+}
+
+// PacketFilter narrows the packets returned. Every field is optional and all
+// present fields must match.
+message PacketFilter {
+  optional string source_chain_id = 1;
+  optional string destination_chain_id = 2;
+  optional string source_client_id = 3;
+  optional string destination_client_id = 4;
+  // Relay state as reported by this API, not the relayer's internal status.
+  // A single state may cover several internal statuses; PACKET_STATE_PENDING
+  // covers every in-flight status.
+  optional PacketState state = 5;
+  // The source-chain SendPacket transaction hash. Matches only the send
+  // transaction, never a recv, ack, or timeout hash.
+  optional string source_tx_hash = 6;
+  optional uint64 sequence_number = 7;
+  // Unix seconds, inclusive, matched against the packet's discovery time.
+  optional int64 created_from = 8;
+  optional int64 created_to = 9;
+}
+
+message PacketsResponse {
+  repeated PacketStatus packets = 1;
+  // Packets matching the filter, ignoring limit and offset.
+  uint64 total = 2;
+}
+
 enum PacketState {
   PACKET_STATE_UNSPECIFIED = 0;
   // The packet was discovered but has not been selected by this relayer
@@ -94,4 +141,8 @@ message PacketStatus {
   // The source-chain timeout transaction. Present for timed-out packets, and
   // may be present while pending.
   TransactionInfo timeout_tx = 7;
+  // Unix seconds when the relayer first recorded the packet.
+  int64 created_at = 8;
+  // Unix seconds of the packet's last state change.
+  int64 updated_at = 9;
 }

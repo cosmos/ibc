@@ -448,3 +448,52 @@ func (db *SqliteDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) err
 		PacketSequenceNumber: int64(key.Sequence),
 	})
 }
+
+func (db *SqliteDB) ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, error) {
+	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
+
+	page = page.Normalize()
+
+	rows, err := db.repo.ListPackets(ctx, reposqlite.ListPacketsParams{
+		Statuses:            filter.statusList(),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SourceTxHash:        filter.SourceTxHash,
+		SequenceNumber:      filter.sequenceFilter(),
+		CreatedFrom:         filter.CreatedFrom,
+		CreatedTo:           filter.CreatedTo,
+		RowLimit:            page.Limit,
+		RowOffset:           page.Offset,
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	packets := make([]Packet, len(rows))
+	for i, row := range rows {
+		packets[i] = packetFromSqlite(row)
+	}
+
+	return packets, nil
+}
+
+func (db *SqliteDB) CountPackets(ctx context.Context, filter PacketFilter) (uint64, error) {
+	total, err := db.repo.CountPackets(ctx, reposqlite.CountPacketsParams{
+		Statuses:            filter.statusList(),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SourceTxHash:        filter.SourceTxHash,
+		SequenceNumber:      filter.sequenceFilter(),
+		CreatedFrom:         filter.CreatedFrom,
+		CreatedTo:           filter.CreatedTo,
+	})
+	if err != nil {
+		return 0, errNormalize(err)
+	}
+
+	return uint64(total), nil //nolint:gosec // COUNT(*) is non-negative
+}
