@@ -9,9 +9,9 @@ lint-license: ## Check SPDX license headers
 	go run github.com/apache/skywalking-eyes/cmd/license-eye@v$(LICENSE_EYE_VERSION) \
 		--config .licenserc.yaml header check
 
-# TODO
-check: check-license-headers ## Run all repository checks
-	$(MAKE) -C link check
-	$(MAKE) -C e2e check
+run-all-checks: ## Run "all-in-one" code validation step.
+	$(MAKE) -C link run-all-checks
+	$(MAKE) -C e2e run-all-checks
+	$(MAKE) lint-license
 
-.PHONY: help lint-license
+.PHONY: help lint-license run-all-checks
