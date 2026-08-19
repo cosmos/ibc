@@ -65,10 +65,8 @@ Sending a packet begins inside the application. The application runs its own log
 2. **Look up the counterparty**: it reads the counterparty registered for the source client.
 3. **Check the deadline**: the timeout must be in the future and not past a maximum.
 4. **Fill in the packet**: it sets that counterparty as the destination client and takes a sequence from a per-client counter.
-5. **Write the commitment**: it writes a fixed-length hash over the destination client, the timeout, and the payload, at a path built from the source client and the sequence. This is written to the commitment store.
+5. **Write the commitment**: it writes a fixed-length hash over the destination client, the timeout, and the payload, at a path built from the source client and the sequence.
 6. **Emit `SendPacket`**: the event carries all packet fields, which is how a relayer reconstructs the packet.
-
-A relayer then reconstructs the packet from the event and submits it to the destination router.
 
 ## Receiving a packet
 
