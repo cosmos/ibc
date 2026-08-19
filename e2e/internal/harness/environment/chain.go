@@ -32,6 +32,7 @@ type Chain struct {
 	id         ChainID
 	evmChainID uint64
 	rpcURL     string
+	wsURL      string
 	timing     Timing
 	impl       chainimpl.Chain
 	lease      *environmentLease
@@ -65,6 +66,10 @@ func (c *Chain) ID() ChainID        { return c.id }
 func (c *Chain) EVMChainID() uint64 { return c.evmChainID }
 func (c *Chain) RPCURL() string     { return c.rpcURL }
 func (c *Chain) Timing() Timing     { return c.timing }
+
+// WSURL is empty for Chains whose adapter serves no websocket endpoint;
+// auto-relayed routes cannot source from those.
+func (c *Chain) WSURL() string { return c.wsURL }
 
 func (c *Chain) Height(ctx context.Context) (uint64, error) {
 	var height uint64

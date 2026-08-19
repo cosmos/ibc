@@ -12,6 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
 	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
+	"github.com/cosmos/ibc/link/internal/relay/watcher"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/relayer"
@@ -110,8 +111,14 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, pollInterval, logger)
 
+	// Packet discovery
+	watchers, err := watcher.NewSetFromConfig(cfg, clientSet, db, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	// Services
-	relayerService := relayer.New(cfg, db, clientSet, dispatcher)
+	relayerService := relayer.New(cfg, db, clientSet, dispatcher, watchers)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)

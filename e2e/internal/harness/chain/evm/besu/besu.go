@@ -57,6 +57,7 @@ type Chain struct {
 
 	container testcontainers.Container
 	logID     string
+	wsURL     string
 	treasury  evm.Account
 	wait      evm.TransactionWait
 
@@ -206,12 +207,12 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		Name:         namePrefix,
 		Image:        spec.Image,
 		Labels:       labels,
-		ExposedPorts: []string{"8545/tcp"},
+		ExposedPorts: []string{"8545/tcp", "8546/tcp"},
 		ConfigModifier: func(config *containertypes.Config) {
 			config.User = hostUser
 		},
 		HostConfigModifier: func(config *containertypes.HostConfig) {
-			container.BindPortsToLoopback(config, "8545/tcp")
+			container.BindPortsToLoopback(config, "8545/tcp", "8546/tcp")
 			config.Mounts = append(
 				config.Mounts,
 				mount.Mount{
@@ -230,6 +231,9 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			"--rpc-http-enabled",
 			"--rpc-http-host=0.0.0.0",
 			"--rpc-http-api=ETH,NET,WEB3",
+			"--rpc-ws-enabled",
+			"--rpc-ws-host=0.0.0.0",
+			"--rpc-ws-api=ETH,NET,WEB3",
 			"--host-allowlist=*",
 		},
 	}
@@ -249,6 +253,12 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("resolve besu RPC port: %w", err)
 	}
 	bc.Identity = evm.NewIdentity(spec.ID, fmt.Sprintf("http://%s:%s", host, port.Port()))
+	// Besu runs its websocket JSON-RPC on a second listener, unlike Anvil.
+	wsPort, err := bc.container.MappedPort(ctx, "8546/tcp")
+	if err != nil {
+		return nil, fmt.Errorf("resolve besu websocket port: %w", err)
+	}
+	bc.wsURL = fmt.Sprintf("ws://%s:%s", host, wsPort.Port())
 
 	client, err := ethclient.DialContext(ctx, bc.RPCURL())
 	if err != nil {
@@ -267,6 +277,8 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 	bc.EVMClient = ec
 	return bc, nil
 }
+
+func (bc *Chain) WSURL() string { return bc.wsURL }
 
 // EnsureEOABalance transfers only the shortfall from the Chain's private
 // treasury, then verifies the requested minimum on-chain.

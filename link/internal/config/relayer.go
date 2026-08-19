@@ -72,9 +72,6 @@ type ClientEnd struct {
 // AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
-	// Lookback the number of blocks the relayer looks back from the latest
-	// block to check for packets to relay.
-	Lookback uint64 `yaml:"lookback,omitempty"`
 }
 
 // ChainOverride returns the relay settings override for a chain.
@@ -103,11 +100,46 @@ func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty Cl
 	return ClientEnd{}, ClientEnd{}, false
 }
 
+// SourceEnd returns this connection's end on chainID, with the end its packets
+// flow toward.
+func (c ConnectionConfig) SourceEnd(chainID string) (source, destination ClientEnd, ok bool) {
+	switch chainID {
+	case c.ClientA.ChainID:
+		return c.ClientA, c.ClientB, true
+	case c.ClientB.ChainID:
+		return c.ClientB, c.ClientA, true
+	}
+
+	return ClientEnd{}, ClientEnd{}, false
+}
+
+// AutoRelayConnections returns the connections whose end on chainID has
+// auto-relay enabled.
+func (c RelayerConfig) AutoRelayConnections(chainID string) []ConnectionConfig {
+	var connections []ConnectionConfig
+
+	for _, conn := range c.Connections {
+		source, _, ok := conn.SourceEnd(chainID)
+		if !ok {
+			continue
+		}
+
+		if source.AutoRelay.Enabled == nil || !*source.AutoRelay.Enabled {
+			continue
+		}
+
+		connections = append(connections, conn)
+	}
+
+	return connections
+}
+
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
 	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
 		return errors.New(".dispatchPollInterval must be positive")
 	}
+
 	if err := c.validateChainOverrides(); err != nil {
 		return err
 	}

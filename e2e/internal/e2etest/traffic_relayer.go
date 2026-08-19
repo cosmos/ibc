@@ -235,9 +235,7 @@ func RelaySelected(ctx context.Context, relayer *ibclink.Relayer, packets ...Pac
 
 // observeStatus reports the relayer's wire status for the packet. A nil
 // status with ok set means the relayer has no record of the source
-// transaction yet: the packet reads as pending; on non-manual routes it is
-// submitted for relaying first, standing in for the relayer's on-chain
-// packet discovery until the product grows one.
+// transaction yet, which reads as pending.
 func observeStatus(
 	ctx context.Context,
 	relayer *ibclink.Relayer,
@@ -245,11 +243,6 @@ func observeStatus(
 ) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
 	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
 	if ibclink.IsStatusNotFound(err) {
-		if !relayer.ManualRoute(string(packet.RouteID)) {
-			if relayErr := relayer.RelayAll(ctx, string(packet.Source), packet.SourceTxHash); relayErr != nil {
-				return nil, 0, false, relayErr
-			}
-		}
 		return nil, relayerv2.PacketState_PACKET_STATE_PENDING, true, nil
 	}
 	if err != nil {

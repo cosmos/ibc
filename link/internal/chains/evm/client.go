@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
@@ -53,21 +54,37 @@ type Client struct {
 	chainID       string
 	routerAddress common.Address
 	eth           ETHClient
+	ws            ETHClient // nil unless a websocket endpoint is configured
 	router        *ics26router.Contract
 	routerABI     *abi.ABI
 	logger        *slog.Logger
 }
 
-func New(chainID, rpcURL, ics26RouterAddress string) (*Client, error) {
+func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
 
-	return NewWithClient(chainID, eth, ics26RouterAddress)
+	var ws ETHClient
+
+	if wsURL != "" {
+		dialed, errDial := ethclient.Dial(wsURL)
+		if errDial != nil {
+			return nil, errors.Wrapf(errDial, "dialing websocket for chain %s", chainID)
+		}
+
+		ws = dialed
+	}
+
+	return NewWithClients(chainID, eth, ws, ics26RouterAddress)
 }
 
 func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*Client, error) {
+	return NewWithClients(chainID, eth, nil, ics26RouterAddress)
+}
+
+func NewWithClients(chainID string, eth, ws ETHClient, ics26RouterAddress string) (*Client, error) {
 	if !common.IsHexAddress(ics26RouterAddress) {
 		return nil, errors.Errorf("invalid ics26 router address %q for chain %s", ics26RouterAddress, chainID)
 	}
@@ -94,6 +111,7 @@ func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*C
 		chainID:       chainID,
 		routerAddress: routerAddress,
 		eth:           eth,
+		ws:            ws,
 		router:        router,
 		routerABI:     routerABI,
 		logger:        slog.With("module", "chains", "chainType", "evm", "chainID", chainID),
@@ -139,7 +157,11 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 				)
 			}
 
-			events = append(events, v2.PacketEvent{Kind: v2.KindSendPacket, Packet: toPacket(sendPacket.Packet)})
+			events = append(events, v2.PacketEvent{
+				Kind:   v2.KindSendPacket,
+				Packet: toPacket(sendPacket.Packet),
+				TxHash: txHash.String(),
+			})
 		case writeAckID:
 			writeAck, errParse := c.router.ParseWriteAcknowledgement(*log)
 			if errParse != nil {
@@ -150,6 +172,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 				Kind:   v2.KindWriteAck,
 				Packet: toPacket(writeAck.Packet),
 				Acks:   writeAck.Acknowledgements,
+				TxHash: txHash.String(),
 			})
 		}
 	}
@@ -316,19 +339,12 @@ func (c *Client) FindTimeoutTx(ctx context.Context, sourceClientID string, seque
 }
 
 func (c *Client) findPacketTx(ctx context.Context, eventName, clientID string, sequence uint64) (*v2.Tx, error) {
-	topics, err := abi.MakeTopics(
-		[]any{c.routerABI.Events[eventName].ID},
-		[]any{clientID},
-		[]any{sequence},
-	)
+	query, err := c.packetLogQuery(eventName, []any{clientID}, []any{sequence})
 	if err != nil {
-		return nil, errors.Wrapf(err, "creating %s topics for client %s sequence %d", eventName, clientID, sequence)
+		return nil, err
 	}
 
-	logs, err := c.eth.FilterLogs(ctx, ethereum.FilterQuery{
-		Addresses: []common.Address{c.routerAddress},
-		Topics:    topics,
-	})
+	logs, err := c.eth.FilterLogs(ctx, query)
 	if err != nil {
 		return nil, errors.Wrapf(err, "filtering %s logs on chain %s", eventName, c.chainID)
 	}
@@ -360,6 +376,159 @@ func (c *Client) findPacketTx(ctx context.Context, eventName, clientID string, s
 		Hash:           log.TxHash.String(),
 		Timestamp:      time.Unix(int64(header.Time), 0).UTC(),
 		RelayerAddress: sender,
+	}, nil
+}
+
+// subscriptionLogBuffer matches the buffer abigen's generated watchers use.
+const subscriptionLogBuffer = 128
+
+// SubscribeSendPackets streams SendPacket events for clientIDs to out. It is one
+// shot: the subscription ends on the first transport, decode or header failure
+// and does not reconnect.
+func (c *Client) SubscribeSendPackets(
+	ctx context.Context,
+	clientIDs []string,
+	out chan<- v2.PacketEvent,
+) (v2.Subscription, error) {
+	switch {
+	case c.ws == nil:
+		return nil, errors.Errorf("no websocket endpoint configured for chain %s", c.chainID)
+	case len(clientIDs) == 0:
+		return nil, errors.Errorf("no client ids to subscribe to on chain %s", c.chainID)
+	}
+
+	query, err := c.packetLogQuery(sendPacketEvent, toAnySlice(clientIDs), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	logs := make(chan types.Log, subscriptionLogBuffer)
+
+	sub, err := c.ws.SubscribeFilterLogs(ctx, query, logs)
+	if err != nil {
+		return nil, errors.Wrapf(err, "subscribing to %s logs on chain %s", sendPacketEvent, c.chainID)
+	}
+
+	blockTimeAt := c.blockTimer()
+
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+
+		for {
+			select {
+			case log := <-logs:
+				packetEvent, err := c.sendPacketEvent(ctx, log, blockTimeAt)
+				if err != nil {
+					// this error may have been due to a block header http
+					// fetch failure, however that data is required for send
+					// packets (in order to make finality decisions within the
+					// relaying pipeline), so we are still always returning
+					// this error and force the caller to reconnect instead of
+					// returning a
+					// zero value for the time.
+					return err
+				}
+
+				select {
+				case out <- packetEvent:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+func (c *Client) sendPacketEvent(
+	ctx context.Context,
+	log types.Log,
+	blockTimeAt func(context.Context, uint64) (time.Time, error),
+) (v2.PacketEvent, error) {
+	sendPacket, err := c.router.ParseSendPacket(log)
+	if err != nil {
+		return v2.PacketEvent{}, errors.Wrapf(
+			err,
+			"parsing send packet event from tx %s on chain %s",
+			log.TxHash,
+			c.chainID,
+		)
+	}
+
+	timestamp, err := blockTimeAt(ctx, log.BlockNumber)
+	if err != nil {
+		return v2.PacketEvent{}, errors.Wrapf(
+			err,
+			"fetching block time at block %d on chain %s",
+			log.BlockNumber,
+			c.chainID,
+		)
+	}
+
+	return v2.PacketEvent{
+		Height:    log.BlockNumber,
+		BlockTime: timestamp,
+		Kind:      v2.KindSendPacket,
+		Packet:    toPacket(sendPacket.Packet),
+		TxHash:    log.TxHash.String(),
+		Removed:   log.Removed,
+	}, nil
+}
+
+// blockTimer memoizes the last block looked up, which is nearly always a hit
+// because logs arrive in block order. It reads headers over HTTP so header
+// traffic stays off the websocket connection.
+func (c *Client) blockTimer() func(ctx context.Context, blockNumber uint64) (time.Time, error) {
+	var (
+		cachedNumber uint64
+		cached       time.Time
+	)
+
+	return func(ctx context.Context, blockNumber uint64) (time.Time, error) {
+		if !cached.IsZero() && cachedNumber == blockNumber {
+			return cached, nil
+		}
+
+		header, err := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(blockNumber))
+		if err != nil {
+			return time.Time{}, errors.Wrapf(err, "getting header %d on chain %s", blockNumber, c.chainID)
+		}
+
+		cachedNumber, cached = blockNumber, blockTime(header)
+
+		return cached, nil
+	}
+}
+
+func toAnySlice[T any](values []T) []any {
+	out := make([]any, len(values))
+	for i, value := range values {
+		out[i] = value
+	}
+
+	return out
+}
+
+// packetLogQuery builds the router log filter for a packet event. An empty
+// clientIDs or sequences leaves that topic position a wildcard.
+func (c *Client) packetLogQuery(eventName string, clientIDs, sequences []any) (ethereum.FilterQuery, error) {
+	topics, err := abi.MakeTopics([]any{c.routerABI.Events[eventName].ID}, clientIDs, sequences)
+	if err != nil {
+		return ethereum.FilterQuery{}, errors.Wrapf(
+			err,
+			"creating %s topics for clients %v sequences %v",
+			eventName, clientIDs, sequences,
+		)
+	}
+
+	return ethereum.FilterQuery{
+		Addresses: []common.Address{c.routerAddress},
+		Topics:    topics,
 	}, nil
 }
 

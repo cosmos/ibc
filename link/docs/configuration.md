@@ -60,6 +60,7 @@ and `relayer.chainOverrides[].chainId` are validated against this list.
 | Field         | Type   | Description |
 |---------------|--------|-------------|
 | `rpc`         | string | HTTP(S) JSON-RPC endpoint. |
+| `ws`          | string | Optional. `ws://` or `wss://` endpoint the relayer subscribes to for `SendPacket` events. Required when any route sourced from this chain sets `autoRelay.enabled: true`. |
 | `ics26Router` | string | ICS26 router contract address, hex-encoded with `0x` prefix. |
 
 ```yaml
@@ -67,6 +68,7 @@ chains:
   - chainId: "1"
     evm:
       rpc: https://ethereum-rpc.example.com
+      ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000000"
 ```
 
@@ -110,7 +112,7 @@ each end's counterparty is simply the connection's other end.
 | `signer`      | string | Signer submitting relay transactions on `chainId` — this end's own chain. Must match a `signers[].alias`. |
 | `clientId`    | string | This end's on-chain client ID, on `chainId`. |
 | `type`        | string | Only `attestation` is currently supported. |
-| `autoRelay`   | object | `enabled` (bool), `lookback` (uint) — auto-relay settings for packets flowing FROM this end's chain TOWARD the counterparty end. |
+| `autoRelay`   | object | Whether packets flowing FROM this end's chain TOWARD the counterparty end are relayed as they are discovered on chain. See below. |
 
 `clientA` and `clientB` must be on different chains.
 
@@ -125,7 +127,6 @@ relayer:
         type: "attestation"
         autoRelay:
           enabled: true
-          lookback: 100
       clientB:
         chainId: "8453"
         signer: "relayer-key"
@@ -133,12 +134,28 @@ relayer:
         type: "attestation"
         autoRelay:
           enabled: true
-          lookback: 100
 ```
 
 `ibc config validate --live` additionally confirms each connection's
 on-chain registered counterparty matches `clientA`/`clientB`, and runs the
 same attestor-quorum resolution described above.
+
+##### `relayer.connections[].clientA.autoRelay` / `.clientB.autoRelay`
+
+| Field     | Type | Description |
+|-----------|------|--------------|
+| `enabled` | bool | Defaults to false. Relay packets this end sends as they are discovered on chain, instead of only those submitted through the API. Requires `ws` on this end's chain `evm` block; config load fails without it. |
+
+The set of clients the relayer watches is derived from these entries — there is
+no separate list to keep in sync, and a client end with no connection cannot be
+watched. Auto-relay is per direction: enabling it on `clientA` alone relays only
+the packets that chain sends.
+
+With it off, the end is relayed only for packets submitted through the API, as
+in `TestTransfer_ManualRelay`. Both paths write the same packet rows and can run
+against the same client at once. Turning it on is a decision to relay everything
+that end sends, so the per-packet selection an API relay request carries does
+not apply to it.
 
 ---
 

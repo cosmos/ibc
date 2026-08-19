@@ -69,6 +69,23 @@ packages:
       structname: "MockTxSubmitterETHClient"
     interfaces:
       ETHClient:
+  github.com/cosmos/ibc/link/internal/relay/watcher:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "watcher.go"
+      pkgname: "mocks"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Subscriber:
+      PacketStore:
+  github.com/cosmos/ibc/link/internal/types/v2:
+    config:
+      dir: "internal/tests/mocks"
+      filename: "subscription.go"
+      pkgname: "mocks"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      Subscription:
   github.com/cosmos/ibc/link/internal/chains/evm:
     config:
       dir: "internal/tests/mocks"

@@ -84,7 +84,7 @@ func TestRelay(t *testing.T) {
 		repo := mocks.NewMockRepository(t)
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
-		service := New(relayerConfig(), st, clients, nil)
+		service := New(relayerConfig(), st, clients, nil, nil)
 
 		blockTime := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
 		events := []v2.PacketEvent{
@@ -179,7 +179,7 @@ func TestRelay(t *testing.T) {
 
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
-		service := New(relayerConfig(), st, clients, nil)
+		service := New(relayerConfig(), st, clients, nil, nil)
 
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return([]v2.PacketEvent{{
@@ -230,7 +230,7 @@ func TestRelay(t *testing.T) {
 
 				client := mocks.NewMockClient(t)
 				clients := NewMockChainClients(t)
-				service := New(relayerConfig(), st, clients, nil)
+				service := New(relayerConfig(), st, clients, nil, nil)
 				clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 				client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return([]v2.PacketEvent{{
 					BlockTime: input.SourceTxTime,
@@ -258,7 +258,7 @@ func TestRelay(t *testing.T) {
 	})
 
 	t.Run("selectionValidation", func(t *testing.T) {
-		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 		requests := []RelayRequest{
 			{ChainID: chainIDEth, TxHash: txHashLower},
 			relaySelected(chainIDEth, txHashLower),
@@ -302,7 +302,7 @@ func TestRelay(t *testing.T) {
 				client := mocks.NewMockClient(t)
 				clients := NewMockChainClients(t)
 				cfg := relayerConfig()
-				service := New(cfg, NewMockStore(t), clients, nil)
+				service := New(cfg, NewMockStore(t), clients, nil, nil)
 				clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 				client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
@@ -327,7 +327,7 @@ func TestRelay(t *testing.T) {
 
 	t.Run("unsupportedChain", func(t *testing.T) {
 		// ARRANGE
-		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
 		// ACT
 		err := service.Relay(context.Background(), relayAll("999", txHashLower))
@@ -341,7 +341,7 @@ func TestRelay(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		clients := NewMockChainClients(t)
-		service := New(relayerConfig(), NewMockStore(t), clients, nil)
+		service := New(relayerConfig(), NewMockStore(t), clients, nil, nil)
 
 		// config knows the chain but the chain client set has no client for it
 		clients.EXPECT().Get(chainIDEth).Return(nil, false).Once()
@@ -361,7 +361,7 @@ func TestRelay(t *testing.T) {
 		ctx := context.Background()
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
-		service := New(relayerConfig(), NewMockStore(t), clients, nil)
+		service := New(relayerConfig(), NewMockStore(t), clients, nil, nil)
 
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, ethereum.NotFound).Once()
@@ -379,7 +379,7 @@ func TestRelay(t *testing.T) {
 		ctx := context.Background()
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
-		service := New(relayerConfig(), NewMockStore(t), clients, nil)
+		service := New(relayerConfig(), NewMockStore(t), clients, nil, nil)
 
 		// nothing is recorded when extraction fails
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
@@ -407,7 +407,7 @@ func TestRelay(t *testing.T) {
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+				service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
 				// ACT
 				err := service.Relay(context.Background(), relayAll(tt.chainID, tt.txHash))
@@ -424,7 +424,7 @@ func TestRelay(t *testing.T) {
 		st := NewMockStore(t)
 		client := mocks.NewMockClient(t)
 		clients := NewMockChainClients(t)
-		service := New(relayerConfig(), st, clients, nil)
+		service := New(relayerConfig(), st, clients, nil, nil)
 
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, nil).Once()
@@ -447,8 +447,9 @@ func TestStatus(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
+		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
 		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(nil, store.ErrNotFound).Once()
 
 		// ACT
@@ -458,28 +459,51 @@ func TestStatus(t *testing.T) {
 		require.ErrorIs(t, err, ErrNotFound)
 	})
 
-	t.Run("submittedWithoutPackets", func(t *testing.T) {
+	// an auto-relayed packet is never submitted to /relay, so its rows have to
+	// answer for it on their own
+	t.Run("autoRelayedPacketsNeedNoRelayRequest", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
-		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
-		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
+		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return([]store.Packet{{
+			Status:               store.RelayStatusPending,
+			SourceChainID:        chainIDEth,
+			PacketSequenceNumber: 7,
+			PacketSourceClientID: "base-0",
+		}}, nil).Once()
 
 		// ACT
 		statuses, err := service.Status(ctx, chainIDEth, txHashLower)
 
 		// ASSERT
 		require.NoError(t, err)
-		assert.Empty(t, statuses)
+		require.Len(t, statuses, 1)
+		assert.Equal(t, uint64(7), statuses[0].SequenceNumber)
+	})
+
+	t.Run("storeError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		st := NewMockStore(t)
+		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
+
+		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, errors.New("boom")).Once()
+
+		// ACT
+		_, err := service.Status(ctx, chainIDEth, txHashLower)
+
+		// ASSERT
+		require.ErrorContains(t, err, "listing packets")
+		require.NotErrorIs(t, err, ErrNotFound)
 	})
 
 	t.Run("mapsPackets", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
 		recvTxHash := "0xrecv"
 		ackTxHash := "0xack"
@@ -505,7 +529,6 @@ func TestStatus(t *testing.T) {
 			},
 		}
 
-		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(&store.RelayRequest{ID: 1}, nil).Once()
 		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(packets, nil).Once()
 
 		// ACT
@@ -558,4 +581,13 @@ func TestMapPacketState(t *testing.T) {
 	assert.Equal(t, StateTimedOut, mapPacketState(store.RelayStatusCompleteWithTimeout))
 	assert.Equal(t, StateRejected, mapPacketState(store.RelayStatusCompleteWithWriteAckError))
 	assert.Equal(t, StateRelayFailed, mapPacketState(store.RelayStatusFailed))
+}
+
+func TestServiceLifecycle(t *testing.T) {
+	t.Run("noBackgroundLoopsIsANoOp", func(t *testing.T) {
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
+
+		require.NoError(t, service.Start())
+		require.NoError(t, service.Stop())
+	})
 }

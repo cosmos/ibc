@@ -18,3 +18,13 @@ const (
 	LatestBlock    = math.MaxUint64
 	FinalizedBlock = LatestBlock - 1
 )
+
+// Subscription an active event stream.
+type Subscription interface {
+	// Err returns the error that ended the subscription, if any. It is closed
+	// when the subscription ends for any reason.
+	Err() <-chan error
+
+	// Unsubscribe ends the subscription and releases its resources.
+	Unsubscribe()
+}

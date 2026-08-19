@@ -81,6 +81,10 @@ type PacketEvent struct {
 	Kind      EventKind
 	Packet    channeltypesv2.Packet
 	Acks      [][]byte
+	TxHash    string
+	// Removed the event's block was reorged out. Always false on an
+	// instant-finality chain.
+	Removed bool
 }
 
 // Tx a transaction observed on a chain.

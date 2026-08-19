@@ -20,6 +20,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
+	"github.com/cosmos/ibc/link/internal/relay/watcher"
 	"github.com/cosmos/ibc/link/internal/store"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -32,6 +33,7 @@ type Service struct {
 	chains ChainClients
 
 	dispatcher *dispatch.RelayDispatcher
+	watchers   watcher.Set
 }
 
 // ChainClients resolves chain clients by chain id.
@@ -111,35 +113,49 @@ type RelayRequest struct {
 	Packets   []PacketSelector
 }
 
-// New Service constructor. dispatcher may be nil for a service that only
-// serves the gRPC API, with no background dispatch loop.
-func New(cfg config.Config, st Store, clients ChainClients, dispatcher *dispatch.RelayDispatcher) *Service {
+// New Service constructor. dispatcher may be nil, and watchers empty, for a
+// service that only serves the gRPC API, with no background loops.
+func New(
+	cfg config.Config,
+	st Store,
+	clients ChainClients,
+	dispatcher *dispatch.RelayDispatcher,
+	watchers watcher.Set,
+) *Service {
 	return &Service{
 		logger:     slog.With("service", "relayer"),
 		cfg:        cfg,
 		store:      st,
 		chains:     clients,
 		dispatcher: dispatcher,
+		watchers:   watchers,
 	}
 }
 
-// Start begins the background relay dispatch loop. A no-op if dispatcher is nil.
+// Start begins the background relay dispatch loop and the packet watchers.
+// Either is skipped when nil.
 func (s *Service) Start() error {
-	if s.dispatcher == nil {
-		return nil
+	if s.dispatcher != nil {
+		if err := s.dispatcher.Start(); err != nil {
+			return err
+		}
 	}
 
-	return s.dispatcher.Start()
+	return s.watchers.Start()
 }
 
-// Stop cancels the background relay dispatch loop and blocks until it has exited.
-// A no-op if dispatcher is nil.
+// Stop cancels the background loops and blocks until they have exited. Watchers
+// stop first so nothing new is discovered while the dispatcher drains.
 func (s *Service) Stop() error {
-	if s.dispatcher == nil {
-		return nil
+	err := s.watchers.Stop()
+
+	if s.dispatcher != nil {
+		if stopErr := s.dispatcher.Stop(); err == nil {
+			err = stopErr
+		}
 	}
 
-	return s.dispatcher.Stop()
+	return err
 }
 
 func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
@@ -314,16 +330,22 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 		return nil, err
 	}
 
-	switch _, errGet := s.store.GetRelayRequest(ctx, chainID, txHash); {
-	case errors.Is(errGet, store.ErrNotFound):
-		return nil, errors.Wrap(ErrNotFound, "transaction not submitted to relayer")
-	case errGet != nil:
-		return nil, errors.Wrap(errGet, "getting relay request")
-	}
-
 	packets, err := s.store.ListPacketsBySourceTx(ctx, chainID, txHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "listing packets")
+	}
+
+	// an auto-relayed packet is discovered on chain and never submitted, so the
+	// rows are what make its transaction known here. The relay request is only
+	// consulted when there are none, which is what still separates a submitted
+	// transaction that selected nothing from one we have never heard of
+	if len(packets) == 0 {
+		switch _, errGet := s.store.GetRelayRequest(ctx, chainID, txHash); {
+		case errors.Is(errGet, store.ErrNotFound):
+			return nil, errors.Wrap(ErrNotFound, "transaction not submitted to relayer")
+		case errGet != nil:
+			return nil, errors.Wrap(errGet, "getting relay request")
+		}
 	}
 
 	statuses := make([]PacketStatus, len(packets))

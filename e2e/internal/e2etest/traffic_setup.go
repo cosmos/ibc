@@ -361,7 +361,6 @@ func buildConfig(
 	}
 	options := ibclink.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
-		ManualRoutes: make(map[string]bool, len(routes)),
 		WaitPolicies: make(map[string]ibclink.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
@@ -372,11 +371,17 @@ func buildConfig(
 		apps, ok := deployment.Chain(id)
 		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
 		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
-		config.Chains = append(config.Chains, ibclink.RelayerChain{
+		relayerChain := ibclink.RelayerChain{
 			ChainID:     options.ChainIDs[string(id)],
 			RPC:         rpc,
 			ICS26Router: apps.ICS26Router.Hex(),
-		})
+		}
+		if chain.WSURL() != "" {
+			ws, wsErr := driver.ChainWS(string(id))
+			require.NoError(t, wsErr, "e2etest: resolve Chain %q websocket binding", id)
+			relayerChain.WS = ws
+		}
+		config.Chains = append(config.Chains, relayerChain)
 	}
 	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)
@@ -388,11 +393,10 @@ func buildConfig(
 		})
 	}
 
-	connections := map[string]bool{}
+	connections := map[string]int{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
 		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
-		options.ManualRoutes[string(route.ID)] = route.Manual
 		source, err := env.Chain(route.Source)
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q source Chain %q: %v", route.ID, route.Source, err)
@@ -415,9 +419,22 @@ func buildConfig(
 			connection.ChainA, connection.ClientA, connection.ChainB, connection.ClientB = connection.ChainB, connection.ClientB, connection.ChainA, connection.ClientA
 		}
 		key := connection.ChainA + "/" + connection.ClientA
-		if !connections[key] {
-			connections[key] = true
+
+		index, seen := connections[key]
+		if !seen {
+			index = len(config.Connections)
+			connections[key] = index
 			config.Connections = append(config.Connections, connection)
+		}
+
+		// the reverse route shares this connection, so each direction turns on
+		// the end it is sent from rather than the whole connection
+		if !route.Manual {
+			if config.Connections[index].ClientA == clients.SourceClientID {
+				config.Connections[index].AutoRelayA = true
+			} else {
+				config.Connections[index].AutoRelayB = true
+			}
 		}
 	}
 	return config, options

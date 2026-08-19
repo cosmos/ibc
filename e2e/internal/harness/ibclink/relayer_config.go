@@ -38,8 +38,10 @@ type RelayerConfig struct {
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
 // chain id in decimal.
 type RelayerChain struct {
-	ChainID            string
-	RPC                string
+	ChainID string
+	RPC     string
+	// WS is required by the relayer for chains sourcing auto-relayed routes.
+	WS                 string
 	ICS26Router        string
 	PacketBatchSize    int
 	PacketBatchTimeout time.Duration
@@ -52,6 +54,11 @@ type RelayerConnection struct {
 	ClientA string
 	ChainB  string
 	ClientB string
+	// AutoRelayA and AutoRelayB relay packets sent from that end as they are
+	// discovered on chain. A manual route leaves its end off and is relayed
+	// only on an explicit Relay call.
+	AutoRelayA bool
+	AutoRelayB bool
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -126,6 +133,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			ChainID: chain.ChainID,
 			EVM: evmChainConfig{
 				RPC:         chain.RPC,
+				WS:          chain.WS,
 				ICS26Router: chain.ICS26Router,
 			},
 		})
@@ -158,16 +166,18 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
 			Alias: connection.ClientA + "-" + connection.ClientB,
 			ClientA: clientEndFileConfig{
-				ChainID:  connection.ChainA,
-				Signer:   cfg.SignerAlias,
-				ClientID: connection.ClientA,
-				Type:     "attestation",
+				ChainID:   connection.ChainA,
+				Signer:    cfg.SignerAlias,
+				ClientID:  connection.ClientA,
+				Type:      "attestation",
+				AutoRelay: autoRelay(connection.AutoRelayA),
 			},
 			ClientB: clientEndFileConfig{
-				ChainID:  connection.ChainB,
-				Signer:   cfg.SignerAlias,
-				ClientID: connection.ClientB,
-				Type:     "attestation",
+				ChainID:   connection.ChainB,
+				Signer:    cfg.SignerAlias,
+				ClientID:  connection.ClientB,
+				Type:      "attestation",
+				AutoRelay: autoRelay(connection.AutoRelayB),
 			},
 		})
 	}
@@ -253,8 +263,21 @@ type connectionFileConfig struct {
 }
 
 type clientEndFileConfig struct {
-	ChainID  string `yaml:"chainId"`
-	Signer   string `yaml:"signer"`
-	ClientID string `yaml:"clientId"`
-	Type     string `yaml:"type"`
+	ChainID   string               `yaml:"chainId"`
+	Signer    string               `yaml:"signer"`
+	ClientID  string               `yaml:"clientId"`
+	Type      string               `yaml:"type"`
+	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
+}
+
+type autoRelayFileConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+func autoRelay(enabled bool) *autoRelayFileConfig {
+	if !enabled {
+		return nil
+	}
+
+	return &autoRelayFileConfig{Enabled: true}
 }
