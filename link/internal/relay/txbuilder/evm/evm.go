@@ -6,8 +6,11 @@
 package evm
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
@@ -15,15 +18,30 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-var routerABI = mustRouterABI()
+var router = mustRouterBinding()
 
-func mustRouterABI() *abi.ABI {
-	parsed, err := ics26router.ContractMetaData.GetAbi()
+func mustRouterBinding() *ics26router.ContractTransactor {
+	bound, err := ics26router.NewContractTransactor(common.Address{}, nil)
 	if err != nil {
-		panic(errors.Wrap(err, "parsing ics26 router abi"))
+		panic(errors.Wrap(err, "constructing ics26 router binding"))
 	}
 
-	return parsed
+	return bound
+}
+
+func calldata(call func(*bind.TransactOpts) (*types.Transaction, error)) ([]byte, error) {
+	opts := &bind.TransactOpts{
+		Nonce:    new(big.Int),
+		Signer:   func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) { return tx, nil },
+		GasLimit: 1,
+		GasPrice: big.NewInt(1),
+		NoSend:   true,
+	}
+	tx, err := call(opts)
+	if err != nil {
+		return nil, err
+	}
+	return tx.Data(), nil
 }
 
 // TxBuilder implements txbuilder.TxBuilder for one EVM chain's ICS26Router.
@@ -107,7 +125,9 @@ func height(h uint64) ics26router.IICS02ClientMsgsHeight {
 // packUpdateClient packs a call to updateClient(clientId, updateMsg), where
 // updateMsg is the already-encoded proof produced by proofgen.ProofGenerator.StateProof.
 func packUpdateClient(clientID string, updateMsg []byte) ([]byte, error) {
-	packed, err := routerABI.Pack("updateClient", clientID, updateMsg)
+	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return router.UpdateClient(opts, clientID, updateMsg)
+	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing updateClient call")
 	}
@@ -117,10 +137,12 @@ func packUpdateClient(clientID string, updateMsg []byte) ([]byte, error) {
 
 // packRecvPacket packs a call to recvPacket for one packet.
 func packRecvPacket(packet ics26router.IICS26RouterMsgsPacket, proof []byte, proofHeight uint64) ([]byte, error) {
-	packed, err := routerABI.Pack("recvPacket", ics26router.IICS26RouterMsgsMsgRecvPacket{
-		Packet:          packet,
-		ProofCommitment: proof,
-		ProofHeight:     height(proofHeight),
+	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return router.RecvPacket(opts, ics26router.IICS26RouterMsgsMsgRecvPacket{
+			Packet:          packet,
+			ProofCommitment: proof,
+			ProofHeight:     height(proofHeight),
+		})
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing recvPacket call")
@@ -136,11 +158,13 @@ func packAckPacket(
 	proof []byte,
 	proofHeight uint64,
 ) ([]byte, error) {
-	packed, err := routerABI.Pack("ackPacket", ics26router.IICS26RouterMsgsMsgAckPacket{
-		Packet:          packet,
-		Acknowledgement: acknowledgement,
-		ProofAcked:      proof,
-		ProofHeight:     height(proofHeight),
+	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return router.AckPacket(opts, ics26router.IICS26RouterMsgsMsgAckPacket{
+			Packet:          packet,
+			Acknowledgement: acknowledgement,
+			ProofAcked:      proof,
+			ProofHeight:     height(proofHeight),
+		})
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing ackPacket call")
@@ -151,10 +175,12 @@ func packAckPacket(
 
 // packTimeoutPacket packs a call to timeoutPacket for one packet.
 func packTimeoutPacket(packet ics26router.IICS26RouterMsgsPacket, proof []byte, proofHeight uint64) ([]byte, error) {
-	packed, err := routerABI.Pack("timeoutPacket", ics26router.IICS26RouterMsgsMsgTimeoutPacket{
-		Packet:       packet,
-		ProofTimeout: proof,
-		ProofHeight:  height(proofHeight),
+	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return router.TimeoutPacket(opts, ics26router.IICS26RouterMsgsMsgTimeoutPacket{
+			Packet:       packet,
+			ProofTimeout: proof,
+			ProofHeight:  height(proofHeight),
+		})
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing timeoutPacket call")
@@ -167,7 +193,9 @@ func packTimeoutPacket(packet ics26router.IICS26RouterMsgsPacket, proof []byte, 
 // one packet-operation call per packet) as a single multicall(bytes[]) call,
 // the one transaction the batch is actually submitted as.
 func packMulticall(calls [][]byte) ([]byte, error) {
-	packed, err := routerABI.Pack("multicall", calls)
+	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return router.Multicall(opts, calls)
+	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing multicall")
 	}
