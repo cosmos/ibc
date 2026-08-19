@@ -5,6 +5,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"sort"
+	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
@@ -37,8 +40,20 @@ var (
 
 	cmdRelayerStatus = &cobra.Command{
 		Use:   useStatus,
-		Short: "Query per-packet relay status for a source transaction",
+		Short: "Deprecated: use \"packets\" instead. Query per-packet relay status for a source transaction",
 		RunE:  relayerStatus,
+	}
+
+	cmdRelayerPackets = &cobra.Command{
+		Use:   "packets",
+		Short: "List the packets the relayer is aware of and their relay status",
+		Long: "List the packets the relayer is aware of, most recent first.\n\n" +
+			"With no filters every known packet is listed, bounded by --limit. " +
+			"Filters combine: a packet must match all of them.",
+		Example: "  ibc relayer packets --state pending\n" +
+			"  ibc relayer packets --chain-id 1 --tx-hash 0xabc\n" +
+			"  ibc relayer packets --source-client-id base-0 --limit 20",
+		RunE: relayerPackets,
 	}
 )
 
@@ -47,7 +62,40 @@ var (
 	flagRelayerHost          string
 	flagRelayerTxHash        string
 	flagRelayerSourceChainID string
+
+	flagRelayerPacketsDestChainID  string
+	flagRelayerPacketsSrcClientID  string
+	flagRelayerPacketsDestClientID string
+	flagRelayerPacketsState        string
+	flagRelayerPacketsSequence     uint64
+	flagRelayerPacketsCreatedFrom  string
+	flagRelayerPacketsCreatedTo    string
+	flagRelayerPacketsLimit        uint32
+	flagRelayerPacketsOffset       uint32
 )
+
+// packetStates maps the --state flag to its wire value. The keys are the
+// PacketState enum names lowercased and stripped of their prefix, so operators
+// type "pending" rather than "PACKET_STATE_PENDING".
+var packetStates = map[string]relayerv2.PacketState{
+	"not-selected": relayerv2.PacketState_PACKET_STATE_NOT_SELECTED,
+	"pending":      relayerv2.PacketState_PACKET_STATE_PENDING,
+	"succeeded":    relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
+	"timed-out":    relayerv2.PacketState_PACKET_STATE_TIMED_OUT,
+	"rejected":     relayerv2.PacketState_PACKET_STATE_REJECTED,
+	"relay-failed": relayerv2.PacketState_PACKET_STATE_RELAY_FAILED,
+}
+
+func packetStateNames() []string {
+	names := make([]string, 0, len(packetStates))
+	for name := range packetStates {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names
+}
 
 func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
@@ -120,8 +168,71 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerStatus(cmd *cobra.Command, _ []string) error {
+	//nolint:staticcheck // Status is deprecated in favor of Packets and is
+	// removed once callers have migrated; this command exists to serve it
+	// until then.
 	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Status, &relayerv2.StatusRequest{
 		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
+	})
+}
+
+func relayerPackets(cmd *cobra.Command, _ []string) error {
+	filter := &relayerv2.PacketFilter{}
+
+	optional := func(value string, into **string) {
+		if value != "" {
+			v := value
+			*into = &v
+		}
+	}
+
+	optional(flagRelayerSourceChainID, &filter.SourceChainId)
+	optional(flagRelayerPacketsDestChainID, &filter.DestinationChainId)
+	optional(flagRelayerPacketsSrcClientID, &filter.SourceClientId)
+	optional(flagRelayerPacketsDestClientID, &filter.DestinationClientId)
+	optional(flagRelayerTxHash, &filter.SourceTxHash)
+
+	if cmd.Flags().Changed("sequence") {
+		filter.SequenceNumber = &flagRelayerPacketsSequence
+	}
+
+	if flagRelayerPacketsState != "" {
+		state, ok := packetStates[strings.ToLower(flagRelayerPacketsState)]
+		if !ok {
+			return errors.Errorf(
+				"invalid --state %q, expected one of: %s",
+				flagRelayerPacketsState, strings.Join(packetStateNames(), ", "),
+			)
+		}
+
+		filter.State = &state
+	}
+
+	for _, bound := range []struct {
+		flag  string
+		value string
+		into  **int64
+	}{
+		{"created-from", flagRelayerPacketsCreatedFrom, &filter.CreatedFrom},
+		{"created-to", flagRelayerPacketsCreatedTo, &filter.CreatedTo},
+	} {
+		if bound.value == "" {
+			continue
+		}
+
+		at, err := time.Parse(time.RFC3339, bound.value)
+		if err != nil {
+			return errors.Wrapf(err, "invalid --%s %q, expected RFC3339", bound.flag, bound.value)
+		}
+
+		seconds := at.Unix()
+		*bound.into = &seconds
+	}
+
+	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Packets, &relayerv2.PacketsRequest{
+		Filter: filter,
+		Limit:  flagRelayerPacketsLimit,
+		Offset: flagRelayerPacketsOffset,
 	})
 }
 
