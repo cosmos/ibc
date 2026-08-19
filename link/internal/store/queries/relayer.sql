@@ -157,6 +157,12 @@ ORDER BY id;
 --
 -- The status set is always applied, so callers pass every known status when
 -- they want no status filter.
+--
+-- Callers bind row_limit as one more than the page they want. The extra row is
+-- a probe: if it comes back there is another page, and it is dropped before
+-- returning. That keeps the query O(page) -- the planner stops once it has
+-- enough rows -- where reporting an exact total would force it to visit every
+-- matching row on every request.
 
 -- name: ListPackets :many
 SELECT * FROM packets
@@ -171,15 +177,3 @@ AND created_at >= COALESCE(sqlc.narg(created_from), created_at)
 AND created_at <= COALESCE(sqlc.narg(created_to), created_at)
 ORDER BY id DESC
 LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
-
--- name: CountPackets :one
-SELECT COUNT(*) FROM packets
-WHERE ',' || sqlc.arg(statuses) || ',' LIKE '%,' || status || ',%'
-AND source_chain_id = COALESCE(sqlc.narg(source_chain_id), source_chain_id)
-AND destination_chain_id = COALESCE(sqlc.narg(destination_chain_id), destination_chain_id)
-AND packet_source_client_id = COALESCE(sqlc.narg(source_client_id), packet_source_client_id)
-AND packet_destination_client_id = COALESCE(sqlc.narg(destination_client_id), packet_destination_client_id)
-AND source_tx_hash = COALESCE(sqlc.narg(source_tx_hash), source_tx_hash)
-AND packet_sequence_number = COALESCE(sqlc.narg(sequence_number), packet_sequence_number)
-AND created_at >= COALESCE(sqlc.narg(created_from), created_at)
-AND created_at <= COALESCE(sqlc.narg(created_to), created_at);

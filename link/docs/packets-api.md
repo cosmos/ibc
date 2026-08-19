@@ -39,8 +39,13 @@ a packet's state, so the two cannot disagree.
 ## Paging
 
 `limit` defaults to 100 and is capped at 1000. `offset` skips packets. Results
-are ordered most recent first, and `total` reports how many packets match the
-filter, ignoring `limit` and `offset`.
+are ordered most recent first, and `has_more` reports whether further packets
+match beyond the returned page — page until it is false.
+
+There is deliberately no exact count. Producing one would require visiting every
+matching packet on every request, which is the expensive part; `has_more` is
+answered by fetching one row past the page and discarding it, so a request costs
+about as much as the page it returns.
 
 Paging is **not a consistent snapshot**. The relayer is writing to this table
 while you read it, so a packet inserted between two requests shifts later pages
@@ -66,11 +71,17 @@ one SQL statement whose optional clauses are `COALESCE(param, column)`, which
 the query planner cannot satisfy from an index — it plans a sequential scan
 even when a matching index exists.
 
-That is acceptable at the sizes this table reaches in practice, and paging with
-no filter is cheap because the ordering walks the primary key and stops at
-`limit`. A selective filter over a large table is the case that degrades. The
-fix, if it becomes necessary, is to specialize the query per filter combination
-rather than to add indexes the current statement cannot use.
+What keeps that acceptable is that the scan stops early. Ordering walks the
+primary key and the query asks for only one row more than the page, so a listing
+whose matches are recent reads roughly `limit` rows rather than the table. The
+case that degrades is a selective filter whose matches are old, where the scan
+runs until it finds enough of them.
+
+This is why the API reports `has_more` rather than a count: any exact total
+would force every request to visit every match, removing the early stop and
+making the cheap case as expensive as the worst one. If filtering does become
+too slow, the fix is to specialize the query per filter combination rather than
+to add indexes the current statement cannot use.
 
 ## CLI
 

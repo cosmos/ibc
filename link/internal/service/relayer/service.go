@@ -43,8 +43,11 @@ type ChainClients interface {
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
-	ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)
-	CountPackets(ctx context.Context, filter store.PacketFilter) (uint64, error)
+	ListPackets(
+		ctx context.Context,
+		filter store.PacketFilter,
+		page store.Page,
+	) ([]store.Packet, bool, error)
 	Transact(ctx context.Context, call func(store.Repository) error) error
 }
 
@@ -327,8 +330,8 @@ func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []Pack
 	})
 }
 
-// Packets lists the packets this relayer knows about, most recent first,
-// along with the total matching the filter before paging.
+// Packets lists the packets this relayer knows about, most recent first, and
+// reports whether more match the filter beyond the returned page.
 //
 // An unknown transaction yields an empty result rather than an error:
 // listing endpoints report absence as emptiness.
@@ -336,20 +339,15 @@ func (s *Service) Packets(
 	ctx context.Context,
 	filter PacketFilter,
 	page store.Page,
-) ([]PacketStatus, uint64, error) {
+) ([]PacketStatus, bool, error) {
 	storeFilter, err := s.toStoreFilter(filter)
 	if err != nil {
-		return nil, 0, err
+		return nil, false, err
 	}
 
-	packets, err := s.store.ListPackets(ctx, storeFilter, page)
+	packets, hasMore, err := s.store.ListPackets(ctx, storeFilter, page)
 	if err != nil {
-		return nil, 0, errors.Wrap(err, "listing packets")
-	}
-
-	total, err := s.store.CountPackets(ctx, storeFilter)
-	if err != nil {
-		return nil, 0, errors.Wrap(err, "counting packets")
+		return nil, false, errors.Wrap(err, "listing packets")
 	}
 
 	statuses := make([]PacketStatus, len(packets))
@@ -357,7 +355,7 @@ func (s *Service) Packets(
 		statuses[i] = toPacketStatus(packet)
 	}
 
-	return statuses, total, nil
+	return statuses, hasMore, nil
 }
 
 // toStoreFilter lowers an API filter to a store filter, expanding the API

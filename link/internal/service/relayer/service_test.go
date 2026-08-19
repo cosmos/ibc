@@ -453,11 +453,10 @@ func TestPackets(t *testing.T) {
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
 
-		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
-		st.EXPECT().CountPackets(ctx, mock.Anything).Return(uint64(0), nil).Once()
+		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, false, nil).Once()
 
 		// ACT
-		statuses, total, err := service.Packets(ctx, PacketFilter{
+		statuses, hasMore, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: &chainIDEthVar,
 			SourceTxHash:  &txHashLowerVar,
 		}, store.Page{})
@@ -465,7 +464,7 @@ func TestPackets(t *testing.T) {
 		// ASSERT
 		require.NoError(t, err)
 		require.Empty(t, statuses)
-		require.Zero(t, total)
+		require.False(t, hasMore)
 	})
 
 	t.Run("normalizesTxHashCasing", func(t *testing.T) {
@@ -480,8 +479,7 @@ func TestPackets(t *testing.T) {
 		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
 			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
 				seen = filter.SourceTxHash
-			}).Return(nil, nil).Once()
-		st.EXPECT().CountPackets(ctx, mock.Anything).Return(uint64(0), nil).Once()
+			}).Return(nil, false, nil).Once()
 
 		_, _, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: &chainIDEthVar,
@@ -513,8 +511,7 @@ func TestPackets(t *testing.T) {
 		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
 			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
 				seen = filter.Statuses
-			}).Return(nil, nil).Once()
-		st.EXPECT().CountPackets(ctx, mock.Anything).Return(uint64(0), nil).Once()
+			}).Return(nil, false, nil).Once()
 
 		pending := StatePending
 		_, _, err := service.Packets(ctx, PacketFilter{State: &pending}, store.Page{})

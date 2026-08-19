@@ -80,8 +80,10 @@ message PacketFilter {
 
 message PacketsResponse {
   repeated PacketStatus packets = 1;
-  // Packets matching the filter, ignoring limit and offset.
-  uint64 total = 2;
+  // Whether more packets match the filter beyond this page. Paging stops when
+  // this is false. An exact count is deliberately not reported: computing one
+  // would require visiting every matching packet on every request.
+  bool has_more = 2;
 }
 
 enum PacketState {

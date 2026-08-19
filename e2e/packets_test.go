@@ -119,7 +119,7 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 			SourceChainId: ptr(wireChainID(t, env, chainB)),
 		})
 		require.Equal(t, []string{bHash}, sourceTxHashes(res))
-		require.EqualValues(t, 1, res.GetTotal())
+		require.False(t, res.GetHasMore())
 	})
 
 	t.Run("bySourceClient", func(t *testing.T) {
@@ -149,7 +149,7 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 			SourceClientId: ptr(cToA.PacketTx().SourceClientID),
 		})
 		require.Empty(t, res.GetPackets())
-		require.Zero(t, res.GetTotal())
+		require.False(t, res.GetHasMore())
 	})
 
 	t.Run("unknownTxHashIsEmptyNotError", func(t *testing.T) {
@@ -157,7 +157,7 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 			SourceTxHash: ptr("0x" + strings.Repeat("ab", 32)),
 		})
 		require.Empty(t, res.GetPackets())
-		require.Zero(t, res.GetTotal())
+		require.False(t, res.GetHasMore())
 	})
 
 	t.Run("terminalStateFilter", func(t *testing.T) {
@@ -184,17 +184,22 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 
 	t.Run("pagingCoversEveryPacketOnce", func(t *testing.T) {
 		full := listPackets(ctx, t, client, nil)
-		require.GreaterOrEqual(t, len(full.GetPackets()), 2)
+		total := len(full.GetPackets())
+		require.GreaterOrEqual(t, total, 2)
+		require.False(t, full.GetHasMore(), "an unpaged listing has nothing beyond it")
 
 		seen := map[string]int{}
 
-		for offset := uint32(0); offset < uint32(len(full.GetPackets())); offset++ {
+		for offset := 0; offset < total; offset++ {
 			res, err := client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
-				Limit: 1, Offset: offset,
+				Limit: 1, Offset: uint32(offset), //nolint:gosec // bounded by total
 			}))
 			require.NoError(t, err)
 			require.Len(t, res.Msg.GetPackets(), 1)
-			require.Equal(t, full.GetTotal(), res.Msg.GetTotal(), "total ignores paging")
+
+			// has_more is true for every page but the last.
+			require.Equalf(t, offset < total-1, res.Msg.GetHasMore(),
+				"has_more at offset %d of %d", offset, total)
 
 			seen[res.Msg.GetPackets()[0].GetSendTx().GetTxHash()]++
 		}

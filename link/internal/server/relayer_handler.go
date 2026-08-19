@@ -29,7 +29,7 @@ type RelayerService interface {
 		ctx context.Context,
 		filter relayer.PacketFilter,
 		page store.Page,
-	) ([]relayer.PacketStatus, uint64, error)
+	) ([]relayer.PacketStatus, bool, error)
 }
 
 var (
@@ -98,7 +98,7 @@ func (h *RelayerHandler) Packets(
 
 	h.logger.Info("Packets", "limit", req.Msg.GetLimit(), "offset", req.Msg.GetOffset())
 
-	statuses, total, err := h.srv.Packets(ctx, filter, store.Page{
+	statuses, hasMore, err := h.srv.Packets(ctx, filter, store.Page{
 		Limit:  int64(req.Msg.GetLimit()),
 		Offset: int64(req.Msg.GetOffset()),
 	})
@@ -114,7 +114,7 @@ func (h *RelayerHandler) Packets(
 
 	return connect.NewResponse(&proto.PacketsResponse{
 		Packets: packetStatusesToProto(statuses),
-		Total:   total,
+		HasMore: hasMore,
 	}), nil
 }
 

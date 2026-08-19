@@ -552,8 +552,10 @@ func (x *PacketFilter) GetCreatedTo() int64 {
 type PacketsResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Packets []*PacketStatus        `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
-	// Packets matching the filter, ignoring limit and offset.
-	Total         uint64 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// Whether more packets match the filter beyond this page. Paging stops when
+	// this is false. An exact count is deliberately not reported: computing one
+	// would require visiting every matching packet on every request.
+	HasMore       bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -595,11 +597,11 @@ func (x *PacketsResponse) GetPackets() []*PacketStatus {
 	return nil
 }
 
-func (x *PacketsResponse) GetTotal() uint64 {
+func (x *PacketsResponse) GetHasMore() bool {
 	if x != nil {
-		return x.Total
+		return x.HasMore
 	}
-	return 0
+	return false
 }
 
 type TransactionInfo struct {
@@ -815,10 +817,10 @@ const file_relayer_proto_rawDesc = "" +
 	"\x0f_source_tx_hashB\x12\n" +
 	"\x10_sequence_numberB\x0f\n" +
 	"\r_created_fromB\r\n" +
-	"\v_created_to\"_\n" +
+	"\v_created_to\"d\n" +
 	"\x0fPacketsResponse\x126\n" +
-	"\apackets\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\apackets\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x04R\x05total\"E\n" +
+	"\apackets\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\apackets\x12\x19\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"E\n" +
 	"\x0fTransactionInfo\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
 	"\bchain_id\x18\x02 \x01(\tR\achainId\"\xbe\x03\n" +

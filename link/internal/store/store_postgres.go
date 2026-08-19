@@ -401,7 +401,11 @@ func (db *PostgresDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) e
 	})
 }
 
-func (db *PostgresDB) ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, error) {
+func (db *PostgresDB) ListPackets(
+	ctx context.Context,
+	filter PacketFilter,
+	page Page,
+) ([]Packet, bool, error) {
 	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
 
 	page = page.Normalize()
@@ -416,42 +420,23 @@ func (db *PostgresDB) ListPackets(ctx context.Context, filter PacketFilter, page
 		SequenceNumber:      filter.sequenceFilter(),
 		CreatedFrom:         timestampFilter(filter.CreatedFrom),
 		CreatedTo:           timestampFilter(filter.CreatedTo),
-		RowLimit:            int32(page.Limit), //nolint:gosec // bounded by MaxPacketPageLimit
+		RowLimit:            int32(page.probeLimit()), //nolint:gosec // bounded by MaxPacketPageLimit
 		RowOffset:           int32(page.Offset),
 	})
 	if err != nil {
-		return nil, errNormalize(err)
+		return nil, false, errNormalize(err)
 	}
+
+	rows, hasMore := trimProbe(page.Limit, rows)
 
 	packets := make([]Packet, len(rows))
 	for i, row := range rows {
 		packets[i] = packetFromPostgres(row)
 	}
 
-	return packets, nil
+	return packets, hasMore, nil
 }
 
-func (db *PostgresDB) CountPackets(ctx context.Context, filter PacketFilter) (uint64, error) {
-	total, err := db.repo.CountPackets(ctx, postgres.CountPacketsParams{
-		Statuses:            filter.statusList(),
-		SourceChainID:       filter.SourceChainID,
-		DestinationChainID:  filter.DestinationChainID,
-		SourceClientID:      filter.SourceClientID,
-		DestinationClientID: filter.DestinationClientID,
-		SourceTxHash:        filter.SourceTxHash,
-		SequenceNumber:      filter.sequenceFilter(),
-		CreatedFrom:         timestampFilter(filter.CreatedFrom),
-		CreatedTo:           timestampFilter(filter.CreatedTo),
-	})
-	if err != nil {
-		return 0, errNormalize(err)
-	}
-
-	return uint64(total), nil //nolint:gosec // COUNT(*) is non-negative
-}
-
-// timestampFilter renders an optional time as the pgtype the generated params
-// use; an absent filter becomes an invalid (NULL) timestamptz.
 func timestampFilter(t *time.Time) pgtype.Timestamptz {
 	if t == nil {
 		return pgtype.Timestamptz{}
