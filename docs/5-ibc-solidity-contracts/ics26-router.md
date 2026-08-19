@@ -233,7 +233,7 @@ Each gate below is a function selector granted to a role in an external OpenZepp
 Authorization itself happens outside the router. One external `AccessManager` is passed as `authority` at initialization, and a deployment decides which selectors it binds to which role. The router only asks the access manager whether the caller holds the role assigned to the selector, so who may relay is a deployment decision rather than a property of the contract.
 
 <Note>
-On a chain IBC Link brings up, any address may relay. `ibc deploy core` binds the router's relaying calls to the public role, and it never grants the relayer role. The selectors it binds are listed under [the access manager and its roles](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles).
+On a chain the IBC CLI brings up, any address may relay. `ibc deploy core` binds the router's relaying calls to the public role, and it never grants the relayer role. The selectors it binds are listed under [the access manager and its roles](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles).
 </Note>
 
 ## Deployment and upgrade

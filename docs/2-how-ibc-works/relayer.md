@@ -41,7 +41,6 @@ Once an application sends a packet to the router on the source chain, the router
 
 When a request arrives, the relayer reads the packet events out of the transaction, records the request, and stores one packet for each send event on a configured client. The packets the request left out are stored too, and left alone until a later request selects them. Chain state holds only a 32-byte commitment, so a packet's contents live in the event the send emitted, which is why a request names a transaction. What the relayer stores is metadata, not the packet itself. Delivering the packet and delivering a timeout both read that transaction's events from the source chain again and pick out the sequence they need. So a source node that cannot serve the transaction stalls delivery, even for a packet the relayer already recorded.
 
-<!-- todo: fill in info about autorelay -->
 ## The relay pipeline
 
 Every packet moves through the same fixed sequence of stages.
@@ -127,6 +126,6 @@ That bounds what a relayer cannot do:
 - It cannot forge or alter a proof. Any change to the signed bytes breaks the digest the signatures are checked against.
 - It cannot alter a packet's contents. The packet it submits has to hash to the commitment the source chain stored.
 
-The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs. That party can be anyone, because the [deployment IBC Link performs](/ibc-solidity-contracts/permissions-and-upgrades) opens the router's relay calls to every address.
+The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs. That party can be anyone, because the [deployment the IBC CLI performs](/ibc-solidity-contracts/permissions-and-upgrades) opens the router's relay calls to every address.
 
 A relayer is a courier: it can be slow, and it can be replaced, but it cannot alter what it carries.

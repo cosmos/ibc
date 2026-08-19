@@ -44,13 +44,13 @@ An admin makes both kinds of change, and both are calls on the manager rather th
 
 ## What a deployment assigns
 
-IBC Link deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. It never grants `RELAYER_ROLE`. So on a chain IBC Link brings up, any address may relay, and the relayer role gates nothing.
+The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, and the relayer role gates nothing.
 
 The manager's constructor takes its first admin as an argument. `ibc deploy core` passes the deployer key and leaves it there, and the driver's own comment calls role hardening a follow-up. The rest of the manager's surface is in [OpenZeppelin's reference](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager).
 
 ## Permissions on a light client
 
-A light client sits outside the access manager, so the client's own constructor decides who may submit proofs to it. For the attestation light client that is the fifth constructor argument, `roleManager`. A nonzero address there receives both the client's admin role and its proof-submitter role. Whether that address can grant or revoke them afterwards depends on what it is. `ibc deploy client` passes the [router](/ibc-solidity-contracts/ics26-router), which exposes no way to call `grantRole`, so on a client IBC Link deployed those roles cannot be moved without upgrading the router. Deploy with a zero role manager and the submitter role goes to the zero address instead, which leaves proof submission open to every caller.
+A light client sits outside the access manager, so the client's own constructor decides who may submit proofs to it. For the attestation light client that is the fifth constructor argument, `roleManager`. A nonzero address there receives both the client's admin role and its proof-submitter role. Whether that address can grant or revoke them afterwards depends on what it is. `ibc deploy client` passes the [router](/ibc-solidity-contracts/ics26-router), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. Deploy with a zero role manager and the submitter role goes to the zero address instead, which leaves proof submission open to every caller.
 
 <Warning>
 Deploying an attestation light client by hand with a zero role manager leaves proof submission open for the life of that client. A client with no admin cannot be closed later.
