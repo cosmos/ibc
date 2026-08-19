@@ -151,7 +151,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 		"http://"+readiness.HTTP,
 		connect.WithGRPC(),
 	)
-	if err := d.probeStatusEndpoint(ctx); err != nil {
+	if err := d.probePacketsEndpoint(ctx); err != nil {
 		return nil, errors.Join(err, d.kill())
 	}
 	return d, nil
@@ -263,7 +263,8 @@ func (d *Relayer) relay(ctx context.Context, sourceChainID string, request *rela
 }
 
 // PacketStatuses returns the relayer's per-packet status for one source
-// transaction. IsStatusNotFound distinguishes "never submitted" errors.
+// transaction. A transaction the relayer has never indexed yields an empty
+// slice rather than an error, because listing reports absence as emptiness.
 func (d *Relayer) PacketStatuses(
 	ctx context.Context,
 	sourceChainID string,
@@ -271,24 +272,18 @@ func (d *Relayer) PacketStatuses(
 ) ([]*relayerv2.PacketStatus, error) {
 	chainID, err := d.wireChainID(sourceChainID)
 	if err != nil {
-		return nil, fmt.Errorf("ibc status: %w", err)
+		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	//nolint:staticcheck // migrated to Packets in a follow-up; Status still
-	// backs the harness until every caller moves.
-	response, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
-		SourceChainId: chainID,
-		TxHash:        sourceTxHash,
+	response, err := d.client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
+		Filter: &relayerv2.PacketFilter{
+			SourceChainId: &chainID,
+			SourceTxHash:  &sourceTxHash,
+		},
 	}))
 	if err != nil {
-		return nil, fmt.Errorf("ibc status: %w", err)
+		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	return response.Msg.PacketStatuses, nil
-}
-
-// IsStatusNotFound reports whether the error says the source transaction was
-// never submitted to the relayer.
-func IsStatusNotFound(err error) bool {
-	return connect.CodeOf(err) == connect.CodeNotFound
+	return response.Msg.GetPackets(), nil
 }
 
 func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
@@ -299,20 +294,24 @@ func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
 	return chainID, nil
 }
 
-// probeStatusEndpoint pins the RPC wire contract at startup (not a liveness
-// wait): an unknown transaction must report CodeNotFound. Drivers without a
-// chain mapping have nothing to probe.
-func (d *Relayer) probeStatusEndpoint(ctx context.Context) error {
+// probePacketsEndpoint pins the RPC wire contract at startup (not a liveness
+// wait): an unknown transaction must succeed and return nothing. Drivers
+// without a chain mapping have nothing to probe.
+func (d *Relayer) probePacketsEndpoint(ctx context.Context) error {
 	for _, chainID := range d.chainIDs {
-		//nolint:staticcheck // see PacketStatuses
-		_, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
-			SourceChainId: chainID,
-			TxHash:        zeroTxHash,
+		response, err := d.client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
+			Filter: &relayerv2.PacketFilter{
+				SourceChainId: &chainID,
+				SourceTxHash:  &[]string{zeroTxHash}[0],
+			},
 		}))
-		if err == nil || IsStatusNotFound(err) {
-			return nil
+		if err != nil {
+			return fmt.Errorf("ibc relayer run: packets probe: %w", err)
 		}
-		return fmt.Errorf("ibc relayer run: status probe: %w", err)
+		if len(response.Msg.GetPackets()) != 0 {
+			return fmt.Errorf("ibc relayer run: packets probe: unknown transaction returned packets")
+		}
+		return nil
 	}
 	return nil
 }

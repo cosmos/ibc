@@ -57,15 +57,18 @@ func (f *fakeRelayerAPI) Relay(
 	return connect.NewResponse(&relayerv2.RelayResponse{}), nil
 }
 
-func (f *fakeRelayerAPI) Status(
+func (f *fakeRelayerAPI) Packets(
 	_ context.Context,
-	req *connect.Request[relayerv2.StatusRequest],
-) (*connect.Response[relayerv2.StatusResponse], error) {
-	statuses, ok := f.statuses[req.Msg.SourceChainId+"/"+req.Msg.TxHash]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("transaction not submitted to relayer"))
-	}
-	return connect.NewResponse(&relayerv2.StatusResponse{PacketStatuses: statuses}), nil
+	req *connect.Request[relayerv2.PacketsRequest],
+) (*connect.Response[relayerv2.PacketsResponse], error) {
+	filter := req.Msg.GetFilter()
+	// An unknown transaction lists nothing rather than erroring.
+	packets := f.statuses[filter.GetSourceChainId()+"/"+filter.GetSourceTxHash()]
+
+	return connect.NewResponse(&relayerv2.PacketsResponse{
+		Packets: packets,
+		Total:   uint64(len(packets)),
+	}), nil
 }
 
 func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
@@ -108,9 +111,9 @@ func TestStartRelayerSurfacesStartupLogs(t *testing.T) {
 	require.ErrorContains(t, err, ".signers[0].grpc required for remote signer")
 }
 
-func TestRelayerProbeAcceptsNotFoundStatus(t *testing.T) {
+func TestRelayerProbeAcceptsEmptyPacketListing(t *testing.T) {
 	relayer := testRelayer(t, &fakeRelayerAPI{})
-	require.NoError(t, relayer.probeStatusEndpoint(context.Background()))
+	require.NoError(t, relayer.probePacketsEndpoint(context.Background()))
 }
 
 func TestRelayerTranslatesChainIDs(t *testing.T) {
@@ -125,13 +128,14 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.Len(t, statuses, 1)
 	require.Equal(t, uint64(7), statuses[0].SequenceNumber)
 
-	_, err = relayer.PacketStatuses(ctx, "chain-a", "0xother")
-	require.Error(t, err)
-	require.True(t, IsStatusNotFound(err))
+	// An unindexed transaction lists nothing; it is not an error.
+	unknown, err := relayer.PacketStatuses(ctx, "chain-a", "0xother")
+	require.NoError(t, err)
+	require.Empty(t, unknown)
 
+	// An unmapped chain is still a client-side error.
 	_, err = relayer.PacketStatuses(ctx, "chain-c", "0xabc")
 	require.Error(t, err)
-	require.False(t, IsStatusNotFound(err))
 	require.ErrorContains(t, err, "no configured chain id")
 
 	require.NoError(t, relayer.RelayAll(ctx, "chain-b", "0xdef"))

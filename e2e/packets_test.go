@@ -203,29 +203,6 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 			require.Equalf(t, 1, count, "packet %s appeared %d times across pages", hash, count)
 		}
 	})
-
-	t.Run("supersetOfStatus", func(t *testing.T) {
-		// Status is removed once callers migrate; until then this pins the
-		// guarantee that Packets returns exactly what it returned.
-		expected, err := relayer.PacketStatuses(ctx, string(chainB), bHash)
-		require.NoError(t, err)
-
-		actual := listPackets(ctx, t, client, &relayerv2.PacketFilter{
-			SourceChainId: ptr(wireChainID(t, env, chainB)),
-			SourceTxHash:  ptr(bHash),
-		}).GetPackets()
-
-		require.Len(t, actual, len(expected))
-
-		for i := range expected {
-			require.Equal(t, expected[i].GetState(), actual[i].GetState())
-			require.Equal(t, expected[i].GetSequenceNumber(), actual[i].GetSequenceNumber())
-			require.Equal(t, expected[i].GetSourceClientId(), actual[i].GetSourceClientId())
-			require.Equal(t, expected[i].GetSendTx().GetTxHash(), actual[i].GetSendTx().GetTxHash())
-			require.Equal(t, expected[i].GetRecvTx().GetTxHash(), actual[i].GetRecvTx().GetTxHash())
-			require.Equal(t, expected[i].GetAckTx().GetTxHash(), actual[i].GetAckTx().GetTxHash())
-		}
-	})
 }
 
 // TestPacketsStateFilterCoversInFlightStatuses is the wire-level guard for the
