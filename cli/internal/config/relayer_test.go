@@ -30,8 +30,12 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, ChainTypeEVM, config.Chains[0].Type())
 
 		assert.Equal(t, 3*time.Second, *config.Relayer.DispatchPollInterval)
+		assert.False(t, *config.Relayer.ClearOnStart)
+		assert.Equal(t, 10*time.Minute, *config.Relayer.ClearInterval)
 		require.Len(t, config.Relayer.ChainOverrides, 2)
 		chain := config.Relayer.ChainOverrides[0]
+		require.NotNil(t, chain.Discovery)
+		assert.Equal(t, 15*time.Minute, *chain.Discovery.ClearInterval)
 		assert.Equal(t, "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
@@ -190,6 +194,22 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.DispatchPollInterval = &interval
 				},
 				errContains: ".dispatchPollInterval: must be positive",
+			},
+			{
+				name: "non-positive clear interval",
+				patch: func(c *Config) {
+					interval := time.Duration(0)
+					c.Relayer.ClearInterval = &interval
+				},
+				errContains: "relayer.clearInterval: must be positive",
+			},
+			{
+				name: "non-positive discovery clear interval",
+				patch: func(c *Config) {
+					interval := -time.Minute
+					c.Relayer.ChainOverrides[0].Discovery.ClearInterval = &interval
+				},
+				errContains: "relayer.chainOverrides[0].discovery.clearInterval: must be positive",
 			},
 			{
 				name: "negative tx submission delay",
@@ -434,4 +454,60 @@ func TestClientEndParams(t *testing.T) {
 			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
 		})
 	}
+}
+
+func TestRelayerConfigClearOnStartEnabled(t *testing.T) {
+	for name, tt := range map[string]struct {
+		config string
+		want   bool
+	}{
+		// nothing configured is the case an operator has not thought about, and
+		// starting cold without clearing is the one that loses packets
+		"unset":    {config: "db:\n  type: sqlite\n  url: ibc.db\n", want: true},
+		"enabled":  {config: "relayer:\n  clearOnStart: true\n", want: true},
+		"disabled": {config: "relayer:\n  clearOnStart: false\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// ARRANGE
+			config, err := LoadFromFile(writeTestConfig(t, tt.config), true)
+			require.NoError(t, err)
+
+			// ACT / ASSERT
+			assert.Equal(t, tt.want, config.Relayer.ClearOnStartEnabled())
+		})
+	}
+}
+
+func TestRelayerConfigClearIntervalFor(t *testing.T) {
+	config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
+	require.NoError(t, err)
+
+	for name, tt := range map[string]struct {
+		chainID string
+		want    time.Duration
+	}{
+		"chain with a discovery override": {chainID: "1", want: 15 * time.Minute},
+		"chain without one":               {chainID: "8453", want: 10 * time.Minute},
+		"unconfigured chain":              {chainID: "999", want: 10 * time.Minute},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, config.Relayer.ClearIntervalFor(tt.chainID))
+		})
+	}
+
+	t.Run("unset falls back to the default", func(t *testing.T) {
+		// ARRANGE
+		path := writeTestConfig(t, `
+db:
+  type: sqlite
+  url: ibc.db
+`)
+
+		// ACT
+		config, err := LoadFromFile(path, true)
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, DefaultClearInterval, config.Relayer.ClearIntervalFor("1"))
+	})
 }

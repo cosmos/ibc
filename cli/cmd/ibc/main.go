@@ -113,6 +113,9 @@ func init() {
 	cmdRelayerPackets.Flags().
 		BoolVar(&flagRelayerPacketsAll, "all", false, "follow every page and print the combined result")
 
+	cmdRelayerRun.Flags().
+		BoolVar(&flagRelayerClearOnStart, flagClearOnStart, true, "clear outstanding packets at startup, overriding relayer.clearOnStart")
+
 	// Attestor commands
 	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)
 	for _, c := range []*cobra.Command{cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation} {

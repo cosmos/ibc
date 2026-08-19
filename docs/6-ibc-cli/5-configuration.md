@@ -195,6 +195,10 @@ The two client ends must belong to different chains. A client can appear in only
 
 With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](cli/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L237-L264](cli/internal/config/config.go#L237-L264) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](cli/internal/config/relayer.go#L118-L135) -->
 
+Auto-relaying discovers packets two ways: a websocket subscription to `SendPacket` on the source chain, and a periodic clearing pass that reads live packet commitments from the router and picks up anything the subscription missed. A pass also runs immediately after a subscription reconnect, regardless of `clearOnStart`, because a dropped connection is a known gap.
+
+A pass walks the client's whole sequence range and probes every sequence it has not already recorded a packet for, so its cost tracks how much that client has sent over its lifetime. Turning `autoRelay` on for a client that has already sent packets is therefore not a fresh start: every packet still outstanding on it gets relayed, including ones sent before the route existed. Clearing skips any sequence the relayer already holds a row for, whatever state that row is in, so it does not retry packets that have already failed.
+
 ### Relay settings
 
 The relayer uses these defaults unless you override them.
@@ -204,6 +208,8 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `dispatchPollInterval` | `duration` | `1s` | How often the dispatcher polls the store for unfinished packets. |
+| `clearOnStart` | `bool` | `true` | Whether a clearing pass runs at startup. `ibc relayer run --clear-on-start=false` overrides it for that process, and only when passed explicitly. |
+| `clearInterval` | `duration` | `5m` | How often a clearing pass runs after startup. Overridable per chain. |
 
 <!-- [relayer.go:L28](cli/internal/config/relayer.go#L28) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
 
@@ -219,6 +225,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
+| `chainOverrides[].discovery.clearInterval` | `duration` | optional | Overrides `clearInterval` for packets sourced from this chain. |
 
 <!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 

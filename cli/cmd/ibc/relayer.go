@@ -48,8 +48,12 @@ var (
 	}
 )
 
+// flagClearOnStart shared by the flag declaration and the config override.
+const flagClearOnStart = "clear-on-start"
+
 var (
 	flagRelayerNoMigrate     bool
+	flagRelayerClearOnStart  bool
 	flagRelayerHost          string
 	flagRelayerTxHash        string
 	flagRelayerSourceChainID string
@@ -78,11 +82,13 @@ func packetStateNames() []string {
 	return slices.Sorted(maps.Keys(packetStates))
 }
 
-func relayerRun(_ *cobra.Command, _ []string) error {
+func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
 	}
+
+	applyClearOnStart(cmd, &cfg)
 
 	app, err := bootstrap.BuildRelayer(cfg)
 	if err != nil {
@@ -112,7 +118,7 @@ func relayerRun(_ *cobra.Command, _ []string) error {
 	}
 
 	if err := app.RelayerService.Start(); err != nil {
-		app.Logger.Error("Failed to start relayer loop", "err", err)
+		app.Logger.Error("Failed to start relayer background loops", "err", err)
 		_ = app.Server.Stop()
 		return err
 	}
@@ -253,4 +259,13 @@ func optional[T comparable](value T) *T {
 	}
 
 	return &value
+}
+
+// applyClearOnStart lets the flag override relayer.clearOnStart only when the
+// operator passed it, since the flag's own default would otherwise mask a
+// configured false on every run.
+func applyClearOnStart(cmd *cobra.Command, cfg *config.Config) {
+	if cmd.Flags().Changed(flagClearOnStart) {
+		cfg.Relayer.ClearOnStart = &flagRelayerClearOnStart
+	}
 }
