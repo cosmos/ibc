@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-// BlockHeader is the minimal view of a block the attestor and proof generators
-// need: a height and its timestamp.
+// BlockHeader represents a minimal subset of fields that IBC client needs for *attestation*.
 type BlockHeader struct {
 	Height    uint64
 	Timestamp time.Time
