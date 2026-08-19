@@ -13,6 +13,12 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
+// Backoff bounds for reconnecting a dropped subscription.
+const (
+	DefaultMinBackoff = time.Second
+	DefaultMaxBackoff = time.Minute
+)
+
 // eventBuffer matches the log buffer the chain client subscribes with, so a
 // slow store write does not immediately back up the websocket.
 const eventBuffer = 128
@@ -28,20 +34,21 @@ type PacketStore interface {
 }
 
 // Watcher records a packet row for every SendPacket event one chain emits on
-// the clients it watches. The subscription starts where the chain is and never
-// looks backwards, so a packet sent while nothing was listening is not
-// discovered here.
+// the clients it watches, resubscribing with backoff whenever the subscription
+// ends. The subscription starts where the chain is and never looks backwards,
+// so a packet sent while nothing was listening is not discovered here.
 type Watcher struct {
 	chainID    string
 	clientIDs  []string
 	routes     map[string]config.ClientEnd
 	subscriber Subscriber
 	storage    PacketStore
+	minBackoff time.Duration
+	maxBackoff time.Duration
+	logger     *slog.Logger
 
 	cancel  context.CancelFunc
 	stopped chan struct{}
-
-	logger *slog.Logger
 }
 
 // New builds the watcher for one chain.
@@ -50,6 +57,7 @@ func New(
 	connections []config.ConnectionConfig,
 	subscriber Subscriber,
 	storage PacketStore,
+	minBackoff, maxBackoff time.Duration,
 	logger *slog.Logger,
 ) *Watcher {
 	clientIDs := make([]string, 0, len(connections))
@@ -66,6 +74,8 @@ func New(
 		routes:     routesOf(chainID, connections),
 		subscriber: subscriber,
 		storage:    storage,
+		minBackoff: minBackoff,
+		maxBackoff: maxBackoff,
 		logger:     logger.With("module", "watcher", "chainID", chainID),
 	}
 }
@@ -88,7 +98,7 @@ func routesOf(chainID string, connections []config.ConnectionConfig) map[string]
 func (w *Watcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	stream, err := w.subscribe(ctx)
+	stream, err := w.subscribe(ctx, make(chan v2.PacketEvent, eventBuffer))
 	if err != nil {
 		cancel()
 
@@ -103,22 +113,34 @@ func (w *Watcher) Start() error {
 	return nil
 }
 
-// stream is one open subscription and the events it feeds.
+// stream is one open subscription and the events it feeds. The zero value is
+// the gap between a dropped subscription and its replacement.
 type stream struct {
 	sub    v2.Subscription
-	events <-chan v2.PacketEvent
+	events chan v2.PacketEvent
 	cancel context.CancelFunc
 }
 
 // close releases all of a subscription's resources
 func (s stream) close() {
+	if s.sub == nil {
+		return
+	}
+
 	s.sub.Unsubscribe()
 	s.cancel()
 }
 
-func (w *Watcher) subscribe(ctx context.Context) (stream, error) {
-	events := make(chan v2.PacketEvent, eventBuffer)
+// errs is nil while nothing is subscribed, so the loop simply waits out a gap.
+func (s stream) errs() <-chan error {
+	if s.sub == nil {
+		return nil
+	}
 
+	return s.sub.Err()
+}
+
+func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (stream, error) {
 	subCtx, cancel := context.WithCancel(ctx)
 	sub, err := w.subscriber.SubscribeSendPackets(subCtx, w.clientIDs, events)
 	if err != nil {
@@ -142,9 +164,9 @@ func (w *Watcher) Stop() error {
 	return nil
 }
 
-func (w *Watcher) run(ctx context.Context, stream stream) {
+func (w *Watcher) run(ctx context.Context, open stream) {
 	defer close(w.stopped)
-	defer stream.close()
+	defer func() { open.close() }()
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -152,19 +174,48 @@ func (w *Watcher) run(ctx context.Context, stream stream) {
 		}
 	}()
 
-	w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
+	// the events channel outlives each subscription, so a reconnect keeps
+	// whatever the dropped one had already buffered
+	events := open.events
+	backoff := w.minBackoff
+
+	// nil while a subscription is live, so only a gap paces itself
+	var resubscribe <-chan time.Time
+
+	retryIn := func(msg string, err error) {
+		w.logger.Warn(msg, "err", err, "backoff", backoff)
+
+		resubscribe = time.After(backoff)
+		backoff = min(backoff*2, w.maxBackoff)
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case event := <-stream.events:
+
+		case event := <-events:
 			if err := w.HandleEvent(ctx, event); err != nil {
 				w.logger.Error("Recording send packet", "err", err)
 			}
-		case err := <-stream.sub.Err():
-			w.logger.Error("Send packet subscription ended", "err", err)
-			return
+
+		case err := <-open.errs():
+			open.close()
+			open = stream{}
+
+			retryIn("Send packet subscription ended, reconnecting", err)
+
+		case <-resubscribe:
+			opened, err := w.subscribe(ctx, events)
+			if err != nil {
+				retryIn("Subscribing to send packets failed, retrying", err)
+
+				continue
+			}
+
+			open, resubscribe, backoff = opened, nil, w.minBackoff
+
+			w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
 		}
 	}
 }
