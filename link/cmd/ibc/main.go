@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -91,15 +92,39 @@ func init() {
 	}
 
 	// Relayer commands
-	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus)
+	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus, cmdRelayerPackets)
 	cmdRelayerRun.Flags().BoolVarP(&flagRelayerNoMigrate, "no-migrate", "", false, "skip database migrations")
-	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
+	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus, cmdRelayerPackets} {
 		c.Flags().StringVar(&flagRelayerHost, "host", "", "dial this address instead of resolving from config")
 		c.Flags().StringVar(&flagRelayerTxHash, "tx-hash", "", "source transaction hash")
 		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
+	}
+
+	// relay and status address one transaction, so both identifiers are
+	// required. On packets they are optional filters.
+	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
 		_ = c.MarkFlagRequired("tx-hash")
 		_ = c.MarkFlagRequired("chain-id")
 	}
+
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsDestChainID, "destination-chain-id", "", "destination chain id")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsSrcClientID, "source-client-id", "", "source client id")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsDestClientID, "destination-client-id", "", "destination client id")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsState, "state", "", "relay state ("+strings.Join(packetStateNames(), ", ")+")")
+	cmdRelayerPackets.Flags().
+		Uint64Var(&flagRelayerPacketsSequence, "sequence", 0, "packet sequence number")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsCreatedFrom, "created-from", "", "only packets first seen at or after this RFC3339 time")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsCreatedTo, "created-to", "", "only packets first seen at or before this RFC3339 time")
+	cmdRelayerPackets.Flags().
+		Uint32Var(&flagRelayerPacketsLimit, "limit", 0, "maximum packets to return (default 100, max 1000)")
+	cmdRelayerPackets.Flags().
+		Uint32Var(&flagRelayerPacketsOffset, "offset", 0, "packets to skip, for paging")
 
 	// Attestor commands
 	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)
