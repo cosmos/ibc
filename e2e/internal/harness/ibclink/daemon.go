@@ -273,6 +273,8 @@ func (d *Relayer) PacketStatuses(
 	if err != nil {
 		return nil, fmt.Errorf("ibc status: %w", err)
 	}
+	//nolint:staticcheck // migrated to Packets in a follow-up; Status still
+	// backs the harness until every caller moves.
 	response, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
 		SourceChainId: chainID,
 		TxHash:        sourceTxHash,
@@ -302,6 +304,7 @@ func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
 // chain mapping have nothing to probe.
 func (d *Relayer) probeStatusEndpoint(ctx context.Context) error {
 	for _, chainID := range d.chainIDs {
+		//nolint:staticcheck // see PacketStatuses
 		_, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
 			SourceChainId: chainID,
 			TxHash:        zeroTxHash,
