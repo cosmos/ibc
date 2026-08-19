@@ -10,12 +10,10 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
-// TestDBStatusesForStateIsExhaustive is the guard for the state expansion. Every
-// relay status must be reachable by filtering on the state it maps to,
-// otherwise a packet in that status exists but can never be listed.
-//
-// It fails automatically when a relay status is added without AllRelayStatuses
-// being updated, or when mapPacketState and the expansion disagree.
+// Every relay status must be reachable by filtering on the state it maps to,
+// or a packet in that status exists that no filter can list. Fails if a status
+// is added without AllRelayStatuses, or if the expansion drifts from
+// mapPacketState.
 func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 	t.Parallel()
 
@@ -49,8 +47,7 @@ func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 		"every relay status must be covered exactly once")
 }
 
-// TestDBStatusesForStatePendingCoversIntermediates pins the specific hazard: a
-// packet mid-pipeline is not in the literal PENDING status, and must still be
+// A packet mid-pipeline is not in the literal PENDING status, and must still be
 // listed by a PENDING filter.
 func TestDBStatusesForStatePendingCoversIntermediates(t *testing.T) {
 	t.Parallel()
@@ -85,17 +82,15 @@ func TestDBStatusesForStatePendingCoversIntermediates(t *testing.T) {
 	}
 }
 
-// TestDBStatusesForStateNilMeansEveryStatus checks that an absent state filter
-// widens to every status rather than matching nothing, since the query applies
-// the status set unconditionally.
+// An absent state filter widens to every status, since the query always applies
+// the status set.
 func TestDBStatusesForStateNilMeansEveryStatus(t *testing.T) {
 	t.Parallel()
 
 	require.ElementsMatch(t, store.AllRelayStatuses(), dbStatusesForState(nil))
 }
 
-// TestDBStatusesForStateUnspecifiedMatchesNothing checks the inverse: a state
-// outside the mapped set must narrow to nothing rather than silently widening.
+// The inverse: an unmapped state narrows to nothing rather than widening.
 func TestDBStatusesForStateUnspecifiedMatchesNothing(t *testing.T) {
 	t.Parallel()
 

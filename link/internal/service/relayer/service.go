@@ -94,9 +94,8 @@ type PacketStatus struct {
 	UpdatedAt      time.Time
 }
 
-// PacketFilter narrows a Packets listing. Every field is optional; State is
-// the API-level state, which the service expands into the underlying relay
-// statuses before querying.
+// PacketFilter narrows a Packets listing. State is the API-level state, which
+// the service expands into the relay statuses it covers.
 type PacketFilter struct {
 	SourceChainID       *string
 	DestinationChainID  *string
@@ -330,11 +329,8 @@ func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []Pack
 	})
 }
 
-// Packets lists the packets this relayer knows about, most recent first, and
-// reports whether more match the filter beyond the returned page.
-//
-// An unknown transaction yields an empty result rather than an error:
-// listing endpoints report absence as emptiness.
+// Packets lists packets most recent first and reports whether more match beyond
+// the page. An unknown transaction yields an empty result, not an error.
 func (s *Service) Packets(
 	ctx context.Context,
 	filter PacketFilter,
@@ -358,9 +354,8 @@ func (s *Service) Packets(
 	return statuses, hasMore, nil
 }
 
-// toStoreFilter lowers an API filter to a store filter, expanding the API
-// state into the relay statuses it covers and normalising the tx hash the same
-// way Relay does, so lookups stay case-insensitive.
+// toStoreFilter lowers an API filter, expanding the state and normalizing the
+// tx hash so lookups stay case-insensitive.
 func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
 	out := store.PacketFilter{
 		Statuses:            dbStatusesForState(filter.State),
@@ -390,14 +385,11 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 	return out, nil
 }
 
-// dbStatusesForState expands an API state into every relay status that maps to
-// it. A nil state means no filtering, which is expressed as every status
-// rather than an absent clause, because the query applies the status list
-// unconditionally.
+// dbStatusesForState expands an API state into the relay statuses it covers; a
+// nil state means every status, since the query always applies the list.
 //
-// The expansion is derived from mapPacketState rather than listed by hand, so
-// a new relay status is classified consistently by both without anyone
-// remembering to update a second list.
+// Derived from mapPacketState rather than hand-listed, so a new relay status
+// cannot be classified one way here and another way there.
 func dbStatusesForState(state *PacketState) []store.RelayStatus {
 	all := store.AllRelayStatuses()
 	if state == nil {
@@ -415,7 +407,6 @@ func dbStatusesForState(state *PacketState) []store.RelayStatus {
 	return matching
 }
 
-// toPacketStatus renders a stored packet as its API status.
 func toPacketStatus(packet store.Packet) PacketStatus {
 	return PacketStatus{
 		State:          mapPacketState(packet.Status),
@@ -443,13 +434,9 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 	return s.normalizeTxHash(chainID, txHash)
 }
 
-// normalizeTxHash renders txHash in the canonical casing the store holds, so
-// lookups are case-insensitive. Stored hashes are canonical, so skipping this
-// would make a differently-cased hash silently match nothing.
-//
-// chainID may be empty, which happens when a packet filter names a transaction
-// hash without a chain. Every supported chain is EVM, so the hash is validated
-// as one; the chain's own type is used when a chain is named.
+// normalizeTxHash canonicalizes casing; without it a differently-cased hash
+// silently matches nothing. chainID may be empty when a filter names a hash
+// without a chain, in which case the hash is validated as EVM.
 func (s *Service) normalizeTxHash(chainID, txHash string) (string, error) {
 	if chainID == "" {
 		return normalizeEVMTxHash(txHash)

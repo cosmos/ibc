@@ -170,7 +170,6 @@ func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 }
 
 const listPackets = `-- name: ListPackets :many
-
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE ',' || ?1 || ',' LIKE '%,' || status || ',%'
 AND source_chain_id = COALESCE(?2, source_chain_id)
@@ -199,29 +198,15 @@ type ListPacketsParams struct {
 	RowLimit            int64
 }
 
-// Shared filter shape for ListPackets and CountPackets.
+// Optional filters use COALESCE(param, column) rather than a NULL guard: the
+// guard names each parameter twice, which makes sqlc number the placeholders
+// and collide with the status list. Every filter column is NOT NULL.
 //
-// Optional filters use COALESCE(param, column) rather than
-// (param IS NULL OR column = param): the latter names each parameter twice,
-// which makes sqlc emit explicitly numbered placeholders, and those collide
-// with the placeholders sqlc.slice injects for statuses. Every filter column
-// is NOT NULL, so COALESCE degrades to a self-comparison when the filter is
-// absent.
+// Statuses are one comma-delimited string for the same reason, and are always
+// applied -- callers pass every status when they want no status filter.
 //
-// The status set is passed as one comma-delimited string rather than
-// sqlc.slice: slice expansion injects unnumbered placeholders, which collide
-// with the numbered placeholders sqlc emits for the other parameters. Relay
-// statuses are fixed identifiers containing no commas, so delimiting is safe.
-// It does forgo an index on status; see the packets index migration.
-//
-// The status set is always applied, so callers pass every known status when
-// they want no status filter.
-//
-// Callers bind row_limit as one more than the page they want. The extra row is
-// a probe: if it comes back there is another page, and it is dropped before
-// returning. That keeps the query O(page) -- the planner stops once it has
-// enough rows -- where reporting an exact total would force it to visit every
-// matching row on every request.
+// row_limit is bound one higher than the page: the extra row reveals another
+// page without counting every match, keeping the query O(page).
 func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Packet, error) {
 	rows, err := q.db.QueryContext(ctx, listPackets,
 		arg.Statuses,
