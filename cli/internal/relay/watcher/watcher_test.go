@@ -5,6 +5,7 @@ package watcher
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -29,10 +30,67 @@ const (
 
 var blockTime = time.Unix(1_700_000_000, 0).UTC()
 
-// chain is both the Subscriber and the single subscription it hands out, so a
-// test can act as the chain: deliver events on out, fail the stream on errs.
+// chain stands in for the chain-side event stream. It opens a fresh
+// subscription per subscribe, so a test can watch the watcher reconnect, and
+// failNext makes the next subscribe fail instead.
 type chain struct {
-	failWith     error
+	mu       sync.Mutex
+	subs     []*subscription
+	failWith error
+}
+
+func newChain() *chain { return &chain{} }
+
+func (c *chain) SubscribeSendPackets(
+	ctx context.Context,
+	clientIDs []string,
+	out chan<- v2.PacketEvent,
+) (v2.Subscription, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.failWith; err != nil {
+		c.failWith = nil
+
+		return nil, err
+	}
+
+	sub := &subscription{clientIDs: clientIDs, ctx: ctx, out: out, errs: make(chan error, 1)}
+	c.subs = append(c.subs, sub)
+
+	return sub, nil
+}
+
+// failNext makes the next subscribe fail rather than open.
+func (c *chain) failNext(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.failWith = err
+}
+
+// opened is how many subscriptions the watcher has opened so far.
+func (c *chain) opened() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return len(c.subs)
+}
+
+// latest is the subscription the watcher is currently reading from.
+func (c *chain) latest(t *testing.T) *subscription {
+	t.Helper()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	require.NotEmpty(t, c.subs, "watcher has not subscribed")
+
+	return c.subs[len(c.subs)-1]
+}
+
+// subscription is one opened stream, which the test drives as the chain would.
+type subscription struct {
 	clientIDs    []string
 	ctx          context.Context //nolint:containedctx // the test asserts on its cancellation
 	out          chan<- v2.PacketEvent
@@ -40,32 +98,9 @@ type chain struct {
 	unsubscribed bool
 }
 
-func newChain() *chain {
-	return &chain{errs: make(chan error, 1)}
-}
+func (s *subscription) Err() <-chan error { return s.errs }
 
-func (c *chain) SubscribeSendPackets(
-	ctx context.Context,
-	clientIDs []string,
-	out chan<- v2.PacketEvent,
-) (v2.Subscription, error) {
-	if err := c.failWith; err != nil {
-		c.failWith = nil
-
-		return nil, err
-	}
-
-	c.clientIDs, c.ctx, c.out = clientIDs, ctx, out
-
-	return c, nil
-}
-
-// failNext makes the next subscribe fail rather than open.
-func (c *chain) failNext(err error) { c.failWith = err }
-
-func (c *chain) Err() <-chan error { return c.errs }
-
-func (c *chain) Unsubscribe() { c.unsubscribed = true }
+func (s *subscription) Unsubscribe() { s.unsubscribed = true }
 
 // packetStore records what the watcher writes and optionally fails the write.
 type packetStore struct {
@@ -109,7 +144,15 @@ func testConnections() []config.ConnectionConfig {
 }
 
 func newTestWatcher(subscriber Subscriber, storage PacketStore) *Watcher {
-	return New(sourceChainID, testConnections(), subscriber, storage, slog.Default())
+	return New(
+		sourceChainID,
+		testConnections(),
+		subscriber,
+		storage,
+		DefaultMinBackoff,
+		DefaultMaxBackoff,
+		slog.Default(),
+	)
 }
 
 func sendPacketEvent(sequence uint64) v2.PacketEvent {
@@ -195,16 +238,27 @@ func TestWatcherHandleEvent(t *testing.T) {
 	})
 }
 
+// TestWatcherStart runs the loop inside a synctest bubble: Wait returns once
+// the watcher's goroutine is blocked again and sleeping advances the backoff
+// timers instantly, so nothing here has to poll or wait on real time.
 func TestWatcherStart(t *testing.T) {
+	// start runs the watcher up to its first open subscription.
+	start := func(t *testing.T, c *chain, storage PacketStore) *Watcher {
+		t.Helper()
+
+		w := newTestWatcher(c, storage)
+		require.NoError(t, w.Start())
+		synctest.Wait()
+
+		return w
+	}
+
 	t.Run("subscribesToTheConfiguredClients", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			c := newChain()
-			w := newTestWatcher(c, newPacketStore(nil))
+			w := start(t, c, newPacketStore(nil))
 
-			require.NoError(t, w.Start())
-			synctest.Wait()
-
-			assert.Equal(t, []string{sourceClientID}, c.clientIDs)
+			assert.Equal(t, []string{sourceClientID}, c.latest(t).clientIDs)
 			require.NoError(t, w.Stop())
 		})
 	})
@@ -213,13 +267,10 @@ func TestWatcherStart(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			c := newChain()
 			storage := newPacketStore(errors.New("store unavailable"))
-			w := newTestWatcher(c, storage)
+			w := start(t, c, storage)
 
-			require.NoError(t, w.Start())
-			synctest.Wait()
-
-			c.out <- sendPacketEvent(1)
-			c.out <- sendPacketEvent(2)
+			c.latest(t).out <- sendPacketEvent(1)
+			c.latest(t).out <- sendPacketEvent(2)
 			synctest.Wait()
 
 			assert.Equal(t, []uint64{1, 2}, storage.sequences())
@@ -227,13 +278,63 @@ func TestWatcherStart(t *testing.T) {
 		})
 	})
 
+	t.Run("subscriptionErrorResubscribes", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			c := newChain()
+			storage := newPacketStore(nil)
+			w := start(t, c, storage)
+
+			first := c.latest(t)
+			first.errs <- errors.New("websocket closed")
+
+			time.Sleep(DefaultMinBackoff)
+			synctest.Wait()
+
+			require.Len(t, c.subs, 2)
+
+			// the dropped subscription's context must be dead, or every
+			// reconnect leaks the goroutine feeding it
+			assert.True(t, first.unsubscribed)
+			require.Error(t, first.ctx.Err())
+
+			c.latest(t).out <- sendPacketEvent(1)
+			synctest.Wait()
+
+			assert.Equal(t, []uint64{1}, storage.sequences())
+			require.NoError(t, w.Stop())
+		})
+	})
+
+	t.Run("resubscribeErrorRetriesWithBackoff", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			c := newChain()
+			storage := newPacketStore(nil)
+			w := start(t, c, storage)
+
+			c.failNext(errors.New("dial failed"))
+			c.latest(t).errs <- errors.New("websocket closed")
+
+			time.Sleep(DefaultMinBackoff)
+			synctest.Wait()
+			require.Equal(t, 1, c.opened(), "the retry that failed should not have opened anything")
+
+			// the failed retry doubles the wait before the next one
+			time.Sleep(2 * DefaultMinBackoff)
+			synctest.Wait()
+			require.Equal(t, 2, c.opened())
+
+			c.latest(t).out <- sendPacketEvent(1)
+			synctest.Wait()
+
+			assert.Equal(t, []uint64{1}, storage.sequences())
+			require.NoError(t, w.Stop())
+		})
+	})
+
 	t.Run("stopBlocksUntilTheLoopExits", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			c := newChain()
-			w := newTestWatcher(c, newPacketStore(nil))
-
-			require.NoError(t, w.Start())
-			synctest.Wait()
+			w := start(t, c, newPacketStore(nil))
 
 			require.NoError(t, w.Stop())
 
@@ -245,8 +346,8 @@ func TestWatcherStart(t *testing.T) {
 
 			// canceling the subscription context is what releases the
 			// subscription's goroutine; unsubscribing alone leaves it running
-			assert.True(t, c.unsubscribed)
-			require.Error(t, c.ctx.Err())
+			assert.True(t, c.latest(t).unsubscribed)
+			require.Error(t, c.latest(t).ctx.Err())
 		})
 	})
 
