@@ -2,6 +2,7 @@
 
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
+FORGE_BUILD_FLAGS ?=
 
 HARNESS_DIR := internal/harness
 CONTRACT_BINDINGS := $(addprefix $(HARNESS_DIR)/environment/solidityibc/,\
@@ -11,6 +12,7 @@ help: ## List e2e commands
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 doctor: ## Check the runtime dependencies used by e2e tests
+	@command -v go >/dev/null || { echo "missing go" >&2; exit 1; }
 	@command -v docker >/dev/null || { echo "missing docker; Docker is required for e2e modes and matrix generation" >&2; exit 1; }
 	@docker info >/dev/null || { echo "docker daemon is not reachable" >&2; exit 1; }
 
@@ -32,7 +34,7 @@ test-harness: _build-link ## Run tests for e2e harness itself
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
-	forge build --root $(HARNESS_DIR)/environment/solidityibc/contracts
+	forge build $(FORGE_BUILD_FLAGS) --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	./scripts/generate-contract-bindings.sh
 
 test: _build-link ## Run e2e tests (E2E_MODE=... E2E_FLAGS=...)
@@ -53,10 +55,10 @@ clean-dry-run: ## Preview e2e processes and Docker resources
 
 check-stale: ## Run all checks for stale code
 	@echo "Checking for stale ABI Go bindings..."
-	$(MAKE) test-apps
-	@status="$$(git -C .. status --porcelain --untracked-files=all -- $(addprefix e2e/,$(CONTRACT_BINDINGS)))"; \
+	$(MAKE) test-apps FORGE_BUILD_FLAGS=--force
+	@status="$$(git status --porcelain --untracked-files=all -- $(CONTRACT_BINDINGS))"; \
 		test -z "$$status" || { \
-			echo "contract bindings are stale — run 'make test-apps' and commit the result" >&2; \
+			echo "contract bindings are stale — run 'make -C e2e test-apps' and commit the result" >&2; \
 			echo "$$status" >&2; \
 			exit 1; \
 		}
