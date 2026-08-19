@@ -30,6 +30,7 @@ type Prover interface {
 // ProofKind identifies the packet claim being proved.
 type ProofKind int
 
+// Proof kinds.
 const (
 	ProofKindUnknown ProofKind = iota
 	ProofKindPacketCommitment
