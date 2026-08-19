@@ -193,7 +193,7 @@ Holders of `PROOF_SUBMITTER_ROLE` may call the four gated functions. When the ze
 
 The interface says to grant the role to the ICS26Router when the client is used with IBC.
 
-The `roleManager` argument decides between those two cases. A nonzero address receives the AccessControl default admin role along with the submitter role, so whether the submitter role can change later depends on what that address is. `ibc deploy client` passes the [router](/ibc-solidity-contracts/ics26-router), which exposes no way to call `grantRole`, so on a client IBC Link deployed those roles cannot be moved without upgrading the router. A zero address leaves submission open to anyone.
+The `roleManager` argument decides between those two cases. A nonzero address receives the AccessControl default admin role along with the submitter role, so whether the submitter role can change later depends on what that address is. `ibc deploy client` passes the [router](/ibc-solidity-contracts/ics26-router), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. A zero address leaves submission open to anyone.
 
 ## Constructor and configuration
 

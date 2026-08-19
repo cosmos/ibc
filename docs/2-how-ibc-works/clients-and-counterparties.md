@@ -81,7 +81,7 @@ Because a proof is opaque bytes to IBC, the router never needs to know how a cli
 
 An update advances a client's view of the counterparty to a later height, so a packet proven at that height has something to be checked against. It usually travels with the packet it serves, submitted in the same transaction.
 
-[Relayers](/how-ibc-works/relayer) do the updating. In IBC-solidity they call the router's `updateClient`, which is role-gated and forwards the update to the client as opaque bytes. The contracts' role library names a relayer role for that selector, and no deployment path that ships leaves it there. `ibc deploy core` binds that selector to the [public role](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) instead, so any address may relay on a chain IBC Link brings up.
+[Relayers](/how-ibc-works/relayer) do the updating. In IBC-solidity they call the router's `updateClient`, which is role-gated and forwards the update to the client as opaque bytes. The contracts' role library names a relayer role for that selector, and no deployment path that ships leaves it there. `ibc deploy core` binds that selector to the [public role](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) instead, so any address may relay on a chain the IBC CLI brings up.
 
 ```solidity
 enum UpdateResult { Update, Misbehaviour, NoOp }

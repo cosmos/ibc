@@ -18,7 +18,7 @@ Four calls move a packet in IBC:
 | `ackPacket` | a relayer | the source router | `onAcknowledgementPacket`, on the sending application |
 | `timeoutPacket` | a relayer | the source router | `onTimeoutPacket`, on the sending application |
 
- `sendPacket` is an application's own call, and the [router](/how-ibc-works/core-router-and-store) accepts it only from the application registered on the payload's source port. The other three are role-gated: a [relayer](/how-ibc-works/relayer) submits them, and each chain's [role map](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) decides which addresses it admits to those calls. On a chain IBC Link brings up, that map admits any address.
+ `sendPacket` is an application's own call, and the [router](/how-ibc-works/core-router-and-store) accepts it only from the application registered on the payload's source port. The other three are role-gated: a [relayer](/how-ibc-works/relayer) submits them, and each chain's [role map](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) decides which addresses it admits to those calls. On a chain the IBC CLI brings up, that map admits any address.
 
 A relayer stands between every pair of steps. Each chain learns what the other wrote only through a proof its own [client](/how-ibc-works/clients-and-counterparties) verifies, and the store keeps only a hash of the packet, so the send event is what carries its fields to a relayer. That client has to be current for the proof to verify. So a relayer packs `updateClient` into the same transaction, ahead of the call it is relaying.
 

@@ -101,7 +101,7 @@ Deployment splits three ways:
 - **A token issuer** deploys its own IFT, initialized with an already-deployed ICS27GMP address plus the token's name and symbol, and one send-call constructor registered per counterparty client it bridges to.
 - **The contracts themselves** create the rest. ICS27GMP makes an account proxy for each `(clientId, sender, salt)` on first use, behind the beacon it creates over the account logic it was handed. The ICS02 precompile is chain-native at `0x...0807`, so only its wrapper is deployed.
 
-IBC Link deploys the contract set. `ibc deploy core` stands up the access manager and the router on one chain. `ibc deploy client` deploys a light client tracking one counterparty and registers it. A connection between two chains takes four of those invocations, two per chain.
+The IBC CLI deploys the contract set. `ibc deploy core` stands up the access manager and the router on one chain. `ibc deploy client` deploys a light client tracking one counterparty and registers it. A connection between two chains takes four of those invocations, two per chain.
 
 [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades) has what each deployment fixes for good and who can change it later.
 
