@@ -73,3 +73,4 @@ _build-link:
 .PHONY: test-harness test-apps test
 .PHONY: generate-matrix check-matrix
 .PHONY:	clean-dry-run clean check-test-apps check
+.PHONY: _build-link

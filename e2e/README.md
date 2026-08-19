@@ -16,11 +16,10 @@ Run targets from the repository root:
 
 ```sh
 make -C e2e doctor
-make build-link
 make -C e2e test
 ```
 
-`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
+The test target builds `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
 
 Execution modes choose providers from each test's declared requirements:
 
