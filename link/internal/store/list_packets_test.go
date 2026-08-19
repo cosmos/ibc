@@ -70,7 +70,7 @@ func testListPackets(t *testing.T, s Store) {
 	hashesFor := func(t *testing.T, filter PacketFilter) []string {
 		t.Helper()
 
-		packets, _, err := s.ListPackets(ctx, filter, Page{})
+		packets, err := s.ListPackets(ctx, filter, Page{Limit: 100})
 		require.NoError(t, err)
 
 		hashes := make([]string, len(packets))
@@ -141,40 +141,33 @@ func testListPackets(t *testing.T, s Store) {
 			require.Empty(t, hashesFor(t, PacketFilter{Statuses: all, CreatedTo: &past}))
 		})
 
-		t.Run("hasMoreReportsFurtherPages", func(t *testing.T) {
-			// chainOne holds two packets.
+		t.Run("limitAndOffsetAreAppliedAsGiven", func(t *testing.T) {
+			// The store pages exactly as asked; defaults and has-more probing
+			// belong to the service.
 			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
 
-			first, hasMore, err := s.ListPackets(ctx, filter, Page{Limit: 1})
+			page, err := s.ListPackets(ctx, filter, Page{Limit: 1})
 			require.NoError(t, err)
-			require.Len(t, first, 1)
-			require.True(t, hasMore)
+			require.Len(t, page, 1)
 
-			both, hasMore, err := s.ListPackets(ctx, filter, Page{Limit: 2})
+			both, err := s.ListPackets(ctx, filter, Page{Limit: 5})
 			require.NoError(t, err)
 			require.Len(t, both, 2)
-			require.False(t, hasMore, "an exactly-full page must not claim more")
-
-			last, hasMore, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 1})
-			require.NoError(t, err)
-			require.Len(t, last, 1)
-			require.False(t, hasMore)
 		})
 
-		t.Run("noMatchesHasNoMore", func(t *testing.T) {
-			packets, hasMore, err := s.ListPackets(ctx,
-				PacketFilter{Statuses: all, SourceTxHash: str("0xnope")}, Page{})
+		t.Run("noMatchesIsEmpty", func(t *testing.T) {
+			packets, err := s.ListPackets(ctx,
+				PacketFilter{Statuses: all, SourceTxHash: str("0xnope")}, Page{Limit: 10})
 			require.NoError(t, err)
 			require.Empty(t, packets)
-			require.False(t, hasMore)
 		})
 
 		t.Run("pagingCoversEveryRowExactlyOnce", func(t *testing.T) {
 			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
 
-			first, _, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 0})
+			first, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 0})
 			require.NoError(t, err)
-			second, _, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 1})
+			second, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 1})
 			require.NoError(t, err)
 
 			require.Len(t, first, 1)
@@ -183,7 +176,7 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("orderedMostRecentFirst", func(t *testing.T) {
-			packets, _, err := s.ListPackets(ctx, PacketFilter{Statuses: all}, Page{})
+			packets, err := s.ListPackets(ctx, PacketFilter{Statuses: all}, Page{Limit: 100})
 			require.NoError(t, err)
 			require.NotEmpty(t, packets)
 
@@ -195,12 +188,6 @@ func testListPackets(t *testing.T, s Store) {
 		t.Run("emptyStatusesMatchesNothing", func(t *testing.T) {
 			// Must not silently widen to everything.
 			require.Empty(t, hashesFor(t, PacketFilter{Statuses: nil}))
-		})
-
-		t.Run("limitIsCapped", func(t *testing.T) {
-			packets, _, err := s.ListPackets(ctx, PacketFilter{Statuses: all}, Page{Limit: MaxPacketPageLimit + 500})
-			require.NoError(t, err)
-			require.LessOrEqual(t, len(packets), MaxPacketPageLimit)
 		})
 	})
 }

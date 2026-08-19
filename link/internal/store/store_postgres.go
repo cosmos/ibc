@@ -405,10 +405,8 @@ func (db *PostgresDB) ListPackets(
 	ctx context.Context,
 	filter PacketFilter,
 	page Page,
-) ([]Packet, bool, error) {
+) ([]Packet, error) {
 	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
-
-	page = page.Normalize()
 
 	rows, err := db.repo.ListPackets(ctx, postgres.ListPacketsParams{
 		Statuses:            filter.statusList(),
@@ -420,21 +418,19 @@ func (db *PostgresDB) ListPackets(
 		SequenceNumber:      filter.sequenceFilter(),
 		CreatedFrom:         timestampFilter(filter.CreatedFrom),
 		CreatedTo:           timestampFilter(filter.CreatedTo),
-		RowLimit:            int32(page.probeLimit()), //nolint:gosec // bounded by MaxPacketPageLimit
+		RowLimit:            int32(page.Limit), //nolint:gosec // bounded by the caller's page cap
 		RowOffset:           int32(page.Offset),
 	})
 	if err != nil {
-		return nil, false, errNormalize(err)
+		return nil, errNormalize(err)
 	}
-
-	rows, hasMore := trimProbe(page.Limit, rows)
 
 	packets := make([]Packet, len(rows))
 	for i, row := range rows {
 		packets[i] = packetFromPostgres(row)
 	}
 
-	return packets, hasMore, nil
+	return packets, nil
 }
 
 func timestampFilter(t *time.Time) pgtype.Timestamptz {

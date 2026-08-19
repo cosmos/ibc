@@ -453,7 +453,7 @@ func TestPackets(t *testing.T) {
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
 
-		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, false, nil).Once()
+		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
 
 		// ACT
 		statuses, hasMore, err := service.Packets(ctx, PacketFilter{
@@ -479,7 +479,7 @@ func TestPackets(t *testing.T) {
 		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
 			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
 				seen = filter.SourceTxHash
-			}).Return(nil, false, nil).Once()
+			}).Return(nil, nil).Once()
 
 		_, _, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: &chainIDEthVar,
@@ -511,7 +511,7 @@ func TestPackets(t *testing.T) {
 		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
 			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
 				seen = filter.Statuses
-			}).Return(nil, false, nil).Once()
+			}).Return(nil, nil).Once()
 
 		pending := StatePending
 		_, _, err := service.Packets(ctx, PacketFilter{State: &pending}, store.Page{})

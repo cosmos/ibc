@@ -43,11 +43,7 @@ type ChainClients interface {
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
-	ListPackets(
-		ctx context.Context,
-		filter store.PacketFilter,
-		page store.Page,
-	) ([]store.Packet, bool, error)
+	ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)
 	Transact(ctx context.Context, call func(store.Repository) error) error
 }
 
@@ -92,6 +88,28 @@ type PacketStatus struct {
 	TimeoutTx      *TxInfo
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// Bounds on how many packets one listing returns.
+const (
+	DefaultPacketPageLimit = 100
+	MaxPacketPageLimit     = 1000
+)
+
+// normalizePage applies the default and cap so every listing is bounded.
+func normalizePage(page store.Page) store.Page {
+	switch {
+	case page.Limit <= 0:
+		page.Limit = DefaultPacketPageLimit
+	case page.Limit > MaxPacketPageLimit:
+		page.Limit = MaxPacketPageLimit
+	}
+
+	if page.Offset < 0 {
+		page.Offset = 0
+	}
+
+	return page
 }
 
 // PacketFilter narrows a Packets listing. State is the API-level state, which
@@ -341,9 +359,19 @@ func (s *Service) Packets(
 		return nil, false, err
 	}
 
-	packets, hasMore, err := s.store.ListPackets(ctx, storeFilter, page)
+	// One row past the page reveals whether another page exists, without
+	// counting every match.
+	page = normalizePage(page)
+	page.Limit++
+
+	packets, err := s.store.ListPackets(ctx, storeFilter, page)
 	if err != nil {
 		return nil, false, errors.Wrap(err, "listing packets")
+	}
+
+	hasMore := int64(len(packets)) == page.Limit
+	if hasMore {
+		packets = packets[:page.Limit-1]
 	}
 
 	statuses := make([]PacketStatus, len(packets))
