@@ -10,9 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testListPackets exercises every ListPackets filter against a seeded set. It
-// runs against both engines from TestStore, because the filters are generated
-// from one .sql file per engine and only a real query proves they agree.
+// testListPackets runs against both engines: the filters are generated per
+// engine from one .sql file, and only a real query proves they agree.
 func testListPackets(t *testing.T, s Store) {
 	t.Helper()
 
@@ -24,9 +23,7 @@ func testListPackets(t *testing.T, s Store) {
 		chainTwo = "list-2"
 	)
 
-	// Packets may only be inserted as NOT_SELECTED or PENDING, so the target
-	// status is applied as a transition afterwards, exactly as the pipeline
-	// does it.
+	// Packets insert as PENDING and transition, as the pipeline does.
 	seed := []UpsertPacket{
 		{
 			Status: RelayStatusPending, SourceChainID: chainOne, DestinationChainID: chainTwo,
@@ -108,8 +105,7 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("bySequence", func(t *testing.T) {
-			// Scoped by chain: the shared database also holds packets seeded by
-			// testRepoReadWrite, which reuse low sequence numbers.
+			// Scoped by chain: testRepoReadWrite reuses low sequences.
 			sequence := uint64(3)
 			require.Equal(t, []string{"0xlist3"}, hashesFor(t, PacketFilter{
 				Statuses: all, SourceChainID: str(chainTwo), SequenceNumber: &sequence,
@@ -124,10 +120,10 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("filtersCombineAsAnd", func(t *testing.T) {
+			// chainOne holds no src-b packet.
 			require.Empty(t, hashesFor(t, PacketFilter{
-				Statuses:      all,
-				SourceChainID: str(chainOne),
-				// chainOne holds no src-b packet, so the AND yields nothing.
+				Statuses:       all,
+				SourceChainID:  str(chainOne),
 				SourceClientID: str("src-b"),
 			}))
 		})
@@ -146,8 +142,7 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("hasMoreReportsFurtherPages", func(t *testing.T) {
-			// chainOne holds two packets: a page of one has more, an exactly
-			// full page does not, and the probe row is never handed back.
+			// chainOne holds two packets.
 			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
 
 			first, hasMore, err := s.ListPackets(ctx, filter, Page{Limit: 1})
@@ -198,8 +193,7 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("emptyStatusesMatchesNothing", func(t *testing.T) {
-			// A state that maps to no relay status must not silently widen to
-			// "everything"; it has to return an empty listing.
+			// Must not silently widen to everything.
 			require.Empty(t, hashesFor(t, PacketFilter{Statuses: nil}))
 		})
 

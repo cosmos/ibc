@@ -46,8 +46,7 @@ type RelayerApiServiceClient interface {
 	// Relay tracks the packets emitted by a source transaction and submits the
 	// transactions required to complete them.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
-	// Packets lists the packets this relayer is aware of, most recent first,
-	// narrowed by an optional filter.
+	// Packets lists the packets this relayer is aware of, most recent first.
 	Packets(context.Context, *connect.Request[PacketsRequest]) (*connect.Response[PacketsResponse], error)
 }
 
@@ -98,8 +97,7 @@ type RelayerApiServiceHandler interface {
 	// Relay tracks the packets emitted by a source transaction and submits the
 	// transactions required to complete them.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
-	// Packets lists the packets this relayer is aware of, most recent first,
-	// narrowed by an optional filter.
+	// Packets lists the packets this relayer is aware of, most recent first.
 	Packets(context.Context, *connect.Request[PacketsRequest]) (*connect.Response[PacketsResponse], error)
 }
 

@@ -68,9 +68,7 @@ var (
 	flagRelayerPacketsOffset       uint32
 )
 
-// packetStates maps the --state flag to its wire value. The keys are the
-// PacketState enum names lowercased and stripped of their prefix, so operators
-// type "pending" rather than "PACKET_STATE_PENDING".
+// packetStates maps the --state flag to its wire value.
 var packetStates = map[string]relayerv2.PacketState{
 	"not-selected": relayerv2.PacketState_PACKET_STATE_NOT_SELECTED,
 	"pending":      relayerv2.PacketState_PACKET_STATE_PENDING,

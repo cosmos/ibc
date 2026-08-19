@@ -100,8 +100,7 @@ func init() {
 		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
 	}
 
-	// relay addresses one transaction, so both identifiers are required. On
-	// packets they are optional filters.
+	// On packets these are optional filters.
 	_ = cmdRelayerRelay.MarkFlagRequired("tx-hash")
 	_ = cmdRelayerRelay.MarkFlagRequired("chain-id")
 

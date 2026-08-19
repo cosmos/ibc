@@ -368,14 +368,11 @@ func (*RelayResponse) Descriptor() ([]byte, []int) {
 }
 
 type PacketsRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Absent filter matches every packet.
-	Filter *PacketFilter `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
-	// Maximum packets to return. Zero applies the default of 100; values above
-	// 1000 are capped.
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Filter *PacketFilter          `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
+	// Zero applies the default of 100; values above 1000 are capped.
 	Limit uint32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	// Packets to skip, for paging. Results are ordered most recent first, so a
-	// packet inserted between two pages can shift later pages; paging is not a
+	// Packets inserted between requests shift later pages; paging is not a
 	// consistent snapshot.
 	Offset        uint32 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -433,23 +430,19 @@ func (x *PacketsRequest) GetOffset() uint32 {
 	return 0
 }
 
-// PacketFilter narrows the packets returned. Every field is optional and all
-// present fields must match.
+// Every field is optional; all present fields must match.
 type PacketFilter struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	SourceChainId       *string                `protobuf:"bytes,1,opt,name=source_chain_id,json=sourceChainId,proto3,oneof" json:"source_chain_id,omitempty"`
 	DestinationChainId  *string                `protobuf:"bytes,2,opt,name=destination_chain_id,json=destinationChainId,proto3,oneof" json:"destination_chain_id,omitempty"`
 	SourceClientId      *string                `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3,oneof" json:"source_client_id,omitempty"`
 	DestinationClientId *string                `protobuf:"bytes,4,opt,name=destination_client_id,json=destinationClientId,proto3,oneof" json:"destination_client_id,omitempty"`
-	// Relay state as reported by this API, not the relayer's internal status.
-	// A single state may cover several internal statuses; PACKET_STATE_PENDING
-	// covers every in-flight status.
+	// PACKET_STATE_PENDING covers every in-flight internal status.
 	State *PacketState `protobuf:"varint,5,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState,oneof" json:"state,omitempty"`
-	// The source-chain SendPacket transaction hash. Matches only the send
-	// transaction, never a recv, ack, or timeout hash.
+	// Matches the SendPacket transaction only, never recv, ack, or timeout.
 	SourceTxHash   *string `protobuf:"bytes,6,opt,name=source_tx_hash,json=sourceTxHash,proto3,oneof" json:"source_tx_hash,omitempty"`
 	SequenceNumber *uint64 `protobuf:"varint,7,opt,name=sequence_number,json=sequenceNumber,proto3,oneof" json:"sequence_number,omitempty"`
-	// Unix seconds, inclusive, matched against the packet's discovery time.
+	// Unix seconds, inclusive, against the packet's discovery time.
 	CreatedFrom   *int64 `protobuf:"varint,8,opt,name=created_from,json=createdFrom,proto3,oneof" json:"created_from,omitempty"`
 	CreatedTo     *int64 `protobuf:"varint,9,opt,name=created_to,json=createdTo,proto3,oneof" json:"created_to,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -552,9 +545,8 @@ func (x *PacketFilter) GetCreatedTo() int64 {
 type PacketsResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Packets []*PacketStatus        `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
-	// Whether more packets match the filter beyond this page. Paging stops when
-	// this is false. An exact count is deliberately not reported: computing one
-	// would require visiting every matching packet on every request.
+	// More packets match beyond this page. No exact count is reported: producing
+	// one would visit every matching packet on every request.
 	HasMore       bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -673,9 +665,8 @@ type PacketStatus struct {
 	// The source-chain timeout transaction. Present for timed-out packets, and
 	// may be present while pending.
 	TimeoutTx *TransactionInfo `protobuf:"bytes,7,opt,name=timeout_tx,json=timeoutTx,proto3" json:"timeout_tx,omitempty"`
-	// Unix seconds when the relayer first recorded the packet.
-	CreatedAt int64 `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// Unix seconds of the packet's last state change.
+	// Unix seconds.
+	CreatedAt     int64 `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     int64 `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

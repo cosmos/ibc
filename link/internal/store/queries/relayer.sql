@@ -140,30 +140,15 @@ WHERE status NOT IN (
 )
 ORDER BY id;
 
--- Shared filter shape for ListPackets and CountPackets.
+-- Optional filters use COALESCE(param, column) rather than a NULL guard: the
+-- guard names each parameter twice, which makes sqlc number the placeholders
+-- and collide with the status list. Every filter column is NOT NULL.
 --
--- Optional filters use COALESCE(param, column) rather than
--- (param IS NULL OR column = param): the latter names each parameter twice,
--- which makes sqlc emit explicitly numbered placeholders, and those collide
--- with the placeholders sqlc.slice injects for statuses. Every filter column
--- is NOT NULL, so COALESCE degrades to a self-comparison when the filter is
--- absent.
+-- Statuses are one comma-delimited string for the same reason, and are always
+-- applied -- callers pass every status when they want no status filter.
 --
--- The status set is passed as one comma-delimited string rather than
--- sqlc.slice: slice expansion injects unnumbered placeholders, which collide
--- with the numbered placeholders sqlc emits for the other parameters. Relay
--- statuses are fixed identifiers containing no commas, so delimiting is safe.
--- It does forgo an index on status; see the packets index migration.
---
--- The status set is always applied, so callers pass every known status when
--- they want no status filter.
---
--- Callers bind row_limit as one more than the page they want. The extra row is
--- a probe: if it comes back there is another page, and it is dropped before
--- returning. That keeps the query O(page) -- the planner stops once it has
--- enough rows -- where reporting an exact total would force it to visit every
--- matching row on every request.
-
+-- row_limit is bound one higher than the page: the extra row reveals another
+-- page without counting every match, keeping the query O(page).
 -- name: ListPackets :many
 SELECT * FROM packets
 WHERE ',' || sqlc.arg(statuses) || ',' LIKE '%,' || status || ',%'

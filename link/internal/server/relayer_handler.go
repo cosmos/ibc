@@ -89,7 +89,6 @@ func (h *RelayerHandler) Relay(
 	return connect.NewResponse(&proto.RelayResponse{}), nil
 }
 
-// Packets lists the packets the relayer knows about, filtered and paged.
 func (h *RelayerHandler) Packets(
 	ctx context.Context,
 	req *connect.Request[proto.PacketsRequest],
@@ -118,8 +117,7 @@ func (h *RelayerHandler) Packets(
 	}), nil
 }
 
-// packetFilterFromProto lowers the wire filter. An absent filter, or an absent
-// field within it, means no constraint on that column.
+// packetFilterFromProto lowers the wire filter; absent fields mean no constraint.
 func packetFilterFromProto(filter *proto.PacketFilter) relayer.PacketFilter {
 	if filter == nil {
 		return relayer.PacketFilter{}
@@ -171,9 +169,8 @@ func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatu
 	return out
 }
 
-// packetStateFromProto is the inverse of packetStateToProto. An unrecognized
-// or unspecified state maps to StateUnspecified, which matches no relay status
-// and so returns an empty listing rather than silently ignoring the filter.
+// packetStateFromProto maps an unknown state to StateUnspecified, which matches
+// no relay status -- an empty listing rather than a silently ignored filter.
 func packetStateFromProto(state proto.PacketState) relayer.PacketState {
 	switch state {
 	case proto.PacketState_PACKET_STATE_NOT_SELECTED:

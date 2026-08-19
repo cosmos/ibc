@@ -43,8 +43,7 @@ type Repository interface {
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 
-	// ListPackets returns packets matching filter, most recent first, bounded
-	// by page, and reports whether further packets match beyond it.
+	// ListPackets reports whether further packets match beyond the page.
 	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, bool, error)
 
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
@@ -164,10 +163,8 @@ const (
 	RelayStatusFailed                     RelayStatus = "FAILED"
 )
 
-// AllRelayStatuses returns every relay status, so callers can derive groupings
-// rather than restating them. Adding a status above without adding it here will
-// silently exclude packets in that status from any derived grouping, so the
-// list is covered by a test asserting it stays exhaustive.
+// AllRelayStatuses lets callers derive groupings rather than restate them.
+// Omitting a status here silently excludes it from every derived grouping.
 func AllRelayStatuses() []RelayStatus {
 	return []RelayStatus{
 		RelayStatusNotSelected,
@@ -290,11 +287,8 @@ func errNormalize(err error) error {
 	}
 }
 
-// PacketFilter narrows a ListPackets query. Every field is optional and all
-// set fields must match. Statuses is the one exception: it is always applied,
-// so callers list every status when they want no status filtering. That keeps
-// a single SQL shape across engines, since a slice parameter cannot be guarded
-// by IS NULL.
+// PacketFilter narrows a ListPackets query. Every field is optional except
+// Statuses, which is always applied -- pass every status for no filtering.
 type PacketFilter struct {
 	Statuses            []RelayStatus
 	SourceChainID       *string
@@ -313,14 +307,13 @@ type Page struct {
 	Offset int64
 }
 
-// DefaultPacketPageLimit and MaxPacketPageLimit bound how many packets one
-// listing returns.
+// Bounds on how many packets one listing returns.
 const (
 	DefaultPacketPageLimit = 100
 	MaxPacketPageLimit     = 1000
 )
 
-// Normalize applies the default and cap, so every caller is bounded.
+// Normalize applies the default and cap.
 func (p Page) Normalize() Page {
 	switch {
 	case p.Limit <= 0:
@@ -336,13 +329,12 @@ func (p Page) Normalize() Page {
 	return p
 }
 
-// probeLimit is the row limit to bind: one more than the page, so a returned
-// extra row reveals that another page exists without counting every match.
+// probeLimit asks for one row past the page; its presence reveals another page.
 func (p Page) probeLimit() int64 {
 	return p.Limit + 1
 }
 
-// trimProbe drops the probe row if it came back, reporting whether it did.
+// trimProbe drops the probe row, reporting whether it was there.
 func trimProbe[T any](limit int64, rows []T) ([]T, bool) {
 	if int64(len(rows)) > limit {
 		return rows[:limit], true
@@ -351,10 +343,8 @@ func trimProbe[T any](limit int64, rows []T) ([]T, bool) {
 	return rows, false
 }
 
-// statusList renders the filter's statuses as the comma-delimited string the
-// generated queries match against. Relay statuses contain no commas, so the
-// delimiters are unambiguous. An empty set yields "," which matches nothing,
-// which is the intended reading of "no status qualifies".
+// statusList renders statuses for the query. Relay statuses contain no commas,
+// so delimiting is unambiguous; an empty set matches nothing, as intended.
 func (f PacketFilter) statusList() *string {
 	statuses := make([]string, len(f.Statuses))
 	for i, status := range f.Statuses {
@@ -366,8 +356,7 @@ func (f PacketFilter) statusList() *string {
 	return &list
 }
 
-// sequenceFilter converts the domain's unsigned sequence to the signed type
-// the generated params use.
+// sequenceFilter converts to the signed type the generated params use.
 func (f PacketFilter) sequenceFilter() *int64 {
 	if f.SequenceNumber == nil {
 		return nil

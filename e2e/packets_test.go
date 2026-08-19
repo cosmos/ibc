@@ -20,8 +20,8 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-// packetsClient dials the running relayer's API directly. The harness helpers
-// still speak Status, so these tests drive the new RPC themselves.
+// packetsClient dials the relayer directly; the harness helpers wrap a
+// different call shape.
 func packetsClient(t *testing.T, relayer *ibclink.Relayer) relayerv2.RelayerApiServiceClient {
 	t.Helper()
 
@@ -46,8 +46,6 @@ func listPackets(
 	return res.Msg
 }
 
-// sourceTxHashes renders a response as the set of source transaction hashes,
-// which is what the assertions compare.
 func sourceTxHashes(res *relayerv2.PacketsResponse) []string {
 	hashes := make([]string, 0, len(res.GetPackets()))
 	for _, packet := range res.GetPackets() {
@@ -68,10 +66,8 @@ func wireChainID(t *testing.T, env *environment.Environment, id environment.Chai
 
 func ptr[T any](v T) *T { return &v }
 
-// TestPacketsFiltersDiscriminate relays over two routes that share a
-// destination but differ in source chain and client, then checks each filter
-// returns only its own packets. Two routes matter: a filter that is silently
-// ignored still looks correct against a single-route fixture.
+// Two routes sharing a destination but differing in source chain and client: a
+// silently ignored filter still looks correct against a single-route fixture.
 func TestPacketsFiltersDiscriminate(t *testing.T) {
 	t.Parallel()
 
@@ -135,8 +131,7 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 	})
 
 	t.Run("txHashIsCaseInsensitive", func(t *testing.T) {
-		// Stored hashes are canonical, so an uppercase hash must be normalised
-		// rather than silently matching nothing.
+		// An uppercase hash must normalize, not silently match nothing.
 		upper := "0x" + strings.ToUpper(strings.TrimPrefix(bHash, "0x"))
 		res := listPackets(ctx, t, client, &relayerv2.PacketFilter{SourceTxHash: ptr(upper)})
 		require.Equal(t, []string{bHash}, sourceTxHashes(res))
@@ -210,10 +205,9 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 	})
 }
 
-// TestPacketsStateFilterCoversInFlightStatuses is the wire-level guard for the
-// state expansion. A packet held mid-pipeline sits in an intermediate relay
-// status, not the literal PENDING one, and must still be returned by a PENDING
-// filter — otherwise an in-flight packet exists that no state filter can find.
+// Wire-level guard for the state expansion: a packet held mid-pipeline sits in
+// an intermediate status, not the literal PENDING one, and must still be
+// returned by a PENDING filter.
 func TestPacketsStateFilterCoversInFlightStatuses(t *testing.T) {
 	t.Parallel()
 
