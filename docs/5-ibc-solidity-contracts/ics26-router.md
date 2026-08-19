@@ -45,7 +45,7 @@ Every IBC application is registered on a port by whoever deploys it, and impleme
 | `addIBCApp(string calldata portId, address app)` | Registers an application under a custom port identifier. Role-gated. |
 | `getIBCApp(string calldata portId)` | Returns the application registered on a port. |
 
-The role map names `ID_CUSTOMIZER_ROLE` for the role-gated function. The port that function picks must pass identifier validation, and it must not parse as an address, so a chosen name can never collide with one derived from a contract address.
+The role map names `ID_CUSTOMIZER_ROLE` for the role-gated function. The port that function picks must pass identifier validation, and it must not parse as an address, so a chosen name can never collide with one derived from a contract address. Custom identifiers may not start with `client-` or `channel-`, so a chosen name can never collide with a generated one.
 
 Either function reverts if the port already exists.
 
@@ -174,6 +174,8 @@ receipt          keccak256(packet)
 - Each payload hash inside a packet's value covers the source port, the destination port, the version, the encoding, and the value.
 - A receipt value must be non-zero, which is what lets non-membership prove a packet was never received. The code relies on that property rather than deriving it.
 
+The store has one public read, `getCommitment(bytes32 hashedPath)`, which returns the stored value, or zero. The key is keccak256 of the raw path in the table above. `RelayerHelper` wraps that call: `queryPacketCommitment`, `queryPacketReceipt`, and `queryAckCommitment` build the path from a client identifier and a sequence, and `isPacketReceived` and `isPacketReceiveSuccessful` take the packet itself. The latter is true only for a received packet whose stored acknowledgement is not the universal error acknowledgement.
+
 ## Events
 
 | Event | When it fires |
@@ -190,7 +192,6 @@ receipt          keccak256(packet)
 | `ICS02ClientMigrated(string clientId, CounterpartyInfo counterpartyInfo, address client)` | A client contract and its counterparty info are replaced under the same identifier |
 | `ICS02MisbehaviourSubmitted(string clientId)` | The router forwards misbehaviour evidence to a client |
 
-- A relayer gets the packet itself from `SendPacket`.
 - Every packet event indexes a client identifier and the sequence. Which client is indexed depends on the leg: `SendPacket`, `AckPacket`, and `TimeoutPacket` index the source client, and `WriteAcknowledgement` indexes the destination client.
 
 ## Errors
