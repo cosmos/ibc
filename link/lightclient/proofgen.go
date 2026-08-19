@@ -50,33 +50,3 @@ const (
 	ProofKindAcknowledgement
 	ProofKindReceiptAbsence
 )
-
-// ClientInfo describes one configured light-client instance from the
-// perspective of the ProverFactory responsible for its type.
-type ClientInfo struct {
-	ClientID     string
-	Type         string
-	ClientParams *RawParams
-}
-
-// ChainInfo is the chain configuration relevant to proof generation. It omits
-// operational settings, such as the deployer, that custom provers do not need.
-type ChainInfo struct {
-	ChainID string
-	EVM     *EVMChainInfo
-}
-
-// EVMChainInfo contains the EVM connection details available to a prover.
-type EVMChainInfo struct {
-	RPC         string
-	ICS26Router string
-}
-
-// ProverFactoryOptions describes the configured light-client instance a ProverFactory
-// constructs. Additional shared construction dependencies may be added here
-// as the extension API evolves.
-type ProverFactoryOptions struct {
-	Client            ClientInfo
-	HostChain         ChainInfo
-	CounterpartyChain ChainInfo
-}
