@@ -25,13 +25,11 @@ import (
 
 // TestRemoteAttestationLightClientRelaysPacket relays through a remote prover.
 func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
-	binary := buildCustomIBC(t)
-	t.Setenv("IBC_BIN", binary)
+	t.Setenv("IBC_BIN", buildCustomIBC(t))
+	ctx := t.Context()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = listener.Close() })
-	remoteURL := "http://" + listener.Addr().String()
 
 	spec, runtime := attestedMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB,
@@ -49,40 +47,47 @@ func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
 			require.NotEmpty(t, cfg.Connections)
 			serviceConfig = cloneRelayerConfig(*cfg)
 			cfg.Connections[0].ClientAType = remotepoc.Type
-			cfg.Connections[0].ClientAParams = map[string]any{"url": remoteURL}
+			cfg.Connections[0].ClientAParams = map[string]any{"url": "http://" + listener.Addr().String()}
 		},
 		route,
 	)
+	serveAttestationProver(t, listener, env, serviceConfig)
 
-	useEnvironmentRPCs(t, env, &serviceConfig)
-	serviceConfigPath := filepath.Join(t.TempDir(), "attestation-proof-service.yaml")
-	require.NoError(t, ibclink.WriteRelayerConfig(serviceConfigPath, serviceConfig))
-	remoteEnd := serviceConfig.Connections[0]
-	server, err := remotepoc.NewAttestationHandler(
-		t.Context(), serviceConfigPath, remoteEnd.ChainA, remoteEnd.ClientA,
+	relayer := e2etest.StartRelayer(t, driver, env)
+	transfer, err := e2etest.NewTransfer(t, env, deployment, sender, route).Send(
+		ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)},
 	)
 	require.NoError(t, err)
-	serverErrors := make(chan error, 1)
-	go func() { serverErrors <- server.Serve(listener) }()
+	require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
+	_, err = e2etest.AwaitState(
+		ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
+	)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+}
+
+func serveAttestationProver(
+	t *testing.T,
+	listener net.Listener,
+	env *environment.Environment,
+	cfg ibclink.RelayerConfig,
+) {
+	t.Helper()
+	useEnvironmentRPCs(t, env, &cfg)
+	configPath := filepath.Join(t.TempDir(), "attestation-proof-service.yaml")
+	require.NoError(t, ibclink.WriteRelayerConfig(configPath, cfg))
+
+	client := cfg.Connections[0]
+	server, err := remotepoc.NewAttestationHandler(t.Context(), configPath, client.ChainA, client.ClientA)
+	require.NoError(t, err)
+	errs := make(chan error, 1)
+	go func() { errs <- server.Serve(listener) }()
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		require.NoError(t, server.Shutdown(ctx))
-		serveErr := <-serverErrors
-		require.ErrorIs(t, serveErr, http.ErrServerClosed)
+		require.ErrorIs(t, <-errs, http.ErrServerClosed)
 	})
-
-	relayer := e2etest.StartRelayer(t, driver, env)
-	transfer, err := e2etest.NewTransfer(t, env, deployment, sender, route).Send(
-		t.Context(), e2etest.TransferRequest{Amount: big.NewInt(1_234_000)},
-	)
-	require.NoError(t, err)
-	require.NoError(t, e2etest.RelayAll(t.Context(), relayer, transfer.PacketTx()))
-	_, err = e2etest.AwaitState(
-		t.Context(), relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
-	)
-	require.NoError(t, err)
-	require.NoError(t, transfer.VerifyDelivered(t.Context()))
 }
 
 func cloneRelayerConfig(cfg ibclink.RelayerConfig) ibclink.RelayerConfig {
