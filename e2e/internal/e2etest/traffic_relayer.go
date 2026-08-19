@@ -244,16 +244,18 @@ func observeStatus(
 	packet PacketTx,
 ) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
 	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
-	if ibclink.IsStatusNotFound(err) {
+	if err != nil {
+		return nil, 0, false, err
+	}
+	// An empty listing means the relayer has not indexed the transaction, which
+	// the Status endpoint used to report as a NotFound error.
+	if len(statuses) == 0 {
 		if !relayer.ManualRoute(string(packet.RouteID)) {
 			if relayErr := relayer.RelayAll(ctx, string(packet.Source), packet.SourceTxHash); relayErr != nil {
 				return nil, 0, false, relayErr
 			}
 		}
 		return nil, relayerv2.PacketState_PACKET_STATE_PENDING, true, nil
-	}
-	if err != nil {
-		return nil, 0, false, err
 	}
 	observed := statusForPacket(statuses, packet)
 	if observed == nil {
