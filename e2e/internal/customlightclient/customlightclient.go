@@ -27,8 +27,8 @@ func (Factory) Type() string { return Type }
 
 func (Factory) New(
 	_ context.Context,
-	options lightclient.FactoryOptions,
-) (lightclient.ProofGenerator, error) {
+	options lightclient.ProverFactoryOptions,
+) (lightclient.Prover, error) {
 	self := options.Client
 	var p params
 	if err := self.ClientParams.Decode(&p); err != nil {
@@ -37,7 +37,9 @@ func (Factory) New(
 	if p.MarkerFile == "" {
 		return nil, errors.New("markerFile is required")
 	}
-	if err := os.WriteFile(p.MarkerFile, []byte(self.ChainID+"/"+self.ClientID), 0o600); err != nil {
+	if err := os.WriteFile(
+		p.MarkerFile, []byte(options.HostChain.ChainID+"/"+self.ClientID), 0o600,
+	); err != nil {
 		return nil, err
 	}
 

@@ -72,7 +72,7 @@ func proofKindFor(relayKind v2.RelayKind) lightclient.ProofKind {
 func relayPackets(
 	ctx context.Context,
 	chainClient chains.Client,
-	proofGen proofgen.ProofGenerator,
+	proofGen proofgen.Prover,
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,

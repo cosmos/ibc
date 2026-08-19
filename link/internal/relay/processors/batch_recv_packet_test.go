@@ -31,9 +31,9 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.ProofGenerator
+type staticProofGenerators map[string]proofgen.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.Prover, bool) {
 	gen, ok := s[proofgen.Key(chainID, clientID)]
 	return gen, ok
 }
@@ -102,7 +102,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			}, nil
 		}).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
+	proofGen := mocks.NewMockProver(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
 	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
@@ -199,7 +199,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	}, nil).Once()
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
+	proofGen := mocks.NewMockProver(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
 	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
@@ -304,7 +304,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		},
 	}, nil).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
+	proofGen := mocks.NewMockProver(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
 	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).

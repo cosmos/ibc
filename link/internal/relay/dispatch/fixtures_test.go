@@ -42,9 +42,9 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.ProofGenerator
+type staticProofGenerators map[string]proofgen.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.Prover, bool) {
 	gen, ok := s[proofgen.Key(chainID, clientID)]
 	return gen, ok
 }
@@ -70,8 +70,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
-	destProofGen := mocks.NewMockProofGenerator(t)
-	sourceProofGen := mocks.NewMockProofGenerator(t)
+	destProofGen := mocks.NewMockProver(t)
+	sourceProofGen := mocks.NewMockProver(t)
 
 	deps := pipeline.Deps{
 		Storage: db,

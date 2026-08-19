@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package lightclient is the public extension point for light client proof
-// generation. Implement ProofGenerator and ProverFactory here, register the factory
+// generation. Implement Prover and ProverFactory here, register the factory
 // under a client type name, and supply it through link/cli.
 //
 // This package must not import anything under link/internal. Everything it
@@ -16,9 +16,9 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 )
 
-// ProofGenerator generates packet membership/non-membership proofs and state
+// Prover generates packet membership/non-membership proofs and state
 // proofs for one configured light client.
-type ProofGenerator interface {
+type Prover interface {
 	// LatestProvableHeight resolves the highest height a subsequent StateProof
 	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp.
@@ -54,11 +54,9 @@ const (
 // ClientInfo describes one configured light-client instance from the
 // perspective of the ProverFactory responsible for its type.
 type ClientInfo struct {
-	ChainID             string
-	CounterpartyChainID string
-	ClientID            string
-	Type                string
-	ClientParams        *RawParams
+	ClientID     string
+	Type         string
+	ClientParams *RawParams
 }
 
 // ChainInfo is the chain configuration relevant to proof generation. It omits
@@ -74,10 +72,10 @@ type EVMChainInfo struct {
 	ICS26Router string
 }
 
-// FactoryOptions describes the configured light-client instance a ProverFactory
+// ProverFactoryOptions describes the configured light-client instance a ProverFactory
 // constructs. Additional shared construction dependencies may be added here
 // as the extension API evolves.
-type FactoryOptions struct {
+type ProverFactoryOptions struct {
 	Client            ClientInfo
 	HostChain         ChainInfo
 	CounterpartyChain ChainInfo

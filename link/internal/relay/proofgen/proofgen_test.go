@@ -144,7 +144,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		}
 
 		reg := lightclient.NewRegistry()
-		built := make(chan lightclient.FactoryOptions, 2)
+		built := make(chan lightclient.ProverFactoryOptions, 2)
 		require.NoError(t, reg.Register(stubFactory{built: built}))
 
 		set, err := NewSetFromConfig(ctx, cfg, clientSet, nil, reg)
@@ -162,18 +162,18 @@ func TestNewSetFromConfig(t *testing.T) {
 
 // stubFactory is a light client type that exists only in this test.
 type stubFactory struct {
-	built chan<- lightclient.FactoryOptions
+	built chan<- lightclient.ProverFactoryOptions
 }
 
 func (stubFactory) Type() string { return "myclient" }
 
 func (f stubFactory) New(
-	_ context.Context, options lightclient.FactoryOptions,
-) (lightclient.ProofGenerator, error) {
+	_ context.Context, options lightclient.ProverFactoryOptions,
+) (lightclient.Prover, error) {
 	if f.built != nil {
 		f.built <- options
 	}
 	return stubGenerator{}, nil
 }
 
-type stubGenerator struct{ lightclient.ProofGenerator }
+type stubGenerator struct{ lightclient.Prover }

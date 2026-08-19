@@ -35,8 +35,8 @@ func (Factory) Type() string { return Type }
 
 func (f Factory) New(
 	_ context.Context,
-	options lightclient.FactoryOptions,
-) (lightclient.ProofGenerator, error) {
+	options lightclient.ProverFactoryOptions,
+) (lightclient.Prover, error) {
 	var p ClientParams
 	if err := options.Client.ClientParams.Decode(&p); err != nil {
 		return nil, err

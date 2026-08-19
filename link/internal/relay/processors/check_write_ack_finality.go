@@ -20,7 +20,7 @@ import (
 // currently prove.
 type CheckWriteAckFinality struct {
 	destinationChainClient chains.Client
-	proofGen               proofgen.ProofGenerator
+	proofGen               proofgen.Prover
 }
 
 func NewCheckWriteAckFinality(

@@ -16,7 +16,7 @@ type ProverFactory interface {
 	Type() string
 
 	// New builds a generator for Client, which tracks CounterpartyChain.
-	New(ctx context.Context, options FactoryOptions) (ProofGenerator, error)
+	New(ctx context.Context, options ProverFactoryOptions) (Prover, error)
 }
 
 // Registry resolves custom light-client factories by config type name.

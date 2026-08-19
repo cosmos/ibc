@@ -28,7 +28,7 @@ type ChainClients interface {
 
 // ProofGenerators resolves proof generators by (chainIDclientID).
 type ProofGenerators interface {
-	Get(chainID, clientID string) (proofgen.ProofGenerator, bool)
+	Get(chainID, clientID string) (proofgen.Prover, bool)
 }
 
 // TxBuilders resolves tx builders by chain id.

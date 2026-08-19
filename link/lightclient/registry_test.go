@@ -13,7 +13,7 @@ type testFactory string
 
 func (f testFactory) Type() string { return string(f) }
 
-func (testFactory) New(context.Context, FactoryOptions) (ProofGenerator, error) {
+func (testFactory) New(context.Context, ProverFactoryOptions) (Prover, error) {
 	return nil, nil
 }
 

@@ -20,7 +20,7 @@ import (
 )
 
 // NewHandler exposes generator through the proof-of-concept HTTP protocol.
-func NewHandler(generator lightclient.ProofGenerator) *http.Server {
+func NewHandler(generator lightclient.Prover) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /proof", func(w http.ResponseWriter, r *http.Request) {
 		var req request

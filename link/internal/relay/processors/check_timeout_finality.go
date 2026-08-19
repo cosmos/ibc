@@ -16,7 +16,7 @@ import (
 // proof generator currently being able to prove a destination-chain
 // timestamp past the timeout.
 type CheckTimeoutFinality struct {
-	proofGen proofgen.ProofGenerator
+	proofGen proofgen.Prover
 }
 
 func NewCheckTimeoutFinality(proofGenerators ProofGenerators, route Route) (CheckTimeoutFinality, error) {

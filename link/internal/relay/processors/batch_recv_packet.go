@@ -24,7 +24,7 @@ type BatchRecvPacket struct {
 	sourceChainClient      chains.Client
 	destinationChainClient chains.Client
 	route                  Route
-	proofGen               proofgen.ProofGenerator
+	proofGen               proofgen.Prover
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
 	storage                TxStorage
