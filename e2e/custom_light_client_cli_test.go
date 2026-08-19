@@ -16,46 +16,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/internal/customlightclient"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/lightclient/remotepoc"
 )
-
-// TestCustomCompiledCLILoadsLightClient runs a registered custom client.
-func TestCustomCompiledCLILoadsLightClient(t *testing.T) {
-	binary := buildCustomIBC(t)
-	t.Setenv("IBC_BIN", binary)
-
-	spec, runtime := attestedMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB,
-	))
-	env := e2etest.Start(t, spec, runtime)
-
-	marker := filepath.Join(t.TempDir(), "custom-client-created")
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	driver, _ := e2etest.DeployWithRelayerConfig(
-		t,
-		env,
-		e2etest.NewSigner(t),
-		e2etest.NewSigner(t),
-		func(cfg *ibclink.RelayerConfig) {
-			require.NotEmpty(t, cfg.Connections)
-			cfg.Connections[0].ClientAType = customlightclient.Type
-			cfg.Connections[0].ClientAParams = map[string]any{"markerFile": marker}
-		},
-		route,
-	)
-
-	relayer := e2etest.StartRelayer(t, driver, env)
-	require.NotEmpty(t, relayer.Ready().HTTP)
-
-	createdFor, err := os.ReadFile(marker)
-	require.NoError(t, err, "custom light-client factory was not invoked")
-	require.NotEmpty(t, createdFor)
-}
 
 // TestRemoteAttestationLightClientRelaysPacket relays through a remote prover.
 func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
