@@ -16,7 +16,7 @@ The router exposes four packet operations:
 - `ackPacket`: closes out a delivered packet on the source chain and hands the answer to the sending application.
 - `timeoutPacket`: closes out an undelivered packet on the source chain once its deadline has passed, and tells the sending application.
 
-An application calls `sendPacket`. A relayer calls the other three and, when needed, `updateClient` to bring the client that verifies the proof up to date. Those relay calls are [role-gated](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles), although on a chain IBC Link brings up that gate admits any address.
+An application calls `sendPacket`. A relayer calls the other three and, when needed, `updateClient` to bring the client that verifies the proof up to date. Those relay calls are [role-gated](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles), although on a chain the IBC CLI brings up that gate admits any address.
 
 For what each operation checks, and the order they run in, see the [packet lifecycle](/how-ibc-works/packet-lifecycle).
 
