@@ -367,102 +367,6 @@ func (*RelayResponse) Descriptor() ([]byte, []int) {
 	return file_relayer_proto_rawDescGZIP(), []int{4}
 }
 
-type StatusRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
-	SourceChainId string                 `protobuf:"bytes,2,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *StatusRequest) Reset() {
-	*x = StatusRequest{}
-	mi := &file_relayer_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StatusRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StatusRequest) ProtoMessage() {}
-
-func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
-func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *StatusRequest) GetTxHash() string {
-	if x != nil {
-		return x.TxHash
-	}
-	return ""
-}
-
-func (x *StatusRequest) GetSourceChainId() string {
-	if x != nil {
-		return x.SourceChainId
-	}
-	return ""
-}
-
-type StatusResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PacketStatuses []*PacketStatus        `protobuf:"bytes,1,rep,name=packet_statuses,json=packetStatuses,proto3" json:"packet_statuses,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *StatusResponse) Reset() {
-	*x = StatusResponse{}
-	mi := &file_relayer_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StatusResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StatusResponse) ProtoMessage() {}
-
-func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
-func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *StatusResponse) GetPacketStatuses() []*PacketStatus {
-	if x != nil {
-		return x.PacketStatuses
-	}
-	return nil
-}
-
 type PacketsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Absent filter matches every packet.
@@ -480,7 +384,7 @@ type PacketsRequest struct {
 
 func (x *PacketsRequest) Reset() {
 	*x = PacketsRequest{}
-	mi := &file_relayer_proto_msgTypes[7]
+	mi := &file_relayer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -492,7 +396,7 @@ func (x *PacketsRequest) String() string {
 func (*PacketsRequest) ProtoMessage() {}
 
 func (x *PacketsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[7]
+	mi := &file_relayer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -505,7 +409,7 @@ func (x *PacketsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PacketsRequest.ProtoReflect.Descriptor instead.
 func (*PacketsRequest) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{7}
+	return file_relayer_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PacketsRequest) GetFilter() *PacketFilter {
@@ -554,7 +458,7 @@ type PacketFilter struct {
 
 func (x *PacketFilter) Reset() {
 	*x = PacketFilter{}
-	mi := &file_relayer_proto_msgTypes[8]
+	mi := &file_relayer_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -566,7 +470,7 @@ func (x *PacketFilter) String() string {
 func (*PacketFilter) ProtoMessage() {}
 
 func (x *PacketFilter) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[8]
+	mi := &file_relayer_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -579,7 +483,7 @@ func (x *PacketFilter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PacketFilter.ProtoReflect.Descriptor instead.
 func (*PacketFilter) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{8}
+	return file_relayer_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PacketFilter) GetSourceChainId() string {
@@ -656,7 +560,7 @@ type PacketsResponse struct {
 
 func (x *PacketsResponse) Reset() {
 	*x = PacketsResponse{}
-	mi := &file_relayer_proto_msgTypes[9]
+	mi := &file_relayer_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -668,7 +572,7 @@ func (x *PacketsResponse) String() string {
 func (*PacketsResponse) ProtoMessage() {}
 
 func (x *PacketsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[9]
+	mi := &file_relayer_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -681,7 +585,7 @@ func (x *PacketsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PacketsResponse.ProtoReflect.Descriptor instead.
 func (*PacketsResponse) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{9}
+	return file_relayer_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PacketsResponse) GetPackets() []*PacketStatus {
@@ -708,7 +612,7 @@ type TransactionInfo struct {
 
 func (x *TransactionInfo) Reset() {
 	*x = TransactionInfo{}
-	mi := &file_relayer_proto_msgTypes[10]
+	mi := &file_relayer_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -720,7 +624,7 @@ func (x *TransactionInfo) String() string {
 func (*TransactionInfo) ProtoMessage() {}
 
 func (x *TransactionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[10]
+	mi := &file_relayer_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -733,7 +637,7 @@ func (x *TransactionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionInfo.ProtoReflect.Descriptor instead.
 func (*TransactionInfo) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{10}
+	return file_relayer_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TransactionInfo) GetTxHash() string {
@@ -777,7 +681,7 @@ type PacketStatus struct {
 
 func (x *PacketStatus) Reset() {
 	*x = PacketStatus{}
-	mi := &file_relayer_proto_msgTypes[11]
+	mi := &file_relayer_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -789,7 +693,7 @@ func (x *PacketStatus) String() string {
 func (*PacketStatus) ProtoMessage() {}
 
 func (x *PacketStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_relayer_proto_msgTypes[11]
+	mi := &file_relayer_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -802,7 +706,7 @@ func (x *PacketStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PacketStatus.ProtoReflect.Descriptor instead.
 func (*PacketStatus) Descriptor() ([]byte, []int) {
-	return file_relayer_proto_rawDescGZIP(), []int{11}
+	return file_relayer_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PacketStatus) GetState() PacketState {
@@ -887,12 +791,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\x0ePacketSelector\x12(\n" +
 	"\x10source_client_id\x18\x01 \x01(\tR\x0esourceClientId\x12'\n" +
 	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\"\x0f\n" +
-	"\rRelayResponse\"P\n" +
-	"\rStatusRequest\x12\x17\n" +
-	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12&\n" +
-	"\x0fsource_chain_id\x18\x02 \x01(\tR\rsourceChainId\"W\n" +
-	"\x0eStatusResponse\x12E\n" +
-	"\x0fpacket_statuses\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\x0epacketStatuses\"t\n" +
+	"\rRelayResponse\"t\n" +
 	"\x0ePacketsRequest\x124\n" +
 	"\x06filter\x18\x01 \x01(\v2\x1c.ibc.v2.relayer.PacketFilterR\x06filter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit\x12\x16\n" +
@@ -943,10 +842,9 @@ const file_relayer_proto_rawDesc = "" +
 	"\x16PACKET_STATE_SUCCEEDED\x10\x03\x12\x1a\n" +
 	"\x16PACKET_STATE_TIMED_OUT\x10\x04\x12\x19\n" +
 	"\x15PACKET_STATE_REJECTED\x10\x05\x12\x1d\n" +
-	"\x19PACKET_STATE_RELAY_FAILED\x10\x062\xf4\x01\n" +
+	"\x19PACKET_STATE_RELAY_FAILED\x10\x062\xa9\x01\n" +
 	"\x11RelayerApiService\x12F\n" +
-	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00\x12I\n" +
-	"\x06Status\x12\x1d.ibc.v2.relayer.StatusRequest\x1a\x1e.ibc.v2.relayer.StatusResponse\"\x00\x12L\n" +
+	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00\x12L\n" +
 	"\aPackets\x12\x1e.ibc.v2.relayer.PacketsRequest\x1a\x1f.ibc.v2.relayer.PacketsResponse\"\x00B+Z)github.com/cosmos/ibc/link/api/v2/relayerb\x06proto3"
 
 var (
@@ -962,7 +860,7 @@ func file_relayer_proto_rawDescGZIP() []byte {
 }
 
 var file_relayer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_relayer_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_relayer_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_relayer_proto_goTypes = []any{
 	(PacketState)(0),        // 0: ibc.v2.relayer.PacketState
 	(*RelayRequest)(nil),    // 1: ibc.v2.relayer.RelayRequest
@@ -970,38 +868,33 @@ var file_relayer_proto_goTypes = []any{
 	(*SelectedPackets)(nil), // 3: ibc.v2.relayer.SelectedPackets
 	(*PacketSelector)(nil),  // 4: ibc.v2.relayer.PacketSelector
 	(*RelayResponse)(nil),   // 5: ibc.v2.relayer.RelayResponse
-	(*StatusRequest)(nil),   // 6: ibc.v2.relayer.StatusRequest
-	(*StatusResponse)(nil),  // 7: ibc.v2.relayer.StatusResponse
-	(*PacketsRequest)(nil),  // 8: ibc.v2.relayer.PacketsRequest
-	(*PacketFilter)(nil),    // 9: ibc.v2.relayer.PacketFilter
-	(*PacketsResponse)(nil), // 10: ibc.v2.relayer.PacketsResponse
-	(*TransactionInfo)(nil), // 11: ibc.v2.relayer.TransactionInfo
-	(*PacketStatus)(nil),    // 12: ibc.v2.relayer.PacketStatus
+	(*PacketsRequest)(nil),  // 6: ibc.v2.relayer.PacketsRequest
+	(*PacketFilter)(nil),    // 7: ibc.v2.relayer.PacketFilter
+	(*PacketsResponse)(nil), // 8: ibc.v2.relayer.PacketsResponse
+	(*TransactionInfo)(nil), // 9: ibc.v2.relayer.TransactionInfo
+	(*PacketStatus)(nil),    // 10: ibc.v2.relayer.PacketStatus
 }
 var file_relayer_proto_depIdxs = []int32{
 	2,  // 0: ibc.v2.relayer.RelayRequest.all_packets:type_name -> ibc.v2.relayer.AllPackets
 	3,  // 1: ibc.v2.relayer.RelayRequest.selected_packets:type_name -> ibc.v2.relayer.SelectedPackets
 	4,  // 2: ibc.v2.relayer.SelectedPackets.packets:type_name -> ibc.v2.relayer.PacketSelector
-	12, // 3: ibc.v2.relayer.StatusResponse.packet_statuses:type_name -> ibc.v2.relayer.PacketStatus
-	9,  // 4: ibc.v2.relayer.PacketsRequest.filter:type_name -> ibc.v2.relayer.PacketFilter
-	0,  // 5: ibc.v2.relayer.PacketFilter.state:type_name -> ibc.v2.relayer.PacketState
-	12, // 6: ibc.v2.relayer.PacketsResponse.packets:type_name -> ibc.v2.relayer.PacketStatus
-	0,  // 7: ibc.v2.relayer.PacketStatus.state:type_name -> ibc.v2.relayer.PacketState
-	11, // 8: ibc.v2.relayer.PacketStatus.send_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	11, // 9: ibc.v2.relayer.PacketStatus.recv_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	11, // 10: ibc.v2.relayer.PacketStatus.ack_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	11, // 11: ibc.v2.relayer.PacketStatus.timeout_tx:type_name -> ibc.v2.relayer.TransactionInfo
-	1,  // 12: ibc.v2.relayer.RelayerApiService.Relay:input_type -> ibc.v2.relayer.RelayRequest
-	6,  // 13: ibc.v2.relayer.RelayerApiService.Status:input_type -> ibc.v2.relayer.StatusRequest
-	8,  // 14: ibc.v2.relayer.RelayerApiService.Packets:input_type -> ibc.v2.relayer.PacketsRequest
-	5,  // 15: ibc.v2.relayer.RelayerApiService.Relay:output_type -> ibc.v2.relayer.RelayResponse
-	7,  // 16: ibc.v2.relayer.RelayerApiService.Status:output_type -> ibc.v2.relayer.StatusResponse
-	10, // 17: ibc.v2.relayer.RelayerApiService.Packets:output_type -> ibc.v2.relayer.PacketsResponse
-	15, // [15:18] is the sub-list for method output_type
-	12, // [12:15] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	7,  // 3: ibc.v2.relayer.PacketsRequest.filter:type_name -> ibc.v2.relayer.PacketFilter
+	0,  // 4: ibc.v2.relayer.PacketFilter.state:type_name -> ibc.v2.relayer.PacketState
+	10, // 5: ibc.v2.relayer.PacketsResponse.packets:type_name -> ibc.v2.relayer.PacketStatus
+	0,  // 6: ibc.v2.relayer.PacketStatus.state:type_name -> ibc.v2.relayer.PacketState
+	9,  // 7: ibc.v2.relayer.PacketStatus.send_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	9,  // 8: ibc.v2.relayer.PacketStatus.recv_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	9,  // 9: ibc.v2.relayer.PacketStatus.ack_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	9,  // 10: ibc.v2.relayer.PacketStatus.timeout_tx:type_name -> ibc.v2.relayer.TransactionInfo
+	1,  // 11: ibc.v2.relayer.RelayerApiService.Relay:input_type -> ibc.v2.relayer.RelayRequest
+	6,  // 12: ibc.v2.relayer.RelayerApiService.Packets:input_type -> ibc.v2.relayer.PacketsRequest
+	5,  // 13: ibc.v2.relayer.RelayerApiService.Relay:output_type -> ibc.v2.relayer.RelayResponse
+	8,  // 14: ibc.v2.relayer.RelayerApiService.Packets:output_type -> ibc.v2.relayer.PacketsResponse
+	13, // [13:15] is the sub-list for method output_type
+	11, // [11:13] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_relayer_proto_init() }
@@ -1013,14 +906,14 @@ func file_relayer_proto_init() {
 		(*RelayRequest_AllPackets)(nil),
 		(*RelayRequest_SelectedPackets)(nil),
 	}
-	file_relayer_proto_msgTypes[8].OneofWrappers = []any{}
+	file_relayer_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_relayer_proto_rawDesc), len(file_relayer_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   12,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

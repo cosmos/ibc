@@ -327,46 +327,10 @@ func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []Pack
 	})
 }
 
-func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketStatus, error) {
-	txHash, err := s.validateRelayArgs(chainID, txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	switch _, errGet := s.store.GetRelayRequest(ctx, chainID, txHash); {
-	case errors.Is(errGet, store.ErrNotFound):
-		return nil, errors.Wrap(ErrNotFound, "transaction not submitted to relayer")
-	case errGet != nil:
-		return nil, errors.Wrap(errGet, "getting relay request")
-	}
-
-	packets, err := s.store.ListPacketsBySourceTx(ctx, chainID, txHash)
-	if err != nil {
-		return nil, errors.Wrap(err, "listing packets")
-	}
-
-	statuses := make([]PacketStatus, len(packets))
-	for i, packet := range packets {
-		statuses[i] = PacketStatus{
-			State:          mapPacketState(packet.Status),
-			SequenceNumber: packet.PacketSequenceNumber,
-			SourceClientID: packet.PacketSourceClientID,
-			SendTx:         TxInfo{TxHash: packet.SourceTxHash, ChainID: packet.SourceChainID},
-			RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
-			AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
-			TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
-		}
-	}
-
-	return statuses, nil
-}
-
 // Packets lists the packets this relayer knows about, most recent first,
 // along with the total matching the filter before paging.
 //
-// It is a superset of Status: filtering on SourceChainID and SourceTxHash
-// returns the same packets Status returns for that transaction. Unlike Status,
-// an unknown transaction yields an empty result rather than ErrNotFound —
+// An unknown transaction yields an empty result rather than an error:
 // listing endpoints report absence as emptiness.
 func (s *Service) Packets(
 	ctx context.Context,
@@ -398,7 +362,7 @@ func (s *Service) Packets(
 
 // toStoreFilter lowers an API filter to a store filter, expanding the API
 // state into the relay statuses it covers and normalising the tx hash the same
-// way Relay and Status do, so lookups stay case-insensitive.
+// way Relay does, so lookups stay case-insensitive.
 func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
 	out := store.PacketFilter{
 		Statuses:            dbStatusesForState(filter.State),

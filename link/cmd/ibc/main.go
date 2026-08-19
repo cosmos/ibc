@@ -92,20 +92,18 @@ func init() {
 	}
 
 	// Relayer commands
-	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus, cmdRelayerPackets)
+	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerPackets)
 	cmdRelayerRun.Flags().BoolVarP(&flagRelayerNoMigrate, "no-migrate", "", false, "skip database migrations")
-	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus, cmdRelayerPackets} {
+	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerPackets} {
 		c.Flags().StringVar(&flagRelayerHost, "host", "", "dial this address instead of resolving from config")
 		c.Flags().StringVar(&flagRelayerTxHash, "tx-hash", "", "source transaction hash")
 		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
 	}
 
-	// relay and status address one transaction, so both identifiers are
-	// required. On packets they are optional filters.
-	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
-		_ = c.MarkFlagRequired("tx-hash")
-		_ = c.MarkFlagRequired("chain-id")
-	}
+	// relay addresses one transaction, so both identifiers are required. On
+	// packets they are optional filters.
+	_ = cmdRelayerRelay.MarkFlagRequired("tx-hash")
+	_ = cmdRelayerRelay.MarkFlagRequired("chain-id")
 
 	cmdRelayerPackets.Flags().
 		StringVar(&flagRelayerPacketsDestChainID, "destination-chain-id", "", "destination chain id")

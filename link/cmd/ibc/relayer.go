@@ -38,12 +38,6 @@ var (
 		RunE:  relayerRelay,
 	}
 
-	cmdRelayerStatus = &cobra.Command{
-		Use:   useStatus,
-		Short: "Deprecated: use \"packets\" instead. Query per-packet relay status for a source transaction",
-		RunE:  relayerStatus,
-	}
-
 	cmdRelayerPackets = &cobra.Command{
 		Use:   "packets",
 		Short: "List the packets the relayer is aware of and their relay status",
@@ -164,15 +158,6 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 		TxHash:        flagRelayerTxHash,
 		SourceChainId: flagRelayerSourceChainID,
 		Selection:     &relayerv2.RelayRequest_AllPackets{AllPackets: &relayerv2.AllPackets{}},
-	})
-}
-
-func relayerStatus(cmd *cobra.Command, _ []string) error {
-	//nolint:staticcheck // Status is deprecated in favor of Packets and is
-	// removed once callers have migrated; this command exists to serve it
-	// until then.
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Status, &relayerv2.StatusRequest{
-		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
 	})
 }
 
