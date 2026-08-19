@@ -77,6 +77,62 @@ func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeo
 	return err
 }
 
+const createUnresolvedSequence = `-- name: CreateUnresolvedSequence :exec
+INSERT INTO packet_clearing_unresolved (
+    source_chain_id,
+    packet_source_client_id,
+    packet_sequence_number
+) VALUES (
+    $1,
+    $2,
+    $3
+)
+ON CONFLICT (source_chain_id, packet_source_client_id, packet_sequence_number) DO NOTHING
+`
+
+type CreateUnresolvedSequenceParams struct {
+	ChainID  string
+	ClientID string
+	Sequence int64
+}
+
+// a sequence that is still unresolved keeps the first_seen_at it was first recorded with,
+// since how long it has been stuck is the only signal an operator gets about it
+func (q *Queries) CreateUnresolvedSequence(ctx context.Context, arg CreateUnresolvedSequenceParams) error {
+	_, err := q.db.Exec(ctx, createUnresolvedSequence, arg.ChainID, arg.ClientID, arg.Sequence)
+	return err
+}
+
+const deleteUnresolvedSequence = `-- name: DeleteUnresolvedSequence :exec
+DELETE FROM packet_clearing_unresolved
+WHERE source_chain_id = $1
+  AND packet_source_client_id = $2
+  AND packet_sequence_number = $3
+`
+
+type DeleteUnresolvedSequenceParams struct {
+	ChainID  string
+	ClientID string
+	Sequence int64
+}
+
+func (q *Queries) DeleteUnresolvedSequence(ctx context.Context, arg DeleteUnresolvedSequenceParams) error {
+	_, err := q.db.Exec(ctx, deleteUnresolvedSequence, arg.ChainID, arg.ClientID, arg.Sequence)
+	return err
+}
+
+const getClearingState = `-- name: GetClearingState :one
+SELECT last_probed_sequence FROM packet_clearing_state
+WHERE source_chain_id = $1 AND packet_source_client_id = $2
+`
+
+func (q *Queries) GetClearingState(ctx context.Context, chainID string, clientID string) (int64, error) {
+	row := q.db.QueryRow(ctx, getClearingState, chainID, clientID)
+	var last_probed_sequence int64
+	err := row.Scan(&last_probed_sequence)
+	return last_probed_sequence, err
+}
+
 const listDispatchablePackets = `-- name: ListDispatchablePackets :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE status NOT IN (
@@ -303,6 +359,32 @@ func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txH
 	return items, nil
 }
 
+const listUnresolvedSequences = `-- name: ListUnresolvedSequences :many
+SELECT packet_sequence_number FROM packet_clearing_unresolved
+WHERE source_chain_id = $1 AND packet_source_client_id = $2
+ORDER BY packet_sequence_number
+`
+
+func (q *Queries) ListUnresolvedSequences(ctx context.Context, chainID string, clientID string) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listUnresolvedSequences, chainID, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var packet_sequence_number int64
+		if err := rows.Scan(&packet_sequence_number); err != nil {
+			return nil, err
+		}
+		items = append(items, packet_sequence_number)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const maxPacketSequence = `-- name: MaxPacketSequence :one
 SELECT CAST(COALESCE(MAX(packet_sequence_number), 0) AS bigint) FROM packets
 WHERE source_chain_id = $1 AND packet_source_client_id = $2
@@ -314,6 +396,35 @@ func (q *Queries) MaxPacketSequence(ctx context.Context, chainID string, clientI
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const setClearingState = `-- name: SetClearingState :exec
+INSERT INTO packet_clearing_state (
+    source_chain_id,
+    packet_source_client_id,
+    last_probed_sequence
+) VALUES (
+    $1,
+    $2,
+    $3
+)
+ON CONFLICT (source_chain_id, packet_source_client_id) DO UPDATE SET
+    last_probed_sequence = excluded.last_probed_sequence,
+    updated_at           = CURRENT_TIMESTAMP
+WHERE excluded.last_probed_sequence > packet_clearing_state.last_probed_sequence
+`
+
+type SetClearingStateParams struct {
+	ChainID            string
+	ClientID           string
+	LastProbedSequence int64
+}
+
+// the watermark only moves forward, so a slow pass cannot drag it back over sequences
+// another instance already probed, and a storage read gone bad cannot force a full rescan
+func (q *Queries) SetClearingState(ctx context.Context, arg SetClearingStateParams) error {
+	_, err := q.db.Exec(ctx, setClearingState, arg.ChainID, arg.ClientID, arg.LastProbedSequence)
+	return err
 }
 
 const updatePacketAckTx = `-- name: UpdatePacketAckTx :exec

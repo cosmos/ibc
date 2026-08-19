@@ -208,6 +208,78 @@ func (_c *MockRepository_ClearPacketTimeoutTx_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// GetClearingState provides a mock function for the type MockRepository
+func (_mock *MockRepository) GetClearingState(ctx context.Context, chainID string, clientID string) (store.ClearingState, error) {
+	ret := _mock.Called(ctx, chainID, clientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetClearingState")
+	}
+
+	var r0 store.ClearingState
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (store.ClearingState, error)); ok {
+		return returnFunc(ctx, chainID, clientID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) store.ClearingState); ok {
+		r0 = returnFunc(ctx, chainID, clientID)
+	} else {
+		r0 = ret.Get(0).(store.ClearingState)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, chainID, clientID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepository_GetClearingState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetClearingState'
+type MockRepository_GetClearingState_Call struct {
+	*mock.Call
+}
+
+// GetClearingState is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - clientID string
+func (_e *MockRepository_Expecter) GetClearingState(ctx any, chainID any, clientID any) *MockRepository_GetClearingState_Call {
+	return &MockRepository_GetClearingState_Call{Call: _e.mock.On("GetClearingState", ctx, chainID, clientID)}
+}
+
+func (_c *MockRepository_GetClearingState_Call) Run(run func(ctx context.Context, chainID string, clientID string)) *MockRepository_GetClearingState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_GetClearingState_Call) Return(clearingState store.ClearingState, err error) *MockRepository_GetClearingState_Call {
+	_c.Call.Return(clearingState, err)
+	return _c
+}
+
+func (_c *MockRepository_GetClearingState_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string) (store.ClearingState, error)) *MockRepository_GetClearingState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListDispatchablePackets provides a mock function for the type MockRepository
 func (_mock *MockRepository) ListDispatchablePackets(ctx context.Context) ([]store.Packet, error) {
 	ret := _mock.Called(ctx)
@@ -566,6 +638,81 @@ func (_c *MockRepository_MaxPacketSequence_Call) Return(v uint64, err error) *Mo
 }
 
 func (_c *MockRepository_MaxPacketSequence_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string) (uint64, error)) *MockRepository_MaxPacketSequence_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetClearingState provides a mock function for the type MockRepository
+func (_mock *MockRepository) SetClearingState(ctx context.Context, chainID string, clientID string, lastProbed uint64, delta store.UnresolvedDelta) error {
+	ret := _mock.Called(ctx, chainID, clientID, lastProbed, delta)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetClearingState")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64, store.UnresolvedDelta) error); ok {
+		r0 = returnFunc(ctx, chainID, clientID, lastProbed, delta)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepository_SetClearingState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetClearingState'
+type MockRepository_SetClearingState_Call struct {
+	*mock.Call
+}
+
+// SetClearingState is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - clientID string
+//   - lastProbed uint64
+//   - delta store.UnresolvedDelta
+func (_e *MockRepository_Expecter) SetClearingState(ctx any, chainID any, clientID any, lastProbed any, delta any) *MockRepository_SetClearingState_Call {
+	return &MockRepository_SetClearingState_Call{Call: _e.mock.On("SetClearingState", ctx, chainID, clientID, lastProbed, delta)}
+}
+
+func (_c *MockRepository_SetClearingState_Call) Run(run func(ctx context.Context, chainID string, clientID string, lastProbed uint64, delta store.UnresolvedDelta)) *MockRepository_SetClearingState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		var arg4 store.UnresolvedDelta
+		if args[4] != nil {
+			arg4 = args[4].(store.UnresolvedDelta)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_SetClearingState_Call) Return(err error) *MockRepository_SetClearingState_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepository_SetClearingState_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string, lastProbed uint64, delta store.UnresolvedDelta) error) *MockRepository_SetClearingState_Call {
 	_c.Call.Return(run)
 	return _c
 }

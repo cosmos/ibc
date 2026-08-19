@@ -35,6 +35,20 @@ type Packet struct {
 	TimeoutTxRelayerAddress   *string
 }
 
+type PacketClearingState struct {
+	SourceChainID        string
+	PacketSourceClientID string
+	LastProbedSequence   int64
+	UpdatedAt            pgtype.Timestamptz
+}
+
+type PacketClearingUnresolved struct {
+	SourceChainID        string
+	PacketSourceClientID string
+	PacketSequenceNumber int64
+	FirstSeenAt          pgtype.Timestamptz
+}
+
 type PacketTxSubmission struct {
 	PacketID     int64
 	SubmissionID int64

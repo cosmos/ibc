@@ -230,14 +230,55 @@ func (c *fakeChain) FindSendPackets(_ context.Context, _ string, sequences []uin
 	return events, nil
 }
 
-// failingWrites fails every row write while leaving the reads intact.
+// failingWrites fails every row write inside the pass's transaction, leaving
+// the real store to roll back what the pass had already written.
 type failingWrites struct {
 	ClearStore
 
 	err error
 }
 
-func (s failingWrites) UpsertPacket(context.Context, store.UpsertPacket) error { return s.err }
+func (s failingWrites) Transact(ctx context.Context, call func(store.Repository) error) error {
+	return s.ClearStore.Transact(ctx, func(repo store.Repository) error {
+		return call(failingRepo{Repository: repo, err: s.err})
+	})
+}
+
+type failingRepo struct {
+	store.Repository
+
+	err error
+}
+
+func (r failingRepo) UpsertPacket(context.Context, store.UpsertPacket) error { return r.err }
+
+// boundedStore records the floor the clearing pass queries recorded sequences with.
+type boundedStore struct {
+	ClearStore
+
+	from uint64
+}
+
+func (s *boundedStore) ListPacketSequencesFrom(
+	ctx context.Context,
+	chainID, clientID string,
+	fromSequence uint64,
+) ([]uint64, error) {
+	s.from = fromSequence
+
+	return s.ClearStore.ListPacketSequencesFrom(ctx, chainID, clientID, fromSequence)
+}
+
+// clearingState is how far the pass recorded probing, which is the bound the
+// next one starts from.
+func clearingState(t *testing.T, db *store.SqliteDB) store.ClearingState {
+	t.Helper()
+
+	state, err := db.GetClearingState(context.Background(), sourceChainID, sourceClientID)
+	require.NoError(t, err)
+
+	return state
+}
 
 // watcherStore is the real store a clearing pass reads and writes, which is
 // most of what a pass does.
@@ -297,6 +338,7 @@ func TestClearerClear(t *testing.T) {
 
 		assert.Equal(t, Result{Probed: 5, Outstanding: 2, Recovered: 2}, result)
 		assert.Equal(t, []uint64{3, 5}, recorded(t, db))
+		assert.Equal(t, store.ClearingState{LastProbed: 5}, clearingState(t, db))
 
 		rows, err := db.ListPacketsBySourceTx(ctx, sourceChainID, sendTxHash)
 		require.NoError(t, err)
@@ -352,6 +394,21 @@ func TestClearerClear(t *testing.T) {
 		}
 	})
 
+	t.Run("theSkipQueryIsBoundedByTheWatermark", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.send(1, 2, 3, 4)
+
+		db := watcherStore(t)
+		require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 2, store.UnresolvedDelta{}))
+
+		storage := &boundedStore{ClearStore: db}
+
+		_, err := newTestClearer(chain, storage).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint64(3), storage.from)
+	})
+
 	// the rpc endpoint this pass reads lags the websocket the subscription reads,
 	// so the sequence counter trails rows the subscription already wrote. Nothing
 	// is written off by carrying on: the range is bounded by what the chain reports
@@ -367,6 +424,22 @@ func TestClearerClear(t *testing.T) {
 
 		assert.Equal(t, 2, result.Probed)
 		assert.Equal(t, []uint64{1, 2}, chain.probeCalls()[0])
+		assert.Equal(t, uint64(2), clearingState(t, db).LastProbed)
+	})
+
+	// a pass that read a stale watermark reports the bound it probed to, and the
+	// store keeps the higher one another instance already earned
+	t.Run("aWatermarkBehindTheStoredOneDoesNotMoveIt", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.send(1, 2, 3)
+
+		db := watcherStore(t)
+		require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 9, store.UnresolvedDelta{}))
+
+		_, err := newTestClearer(chain, db).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint64(9), clearingState(t, db).LastProbed)
 	})
 
 	t.Run("aClientWithNothingSentProbesNothing", func(t *testing.T) {
@@ -389,6 +462,7 @@ func TestClearerClear(t *testing.T) {
 		_, err := newTestClearer(chain, db).Clear(ctx, sourceClientID)
 		require.ErrorContains(t, err, "rpc refused the batch")
 		assert.Empty(t, recorded(t, db))
+		assert.Equal(t, store.ClearingState{}, clearingState(t, db))
 	})
 
 	t.Run("bothQueriesAreChunked", func(t *testing.T) {
@@ -436,7 +510,39 @@ func TestClearerClear(t *testing.T) {
 		assert.Equal(t, 2, (<-done).Probed)
 	})
 
-	t.Run("aSendWithNoLogIsReportedAndRetried", func(t *testing.T) {
+	t.Run("aWarmPassProbesOnlyWhatTheWatermarkHasNotSettled", func(t *testing.T) {
+		chain := newFakeChain()
+
+		const sent = 2 * probeChunk
+
+		for sequence := uint64(1); sequence <= sent; sequence++ {
+			chain.send(sequence)
+		}
+
+		// everything is settled but one packet, which stays stuck in a terminal
+		// state: a client's history must not pin the probe to it
+		chain.settle(sequenceRange(2, sent)...)
+
+		clearer := newTestClearer(chain, watcherStore(t))
+
+		cold, err := clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+		assert.Equal(t, sent, cold.Probed)
+
+		coldCalls := len(chain.probeCalls())
+		require.Equal(t, 2, coldCalls)
+
+		chain.send(sent + 1)
+
+		warm, err := clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1, warm.Probed)
+		assert.Equal(t, [][]uint64{{sent + 1}}, chain.probeCalls()[coldCalls:])
+		assert.Less(t, len(chain.probeCalls())-coldCalls, coldCalls)
+	})
+
+	t.Run("anUnresolvedSendIsProbedUntilItSettles", func(t *testing.T) {
 		chain := newFakeChain()
 		chain.send(1, 2)
 		chain.prune(1)
@@ -447,18 +553,32 @@ func TestClearerClear(t *testing.T) {
 		result, err := clearer.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
-		// the pruned send has no row to skip it by, so it is looked up again
+		// the pruned send has no row and sits below the watermark, so only the
+		// unresolved set keeps it in the probe
 		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1, Unresolved: 1}, result)
 		assert.Equal(t, []uint64{2}, recorded(t, db))
+		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
+
+		before := len(chain.probeCalls())
 
 		result, err = clearer.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
+		assert.Equal(t, [][]uint64{{1}}, chain.probeCalls()[before:])
 		assert.Equal(t, 1, result.Unresolved)
-		assert.Equal(t, [][]uint64{{1}}, chain.findCalls()[1:])
+
+		// an ack or a timeout deletes the commitment, which is the only thing
+		// that drains the set
+		chain.settle(1)
+
+		result, err = clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Zero(t, result.Unresolved)
+		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 	})
 
-	t.Run("aFailedRowWriteFailsThePass", func(t *testing.T) {
+	t.Run("aFailedRowWriteLeavesNoWatermark", func(t *testing.T) {
 		chain := newFakeChain()
 		chain.send(1, 2)
 
@@ -467,7 +587,9 @@ func TestClearerClear(t *testing.T) {
 
 		_, err := newTestClearer(chain, storage).Clear(ctx, sourceClientID)
 		require.ErrorContains(t, err, "disk is full")
+
 		assert.Empty(t, recorded(t, db))
+		assert.Equal(t, store.ClearingState{}, clearingState(t, db))
 	})
 
 	t.Run("everyProbeNamesTheHeadTheSequenceWasReadAt", func(t *testing.T) {
@@ -532,7 +654,32 @@ func TestClearerClear(t *testing.T) {
 
 		assert.Empty(t, chain.probeCalls())
 		assert.Empty(t, recorded(t, db))
+		assert.Equal(t, store.ClearingState{}, clearingState(t, db))
 	})
+}
+
+// A sequence unresolved before and after must produce neither half of the
+// delta: adding would reset the first_seen_at an operator reads to tell how
+// long a packet has been stuck, and resolving would forget it outright.
+func TestUnresolvedDelta(t *testing.T) {
+	for name, tt := range map[string]struct {
+		probed, unresolved []uint64
+		add, resolve       []uint64
+	}{
+		"unchanged":   {probed: []uint64{5, 9}, unresolved: []uint64{5, 9}},
+		"add":         {probed: []uint64{5}, unresolved: []uint64{5, 9}, add: []uint64{9}},
+		"resolve":     {probed: []uint64{5, 9}, unresolved: []uint64{9}, resolve: []uint64{5}},
+		"replaced":    {probed: []uint64{5}, unresolved: []uint64{9}, add: []uint64{9}, resolve: []uint64{5}},
+		"allResolved": {probed: []uint64{5, 9}, resolve: []uint64{5, 9}},
+		"firstSeen":   {unresolved: []uint64{9}, add: []uint64{9}},
+		"bothEmpty":   {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			delta := unresolvedDelta(tt.probed, tt.unresolved)
+			assert.Equal(t, tt.add, delta.Add)
+			assert.Equal(t, tt.resolve, delta.Resolve)
+		})
+	}
 }
 
 // assertCovers checks the calls split at size and cover 1..sent between them.

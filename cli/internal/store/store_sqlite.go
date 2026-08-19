@@ -361,6 +361,81 @@ func (db *SqliteDB) ListPacketSequencesFrom(
 	return sequences, nil
 }
 
+func (db *SqliteDB) GetClearingState(ctx context.Context, chainID string, clientID string) (ClearingState, error) {
+	db.logger.Debug("GetClearingState", "chainID", chainID, "clientID", clientID)
+
+	if chainID == "" || clientID == "" {
+		return ClearingState{}, errors.New("chainID and clientID are required")
+	}
+
+	lastProbed, err := db.repo.GetClearingState(ctx, chainID, clientID)
+	// no row means clearing has never probed this client, which is "probe from one"
+	if err != nil && !errors.Is(errNormalize(err), ErrNotFound) {
+		return ClearingState{}, errNormalize(err)
+	}
+
+	unresolved, err := db.repo.ListUnresolvedSequences(ctx, chainID, clientID)
+	if err != nil {
+		return ClearingState{}, errNormalize(err)
+	}
+
+	state := ClearingState{
+		LastProbed: uint64(lastProbed), //nolint:gosec // sequences fit in int64
+	}
+
+	for _, sequence := range unresolved {
+		state.Unresolved = append(state.Unresolved, uint64(sequence)) //nolint:gosec // sequences fit in int64
+	}
+
+	return state, nil
+}
+
+//nolint:dupl // the dialect wrappers are structurally parallel by design
+func (db *SqliteDB) SetClearingState(
+	ctx context.Context,
+	chainID string,
+	clientID string,
+	lastProbed uint64,
+	delta UnresolvedDelta,
+) error {
+	db.logger.Debug("SetClearingState", "chainID", chainID, "clientID", clientID, "lastProbed", lastProbed)
+
+	if chainID == "" || clientID == "" {
+		return errors.New("chainID and clientID are required")
+	}
+
+	// adding rather than replacing is what keeps first_seen_at, and leaving a
+	// sequence out of both halves is what keeps a pass from deleting rows it
+	// never probed
+	for _, sequence := range delta.Add {
+		err := db.repo.CreateUnresolvedSequence(ctx, reposqlite.CreateUnresolvedSequenceParams{
+			ChainID:  chainID,
+			ClientID: clientID,
+			Sequence: int64(sequence), //nolint:gosec // sequences fit in int64
+		})
+		if err != nil {
+			return errors.Wrapf(err, "recording unresolved sequence %d", sequence)
+		}
+	}
+
+	for _, sequence := range delta.Resolve {
+		err := db.repo.DeleteUnresolvedSequence(ctx, reposqlite.DeleteUnresolvedSequenceParams{
+			ChainID:  chainID,
+			ClientID: clientID,
+			Sequence: int64(sequence), //nolint:gosec // sequences fit in int64
+		})
+		if err != nil {
+			return errors.Wrapf(err, "clearing unresolved sequence %d", sequence)
+		}
+	}
+
+	return db.repo.SetClearingState(ctx, reposqlite.SetClearingStateParams{
+		ChainID:            chainID,
+		ClientID:           clientID,
+		LastProbedSequence: int64(lastProbed), //nolint:gosec // sequences fit in int64
+	})
+}
+
 func (db *SqliteDB) UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error {
 	db.logger.Debug("UpdatePacketStatus", "key", key, "status", status)
 
