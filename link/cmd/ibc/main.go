@@ -154,6 +154,11 @@ func init() {
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
 
+	cmdDeployRenderConfig.Flags().
+		StringVar(&flagDeployRenderSignerA, "signer-a", "", "signers[] alias submitting relay txs on chainA")
+	cmdDeployRenderConfig.Flags().
+		StringVar(&flagDeployRenderSignerB, "signer-b", "", "signers[] alias submitting relay txs on chainB")
+
 	// IFT commands
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTName, "name", "", "ERC20 token name")
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "ERC20 token symbol (need not be unique)")

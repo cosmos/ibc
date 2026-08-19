@@ -183,13 +183,15 @@ func TestDeployConnection(t *testing.T) {
 
 	// render-config pairs the two manifests into one relayer.connections[]
 	// entry: clientA/clientB, each end's counterparty implied by the other.
-	rendered, err := driver.Deploy(ctx, "render-config", chainAID, chainBID)
+	rendered, err := driver.Deploy(ctx, "render-config", chainAID, chainBID,
+		"--signer-a", deployerAlias, "--signer-b", deployerAlias)
 	require.NoError(t, err)
 	for _, want := range []string{
 		"alias: " + chainAID + "-" + chainBID,
 		"clientId: " + sharedClientID,
 		`chainId: "` + chainAID + `"`,
 		`chainId: "` + chainBID + `"`,
+		"signer: " + deployerAlias,
 	} {
 		require.Contains(t, string(rendered), want)
 	}

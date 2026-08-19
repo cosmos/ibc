@@ -40,6 +40,9 @@ var (
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
 
+	flagDeployRenderSignerA string
+	flagDeployRenderSignerB string
+
 	flagDeployIFTName        string
 	flagDeployIFTSymbol      string
 	flagDeployIFTOwner       string
@@ -529,9 +532,10 @@ func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	return chain
 }
 
-func renderedClientEnd(m *manifest.Manifest, c manifest.Client) config.ClientEnd {
+func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) config.ClientEnd {
 	return config.ClientEnd{
 		ChainID:  m.ChainID,
+		Signer:   signer,
 		ClientID: c.ClientID,
 		Type:     config.ClientType(c.Type),
 	}
@@ -549,7 +553,7 @@ type renderedDeployment struct {
 
 // renderRelayConfig projects two deployment manifests into the config
 // sections needed to relay between them for every mutual client pair.
-func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDeployment, map[string]string, error) {
+func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest, signerA, signerB string) (renderedDeployment, map[string]string, error) {
 	full := cfg
 	full.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
 	full.Relayer.Connections = nil
@@ -571,8 +575,8 @@ func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest) (renderedDepl
 		}
 		full.Relayer.Connections = append(full.Relayer.Connections, config.ConnectionConfig{
 			Alias:   alias,
-			ClientA: renderedClientEnd(a, ca),
-			ClientB: renderedClientEnd(b, cb),
+			ClientA: renderedClientEnd(a, ca, signerA),
+			ClientB: renderedClientEnd(b, cb, signerB),
 		})
 		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
 		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
@@ -598,6 +602,16 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	signers := []string{flagDeployRenderSignerA, flagDeployRenderSignerB}
+	for i, alias := range signers {
+		if alias == "" {
+			return errors.Errorf("--signer-%c is required: the signers[] alias submitting relay txs on %s",
+				'a'+i, args[i])
+		}
+		if _, ok := cfg.Signer(alias); !ok {
+			return errors.Errorf("signer %q not found in config", alias)
+		}
+	}
 	manifests := make([]*manifest.Manifest, len(args))
 	for i, chainID := range args {
 		m, loadErr := manifest.Load(flagDeployManifestDir, chainID)
@@ -612,7 +626,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		}
 		manifests[i] = m
 	}
-	out, comments, err := renderRelayConfig(cfg, manifests[0], manifests[1])
+	out, comments, err := renderRelayConfig(cfg, manifests[0], manifests[1], signers[0], signers[1])
 	if err != nil {
 		return err
 	}
