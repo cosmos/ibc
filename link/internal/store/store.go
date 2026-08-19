@@ -11,7 +11,7 @@ import (
 	pgx "github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 )
 
 // Store a unified, database-agnostic API for persistence.

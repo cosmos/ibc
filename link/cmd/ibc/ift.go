@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 )
 
@@ -210,7 +210,7 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 		return errors.Wrap(err, "symbol")
 	}
 
-	return config.PrintJSON(map[string]string{
+	return printJSON(map[string]string{
 		"address": account,
 		"symbol":  symbol,
 		"balance": balance.String(),
@@ -218,7 +218,7 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 }
 
 func printTxHash(txHash string) error {
-	return config.PrintJSON(map[string]string{"txHash": txHash})
+	return printJSON(map[string]string{"txHash": txHash})
 }
 
 func parseIFTAmount(s string) *big.Int {

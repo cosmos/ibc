@@ -13,7 +13,8 @@ import (
 	"github.com/pkg/errors"
 	migrate "github.com/rubenv/sql-migrate"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
+	"github.com/cosmos/ibc/link/internal/fsutil"
 	reposqlite "github.com/cosmos/ibc/link/internal/store/repository/sqlite"
 
 	//nolint:blank-imports // SQL driver
@@ -83,7 +84,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 	}
 
 	// sqlite can auto-create db files, but not nested directories.
-	if err = config.EnsureDirectory(path); err != nil {
+	if err = fsutil.EnsureDirectory(path); err != nil {
 		return nil, errors.Wrapf(err, "ensure directory for %s", path)
 	}
 

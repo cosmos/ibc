@@ -26,6 +26,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/iftsendcallconstructor"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	linkconfig "github.com/cosmos/ibc/link/config"
 )
 
 var testERC20Transactor = mustBinding(testerc20.NewTestERC20Transactor(common.Address{}, nil))
@@ -154,7 +155,7 @@ func DeployWithRelayerConfig(
 	if configure != nil {
 		configure(&config)
 	}
-	if config.SignerType == "" || config.SignerType == ibclink.RelayerSignerLocal {
+	if config.SignerType == "" || config.SignerType == linkconfig.SignerLocal {
 		require.NoError(t, relayer.storeKey(config.SignerKeyFile), "e2etest: store relayer signer key")
 	}
 	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write config")
@@ -384,7 +385,7 @@ func buildConfig(
 			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
 		}
 		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+			Name: string(attestor.ID()), Type: linkconfig.AttestorTypeRemote, GRPC: attestor.Endpoint(),
 		})
 	}
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 

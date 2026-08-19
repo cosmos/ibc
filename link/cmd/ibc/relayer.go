@@ -13,7 +13,6 @@ import (
 
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
 )
 
@@ -155,8 +154,8 @@ func relayerCall[Req, Resp any](
 	}
 
 	if pm, ok := any(res.Msg).(proto.Message); ok {
-		return config.PrintProtoJSON(pm)
+		return printProtoJSON(pm)
 	}
 
-	return config.PrintJSON(res.Msg)
+	return printJSON(res.Msg)
 }

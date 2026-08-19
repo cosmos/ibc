@@ -8,8 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/chains/evm"
-	"github.com/cosmos/ibc/link/internal/config"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 

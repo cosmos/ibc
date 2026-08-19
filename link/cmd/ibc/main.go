@@ -12,13 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/deploy"
 	"github.com/cosmos/ibc/link/internal/pkg/logging"
 )
 
-// global globalFlags, loaded in config.DeclarePersistentFlags()
-var globalFlags = config.DefaultFlagSet()
+var globalFlags = defaultFlagSet()
 
 // useStatus is the shared "status" subcommand name and status-field key,
 // factored out to satisfy goconst across cmd/ibc.
@@ -49,7 +47,7 @@ func runMain() int {
 // single init() for binding all commands to rootCmd
 func init() {
 	// setup global flags
-	config.DeclarePersistentFlags(rootCmd, &globalFlags)
+	declarePersistentFlags(rootCmd, &globalFlags)
 
 	cobra.OnInitialize(func() {
 		slog.SetDefault(logging.Default(globalFlags.LogJSON))

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	linkconfig "github.com/cosmos/ibc/link/config"
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box
@@ -17,7 +17,7 @@ import (
 type RelayerConfig struct {
 	DBPath      string
 	SignerAlias string
-	// SignerType defaults to RelayerSignerLocal. A remote transaction signer is
+	// SignerType defaults to config.SignerLocal. A remote transaction signer is
 	// shared by both ends of every route.
 	SignerType string
 	SignerGRPC string
@@ -59,7 +59,7 @@ type RelayerConnection struct {
 // remote entry is reached at a bare gRPC host:port
 type RelayerAttestor struct {
 	Name    string
-	Type    string
+	Type    linkconfig.AttestorType
 	ChainID string // local only
 	GRPC    string // remote only
 	KeyFile string // local only
@@ -71,7 +71,7 @@ func WriteRelayerConfig(path string, cfg RelayerConfig) error {
 	if err != nil {
 		return fmt.Errorf("ibclink: relayer config: %w", err)
 	}
-	data, err := yaml.Marshal(file)
+	data, err := linkconfig.MarshalYAML(file)
 	if err != nil {
 		return fmt.Errorf("ibclink: encode relayer config: %w", err)
 	}
@@ -84,37 +84,38 @@ func WriteRelayerConfig(path string, cfg RelayerConfig) error {
 	return nil
 }
 
-func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
+func buildRelayerFileConfig(cfg RelayerConfig) (linkconfig.Config, error) {
 	signerType := cfg.SignerType
 	if signerType == "" {
-		signerType = RelayerSignerLocal
+		signerType = linkconfig.SignerLocal
 	}
 	switch {
 	case cfg.DBPath == "":
-		return fileConfig{}, errors.New("db path is required")
+		return linkconfig.Config{}, errors.New("db path is required")
 	case cfg.SignerAlias == "":
-		return fileConfig{}, errors.New("signer alias is required")
-	case signerType == RelayerSignerLocal && cfg.SignerKeyFile == "":
-		return fileConfig{}, errors.New("signer key file is required")
+		return linkconfig.Config{}, errors.New("signer alias is required")
+	case signerType == linkconfig.SignerLocal && cfg.SignerKeyFile == "":
+		return linkconfig.Config{}, errors.New("signer key file is required")
 	case len(cfg.Chains) == 0:
-		return fileConfig{}, errors.New("at least one chain is required")
+		return linkconfig.Config{}, errors.New("at least one chain is required")
 	case len(cfg.Connections) == 0:
-		return fileConfig{}, errors.New("at least one connection is required")
+		return linkconfig.Config{}, errors.New("at least one connection is required")
 	}
 
-	processSigner := signerConfig{Alias: cfg.SignerAlias, Type: signerType}
-	if signerType == RelayerSignerRemote {
+	processSigner := linkconfig.SignerConfig{Alias: cfg.SignerAlias, Type: signerType}
+	if signerType == linkconfig.SignerRemote {
 		processSigner.GRPC = cfg.SignerGRPC
 		processSigner.RemoteKeyID = cfg.SignerRemoteKeyID
 	} else {
 		processSigner.File = cfg.SignerKeyFile
 	}
-	file := fileConfig{
-		Server:  serverConfig{ListenAddress: loopbackAnyPort},
-		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
-		Signers: []signerConfig{processSigner},
+	dispatchPollInterval := 100 * time.Millisecond
+	file := linkconfig.Config{
+		Server:  linkconfig.ServerConfig{ListenAddress: loopbackAnyPort},
+		DB:      linkconfig.DBConfig{Type: linkconfig.DBTypeSQLite, URL: cfg.DBPath},
+		Signers: linkconfig.Signers{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
-		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},
+		Relayer: linkconfig.RelayerConfig{DispatchPollInterval: &dispatchPollInterval},
 	}
 
 	for _, chain := range cfg.Chains {
@@ -122,9 +123,9 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		if batchSize == 0 {
 			batchSize = 1
 		}
-		file.Chains = append(file.Chains, chainConfig{
+		file.Chains = append(file.Chains, linkconfig.ChainConfig{
 			ChainID: chain.ChainID,
-			EVM: evmChainConfig{
+			EVM: &linkconfig.EVMChainConfig{
 				RPC:         chain.RPC,
 				ICS26Router: chain.ICS26Router,
 			},
@@ -134,12 +135,16 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		// submission delay paces only consecutive transactions on one chain
 		// (retries and multi-route traffic); it must stay non-zero because
 		// zero is coerced back to the mainnet default.
-		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
-			ChainID:            chain.ChainID,
-			TxSubmissionDelay:  "10ms",
-			PacketBatchSize:    batchSize,
-			PacketBatchTimeout: chain.PacketBatchTimeout,
-		})
+		txSubmissionDelay := 10 * time.Millisecond
+		override := linkconfig.RelayerChainOverride{
+			ChainID:           chain.ChainID,
+			TxSubmissionDelay: &txSubmissionDelay,
+			PacketBatchSize:   &batchSize,
+		}
+		if chain.PacketBatchTimeout != 0 {
+			override.PacketBatchTimeout = &chain.PacketBatchTimeout
+		}
+		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, override)
 	}
 
 	if len(cfg.Attestors) == 0 {
@@ -149,25 +154,25 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	} else {
 		for _, attestor := range cfg.Attestors {
 			if err := addAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
-				return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
+				return linkconfig.Config{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
 			}
 		}
 	}
 
 	for _, connection := range cfg.Connections {
-		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
+		file.Relayer.Connections = append(file.Relayer.Connections, linkconfig.ConnectionConfig{
 			Alias: connection.ClientA + "-" + connection.ClientB,
-			ClientA: clientEndFileConfig{
+			ClientA: linkconfig.ClientEnd{
 				ChainID:  connection.ChainA,
 				Signer:   cfg.SignerAlias,
 				ClientID: connection.ClientA,
-				Type:     "attestation",
+				Type:     linkconfig.ClientTypeAttestation,
 			},
-			ClientB: clientEndFileConfig{
+			ClientB: linkconfig.ClientEnd{
 				ChainID:  connection.ChainB,
 				Signer:   cfg.SignerAlias,
 				ClientID: connection.ClientB,
-				Type:     "attestation",
+				Type:     linkconfig.ClientTypeAttestation,
 			},
 		})
 	}
@@ -178,14 +183,14 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 // Local entries always bring their own key file, unlike the implicit
 // default (addDefaultLocalAttestor), so multiple local attestors don't
 // share a signing identity.
-func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
+func addAttestor(file *linkconfig.Config, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
-	case RelayerAttestorRemote:
-		file.Attestors = append(file.Attestors, attestorFileConfig{
-			Name: attestor.Name, Type: RelayerAttestorRemote, GRPC: attestor.GRPC,
+	case linkconfig.AttestorTypeRemote:
+		file.Attestors = append(file.Attestors, linkconfig.AttestorConfig{
+			Name: attestor.Name, Type: linkconfig.AttestorTypeRemote, GRPC: attestor.GRPC,
 		})
 		return nil
-	case RelayerAttestorLocal:
+	case linkconfig.AttestorTypeLocal:
 		switch {
 		case attestor.ChainID == "":
 			return errors.New("chainId is required for local attestors")
@@ -194,11 +199,11 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 		}
 
 		signerAlias := attestor.Name + "-signer"
-		file.Signers = append(file.Signers, signerConfig{
-			Alias: signerAlias, Type: RelayerSignerLocal, File: attestor.KeyFile,
+		file.Signers = append(file.Signers, linkconfig.SignerConfig{
+			Alias: signerAlias, Type: linkconfig.SignerLocal, File: attestor.KeyFile,
 		})
-		file.Attestors = append(file.Attestors, attestorFileConfig{
-			Name: attestor.Name, ChainID: attestor.ChainID, Type: RelayerAttestorLocal,
+		file.Attestors = append(file.Attestors, linkconfig.AttestorConfig{
+			Name: attestor.Name, ChainID: attestor.ChainID, Type: linkconfig.AttestorTypeLocal,
 			Signer: signerAlias, FinalityOffset: uint(finalityOffset),
 		})
 		return nil
@@ -209,52 +214,24 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 
 // addDefaultLocalAttestor declares the default local attestor for a chain,
 // backed by the relayer process's own signer.
-func addDefaultLocalAttestor(file *fileConfig, processSigner signerConfig, finalityOffset uint64, chainID string) {
+func addDefaultLocalAttestor(
+	file *linkconfig.Config,
+	processSigner linkconfig.SignerConfig,
+	finalityOffset uint64,
+	chainID string,
+) {
 	name := localAttestorName(chainID)
 	signerAlias := name + "-signer"
 
 	signer := processSigner
 	signer.Alias = signerAlias
 	file.Signers = append(file.Signers, signer)
-	file.Attestors = append(file.Attestors, attestorFileConfig{
-		Name: name, ChainID: chainID, Type: RelayerAttestorLocal,
+	file.Attestors = append(file.Attestors, linkconfig.AttestorConfig{
+		Name: name, ChainID: chainID, Type: linkconfig.AttestorTypeLocal,
 		Signer: signerAlias, FinalityOffset: uint(finalityOffset),
 	})
 }
 
 func localAttestorName(chainID string) string {
 	return "local-attestor-" + chainID
-}
-
-const (
-	RelayerSignerLocal    = "local"
-	RelayerSignerRemote   = "remote"
-	RelayerAttestorLocal  = "local"
-	RelayerAttestorRemote = "remote"
-)
-
-type relayerFileConfig struct {
-	DispatchPollInterval string                    `yaml:"dispatchPollInterval,omitempty"`
-	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
-	Connections          []connectionFileConfig    `yaml:"connections"`
-}
-
-type chainOverrideFileConfig struct {
-	ChainID            string        `yaml:"chainId"`
-	TxSubmissionDelay  string        `yaml:"txSubmissionDelay"`
-	PacketBatchSize    int           `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
-}
-
-type connectionFileConfig struct {
-	Alias   string              `yaml:"alias"`
-	ClientA clientEndFileConfig `yaml:"clientA"`
-	ClientB clientEndFileConfig `yaml:"clientB"`
-}
-
-type clientEndFileConfig struct {
-	ChainID  string `yaml:"chainId"`
-	Signer   string `yaml:"signer"`
-	ClientID string `yaml:"clientId"`
-	Type     string `yaml:"type"`
 }

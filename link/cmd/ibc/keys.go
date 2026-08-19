@@ -11,7 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
+	"github.com/cosmos/ibc/link/internal/fsutil"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/keyfile"
 )
@@ -154,7 +155,7 @@ func keysList(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	keyPath, err := config.ExpandHome(filepath.Join(globalFlags.Home, "keys"))
+	keyPath, err := fsutil.ExpandHome(filepath.Join(globalFlags.Home, "keys"))
 	if err != nil {
 		return err
 	}
@@ -174,7 +175,7 @@ func keysList(_ *cobra.Command, _ []string) error {
 		})
 	}
 
-	return config.PrintJSON(out)
+	return printJSON(out)
 }
 
 func keysImport(_ *cobra.Command, args []string) error {
@@ -270,7 +271,7 @@ func addSignerToConfig(cfg config.Config, alias string) error {
 		return err
 	}
 
-	return cfg.StoreToFileWithComments(configPath)
+	return writeConfigFile(configPath, cfg, config.CollectComments(cfg))
 }
 
 func printKey(key signer.LocalKey, showPrivate bool, extra map[string]any) error {
@@ -298,7 +299,7 @@ func printKey(key signer.LocalKey, showPrivate bool, extra map[string]any) error
 		kv[k] = v
 	}
 
-	return config.PrintJSON(kv)
+	return printJSON(kv)
 }
 
 func toHex(b []byte) string {

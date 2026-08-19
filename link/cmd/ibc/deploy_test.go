@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/internal/deploy/manifest"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 )
@@ -177,7 +177,7 @@ func TestRenderRelayConfig(t *testing.T) {
 
 // goccy silently drops comments whose path doesn't resolve, so assert the
 // paths agree with the emitted document rather than just with each other.
-// CollectComments' own logic is unit-tested directly in internal/config.
+// CollectComments' own logic is unit-tested directly in config.
 func TestRenderConfigEmitsComments(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
@@ -199,7 +199,7 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	require.NoError(t, err)
 
 	rendered := captureStdout(t, func() {
-		require.NoError(t, config.PrintYAMLWithComments(out, comments))
+		require.NoError(t, printYAMLWithComments(out, comments))
 	})
 
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)

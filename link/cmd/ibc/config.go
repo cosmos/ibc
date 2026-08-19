@@ -9,7 +9,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/config"
+	"github.com/cosmos/ibc/link/internal/fsutil"
 	"github.com/cosmos/ibc/link/internal/livevalidate"
 )
 
@@ -83,7 +84,7 @@ func configAddChain(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	return cfg.StoreToFileWithComments(configPath)
+	return writeConfigFile(configPath, cfg, config.CollectComments(cfg))
 }
 
 func configNew(_ *cobra.Command, _ []string) error {
@@ -92,17 +93,17 @@ func configNew(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	cfg := config.DefaultConfig()
+	cfg := config.Default()
 
 	if flagConfigNewOut {
-		return config.PrintYAML(cfg)
+		return printYAMLWithComments(cfg, nil)
 	}
 
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf("config file %s already exists", configPath)
 	}
 
-	if err := cfg.StoreToFile(configPath); err != nil {
+	if err := writeConfigFile(configPath, cfg, nil); err != nil {
 		return errors.Wrap(err, "unable to write file")
 	}
 
@@ -126,7 +127,7 @@ func configValidate(cmd *cobra.Command, _ []string) error {
 	// todo: it still logs store's log, we need to add config.logging{} params
 	// to truly suppress logging (in followup PRs)
 	if !globalFlags.Quiet {
-		return config.PrintJSON(map[string]any{useStatus: "valid"})
+		return printJSON(map[string]any{useStatus: "valid"})
 	}
 
 	return nil
@@ -140,7 +141,7 @@ func printConfigHome(_ *cobra.Command, _ []string) {
 
 // setupHomeWithConfig changes process directory to `--home` and parses the config
 func setupHomeWithConfig() (config.Config, error) {
-	home, err := config.ExpandHome(globalFlags.Home)
+	home, err := fsutil.ExpandHome(globalFlags.Home)
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "home")
 	}
@@ -151,7 +152,7 @@ func setupHomeWithConfig() (config.Config, error) {
 	}
 
 	// ensure --home exists
-	if err = config.EnsureDirectory(configPath); err != nil {
+	if err = fsutil.EnsureDirectory(configPath); err != nil {
 		return config.Config{}, errors.Wrapf(err, "unable to create home directory %s", home)
 	}
 
@@ -159,7 +160,10 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
 	}
 
-	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig(), flagConfigValidateStrict)
+	cfg, err := config.LoadFile(configPath, config.LoadOptions{
+		SkipValidation:        !globalFlags.ValidateConfig(),
+		DisallowUnknownFields: flagConfigValidateStrict,
+	})
 	if err != nil {
 		return config.Config{}, err
 	}

@@ -9,7 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/config"
+	"github.com/cosmos/ibc/link/internal/fsutil"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -29,7 +29,7 @@ type PersistedLocalKey struct {
 func KeyFilePath(homePath, keyName string) (string, error) {
 	filename := keyName + ".json"
 	path := filepath.Join(homePath, "/keys", filepath.Clean(filename))
-	return config.ExpandHome(path)
+	return fsutil.ExpandHome(path)
 }
 
 func GenerateLocalKey(keyType keyfile.Type) (LocalKey, error) {

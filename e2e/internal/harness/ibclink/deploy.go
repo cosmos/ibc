@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	linkconfig "github.com/cosmos/ibc/link/config"
 )
 
 // deployCommandTimeout bounds the sequential deployment transactions a
@@ -53,24 +53,24 @@ func WriteDeployConfig(path string, cfg DeployConfig) error {
 		return errors.New("ibclink: deploy config: at least one chain is required")
 	}
 
-	file := fileConfig{
-		Server: serverConfig{ListenAddress: loopbackAnyPort},
-		DB:     dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
-		Signers: []signerConfig{{
+	file := linkconfig.Config{
+		Server: linkconfig.ServerConfig{ListenAddress: loopbackAnyPort},
+		DB:     linkconfig.DBConfig{Type: linkconfig.DBTypeSQLite, URL: cfg.DBPath},
+		Signers: linkconfig.Signers{{
 			Alias: cfg.SignerAlias,
-			Type:  RelayerSignerLocal,
+			Type:  linkconfig.SignerLocal,
 			File:  cfg.SignerKeyFile,
 		}},
 	}
 	for _, chain := range cfg.Chains {
-		file.Chains = append(file.Chains, chainConfig{
+		file.Chains = append(file.Chains, linkconfig.ChainConfig{
 			ChainID:  chain.ChainID,
-			EVM:      evmChainConfig{RPC: chain.RPC, ICS26Router: placeholderRouter},
+			EVM:      &linkconfig.EVMChainConfig{RPC: chain.RPC, ICS26Router: placeholderRouter},
 			Deployer: cfg.SignerAlias,
 		})
 	}
 
-	data, err := yaml.Marshal(file)
+	data, err := linkconfig.MarshalYAML(file)
 	if err != nil {
 		return fmt.Errorf("ibclink: encode deploy config: %w", err)
 	}

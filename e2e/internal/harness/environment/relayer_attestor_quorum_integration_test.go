@@ -14,6 +14,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	linkconfig "github.com/cosmos/ibc/link/config"
 	"github.com/cosmos/ibc/link/keyfile"
 )
 
@@ -130,12 +131,12 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 		require.NoError(t, err)
 
 		attestors := []ibclink.RelayerAttestor{
-			{Name: string(attestorA1), Type: ibclink.RelayerAttestorRemote, GRPC: resolvedA1.Endpoint()},
-			{Name: string(attestorB), Type: ibclink.RelayerAttestorRemote, GRPC: resolvedB.Endpoint()},
+			{Name: string(attestorA1), Type: linkconfig.AttestorTypeRemote, GRPC: resolvedA1.Endpoint()},
+			{Name: string(attestorB), Type: linkconfig.AttestorTypeRemote, GRPC: resolvedB.Endpoint()},
 		}
 		if includeSecondAttestorA {
 			attestors = append(attestors, ibclink.RelayerAttestor{
-				Name: string(attestorA2), Type: ibclink.RelayerAttestorRemote, GRPC: resolvedA2.Endpoint(),
+				Name: string(attestorA2), Type: linkconfig.AttestorTypeRemote, GRPC: resolvedA2.Endpoint(),
 			})
 		}
 
