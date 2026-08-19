@@ -3,7 +3,6 @@
 package config
 
 import (
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -30,8 +29,7 @@ const (
 type RelayerConfig struct {
 	DispatchPollInterval *time.Duration         `yaml:"dispatchPollInterval,omitempty"`
 	ChainOverrides       []RelayerChainOverride `yaml:"chainOverrides"`
-	Clients              []ClientConfig         `yaml:"clients"`
-	Routes               []RouteConfig          `yaml:"routesToRelay"`
+	Connections          []ConnectionConfig     `yaml:"connections"`
 }
 
 // RelayerChainOverride relay settings for one chain.
@@ -49,41 +47,26 @@ type RelayerEVMConfig struct {
 	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
 }
 
-// ClientConfig a light client on a chain.
-type ClientConfig struct {
-	// Alias unique config-level handle referenced by routes.
-	Alias                string             `yaml:"alias"`
-	ClientID             string             `yaml:"clientId"`
-	ChainID              string             `yaml:"chainId"`
-	CounterpartyChainID  string             `yaml:"counterpartyChainId"`
-	CounterpartyClientID string             `yaml:"counterpartyClientId"`
-	Type                 ClientType         `yaml:"type"`
-	AttestorSet          *AttestorSetConfig `yaml:"attestorSet,omitempty"`
+// ConnectionConfig one bidirectional IBC connection the relayer actively
+// relays, in both directions. ClientA's counterparty is simply ClientB (and
+// vice versa).
+type ConnectionConfig struct {
+	Alias   string    `yaml:"alias"`
+	ClientA ClientEnd `yaml:"clientA"`
+	ClientB ClientEnd `yaml:"clientB"`
 }
 
-// AttestorSetConfig attestation policy for a client.
-type AttestorSetConfig struct {
-	CounterpartyChainFinalityOffset uint64          `yaml:"counterpartyChainFinalityOffset"`
-	Threshold                       int             `yaml:"threshold"`
-	Attestors                       []AttestorEntry `yaml:"attestors"`
-}
+// ClientEnd one side of a connection: a light client on chainId,
+// tracking the connection's other end as its counterparty
+type ClientEnd struct {
+	ChainID  string     `yaml:"chainId"`
+	Signer   string     `yaml:"signer"`
+	ClientID string     `yaml:"clientId"`
+	Type     ClientType `yaml:"type"`
 
-// AttestorEntry an attestor the relayer queries for packet and state attestations.
-type AttestorEntry struct {
-	Name string       `yaml:"name"`
-	Type AttestorType `yaml:"type"`
-	GRPC string       `yaml:"grpc,omitempty"`
-}
-
-// RouteConfig packets sent from the source client are relayed through the
-// entire packet lifecycle: recv, ack, timeout.
-type RouteConfig struct {
-	SourceClient string `yaml:"sourceClient"`
-	// SourceSignerAlias and DestSignerAlias are the signer aliases used to submit relay
-	// transactions on the route's source and destination chains.
-	SourceSignerAlias string          `yaml:"sourceSignerAlias"`
-	DestSignerAlias   string          `yaml:"destSignerAlias"`
-	AutoRelay         AutoRelayConfig `yaml:"autoRelay,omitempty"`
+	// AutoRelay configures auto-relay for packets flowing FROM this end's
+	// chain TOWARD the counterparty end.
+	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -105,25 +88,19 @@ func (c RelayerConfig) ChainOverride(chainID string) (RelayerChainOverride, bool
 	return RelayerChainOverride{}, false
 }
 
-// ClientByAlias returns the client config for the given alias.
-func (c RelayerConfig) ClientByAlias(alias string) (ClientConfig, bool) {
-	for _, client := range c.Clients {
-		if client.Alias == alias {
-			return client, true
+// ClientEnd returns the client end matching (chainID, clientID) in any
+// configured connection, along with its counterparty
+func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty ClientEnd, ok bool) {
+	for _, conn := range c.Connections {
+		switch {
+		case conn.ClientA.ChainID == chainID && conn.ClientA.ClientID == clientID:
+			return conn.ClientA, conn.ClientB, true
+		case conn.ClientB.ChainID == chainID && conn.ClientB.ClientID == clientID:
+			return conn.ClientB, conn.ClientA, true
 		}
 	}
 
-	return ClientConfig{}, false
-}
-
-func (c RelayerConfig) Client(chainID, clientID string) (ClientConfig, bool) {
-	for _, client := range c.Clients {
-		if client.ChainID == chainID && client.ClientID == clientID {
-			return client, true
-		}
-	}
-
-	return ClientConfig{}, false
+	return ClientEnd{}, ClientEnd{}, false
 }
 
 // Validate validates the relayer config. Allows empty blocks.
@@ -135,11 +112,7 @@ func (c RelayerConfig) Validate() error {
 		return err
 	}
 
-	if err := c.validateClients(); err != nil {
-		return err
-	}
-
-	return c.validateRoutes()
+	return c.validateConnections()
 }
 
 func (c RelayerConfig) validateChainOverrides() error {
@@ -159,79 +132,61 @@ func (c RelayerConfig) validateChainOverrides() error {
 	return nil
 }
 
-func (c RelayerConfig) validateClients() error {
-	clients := make(map[string]struct{})
+func (c RelayerConfig) validateConnections() error {
 	aliases := make(map[string]struct{})
+	clientEnds := make(map[string]struct{})
 
-	for _, client := range c.Clients {
-		if err := client.Validate(); err != nil {
-			return errors.Wrapf(err, ".clients[%s]", client.Alias)
+	for _, conn := range c.Connections {
+		if err := conn.Validate(); err != nil {
+			return errors.Wrapf(err, ".connections[%s]", conn.Alias)
 		}
 
-		if _, ok := aliases[client.Alias]; ok {
-			return errors.Errorf(".clients duplicate alias: %q", client.Alias)
+		if _, ok := aliases[conn.Alias]; ok {
+			return errors.Errorf(".connections duplicate alias: %q", conn.Alias)
 		}
-		aliases[client.Alias] = struct{}{}
+		aliases[conn.Alias] = struct{}{}
 
-		key := client.ChainID + "/" + client.ClientID
-		if _, ok := clients[key]; ok {
-			return errors.Errorf(".clients duplicate client %q on chain %q", client.ClientID, client.ChainID)
-		}
-		clients[key] = struct{}{}
-	}
-
-	for _, client := range c.Clients {
-		if err := c.validateCounterparty(client); err != nil {
-			return err
+		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
+			key := end.ChainID + "/" + end.ClientID
+			if _, ok := clientEnds[key]; ok {
+				return errors.Errorf(".connections duplicate client %q on chain %q", end.ClientID, end.ChainID)
+			}
+			clientEnds[key] = struct{}{}
 		}
 	}
 
 	return nil
 }
 
-// validateCounterparty ensures both sides of a connection are configured for bi-directional relaying.
-func (c RelayerConfig) validateCounterparty(client ClientConfig) error {
-	counterparty, ok := c.Client(client.CounterpartyChainID, client.CounterpartyClientID)
-	if !ok {
-		return errors.Errorf(
-			".clients[%s] counterparty client %q on chain %q must also be configured for bi-directional relaying",
-			client.Alias, client.CounterpartyClientID, client.CounterpartyChainID,
-		)
+func (c ConnectionConfig) Validate() error {
+	if c.Alias == "" {
+		return errors.New(".alias required")
 	}
 
-	if counterparty.CounterpartyChainID != client.ChainID || counterparty.CounterpartyClientID != client.ClientID {
-		return errors.Errorf(
-			".clients[%s] counterparty client %q does not reference it back",
-			client.Alias, counterparty.Alias,
-		)
+	if err := c.ClientA.Validate(); err != nil {
+		return errors.Wrap(err, ".clientA")
+	}
+	if err := c.ClientB.Validate(); err != nil {
+		return errors.Wrap(err, ".clientB")
+	}
+
+	if c.ClientA.ChainID != "" && c.ClientA.ChainID == c.ClientB.ChainID {
+		return errors.New(".clientA and .clientB must be on different chains")
 	}
 
 	return nil
 }
 
-func (c RelayerConfig) validateRoutes() error {
-	// An empty relayer block is valid (e.g. an attestor-only process has no
-	// use for one), but configuring clients with no route to relay them is
-	// not.
-	if len(c.Clients) > 0 && len(c.Routes) == 0 {
-		return errors.New(".routesToRelay: no relayer routes configured")
-	}
-
-	routes := make(map[string]struct{})
-
-	for i, route := range c.Routes {
-		if err := route.Validate(); err != nil {
-			return errors.Wrapf(err, ".routesToRelay[%d]", i)
-		}
-
-		if _, ok := c.ClientByAlias(route.SourceClient); !ok {
-			return errors.Errorf(".routesToRelay[%d] references unknown client %q", i, route.SourceClient)
-		}
-
-		if _, ok := routes[route.SourceClient]; ok {
-			return errors.Errorf(".routesToRelay duplicate route for client %q", route.SourceClient)
-		}
-		routes[route.SourceClient] = struct{}{}
+func (c ClientEnd) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case c.ClientID == "":
+		return errors.New(".clientId required")
+	case c.Signer == "":
+		return errors.New(".signer required")
+	case c.Type != ClientTypeAttestation:
+		return errors.Errorf(".type unknown client type: %q", c.Type)
 	}
 
 	return nil
@@ -264,88 +219,6 @@ func (c RelayerEVMConfig) Validate() error {
 		return errors.New(".gasFeeCapMultiplier must be positive")
 	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
 		return errors.New(".gasTipCapMultiplier must be positive")
-	}
-
-	return nil
-}
-
-func (c ClientConfig) Validate() error {
-	switch {
-	case c.Alias == "":
-		return errors.New(".alias required")
-	case c.ClientID == "":
-		return errors.New(".clientId required")
-	case c.ChainID == "":
-		return errors.New(".chainId required")
-	case c.Type != ClientTypeAttestation:
-		return errors.Errorf(".type unknown client type: %q", c.Type)
-	case c.CounterpartyChainID == "":
-		return errors.New(".counterpartyChainId required")
-	case c.CounterpartyClientID == "":
-		return errors.New(".counterpartyClientId required")
-	}
-
-	if c.Type == ClientTypeAttestation {
-		if c.AttestorSet == nil {
-			return errors.Errorf(".attestorSet required for %s clients", ClientTypeAttestation)
-		}
-
-		if err := c.AttestorSet.Validate(); err != nil {
-			return errors.Wrap(err, ".attestorSet")
-		}
-	}
-
-	return nil
-}
-
-func (c AttestorSetConfig) Validate() error {
-	if c.Threshold < 1 {
-		return errors.New(".threshold must be at least 1")
-	}
-
-	if c.Threshold > len(c.Attestors) {
-		return errors.Errorf(".threshold %d exceeds number of attestors %d", c.Threshold, len(c.Attestors))
-	}
-
-	seen := make(map[AttestorEntry]struct{})
-
-	for i, attestor := range c.Attestors {
-		if err := attestor.Validate(); err != nil {
-			return errors.Wrapf(err, ".attestors[%d]", i)
-		}
-
-		if _, ok := seen[attestor]; ok {
-			return errors.Errorf(".attestors duplicate entry: name %q", attestor.Name)
-		}
-		seen[attestor] = struct{}{}
-	}
-
-	return nil
-}
-
-func (c AttestorEntry) Validate() error {
-	switch {
-	case c.Name == "":
-		return errors.New(".name required")
-	case c.Type != AttestorTypeRemote && c.Type != AttestorTypeLocal:
-		return errors.Errorf(".type unknown attestor type: %q", c.Type)
-	case c.Type == AttestorTypeRemote && c.GRPC == "":
-		return errors.New(".grpc required for remote attestors")
-	case strings.Contains(c.GRPC, "://"):
-		return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
-	}
-
-	return nil
-}
-
-func (c RouteConfig) Validate() error {
-	switch {
-	case c.SourceClient == "":
-		return errors.New(".sourceClient required")
-	case c.SourceSignerAlias == "":
-		return errors.New(".sourceSignerAlias required")
-	case c.DestSignerAlias == "":
-		return errors.New(".destSignerAlias required")
 	}
 
 	return nil

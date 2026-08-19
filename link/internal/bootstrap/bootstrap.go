@@ -51,29 +51,35 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Signers
-	signers, err := signerSet(ctx, cfg)
+	signers, err := signer.NewSetFromConfig(ctx, cfg.Signers)
 	if err != nil {
 		return nil, err
 	}
 
-	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same process.
-	// This might be useful for PoC/testing environments or when an operator wants to run the relayer
+	// Attestors
+	local, remote, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers)
+	if err != nil {
+		return nil, err
+	}
+
+	// Dual mode: if .attestor config is provided, then we can run both relayer and attestor in the same
+	// process. This might be useful for PoC/testing environments or when an operator wants to run the relayer
 	// and one of attestors in the same process.
 	var attestorService *attestor.Service
 
 	var attestorHandler *server.AttestorHandler
 
-	if len(cfg.Attestor.Attestations) > 0 {
+	if len(local) > 0 {
 		logger.Info("Attestor config provided, running in dual mode: relayer with attestor")
 
-		attestorService, attestorHandler, err = buildAttestor(cfg, clientSet, signers)
+		attestorService, attestorHandler, err = buildAttestor(local)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Proof generators
-	proofGenerators, err := proofgen.NewSetFromConfig(cfg, clientSet, attestorService)
+	proofGenerators, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
 	if err != nil {
 		return nil, err
 	}
@@ -141,12 +147,22 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}
 
 	// Signers
-	signers, err := signerSet(ctx, cfg)
+	signers, err := signer.NewSetFromConfig(ctx, cfg.Signers)
 	if err != nil {
 		return nil, err
 	}
 
-	attestorService, attestorHandler, err := buildAttestor(cfg, clientSet, signers)
+	// Attestors
+	local, _, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(local) == 0 {
+		return nil, attestor.ErrNoAttestations
+	}
+
+	attestorService, attestorHandler, err := buildAttestor(local)
 	if err != nil {
 		return nil, err
 	}
@@ -166,13 +182,9 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}, nil
 }
 
-func buildAttestor(
-	cfg config.Config,
-	clients *chains.ClientSet,
-	signers *signer.Set,
-) (*attestor.Service, *server.AttestorHandler, error) {
+func buildAttestor(local []attestor.Attestor) (*attestor.Service, *server.AttestorHandler, error) {
 	// Services
-	attestorService, err := attestor.NewFromConfig(cfg, clients, signers)
+	attestorService, err := attestor.New(local)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -181,19 +193,4 @@ func buildAttestor(
 	attestorHandler := server.NewAttestorHandler(attestorService)
 
 	return attestorService, attestorHandler, nil
-}
-
-func signerSet(ctx context.Context, cfg config.Config) (*signer.Set, error) {
-	set := signer.NewSet()
-
-	for _, signerConfig := range cfg.Signers {
-		signer, alias, err := signer.NewSignerFromConfig(ctx, signerConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		set.Set(alias, signer)
-	}
-
-	return set, nil
 }

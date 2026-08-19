@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/attestation"
 	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -543,61 +544,97 @@ func TestPacketWriteAckStatus(t *testing.T) {
 	})
 }
 
-func TestFinality(t *testing.T) {
-	ctx := context.Background()
-	offset := uint64(5)
+func TestGetAttestationSet(t *testing.T) {
+	lightClientAddress := common.HexToAddress("0x00000000000000000000000000000000000abc")
 
-	t.Run("txFinalizedWithOffset", func(t *testing.T) {
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	attestationABI, err := attestation.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	getClientCallData, err := routerABI.Pack("getClient", "base-0")
+	require.NoError(t, err)
+
+	getClientOutput, err := routerABI.Methods["getClient"].Outputs.Pack(lightClientAddress)
+	require.NoError(t, err)
+
+	getAttestationSetCallData, err := attestationABI.Pack("getAttestationSet")
+	require.NoError(t, err)
+
+	expectedAddresses := []common.Address{
+		common.HexToAddress("0x1111111111111111111111111111111111111111"),
+		common.HexToAddress("0x2222222222222222222222222222222222222222"),
+	}
+
+	t.Run("returnsAddressesAndThreshold", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
 		client, eth := newTestClient(t)
-		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{BlockNumber: big.NewInt(100)}, nil).Twice()
-		eth.EXPECT().
-			HeaderByNumber(ctx, (*big.Int)(nil)).
-			Return(&types.Header{Number: big.NewInt(105), Time: 1}, nil).
-			Once()
 
-		finalized, err := client.IsTxFinalized(ctx, txHash.String(), &offset)
+		getAttestationSetOutput, err := attestationABI.Methods["getAttestationSet"].Outputs.Pack(
+			expectedAddresses,
+			uint8(2),
+		)
 		require.NoError(t, err)
-		assert.True(t, finalized)
 
-		eth.EXPECT().
-			HeaderByNumber(ctx, (*big.Int)(nil)).
-			Return(&types.Header{Number: big.NewInt(104), Time: 1}, nil).
-			Once()
+		routerAddr := common.HexToAddress(routerAddress)
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil),
+		).Return(getClientOutput, nil).Once()
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: getAttestationSetCallData}, (*big.Int)(nil),
+		).Return(getAttestationSetOutput, nil).Once()
 
-		finalized, err = client.IsTxFinalized(ctx, txHash.String(), &offset)
+		// ACT
+		addresses, minRequiredSigs, err := client.GetAttestationSet(ctx, "base-0")
+
+		// ASSERT
 		require.NoError(t, err)
-		assert.False(t, finalized)
+		assert.Equal(t, []string{
+			"0x1111111111111111111111111111111111111111",
+			"0x2222222222222222222222222222222222222222",
+		}, addresses)
+		assert.Equal(t, uint8(2), minRequiredSigs)
 	})
 
-	t.Run("txFinalizedNative", func(t *testing.T) {
+	t.Run("routerLookupError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
 		client, eth := newTestClient(t)
-		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{BlockNumber: big.NewInt(100)}, nil).Once()
-		eth.EXPECT().
-			HeaderByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64())).
-			Return(&types.Header{Number: big.NewInt(100), Time: 1}, nil).
-			Once()
 
-		finalized, err := client.IsTxFinalized(ctx, txHash.String(), nil)
+		routerAddr := common.HexToAddress(routerAddress)
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil),
+		).Return(nil, errors.New("rpc down")).Once()
 
-		require.NoError(t, err)
-		assert.True(t, finalized)
+		// ACT
+		_, _, err := client.GetAttestationSet(ctx, "base-0")
+
+		// ASSERT
+		require.ErrorContains(t, err, "resolving light client address")
+		require.ErrorContains(t, err, "rpc down")
 	})
 
-	t.Run("timestampFinalizedWithOffset", func(t *testing.T) {
+	t.Run("attestationSetQueryError", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
 		client, eth := newTestClient(t)
-		eth.EXPECT().
-			HeaderByNumber(ctx, (*big.Int)(nil)).
-			Return(&types.Header{Number: big.NewInt(100), Time: 1}, nil).
-			Once()
-		eth.EXPECT().
-			HeaderByNumber(ctx, big.NewInt(95)).
-			Return(&types.Header{Number: big.NewInt(95), Time: 1752000000}, nil).
-			Once()
 
-		finalized, err := client.IsTimestampFinalized(ctx, time.Unix(1751999999, 0), &offset)
+		routerAddr := common.HexToAddress(routerAddress)
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil),
+		).Return(getClientOutput, nil).Once()
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: getAttestationSetCallData}, (*big.Int)(nil),
+		).Return(nil, errors.New("rpc down")).Once()
 
-		require.NoError(t, err)
-		assert.True(t, finalized)
+		// ACT
+		_, _, err := client.GetAttestationSet(ctx, "base-0")
+
+		// ASSERT
+		require.ErrorContains(t, err, "querying attestation set")
+		require.ErrorContains(t, err, "rpc down")
 	})
 }
 

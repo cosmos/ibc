@@ -179,6 +179,235 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 	}}
 }
 
+// GMPSteps provisions the ICS27-GMP app on chainID's router and records it in
+// the manifest. Requires the core step to have run.
+func GMPSteps(t Target, dir, chainID string) []Step {
+	return []Step{{
+		Name: fmt.Sprintf("gmp app on chain %s", chainID),
+		Done: func(ctx context.Context) (bool, error) {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil {
+				return false, err
+			}
+			if m == nil || m.Core.Router == "" {
+				return false, nil // Run reports the missing-core error
+			}
+			if m.GMP == nil || m.GMP.Address == "" {
+				_, registered, regErr := t.AppRegistered(ctx, m.Core.Router, GMPPortID)
+				if regErr != nil {
+					return false, regErr
+				}
+				if registered {
+					return false, fmt.Errorf(
+						"gmp app is registered at port %q on chain %s but missing from the manifest "+
+							"(likely an interrupted deployment); reconcile the manifest before rerunning",
+						GMPPortID, chainID,
+					)
+				}
+				return false, nil
+			}
+			hasCode, err := t.HasCode(ctx, m.GMP.Address)
+			if err != nil || !hasCode {
+				return false, err
+			}
+			addr, registered, err := t.AppRegistered(ctx, m.Core.Router, m.GMP.Port)
+			if err != nil || !registered {
+				return false, err
+			}
+			if !strings.EqualFold(addr, m.GMP.Address) {
+				return false, fmt.Errorf(
+					"gmp port %q on chain %s is registered to %s but the manifest has %s",
+					m.GMP.Port, chainID, addr, m.GMP.Address,
+				)
+			}
+			return true, nil
+		},
+		Run: func(ctx context.Context) error {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil {
+				return err
+			}
+			if m == nil || m.Core.Router == "" {
+				return fmt.Errorf("no core deployment recorded for chain %s: run `ibc deploy core` first", chainID)
+			}
+			am := m.TargetData["accessManager"]
+			if am == "" {
+				return fmt.Errorf("core manifest for chain %s has no accessManager recorded", chainID)
+			}
+			ref, err := t.ProvisionGMP(ctx, m.Core.Router, am)
+			if err != nil {
+				return err
+			}
+			if regErr := t.RegisterApp(ctx, m.Core.Router, ref.Address, GMPPortID); regErr != nil {
+				return regErr
+			}
+			m.GMP = &manifest.GMP{Address: ref.Address, AccountLogic: ref.AccountLogic, Port: GMPPortID}
+			return m.Save(dir)
+		},
+	}}
+}
+
+// IFTSteps provisions one IFT token on chainID and records it in the manifest.
+// Requires the gmp step to have run.
+func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
+	return []Step{{
+		Name: fmt.Sprintf("ift token %s on chain %s", spec.Symbol, chainID),
+		Done: func(ctx context.Context) (bool, error) {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil || m == nil {
+				return false, err
+			}
+			tok, ok := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
+			if !ok || tok.Address == "" {
+				return false, nil
+			}
+			return t.HasCode(ctx, tok.Address)
+		},
+		Run: func(ctx context.Context) error {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil {
+				return err
+			}
+			if m == nil || m.GMP == nil || m.GMP.Address == "" {
+				return fmt.Errorf("no gmp deployment recorded for chain %s: run `ibc deploy gmp` first", chainID)
+			}
+			ref, err := t.ProvisionIFT(ctx, m.GMP.Address, spec)
+			if err != nil {
+				return err
+			}
+			slog.Info("ift token deployed", "chain", chainID, "symbol", spec.Symbol, "address", ref.Address)
+			m.UpsertToken(manifest.Token{
+				Symbol:  spec.Symbol,
+				Name:    spec.Name,
+				Address: ref.Address,
+				Owner:   spec.Owner,
+			})
+			return m.Save(dir)
+		},
+	}}
+}
+
+// IFTBridgeSteps deploys the EVM send-call constructor (unless an override is
+// supplied or one is already recorded) and registers a bridge on iftAddr
+// pointing at spec.CounterpartyIFT over spec.ClientID.
+// Requires core and a registered client on chainID. The bridge is recorded on
+// the manifest token matching iftAddr when one exists.
+func IFTBridgeSteps(t Target, dir, chainID, iftAddr, ctorOverride string, spec BridgeSpec) []Step {
+	return []Step{
+		{
+			Name: fmt.Sprintf("send call constructor on chain %s", chainID),
+			Done: func(_ context.Context) (bool, error) {
+				if ctorOverride != "" {
+					return true, nil
+				}
+				m, err := manifest.Load(dir, chainID)
+				if err != nil || m == nil {
+					return false, err
+				}
+				return m.EVMSendCallConstructor != "", nil
+			},
+			Run: func(ctx context.Context) error {
+				m, err := manifest.Load(dir, chainID)
+				if err != nil {
+					return err
+				}
+				if m == nil {
+					return fmt.Errorf("no manifest for chain %s", chainID)
+				}
+				addr, err := t.ProvisionSendCallConstructor(ctx)
+				if err != nil {
+					return err
+				}
+				m.EVMSendCallConstructor = addr
+				return m.Save(dir)
+			},
+		},
+		{
+			Name: fmt.Sprintf("ift bridge %s to client %s on chain %s", iftAddr, spec.ClientID, chainID),
+			Done: func(ctx context.Context) (bool, error) {
+				m, err := manifest.Load(dir, chainID)
+				if err != nil || m == nil {
+					return false, err
+				}
+				if m.Core.Router == "" {
+					return false, nil // Run reports the missing-core error
+				}
+				cp, onchainCtor, registered, err := t.IFTBridge(ctx, iftAddr, spec.ClientID)
+				if err != nil {
+					return false, err
+				}
+				if !registered {
+					_, clientOK, cerr := t.ClientRegistered(ctx, m.Core.Router, spec.ClientID)
+					if cerr != nil {
+						return false, cerr
+					}
+					if !clientOK {
+						return false, fmt.Errorf(
+							"client %q not registered on chain %s: run `ibc deploy client` first",
+							spec.ClientID,
+							chainID,
+						)
+					}
+					return false, nil
+				}
+				if cp != spec.CounterpartyIFT {
+					return false, fmt.Errorf(
+						"bridge for client %s on token %s (chain %s) is already registered to counterparty %s, requested %s; "+
+							"register a new client pair",
+						spec.ClientID,
+						iftAddr,
+						chainID,
+						cp,
+						spec.CounterpartyIFT,
+					)
+				}
+				// only an explicit override changes an existing bridge's constructor
+				if ctorOverride != "" && !strings.EqualFold(onchainCtor, ctorOverride) {
+					return false, nil
+				}
+				return true, nil
+			},
+			Run: func(ctx context.Context) error {
+				m, err := manifest.Load(dir, chainID)
+				if err != nil {
+					return err
+				}
+				if m == nil || m.Core.Router == "" {
+					return fmt.Errorf("no core deployment recorded for chain %s: run `ibc deploy core` first", chainID)
+				}
+				ctor, err := resolveConstructor(m, ctorOverride)
+				if err != nil {
+					return err
+				}
+				full := spec
+				full.SendCallConstructor = ctor
+				if regErr := t.RegisterIFTBridge(ctx, iftAddr, full); regErr != nil {
+					return regErr
+				}
+				// records the bridge only when iftAddr is a known token
+				m.UpsertBridge(iftAddr, manifest.Bridge{
+					ClientID:            spec.ClientID,
+					CounterpartyIFT:     spec.CounterpartyIFT,
+					SendCallConstructor: ctor,
+				})
+				return m.Save(dir)
+			},
+		},
+	}
+}
+
+// resolveConstructor returns the send-call constructor address: the override
+// when set, else the chain-level EVM singleton.
+func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+	if m.EVMSendCallConstructor != "" {
+		return m.EVMSendCallConstructor, nil
+	}
+	return "", fmt.Errorf("no send call constructor recorded")
+}
+
 // specToClient converts a ClientSpec and its provisioned address into the
 // manifest.Client record. Shared by Run and Done so the two can't drift on
 // how params are marshaled.

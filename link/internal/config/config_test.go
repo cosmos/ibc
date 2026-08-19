@@ -204,11 +204,11 @@ signers:
     type: remote
     grpc: https://kms.example.com
     remoteKeyId: key-a
-attestor:
-  attestations:
-    - chainId: chain-a
-      name: attestation-a
-      signer: signer-a
+attestors:
+  - name: attestation-a
+    chainId: chain-a
+    type: local
+    signer: signer-a
 `)
 
 			// ACT
@@ -216,8 +216,8 @@ attestor:
 
 			// ASSERT
 			require.NoError(t, err)
-			require.Len(t, config.Attestor.Attestations, 1)
-			assert.Equal(t, "signer-a", config.Attestor.Attestations[0].Signer)
+			require.Len(t, config.Attestors, 1)
+			assert.Equal(t, "signer-a", config.Attestors[0].Signer)
 		})
 
 		t.Run("unknownAttestationSignerFails", func(t *testing.T) {
@@ -228,11 +228,11 @@ signers:
     type: remote
     grpc: https://kms.example.com
     remoteKeyId: key-a
-attestor:
-  attestations:
-    - chainId: chain-a
-      name: attestation-a
-      signer: missing-signer
+attestors:
+  - name: attestation-a
+    chainId: chain-a
+    type: local
+    signer: missing-signer
 `)
 
 			// ACT
@@ -313,103 +313,122 @@ attestor:
 	})
 }
 
-func TestAttestorConfigValidate(t *testing.T) {
+func TestAttestorsValidate(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
-		attestor    AttestorConfig
+		attestors   Attestors
 		errContains string
 	}{
 		{
-			name:     "empty attestations",
-			attestor: AttestorConfig{},
+			name:      "empty",
+			attestors: Attestors{},
 		},
 		{
-			name: "valid attestations",
-			attestor: AttestorConfig{
-				Attestations: []AttestationConfig{
-					{
-						ChainID: "chain-a",
-						Name:    "attestation-a",
-						Signer:  "signer-a",
-					},
-					{
-						ChainID: "chain-b",
-						Name:    "attestation-b",
-						Signer:  "signer-b",
-					},
-				},
+			name: "valid local and remote",
+			attestors: Attestors{
+				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
+				{Name: "attestor-b", Type: AttestorTypeRemote, GRPC: "attestor-b.example.com:3000"},
 			},
 		},
 		{
-			name: "chain id required",
-			attestor: AttestorConfig{
-				Attestations: []AttestationConfig{{
-					Name:   "attestation-a",
-					Signer: "signer-a",
-				}},
+			name: "same name across two remotes is valid",
+			attestors: Attestors{
+				{Name: "watcher", Type: AttestorTypeRemote, GRPC: "watcher-a.example.com:3000"},
+				{Name: "watcher", Type: AttestorTypeRemote, GRPC: "watcher-b.example.com:3000"},
 			},
-			errContains: ".attestations[0]: .chainId required",
 		},
 		{
-			name: "name required",
-			attestor: AttestorConfig{
-				Attestations: []AttestationConfig{{
-					ChainID: "chain-a",
-					Signer:  "signer-a",
-				}},
-			},
-			errContains: ".attestations[0]: .name required",
+			name:        "name required",
+			attestors:   Attestors{{ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
+			errContains: "[0]: .name required",
 		},
 		{
-			name: "signer required",
-			attestor: AttestorConfig{
-				Attestations: []AttestationConfig{{
-					ChainID: "chain-a",
-					Name:    "attestation-a",
-				}},
-			},
-			errContains: ".attestations[0]: .signer required",
+			name:        "local chain id required",
+			attestors:   Attestors{{Name: "attestor-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
+			errContains: "[0]: .chainId required for local attestors",
 		},
 		{
-			name: "duplicate name",
-			attestor: AttestorConfig{
-				Attestations: []AttestationConfig{
-					{
-						ChainID: "chain-a",
-						Name:    "same",
-						Signer:  "signer-a",
-					},
-					{
-						ChainID: "chain-b",
-						Name:    "same",
-						Signer:  "signer-b",
-					},
-				},
-			},
-			errContains: `.attestations[1] duplicate name: "same"`,
+			name:        "invalid type",
+			attestors:   Attestors{{Name: "attestor-a", ChainID: "chain-a", Type: "hybrid"}},
+			errContains: `unknown attestor type: "hybrid"`,
 		},
 		{
-			name: "duplicate signer",
-			attestor: AttestorConfig{
-				Attestations: []AttestationConfig{
-					{
-						ChainID: "chain-a",
-						Name:    "attestation-a",
-						Signer:  "same",
-					},
-					{
-						ChainID: "chain-b",
-						Name:    "attestation-b",
-						Signer:  "same",
-					},
-				},
+			name:        "local missing signer",
+			attestors:   Attestors{{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal}},
+			errContains: ".signer required for local attestors",
+		},
+		{
+			name: "local with grpc set",
+			attestors: Attestors{{
+				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal,
+				Signer: "signer-a", GRPC: "attestor-a.example.com:3000",
+			}},
+			errContains: ".grpc must not be set for local attestors",
+		},
+		{
+			name:        "remote missing grpc",
+			attestors:   Attestors{{Name: "attestor-a", Type: AttestorTypeRemote}},
+			errContains: ".grpc required for remote attestors",
+		},
+		{
+			name: "remote grpc includes a scheme",
+			attestors: Attestors{{
+				Name: "attestor-a", Type: AttestorTypeRemote,
+				GRPC: "https://attestor-a.example.com:443",
+			}},
+			errContains: ".grpc must be a bare host:port, not a URL",
+		},
+		{
+			name: "remote with chainId set",
+			attestors: Attestors{{
+				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
+				GRPC: "attestor-a.example.com:3000",
+			}},
+			errContains: ".chainId must not be set for remote attestors",
+		},
+		{
+			name: "remote with signer set",
+			attestors: Attestors{{
+				Name: "attestor-a", Type: AttestorTypeRemote,
+				GRPC: "attestor-a.example.com:3000", Signer: "signer-a",
+			}},
+			errContains: ".signer must not be set for remote attestors",
+		},
+		{
+			name: "remote with nonzero finalityOffset",
+			attestors: Attestors{{
+				Name: "attestor-a", Type: AttestorTypeRemote,
+				GRPC: "attestor-a.example.com:3000", FinalityOffset: 1,
+			}},
+			errContains: ".finalityOffset must not be set for remote attestors",
+		},
+		{
+			name: "duplicate local name",
+			attestors: Attestors{
+				{Name: "same", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"},
+				{Name: "same", ChainID: "chain-b", Type: AttestorTypeLocal, Signer: "signer-b"},
 			},
-			errContains: `.attestations[1] duplicate signer: "same"`,
+			errContains: `duplicate local attestor name: "same"`,
+		},
+		{
+			name: "duplicate local signer on the same chain",
+			attestors: Attestors{
+				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
+				{Name: "attestor-b", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
+			},
+			errContains: `duplicate local attestor signer "same" on chain "chain-a"`,
+		},
+		{
+			name: "same local signer across different chains is allowed",
+			attestors: Attestors{
+				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
+				{Name: "attestor-b", ChainID: "chain-b", Type: AttestorTypeLocal, Signer: "same"},
+			},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// ACT
-			err := tt.attestor.Validate()
+			err := tt.attestors.Validate()
 
 			// ASSERT
 			if tt.errContains != "" {
@@ -586,11 +605,11 @@ func writeTestConfig(t *testing.T, content string) string {
 func TestConfigAccessors(t *testing.T) {
 	cfg := Config{
 		Signers: Signers{{Alias: "s1", Type: SignerRemote, GRPC: "g", RemoteKeyID: "k"}},
-		Attestor: AttestorConfig{Attestations: []AttestationConfig{
-			{ChainID: "1", Name: "a1", Signer: "s1"},
-			{ChainID: "2", Name: "a2", Signer: "s1"},
-			{ChainID: "1", Name: "a3", Signer: "s1"},
-		}},
+		Attestors: Attestors{
+			{ChainID: "1", Name: "a1", Type: AttestorTypeLocal, Signer: "s1"},
+			{ChainID: "2", Name: "a2", Type: AttestorTypeLocal, Signer: "s1"},
+			{ChainID: "1", Name: "a3", Type: AttestorTypeLocal, Signer: "s1"},
+		},
 	}
 
 	signer, ok := cfg.Signer("s1")
@@ -599,15 +618,51 @@ func TestConfigAccessors(t *testing.T) {
 	_, ok = cfg.Signer("nope")
 	require.False(t, ok)
 
-	attestation, ok := cfg.AttestationByName("a2")
+	attestor, ok := cfg.AttestorByName("a2")
 	require.True(t, ok)
-	require.Equal(t, "2", attestation.ChainID)
-	_, ok = cfg.AttestationByName("nope")
+	require.Equal(t, "2", attestor.ChainID)
+	_, ok = cfg.AttestorByName("nope")
 	require.False(t, ok)
 
-	forChain := cfg.AttestationsForChain("1")
+	forChain := cfg.AttestorsForChain("1")
 	require.Len(t, forChain, 2)
 	require.Equal(t, "a1", forChain[0].Name)
 	require.Equal(t, "a3", forChain[1].Name)
-	require.Empty(t, cfg.AttestationsForChain("9"))
+	require.Empty(t, cfg.AttestorsForChain("9"))
+}
+
+func TestCollectComments(t *testing.T) {
+	cfg := Config{
+		Chains: []ChainConfig{
+			{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: ""}},
+			{ChainID: "2", EVM: &EVMChainConfig{ICS26Router: "0xabc"}},
+		},
+		Relayer: RelayerConfig{Connections: []ConnectionConfig{
+			{ClientA: ClientEnd{ChainID: "1"}, ClientB: ClientEnd{ChainID: "2", Signer: "relayer-key"}},
+		}},
+		Attestors: Attestors{
+			{ChainID: "2", Name: "attestor-2-0xabc", Type: AttestorTypeLocal},
+			{ChainID: "1", Name: "attestor-1-0xdef", Type: AttestorTypeLocal, Signer: "watcher"},
+			{Name: "remote", Type: AttestorTypeRemote, GRPC: "attestor.example.com:3000"},
+		},
+	}
+
+	require.Equal(t, map[string]string{
+		"$.chains[0].evm.ics26Router":             "TODO: fill in",
+		"$.relayer.connections[0].clientA.signer": "TODO: signers[] alias that submits relay txs on chainA",
+		"$.attestors[0].signer":                   "TODO: signers[] alias backing this attestor's key",
+		"$.attestors[0].finalityOffset":           finalityOffsetTODO,
+		"$.attestors[1].finalityOffset":           finalityOffsetTODO,
+	}, CollectComments(cfg))
+
+	// nothing left blank -> only the always-on finalityOffset reminder remains
+	require.Equal(t, map[string]string{
+		"$.attestors[0].finalityOffset": finalityOffsetTODO,
+	}, CollectComments(Config{
+		Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: "0xabc"}}},
+		Relayer: RelayerConfig{Connections: []ConnectionConfig{
+			{ClientA: ClientEnd{ChainID: "1", Signer: "a"}, ClientB: ClientEnd{ChainID: "2", Signer: "b"}},
+		}},
+		Attestors: Attestors{{ChainID: "1", Name: "a", Type: AttestorTypeLocal, Signer: "watcher"}},
+	}))
 }

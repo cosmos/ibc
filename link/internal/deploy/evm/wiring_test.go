@@ -13,7 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/deploy"
@@ -28,8 +31,17 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 	require.NoError(t, err)
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
+	// Geth 1.17.5 activates Bogota on dev chains (simulated.NewBackend uses
+	// params.AllDevChainProtocolChanges); under Bogota the gas estimator
+	// returns values that OOG on execution. No real network schedules Bogota,
+	// so disabling it matches production. ponytail: drop when geth fixes
+	// estimate/execute consistency under Bogota.
+	conf := *params.AllDevChainProtocolChanges
+	conf.BogotaTime = nil
 	sim := simulated.NewBackend(types.GenesisAlloc{
 		addr: {Balance: new(big.Int).Lsh(big.NewInt(1), 100)},
+	}, func(_ *node.Config, ec *ethconfig.Config) {
+		ec.Genesis.Config = &conf
 	})
 	t.Cleanup(func() { _ = sim.Close() })
 
@@ -162,4 +174,104 @@ func TestClientRegisteredNonRouter(t *testing.T) {
 	_, registered, err := d.ClientRegistered(ctx, core.TargetData["accessManager"], "link-x")
 	require.Error(t, err)
 	require.False(t, registered)
+}
+
+func TestProvisionGMPRegister(t *testing.T) {
+	d, _, _ := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+
+	ref, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+	require.NotEmpty(t, ref.Address)
+	require.NotEmpty(t, ref.AccountLogic)
+
+	_, registered, err := d.AppRegistered(ctx, core.Router, deploy.GMPPortID)
+	require.NoError(t, err)
+	require.False(t, registered)
+
+	require.NoError(t, d.RegisterApp(ctx, core.Router, ref.Address, deploy.GMPPortID))
+
+	got, registered, err := d.AppRegistered(ctx, core.Router, deploy.GMPPortID)
+	require.NoError(t, err)
+	require.True(t, registered)
+	require.Equal(t, ref.Address, got)
+}
+
+func TestProvisionIFTAndBridge(t *testing.T) {
+	d, _, owner := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+	gmp, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+
+	token, err := d.ProvisionIFT(ctx, gmp.Address, deploy.IFTSpec{Owner: owner.Hex(), Name: "Foo", Symbol: "FOO"})
+	require.NoError(t, err)
+	require.NotEmpty(t, token.Address)
+
+	_, _, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	require.NoError(t, err)
+	require.False(t, registered)
+
+	ctor, err := d.ProvisionSendCallConstructor(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, ctor)
+
+	require.NoError(t, d.RegisterIFTBridge(ctx, token.Address, deploy.BridgeSpec{
+		ClientID:            "link-2",
+		CounterpartyIFT:     "0x00000000000000000000000000000000000000cp",
+		SendCallConstructor: ctor,
+	}))
+
+	cp, gotCtor, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	require.NoError(t, err)
+	require.True(t, registered)
+	require.Equal(t, "0x00000000000000000000000000000000000000cp", cp)
+	require.Equal(t, ctor, gotCtor)
+}
+
+func TestVerifyGMPAndIFT(t *testing.T) {
+	d, _, owner := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+	gmp, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+	require.NoError(t, d.RegisterApp(ctx, core.Router, gmp.Address, deploy.GMPPortID))
+	token, err := d.ProvisionIFT(ctx, gmp.Address, deploy.IFTSpec{Owner: owner.Hex(), Name: "Foo", Symbol: "FOO"})
+	require.NoError(t, err)
+	ctor, err := d.ProvisionSendCallConstructor(ctx)
+	require.NoError(t, err)
+	require.NoError(t, d.RegisterIFTBridge(ctx, token.Address, deploy.BridgeSpec{
+		ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor,
+	}))
+
+	m := manifest.New("1337", "evm")
+	m.Core.Router = core.Router
+	m.TargetData = core.TargetData
+	m.GMP = &manifest.GMP{Address: gmp.Address, AccountLogic: gmp.AccountLogic, Port: deploy.GMPPortID}
+	m.UpsertToken(manifest.Token{Symbol: "FOO", Name: "Foo", Address: token.Address, Owner: owner.Hex()})
+	require.True(
+		t,
+		m.UpsertBridge(
+			token.Address,
+			manifest.Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor},
+		),
+	)
+
+	report, err := d.Verify(ctx, m)
+	require.NoError(t, err)
+	require.Empty(t, report.Failed())
+
+	// drift: wrong gmp address fails
+	broken := *m
+	broken.GMP = &manifest.GMP{Address: "0x0000000000000000000000000000000000000123", Port: deploy.GMPPortID}
+	report, err = d.Verify(ctx, &broken)
+	require.NoError(t, err)
+	require.NotEmpty(t, report.Failed())
 }

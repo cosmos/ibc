@@ -182,6 +182,7 @@ func TestAwaitMinedReturnsCancellation(t *testing.T) {
 
 func startMining(t *testing.T, backend *simulated.Backend) {
 	t.Helper()
+	backend.Commit()
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)

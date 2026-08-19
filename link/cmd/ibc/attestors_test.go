@@ -14,7 +14,7 @@ import (
 )
 
 // attestorFixture returns a config with one local ECDSA signer (alias
-// "watcher-key"), an attestation "watcher-2" for chain 2 backed by it, and a
+// "watcher-key"), an attestor "watcher-2" for chain 2 backed by it, and a
 // remote signer alias "kms". Returns the config and the key's EVM address.
 func attestorFixture(t *testing.T) (config.Config, string) {
 	t.Helper()
@@ -30,10 +30,11 @@ func attestorFixture(t *testing.T) (config.Config, string) {
 			{Alias: "watcher-key", Type: config.SignerLocal, File: path},
 			{Alias: "kms", Type: config.SignerRemote, GRPC: "localhost:1", RemoteKeyID: "k"},
 		},
-		Attestor: config.AttestorConfig{Attestations: []config.AttestationConfig{
-			{ChainID: "2", Name: "watcher-2", Signer: "watcher-key"},
-			{ChainID: "9", Name: "watcher-9", Signer: "kms"},
-		}},
+		Attestors: config.Attestors{
+			{ChainID: "2", Name: "watcher-2", Type: config.AttestorTypeLocal, Signer: "watcher-key"},
+			{ChainID: "9", Name: "watcher-9", Type: config.AttestorTypeLocal, Signer: "kms"},
+			{Name: "watcher-remote", Type: config.AttestorTypeRemote, GRPC: "attestor.example.com:3000"},
+		},
 	}
 	return cfg, address
 }
@@ -47,7 +48,7 @@ func TestResolveAttestorToken(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0x00000000000000000000000000000000000000aa", got)
 
-	// attestation name resolves through its signer
+	// attestor name resolves through its signer
 	got, err = resolveAttestorToken(cfg, "watcher-2")
 	require.NoError(t, err)
 	require.Equal(t, address, got)
@@ -66,6 +67,11 @@ func TestResolveAttestorToken(t *testing.T) {
 	// through to address passthrough
 	_, err = resolveAttestorToken(cfg, "kms")
 	require.ErrorContains(t, err, "remote signer")
+
+	// a remote attestor's address isn't known statically — fail clearly
+	// rather than falling through to address passthrough
+	_, err = resolveAttestorToken(cfg, "watcher-remote")
+	require.ErrorContains(t, err, `attestor "watcher-remote" is remote`)
 }
 
 func TestAttestorsForChain(t *testing.T) {
@@ -75,7 +81,7 @@ func TestAttestorsForChain(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{address}, got)
 
-	// chain 9's only attestation resolves through a remote signer
+	// chain 9's only attestor resolves through a remote signer
 	_, err = attestorsForChain(cfg, "9")
 	require.ErrorContains(t, err, "remote signer")
 

@@ -13,7 +13,9 @@ import (
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,6 +27,8 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/testerc20"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 )
+
+var testERC20Transactor = mustBinding(testerc20.NewTestERC20Transactor(common.Address{}, nil))
 
 const (
 	relayerStopTimeout = 15 * time.Second
@@ -331,7 +335,9 @@ func registerIFTBridge(
 	callConstructor common.Address,
 ) {
 	t.Helper()
-	data, err := iftABI.Pack("registerIFTBridge", client, counterpartyIFT.Hex(), callConstructor)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.RegisterIFTBridge(opts, client, counterpartyIFT.Hex(), callConstructor)
+	})
 	require.NoError(t, err, "e2etest: pack IFT registerIFTBridge")
 	_, err = evmAccess.BroadcastTx(t.Context(), deployer.account, &iftToken, data, nil)
 	require.NoError(t, err, "e2etest: register IFT bridge for client %q on Chain %q", client, chain)
@@ -372,20 +378,12 @@ func buildConfig(
 			ICS26Router: apps.ICS26Router.Hex(),
 		})
 	}
-	attestorIDs := env.Attestors()
-	attestorSets := make(map[string]*ibclink.RelayerAttestorSet, len(attestorIDs))
-	for _, id := range attestorIDs {
+	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)
-		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
-		client := attestor.IBCClient()
-		chainID := options.ChainIDs[string(client.IBCInstance().Chain().ID())]
-		key := chainID + "/" + client.ID()
-		set := attestorSets[key]
-		if set == nil {
-			set = &ibclink.RelayerAttestorSet{Threshold: int(client.MinRequiredSignatures())}
-			attestorSets[key] = set
+		if err != nil {
+			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
 		}
-		set.Attestors = append(set.Attestors, ibclink.RelayerAttestor{
+		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
 			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
 		})
 	}
@@ -419,15 +417,8 @@ func buildConfig(
 		key := connection.ChainA + "/" + connection.ClientA
 		if !connections[key] {
 			connections[key] = true
-			connection.AttestorSetA = attestorSets[key]
-			connection.AttestorSetB = attestorSets[connection.ChainB+"/"+connection.ClientB]
 			config.Connections = append(config.Connections, connection)
 		}
-
-		config.Routes = append(config.Routes, ibclink.RelayerRoute{
-			SourceChain:  sourceChain,
-			SourceClient: clients.SourceClientID,
-		})
 	}
 	return config, options
 }
@@ -478,7 +469,9 @@ func deployAndMintToken(
 	if err != nil {
 		return common.Address{}, err
 	}
-	data, err := mustABI(testerc20.TestERC20MetaData).Pack("mint", sender.Address(), initialTokenSupply)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return testERC20Transactor.Mint(opts, sender.Address(), initialTokenSupply)
+	})
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: pack TestERC20.mint: %w", err)
 	}
@@ -500,7 +493,9 @@ func deployIFTToken(
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: deploy IFT implementation: %w", err)
 	}
-	initialize, err := iftABI.Pack("initialize", sender.Address(), "IFT Token", "IFT", ics27)
+	initialize, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.Initialize(opts, sender.Address(), "IFT Token", "IFT", ics27)
+	})
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: pack IFT initialize: %w", err)
 	}
@@ -508,7 +503,9 @@ func deployIFTToken(
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: deploy IFT proxy: %w", err)
 	}
-	mint, err := iftABI.Pack("mint", sender.Address(), initialTokenSupply)
+	mint, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.Mint(opts, sender.Address(), initialTokenSupply)
+	})
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: pack IFT mint: %w", err)
 	}
@@ -531,7 +528,9 @@ func deployIFTBatchShim(
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: deploy IFT batch transfer shim: %w", err)
 	}
-	mint, err := iftABI.Pack("mint", shim, amount)
+	mint, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.Mint(opts, shim, amount)
+	})
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: pack IFT mint for batch shim: %w", err)
 	}

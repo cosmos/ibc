@@ -11,12 +11,13 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
 )
 
-var gmpABI = mustABI(ics27gmp.ContractMetaData)
+var gmpTransactor = mustBinding(ics27gmp.NewContractTransactor(common.Address{}, nil))
 
 type GMPRequest struct {
 	// Payload defaults to Counter.increment(). Call takes its own copy.
@@ -84,7 +85,9 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		TimeoutTimestamp: timeoutTimestamp,
 		Memo:             "",
 	}
-	data, err := gmpABI.Pack("sendCall", msg)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return gmpTransactor.SendCall(opts, msg)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack GMP sendCall: %w", err)
 	}
@@ -210,7 +213,9 @@ func (g *GMP) ERC20BalanceOf(ctx context.Context, holder common.Address) (*big.I
 // chain. holder need not have any code deployed yet: minting only writes a
 // balance entry.
 func (g *GMP) FundERC20(ctx context.Context, holder common.Address, amount *big.Int) error {
-	data, err := tokenABI.Pack("mint", holder, amount)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return testERC20Transactor.Mint(opts, holder, amount)
+	})
 	if err != nil {
 		return fmt.Errorf("e2etest: pack TestERC20.mint: %w", err)
 	}
@@ -239,7 +244,9 @@ func (g *GMP) AwaitERC20Balance(
 // PackERC20Transfer ABI-encodes an erc20.transfer(to, amount) call, for use as
 // a GMPRequest.Payload delivered to an ICS27 account.
 func PackERC20Transfer(to common.Address, amount *big.Int) ([]byte, error) {
-	data, err := tokenABI.Pack("transfer", to, amount)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return testERC20Transactor.Transfer(opts, to, amount)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack TestERC20.transfer: %w", err)
 	}

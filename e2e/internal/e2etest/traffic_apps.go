@@ -5,6 +5,7 @@ package e2etest
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -130,7 +131,8 @@ func NewGMP(
 	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
 	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
 	require.NoError(t, err, "e2etest: resolve endpoints for GMP on route %q", route.ID)
-	defaultCall, err := mustABI(counter.CounterMetaData).Pack("increment")
+	bound := mustBinding(counter.NewCounterTransactor(common.Address{}, nil))
+	defaultCall, err := calldata(bound.Increment)
 	require.NoError(t, err, "e2etest: pack Counter.increment()")
 	return &GMP{
 		routeID:        route.ID,
