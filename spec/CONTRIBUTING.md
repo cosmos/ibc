@@ -49,6 +49,17 @@ Ensure that you base and target your PR on the `master` branch.
 
 ### Development Procedure
 
+Install the repository's DCO check once after cloning:
+
+```sh
+cp -i .githooks/commit-msg "$(git rev-parse --git-common-dir)/hooks/commit-msg"
+```
+
+The hook rejects non-merge commits without your `Signed-off-by` trailer. Read
+the [Developer Certificate of Origin](https://developercertificate.org/), then
+re-run your commit command with `--signoff`. To repair the latest commit, use
+`git commit --amend --signoff`. Git explains [why sign-off must be intentional](https://git-scm.com/docs/gitfaq#Documentation/gitfaq.txt-Whynotcodecommitsignoffcodeandotherconfigurationvariables).
+
 - The latest state of development is on `master`.
 - Create a development branch either on `github.com/cosmos/ibc` or your fork (using `git remote add fork`).
   - To ensure a clear ownership of branches on the ibc repo, branches must be named with the convention `{moniker}/{issue#}-branch-name`

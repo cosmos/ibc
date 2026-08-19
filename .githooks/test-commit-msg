@@ -1,0 +1,49 @@
+#!/bin/sh
+
+# SPDX-License-Identifier: Apache-2.0
+
+set -eu
+
+hook=$(dirname "$0")/commit-msg
+message=$(mktemp)
+repository=$(mktemp -d)
+trap 'rm -f "$message"; rm -rf "$repository"' EXIT
+
+export GIT_COMMITTER_NAME='DCO Test'
+export GIT_COMMITTER_EMAIL='dco@example.com'
+export GIT_AUTHOR_NAME='DCO Author'
+export GIT_AUTHOR_EMAIL='author@example.com'
+
+printf 'Test\n\nSigned-off-by: DCO Test <dco@example.com>\n' >"$message"
+"$hook" "$message"
+
+printf 'Test\n\n---\n\nSigned-off-by: DCO Test <dco@example.com>\n' >"$message"
+"$hook" "$message"
+
+GIT_CONFIG_COUNT=1 \
+	GIT_CONFIG_KEY_0=trailer.separators \
+	GIT_CONFIG_VALUE_0='=' \
+	"$hook" "$message"
+
+printf 'Test\n\nSigned-off-by: DCO Author <author@example.com>\n' >"$message"
+"$hook" "$message"
+
+printf 'Test\n\nSigned-off-by: Someone Else <else@example.com>\n' >"$message"
+if "$hook" "$message" 2>/dev/null; then
+	printf >&2 'Unrelated sign-off was accepted\n'
+	exit 1
+fi
+
+printf 'Test\n' >"$message"
+
+git init --quiet "$repository"
+git -C "$repository" config user.name 'DCO Test'
+git -C "$repository" config user.email 'dco@example.com'
+git -C "$repository" -c commit.gpgsign=false -c core.hooksPath=/dev/null commit --allow-empty --quiet -m 'Test'
+git -C "$repository" rev-parse HEAD >"$repository/.git/MERGE_HEAD"
+GIT_DIR="$repository/.git" "$hook" "$message"
+
+if "$hook" "$message" 2>/dev/null; then
+	printf >&2 'Unsigned commit message was accepted\n'
+	exit 1
+fi
