@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package remotepoc adapts a light-client proof generator to a small HTTP/JSON
-// protocol. It is a proof of concept, not a production transport.
+// Package remotepoc provides an experimental HTTP prover.
 package remotepoc
 
 import (
@@ -18,15 +17,15 @@ import (
 	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// Type is the config name of the remote proof generator.
+// Type is the remote prover's config type.
 const Type = "remote"
 
-// ClientParams configure the remote proof service for one light client.
+// ClientParams configures the remote service.
 type ClientParams struct {
 	URL string `yaml:"url"`
 }
 
-// Factory constructs remote proof generators.
+// Factory constructs remote provers.
 type Factory struct {
 	HTTPClient *http.Client
 }

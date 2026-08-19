@@ -123,7 +123,7 @@ func height(h uint64) ics26router.IICS02ClientMsgsHeight {
 }
 
 // packUpdateClient packs a call to updateClient(clientId, updateMsg), where
-// updateMsg is the already-encoded proof produced by lightclient.Prover.StateProof.
+// updateMsg is an encoded light-client state proof.
 func packUpdateClient(clientID string, updateMsg []byte) ([]byte, error) {
 	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return router.UpdateClient(opts, clientID, updateMsg)

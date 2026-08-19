@@ -9,51 +9,42 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ClientInfo describes one configured light-client instance from the
-// perspective of the ProverFactory responsible for its type.
+// ClientInfo describes a configured light client.
 type ClientInfo struct {
 	ClientID     string
 	Type         string
 	ClientParams *RawParams
 }
 
-// ChainInfo is the chain configuration relevant to proof generation. It omits
-// operational settings, such as the deployer, that custom provers do not need.
+// ChainInfo contains chain settings available to provers.
 type ChainInfo struct {
 	ChainID string
 	EVM     *EVMChainInfo
 }
 
-// EVMChainInfo contains the EVM connection details available to a prover.
+// EVMChainInfo contains EVM chain settings.
 type EVMChainInfo struct {
 	RPC         string
 	ICS26Router string
 }
 
-// ProverFactoryOptions describes the configured light-client instance a
-// ProverFactory constructs. Additional shared construction dependencies may
-// be added here as the extension API evolves.
+// ProverFactoryOptions contains inputs for constructing a prover.
 type ProverFactoryOptions struct {
 	Client            ClientInfo
 	HostChain         ChainInfo
 	CounterpartyChain ChainInfo
 }
 
-// ProverFactory builds proof generators for one custom light-client type.
-// New validates the client parameters as part of construction.
+// ProverFactory builds provers for one custom light-client type.
 type ProverFactory interface {
-	// Type returns the name operators use in connection configuration.
+	// Type returns the configured client type name.
 	Type() string
 
-	// New builds a generator for Client, which tracks CounterpartyChain.
+	// New builds a prover for Client.
 	New(ctx context.Context, options ProverFactoryOptions) (Prover, error)
 }
 
-// Registry resolves custom light-client factories by config type name.
-// Built-in client types are resolved internally by the relayer.
-//
-// A Registry is not safe for concurrent registration. Build it fully during
-// startup, then treat it as read-only.
+// Registry resolves custom light-client factories by type.
 type Registry struct {
 	factories map[string]ProverFactory
 }
@@ -62,8 +53,7 @@ func NewRegistry() *Registry {
 	return &Registry{factories: make(map[string]ProverFactory)}
 }
 
-// Register associates a factory with the client type returned by Type.
-// Registering a type twice is an error rather than a silent overwrite.
+// Register adds a factory under its type name.
 func (r *Registry) Register(f ProverFactory) error {
 	if f == nil {
 		return errors.New("factory must not be nil")
@@ -95,7 +85,7 @@ func (r *Registry) Get(clientType string) (ProverFactory, bool) {
 	return f, ok
 }
 
-// Types lists every registered client type, sorted. Useful for error messages.
+// Types returns the registered type names in sorted order.
 func (r *Registry) Types() []string {
 	if r == nil {
 		return nil

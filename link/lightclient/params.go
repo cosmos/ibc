@@ -7,18 +7,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-// RawParams is a client-type-specific config block captured verbatim at decode
-// time and interpreted by the ProverFactory registered for that type, not by the
-// config package.
-//
-// It is used as a pointer in config structs so that adding it does not make
-// those structs non-comparable.
+// RawParams stores client-specific configuration for a ProverFactory.
 type RawParams struct {
 	raw []byte
 }
 
-// NewRawParams builds params from an already-encoded YAML document. Mainly
-// useful in tests.
+// NewRawParams wraps an encoded YAML document.
 func NewRawParams(raw []byte) *RawParams {
 	return &RawParams{raw: append([]byte(nil), raw...)}
 }
@@ -39,21 +33,12 @@ func (p RawParams) MarshalYAML() ([]byte, error) {
 	return p.raw, nil
 }
 
-// IsEmpty reports whether no params were configured. A ProverFactory that requires
-// params should check this and return a helpful error rather than decoding an
-// empty document into a zero value.
+// IsEmpty reports whether params were configured.
 func (p *RawParams) IsEmpty() bool {
 	return p == nil || len(p.raw) == 0
 }
 
-// Decode unmarshals the params into v, rejecting fields v does not declare.
-//
-// Rejecting unknown fields matters: the top-level config decode cannot see
-// inside a captured block, so without this a misspelled key would silently
-// become a zero value. Factories should always decode through this method
-// rather than unmarshalling p.Bytes() themselves.
-//
-// Decoding empty params is a no-op, leaving v at its defaults.
+// Decode strictly unmarshals params into v. Empty params leave v unchanged.
 func (p *RawParams) Decode(v any) error {
 	if p.IsEmpty() {
 		return nil
@@ -66,8 +51,7 @@ func (p *RawParams) Decode(v any) error {
 	return nil
 }
 
-// Bytes returns the captured document. Prefer Decode, which applies strict
-// field checking.
+// Bytes returns the captured document.
 func (p *RawParams) Bytes() []byte {
 	if p == nil {
 		return nil

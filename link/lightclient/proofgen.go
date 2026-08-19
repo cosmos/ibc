@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package lightclient is the public extension point for light client proof
-// generation. Implement Prover and ProverFactory here, register the factory
-// under a client type name, and supply it through link/cli.
-//
-// This package must not import anything under link/internal. Everything it
-// exposes is deliberately narrow: proofs are opaque bytes, and the relayer
-// never interprets them.
+// Package lightclient defines custom light-client proof generation.
 package lightclient
 
 import (
@@ -16,22 +10,15 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 )
 
-// Prover generates packet membership/non-membership proofs and state
-// proofs for one configured light client.
+// Prover generates proofs for one light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent StateProof
-	// and PacketProofs call sharing that height can currently succeed at,
-	// along with that height's counterparty-chain timestamp.
+	// LatestProvableHeight returns the latest provable height and timestamp.
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof proves the light client's counterparty state at height. The
-	// returned bytes are passed to the light client's updateClient entrypoint
-	// unmodified.
+	// StateProof proves counterparty state at height.
 	StateProof(ctx context.Context, height uint64) ([]byte, error)
 
-	// PacketProofs proves each packet's membership or non-membership at
-	// height, one proof per packet with indices aligned to packets. Returns
-	// an error if a proof cannot be generated for any packet.
+	// PacketProofs returns one proof per packet, in packet order.
 	PacketProofs(
 		ctx context.Context,
 		height uint64,
@@ -40,10 +27,9 @@ type Prover interface {
 	) ([][]byte, error)
 }
 
-// ProofKind the kind of packet claim a proof attests to.
+// ProofKind identifies the packet claim being proved.
 type ProofKind int
 
-// Proof kinds.
 const (
 	ProofKindUnknown ProofKind = iota
 	ProofKindPacketCommitment

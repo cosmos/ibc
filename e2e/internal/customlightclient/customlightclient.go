@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package customlightclient is an external light-client implementation used
-// to validate custom-compiled IBC binaries.
+// Package customlightclient provides an E2E custom prover.
 package customlightclient
 
 import (

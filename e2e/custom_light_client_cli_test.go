@@ -24,9 +24,7 @@ import (
 	"github.com/cosmos/ibc/link/lightclient/remotepoc"
 )
 
-// TestCustomCompiledCLILoadsLightClient proves that a downstream binary can
-// register a light-client implementation and select it through the ordinary
-// `ibc relayer run` path.
+// TestCustomCompiledCLILoadsLightClient runs a registered custom client.
 func TestCustomCompiledCLILoadsLightClient(t *testing.T) {
 	binary := buildCustomIBC(t)
 	t.Setenv("IBC_BIN", binary)
@@ -59,9 +57,7 @@ func TestCustomCompiledCLILoadsLightClient(t *testing.T) {
 	require.NotEmpty(t, createdFor)
 }
 
-// TestRemoteAttestationLightClientRelaysPacket proves a custom-compiled CLI can
-// complete a packet relay using the built-in attestation generator through the
-// remote light-client HTTP adapter.
+// TestRemoteAttestationLightClientRelaysPacket relays through a remote prover.
 func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
 	binary := buildCustomIBC(t)
 	t.Setenv("IBC_BIN", binary)

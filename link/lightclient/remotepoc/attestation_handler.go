@@ -19,7 +19,7 @@ import (
 	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// NewHandler exposes generator through the proof-of-concept HTTP protocol.
+// NewHandler serves a prover over HTTP.
 func NewHandler(generator lightclient.Prover) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /proof", func(w http.ResponseWriter, r *http.Request) {
@@ -54,8 +54,7 @@ func NewHandler(generator lightclient.Prover) *http.Server {
 	return &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 }
 
-// NewAttestationHandler constructs the configured attestation generator for
-// one client and exposes it through the remote light-client HTTP protocol.
+// NewAttestationHandler serves a configured attestation prover.
 func NewAttestationHandler(ctx context.Context, configPath, chainID, clientID string) (*http.Server, error) {
 	cfg, err := config.LoadFromFile(configPath, true, true)
 	if err != nil {

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package proofgen generates packet membership/non-membership proofs and
-// light-client state proofs. There is one implementation per light-client
-// type.
+// Package proofgen resolves configured light-client provers.
 package proofgen
 
 import (
@@ -17,13 +15,12 @@ import (
 	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// Key identifies one configured light client by the chain it lives on and
-// its client id, the composite key Prover instances are scoped by.
+// Key identifies a client on a chain.
 func Key(chainID, clientID string) string {
 	return chainID + "/" + clientID
 }
 
-// Set resolves a Prover by (chainID, clientID).
+// Set resolves provers by chain and client ID.
 type Set struct {
 	generators map[string]lightclient.Prover
 }
@@ -41,9 +38,7 @@ func (s *Set) Get(chainID, clientID string) (lightclient.Prover, bool) {
 	return generator, ok
 }
 
-// NewSetFromConfig resolves a Prover for every client end of every
-// configured connection. Attestation uses its built-in resolver; other client
-// types dispatch through the caller-supplied registry.
+// NewSetFromConfig resolves provers for all configured client ends.
 func NewSetFromConfig(
 	ctx context.Context,
 	cfg config.Config,
@@ -67,8 +62,7 @@ func NewSetFromConfig(
 	return NewSet(generators), nil
 }
 
-// forEachClientEnd calls fn once per client end of every configured
-// connection, in both directions.
+// forEachClientEnd calls fn for both ends of every connection.
 func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counterparty config.ClientEnd) error) error {
 	for _, conn := range cfg.Relayer.Connections {
 		for _, end := range []struct {

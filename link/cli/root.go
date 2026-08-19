@@ -18,14 +18,14 @@ import (
 	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// Options supplies dependencies for command families in the IBC CLI.
+// Options configures the CLI.
 type Options struct {
 	Relayer RelayerOptions
 }
 
-// RelayerOptions supplies extensions used by the relayer commands.
+// RelayerOptions configures relayer commands.
 type RelayerOptions struct {
-	// LightClients contains client types beyond the relayer's built-ins.
+	// LightClients contains custom client types.
 	LightClients *lightclient.Registry
 }
 
@@ -45,15 +45,14 @@ var rootCmd = &cobra.Command{
 	Short: "IBC Link",
 }
 
-// NewRootCmd constructs the complete IBC CLI with the supplied extensions.
-// It is intended to be called once by an executable's main function.
+// NewRootCmd constructs the IBC CLI.
 func NewRootCmd(opts Options) *cobra.Command {
 	relayerOptions = opts.Relayer
 
 	return rootCmd
 }
 
-// Execute runs root with signal cancellation and returns a process exit code.
+// Execute runs root and returns its exit code.
 func Execute(root *cobra.Command) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
