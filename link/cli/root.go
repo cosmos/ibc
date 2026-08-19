@@ -25,8 +25,8 @@ type Options struct {
 
 // RelayerOptions configures relayer commands.
 type RelayerOptions struct {
-	// LightClients contains custom client types.
-	LightClients *lightclient.Registry
+	// ProverFactories contains custom prover factories.
+	ProverFactories *lightclient.Registry
 }
 
 // global globalFlags, loaded in config.DeclarePersistentFlags()

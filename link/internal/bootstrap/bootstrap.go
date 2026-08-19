@@ -36,9 +36,8 @@ type Services struct {
 
 // RelayerOptions supplies optional relayer extensions.
 type RelayerOptions struct {
-	// LightClients contains custom client types. Built-in attestation clients
-	// are resolved internally.
-	LightClients *lightclient.Registry
+	// ProverFactories contains custom prover factories.
+	ProverFactories *lightclient.Registry
 }
 
 // BuildRelayer converts config into a runnable relayer process with all of the deps provisioned.
@@ -88,7 +87,7 @@ func BuildRelayer(cfg config.Config, opts RelayerOptions) (*Services, error) {
 
 	// Proof generators
 	proofGenerators, err := proofgen.NewSetFromConfig(
-		ctx, cfg, clientSet, append(local, remote...), opts.LightClients,
+		ctx, cfg, clientSet, append(local, remote...), opts.ProverFactories,
 	)
 	if err != nil {
 		return nil, err

@@ -57,7 +57,7 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 	}
 
 	app, err := bootstrap.BuildRelayer(cfg, bootstrap.RelayerOptions{
-		LightClients: relayerOptions.LightClients,
+		ProverFactories: relayerOptions.ProverFactories,
 	})
 	if err != nil {
 		return err

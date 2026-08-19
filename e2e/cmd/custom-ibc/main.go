@@ -17,7 +17,7 @@ func main() {
 	}
 
 	root := cli.NewRootCmd(cli.Options{
-		Relayer: cli.RelayerOptions{LightClients: registry},
+		Relayer: cli.RelayerOptions{ProverFactories: registry},
 	})
 	os.Exit(cli.Execute(root))
 }
