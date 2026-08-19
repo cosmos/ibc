@@ -25,7 +25,6 @@ type RelayerHandler struct {
 // RelayerService defines relayer business logic.
 type RelayerService interface {
 	Relay(ctx context.Context, request relayer.RelayRequest) error
-	Status(ctx context.Context, chainID string, txHash string) ([]relayer.PacketStatus, error)
 	Packets(
 		ctx context.Context,
 		filter relayer.PacketFilter,
@@ -88,29 +87,6 @@ func (h *RelayerHandler) Relay(
 	}
 
 	return connect.NewResponse(&proto.RelayResponse{}), nil
-}
-
-func (h *RelayerHandler) Status(
-	ctx context.Context,
-	req *connect.Request[proto.StatusRequest],
-) (*connect.Response[proto.StatusResponse], error) {
-	h.logger.Info("Status", "sourceChainID", req.Msg.SourceChainId, "txHash", req.Msg.TxHash)
-
-	statuses, err := h.srv.Status(ctx, req.Msg.SourceChainId, req.Msg.TxHash)
-	switch {
-	case errors.Is(err, relayer.ErrInvalidInput):
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, relayer.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, err)
-	case err != nil:
-		// todo: move to interceptor
-		h.logger.Error("Status", "err", err)
-		return nil, errInternal
-	}
-
-	return connect.NewResponse(&proto.StatusResponse{
-		PacketStatuses: packetStatusesToProto(statuses),
-	}), nil
 }
 
 // Packets lists the packets the relayer knows about, filtered and paged.

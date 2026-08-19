@@ -91,13 +91,13 @@ func TestRelayerHandlerRelaySelection(t *testing.T) {
 	})
 }
 
-func TestRelayerHandlerStatusMapsNotSelected(t *testing.T) {
+func TestRelayerHandlerPacketsMapsNotSelected(t *testing.T) {
 	handler := NewRelayerHandler(&relayerServiceStub{
 		status: []relayerservice.PacketStatus{{State: relayerservice.StateNotSelected}},
 	})
 
-	response, err := handler.Status(context.Background(), connect.NewRequest(&proto.StatusRequest{}))
+	response, err := handler.Packets(context.Background(), connect.NewRequest(&proto.PacketsRequest{}))
 	require.NoError(t, err)
-	require.Len(t, response.Msg.PacketStatuses, 1)
-	assert.Equal(t, proto.PacketState_PACKET_STATE_NOT_SELECTED, response.Msg.PacketStatuses[0].State)
+	require.Len(t, response.Msg.GetPackets(), 1)
+	assert.Equal(t, proto.PacketState_PACKET_STATE_NOT_SELECTED, response.Msg.GetPackets()[0].GetState())
 }

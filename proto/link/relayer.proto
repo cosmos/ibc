@@ -11,17 +11,8 @@ service RelayerApiService {
   // transactions required to complete them.
   rpc Relay(RelayRequest) returns (RelayResponse) {}
 
-  // Status returns per-packet relay status for a transaction previously
-  // submitted via Relay.
-  //
-  // Deprecated: use Packets with a filter of {source_chain_id, source_tx_hash},
-  // which returns the same packets. Status will be removed.
-  rpc Status(StatusRequest) returns (StatusResponse) {}
-
-  // Packets lists the packets this relayer is aware of, most recent first.
-  // It is a superset of Status: filtering on source_chain_id and
-  // source_tx_hash returns exactly the packets Status returns for the same
-  // transaction.
+  // Packets lists the packets this relayer is aware of, most recent first,
+  // narrowed by an optional filter.
   rpc Packets(PacketsRequest) returns (PacketsResponse) {}
 }
 
@@ -54,15 +45,6 @@ message PacketSelector {
 }
 
 message RelayResponse {}
-
-message StatusRequest {
-  string tx_hash = 1;
-  string source_chain_id = 2;
-}
-
-message StatusResponse {
-  repeated PacketStatus packet_statuses = 1;
-}
 
 message PacketsRequest {
   // Absent filter matches every packet.
