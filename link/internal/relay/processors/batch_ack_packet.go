@@ -11,11 +11,11 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // BatchAckPacket delivers one ack tx on the source chain for a batch of
@@ -24,7 +24,7 @@ type BatchAckPacket struct {
 	destinationChainClient chains.Client
 	sourceChainClient      chains.Client
 	route                  Route
-	proofGen               proofgen.Prover
+	proofGen               lightclient.Prover
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
 	storage                TxStorage

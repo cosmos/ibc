@@ -8,15 +8,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // CheckTimeoutFinality gates timing out a packet on the source client's
 // proof generator currently being able to prove a destination-chain
 // timestamp past the timeout.
 type CheckTimeoutFinality struct {
-	proofGen proofgen.Prover
+	proofGen lightclient.Prover
 }
 
 func NewCheckTimeoutFinality(proofGenerators ProofGenerators, route Route) (CheckTimeoutFinality, error) {

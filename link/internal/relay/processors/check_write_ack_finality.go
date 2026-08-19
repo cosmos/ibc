@@ -11,8 +11,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // CheckWriteAckFinality gates ack relaying on the write ack tx's height
@@ -20,7 +20,7 @@ import (
 // currently prove.
 type CheckWriteAckFinality struct {
 	destinationChainClient chains.Client
-	proofGen               proofgen.Prover
+	proofGen               lightclient.Prover
 }
 
 func NewCheckWriteAckFinality(

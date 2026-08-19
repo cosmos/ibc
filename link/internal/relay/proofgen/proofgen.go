@@ -17,11 +17,6 @@ import (
 	"github.com/cosmos/ibc/link/lightclient"
 )
 
-// Prover is the public light-client proof generation contract.
-// Keep the alias here so existing internal relay code can continue to refer to
-// the package that owns generator resolution and lookup.
-type Prover = lightclient.Prover
-
 // Key identifies one configured light client by the chain it lives on and
 // its client id, the composite key Prover instances are scoped by.
 func Key(chainID, clientID string) string {
@@ -30,18 +25,18 @@ func Key(chainID, clientID string) string {
 
 // Set resolves a Prover by (chainID, clientID).
 type Set struct {
-	generators map[string]Prover
+	generators map[string]lightclient.Prover
 }
 
-func NewSet(generators map[string]Prover) *Set {
+func NewSet(generators map[string]lightclient.Prover) *Set {
 	if generators == nil {
-		generators = make(map[string]Prover)
+		generators = make(map[string]lightclient.Prover)
 	}
 
 	return &Set{generators: generators}
 }
 
-func (s *Set) Get(chainID, clientID string) (Prover, bool) {
+func (s *Set) Get(chainID, clientID string) (lightclient.Prover, bool) {
 	generator, ok := s.generators[Key(chainID, clientID)]
 	return generator, ok
 }
@@ -56,7 +51,7 @@ func NewSetFromConfig(
 	attestors []attestorservice.Attestor,
 	reg *lightclient.Registry,
 ) (*Set, error) {
-	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
+	generators := make(map[string]lightclient.Prover, len(cfg.Relayer.Connections)*2)
 	chainInfos := make(map[string]lightclient.ChainInfo, len(cfg.Chains))
 	for _, chain := range cfg.Chains {
 		chainInfos[chain.ChainID] = toChainInfo(chain)
@@ -93,7 +88,7 @@ func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counter
 
 func addGenerator(
 	ctx context.Context,
-	generators map[string]Prover,
+	generators map[string]lightclient.Prover,
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
 	chainInfo map[string]lightclient.ChainInfo,

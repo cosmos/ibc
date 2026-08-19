@@ -10,7 +10,6 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
@@ -72,7 +71,7 @@ func proofKindFor(relayKind v2.RelayKind) lightclient.ProofKind {
 func relayPackets(
 	ctx context.Context,
 	chainClient chains.Client,
-	proofGen proofgen.Prover,
+	proofGen lightclient.Prover,
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,

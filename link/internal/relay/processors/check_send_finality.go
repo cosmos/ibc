@@ -11,8 +11,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // CheckSendFinality gates relaying on the send tx's height being at or
@@ -20,7 +20,7 @@ import (
 // prove.
 type CheckSendFinality struct {
 	sourceChainClient chains.Client
-	proofGen          proofgen.Prover
+	proofGen          lightclient.Prover
 }
 
 func NewCheckSendFinality(

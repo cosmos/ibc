@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // waitForChainTimeout bounds how long batch delivery waits for the target
@@ -28,7 +28,7 @@ type ChainClients interface {
 
 // ProofGenerators resolves proof generators by (chainIDclientID).
 type ProofGenerators interface {
-	Get(chainID, clientID string) (proofgen.Prover, bool)
+	Get(chainID, clientID string) (lightclient.Prover, bool)
 }
 
 // TxBuilders resolves tx builders by chain id.

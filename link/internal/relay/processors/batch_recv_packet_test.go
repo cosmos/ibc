@@ -31,9 +31,9 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.Prover
+type staticProofGenerators map[string]lightclient.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.Prover, bool) {
+func (s staticProofGenerators) Get(chainID, clientID string) (lightclient.Prover, bool) {
 	gen, ok := s[proofgen.Key(chainID, clientID)]
 	return gen, ok
 }
