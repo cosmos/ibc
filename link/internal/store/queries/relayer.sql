@@ -139,3 +139,47 @@ WHERE status NOT IN (
     'FAILED'
 )
 ORDER BY id;
+
+-- Shared filter shape for ListPackets and CountPackets.
+--
+-- Optional filters use COALESCE(param, column) rather than
+-- (param IS NULL OR column = param): the latter names each parameter twice,
+-- which makes sqlc emit explicitly numbered placeholders, and those collide
+-- with the placeholders sqlc.slice injects for statuses. Every filter column
+-- is NOT NULL, so COALESCE degrades to a self-comparison when the filter is
+-- absent.
+--
+-- The status set is passed as one comma-delimited string rather than
+-- sqlc.slice: slice expansion injects unnumbered placeholders, which collide
+-- with the numbered placeholders sqlc emits for the other parameters. Relay
+-- statuses are fixed identifiers containing no commas, so delimiting is safe.
+-- It does forgo an index on status; see the packets index migration.
+--
+-- The status set is always applied, so callers pass every known status when
+-- they want no status filter.
+
+-- name: ListPackets :many
+SELECT * FROM packets
+WHERE ',' || sqlc.arg(statuses) || ',' LIKE '%,' || status || ',%'
+AND source_chain_id = COALESCE(sqlc.narg(source_chain_id), source_chain_id)
+AND destination_chain_id = COALESCE(sqlc.narg(destination_chain_id), destination_chain_id)
+AND packet_source_client_id = COALESCE(sqlc.narg(source_client_id), packet_source_client_id)
+AND packet_destination_client_id = COALESCE(sqlc.narg(destination_client_id), packet_destination_client_id)
+AND source_tx_hash = COALESCE(sqlc.narg(source_tx_hash), source_tx_hash)
+AND packet_sequence_number = COALESCE(sqlc.narg(sequence_number), packet_sequence_number)
+AND created_at >= COALESCE(sqlc.narg(created_from), created_at)
+AND created_at <= COALESCE(sqlc.narg(created_to), created_at)
+ORDER BY id DESC
+LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
+
+-- name: CountPackets :one
+SELECT COUNT(*) FROM packets
+WHERE ',' || sqlc.arg(statuses) || ',' LIKE '%,' || status || ',%'
+AND source_chain_id = COALESCE(sqlc.narg(source_chain_id), source_chain_id)
+AND destination_chain_id = COALESCE(sqlc.narg(destination_chain_id), destination_chain_id)
+AND packet_source_client_id = COALESCE(sqlc.narg(source_client_id), packet_source_client_id)
+AND packet_destination_client_id = COALESCE(sqlc.narg(destination_client_id), packet_destination_client_id)
+AND source_tx_hash = COALESCE(sqlc.narg(source_tx_hash), source_tx_hash)
+AND packet_sequence_number = COALESCE(sqlc.narg(sequence_number), packet_sequence_number)
+AND created_at >= COALESCE(sqlc.narg(created_from), created_at)
+AND created_at <= COALESCE(sqlc.narg(created_to), created_at);

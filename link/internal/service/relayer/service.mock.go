@@ -127,6 +127,72 @@ func (_m *MockStore) EXPECT() *MockStore_Expecter {
 	return &MockStore_Expecter{mock: &_m.Mock}
 }
 
+// CountPackets provides a mock function for the type MockStore
+func (_mock *MockStore) CountPackets(ctx context.Context, filter store.PacketFilter) (uint64, error) {
+	ret := _mock.Called(ctx, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountPackets")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter) (uint64, error)); ok {
+		return returnFunc(ctx, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter) uint64); ok {
+		r0 = returnFunc(ctx, filter)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, store.PacketFilter) error); ok {
+		r1 = returnFunc(ctx, filter)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountPackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPackets'
+type MockStore_CountPackets_Call struct {
+	*mock.Call
+}
+
+// CountPackets is a helper method to define mock.On call
+//   - ctx context.Context
+//   - filter store.PacketFilter
+func (_e *MockStore_Expecter) CountPackets(ctx any, filter any) *MockStore_CountPackets_Call {
+	return &MockStore_CountPackets_Call{Call: _e.mock.On("CountPackets", ctx, filter)}
+}
+
+func (_c *MockStore_CountPackets_Call) Run(run func(ctx context.Context, filter store.PacketFilter)) *MockStore_CountPackets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 store.PacketFilter
+		if args[1] != nil {
+			arg1 = args[1].(store.PacketFilter)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CountPackets_Call) Return(v uint64, err error) *MockStore_CountPackets_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *MockStore_CountPackets_Call) RunAndReturn(run func(ctx context.Context, filter store.PacketFilter) (uint64, error)) *MockStore_CountPackets_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetRelayRequest provides a mock function for the type MockStore
 func (_mock *MockStore) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error) {
 	ret := _mock.Called(ctx, chainID, txHash)
@@ -197,6 +263,80 @@ func (_c *MockStore_GetRelayRequest_Call) Return(relayRequest *store.RelayReques
 }
 
 func (_c *MockStore_GetRelayRequest_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)) *MockStore_GetRelayRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListPackets provides a mock function for the type MockStore
+func (_mock *MockStore) ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error) {
+	ret := _mock.Called(ctx, filter, page)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPackets")
+	}
+
+	var r0 []store.Packet
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) ([]store.Packet, error)); ok {
+		return returnFunc(ctx, filter, page)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) []store.Packet); ok {
+		r0 = returnFunc(ctx, filter, page)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]store.Packet)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, store.PacketFilter, store.Page) error); ok {
+		r1 = returnFunc(ctx, filter, page)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListPackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPackets'
+type MockStore_ListPackets_Call struct {
+	*mock.Call
+}
+
+// ListPackets is a helper method to define mock.On call
+//   - ctx context.Context
+//   - filter store.PacketFilter
+//   - page store.Page
+func (_e *MockStore_Expecter) ListPackets(ctx any, filter any, page any) *MockStore_ListPackets_Call {
+	return &MockStore_ListPackets_Call{Call: _e.mock.On("ListPackets", ctx, filter, page)}
+}
+
+func (_c *MockStore_ListPackets_Call) Run(run func(ctx context.Context, filter store.PacketFilter, page store.Page)) *MockStore_ListPackets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 store.PacketFilter
+		if args[1] != nil {
+			arg1 = args[1].(store.PacketFilter)
+		}
+		var arg2 store.Page
+		if args[2] != nil {
+			arg2 = args[2].(store.Page)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListPackets_Call) Return(packets []store.Packet, err error) *MockStore_ListPackets_Call {
+	_c.Call.Return(packets, err)
+	return _c
+}
+
+func (_c *MockStore_ListPackets_Call) RunAndReturn(run func(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)) *MockStore_ListPackets_Call {
 	_c.Call.Return(run)
 	return _c
 }

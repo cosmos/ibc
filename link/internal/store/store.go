@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"strings"
 	"time"
 
 	pgx "github.com/jackc/pgx/v5"
@@ -41,6 +42,12 @@ type Repository interface {
 	UpsertPacket(ctx context.Context, input UpsertPacket) error
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
+
+	// ListPackets returns packets matching filter, most recent first, bounded
+	// by page. CountPackets returns how many match the same filter, ignoring
+	// page.
+	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, error)
+	CountPackets(ctx context.Context, filter PacketFilter) (uint64, error)
 
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
 	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
@@ -159,6 +166,34 @@ const (
 	RelayStatusFailed                     RelayStatus = "FAILED"
 )
 
+// AllRelayStatuses returns every relay status, so callers can derive groupings
+// rather than restating them. Adding a status above without adding it here will
+// silently exclude packets in that status from any derived grouping, so the
+// list is covered by a test asserting it stays exhaustive.
+func AllRelayStatuses() []RelayStatus {
+	return []RelayStatus{
+		RelayStatusNotSelected,
+		RelayStatusPending,
+		RelayStatusAwaitingSendFinality,
+		RelayStatusCheckRecvPacketDelivery,
+		RelayStatusGetRecvPacket,
+		RelayStatusDeliverRecvPacket,
+		RelayStatusWaitForWriteAck,
+		RelayStatusAwaitingWriteAckFinality,
+		RelayStatusCheckAckPacketDelivery,
+		RelayStatusGetAckPacket,
+		RelayStatusDeliverAckPacket,
+		RelayStatusAwaitingTimeoutFinality,
+		RelayStatusCheckTimeoutPacketDelivery,
+		RelayStatusGetTimeoutPacket,
+		RelayStatusDeliverTimeoutPacket,
+		RelayStatusCompleteWithAck,
+		RelayStatusCompleteWithWriteAckError,
+		RelayStatusCompleteWithTimeout,
+		RelayStatusFailed,
+	}
+}
+
 // WriteAckStatus the execution result carried by a write ack.
 type WriteAckStatus string
 
@@ -255,4 +290,77 @@ func errNormalize(err error) error {
 	default:
 		return err
 	}
+}
+
+// PacketFilter narrows a ListPackets query. Every field is optional and all
+// set fields must match. Statuses is the one exception: it is always applied,
+// so callers list every status when they want no status filtering. That keeps
+// a single SQL shape across engines, since a slice parameter cannot be guarded
+// by IS NULL.
+type PacketFilter struct {
+	Statuses            []RelayStatus
+	SourceChainID       *string
+	DestinationChainID  *string
+	SourceClientID      *string
+	DestinationClientID *string
+	SourceTxHash        *string
+	SequenceNumber      *uint64
+	CreatedFrom         *time.Time
+	CreatedTo           *time.Time
+}
+
+// Page bounds a ListPackets result.
+type Page struct {
+	Limit  int64
+	Offset int64
+}
+
+// DefaultPacketPageLimit and MaxPacketPageLimit bound how many packets one
+// listing returns.
+const (
+	DefaultPacketPageLimit = 100
+	MaxPacketPageLimit     = 1000
+)
+
+// Normalize applies the default and cap, so every caller is bounded.
+func (p Page) Normalize() Page {
+	switch {
+	case p.Limit <= 0:
+		p.Limit = DefaultPacketPageLimit
+	case p.Limit > MaxPacketPageLimit:
+		p.Limit = MaxPacketPageLimit
+	}
+
+	if p.Offset < 0 {
+		p.Offset = 0
+	}
+
+	return p
+}
+
+// statusList renders the filter's statuses as the comma-delimited string the
+// generated queries match against. Relay statuses contain no commas, so the
+// delimiters are unambiguous. An empty set yields "," which matches nothing,
+// which is the intended reading of "no status qualifies".
+func (f PacketFilter) statusList() *string {
+	statuses := make([]string, len(f.Statuses))
+	for i, status := range f.Statuses {
+		statuses[i] = string(status)
+	}
+
+	list := strings.Join(statuses, ",")
+
+	return &list
+}
+
+// sequenceFilter converts the domain's unsigned sequence to the signed type
+// the generated params use.
+func (f PacketFilter) sequenceFilter() *int64 {
+	if f.SequenceNumber == nil {
+		return nil
+	}
+
+	sequence := int64(*f.SequenceNumber) //nolint:gosec // IBC sequences fit in int64
+
+	return &sequence
 }

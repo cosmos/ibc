@@ -43,6 +43,8 @@ type ChainClients interface {
 type Store interface {
 	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
+	ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)
+	CountPackets(ctx context.Context, filter store.PacketFilter) (uint64, error)
 	Transact(ctx context.Context, call func(store.Repository) error) error
 }
 
@@ -85,6 +87,23 @@ type PacketStatus struct {
 	RecvTx         *TxInfo
 	AckTx          *TxInfo
 	TimeoutTx      *TxInfo
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// PacketFilter narrows a Packets listing. Every field is optional; State is
+// the API-level state, which the service expands into the underlying relay
+// statuses before querying.
+type PacketFilter struct {
+	SourceChainID       *string
+	DestinationChainID  *string
+	SourceClientID      *string
+	DestinationClientID *string
+	State               *PacketState
+	SourceTxHash        *string
+	SequenceNumber      *uint64
+	CreatedFrom         *time.Time
+	CreatedTo           *time.Time
 }
 
 // PacketSelector identifies a packet in a source transaction.
@@ -342,6 +361,113 @@ func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketS
 	return statuses, nil
 }
 
+// Packets lists the packets this relayer knows about, most recent first,
+// along with the total matching the filter before paging.
+//
+// It is a superset of Status: filtering on SourceChainID and SourceTxHash
+// returns the same packets Status returns for that transaction. Unlike Status,
+// an unknown transaction yields an empty result rather than ErrNotFound —
+// listing endpoints report absence as emptiness.
+func (s *Service) Packets(
+	ctx context.Context,
+	filter PacketFilter,
+	page store.Page,
+) ([]PacketStatus, uint64, error) {
+	storeFilter, err := s.toStoreFilter(filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	packets, err := s.store.ListPackets(ctx, storeFilter, page)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "listing packets")
+	}
+
+	total, err := s.store.CountPackets(ctx, storeFilter)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "counting packets")
+	}
+
+	statuses := make([]PacketStatus, len(packets))
+	for i, packet := range packets {
+		statuses[i] = toPacketStatus(packet)
+	}
+
+	return statuses, total, nil
+}
+
+// toStoreFilter lowers an API filter to a store filter, expanding the API
+// state into the relay statuses it covers and normalising the tx hash the same
+// way Relay and Status do, so lookups stay case-insensitive.
+func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
+	out := store.PacketFilter{
+		Statuses:            dbStatusesForState(filter.State),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SequenceNumber:      filter.SequenceNumber,
+		CreatedFrom:         filter.CreatedFrom,
+		CreatedTo:           filter.CreatedTo,
+	}
+
+	if filter.SourceTxHash != nil {
+		chainID := ""
+		if filter.SourceChainID != nil {
+			chainID = *filter.SourceChainID
+		}
+
+		normalized, err := s.normalizeTxHash(chainID, *filter.SourceTxHash)
+		if err != nil {
+			return store.PacketFilter{}, err
+		}
+
+		out.SourceTxHash = &normalized
+	}
+
+	return out, nil
+}
+
+// dbStatusesForState expands an API state into every relay status that maps to
+// it. A nil state means no filtering, which is expressed as every status
+// rather than an absent clause, because the query applies the status list
+// unconditionally.
+//
+// The expansion is derived from mapPacketState rather than listed by hand, so
+// a new relay status is classified consistently by both without anyone
+// remembering to update a second list.
+func dbStatusesForState(state *PacketState) []store.RelayStatus {
+	all := store.AllRelayStatuses()
+	if state == nil {
+		return all
+	}
+
+	matching := make([]store.RelayStatus, 0, len(all))
+
+	for _, status := range all {
+		if mapPacketState(status) == *state {
+			matching = append(matching, status)
+		}
+	}
+
+	return matching
+}
+
+// toPacketStatus renders a stored packet as its API status.
+func toPacketStatus(packet store.Packet) PacketStatus {
+	return PacketStatus{
+		State:          mapPacketState(packet.Status),
+		SequenceNumber: packet.PacketSequenceNumber,
+		SourceClientID: packet.PacketSourceClientID,
+		SendTx:         TxInfo{TxHash: packet.SourceTxHash, ChainID: packet.SourceChainID},
+		RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
+		AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
+		TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
+		CreatedAt:      packet.CreatedAt,
+		UpdatedAt:      packet.UpdatedAt,
+	}
+}
+
 // validateRelayArgs validates the tx hash for the chain's type and applies
 // consistent casing so lookups are case-insensitive.
 func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
@@ -352,6 +478,21 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 		return "", errors.Wrap(ErrInvalidInput, "txHash is required")
 	}
 
+	return s.normalizeTxHash(chainID, txHash)
+}
+
+// normalizeTxHash renders txHash in the canonical casing the store holds, so
+// lookups are case-insensitive. Stored hashes are canonical, so skipping this
+// would make a differently-cased hash silently match nothing.
+//
+// chainID may be empty, which happens when a packet filter names a transaction
+// hash without a chain. Every supported chain is EVM, so the hash is validated
+// as one; the chain's own type is used when a chain is named.
+func (s *Service) normalizeTxHash(chainID, txHash string) (string, error) {
+	if chainID == "" {
+		return normalizeEVMTxHash(txHash)
+	}
+
 	chain, ok := s.cfg.Chain(chainID)
 	if !ok {
 		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
@@ -359,15 +500,19 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 
 	switch chain.Type() {
 	case config.ChainTypeEVM:
-		var hash common.Hash
-		if err := hash.UnmarshalText([]byte(txHash)); err != nil {
-			return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
-		}
-
-		return hash.Hex(), nil
+		return normalizeEVMTxHash(txHash)
 	default:
 		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain type for chain %q", chainID)
 	}
+}
+
+func normalizeEVMTxHash(txHash string) (string, error) {
+	var hash common.Hash
+	if err := hash.UnmarshalText([]byte(txHash)); err != nil {
+		return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
+	}
+
+	return hash.Hex(), nil
 }
 
 func mapPacketState(status store.RelayStatus) PacketState {

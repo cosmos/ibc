@@ -77,6 +77,48 @@ func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeo
 	return err
 }
 
+const countPackets = `-- name: CountPackets :one
+SELECT COUNT(*) FROM packets
+WHERE ',' || $1 || ',' LIKE '%,' || status || ',%'
+AND source_chain_id = COALESCE($2, source_chain_id)
+AND destination_chain_id = COALESCE($3, destination_chain_id)
+AND packet_source_client_id = COALESCE($4, packet_source_client_id)
+AND packet_destination_client_id = COALESCE($5, packet_destination_client_id)
+AND source_tx_hash = COALESCE($6, source_tx_hash)
+AND packet_sequence_number = COALESCE($7, packet_sequence_number)
+AND created_at >= COALESCE($8, created_at)
+AND created_at <= COALESCE($9, created_at)
+`
+
+type CountPacketsParams struct {
+	Statuses            *string
+	SourceChainID       *string
+	DestinationChainID  *string
+	SourceClientID      *string
+	DestinationClientID *string
+	SourceTxHash        *string
+	SequenceNumber      *int64
+	CreatedFrom         pgtype.Timestamptz
+	CreatedTo           pgtype.Timestamptz
+}
+
+func (q *Queries) CountPackets(ctx context.Context, arg CountPacketsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPackets,
+		arg.Statuses,
+		arg.SourceChainID,
+		arg.DestinationChainID,
+		arg.SourceClientID,
+		arg.DestinationClientID,
+		arg.SourceTxHash,
+		arg.SequenceNumber,
+		arg.CreatedFrom,
+		arg.CreatedTo,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRelayRequest = `-- name: CreateRelayRequest :exec
 INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES ($1, $2)
@@ -124,6 +166,110 @@ ORDER BY id
 
 func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
 	rows, err := q.db.Query(ctx, listDispatchablePackets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Packet
+	for rows.Next() {
+		var i Packet
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+			&i.SourceChainID,
+			&i.DestinationChainID,
+			&i.SourceTxHash,
+			&i.SourceTxTime,
+			&i.PacketSequenceNumber,
+			&i.PacketSourceClientID,
+			&i.PacketDestinationClientID,
+			&i.PacketTimeoutTimestamp,
+			&i.RecvTxHash,
+			&i.RecvTxTime,
+			&i.RecvTxRelayerAddress,
+			&i.WriteAckTxHash,
+			&i.WriteAckTxTime,
+			&i.WriteAckStatus,
+			&i.AckTxHash,
+			&i.AckTxTime,
+			&i.AckTxRelayerAddress,
+			&i.TimeoutTxHash,
+			&i.TimeoutTxTime,
+			&i.TimeoutTxRelayerAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPackets = `-- name: ListPackets :many
+
+SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
+WHERE ',' || $1 || ',' LIKE '%,' || status || ',%'
+AND source_chain_id = COALESCE($2, source_chain_id)
+AND destination_chain_id = COALESCE($3, destination_chain_id)
+AND packet_source_client_id = COALESCE($4, packet_source_client_id)
+AND packet_destination_client_id = COALESCE($5, packet_destination_client_id)
+AND source_tx_hash = COALESCE($6, source_tx_hash)
+AND packet_sequence_number = COALESCE($7, packet_sequence_number)
+AND created_at >= COALESCE($8, created_at)
+AND created_at <= COALESCE($9, created_at)
+ORDER BY id DESC
+LIMIT $11 OFFSET $10
+`
+
+type ListPacketsParams struct {
+	Statuses            *string
+	SourceChainID       *string
+	DestinationChainID  *string
+	SourceClientID      *string
+	DestinationClientID *string
+	SourceTxHash        *string
+	SequenceNumber      *int64
+	CreatedFrom         pgtype.Timestamptz
+	CreatedTo           pgtype.Timestamptz
+	RowOffset           int32
+	RowLimit            int32
+}
+
+// Shared filter shape for ListPackets and CountPackets.
+//
+// Optional filters use COALESCE(param, column) rather than
+// (param IS NULL OR column = param): the latter names each parameter twice,
+// which makes sqlc emit explicitly numbered placeholders, and those collide
+// with the placeholders sqlc.slice injects for statuses. Every filter column
+// is NOT NULL, so COALESCE degrades to a self-comparison when the filter is
+// absent.
+//
+// The status set is passed as one comma-delimited string rather than
+// sqlc.slice: slice expansion injects unnumbered placeholders, which collide
+// with the numbered placeholders sqlc emits for the other parameters. Relay
+// statuses are fixed identifiers containing no commas, so delimiting is safe.
+// It does forgo an index on status; see the packets index migration.
+//
+// The status set is always applied, so callers pass every known status when
+// they want no status filter.
+func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Packet, error) {
+	rows, err := q.db.Query(ctx, listPackets,
+		arg.Statuses,
+		arg.SourceChainID,
+		arg.DestinationChainID,
+		arg.SourceClientID,
+		arg.DestinationClientID,
+		arg.SourceTxHash,
+		arg.SequenceNumber,
+		arg.CreatedFrom,
+		arg.CreatedTo,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
