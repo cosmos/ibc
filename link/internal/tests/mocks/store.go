@@ -408,7 +408,7 @@ func (_c *MockRepository_ListDispatchablePackets_Call) RunAndReturn(run func(ctx
 }
 
 // ListPackets provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, bool, error) {
+func (_mock *MockRepository) ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error) {
 	ret := _mock.Called(ctx, filter, page)
 
 	if len(ret) == 0 {
@@ -416,9 +416,8 @@ func (_mock *MockRepository) ListPackets(ctx context.Context, filter store.Packe
 	}
 
 	var r0 []store.Packet
-	var r1 bool
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) ([]store.Packet, bool, error)); ok {
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) ([]store.Packet, error)); ok {
 		return returnFunc(ctx, filter, page)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) []store.Packet); ok {
@@ -428,17 +427,12 @@ func (_mock *MockRepository) ListPackets(ctx context.Context, filter store.Packe
 			r0 = ret.Get(0).([]store.Packet)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, store.PacketFilter, store.Page) bool); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, store.PacketFilter, store.Page) error); ok {
 		r1 = returnFunc(ctx, filter, page)
 	} else {
-		r1 = ret.Get(1).(bool)
+		r1 = ret.Error(1)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, store.PacketFilter, store.Page) error); ok {
-		r2 = returnFunc(ctx, filter, page)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
+	return r0, r1
 }
 
 // MockRepository_ListPackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPackets'
@@ -477,12 +471,12 @@ func (_c *MockRepository_ListPackets_Call) Run(run func(ctx context.Context, fil
 	return _c
 }
 
-func (_c *MockRepository_ListPackets_Call) Return(packets []store.Packet, b bool, err error) *MockRepository_ListPackets_Call {
-	_c.Call.Return(packets, b, err)
+func (_c *MockRepository_ListPackets_Call) Return(packets []store.Packet, err error) *MockRepository_ListPackets_Call {
+	_c.Call.Return(packets, err)
 	return _c
 }
 
-func (_c *MockRepository_ListPackets_Call) RunAndReturn(run func(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, bool, error)) *MockRepository_ListPackets_Call {
+func (_c *MockRepository_ListPackets_Call) RunAndReturn(run func(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)) *MockRepository_ListPackets_Call {
 	_c.Call.Return(run)
 	return _c
 }

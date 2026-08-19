@@ -453,10 +453,8 @@ func (db *SqliteDB) ListPackets(
 	ctx context.Context,
 	filter PacketFilter,
 	page Page,
-) ([]Packet, bool, error) {
+) ([]Packet, error) {
 	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
-
-	page = page.Normalize()
 
 	rows, err := db.repo.ListPackets(ctx, reposqlite.ListPacketsParams{
 		Statuses:            filter.statusList(),
@@ -468,19 +466,17 @@ func (db *SqliteDB) ListPackets(
 		SequenceNumber:      filter.sequenceFilter(),
 		CreatedFrom:         filter.CreatedFrom,
 		CreatedTo:           filter.CreatedTo,
-		RowLimit:            page.probeLimit(),
+		RowLimit:            page.Limit,
 		RowOffset:           page.Offset,
 	})
 	if err != nil {
-		return nil, false, errNormalize(err)
+		return nil, errNormalize(err)
 	}
-
-	rows, hasMore := trimProbe(page.Limit, rows)
 
 	packets := make([]Packet, len(rows))
 	for i, row := range rows {
 		packets[i] = packetFromSqlite(row)
 	}
 
-	return packets, hasMore, nil
+	return packets, nil
 }

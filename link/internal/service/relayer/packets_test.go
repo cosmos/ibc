@@ -3,8 +3,10 @@
 package relayer
 
 import (
+	"context"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/link/internal/store"
@@ -96,4 +98,72 @@ func TestDBStatusesForStateUnspecifiedMatchesNothing(t *testing.T) {
 
 	unspecified := StateUnspecified
 	require.Empty(t, dbStatusesForState(&unspecified))
+}
+
+// The service pages by asking for one row past the page and trimming it, so a
+// full page must not leak the probe row nor claim more when there is none.
+func TestPacketsProbesForFurtherPages(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name        string
+		limit       int64
+		rowsFromDB  int
+		wantPackets int
+		wantHasMore bool
+	}{
+		{"partial page", 5, 3, 3, false},
+		{"exactly full", 3, 3, 3, false},
+		{"probe returned", 3, 4, 3, true},
+		{"empty", 5, 0, 0, false},
+		{"default applied", 0, DefaultPacketPageLimit + 1, DefaultPacketPageLimit, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			st := NewMockStore(t)
+			service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+
+			var asked int64
+
+			st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
+				Run(func(_ context.Context, _ store.PacketFilter, page store.Page) {
+					asked = page.Limit
+				}).
+				Return(make([]store.Packet, tt.rowsFromDB), nil).Once()
+
+			packets, hasMore, err := service.Packets(ctx, PacketFilter{}, store.Page{Limit: tt.limit})
+			require.NoError(t, err)
+			require.Len(t, packets, tt.wantPackets)
+			require.Equal(t, tt.wantHasMore, hasMore)
+
+			want := tt.limit
+			if want <= 0 {
+				want = DefaultPacketPageLimit
+			}
+
+			require.Equal(t, want+1, asked, "the store must be asked for one row past the page")
+		})
+	}
+}
+
+func TestPacketsCapsTheLimit(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	st := NewMockStore(t)
+	service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+
+	var asked int64
+
+	st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ store.PacketFilter, page store.Page) {
+			asked = page.Limit
+		}).
+		Return(nil, nil).Once()
+
+	_, _, err := service.Packets(ctx, PacketFilter{}, store.Page{Limit: MaxPacketPageLimit + 500})
+	require.NoError(t, err)
+	require.Equal(t, int64(MaxPacketPageLimit+1), asked)
 }

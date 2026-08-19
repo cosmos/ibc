@@ -43,8 +43,7 @@ type Repository interface {
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 
-	// ListPackets reports whether further packets match beyond the page.
-	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, bool, error)
+	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, error)
 
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
 	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
@@ -301,46 +300,11 @@ type PacketFilter struct {
 	CreatedTo           *time.Time
 }
 
-// Page bounds a ListPackets result.
+// Page bounds a ListPackets result. Limit and Offset are applied as given;
+// defaults, caps, and has-more probing are the caller's concern.
 type Page struct {
 	Limit  int64
 	Offset int64
-}
-
-// Bounds on how many packets one listing returns.
-const (
-	DefaultPacketPageLimit = 100
-	MaxPacketPageLimit     = 1000
-)
-
-// Normalize applies the default and cap.
-func (p Page) Normalize() Page {
-	switch {
-	case p.Limit <= 0:
-		p.Limit = DefaultPacketPageLimit
-	case p.Limit > MaxPacketPageLimit:
-		p.Limit = MaxPacketPageLimit
-	}
-
-	if p.Offset < 0 {
-		p.Offset = 0
-	}
-
-	return p
-}
-
-// probeLimit asks for one row past the page; its presence reveals another page.
-func (p Page) probeLimit() int64 {
-	return p.Limit + 1
-}
-
-// trimProbe drops the probe row, reporting whether it was there.
-func trimProbe[T any](limit int64, rows []T) ([]T, bool) {
-	if int64(len(rows)) > limit {
-		return rows[:limit], true
-	}
-
-	return rows, false
 }
 
 // statusList renders statuses for the query. Relay statuses contain no commas,
