@@ -57,9 +57,13 @@ func NewSetFromConfig(
 	reg *lightclient.Registry,
 ) (*Set, error) {
 	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Connections)*2)
+	chainInfos := make(map[string]lightclient.ChainInfo, len(cfg.Chains))
+	for _, chain := range cfg.Chains {
+		chainInfos[chain.ChainID] = toChainInfo(chain)
+	}
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, reg)
+		return addGenerator(ctx, generators, connAlias, self, counterparty, chainInfos, clientSet, attestors, reg)
 	})
 	if err != nil {
 		return nil, err
@@ -92,6 +96,7 @@ func addGenerator(
 	generators map[string]ProofGenerator,
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
+	chainInfo map[string]lightclient.ChainInfo,
 	clientSet *chains.ClientSet,
 	attestors []attestorservice.Attestor,
 	reg *lightclient.Registry,
@@ -111,16 +116,29 @@ func addGenerator(
 
 	factory, ok := reg.Get(string(client.Type))
 	if !ok {
+		registered := append([]string{string(config.ClientTypeAttestation)}, reg.Types()...)
 		return errors.Errorf(
 			"connection %q: no proof generator registered for client type %q (registered: %v)",
-			connAlias, client.Type, reg.Types(),
+			connAlias, client.Type, registered,
+		)
+	}
+	hostChain, ok := chainInfo[client.ChainID]
+	if !ok {
+		return errors.Errorf("connection %q: no chain config for host chain %q", connAlias, client.ChainID)
+	}
+	counterpartyChain, ok := chainInfo[clientCounterparty.ChainID]
+	if !ok {
+		return errors.Errorf(
+			"connection %q: no chain config for counterparty chain %q", connAlias, clientCounterparty.ChainID,
 		)
 	}
 
 	gen, err := factory.New(
 		ctx,
 		lightclient.FactoryOptions{
-			Client: toClientInfo(client, clientCounterparty.ChainID),
+			Client:            toClientInfo(client, clientCounterparty.ChainID),
+			HostChain:         hostChain,
+			CounterpartyChain: counterpartyChain,
 		},
 	)
 	if err != nil {
@@ -130,6 +148,18 @@ func addGenerator(
 	generators[Key(client.ChainID, client.ClientID)] = gen
 
 	return nil
+}
+
+func toChainInfo(chain config.ChainConfig) lightclient.ChainInfo {
+	info := lightclient.ChainInfo{ChainID: chain.ChainID}
+	if chain.EVM != nil {
+		info.EVM = &lightclient.EVMChainInfo{
+			RPC:         chain.EVM.RPC,
+			ICS26Router: chain.EVM.ICS26Router,
+		}
+	}
+
+	return info
 }
 
 func toClientInfo(end config.ClientEnd, counterpartyChainID string) lightclient.ClientInfo {

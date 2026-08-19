@@ -198,9 +198,8 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".chainId required",
 			},
 			{
-				// An unregistered type is no longer a structural error: client
-				// types are open, and validating one needs a registry. See
-				// TestValidateClients for the check that replaced this.
+				// An unregistered type is not a structural config error. It is
+				// resolved when the relayer constructs proof generators.
 				name: "unregistered client type passes structural validation",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.Type = "tendermint"

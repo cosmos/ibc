@@ -107,7 +107,13 @@ func TestNewSetFromConfig(t *testing.T) {
 			conn.ClientB.ChainID: mocks.NewMockClient(t),
 		})
 
-		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+		cfg := config.Config{
+			Chains: []config.ChainConfig{
+				{ChainID: conn.ClientA.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-a", ICS26Router: "0xa"}},
+				{ChainID: conn.ClientB.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-b", ICS26Router: "0xb"}},
+			},
+			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+		}
 
 		// ACT
 		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, nil)
@@ -129,13 +135,25 @@ func TestNewSetFromConfig(t *testing.T) {
 			conn.ClientB.ChainID: mocks.NewMockClient(t),
 		})
 
-		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+		cfg := config.Config{
+			Chains: []config.ChainConfig{
+				{ChainID: conn.ClientA.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-a", ICS26Router: "0xa"}},
+				{ChainID: conn.ClientB.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-b", ICS26Router: "0xb"}},
+			},
+			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+		}
 
 		reg := lightclient.NewRegistry()
-		require.NoError(t, reg.Register("myclient", stubFactory{}))
+		built := make(chan lightclient.FactoryOptions, 2)
+		require.NoError(t, reg.Register(stubFactory{built: built}))
 
 		set, err := NewSetFromConfig(ctx, cfg, clientSet, nil, reg)
 		require.NoError(t, err)
+		first := <-built
+		require.Equal(t, conn.ClientA.ChainID, first.HostChain.ChainID)
+		require.Equal(t, "http://chain-a", first.HostChain.EVM.RPC)
+		require.Equal(t, conn.ClientB.ChainID, first.CounterpartyChain.ChainID)
+		require.Equal(t, "http://chain-b", first.CounterpartyChain.EVM.RPC)
 
 		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
 		require.True(t, ok)
@@ -143,13 +161,18 @@ func TestNewSetFromConfig(t *testing.T) {
 }
 
 // stubFactory is a light client type that exists only in this test.
-type stubFactory struct{}
+type stubFactory struct {
+	built chan<- lightclient.FactoryOptions
+}
 
-func (stubFactory) ValidateParams(*lightclient.RawParams) error { return nil }
+func (stubFactory) Type() string { return "myclient" }
 
-func (stubFactory) New(
-	context.Context, lightclient.FactoryOptions,
+func (f stubFactory) New(
+	_ context.Context, options lightclient.FactoryOptions,
 ) (lightclient.ProofGenerator, error) {
+	if f.built != nil {
+		f.built <- options
+	}
 	return stubGenerator{}, nil
 }
 

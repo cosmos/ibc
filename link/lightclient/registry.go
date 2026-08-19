@@ -9,17 +9,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Factory builds proof generators for one light client type and validates that
-// type's config params.
-type Factory interface {
-	// ValidateParams reports whether params are usable for this client type.
-	// It runs during config validation, before any chain access, so it must
-	// not perform I/O. Decode through RawParams.Decode so unknown fields are
-	// rejected.
-	ValidateParams(params *RawParams) error
+// ProverFactory builds proof generators for one custom light-client type.
+// New validates the client parameters as part of construction.
+type ProverFactory interface {
+	// Type returns the name operators use in connection configuration.
+	Type() string
 
-	// New builds a generator for Client, which tracks Counterparty. ClientParams
-	// have already passed ValidateParams.
+	// New builds a generator for Client, which tracks CounterpartyChain.
 	New(ctx context.Context, options FactoryOptions) (ProofGenerator, error)
 }
 
@@ -29,22 +25,25 @@ type Factory interface {
 // A Registry is not safe for concurrent registration. Build it fully during
 // startup, then treat it as read-only.
 type Registry struct {
-	factories map[string]Factory
+	factories map[string]ProverFactory
 }
 
 func NewRegistry() *Registry {
-	return &Registry{factories: make(map[string]Factory)}
+	return &Registry{factories: make(map[string]ProverFactory)}
 }
 
-// Register associates a client type name with a factory. The name is the
-// string operators write as `type:` in their connection config. Registering a
-// name twice is an error rather than a silent overwrite.
-func (r *Registry) Register(clientType string, f Factory) error {
-	switch {
-	case clientType == "":
+// Register associates a factory with the client type returned by Type.
+// Registering a type twice is an error rather than a silent overwrite.
+func (r *Registry) Register(f ProverFactory) error {
+	if f == nil {
+		return errors.New("factory must not be nil")
+	}
+	clientType := f.Type()
+	switch clientType {
+	case "":
 		return errors.New("client type must not be empty")
-	case f == nil:
-		return errors.Errorf("client type %q: factory must not be nil", clientType)
+	case "attestation":
+		return errors.Errorf("client type %q is built in and cannot be overridden", clientType)
 	}
 
 	if _, exists := r.factories[clientType]; exists {
@@ -56,7 +55,7 @@ func (r *Registry) Register(clientType string, f Factory) error {
 	return nil
 }
 
-func (r *Registry) Get(clientType string) (Factory, bool) {
+func (r *Registry) Get(clientType string) (ProverFactory, bool) {
 	if r == nil {
 		return nil, false
 	}

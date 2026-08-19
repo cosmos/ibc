@@ -8,7 +8,7 @@ import (
 )
 
 // RawParams is a client-type-specific config block captured verbatim at decode
-// time and interpreted by the Factory registered for that type, not by the
+// time and interpreted by the ProverFactory registered for that type, not by the
 // config package.
 //
 // It is used as a pointer in config structs so that adding it does not make
@@ -39,7 +39,7 @@ func (p RawParams) MarshalYAML() ([]byte, error) {
 	return p.raw, nil
 }
 
-// IsEmpty reports whether no params were configured. A Factory that requires
+// IsEmpty reports whether no params were configured. A ProverFactory that requires
 // params should check this and return a helpful error rather than decoding an
 // empty document into a zero value.
 func (p *RawParams) IsEmpty() bool {

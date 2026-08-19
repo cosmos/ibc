@@ -31,19 +31,7 @@ type Factory struct {
 	HTTPClient *http.Client
 }
 
-func (Factory) ValidateParams(raw *lightclient.RawParams) error {
-	var p ClientParams
-	if err := raw.Decode(&p); err != nil {
-		return err
-	}
-
-	u, err := url.ParseRequestURI(p.URL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("url must be an absolute HTTP(S) URL")
-	}
-
-	return nil
-}
+func (Factory) Type() string { return Type }
 
 func (f Factory) New(
 	_ context.Context,
@@ -52,6 +40,10 @@ func (f Factory) New(
 	var p ClientParams
 	if err := options.Client.ClientParams.Decode(&p); err != nil {
 		return nil, err
+	}
+	u, err := url.ParseRequestURI(p.URL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, errors.New("url must be an absolute HTTP(S) URL")
 	}
 
 	client := f.HTTPClient

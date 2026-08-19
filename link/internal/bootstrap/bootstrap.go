@@ -6,8 +6,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/pkg/errors"
-
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
@@ -86,10 +84,6 @@ func BuildRelayer(cfg config.Config, opts RelayerOptions) (*Services, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	if err = cfg.ValidateClients(opts.LightClients); err != nil {
-		return nil, errors.Wrap(err, "validation failed")
 	}
 
 	// Proof generators

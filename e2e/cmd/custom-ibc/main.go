@@ -13,10 +13,10 @@ import (
 
 func main() {
 	registry := lightclient.NewRegistry()
-	if err := registry.Register(customlightclient.Type, customlightclient.Factory{}); err != nil {
+	if err := registry.Register(customlightclient.Factory{}); err != nil {
 		panic(err)
 	}
-	if err := registry.Register(remotepoc.Type, remotepoc.Factory{}); err != nil {
+	if err := registry.Register(remotepoc.Factory{}); err != nil {
 		panic(err)
 	}
 

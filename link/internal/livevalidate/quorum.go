@@ -33,10 +33,6 @@ func checkAttestorQuorum(ctx context.Context, cfg config.Config, clientSet *chai
 	attestors = append(attestors, local...)
 	attestors = append(attestors, remote...)
 
-	if err := cfg.ValidateClients(nil); err != nil {
-		return errors.Wrap(err, "client config")
-	}
-
 	if _, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, attestors, nil); err != nil {
 		return errors.Wrap(err, "attestor quorum")
 	}

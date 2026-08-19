@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package lightclient is the public extension point for light client proof
-// generation. Implement ProofGenerator and Factory here, register the factory
+// generation. Implement ProofGenerator and ProverFactory here, register the factory
 // under a client type name, and supply it through link/cli.
 //
 // This package must not import anything under link/internal. Everything it
@@ -52,7 +52,7 @@ const (
 )
 
 // ClientInfo describes one configured light-client instance from the
-// perspective of the Factory responsible for its type.
+// perspective of the ProverFactory responsible for its type.
 type ClientInfo struct {
 	ChainID             string
 	CounterpartyChainID string
@@ -61,9 +61,24 @@ type ClientInfo struct {
 	ClientParams        *RawParams
 }
 
-// FactoryOptions describes the configured light-client instance a Factory
+// ChainInfo is the chain configuration relevant to proof generation. It omits
+// operational settings, such as the deployer, that custom provers do not need.
+type ChainInfo struct {
+	ChainID string
+	EVM     *EVMChainInfo
+}
+
+// EVMChainInfo contains the EVM connection details available to a prover.
+type EVMChainInfo struct {
+	RPC         string
+	ICS26Router string
+}
+
+// FactoryOptions describes the configured light-client instance a ProverFactory
 // constructs. Additional shared construction dependencies may be added here
 // as the extension API evolves.
 type FactoryOptions struct {
-	Client ClientInfo
+	Client            ClientInfo
+	HostChain         ChainInfo
+	CounterpartyChain ChainInfo
 }

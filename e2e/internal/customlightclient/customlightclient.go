@@ -23,17 +23,7 @@ type params struct {
 	MarkerFile string `yaml:"markerFile"`
 }
 
-func (Factory) ValidateParams(raw *lightclient.RawParams) error {
-	var p params
-	if err := raw.Decode(&p); err != nil {
-		return err
-	}
-	if p.MarkerFile == "" {
-		return errors.New("markerFile is required")
-	}
-
-	return nil
-}
+func (Factory) Type() string { return Type }
 
 func (Factory) New(
 	_ context.Context,
@@ -43,6 +33,9 @@ func (Factory) New(
 	var p params
 	if err := self.ClientParams.Decode(&p); err != nil {
 		return nil, err
+	}
+	if p.MarkerFile == "" {
+		return nil, errors.New("markerFile is required")
 	}
 	if err := os.WriteFile(p.MarkerFile, []byte(self.ChainID+"/"+self.ClientID), 0o600); err != nil {
 		return nil, err
