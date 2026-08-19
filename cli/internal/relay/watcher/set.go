@@ -42,8 +42,9 @@ func NewSetFromConfig(
 			client,
 			storage,
 			ClearConfig{
-				OnStart:  cfg.Relayer.ClearOnStartEnabled(),
-				Interval: cfg.Relayer.ClearIntervalFor(chain.ChainID),
+				OnStart:                     cfg.Relayer.ClearOnStartEnabled(),
+				Interval:                    cfg.Relayer.ClearIntervalFor(chain.ChainID),
+				AbandonUnrecoverablePackets: cfg.Relayer.AbandonUnrecoverablePacketsFor(chain.ChainID),
 			},
 			DefaultMinBackoff,
 			DefaultMaxBackoff,

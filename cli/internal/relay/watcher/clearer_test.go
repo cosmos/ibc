@@ -22,7 +22,11 @@ import (
 const waitFor = 5 * time.Second
 
 func newTestClearer(chain OutstandingQuerier, storage ClearStore) *Clearer {
-	return NewClearer(sourceChainID, testConnections(), chain, storage, slog.Default())
+	return newClearer(chain, storage, ClearConfig{})
+}
+
+func newClearer(chain OutstandingQuerier, storage ClearStore, clearing ClearConfig) *Clearer {
+	return NewClearer(sourceChainID, testConnections(), chain, storage, clearing, slog.Default())
 }
 
 // fakeChain models what one chain has sent and what is still committed at a
@@ -117,6 +121,16 @@ func (c *fakeChain) prune(sequences ...uint64) {
 
 	for _, sequence := range sequences {
 		c.pruned[sequence] = struct{}{}
+	}
+}
+
+// unprune serves the sends again, as pointing the relayer at an archive endpoint does.
+func (c *fakeChain) unprune(sequences ...uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, sequence := range sequences {
+		delete(c.pruned, sequence)
 	}
 }
 
@@ -612,6 +626,44 @@ func TestClearerClear(t *testing.T) {
 		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 	})
 
+	t.Run("anAbandonedSendIsRememberedButNotProbed", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.send(1, 2)
+		chain.prune(1)
+
+		db := watcherStore(t)
+		abandoning := newClearer(chain, db, ClearConfig{AbandonUnrecoverablePackets: true})
+
+		result, err := abandoning.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1, Abandoned: 1}, result)
+		assert.Equal(t, []uint64{2}, recorded(t, db))
+		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
+
+		before := len(chain.probeCalls())
+
+		result, err = abandoning.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		// on record but out of the probe, so it costs the pass nothing
+		assert.Empty(t, chain.probeCalls()[before:])
+		assert.Equal(t, 1, result.Abandoned)
+		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
+
+		// an archive endpoint turns up later: turning the setting off is the
+		// whole recovery, since the sequence was never forgotten
+		chain.unprune(1)
+
+		result, err = newTestClearer(chain, db).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, [][]uint64{{1}}, chain.probeCalls()[before:])
+		assert.Equal(t, Result{Probed: 1, Outstanding: 1, Recovered: 1}, result)
+		assert.Equal(t, []uint64{1, 2}, recorded(t, db))
+		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
+	})
+
 	t.Run("aFailedRowWriteLeavesNoWatermark", func(t *testing.T) {
 		chain := newFakeChain()
 		chain.send(1, 2)
@@ -705,8 +757,10 @@ func TestUnresolvedDelta(t *testing.T) {
 		"resolve":     {probed: []uint64{5, 9}, unresolved: []uint64{9}, resolve: []uint64{5}},
 		"replaced":    {probed: []uint64{5}, unresolved: []uint64{9}, add: []uint64{9}, resolve: []uint64{5}},
 		"allResolved": {probed: []uint64{5, 9}, resolve: []uint64{5, 9}},
-		"firstSeen":   {unresolved: []uint64{9}, add: []uint64{9}},
-		"bothEmpty":   {},
+		// a pass that probed nothing held, which is what abandoning does, must
+		// resolve nothing: it learned nothing about the set it carried
+		"nothingProbed": {unresolved: []uint64{9}, add: []uint64{9}},
+		"bothEmpty":     {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			delta := unresolvedDelta(tt.probed, tt.unresolved, 42)

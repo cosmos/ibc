@@ -38,6 +38,7 @@ relayer:
       packetBatchTimeout: 10s
       discovery:
         clearInterval: 15m
+        abandonUnrecoverablePackets: true
     - chainId: "8453"
   connections:
     - alias: "eth-base"
