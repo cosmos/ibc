@@ -76,48 +76,6 @@ func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeo
 	return err
 }
 
-const countPackets = `-- name: CountPackets :one
-SELECT COUNT(*) FROM packets
-WHERE ',' || ?1 || ',' LIKE '%,' || status || ',%'
-AND source_chain_id = COALESCE(?2, source_chain_id)
-AND destination_chain_id = COALESCE(?3, destination_chain_id)
-AND packet_source_client_id = COALESCE(?4, packet_source_client_id)
-AND packet_destination_client_id = COALESCE(?5, packet_destination_client_id)
-AND source_tx_hash = COALESCE(?6, source_tx_hash)
-AND packet_sequence_number = COALESCE(?7, packet_sequence_number)
-AND created_at >= COALESCE(?8, created_at)
-AND created_at <= COALESCE(?9, created_at)
-`
-
-type CountPacketsParams struct {
-	Statuses            *string
-	SourceChainID       *string
-	DestinationChainID  *string
-	SourceClientID      *string
-	DestinationClientID *string
-	SourceTxHash        *string
-	SequenceNumber      *int64
-	CreatedFrom         *time.Time
-	CreatedTo           *time.Time
-}
-
-func (q *Queries) CountPackets(ctx context.Context, arg CountPacketsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPackets,
-		arg.Statuses,
-		arg.SourceChainID,
-		arg.DestinationChainID,
-		arg.SourceClientID,
-		arg.DestinationClientID,
-		arg.SourceTxHash,
-		arg.SequenceNumber,
-		arg.CreatedFrom,
-		arg.CreatedTo,
-	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createRelayRequest = `-- name: CreateRelayRequest :exec
 INSERT INTO relay_requests (source_chain_id, source_tx_hash)
 VALUES (?1, ?2)
@@ -258,6 +216,12 @@ type ListPacketsParams struct {
 //
 // The status set is always applied, so callers pass every known status when
 // they want no status filter.
+//
+// Callers bind row_limit as one more than the page they want. The extra row is
+// a probe: if it comes back there is another page, and it is dropped before
+// returning. That keeps the query O(page) -- the planner stops once it has
+// enough rows -- where reporting an exact total would force it to visit every
+// matching row on every request.
 func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Packet, error) {
 	rows, err := q.db.QueryContext(ctx, listPackets,
 		arg.Statuses,

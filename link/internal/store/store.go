@@ -44,10 +44,8 @@ type Repository interface {
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
 
 	// ListPackets returns packets matching filter, most recent first, bounded
-	// by page. CountPackets returns how many match the same filter, ignoring
-	// page.
-	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, error)
-	CountPackets(ctx context.Context, filter PacketFilter) (uint64, error)
+	// by page, and reports whether further packets match beyond it.
+	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, bool, error)
 
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
 	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
@@ -336,6 +334,21 @@ func (p Page) Normalize() Page {
 	}
 
 	return p
+}
+
+// probeLimit is the row limit to bind: one more than the page, so a returned
+// extra row reveals that another page exists without counting every match.
+func (p Page) probeLimit() int64 {
+	return p.Limit + 1
+}
+
+// trimProbe drops the probe row if it came back, reporting whether it did.
+func trimProbe[T any](limit int64, rows []T) ([]T, bool) {
+	if int64(len(rows)) > limit {
+		return rows[:limit], true
+	}
+
+	return rows, false
 }
 
 // statusList renders the filter's statuses as the comma-delimited string the
