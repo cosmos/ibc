@@ -107,7 +107,7 @@ func addGenerator(
 	if !ok {
 		registered := append([]string{string(config.ClientTypeAttestation)}, reg.Types()...)
 		return errors.Errorf(
-			"connection %q: no proof generator registered for client type %q (registered: %v)",
+			"connection %q: no prover registered for client type %q (registered: %v)",
 			connAlias, client.Type, registered,
 		)
 	}

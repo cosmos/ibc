@@ -139,7 +139,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		err := checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil))
-		require.ErrorContains(t, err, `no proof generator registered for client type "tendermint"`)
+		require.ErrorContains(t, err, `no prover registered for client type "tendermint"`)
 		require.ErrorContains(t, err, "attestation", "the error should name what is registered")
 	})
 }

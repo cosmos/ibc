@@ -81,8 +81,7 @@ func TestNewSetFromConfig(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("resolvesBothDirections", func(t *testing.T) {
-		// proves forEachClientEnd/addGenerator wiring: both the connection's
-		// client ends land in the returned Set under their own key.
+		// Both client ends must resolve under their own key.
 		cfg, clientSet, attestors := testConfig(t)
 		conn := cfg.Relayer.Connections[0]
 
@@ -119,7 +118,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, nil)
 
 		// ASSERT
-		require.ErrorContains(t, err, `no proof generator registered for client type "tendermint"`)
+		require.ErrorContains(t, err, `no prover registered for client type "tendermint"`)
 	})
 
 	t.Run("arbitraryRegisteredClientTypeResolves", func(t *testing.T) {
@@ -173,7 +172,7 @@ func (f stubFactory) New(
 	if f.built != nil {
 		f.built <- options
 	}
-	return stubGenerator{}, nil
+	return stubProver{}, nil
 }
 
-type stubGenerator struct{ lightclient.Prover }
+type stubProver struct{ lightclient.Prover }

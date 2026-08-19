@@ -25,6 +25,7 @@ import (
 
 // TestRemoteAttestationLightClientRelaysPacket relays through a remote prover.
 func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
+	// Build the downstream CLI that registers the remote prover factory.
 	t.Setenv("IBC_BIN", buildCustomIBC(t))
 	ctx := t.Context()
 
@@ -38,6 +39,8 @@ func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
 	sender := e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
 	var serviceConfig ibclink.RelayerConfig
+	// Keep the attestation config for the proof service, but configure the
+	// relayer to obtain those proofs from that service over HTTP.
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t,
 		env,
@@ -51,8 +54,10 @@ func TestRemoteAttestationLightClientRelaysPacket(t *testing.T) {
 		},
 		route,
 	)
+	// Serve the built-in attestation prover behind the remote prover protocol.
 	serveAttestationProver(t, listener, env, serviceConfig)
 
+	// Relay a real packet through the custom-compiled CLI and remote prover.
 	relayer := e2etest.StartRelayer(t, driver, env)
 	transfer, err := e2etest.NewTransfer(t, env, deployment, sender, route).Send(
 		ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)},

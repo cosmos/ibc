@@ -50,11 +50,11 @@ func (f Factory) New(
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	return &Generator{url: strings.TrimRight(p.URL, "/") + "/proof", client: client}, nil
+	return &Prover{url: strings.TrimRight(p.URL, "/") + "/proof", client: client}, nil
 }
 
-// Generator forwards proof generation to an HTTP service.
-type Generator struct {
+// Prover forwards proof generation to an HTTP service.
+type Prover struct {
 	url    string
 	client *http.Client
 }
@@ -74,39 +74,39 @@ type response struct {
 	Error     string    `json:"error,omitempty"`
 }
 
-func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	res, err := g.call(ctx, request{Operation: "latest"})
+func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
+	res, err := p.call(ctx, request{Operation: "latest"})
 	return res.Height, res.Timestamp, err
 }
 
-func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, error) {
-	res, err := g.call(ctx, request{Operation: "state", Height: height})
+func (p *Prover) StateProof(ctx context.Context, height uint64) ([]byte, error) {
+	res, err := p.call(ctx, request{Operation: "state", Height: height})
 	return res.Proof, err
 }
 
-func (g *Generator) PacketProofs(
+func (p *Prover) PacketProofs(
 	ctx context.Context,
 	height uint64,
 	kind lightclient.ProofKind,
 	packets []channeltypesv2.Packet,
 ) ([][]byte, error) {
-	res, err := g.call(ctx, request{Operation: "packets", Height: height, Kind: kind, Packets: packets})
+	res, err := p.call(ctx, request{Operation: "packets", Height: height, Kind: kind, Packets: packets})
 	return res.Proofs, err
 }
 
-func (g *Generator) call(ctx context.Context, req request) (response, error) {
+func (p *Prover) call(ctx context.Context, req request) (response, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return response{}, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.url, strings.NewReader(string(body)))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.url, strings.NewReader(string(body)))
 	if err != nil {
 		return response{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	httpRes, err := g.client.Do(httpReq)
+	httpRes, err := p.client.Do(httpReq)
 	if err != nil {
 		return response{}, err
 	}

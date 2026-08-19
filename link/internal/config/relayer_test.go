@@ -199,7 +199,7 @@ func TestRelayerConfig(t *testing.T) {
 			},
 			{
 				// An unregistered type is not a structural config error. It is
-				// resolved when the relayer constructs proof generators.
+				// resolved when the relayer constructs provers.
 				name: "unregistered client type passes structural validation",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.Type = "tendermint"
