@@ -72,8 +72,8 @@ message PacketFilter {
 
 message PacketsResponse {
   repeated PacketStatus packets = 1;
-  // More packets match beyond this page. No exact count is reported: producing
-  // one would visit every matching packet on every request.
+  // More packets match beyond this page. No count is reported: producing one
+  // would visit every match on every request.
   bool has_more = 2;
 }
 

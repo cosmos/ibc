@@ -545,8 +545,8 @@ func (x *PacketFilter) GetCreatedTo() int64 {
 type PacketsResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Packets []*PacketStatus        `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
-	// More packets match beyond this page. No exact count is reported: producing
-	// one would visit every matching packet on every request.
+	// More packets match beyond this page. No count is reported: producing one
+	// would visit every match on every request.
 	HasMore       bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
