@@ -275,8 +275,8 @@ func (d *Relayer) PacketStatuses(
 	}
 	request := &relayerv2.PacketsRequest{
 		Filter: &relayerv2.PacketFilter{
-			SourceChainId: &chainID,
-			SourceTxHash:  &sourceTxHash,
+			SourceChainId: chainID,
+			SourceTxHash:  sourceTxHash,
 		},
 	}
 
@@ -318,8 +318,8 @@ func (d *Relayer) probePacketsEndpoint(ctx context.Context) error {
 	for _, chainID := range d.chainIDs {
 		response, err := d.client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
 			Filter: &relayerv2.PacketFilter{
-				SourceChainId: &chainID,
-				SourceTxHash:  &txHash,
+				SourceChainId: chainID,
+				SourceTxHash:  txHash,
 			},
 		}))
 		if err != nil {
