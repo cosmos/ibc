@@ -83,7 +83,7 @@ sequenceDiagram
     G1-->>S: onAckPacket
 ```
 
-Only the router may call those three handlers, `onRecvPacket`, `onAcknowledgementPacket`, and `onTimeoutPacket`.
+The three handlers the router calls — `onRecvPacket`, `onAcknowledgementPacket`, and `onTimeoutPacket` — accept the router alone, and revert `ICS27Unauthorized` for any other caller.
 
 ## Sending a call
 
@@ -222,6 +222,8 @@ interface IIBCSenderCallbacks {
     function onTimeoutPacket(IIBCAppCallbacks.OnTimeoutPacketCallback calldata msg_) external;
 }
 ```
+
+The `success` flag is not carried in the acknowledgement. ICS27GMP derives it by hashing the acknowledgement bytes and comparing them against the universal error value, so anything that is not that value counts as success.
 
 IBCSenderCallbacksLib calls back only a sender that answers the ERC165 check, and skips any other in silence. A missing interface therefore costs the sender its callback, not the packet.
 

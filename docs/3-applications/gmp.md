@@ -92,7 +92,7 @@ Once the packet reaches the destination chain, the router hands it to that chain
 
 If one of those checks fails, the call never runs, and the acknowledgement carries an error instead. Either way the call runs at most once, because the [receive step](/how-ibc-works/packet-lifecycle) records a receipt for the packet on the destination chain and the same packet cannot be received twice.
 
-A relayer delivers the packet and pays for it. The destination call runs on whatever gas remains in the relayer's transaction, and neither the send message nor the packet carries a gas field, so gas budgeting belongs to the relayer. An attempt that reverts before the packet is received leaves the packet in flight, and a relayer can deliver it again with more gas until the packet's timeout.
+A relayer delivers the packet and pays for it. The destination call runs on whatever gas remains in the relayer's transaction, and neither the send message nor the packet carries a gas field, so gas budgeting belongs to the relayer. A delivery that reverts before the destination chain records the packet's receipt leaves the packet in flight, so a relayer can submit it again, with more gas if that was the problem, until the timeout passes. Once the receipt is written the packet is consumed, and the outcome comes back as an acknowledgement whether the call succeeded or not.
 
 ## Acknowledgements and callbacks
 
