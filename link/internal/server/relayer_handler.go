@@ -22,7 +22,7 @@ type RelayerHandler struct {
 
 // RelayerService defines relayer business logic.
 type RelayerService interface {
-	Relay(ctx context.Context, request relayer.RelayRequest) error
+	Relay(ctx context.Context, request relayer.RelayRequest) (relayer.RelayResult, error)
 	Packets(
 		ctx context.Context,
 		filter relayer.PacketFilter,
@@ -70,7 +70,7 @@ func (h *RelayerHandler) Relay(
 		}
 	}
 
-	err := h.srv.Relay(ctx, request)
+	result, err := h.srv.Relay(ctx, request)
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -84,7 +84,35 @@ func (h *RelayerHandler) Relay(
 		return nil, errInternal
 	}
 
-	return connect.NewResponse(&proto.RelayResponse{}), nil
+	return connect.NewResponse(&proto.RelayResponse{
+		Packets: relayedPacketsToProto(result.Packets),
+	}), nil
+}
+
+func relayedPacketsToProto(packets []relayer.RelayedPacket) []*proto.RelayedPacket {
+	out := make([]*proto.RelayedPacket, len(packets))
+	for i, packet := range packets {
+		out[i] = &proto.RelayedPacket{
+			SourceClientId: packet.Selector.SourceClientID,
+			SequenceNumber: packet.Selector.SequenceNumber,
+			Selection:      packetSelectionToProto(packet.Selection),
+		}
+	}
+
+	return out
+}
+
+func packetSelectionToProto(selection relayer.PacketSelection) proto.PacketSelection {
+	switch selection {
+	case relayer.SelectionStateSelected:
+		return proto.PacketSelection_PACKET_SELECTION_SELECTED
+	case relayer.SelectionStateNotSelected:
+		return proto.PacketSelection_PACKET_SELECTION_NOT_SELECTED
+	case relayer.SelectionStateUnconfigured:
+		return proto.PacketSelection_PACKET_SELECTION_UNCONFIGURED
+	default:
+		return proto.PacketSelection_PACKET_SELECTION_UNSPECIFIED
+	}
 }
 
 func (h *RelayerHandler) Packets(
