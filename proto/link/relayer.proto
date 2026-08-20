@@ -50,7 +50,7 @@ message PacketsRequest {
   // Zero applies the default of 100; values above 1000 are capped.
   uint32 limit = 2;
   // Opaque next_cursor from a previous response. Empty starts at the newest
-  // packet. Treat it as opaque; its encoding is not part of this contract.
+  // packet.
   string cursor = 3;
 }
 
@@ -60,17 +60,14 @@ message PacketFilter {
   optional string destination_chain_id = 2;
   optional string source_client_id = 3;
   optional string destination_client_id = 4;
-  // PACKET_STATE_PENDING covers every in-flight internal status.
   optional PacketState state = 5;
-  // Matches the SendPacket transaction only, never recv, ack, or timeout.
   optional string source_tx_hash = 6;
   optional uint64 sequence_number = 7;
 }
 
 message PacketsResponse {
   repeated PacketStatus packets = 1;
-  // More packets match beyond this page. No count is reported: producing one
-  // would visit every match on every request.
+  // More packets match beyond this page.
   bool has_more = 2;
   // Cursor for the next page, set only when has_more.
   string next_cursor = 3;
@@ -115,7 +112,4 @@ message PacketStatus {
   // The source-chain timeout transaction. Present for timed-out packets, and
   // may be present while pending.
   TransactionInfo timeout_tx = 7;
-  // Unix seconds.
-  int64 created_at = 8;
-  int64 updated_at = 9;
 }

@@ -373,7 +373,7 @@ type PacketsRequest struct {
 	// Zero applies the default of 100; values above 1000 are capped.
 	Limit uint32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
 	// Opaque next_cursor from a previous response. Empty starts at the newest
-	// packet. Treat it as opaque; its encoding is not part of this contract.
+	// packet.
 	Cursor        string `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -437,13 +437,11 @@ type PacketFilter struct {
 	DestinationChainId  *string                `protobuf:"bytes,2,opt,name=destination_chain_id,json=destinationChainId,proto3,oneof" json:"destination_chain_id,omitempty"`
 	SourceClientId      *string                `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3,oneof" json:"source_client_id,omitempty"`
 	DestinationClientId *string                `protobuf:"bytes,4,opt,name=destination_client_id,json=destinationClientId,proto3,oneof" json:"destination_client_id,omitempty"`
-	// PACKET_STATE_PENDING covers every in-flight internal status.
-	State *PacketState `protobuf:"varint,5,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState,oneof" json:"state,omitempty"`
-	// Matches the SendPacket transaction only, never recv, ack, or timeout.
-	SourceTxHash   *string `protobuf:"bytes,6,opt,name=source_tx_hash,json=sourceTxHash,proto3,oneof" json:"source_tx_hash,omitempty"`
-	SequenceNumber *uint64 `protobuf:"varint,7,opt,name=sequence_number,json=sequenceNumber,proto3,oneof" json:"sequence_number,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	State               *PacketState           `protobuf:"varint,5,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState,oneof" json:"state,omitempty"`
+	SourceTxHash        *string                `protobuf:"bytes,6,opt,name=source_tx_hash,json=sourceTxHash,proto3,oneof" json:"source_tx_hash,omitempty"`
+	SequenceNumber      *uint64                `protobuf:"varint,7,opt,name=sequence_number,json=sequenceNumber,proto3,oneof" json:"sequence_number,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PacketFilter) Reset() {
@@ -528,8 +526,7 @@ func (x *PacketFilter) GetSequenceNumber() uint64 {
 type PacketsResponse struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Packets []*PacketStatus        `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
-	// More packets match beyond this page. No count is reported: producing one
-	// would visit every match on every request.
+	// More packets match beyond this page.
 	HasMore bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
 	// Cursor for the next page, set only when has_more.
 	NextCursor    string `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
@@ -656,10 +653,7 @@ type PacketStatus struct {
 	AckTx *TransactionInfo `protobuf:"bytes,6,opt,name=ack_tx,json=ackTx,proto3" json:"ack_tx,omitempty"`
 	// The source-chain timeout transaction. Present for timed-out packets, and
 	// may be present while pending.
-	TimeoutTx *TransactionInfo `protobuf:"bytes,7,opt,name=timeout_tx,json=timeoutTx,proto3" json:"timeout_tx,omitempty"`
-	// Unix seconds.
-	CreatedAt     int64 `protobuf:"varint,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     int64 `protobuf:"varint,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	TimeoutTx     *TransactionInfo `protobuf:"bytes,7,opt,name=timeout_tx,json=timeoutTx,proto3" json:"timeout_tx,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -743,20 +737,6 @@ func (x *PacketStatus) GetTimeoutTx() *TransactionInfo {
 	return nil
 }
 
-func (x *PacketStatus) GetCreatedAt() int64 {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return 0
-}
-
-func (x *PacketStatus) GetUpdatedAt() int64 {
-	if x != nil {
-		return x.UpdatedAt
-	}
-	return 0
-}
-
 var File_relayer_proto protoreflect.FileDescriptor
 
 const file_relayer_proto_rawDesc = "" +
@@ -803,7 +783,7 @@ const file_relayer_proto_rawDesc = "" +
 	"nextCursor\"E\n" +
 	"\x0fTransactionInfo\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
-	"\bchain_id\x18\x02 \x01(\tR\achainId\"\xbe\x03\n" +
+	"\bchain_id\x18\x02 \x01(\tR\achainId\"\x80\x03\n" +
 	"\fPacketStatus\x121\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x1b.ibc.v2.relayer.PacketStateR\x05state\x12'\n" +
 	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\x12(\n" +
@@ -812,11 +792,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\arecv_tx\x18\x05 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x06recvTx\x126\n" +
 	"\x06ack_tx\x18\x06 \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\x05ackTx\x12>\n" +
 	"\n" +
-	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx\x12\x1d\n" +
-	"\n" +
-	"created_at\x18\b \x01(\x03R\tcreatedAt\x12\x1d\n" +
-	"\n" +
-	"updated_at\x18\t \x01(\x03R\tupdatedAt*\xd6\x01\n" +
+	"timeout_tx\x18\a \x01(\v2\x1f.ibc.v2.relayer.TransactionInfoR\ttimeoutTx*\xd6\x01\n" +
 	"\vPacketState\x12\x1c\n" +
 	"\x18PACKET_STATE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19PACKET_STATE_NOT_SELECTED\x10\x01\x12\x18\n" +
