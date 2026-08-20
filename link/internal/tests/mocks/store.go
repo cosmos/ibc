@@ -407,6 +407,80 @@ func (_c *MockRepository_ListDispatchablePackets_Call) RunAndReturn(run func(ctx
 	return _c
 }
 
+// ListPackets provides a mock function for the type MockRepository
+func (_mock *MockRepository) ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error) {
+	ret := _mock.Called(ctx, filter, page)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPackets")
+	}
+
+	var r0 []store.Packet
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) ([]store.Packet, error)); ok {
+		return returnFunc(ctx, filter, page)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, store.PacketFilter, store.Page) []store.Packet); ok {
+		r0 = returnFunc(ctx, filter, page)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]store.Packet)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, store.PacketFilter, store.Page) error); ok {
+		r1 = returnFunc(ctx, filter, page)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepository_ListPackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPackets'
+type MockRepository_ListPackets_Call struct {
+	*mock.Call
+}
+
+// ListPackets is a helper method to define mock.On call
+//   - ctx context.Context
+//   - filter store.PacketFilter
+//   - page store.Page
+func (_e *MockRepository_Expecter) ListPackets(ctx any, filter any, page any) *MockRepository_ListPackets_Call {
+	return &MockRepository_ListPackets_Call{Call: _e.mock.On("ListPackets", ctx, filter, page)}
+}
+
+func (_c *MockRepository_ListPackets_Call) Run(run func(ctx context.Context, filter store.PacketFilter, page store.Page)) *MockRepository_ListPackets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 store.PacketFilter
+		if args[1] != nil {
+			arg1 = args[1].(store.PacketFilter)
+		}
+		var arg2 store.Page
+		if args[2] != nil {
+			arg2 = args[2].(store.Page)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_ListPackets_Call) Return(packets []store.Packet, err error) *MockRepository_ListPackets_Call {
+	_c.Call.Return(packets, err)
+	return _c
+}
+
+func (_c *MockRepository_ListPackets_Call) RunAndReturn(run func(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)) *MockRepository_ListPackets_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListPacketsBySourceTx provides a mock function for the type MockRepository
 func (_mock *MockRepository) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error) {
 	ret := _mock.Called(ctx, chainID, txHash)

@@ -3,13 +3,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
+	"maps"
+	"slices"
+	"strings"
 
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
@@ -35,10 +36,16 @@ var (
 		RunE:  relayerRelay,
 	}
 
-	cmdRelayerStatus = &cobra.Command{
-		Use:   useStatus,
-		Short: "Query per-packet relay status for a source transaction",
-		RunE:  relayerStatus,
+	cmdRelayerPackets = &cobra.Command{
+		Use:   "packets",
+		Short: "List the packets the relayer is aware of and their relay status",
+		Long: "List the packets the relayer is aware of, most recent first.\n\n" +
+			"With no filters every known packet is listed, bounded by --limit. " +
+			"Filters combine: a packet must match all of them.",
+		Example: "  ibc relayer packets --state pending\n" +
+			"  ibc relayer packets --chain-id 1 --tx-hash 0xabc\n" +
+			"  ibc relayer packets --source-client-id base-0 --limit 20",
+		RunE: relayerPackets,
 	}
 )
 
@@ -47,7 +54,30 @@ var (
 	flagRelayerHost          string
 	flagRelayerTxHash        string
 	flagRelayerSourceChainID string
+
+	flagRelayerPacketsDestChainID  string
+	flagRelayerPacketsSrcClientID  string
+	flagRelayerPacketsDestClientID string
+	flagRelayerPacketsState        string
+	flagRelayerPacketsSequence     uint64
+	flagRelayerPacketsLimit        uint32
+	flagRelayerPacketsCursor       string
+	flagRelayerPacketsAll          bool
 )
+
+// packetStates maps the --state flag to its wire value.
+var packetStates = map[string]relayerv2.PacketState{
+	"not-selected": relayerv2.PacketState_PACKET_STATE_NOT_SELECTED,
+	"pending":      relayerv2.PacketState_PACKET_STATE_PENDING,
+	"succeeded":    relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
+	"timed-out":    relayerv2.PacketState_PACKET_STATE_TIMED_OUT,
+	"rejected":     relayerv2.PacketState_PACKET_STATE_REJECTED,
+	"relay-failed": relayerv2.PacketState_PACKET_STATE_RELAY_FAILED,
+}
+
+func packetStateNames() []string {
+	return slices.Sorted(maps.Keys(packetStates))
+}
 
 func relayerRun(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
@@ -112,51 +142,111 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerRelay(cmd *cobra.Command, _ []string) error {
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Relay, &relayerv2.RelayRequest{
+	client, err := relayerClient()
+	if err != nil {
+		return err
+	}
+
+	res, err := client.Relay(cmd.Context(), connect.NewRequest(&relayerv2.RelayRequest{
 		TxHash:        flagRelayerTxHash,
 		SourceChainId: flagRelayerSourceChainID,
 		Selection:     &relayerv2.RelayRequest_AllPackets{AllPackets: &relayerv2.AllPackets{}},
-	})
+	}))
+	if err != nil {
+		return errors.Wrap(err, cmd.Name())
+	}
+
+	return config.PrintProtoJSON(res.Msg)
 }
 
-func relayerStatus(cmd *cobra.Command, _ []string) error {
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Status, &relayerv2.StatusRequest{
-		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
-	})
-}
+func relayerPackets(cmd *cobra.Command, _ []string) error {
+	// An unset flag leaves the zero value: no constraint on that field.
+	filter := &relayerv2.PacketFilter{
+		SourceChainId:       flagRelayerSourceChainID,
+		DestinationChainId:  flagRelayerPacketsDestChainID,
+		SourceClientId:      flagRelayerPacketsSrcClientID,
+		DestinationClientId: flagRelayerPacketsDestClientID,
+		SourceTxHash:        flagRelayerTxHash,
+		SequenceNumber:      flagRelayerPacketsSequence,
+	}
 
-// relayerCall resolves this config's relayer address, sends req via call,
-// and prints the response as JSON.
-func relayerCall[Req, Resp any](
-	cmd *cobra.Command,
-	call func(relayerv2.RelayerApiServiceClient, context.Context, *connect.Request[Req]) (*connect.Response[Resp], error),
-	req *Req,
-) error {
-	cfg, err := setupHomeWithConfig()
+	if flagRelayerPacketsState != "" {
+		state, ok := packetStates[strings.ToLower(flagRelayerPacketsState)]
+		if !ok {
+			return errors.Errorf(
+				"invalid --state %q, expected one of: %s",
+				flagRelayerPacketsState, strings.Join(packetStateNames(), ", "),
+			)
+		}
+
+		filter.State = state
+	}
+
+	req := &relayerv2.PacketsRequest{
+		Filter: filter,
+		Limit:  flagRelayerPacketsLimit,
+		Cursor: flagRelayerPacketsCursor,
+	}
+
+	if flagRelayerPacketsAll {
+		return relayerPacketsAll(cmd, req)
+	}
+
+	client, err := relayerClient()
 	if err != nil {
 		return err
+	}
+
+	res, err := client.Packets(cmd.Context(), connect.NewRequest(req))
+	if err != nil {
+		return errors.Wrap(err, cmd.Name())
+	}
+
+	return config.PrintProtoJSON(res.Msg)
+}
+
+// relayerPacketsAll follows next_cursor to completion and prints all packets as
+// one response
+func relayerPacketsAll(cmd *cobra.Command, req *relayerv2.PacketsRequest) error {
+	client, err := relayerClient()
+	if err != nil {
+		return err
+	}
+
+	all := &relayerv2.PacketsResponse{}
+
+	for {
+		res, err := client.Packets(cmd.Context(), connect.NewRequest(req))
+		if err != nil {
+			return errors.Wrap(err, cmd.Name())
+		}
+
+		all.Packets = append(all.Packets, res.Msg.GetPackets()...)
+
+		if !res.Msg.GetHasMore() {
+			return config.PrintProtoJSON(all)
+		}
+
+		req.Cursor = res.Msg.GetNextCursor()
+	}
+}
+
+// relayerClient dials the relayer resolved from this config, or --host.
+func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	address := flagRelayerHost
 	if address == "" {
 		if cfg.Server.ListenAddress == "" {
-			return errors.New("server.listenAddr is not configured; pass --host to target a server directly")
+			return nil, errors.New("server.listenAddr is not configured; pass --host to target a server directly")
 		}
 		address = cfg.Server.ListenAddress
 	}
 
-	client := relayerv2.NewRelayerApiServiceClient(
+	return relayerv2.NewRelayerApiServiceClient(
 		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
-	)
-
-	res, err := call(client, cmd.Context(), connect.NewRequest(req))
-	if err != nil {
-		return errors.Wrap(err, cmd.Name())
-	}
-
-	if pm, ok := any(res.Msg).(proto.Message); ok {
-		return config.PrintProtoJSON(pm)
-	}
-
-	return config.PrintJSON(res.Msg)
+	), nil
 }

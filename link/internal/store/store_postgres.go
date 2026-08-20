@@ -400,3 +400,37 @@ func (db *PostgresDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) e
 		PacketSequenceNumber: int64(key.Sequence),
 	})
 }
+
+func (db *PostgresDB) ListPackets(
+	ctx context.Context,
+	filter PacketFilter,
+	page Page,
+) ([]Packet, error) {
+	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
+
+	if err := page.validate(); err != nil {
+		return nil, err
+	}
+
+	rows, err := db.repo.ListPackets(ctx, postgres.ListPacketsParams{
+		Statuses:            filter.statusList(),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SourceTxHash:        filter.SourceTxHash,
+		SequenceNumber:      filter.sequenceFilter(),
+		Before:              page.before(),
+		RowLimit:            int32(page.Limit), //nolint:gosec // bounded by the caller's page cap
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	packets := make([]Packet, len(rows))
+	for i, row := range rows {
+		packets[i] = packetFromPostgres(row)
+	}
+
+	return packets, nil
+}

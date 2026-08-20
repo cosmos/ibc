@@ -41,6 +41,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testListPackets(t, db)
 
 		// Close DB for a subsequent test
 		require.NoError(t, db.Close())
@@ -79,6 +80,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testListPackets(t, db)
 	})
 
 	t.Run("postgres", func(t *testing.T) {
@@ -104,6 +106,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testListPackets(t, db)
 	})
 }
 

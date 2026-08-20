@@ -448,3 +448,37 @@ func (db *SqliteDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) err
 		PacketSequenceNumber: int64(key.Sequence),
 	})
 }
+
+func (db *SqliteDB) ListPackets(
+	ctx context.Context,
+	filter PacketFilter,
+	page Page,
+) ([]Packet, error) {
+	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
+
+	if err := page.validate(); err != nil {
+		return nil, err
+	}
+
+	rows, err := db.repo.ListPackets(ctx, reposqlite.ListPacketsParams{
+		Statuses:            filter.statusList(),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SourceTxHash:        filter.SourceTxHash,
+		SequenceNumber:      filter.sequenceFilter(),
+		Before:              page.before(),
+		RowLimit:            page.Limit,
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	packets := make([]Packet, len(rows))
+	for i, row := range rows {
+		packets[i] = packetFromSqlite(row)
+	}
+
+	return packets, nil
+}

@@ -169,6 +169,90 @@ func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 	return items, nil
 }
 
+const listPackets = `-- name: ListPackets :many
+SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
+WHERE ',' || ?1 || ',' LIKE '%,' || status || ',%'
+AND source_chain_id = COALESCE(?2, source_chain_id)
+AND destination_chain_id = COALESCE(?3, destination_chain_id)
+AND packet_source_client_id = COALESCE(?4, packet_source_client_id)
+AND packet_destination_client_id = COALESCE(?5, packet_destination_client_id)
+AND source_tx_hash = COALESCE(?6, source_tx_hash)
+AND packet_sequence_number = COALESCE(?7, packet_sequence_number)
+AND id < ?8
+ORDER BY id DESC
+LIMIT ?9
+`
+
+type ListPacketsParams struct {
+	Statuses            *string
+	SourceChainID       *string
+	DestinationChainID  *string
+	SourceClientID      *string
+	DestinationClientID *string
+	SourceTxHash        *string
+	SequenceNumber      *int64
+	Before              int64
+	RowLimit            int64
+}
+
+func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Packet, error) {
+	rows, err := q.db.QueryContext(ctx, listPackets,
+		arg.Statuses,
+		arg.SourceChainID,
+		arg.DestinationChainID,
+		arg.SourceClientID,
+		arg.DestinationClientID,
+		arg.SourceTxHash,
+		arg.SequenceNumber,
+		arg.Before,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Packet
+	for rows.Next() {
+		var i Packet
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+			&i.SourceChainID,
+			&i.DestinationChainID,
+			&i.SourceTxHash,
+			&i.SourceTxTime,
+			&i.PacketSequenceNumber,
+			&i.PacketSourceClientID,
+			&i.PacketDestinationClientID,
+			&i.PacketTimeoutTimestamp,
+			&i.RecvTxHash,
+			&i.RecvTxTime,
+			&i.RecvTxRelayerAddress,
+			&i.WriteAckTxHash,
+			&i.WriteAckTxTime,
+			&i.WriteAckStatus,
+			&i.AckTxHash,
+			&i.AckTxTime,
+			&i.AckTxRelayerAddress,
+			&i.TimeoutTxHash,
+			&i.TimeoutTxTime,
+			&i.TimeoutTxRelayerAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPacketsBySourceTx = `-- name: ListPacketsBySourceTx :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE source_chain_id = ?1
