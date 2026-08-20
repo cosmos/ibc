@@ -15,10 +15,6 @@ concurrency:
 
 permissions: read-all
 
-defaults:
-  run:
-    working-directory: link
-
 jobs:
   changes:
     name: Detect Changes
@@ -39,15 +35,18 @@ jobs:
             link:
               - 'link/**'
               - 'gen/go/solidity-abi/**'
+              - 'justfile'
               - '.golangci.yml'
               - '.github/workflows/ibc-link-ci.yml'
             sql:
               - 'link/**/*.sql'
               - 'link/internal/store/sqlc.yml'
-              - 'link/Makefile'
+              - 'justfile'
+              - 'link/link.just'
             proto:
               - 'proto/**'
-              - 'link/Makefile'
+              - 'justfile'
+              - 'link/link.just'
 
   lint:
     name: Lint
@@ -86,10 +85,14 @@ jobs:
           cache-dependency-path: |
             link/go.sum
             gen/go/solidity-abi/go.sum
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: 1.57.0
       - name: Download dependencies
+        working-directory: link
         run: go mod download
       - name: Build
-        run: make build
+        run: just link::build
 
   test:
     name: Test
@@ -110,8 +113,11 @@ jobs:
           cache-dependency-path: |
             link/go.sum
             gen/go/solidity-abi/go.sum
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: 1.57.0
       - name: Test
-        run: make test
+        run: just link::test
 
   verify-codegen:
     name: Codegen Verify
@@ -123,6 +129,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: 1.57.0
 
       - uses: sqlc-dev/setup-sqlc@bac53b7fb28c039a6c7f5736fd1e89744021bdd6 # v5
         if: needs.changes.outputs.sql == 'true'
@@ -137,11 +147,11 @@ jobs:
 
       - name: Generate SQL
         if: needs.changes.outputs.sql == 'true'
-        run: make codegen-sql
+        run: just link::codegen-sql
 
       - name: Generate Protos
         if: needs.changes.outputs.proto == 'true'
-        run: make codegen-proto
+        run: just link::codegen-proto
 
       - name: Ensure no changes
         working-directory: .

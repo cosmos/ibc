@@ -41,7 +41,7 @@ FROM authors
 WHERE lower(name) = ?;
 ```
 
-- (re)generate bindings with `make codegen-sql`.
+- (re)generate bindings with `just link::codegen-sql`.
 - Don't edit generated files in `repository/sqlite` or `repository/postgres`.
 
 ### III. Unified repository layer

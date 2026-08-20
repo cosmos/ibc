@@ -7,9 +7,9 @@ This module contains one root repository-level acceptance package: linear Go tes
 Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP) with attestation light clients and
 managed attestors.
 
-- Run from the repository root: `make -C e2e test` uses fast mode;
-  `make -C e2e test E2E_MODE=complete|production` selects another mode, and
-  `E2E_FLAGS='-run TestTransfer_AutoRelay -count=1'` focuses a run. `-e2e.mode` in `E2E_FLAGS`
+- Run from the repository root: `just e2e::test` uses fast mode;
+  `E2E_MODE=complete|production just e2e::test` selects another mode, and
+  `E2E_FLAGS='-run TestTransfer_AutoRelay -count=1' just e2e::test` focuses a run. `-e2e.mode` in `E2E_FLAGS`
   overrides `E2E_MODE`.
 - Tests declare portable EVM, controlled-mining, or node-lifecycle requirements. Fast mode may
   skip an unresolved requirement; complete and production modes fail it. Fast and complete prefer
@@ -25,6 +25,6 @@ managed attestors.
   paused and resumed it is interval-only, so transaction inclusion may take one second.
 - `Environment` cleans up managed resources only. Attached chains remain caller-owned and expose no
   harness mining or node-lifecycle controls.
-- Run `make -C e2e generate-matrix` after changing requirements or topology, and
-  `make -C e2e check-matrix` to check the committed matrix. Both require Docker.
-- After a hard crash: `make -C e2e clean-dry-run`, then `make -C e2e clean` from the repository root.
+- Run `just e2e::generate-matrix` after changing requirements or topology, and
+  `just e2e::check-matrix` to check the committed matrix. Both require Docker.
+- After a hard crash: `just e2e::clean-dry-run`, then `just e2e::clean` from the repository root.

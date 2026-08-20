@@ -15,8 +15,8 @@ The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP)
 Run targets from the repository root:
 
 ```sh
-make -C e2e doctor
-make -C e2e test
+just e2e::doctor
+just e2e::test
 ```
 
 The test target builds `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
@@ -35,17 +35,17 @@ provide those harness controls. `complete` runs each test once with the fastest 
 it does not run every provider permutation.
 
 ```sh
-make -C e2e test
-make -C e2e test E2E_MODE=complete
-make -C e2e test E2E_MODE=production
-make -C e2e test E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'
-make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1'
+just e2e::test
+E2E_MODE=complete just e2e::test
+E2E_MODE=production just e2e::test
+E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1' just e2e::test
+E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1' just e2e::test
 ```
 
 `-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. After a hard crash, use
-`make -C e2e clean-dry-run` and then `make -C e2e clean`.
+`just e2e::clean-dry-run` and then `just e2e::clean`.
 
-Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
+Every environment-backed test calls `t.Parallel()` and boots its own environment; the E2E recipe caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
 
 ## Writing a test
 
@@ -112,8 +112,8 @@ specs for all three modes. Generation starts the caller-owned Anvil used by the 
 so Docker is required.
 
 ```sh
-make -C e2e generate-matrix
-make -C e2e check-matrix
+just e2e::generate-matrix
+just e2e::check-matrix
 ```
 
 Regenerate the matrix after changing test requirements or topology. The check compares generated

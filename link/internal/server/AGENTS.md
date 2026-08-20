@@ -4,7 +4,7 @@
 
 Development flow:
 1. Update raw protos in `proto/link/*`.
-2. Run `make codegen` (proto and mocks included).
+2. Run `just link::codegen` (proto and mocks included).
 3. Implement ConnectRPC handlers in `attestor_handler.go` or `relayer_handler.go`.
 4. Add missing `AttestorService`/`RelayerService` methods if needed.
    - Use idiomatic Go: `ctx` first.
