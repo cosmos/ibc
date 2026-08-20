@@ -155,6 +155,16 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 		require.False(t, res.GetHasMore())
 	})
 
+	// An unconfigured chain names configuration the relayer does not have, so
+	// it is a caller error rather than a filter matching nothing.
+	t.Run("unconfiguredChainIsRejected", func(t *testing.T) {
+		_, err := client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
+			Filter: &relayerv2.PacketFilter{SourceChainId: ptr("99999")},
+		}))
+		require.Error(t, err)
+		require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+	})
+
 	t.Run("terminalStateFilter", func(t *testing.T) {
 		res := listPackets(ctx, t, client, &relayerv2.PacketFilter{
 			State: relayerv2.PacketState_PACKET_STATE_SUCCEEDED.Enum(),

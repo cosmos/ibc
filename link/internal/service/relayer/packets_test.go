@@ -4,6 +4,7 @@ package relayer
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -213,4 +214,60 @@ func TestPacketsRejectsMalformedCursors(t *testing.T) {
 		_, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Cursor: cursor})
 		require.ErrorIs(t, err, ErrInvalidInput, "cursor %q", cursor)
 	}
+}
+
+// Chain ids name configuration, not data, so an unconfigured one is a caller
+// error rather than a filter that matches nothing. Relay already rejects the
+// same value; before this, Packets rejected it only when a tx hash was also
+// supplied, since validation fell out of hash normalization.
+func TestPacketsRejectsUnconfiguredChains(t *testing.T) {
+	t.Parallel()
+
+	known := chainIDEth
+	unknown := "99999"
+	hash := "0x" + strings.Repeat("ab", 32)
+
+	for _, tt := range []struct {
+		name   string
+		filter PacketFilter
+	}{
+		{"source chain alone", PacketFilter{SourceChainID: &unknown}},
+		{"destination chain alone", PacketFilter{DestinationChainID: &unknown}},
+		{"source chain with tx hash", PacketFilter{SourceChainID: &unknown, SourceTxHash: &hash}},
+		{"unknown destination with known source", PacketFilter{
+			SourceChainID: &known, DestinationChainID: &unknown,
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+
+			_, err := service.Packets(context.Background(), tt.filter, PacketQuery{})
+			require.ErrorIs(t, err, ErrInvalidInput)
+			require.ErrorContains(t, err, unknown)
+		})
+	}
+}
+
+// Filters over data still match nothing rather than erroring: the relayer only
+// knows packets it was asked to relay, so absence is not an error.
+func TestPacketsUnknownDataFiltersReturnEmpty(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	st := NewMockStore(t)
+	service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+
+	st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
+
+	hash := "0x" + strings.Repeat("ab", 32)
+	sequence := uint64(999999)
+	client := "no-such-client"
+
+	page, err := service.Packets(ctx, PacketFilter{
+		SourceTxHash: &hash, SequenceNumber: &sequence, SourceClientID: &client,
+	}, PacketQuery{})
+	require.NoError(t, err)
+	require.Empty(t, page.Packets)
 }
