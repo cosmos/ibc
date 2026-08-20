@@ -75,12 +75,16 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 		rowsFromDB  int
 		wantPackets int
 		wantHasMore bool
+		// wantAsked is the limit the store must be given: one row past the
+		// page, after the default and the cap are applied.
+		wantAsked int64
 	}{
-		{"partial page", 5, 3, 3, false},
-		{"exactly full", 3, 3, 3, false},
-		{"probe returned", 3, 4, 3, true},
-		{"empty", 5, 0, 0, false},
-		{"default applied", 0, DefaultPacketPageLimit + 1, DefaultPacketPageLimit, true},
+		{"partial page", 5, 3, 3, false, 6},
+		{"exactly full", 3, 3, 3, false, 4},
+		{"probe returned", 3, 4, 3, true, 4},
+		{"empty", 5, 0, 0, false, 6},
+		{"default applied", 0, DefaultPacketPageLimit + 1, DefaultPacketPageLimit, true, DefaultPacketPageLimit + 1},
+		{"limit capped", MaxPacketPageLimit + 500, 0, 0, false, MaxPacketPageLimit + 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -107,12 +111,7 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 			require.Len(t, page.Packets, tt.wantPackets)
 			require.Equal(t, tt.wantHasMore, page.HasMore)
 
-			want := tt.limit
-			if want <= 0 {
-				want = DefaultPacketPageLimit
-			}
-
-			require.Equal(t, want+1, asked, "the store must be asked for one row past the page")
+			require.Equal(t, tt.wantAsked, asked, "the store must be asked for one row past the page")
 
 			if !tt.wantHasMore {
 				require.Empty(t, page.NextCursor, "a final page must not offer a cursor")
@@ -124,26 +123,6 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 			require.Equal(t, encodeCursor(rows[tt.wantPackets-1].ID), page.NextCursor)
 		})
 	}
-}
-
-func TestPacketsCapsTheLimit(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	st := NewMockStore(t)
-	service := New(relayerConfig(), st, NewMockChainClients(t), nil)
-
-	var asked int64
-
-	st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
-		Run(func(_ context.Context, _ store.PacketFilter, page store.Page) {
-			asked = page.Limit
-		}).
-		Return(nil, nil).Once()
-
-	_, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Limit: MaxPacketPageLimit + 500})
-	require.NoError(t, err)
-	require.Equal(t, int64(MaxPacketPageLimit+1), asked)
 }
 
 // The cursor bounds the query rather than being interpreted by the caller, so
