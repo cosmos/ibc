@@ -3,7 +3,7 @@ title: "Clients and counterparties"
 description: "A client is one chain's verifier for one other chain, and a mirrored pair of clients, each recording the other as its counterparty, is what connects two chains."
 ---
 
-A client is how one chain verifies another. It is the verification layer of IBC: an on-chain view of a counterparty that lets a chain check claims about that counterparty's state for itself. This page covers what a client holds, what it can be asked to verify, how it stays current, and how two chains connect before any packet moves.
+A client is how one chain verifies another. It is the verification layer of IBC: an on-chain snapshot of a counterparty chain that lets a chain check claims about that counterparty's state for itself. This page covers what a client holds, what it can be asked to verify, how it stays current, and how two chains connect before any packet moves.
 
 ## What a client is
 
@@ -27,7 +27,7 @@ flowchart LR
   STB -. "proof of what B wrote" .-> CA
 ```
 
-Each client lives under a client identifier in the [router's](/how-ibc-works/core-router-and-store) client registry, which is how the router reaches it. In IBC-solidity each registry entry is two things: the address of the light-client contract that does the verifying, and a record of the other chain's client.
+Each client lives under a client identifier in the [router's](/how-ibc-works/core-router-and-store) client registry, which is how the router reaches it. In IBC-solidity each registry entry is two things: the address of the light-client contract that does the verifying, and a record of the counterparty client on the counterparty chain.
 
 ## Client state and consensus state
 
@@ -61,7 +61,7 @@ struct MsgVerifyMembership {
 }
 ```
 
-On an arriving packet the router fills that request in itself. It builds the path from the packet's source client and sequence, and it recomputes the commitment from the packet's own fields rather than trusting any value it was handed. The client then checks the proof by its own rules, which it can only do for a height it already holds. If the proof holds, so does the claim.
+On an arriving packet the router fills that request in itself. The location of a packet commitment is derived deterministically from a packet's source client and sequence, and it recomputes the commitment path from the packet's own fields rather than trusting any value it was handed. The client then uses the attached proof and counterparty state it stores to verify the existence of state at that commitment path. If the proof holds, so does the claim.
 
 Alter any part of the packet and the commitment no longer matches what the source chain stored. Alter the source client or the sequence and the router looks at a different path. Either way, verification fails.
 
