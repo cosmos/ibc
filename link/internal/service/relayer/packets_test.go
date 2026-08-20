@@ -13,9 +13,7 @@ import (
 )
 
 // Every relay status must be reachable by filtering on the state it maps to,
-// or a packet in that status exists that no filter can list. Fails if a status
-// is added without AllRelayStatuses, or if the expansion drifts from
-// mapPacketState.
+// or a packet in that status exists that no filter can list.
 func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 	t.Parallel()
 
