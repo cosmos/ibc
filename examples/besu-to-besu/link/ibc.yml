@@ -33,8 +33,6 @@ relayer:
   dispatchPollInterval: 3s
   connections:
     - alias: a-b
-      # No autoRelay block: the field parses but nothing reads it yet, so
-      # packets are relayed explicitly with `ibc relayer relay --tx-hash`.
       clientA:
         chainId: "41001"
         signer: relayer-a

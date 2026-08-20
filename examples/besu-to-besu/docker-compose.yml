@@ -9,7 +9,7 @@
 #
 #     kms  ◀── Sign ──┬── attestor-a ──┐
 #                     ├── attestor-b ──┤ StateAttestation / PacketAttestation
-#                     └── ibc-link ◀───┘
+#                     └── relayer  ◀───┘
 x-link-service: &link-service
   image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
   env_file:
@@ -140,12 +140,12 @@ services:
       besu-b:
         condition: service_healthy
 
-  ibc-link:
+  relayer:
     <<: *link-service
-    container_name: ibc-link
+    container_name: relayer
     command: [ "relayer", "run", "--home", "/home/ibc" ]
     volumes:
-      - ibc-link-home:/home/ibc
+      - relayer-home:/home/ibc
       - ./link/ibc.yml:/home/ibc/ibc.yml:ro
     ports:
       - "127.0.0.1:3000:3000"   # loopback only — see besu-a
@@ -165,7 +165,7 @@ services:
 volumes:
   besu-a-data:
   besu-b-data:
-  ibc-link-home:
+  relayer-home:
 
 networks:
   besu-besu-net:

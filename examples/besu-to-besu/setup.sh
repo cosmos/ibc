@@ -40,12 +40,15 @@
 #   3. deploy    ibc deploy core + client on each chain (writing
 #                chains/local/link.env), then an IFT token per chain and the
 #                bridge between them
-#   4. link      docker compose up kms, both attestors, ibc-link
+#   4. link      docker compose up kms, both attestors, relayer
 #   5. transfer  mint IFT on chain A, send it to chain B, and wait for the
 #                relayer to deliver it — the end-to-end assertion
 #
 # Usage:
 #   ./setup.sh              — run all five (the demo)
+#   ./setup.sh roundtrip    — relay A -> B -> A. The return leg is what
+#                             exercises attestor-b. Skips phases 1-4 when the
+#                             stack is already up and deployed.
 #   ./setup.sh clean        — stop containers, remove volumes and chains/local/
 #
 # Environment (optional):
@@ -134,6 +137,15 @@ source "$LIB_DIR/common.sh"
 source "$LIB_DIR/chains.sh"
 source "$LIB_DIR/link.sh"
 
+# The transfer phase feeds these to `(( ))` and to `sleep`. Checked up front so
+# a unit suffix — IFT_POLL_INTERVAL=3s — is a message here rather than an
+# arithmetic syntax error four phases in.
+for var in IFT_RELAY_TIMEOUT IFT_POLL_INTERVAL IFT_MINT_AMOUNT IFT_SEND_AMOUNT; do
+  [[ "${!var}" =~ ^[0-9]+$ ]] \
+    || die "$var must be a whole number with no unit suffix, got '${!var}'"
+done
+(( IFT_POLL_INTERVAL > 0 )) || die "IFT_POLL_INTERVAL must be greater than 0"
+
 cmd_init() {
   check_prerequisites
   log "--- Phase 1A: Derive keys + render chain configs ---"
@@ -163,22 +175,47 @@ cmd_transfer() {
   run_phase "Phase 5: Relay an IFT transfer A -> B" relay_ift_transfer
 }
 
+cmd_roundtrip() {
+  run_phase "Phase 5: Relay an IFT round trip A -> B -> A" relay_ift_roundtrip
+}
+
+# Phases 1-4. Every step is idempotent, so this is the same work whether the
+# stack is cold or already up.
+bring_up() {
+  log "╔══════════════════════════════════════════════════╗"
+  log "║  besu-to-besu: 2 Besu QBFT chains (A, B) + Link  ║"
+  log "╚══════════════════════════════════════════════════╝"
+  cmd_init
+  cmd_start
+  cmd_deploy
+  cmd_link
+}
+
 main() {
   case "${1:-}" in
-    clean)    clean;          exit 0 ;;
-    "")
-      log "╔══════════════════════════════════════════════════╗"
-      log "║  besu-to-besu: 2 Besu QBFT chains (A, B) + Link  ║"
-      log "╚══════════════════════════════════════════════════╝"
-      cmd_init
-      cmd_start
-      cmd_deploy
-      cmd_link
-      cmd_transfer
+    clean) clean;                      exit 0 ;;
+    "")    bring_up; cmd_transfer;     exit 0 ;;
+    roundtrip)
+      # Phase 5 on its own against a stack that is already up — this is the
+      # command to reach for when iterating on the relay itself. Phases 1-4 run
+      # only when there is nothing usable to relay over.
+      if stack_ready; then
+        log "Stack is up and deployed — running phase 5 only."
+      else
+        bring_up
+      fi
+      cmd_roundtrip
       exit 0
       ;;
     *)
-      echo "Usage: $0 [clean]" >&2
+      cat >&2 <<EOF
+Usage: $0 [roundtrip|clean]
+
+  (no argument)  bring the stack up and relay one transfer, A -> B
+  roundtrip      relay A -> B -> A. Runs phase 5 alone against a stack that is
+                 already up and deployed, and brings one up first if not.
+  clean          stop containers, remove volumes and chains/local/
+EOF
       exit 1
       ;;
   esac

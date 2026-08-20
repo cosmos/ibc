@@ -21,6 +21,26 @@ check_prerequisites() {
   command -v curl      >/dev/null || die "curl is required"
   command -v cast      >/dev/null \
     || info "cast not on PATH — falling back to $FOUNDRY_IMAGE for key derivation"
+
+  pull_images
+}
+
+# Pull anything not already local, up front and with docker's progress bars —
+# the only place they appear. Every later `compose up` and `compose run` is
+# `--progress quiet`, where a first-run pull would look like a hang instead.
+# Silent when there is nothing to fetch, so a re-run says nothing at all.
+# COMPOSE_PROFILES reaches `deployer`, otherwise skipped as an inactive profile.
+pull_images() {
+  local img missing=()
+  while read -r img; do
+    docker image inspect "$img" >/dev/null 2>&1 || missing+=("$img")
+  done < <(COMPOSE_PROFILES=tools docker compose config --images | sort -u)
+
+  (( ${#missing[@]} )) || return 0
+  log "Pulling ${#missing[@]} image(s), first run only:"
+  printf '             %s\n' "${missing[@]}"
+  COMPOSE_PROFILES=tools docker compose pull --policy missing \
+    || die "could not pull the images — check network access"
 }
 
 # Run `cast`, preferring a host binary and falling back to the pinned foundry
