@@ -313,11 +313,13 @@ func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
 // wait): an unknown transaction must succeed and return nothing. Drivers
 // without a chain mapping have nothing to probe.
 func (d *Relayer) probePacketsEndpoint(ctx context.Context) error {
+	txHash := zeroTxHash
+
 	for _, chainID := range d.chainIDs {
 		response, err := d.client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
 			Filter: &relayerv2.PacketFilter{
 				SourceChainId: &chainID,
-				SourceTxHash:  &[]string{zeroTxHash}[0],
+				SourceTxHash:  &txHash,
 			},
 		}))
 		if err != nil {
