@@ -40,13 +40,6 @@ type PacketTxSubmission struct {
 	SubmissionID int64
 }
 
-type RelayRequest struct {
-	ID            int64
-	SourceChainID string
-	SourceTxHash  string
-	CreatedAt     pgtype.Timestamptz
-}
-
 type RelayerTxSubmission struct {
 	ID             int64
 	TxHash         string
