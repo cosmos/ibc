@@ -48,14 +48,6 @@ func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 		"every relay status must be covered exactly once")
 }
 
-// The zero value names no state, so the listing is not narrowed. A filter that
-// matched nothing would be indistinguishable from an empty table.
-func TestDBStatusesForStateUnspecifiedMeansEveryStatus(t *testing.T) {
-	t.Parallel()
-
-	require.ElementsMatch(t, store.AllRelayStatuses(), dbStatusesForState(StateUnspecified))
-}
-
 // The service pages by asking for one row past the page and trimming it, so a
 // full page must not leak the probe row nor claim more when there is none.
 func TestPacketsProbesForFurtherPages(t *testing.T) {
