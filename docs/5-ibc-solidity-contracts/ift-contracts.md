@@ -5,9 +5,9 @@ description: "The IFT base contract, its two deployable variants, and the send-c
 
 An Interchain Fungible Token (IFT) is a fungible token that moves between chains by burning it on one and minting it on the other. Each deployment is an ERC20 with the cross-chain behavior built into the token itself.
 
-That behavior is built on GMP. An IFT defines no packet type, and instead a transfer travels as an ordinary GMP call, addressed to the counterparty IFT contract registered for that client.
+That behavior is built on GMP. An IFT defines no packet type, and instead a transfer travels as an ordinary GMP call, addressed to the counterparty IFT implementation registered for that client.
 
-An issuer deploys one of two variants, which differ only in who the contract's authority is. The authority registers a send-call constructor for each counterparty the contract bridges to.
+An issuer deploys one of two Solidity variants, which differ only in who the contract's authority is. The authority registers a bridge and send-call constructor for each counterparty IFT implementation.
 
 Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](/applications/ift).
 
@@ -15,11 +15,11 @@ Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/ma
 
 An IFT contract contains both the ERC20 logic and the logic for moving the token across chains. Sending burns the amount from the caller, then dispatches an encoded mint call through [ICS27GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts). On receipt, the contract checks that the sender is a registered counterparty, then mints the amount.
 
-Any holder can send with `iftTransfer`, or burn their own balance directly. Minting is the gated side: the authority mints local supply, and a registered counterparty's mint call arrives through GMP. The authority also registers which counterparties this contract accepts those calls from.
+Any holder can send with `iftTransfer`. On the shipped `IFTOwnable` and `IFTAccessManaged` variants, holders can also burn their own balances through `ERC20BurnableUpgradeable`. Minting is the gated side: the authority mints local supply, and a registered counterparty's mint call arrives through GMP. The authority also registers which counterparties this contract accepts those calls from.
 
-GMP carries the call, and calls back when the packet is acknowledged or times out. Two counterparty IFT contracts reach each other through GMP alone, with no escrow or voucher contract between them.
+GMP carries the call and reports acknowledgement or timeout. Counterparty IFT implementations communicate through GMP, with no escrow or voucher contract between them.
 
-Interacts with: [ICS27GMP and its per-sender accounts](/ibc-solidity-contracts/ics27-gmp-and-accounts), one send-call constructor per registered bridge, and the counterparty IFT contract.
+Interacts with: [ICS27GMP and its per-sender accounts](/ibc-solidity-contracts/ics27-gmp-and-accounts), one send-call constructor per registered bridge, and the counterparty IFT implementation.
 
 ## Contracts on this page
 
@@ -85,20 +85,20 @@ function initialize(address authority_, string calldata erc20Name, string callda
 | `erc20Symbol` | The ERC20 token symbol |
 | `ics27Gmp` | The GMP contract this contract sends through and accepts callbacks from |
 
-The GMP address is fixed at initialization by the initializer. Pointing a live contract at a different GMP deployment therefore means an upgrade, which the same authority gates.
+The current implementation writes the GMP address only during initialization and has no setter. Changing it on an existing proxy requires an authorized implementation upgrade that adds explicit storage-update or reinitialization logic; upgrading the implementation alone does not change the stored address.
 
 Both variants run behind a proxy, and both disable initializers in their constructors.
 
 ## Bridge registration
 
-A bridge is one IFT contract's record of a counterparty IFT contract, kept against the client for that counterparty's chain. It tells this contract where to send, and whose mint calls to accept.
+A bridge records the counterparty IFT implementation for a client and the constructor that encodes that destination's mint operation. It tells this contract where to send, and whose mint calls to accept.
 
 Each contract registers its own counterparties, one at a time, and a pair can transfer only once both sides have registered the other. Bridges are keyed by client, so a contract holds one counterparty per client.
 
 | Function | Description |
 |---|---|
 | `registerIFTBridge(string clientId, string counterpartyIFTAddress, address iftSendCallConstructor)` | Authority-only. Records the counterparty for a client ID |
-| `removeIFTBridge(string clientId)` | Authority-only. Deletes the record for a client ID |
+| `removeIFTBridge(string clientId)` | Authority-only. Deletes the record for a client ID, or reverts `IFTBridgeNotFound` if none exists |
 
 Registration validates its arguments before it stores anything. The client ID and the counterparty address must be non-empty, and the send-call constructor must be a live contract that advertises `IIFTSendCallConstructor` through ERC-165.
 
@@ -110,17 +110,19 @@ struct IFTBridge {
 }
 ```
 
-The three fields are the local IBC client ID, the counterparty contract's address as a string, and the send-call constructor registered for that client.
+The three fields are the local IBC client ID, the counterparty implementation's address as a string, and the send-call constructor registered for that client.
 
 <Warning>
-Register an EVM counterparty in its checksummed EIP-55 form. The receiving side compares that string byte for byte against the sender string GMP produces, which is the checksummed hex of the sending contract's address. A differently cased address makes every incoming mint revert.
+For an EVM counterparty, register the address as `0x`-prefixed EIP-55 checksummed hex. Registration accepts any non-empty string and does not validate its casing. On inbound mint, IFT compares the stored string byte for byte with the checksummed sender produced by GMP, so differently cased text fails `IFTUnauthorizedMint`. Packet receiver parsing is separate and accepts any parseable EVM address string.
 </Warning>
 
-Registering the same client ID again overwrites the previous entry. Removal deletes the entry, and transfers this contract already sent on that client still settle or refund.
+Registering the same client ID again overwrites the previous entry. Removing a bridge blocks new sends and inbound EVM mints for that client. Outbound transfers already recorded as pending can still settle or refund because callbacks use the pending-transfer mapping rather than the bridge record.
 
 ## Sending a transfer
 
 A transfer starts on the source IFT contract, when a holder calls `iftTransfer`. The contract burns the amount first, then dispatches an encoded mint call over GMP and stores the record (later this record can be used to refund a failure or timeout). An IFT has no packet type of its own: the transfer travels as an ordinary GMP call, and [ICS27GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts) owns the wire format.
+
+The send is one atomic EVM transaction. If bridge lookup, payload construction, or `ICS27GMP.sendCall` reverts, the earlier burn is rolled back and no pending transfer remains.
 
 | Function | Description |
 |---|---|
@@ -131,26 +133,26 @@ Any holder may call either overload, since neither carries an authority check. T
 
 From the dispatch onwards the transfer is out of this contract's hands. Its path to the counterparty:
 
-1. The source contract calls `ICS27GMP.sendCall` with the encoded mint call, the counterparty address from the bridge, an empty salt, and the timeout. The returned packet sequence keys the pending transfer.
-2. ICS27GMP wraps the payload in a GMP packet whose sender field is the source contract's address as checksummed hex, and sends it through the [router](/ibc-solidity-contracts/ics26-router) on the `gmpport` port.
+1. The source contract calls `ICS27GMP.sendCall` with the encoded mint call, the bridge's counterparty address, empty salt, empty memo, and the timeout. The returned packet sequence keys the pending transfer.
+2. ICS27GMP wraps the payload in a GMP packet whose sender field is the source contract's address as checksummed hex, and sends it through the [router](/ibc-solidity-contracts/ics26-router) with both source and destination ports set to `gmpport`.
 3. A relayer carries the packet to the destination chain and submits it with a proof, which the destination chain's light client verifies.
 4. The destination router hands the packet to its own ICS27GMP, by port.
-5. That ICS27GMP executes the payload through the `ICS27Account` it derives for this sender and client, so `iftMint` arrives from the derived destination account rather than from GMP itself.
+5. On an EVM destination, ICS27GMP executes the payload through the `ICS27Account` derived from the destination client ID, packet sender, and salt, so `iftMint` arrives from that account rather than from GMP itself. A Cosmos SDK destination instead executes the JSON messages body produced by `CosmosIFTSendCallConstructor`.
 
 The destination contract's checks on that call are next. [IFT: how it works](/applications/ift) explains the same path from the holder's side.
 
-## Receiving a mint
+## Receiving a mint on EVM
 
-The receiving entry point is `iftMint(address receiver, uint256 amount)`, and the destination contract mints only for a caller it can trace back to a registered counterparty.
+On an EVM destination, the receiving entry point is `iftMint(address receiver, uint256 amount)`, and the destination contract mints only for a caller it can trace back to a registered counterparty.
 
-That caller is the `ICS27Account` GMP derived for the source contract on this client, not the GMP contract itself. That derivation takes the client, the sender, and a salt, so the address is what identifies who asked for the mint. Four checks on the caller stand between the call and a mint.
+That caller is an `ICS27Account`, not the GMP contract itself. The destination `ICS27GMP` creates or retrieves its account identifier from the destination chain's local client ID, the packet sender string, and the packet salt. The account address is CREATE2-derived using that identifier and deployment-specific beacon-proxy bytecode. IFT authorizes the caller by reverse-looking up the identifier. Four checks stand between the call and a mint.
 
 - The contract asks GMP for the caller's account identifier, and that lookup reverts when the caller is not a GMP account.
 - A bridge must be registered for the identifier's client ID.
 - The identifier's sender string must equal the registered counterparty address exactly.
 - The identifier's salt must be empty, which leaves each counterparty one account to mint through.
 
-Pass all four and the contract mints to the receiver, emits `IFTMintReceived`, and returns nothing. GMP wraps the call's empty return data in an acknowledgement. Fail one and the call reverts, which the router converts into an error acknowledgement.
+Pass all four and the contract mints to the receiver, emits `IFTMintReceived`, and returns nothing. GMP wraps the call's empty return data in an acknowledgement. A failure carrying revert data becomes the universal error acknowledgement. An empty revert, including an out-of-gas callback, aborts receive processing instead of writing that acknowledgement.
 
 ## Acknowledgement and timeout callbacks
 
@@ -158,25 +160,25 @@ The two GMP callbacks settle or refund the pending record, and only the GMP cont
 
 | Function | Description |
 |---|---|
-| `onAckPacket(bool success, IIBCAppCallbacks.OnAcknowledgementPacketCallback msg_)` | Settles the pending transfer on success, refunds on the error acknowledgement |
+| `onAckPacket(bool success, IIBCAppCallbacks.OnAcknowledgementPacketCallback msg_)` | Settles the pending transfer when GMP reports success, and refunds when GMP reports failure |
 | `onTimeoutPacket(IIBCAppCallbacks.OnTimeoutPacketCallback msg_)` | Refunds the pending transfer |
 
 The base contract inherits `IBCCallbackReceiver`, which advertises `IIBCSenderCallbacks` through ERC-165, and GMP delivers a callback only to senders that advertise it.
 
-On a successful acknowledgement the source contract deletes the pending transfer and emits `IFTTransferCompleted`, minting and burning nothing. On the error acknowledgement it refunds instead: it mints the pending amount back to the original sender, deletes the record, and emits `IFTTransferRefunded`.
+GMP maps the universal error acknowledgement to `success == false` before invoking `onAckPacket`; IFT does not inspect the acknowledgement bytes. On success the source contract deletes the pending transfer and emits `IFTTransferCompleted`, minting and burning nothing. On failure it refunds instead: it mints the pending amount back to the original sender, deletes the record, and emits `IFTTransferRefunded`.
 
 The timeout callback refunds with no success check, once a relayer submits the timeout proof and GMP routes the callback to the source contract. Its three effects are the same: mint back to the sender, delete the record, emit `IFTTransferRefunded`.
 
 ## Send-call constructors
 
-A send-call constructor is registered per counterparty client, and it turns a receiver and an amount into the exact mint call that chain expects. One EVM encoder serves every EVM counterparty, because it holds no state. A Cosmos encoder is built with one counterparty's type URL, denom, and interchain account address, so a second Cosmos counterparty needs a second encoder. The destination's mint call is built on the source chain, inside the transfer, and different chain types expect different encodings.
+A send-call constructor is registered per counterparty client, and it turns a receiver and an amount into the exact mint call that chain expects. One EVM encoder can serve every EVM counterparty because it holds no state. A Cosmos encoder stores a type URL, denom, and interchain account address; counterparties with different values need separately configured encoder deployments, while bridges with identical values may reuse one. The destination's mint call is built on the source chain, inside the transfer, and different chain types expect different encodings.
 
 | Contract | What it produces |
 |---|---|
 | `EVMIFTSendCallConstructor` | An ABI-encoded call to `IIFT.iftMint(receiver, amount)`, after parsing the receiver string as an EVM address |
-| `CosmosIFTSendCallConstructor` | A protojson transaction wrapping one `MsgIFTMint`, whose type URL, denom, and signer, an interchain account address, are all fixed at construction |
+| `CosmosIFTSendCallConstructor` | A protojson-compatible JSON messages body containing one `MsgIFTMint`; its type URL, denom, and signer interchain account are fixed at construction |
 
-The Cosmos contract accepts a receiver that is either EVM hex or bech32-shaped. Its interchain account address derives from the IFT contract's own address, so the pair is precomputed off-chain before that contract is deployed. That changes deployment order: the account address is computed off-chain first, then fed to the constructor's deployment.
+The Cosmos contract accepts a receiver that is either EVM hex or bech32-shaped; the bech32 check is a character-shape heuristic and does not validate a checksum. Its interchain account address derives from the Cosmos destination client ID, the predicted checksummed IFT contract address as the GMP sender, and the empty IFT salt. The repo's `compute-ift-addresses` tool predicts the IFT deployment address from the deployer and nonce, then computes the corresponding Cosmos account before deployment. That account address is fed to the constructor's deployment.
 
 Supporting a new counterparty means implementing `constructMintCall(receiver, amount)` from `IIFTSendCallConstructor` and advertising that interface through ERC-165, then registering the contract as a bridge's constructor. Without the ERC-165 answer, `registerIFTBridge` reverts `IFTInvalidConstructorInterface`.
 
@@ -186,7 +188,7 @@ Beyond its ERC20 balances and its access-control state, an IFT contract also sto
 
 | What is stored | When written | When deleted |
 |---|---|---|
-| The GMP contract | At initialization | Stays for the life of the contract |
+| The GMP contract | At initialization | No setter exists in the current implementation |
 | A bridge, per client ID | On registration | On removal, or overwritten by a later registration for the same client ID |
 | A pending transfer, per client ID and sequence | On send, under the sequence `sendCall` returns | On a successful acknowledgement, or on a refund |
 
@@ -223,8 +225,11 @@ The reverts fall into argument validation, a missing bridge or pending record, a
 | `IFTUnexpectedSalt(salt)` | The calling account's identifier carries a non-empty salt |
 | `IFTOnlyICS27GMP(caller)` | Anyone but the GMP contract calls a callback |
 | `IFTPendingTransferNotFound(clientId, sequence)` | No pending transfer matches the client ID and sequence |
+| `IFTInvalidReceiver(receiver)` | Declared in `IIFTErrors`, but unused by the current `IFTBaseUpgradeable` implementation |
 | `EVMIFTInvalidReceiver(receiver)` | The receiver string does not parse as an EVM address |
-| `CosmosIFTInvalidReceiver(receiver)` | The receiver string is neither EVM hex nor bech32-shaped |
+| `CosmosIFTInvalidReceiver(receiver)` | The receiver string is neither EVM hex nor bech32-shaped under the constructor's character heuristic |
+
+Receiver-format failures come from the selected constructor. On EVM, minting to the zero address instead reverts with the inherited ERC20 error.
 
 ## Roles and permissions
 
