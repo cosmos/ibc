@@ -269,10 +269,6 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult,
 	}
 
 	err = s.store.Transact(ctx, func(repo store.Repository) error {
-		if errCreate := repo.CreateRelayRequest(ctx, chainID, txHash); errCreate != nil {
-			return errors.Wrap(errCreate, "creating relay request")
-		}
-
 		for _, selector := range sortedPacketSelectors(relayablePackets) {
 			packet := relayablePackets[selector]
 			if errUpsert := repo.UpsertPacket(ctx, packet); errUpsert != nil {
