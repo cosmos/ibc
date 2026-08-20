@@ -28,13 +28,15 @@ func Default(json bool) *slog.Logger {
 // ReplaceAttrs normalizes errors before they reach a slog handler.
 func ReplaceAttrs(_ []string, attr slog.Attr) slog.Attr {
 	switch attr.Key {
+	case slog.TimeKey:
+		// log utc timestamp
+		t := attr.Value.Time().UTC()
+		return slog.String("time", t.Format(timeFormat))
 	case "err", "error":
+		// normalize error w/o stack trace
 		if err, ok := attr.Value.Any().(error); ok && err != nil {
 			return slog.String("err", err.Error())
 		}
-	case slog.TimeKey:
-		t := attr.Value.Time().UTC()
-		return slog.String("time", t.Format(timeFormat))
 	}
 
 	return attr

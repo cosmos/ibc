@@ -4,14 +4,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+	"github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
@@ -49,7 +48,7 @@ var (
 	flagRelayerSourceChainID string
 )
 
-func relayerRun(cmd *cobra.Command, _ []string) error {
+func relayerRun(_ *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -92,15 +91,12 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 	for _, chain := range cfg.Chains {
 		connected = append(connected, chain.ChainID)
 	}
-	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(relayerv2.ProcessReadiness{
-		Event:           relayerv2.ProcessReadinessEvent,
+
+	app.Logger.Info("Readiness", "readiness", relayer.ProcessReadiness{
+		Event:           relayer.ProcessReadinessEvent,
 		ChainsConnected: connected,
 		HTTP:            address.String(),
-	}); err != nil {
-		_ = app.RelayerService.Stop()
-		_ = app.Server.Stop()
-		return err
-	}
+	})
 
 	// executes from last to first
 	graceful.AddCallback(app.Store.Close)
@@ -112,15 +108,15 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerRelay(cmd *cobra.Command, _ []string) error {
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Relay, &relayerv2.RelayRequest{
+	return relayerCall(cmd, relayer.RelayerApiServiceClient.Relay, &relayer.RelayRequest{
 		TxHash:        flagRelayerTxHash,
 		SourceChainId: flagRelayerSourceChainID,
-		Selection:     &relayerv2.RelayRequest_AllPackets{AllPackets: &relayerv2.AllPackets{}},
+		Selection:     &relayer.RelayRequest_AllPackets{AllPackets: &relayer.AllPackets{}},
 	})
 }
 
 func relayerStatus(cmd *cobra.Command, _ []string) error {
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Status, &relayerv2.StatusRequest{
+	return relayerCall(cmd, relayer.RelayerApiServiceClient.Status, &relayer.StatusRequest{
 		TxHash: flagRelayerTxHash, SourceChainId: flagRelayerSourceChainID,
 	})
 }
@@ -129,7 +125,7 @@ func relayerStatus(cmd *cobra.Command, _ []string) error {
 // and prints the response as JSON.
 func relayerCall[Req, Resp any](
 	cmd *cobra.Command,
-	call func(relayerv2.RelayerApiServiceClient, context.Context, *connect.Request[Req]) (*connect.Response[Resp], error),
+	call func(relayer.RelayerApiServiceClient, context.Context, *connect.Request[Req]) (*connect.Response[Resp], error),
 	req *Req,
 ) error {
 	cfg, err := setupHomeWithConfig()
@@ -145,7 +141,7 @@ func relayerCall[Req, Resp any](
 		address = cfg.Server.ListenAddress
 	}
 
-	client := relayerv2.NewRelayerApiServiceClient(
+	client := relayer.NewRelayerApiServiceClient(
 		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
 	)
 
