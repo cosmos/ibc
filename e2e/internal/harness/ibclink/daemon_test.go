@@ -20,24 +20,26 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-func TestParseReadiness(t *testing.T) {
-	valid := `{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}` + "\n"
-	res := parseReadiness(valid)
+func TestParseReadinessLog(t *testing.T) {
+	valid := `{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}}` + "\n"
+	res, ok := parseReadinessLog(valid)
+	require.True(t, ok)
 	require.NoError(t, res.err)
 	require.Equal(t, "127.0.0.1:4242", res.readiness.HTTP)
 	require.Equal(t, []string{"chain-a"}, res.readiness.ChainsConnected)
 
-	res = parseReadiness("plain log line, not json\n")
-	require.Error(t, res.err)
-	require.ErrorContains(t, res.err, "not readiness JSON")
+	_, ok = parseReadinessLog(`{"level":"INFO","msg":"Starting relayer"}`)
+	require.False(t, ok)
 
-	wrongEvent := `{"event":"started","http":"127.0.0.1:4242"}`
-	res = parseReadiness(wrongEvent)
+	wrongEvent := `{"msg":"Readiness","readiness":{"event":"started","http":"127.0.0.1:4242"}}`
+	res, ok = parseReadinessLog(wrongEvent)
+	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "invalid readiness")
 
-	notReady := `{"event":"ready"}`
-	res = parseReadiness(notReady)
+	notReady := `{"msg":"Readiness","readiness":{"event":"ready"}}`
+	res, ok = parseReadinessLog(notReady)
+	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "http")
 }
@@ -136,7 +138,7 @@ func TestStartRelayerSurfacesStartupLogs(t *testing.T) {
 	require.NoError(t, err)
 	_, err = driver.StartRelayer(t.Context())
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no readiness line")
+	require.ErrorContains(t, err, "no readiness log")
 	require.ErrorContains(t, err, ".signers[0].grpc required for remote signer")
 }
 
@@ -201,8 +203,11 @@ func TestWaitPoliciesSurviveDriverAndRelayerStartup(t *testing.T) {
 
 	script := filepath.Join(t.TempDir(), "ibc-ready")
 	require.NoError(t, os.WriteFile(script, []byte(fmt.Sprintf(
-		"#!/bin/sh\nprintf '%%s\\n' '%s'\nexec sleep 60\n",
-		fmt.Sprintf(`{"event":"ready","http":%q}`, strings.TrimPrefix(server.URL, "http://")),
+		"#!/bin/sh\nprintf '%%s\\n' '%s' >&2\nexec sleep 60\n",
+		fmt.Sprintf(
+			`{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","http":%q}}`,
+			strings.TrimPrefix(server.URL, "http://"),
+		),
 	)), 0o700))
 	t.Setenv(binEnv, script)
 
