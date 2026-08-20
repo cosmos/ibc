@@ -81,52 +81,66 @@ func testListPackets(t *testing.T, s Store) {
 	str := func(v string) *string { return &v }
 
 	t.Run("listPackets", func(t *testing.T) {
-		t.Run("bySourceChain", func(t *testing.T) {
-			require.ElementsMatch(t, []string{"0xlist1", "0xlist2"},
-				hashesFor(t, PacketFilter{Statuses: all, SourceChainID: str(chainOne)}))
-		})
-
-		t.Run("bySourceClient", func(t *testing.T) {
-			require.ElementsMatch(t, []string{"0xlist3"},
-				hashesFor(t, PacketFilter{Statuses: all, SourceClientID: str("src-b")}))
-		})
-
-		t.Run("byDestinationClient", func(t *testing.T) {
-			require.ElementsMatch(t, []string{"0xlist1", "0xlist2"},
-				hashesFor(t, PacketFilter{Statuses: all, DestinationClientID: str("dst-a")}))
-		})
-
-		t.Run("bySourceTxHash", func(t *testing.T) {
-			require.Equal(t, []string{"0xlist2"},
-				hashesFor(t, PacketFilter{Statuses: all, SourceTxHash: str("0xlist2")}))
-		})
-
-		t.Run("bySequence", func(t *testing.T) {
-			// Scoped by chain: testRepoReadWrite reuses low sequences.
+		// Every filter narrows the same fixture, so the cases differ only in the
+		// filter and what it should match.
+		t.Run("filters", func(t *testing.T) {
 			sequence := uint64(3)
-			require.Equal(t, []string{"0xlist3"}, hashesFor(t, PacketFilter{
-				Statuses: all, SourceChainID: str(chainTwo), SequenceNumber: &sequence,
-			}))
-		})
 
-		t.Run("byStatusSubset", func(t *testing.T) {
-			require.Equal(t, []string{"0xlist2"}, hashesFor(t, PacketFilter{
-				Statuses:      []RelayStatus{RelayStatusCompleteWithAck},
-				SourceChainID: str(chainOne),
-			}))
-		})
-
-		t.Run("filtersCombineAsAnd", func(t *testing.T) {
-			// chainOne holds no src-b packet.
-			require.Empty(t, hashesFor(t, PacketFilter{
-				Statuses:       all,
-				SourceChainID:  str(chainOne),
-				SourceClientID: str("src-b"),
-			}))
-		})
-
-		t.Run("unknownValueIsEmptyNotError", func(t *testing.T) {
-			require.Empty(t, hashesFor(t, PacketFilter{Statuses: all, SourceTxHash: str("0xmissing")}))
+			for _, tt := range []struct {
+				name   string
+				filter PacketFilter
+				want   []string
+			}{
+				{
+					"source chain",
+					PacketFilter{Statuses: all, SourceChainID: str(chainOne)},
+					[]string{"0xlist1", "0xlist2"},
+				},
+				{
+					"source client",
+					PacketFilter{Statuses: all, SourceClientID: str("src-b")},
+					[]string{"0xlist3"},
+				},
+				{
+					"destination client",
+					PacketFilter{Statuses: all, DestinationClientID: str("dst-a")},
+					[]string{"0xlist1", "0xlist2"},
+				},
+				{
+					"source tx hash",
+					PacketFilter{Statuses: all, SourceTxHash: str("0xlist2")},
+					[]string{"0xlist2"},
+				},
+				{
+					// Scoped by chain: testRepoReadWrite reuses low sequences.
+					"sequence",
+					PacketFilter{Statuses: all, SourceChainID: str(chainTwo), SequenceNumber: &sequence},
+					[]string{"0xlist3"},
+				},
+				{
+					"status subset",
+					PacketFilter{
+						Statuses:      []RelayStatus{RelayStatusCompleteWithAck},
+						SourceChainID: str(chainOne),
+					},
+					[]string{"0xlist2"},
+				},
+				{
+					// chainOne holds no src-b packet.
+					"filters combine as and",
+					PacketFilter{Statuses: all, SourceChainID: str(chainOne), SourceClientID: str("src-b")},
+					nil,
+				},
+				{
+					"unknown value is empty, not an error",
+					PacketFilter{Statuses: all, SourceTxHash: str("0xmissing")},
+					nil,
+				},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					require.ElementsMatch(t, tt.want, hashesFor(t, tt.filter))
+				})
+			}
 		})
 
 		t.Run("limitIsAppliedAsGiven", func(t *testing.T) {
@@ -141,13 +155,6 @@ func testListPackets(t *testing.T, s Store) {
 			both, err := s.ListPackets(ctx, filter, Page{Limit: 5})
 			require.NoError(t, err)
 			require.Len(t, both, 2)
-		})
-
-		t.Run("noMatchesIsEmpty", func(t *testing.T) {
-			packets, err := s.ListPackets(ctx,
-				PacketFilter{Statuses: all, SourceTxHash: str("0xnope")}, Page{Limit: 10})
-			require.NoError(t, err)
-			require.Empty(t, packets)
 		})
 
 		t.Run("pagingCoversEveryRowExactlyOnce", func(t *testing.T) {
