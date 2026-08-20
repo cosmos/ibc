@@ -62,7 +62,7 @@ func (f *fakeRelayerAPI) Packets(
 	req *connect.Request[relayerv2.PacketsRequest],
 ) (*connect.Response[relayerv2.PacketsResponse], error) {
 	filter := req.Msg.GetFilter()
-	// An unknown transaction lists nothing rather than erroring.
+	// An unknown transaction lists nothing
 	packets := f.statuses[filter.GetSourceChainId()+"/"+filter.GetSourceTxHash()]
 
 	return connect.NewResponse(&relayerv2.PacketsResponse{
@@ -132,7 +132,6 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, unknown)
 
-	// An unmapped chain is still a client-side error.
 	_, err = relayer.PacketStatuses(ctx, "chain-c", "0xabc")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "no configured chain id")

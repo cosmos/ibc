@@ -116,7 +116,6 @@ func (h *RelayerHandler) Packets(
 	}), nil
 }
 
-// packetFilterFromProto lowers the wire filter; absent fields mean no constraint.
 func packetFilterFromProto(filter *proto.PacketFilter) relayer.PacketFilter {
 	if filter == nil {
 		return relayer.PacketFilter{}
@@ -156,8 +155,6 @@ func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatu
 	return out
 }
 
-// packetStateFromProto maps an unknown state to StateUnspecified, which matches
-// no relay status -- an empty listing rather than a silently ignored filter.
 func packetStateFromProto(state proto.PacketState) relayer.PacketState {
 	switch state {
 	case proto.PacketState_PACKET_STATE_NOT_SELECTED:

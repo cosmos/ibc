@@ -140,15 +140,6 @@ WHERE status NOT IN (
 )
 ORDER BY id;
 
--- Optional filters use COALESCE(param, column) rather than a NULL guard: the
--- guard names each parameter twice, which makes sqlc number the placeholders
--- and collide with the status list. Every filter column is NOT NULL.
---
--- Statuses are one comma-delimited string for the same reason, and are always
--- applied -- callers pass every status when they want no status filter.
---
--- row_limit is bound one higher than the page: the extra row reveals another
--- page without counting every match, keeping the query O(page).
 -- name: ListPackets :many
 SELECT * FROM packets
 WHERE ',' || sqlc.arg(statuses) || ',' LIKE '%,' || status || ',%'

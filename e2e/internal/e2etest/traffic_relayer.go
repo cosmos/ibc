@@ -247,8 +247,6 @@ func observeStatus(
 	if err != nil {
 		return nil, 0, false, err
 	}
-	// An empty listing means the relayer has not indexed the transaction, which
-	// the Status endpoint used to report as a NotFound error.
 	if len(statuses) == 0 {
 		if !relayer.ManualRoute(string(packet.RouteID)) {
 			if relayErr := relayer.RelayAll(ctx, string(packet.Source), packet.SourceTxHash); relayErr != nil {

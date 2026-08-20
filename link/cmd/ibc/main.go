@@ -100,7 +100,6 @@ func init() {
 		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
 	}
 
-	// On packets these are optional filters.
 	_ = cmdRelayerRelay.MarkFlagRequired("tx-hash")
 	_ = cmdRelayerRelay.MarkFlagRequired("chain-id")
 
