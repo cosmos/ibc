@@ -16,34 +16,34 @@ gen_solidity_abi_dir := "gen/go/solidity-abi"
 
 # List all available recipes
 default:
-  just --list
+    just --list
 
 # Check SPDX license headers
 [group('lint')]
 lint-license:
-  go run github.com/apache/skywalking-eyes/cmd/license-eye@v{{license_eye_version}} \
-    --config .licenserc.yaml header check
+    go run github.com/apache/skywalking-eyes/cmd/license-eye@v{{ license_eye_version }} \
+      --config .licenserc.yaml header check
 
 # Lint generated Solidity Go binding packages
 [group('lint')]
 lint-gen:
-  cd {{gen_solidity_abi_dir}} && golangci-lint run
+    cd {{ gen_solidity_abi_dir }} && golangci-lint run
 
 # Lint generated Solidity Go binding packages and fix errors
 [group('lint')]
 lint-fix-gen:
-  cd {{gen_solidity_abi_dir}} && golangci-lint run --fix
+    cd {{ gen_solidity_abi_dir }} && golangci-lint run --fix
 
 # Compile generated Solidity Go binding packages
 [group('test')]
 test-gen:
-  go -C {{gen_solidity_abi_dir}} test ./...
+    go -C {{ gen_solidity_abi_dir }} test ./...
 
 # Run all repository checks
 [group('check')]
 run-all-checks:
-  just link::run-all-checks
-  just e2e::run-all-checks
-  just lint-gen
-  just test-gen
-  just lint-license
+    just link::run-all-checks
+    just e2e::run-all-checks
+    just lint-gen
+    just test-gen
+    just lint-license

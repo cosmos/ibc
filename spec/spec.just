@@ -5,14 +5,14 @@
 
 # List specification recipes
 default:
-  just --list spec
+    just --list spec
 
 # Lint specifications
 [group('lint')]
 lint:
-  markdownlint-cli2 "**.md"
+    markdownlint-cli2 "**.md"
 
 # Lint specifications and fix errors
 [group('lint')]
 lint-fix:
-  markdownlint-cli2 "**.md" --fix
+    markdownlint-cli2 "**.md" --fix
