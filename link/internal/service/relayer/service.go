@@ -309,14 +309,19 @@ func relayResult(
 
 	packets := make([]ObservedPacket, 0, len(observed))
 
+	// selected is a subset of relayable, which is a subset of observed, so the
+	// three cases partition the transaction's packets.
 	for _, selector := range sortedPacketSelectors(observed) {
+		_, isSelected := selectedSet[selector]
+		_, isRelayable := relayable[selector]
+
 		selection := SelectionStateUnconfigured
 
-		if _, ok := relayable[selector]; ok {
+		switch {
+		case isSelected:
+			selection = SelectionStateSelected
+		case isRelayable:
 			selection = SelectionStateNotSelected
-			if _, ok := selectedSet[selector]; ok {
-				selection = SelectionStateSelected
-			}
 		}
 
 		packets = append(packets, ObservedPacket{Selector: selector, Selection: selection})
