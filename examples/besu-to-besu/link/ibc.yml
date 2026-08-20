@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  listenAddr: 0.0.0.0:3000
+
+db:
+  type: sqlite
+  url: ibc.db
+
+signers:
+  - alias: relayer-a
+    type: remote
+    grpc: kms:9090
+    remoteKeyId: relayer-a
+
+  - alias: relayer-b
+    type: remote
+    grpc: kms:9090
+    remoteKeyId: relayer-b
+
+chains:
+  - chainId: "41001"
+    evm:
+      rpc: http://besu-a:8545
+      ics26Router: "${A_ICS26_ROUTER}"
+
+  - chainId: "41002"
+    evm:
+      rpc: http://besu-b:8545
+      ics26Router: "${B_ICS26_ROUTER}"
+
+relayer:
+  dispatchPollInterval: 3s
+  connections:
+    - alias: a-b
+      clientA:
+        chainId: "41001"
+        signer: relayer-a
+        clientId: "${A_CLIENT_ID}"
+        type: attestation
+      clientB:
+        chainId: "41002"
+        signer: relayer-b
+        clientId: "${B_CLIENT_ID}"
+        type: attestation
+
+attestors:
+  - name: attestor-a
+    type: remote
+    grpc: attestor-a:3000
+
+  - name: attestor-b
+    type: remote
+    grpc: attestor-b:3000
