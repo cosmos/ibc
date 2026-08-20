@@ -117,7 +117,9 @@ func init() {
 	cmdRelayerPackets.Flags().
 		Uint32Var(&flagRelayerPacketsLimit, "limit", 0, "maximum packets to return (default 100, max 1000)")
 	cmdRelayerPackets.Flags().
-		Uint32Var(&flagRelayerPacketsOffset, "offset", 0, "packets to skip, for paging")
+		StringVar(&flagRelayerPacketsCursor, "cursor", "", "next_cursor from a previous response, to resume paging")
+	cmdRelayerPackets.Flags().
+		BoolVar(&flagRelayerPacketsAll, "all", false, "follow every page and print the combined result")
 
 	// Attestor commands
 	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)

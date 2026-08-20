@@ -125,16 +125,21 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 
 			var asked int64
 
+			rows := make([]store.Packet, tt.rowsFromDB)
+			for i := range rows {
+				rows[i].ID = int64(tt.rowsFromDB - i)
+			}
+
 			st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
 				Run(func(_ context.Context, _ store.PacketFilter, page store.Page) {
 					asked = page.Limit
 				}).
-				Return(make([]store.Packet, tt.rowsFromDB), nil).Once()
+				Return(rows, nil).Once()
 
-			packets, hasMore, err := service.Packets(ctx, PacketFilter{}, store.Page{Limit: tt.limit})
+			page, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Limit: tt.limit})
 			require.NoError(t, err)
-			require.Len(t, packets, tt.wantPackets)
-			require.Equal(t, tt.wantHasMore, hasMore)
+			require.Len(t, page.Packets, tt.wantPackets)
+			require.Equal(t, tt.wantHasMore, page.HasMore)
 
 			want := tt.limit
 			if want <= 0 {
@@ -142,6 +147,15 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 			}
 
 			require.Equal(t, want+1, asked, "the store must be asked for one row past the page")
+
+			if !tt.wantHasMore {
+				require.Empty(t, page.NextCursor, "a final page must not offer a cursor")
+				return
+			}
+
+			// The cursor must name the last returned row, not the probe row,
+			// or the next page would skip it.
+			require.Equal(t, encodeCursor(rows[tt.wantPackets-1].ID), page.NextCursor)
 		})
 	}
 }
@@ -161,7 +175,42 @@ func TestPacketsCapsTheLimit(t *testing.T) {
 		}).
 		Return(nil, nil).Once()
 
-	_, _, err := service.Packets(ctx, PacketFilter{}, store.Page{Limit: MaxPacketPageLimit + 500})
+	_, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Limit: MaxPacketPageLimit + 500})
 	require.NoError(t, err)
 	require.Equal(t, int64(MaxPacketPageLimit+1), asked)
+}
+
+// The cursor bounds the query rather than being interpreted by the caller, so
+// the service must hand the store the id it names and reject anything else.
+func TestPacketsCursorBoundsTheQuery(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	st := NewMockStore(t)
+	service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+
+	var asked int64
+
+	st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ store.PacketFilter, page store.Page) {
+			asked = page.Before
+		}).
+		Return(nil, nil).Once()
+
+	_, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Cursor: encodeCursor(4096)})
+	require.NoError(t, err)
+	require.Equal(t, int64(4096), asked)
+}
+
+func TestPacketsRejectsMalformedCursors(t *testing.T) {
+	t.Parallel()
+
+	// "MA" decodes to "0", a position no packet can occupy.
+	for _, cursor := range []string{"not-base64!", "abc", "MA"} {
+		ctx := context.Background()
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+
+		_, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Cursor: cursor})
+		require.ErrorIs(t, err, ErrInvalidInput, "cursor %q", cursor)
+	}
 }

@@ -372,9 +372,9 @@ type PacketsRequest struct {
 	Filter *PacketFilter          `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
 	// Zero applies the default of 100; values above 1000 are capped.
 	Limit uint32 `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	// Packets inserted between requests shift later pages; paging is not a
-	// consistent snapshot.
-	Offset        uint32 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	// Opaque next_cursor from a previous response. Empty starts at the newest
+	// packet. Treat it as opaque; its encoding is not part of this contract.
+	Cursor        string `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -423,11 +423,11 @@ func (x *PacketsRequest) GetLimit() uint32 {
 	return 0
 }
 
-func (x *PacketsRequest) GetOffset() uint32 {
+func (x *PacketsRequest) GetCursor() string {
 	if x != nil {
-		return x.Offset
+		return x.Cursor
 	}
-	return 0
+	return ""
 }
 
 // Every field is optional; all present fields must match.
@@ -530,7 +530,9 @@ type PacketsResponse struct {
 	Packets []*PacketStatus        `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
 	// More packets match beyond this page. No count is reported: producing one
 	// would visit every match on every request.
-	HasMore       bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	HasMore bool `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	// Cursor for the next page, set only when has_more.
+	NextCursor    string `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -577,6 +579,13 @@ func (x *PacketsResponse) GetHasMore() bool {
 		return x.HasMore
 	}
 	return false
+}
+
+func (x *PacketsResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
 }
 
 type TransactionInfo struct {
@@ -771,7 +780,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\x0ePacketsRequest\x124\n" +
 	"\x06filter\x18\x01 \x01(\v2\x1c.ibc.v2.relayer.PacketFilterR\x06filter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit\x12\x16\n" +
-	"\x06offset\x18\x03 \x01(\rR\x06offset\"\xf8\x03\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xf8\x03\n" +
 	"\fPacketFilter\x12+\n" +
 	"\x0fsource_chain_id\x18\x01 \x01(\tH\x00R\rsourceChainId\x88\x01\x01\x125\n" +
 	"\x14destination_chain_id\x18\x02 \x01(\tH\x01R\x12destinationChainId\x88\x01\x01\x12-\n" +
@@ -786,10 +795,12 @@ const file_relayer_proto_rawDesc = "" +
 	"\x16_destination_client_idB\b\n" +
 	"\x06_stateB\x11\n" +
 	"\x0f_source_tx_hashB\x12\n" +
-	"\x10_sequence_number\"d\n" +
+	"\x10_sequence_number\"\x85\x01\n" +
 	"\x0fPacketsResponse\x126\n" +
 	"\apackets\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\apackets\x12\x19\n" +
-	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"E\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\x12\x1f\n" +
+	"\vnext_cursor\x18\x03 \x01(\tR\n" +
+	"nextCursor\"E\n" +
 	"\x0fTransactionInfo\x12\x17\n" +
 	"\atx_hash\x18\x01 \x01(\tR\x06txHash\x12\x19\n" +
 	"\bchain_id\x18\x02 \x01(\tR\achainId\"\xbe\x03\n" +

@@ -37,24 +37,29 @@ a packet's state, so the two cannot disagree.
 
 ## Paging
 
-`limit` defaults to 100 and is capped at 1000. `offset` skips packets. Results
-are ordered most recent first, and `has_more` reports whether further packets
-match beyond the returned page — page until it is false.
+`limit` defaults to 100 and is capped at 1000. Results are ordered most recent
+first. `has_more` reports whether further packets match beyond the returned
+page, and `next_cursor` carries the position to resume from — pass it back as
+`cursor` and repeat until `has_more` is false.
+
+Treat `next_cursor` as opaque. It encodes a paging position, and nothing about
+its contents is part of this contract.
 
 There is deliberately no exact count. Producing one would require visiting every
 matching packet on every request, which is the expensive part; `has_more` is
 answered by fetching one row past the page and discarding it, so a request costs
 about as much as the page it returns.
 
-Paging is **not a consistent snapshot**. The relayer is writing to this table
-while you read it, so a packet inserted between two requests shifts later pages
-and can be seen twice. Ordering is newest first, so new arrivals land at the
-front and push earlier pages down.
+Because the cursor names a position rather than a number of rows to skip,
+packets arriving mid-walk do not shift the pages behind it. An offset pager
+would return a row on page one and then again on page two once a newer packet
+landed between the two requests.
 
-A cursor over `id` would not fix this and would be worse: ids come from a
-sequence, so they contain gaps from rolled-back transactions, and a packet
-assigned a lower id can commit after a higher one. A `WHERE id < cursor` pager
-would skip those packets permanently rather than merely reordering them.
+One caveat remains. Ids come from a sequence, so a packet assigned a lower id
+can commit after a higher one; if it commits after a walk has already paged past
+its position, that walk will not see it. A walk therefore sees a consistent view
+of the packets committed before it started, and later arrivals appear at the
+front on the next walk rather than being lost.
 
 ## Absence is emptiness
 
@@ -70,11 +75,15 @@ one SQL statement whose optional clauses are `COALESCE(param, column)`, which
 the query planner cannot satisfy from an index — it plans a sequential scan
 even when a matching index exists.
 
-What keeps that acceptable is that the scan stops early. Ordering walks the
-primary key and the query asks for only one row more than the page, so a listing
-whose matches are recent reads roughly `limit` rows rather than the table. The
-case that degrades is a selective filter whose matches are old, where the scan
-runs until it finds enough of them.
+What keeps that acceptable is that the scan stops early, and that the cursor
+bounds where it starts. The cursor is passed as a plain `id < ?` comparison
+rather than a `COALESCE` guard — with no cursor it is given the maximum id — so
+the planner answers it with a primary key seek in every case, including the
+first page. From there the query asks for only one row more than the page, so a
+listing whose matches are recent reads roughly `limit` rows rather than the
+table. The case that degrades is a selective filter whose matches are old, where
+the scan runs until it finds enough of them; deep paging no longer compounds
+this, since the cursor seeks past pages already read instead of walking them.
 
 This is why the API reports `has_more` rather than a count: any exact total
 would force every request to visit every match, removing the early stop and
@@ -88,7 +97,11 @@ to add indexes the current statement cannot use.
 ibc relayer packets --state pending
 ibc relayer packets --chain-id 1 --tx-hash 0xabc
 ibc relayer packets --source-client-id base-0 --limit 20
+ibc relayer packets --state pending --all
 ```
 
 `--state` accepts `not-selected`, `pending`, `succeeded`, `timed-out`,
 `rejected`, and `relay-failed`. Output is JSON.
+
+`--all` follows `next_cursor` to completion and prints the packets as one
+response; `--cursor` resumes a walk from a `next_cursor` returned earlier.

@@ -96,20 +96,29 @@ const (
 	MaxPacketPageLimit     = 1000
 )
 
-// normalizePage applies the default and cap so every listing is bounded.
-func normalizePage(page store.Page) store.Page {
+// PacketQuery bounds a Packets listing.
+type PacketQuery struct {
+	Limit  int64
+	Cursor string
+}
+
+// PacketPage is one page of a Packets listing.
+type PacketPage struct {
+	Packets    []PacketStatus
+	HasMore    bool
+	NextCursor string
+}
+
+// normalizeLimit applies the default and cap so every listing is bounded.
+func normalizeLimit(limit int64) int64 {
 	switch {
-	case page.Limit <= 0:
-		page.Limit = DefaultPacketPageLimit
-	case page.Limit > MaxPacketPageLimit:
-		page.Limit = MaxPacketPageLimit
+	case limit <= 0:
+		return DefaultPacketPageLimit
+	case limit > MaxPacketPageLimit:
+		return MaxPacketPageLimit
 	}
 
-	if page.Offset < 0 {
-		page.Offset = 0
-	}
-
-	return page
+	return limit
 }
 
 // PacketFilter narrows a Packets listing. State is the API-level state, which
@@ -350,33 +359,41 @@ func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []Pack
 func (s *Service) Packets(
 	ctx context.Context,
 	filter PacketFilter,
-	page store.Page,
-) ([]PacketStatus, bool, error) {
+	query PacketQuery,
+) (PacketPage, error) {
 	storeFilter, err := s.toStoreFilter(filter)
 	if err != nil {
-		return nil, false, err
+		return PacketPage{}, err
 	}
+
+	before, err := decodeCursor(query.Cursor)
+	if err != nil {
+		return PacketPage{}, err
+	}
+
+	limit := normalizeLimit(query.Limit)
 
 	// One row past the page reveals another page without counting matches.
-	page = normalizePage(page)
-	page.Limit++
-
-	packets, err := s.store.ListPackets(ctx, storeFilter, page)
+	packets, err := s.store.ListPackets(ctx, storeFilter, store.Page{
+		Limit:  limit + 1,
+		Before: before,
+	})
 	if err != nil {
-		return nil, false, errors.Wrap(err, "listing packets")
+		return PacketPage{}, errors.Wrap(err, "listing packets")
 	}
 
-	hasMore := int64(len(packets)) == page.Limit
-	if hasMore {
-		packets = packets[:page.Limit-1]
+	page := PacketPage{HasMore: int64(len(packets)) > limit}
+	if page.HasMore {
+		packets = packets[:limit]
+		page.NextCursor = encodeCursor(packets[len(packets)-1].ID)
 	}
 
-	statuses := make([]PacketStatus, len(packets))
+	page.Packets = make([]PacketStatus, len(packets))
 	for i, packet := range packets {
-		statuses[i] = toPacketStatus(packet)
+		page.Packets[i] = toPacketStatus(packet)
 	}
 
-	return statuses, hasMore, nil
+	return page, nil
 }
 
 // toStoreFilter lowers an API filter, expanding the state and normalizing the

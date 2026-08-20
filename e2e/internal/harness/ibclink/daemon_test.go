@@ -67,7 +67,6 @@ func (f *fakeRelayerAPI) Packets(
 
 	return connect.NewResponse(&relayerv2.PacketsResponse{
 		Packets: packets,
-		Total:   uint64(len(packets)),
 	}), nil
 }
 

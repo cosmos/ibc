@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -296,10 +297,22 @@ type PacketFilter struct {
 	SequenceNumber      *uint64
 }
 
-// Page bounds a ListPackets result
+// Page bounds a ListPackets result. Before is an exclusive upper bound on
+// packet id; ordering is newest first, so paging walks it downwards.
 type Page struct {
 	Limit  int64
-	Offset int64
+	Before int64
+}
+
+// before returns the exclusive upper bound on packet id. The zero value means
+// unbounded, so a Page carrying no cursor starts at the newest packet. Passing
+// a sentinel rather than NULL keeps the clause a plain comparison the planner
+// can answer with an index seek.
+func (p Page) before() int64 {
+	if p.Before <= 0 {
+		return math.MaxInt64
+	}
+	return p.Before
 }
 
 // statusList renders statuses for the query

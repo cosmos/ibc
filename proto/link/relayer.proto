@@ -49,9 +49,9 @@ message PacketsRequest {
   PacketFilter filter = 1;
   // Zero applies the default of 100; values above 1000 are capped.
   uint32 limit = 2;
-  // Packets inserted between requests shift later pages; paging is not a
-  // consistent snapshot.
-  uint32 offset = 3;
+  // Opaque next_cursor from a previous response. Empty starts at the newest
+  // packet. Treat it as opaque; its encoding is not part of this contract.
+  string cursor = 3;
 }
 
 // Every field is optional; all present fields must match.
@@ -72,6 +72,8 @@ message PacketsResponse {
   // More packets match beyond this page. No count is reported: producing one
   // would visit every match on every request.
   bool has_more = 2;
+  // Cursor for the next page, set only when has_more.
+  string next_cursor = 3;
 }
 
 enum PacketState {

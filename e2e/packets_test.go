@@ -174,24 +174,40 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 		require.False(t, full.GetHasMore(), "an unpaged listing has nothing beyond it")
 
 		seen := map[string]int{}
+		cursor := ""
 
-		for offset := 0; offset < total; offset++ {
+		for page := 0; page < total; page++ {
 			res, err := client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
-				Limit: 1, Offset: uint32(offset), //nolint:gosec // bounded by total
+				Limit: 1, Cursor: cursor,
 			}))
 			require.NoError(t, err)
 			require.Len(t, res.Msg.GetPackets(), 1)
 
 			// has_more is true for every page but the last.
-			require.Equalf(t, offset < total-1, res.Msg.GetHasMore(),
-				"has_more at offset %d of %d", offset, total)
+			require.Equalf(t, page < total-1, res.Msg.GetHasMore(),
+				"has_more at page %d of %d", page, total)
+
+			if res.Msg.GetHasMore() {
+				require.NotEmpty(t, res.Msg.GetNextCursor(), "has_more must come with a cursor")
+			} else {
+				require.Empty(t, res.Msg.GetNextCursor(), "a final page must not offer a cursor")
+			}
 
 			seen[res.Msg.GetPackets()[0].GetSendTx().GetTxHash()]++
+			cursor = res.Msg.GetNextCursor()
 		}
 
 		for hash, count := range seen {
 			require.Equalf(t, 1, count, "packet %s appeared %d times across pages", hash, count)
 		}
+	})
+
+	t.Run("rejectsMalformedCursor", func(t *testing.T) {
+		_, err := client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
+			Cursor: "not-a-cursor!",
+		}))
+		require.Error(t, err)
+		require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 	})
 }
 

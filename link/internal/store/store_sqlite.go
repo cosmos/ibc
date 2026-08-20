@@ -464,8 +464,8 @@ func (db *SqliteDB) ListPackets(
 		DestinationClientID: filter.DestinationClientID,
 		SourceTxHash:        filter.SourceTxHash,
 		SequenceNumber:      filter.sequenceFilter(),
+		Before:              page.before(),
 		RowLimit:            page.Limit,
-		RowOffset:           page.Offset,
 	})
 	if err != nil {
 		return nil, errNormalize(err)

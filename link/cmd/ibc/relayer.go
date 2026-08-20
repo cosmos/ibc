@@ -62,7 +62,8 @@ var (
 	flagRelayerPacketsState        string
 	flagRelayerPacketsSequence     uint64
 	flagRelayerPacketsLimit        uint32
-	flagRelayerPacketsOffset       uint32
+	flagRelayerPacketsCursor       string
+	flagRelayerPacketsAll          bool
 )
 
 // packetStates maps the --state flag to its wire value.
@@ -188,11 +189,65 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 		filter.State = &state
 	}
 
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Packets, &relayerv2.PacketsRequest{
+	req := &relayerv2.PacketsRequest{
 		Filter: filter,
 		Limit:  flagRelayerPacketsLimit,
-		Offset: flagRelayerPacketsOffset,
-	})
+		Cursor: flagRelayerPacketsCursor,
+	}
+
+	if flagRelayerPacketsAll {
+		return relayerPacketsAll(cmd, req)
+	}
+
+	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Packets, req)
+}
+
+// relayerPacketsAll follows next_cursor to completion and prints the packets as
+// one response. Cursors make this safe to do page by page: each request resumes
+// from a fixed position rather than a row count that later inserts would shift.
+func relayerPacketsAll(cmd *cobra.Command, req *relayerv2.PacketsRequest) error {
+	client, err := relayerClient()
+	if err != nil {
+		return err
+	}
+
+	all := &relayerv2.PacketsResponse{}
+
+	for {
+		res, err := client.Packets(cmd.Context(), connect.NewRequest(req))
+		if err != nil {
+			return errors.Wrap(err, cmd.Name())
+		}
+
+		all.Packets = append(all.Packets, res.Msg.GetPackets()...)
+
+		if !res.Msg.GetHasMore() {
+			return config.PrintProtoJSON(all)
+		}
+
+		req.Cursor = res.Msg.GetNextCursor()
+	}
+}
+
+// relayerClient dials the relayer resolved from this config, or --host.
+func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
+	cfg, err := setupHomeWithConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	address := flagRelayerHost
+	if address == "" {
+		if cfg.Server.ListenAddress == "" {
+			return nil, errors.New("server.listenAddr is not configured; pass --host to target a server directly")
+		}
+
+		address = cfg.Server.ListenAddress
+	}
+
+	return relayerv2.NewRelayerApiServiceClient(
+		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
+	), nil
 }
 
 // relayerCall resolves this config's relayer address, sends req via call,
@@ -202,22 +257,10 @@ func relayerCall[Req, Resp any](
 	call func(relayerv2.RelayerApiServiceClient, context.Context, *connect.Request[Req]) (*connect.Response[Resp], error),
 	req *Req,
 ) error {
-	cfg, err := setupHomeWithConfig()
+	client, err := relayerClient()
 	if err != nil {
 		return err
 	}
-
-	address := flagRelayerHost
-	if address == "" {
-		if cfg.Server.ListenAddress == "" {
-			return errors.New("server.listenAddr is not configured; pass --host to target a server directly")
-		}
-		address = cfg.Server.ListenAddress
-	}
-
-	client := relayerv2.NewRelayerApiServiceClient(
-		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
-	)
 
 	res, err := call(client, cmd.Context(), connect.NewRequest(req))
 	if err != nil {

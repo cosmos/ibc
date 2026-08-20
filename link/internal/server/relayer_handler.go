@@ -12,7 +12,6 @@ import (
 
 	proto "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/service/relayer"
-	"github.com/cosmos/ibc/link/internal/store"
 )
 
 // RelayerHandler handles relayer RPC requests.
@@ -27,8 +26,8 @@ type RelayerService interface {
 	Packets(
 		ctx context.Context,
 		filter relayer.PacketFilter,
-		page store.Page,
-	) ([]relayer.PacketStatus, bool, error)
+		query relayer.PacketQuery,
+	) (relayer.PacketPage, error)
 }
 
 var (
@@ -94,11 +93,11 @@ func (h *RelayerHandler) Packets(
 ) (*connect.Response[proto.PacketsResponse], error) {
 	filter := packetFilterFromProto(req.Msg.GetFilter())
 
-	h.logger.Info("Packets", "limit", req.Msg.GetLimit(), "offset", req.Msg.GetOffset())
+	h.logger.Info("Packets", "limit", req.Msg.GetLimit(), "cursor", req.Msg.GetCursor())
 
-	statuses, hasMore, err := h.srv.Packets(ctx, filter, store.Page{
+	page, err := h.srv.Packets(ctx, filter, relayer.PacketQuery{
 		Limit:  int64(req.Msg.GetLimit()),
-		Offset: int64(req.Msg.GetOffset()),
+		Cursor: req.Msg.GetCursor(),
 	})
 
 	switch {
@@ -111,8 +110,9 @@ func (h *RelayerHandler) Packets(
 	}
 
 	return connect.NewResponse(&proto.PacketsResponse{
-		Packets: packetStatusesToProto(statuses),
-		HasMore: hasMore,
+		Packets:    packetStatusesToProto(page.Packets),
+		HasMore:    page.HasMore,
+		NextCursor: page.NextCursor,
 	}), nil
 }
 
