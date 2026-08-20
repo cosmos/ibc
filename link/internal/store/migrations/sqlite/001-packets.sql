@@ -32,5 +32,9 @@ create table if not exists packets (
 create unique index if not exists index_packet
     on packets (source_chain_id, packet_sequence_number, packet_source_client_id);
 
+-- Serves the per-transaction packet read.
+create index if not exists index_packets_source_tx
+    on packets (source_chain_id, source_tx_hash);
+
 -- +migrate Down
 drop table if exists packets;
