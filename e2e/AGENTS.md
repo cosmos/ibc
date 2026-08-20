@@ -7,8 +7,8 @@ This module contains one root repository-level acceptance package: linear Go tes
 Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP) with attestation light clients and
 managed attestors.
 
-- Run from the repository root: `make test-e2e` uses fast mode;
-  `make test-e2e E2E_MODE=complete|production` selects another mode, and
+- Run from the repository root: `make -C e2e test` uses fast mode;
+  `make -C e2e test E2E_MODE=complete|production` selects another mode, and
   `E2E_FLAGS='-run TestTransfer_AutoRelay -count=1'` focuses a run. `-e2e.mode` in `E2E_FLAGS`
   overrides `E2E_MODE`.
 - Tests declare portable EVM, controlled-mining, or node-lifecycle requirements. Fast mode may
@@ -25,6 +25,6 @@ managed attestors.
   paused and resumed it is interval-only, so transaction inclusion may take one second.
 - `Environment` cleans up managed resources only. Attached chains remain caller-owned and expose no
   harness mining or node-lifecycle controls.
-- Run `make generate-e2e-matrix` after changing requirements or topology, and
-  `make check-e2e-matrix` to check the committed matrix. Both require Docker.
-- After a hard crash: `make clean-e2e-dry-run`, then `make clean-e2e` from the repository root.
+- Run `make -C e2e generate-matrix` after changing requirements or topology, and
+  `make -C e2e check-matrix` to check the committed matrix. Both require Docker.
+- After a hard crash: `make -C e2e clean-dry-run`, then `make -C e2e clean` from the repository root.

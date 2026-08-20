@@ -15,12 +15,11 @@ The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP)
 Run targets from the repository root:
 
 ```sh
-make doctor-e2e
-make build-link
-make test-e2e
+make -C e2e doctor
+make -C e2e test
 ```
 
-`make build-link` produces `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
+The test target builds `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
 
 Execution modes choose providers from each test's declared requirements:
 
@@ -36,15 +35,15 @@ provide those harness controls. `complete` runs each test once with the fastest 
 it does not run every provider permutation.
 
 ```sh
-make test-e2e
-make test-e2e E2E_MODE=complete
-make test-e2e E2E_MODE=production
-make test-e2e E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'
-make test-e2e E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1'
+make -C e2e test
+make -C e2e test E2E_MODE=complete
+make -C e2e test E2E_MODE=production
+make -C e2e test E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'
+make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1'
 ```
 
 `-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. After a hard crash, use
-`make clean-e2e-dry-run` and then `make clean-e2e`.
+`make -C e2e clean-dry-run` and then `make -C e2e clean`.
 
 Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
 
@@ -113,8 +112,8 @@ specs for all three modes. Generation starts the caller-owned Anvil used by the 
 so Docker is required.
 
 ```sh
-make generate-e2e-matrix
-make check-e2e-matrix
+make -C e2e generate-matrix
+make -C e2e check-matrix
 ```
 
 Regenerate the matrix after changing test requirements or topology. The check compares generated

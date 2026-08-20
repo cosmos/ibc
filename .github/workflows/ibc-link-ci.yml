@@ -39,7 +39,6 @@ jobs:
             link:
               - 'link/**'
               - 'gen/go/solidity-abi/**'
-              - 'go.work'
               - '.golangci.yml'
               - '.github/workflows/ibc-link-ci.yml'
             sql:
