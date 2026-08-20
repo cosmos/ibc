@@ -124,6 +124,31 @@ type PacketSelector struct {
 	SequenceNumber uint64
 }
 
+// PacketSelection is what a relay request decided about one packet.
+type PacketSelection int
+
+// Packet selections
+const (
+	SelectionStateUnspecified PacketSelection = iota
+	SelectionStateSelected
+	SelectionStateNotSelected
+	SelectionStateUnconfigured
+)
+
+// RelayedPacket reports one packet's disposition. Unconfigured packets are
+// included so a caller can tell a relay that selected nothing from one that
+// selected everything.
+type RelayedPacket struct {
+	Selector  PacketSelector
+	Selection PacketSelection
+}
+
+// RelayResult reports what a relay request did with each packet in the
+// transaction.
+type RelayResult struct {
+	Packets []RelayedPacket
+}
+
 // SelectionMode controls which packets a relay request selects for relay.
 type SelectionMode int
 
@@ -173,41 +198,43 @@ func (s *Service) Stop() error {
 	return s.dispatcher.Stop()
 }
 
-func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
+func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult, error) {
 	switch {
 	case request.Selection == SelectionUnspecified:
-		return errors.Wrap(ErrInvalidInput, "packet selection is required")
+		return RelayResult{}, errors.Wrap(ErrInvalidInput, "packet selection is required")
 	case request.Selection == SelectionAll && len(request.Packets) > 0:
-		return errors.Wrap(ErrInvalidInput, "packet selectors require explicit selection")
+		return RelayResult{}, errors.Wrap(ErrInvalidInput, "packet selectors require explicit selection")
 	case request.Selection == SelectionExplicit && len(request.Packets) == 0:
-		return errors.Wrap(ErrInvalidInput, "selected packet list is empty")
+		return RelayResult{}, errors.Wrap(ErrInvalidInput, "selected packet list is empty")
 	case request.Selection != SelectionAll && request.Selection != SelectionExplicit:
-		return errors.Wrap(ErrInvalidInput, "invalid packet selection")
+		return RelayResult{}, errors.Wrap(ErrInvalidInput, "invalid packet selection")
 	}
 
 	txHash, err := s.validateRelayArgs(request.ChainID, request.TxHash)
 	if err != nil {
-		return err
+		return RelayResult{}, err
 	}
 	chainID := request.ChainID
 
 	client, ok := s.chains.Get(chainID)
 	if !ok {
-		return errors.Wrapf(ErrNotFound, "client for chain %q", chainID)
+		return RelayResult{}, errors.Wrapf(ErrNotFound, "client for chain %q", chainID)
 	}
 
 	hashBytes, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
 	if err != nil {
-		return errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
+		return RelayResult{}, errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
 	}
 
 	events, err := client.TxPacketEvents(ctx, hashBytes)
 	if err != nil {
 		if errors.Is(err, ethereum.NotFound) {
-			return errors.Wrapf(ErrNotFound, "no packets found: transaction %s on chain %s", txHash, chainID)
+			return RelayResult{}, errors.Wrapf(
+				ErrNotFound, "no packets found: transaction %s on chain %s", txHash, chainID,
+			)
 		}
 
-		return errors.Wrap(err, "extracting packet events")
+		return RelayResult{}, errors.Wrap(err, "extracting packet events")
 	}
 
 	observedPackets, relayablePackets := s.packetsFromEvents(chainID, txHash, events)
@@ -217,7 +244,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
 		selected = request.Packets
 		for _, selector := range selected {
 			if _, ok := observedPackets[selector]; !ok {
-				return errors.Wrapf(
+				return RelayResult{}, errors.Wrapf(
 					ErrInvalidInput,
 					"packet %s/%d is absent from transaction",
 					selector.SourceClientID,
@@ -225,7 +252,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
 				)
 			}
 			if _, ok := relayablePackets[selector]; !ok {
-				return errors.Wrapf(
+				return RelayResult{}, errors.Wrapf(
 					ErrFailedPrecondition,
 					"packet %s/%d is not configured for relaying",
 					selector.SourceClientID,
@@ -256,7 +283,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
 		return nil
 	})
 	if err != nil {
-		return errors.Wrap(err, "recording relay request")
+		return RelayResult{}, errors.Wrap(err, "recording relay request")
 	}
 
 	s.logger.Info(
@@ -267,7 +294,39 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) error {
 		"selected", len(selected),
 	)
 
-	return nil
+	return relayResult(observedPackets, relayablePackets, selected), nil
+}
+
+// relayResult reports every observed packet so a caller can distinguish a
+// request that selected nothing from one that selected everything. A packet
+// this relayer has no client or route for is reported as unconfigured rather
+// than omitted, which is otherwise only visible in the logs.
+func relayResult(
+	observed map[PacketSelector]struct{},
+	relayable map[PacketSelector]store.UpsertPacket,
+	selected []PacketSelector,
+) RelayResult {
+	selectedSet := make(map[PacketSelector]struct{}, len(selected))
+	for _, selector := range selected {
+		selectedSet[selector] = struct{}{}
+	}
+
+	packets := make([]RelayedPacket, 0, len(observed))
+
+	for _, selector := range sortedPacketSelectors(observed) {
+		selection := SelectionStateUnconfigured
+
+		if _, ok := relayable[selector]; ok {
+			selection = SelectionStateNotSelected
+			if _, ok := selectedSet[selector]; ok {
+				selection = SelectionStateSelected
+			}
+		}
+
+		packets = append(packets, RelayedPacket{Selector: selector, Selection: selection})
+	}
+
+	return RelayResult{Packets: packets}
 }
 
 // packetsFromEvents extracts the transaction's send packets. observed holds
@@ -333,7 +392,7 @@ func (s *Service) packetsFromEvents(
 
 // sortedPacketSelectors fixes the upsert order so concurrent relay requests
 // for the same transaction cannot deadlock on row locks.
-func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []PacketSelector {
+func sortedPacketSelectors[V any](packets map[PacketSelector]V) []PacketSelector {
 	return slices.SortedFunc(maps.Keys(packets), func(a, b PacketSelector) int {
 		return cmp.Or(cmp.Compare(a.SourceClientID, b.SourceClientID), cmp.Compare(a.SequenceNumber, b.SequenceNumber))
 	})
