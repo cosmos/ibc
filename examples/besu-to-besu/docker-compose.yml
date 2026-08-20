@@ -6,14 +6,20 @@
 # known BIP-39 test vectors. Local devnet use only — never on a public, shared,
 # or production network.
 #
-# Each /evm mount points at chains/local/<chain>/, which ./setup.sh init
-# renders from chains/*.tmpl — besu.toml, el-genesis.json, and the validator
-# key derived from the demo mnemonic. Nothing under chains/local/ is committed,
-# so `docker compose up` without a prior init has no config to mount.
+#
+#     kms  ◀── Sign ──┬── attestor-a ──┐
+#                     ├── attestor-b ──┤ StateAttestation / PacketAttestation
+#                     └── ibc-link ◀───┘
+x-link-service: &link-service
+  image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
+  env_file:
+    - path: ./chains/local/link.env
+      required: false
+  networks: [ besu-besu-net ]
+  restart: on-failure
 
 services:
 
-  # ── Chains ────────────────────────────────────────────────────────────────
   besu-a:
     image: ${BESU_IMAGE:-hyperledger/besu:25.4.0}
     container_name: besu-a
@@ -23,11 +29,6 @@ services:
       - "--metrics-host=0.0.0.0"
       - "--metrics-port=9545"
       - "--Xqbft-enable-early-round-change"
-    # Published on the loopback interface only. Without the explicit 127.0.0.1
-    # these bind to 0.0.0.0 and expose an unauthenticated JSON-RPC endpoint —
-    # holding keys that can sign as the chain's sole validator — to the whole
-    # LAN. Container-to-container traffic goes over besu-besu-net and does not
-    # depend on these mappings.
     ports:
       - "127.0.0.1:8545:8545"
       - "127.0.0.1:8546:8546"
@@ -53,7 +54,7 @@ services:
       - "--metrics-host=0.0.0.0"
       - "--metrics-port=9545"
       - "--Xqbft-enable-early-round-change"
-    ports:                       # loopback only — see besu-a
+    ports:
       - "127.0.0.1:8745:8545"
       - "127.0.0.1:8746:8546"
       - "127.0.0.1:9745:9545"
@@ -69,10 +70,102 @@ services:
       retries: 60
       start_period: 10s
 
+  kms:
+    image: ${KMS_IMAGE:-ghcr.io/cosmos/kms:latest}
+    container_name: kms
+    volumes:
+      - ./link/kms.yaml:/home/kms/kms.yaml:ro
+      - ./chains/local/kms/keys:/home/kms/keys:ro
+    networks: [ besu-besu-net ]
+    restart: on-failure
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9090" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  attestor-a:
+    <<: *link-service
+    container_name: attestor-a
+    command: [ "attestor", "run", "--home", "/home/ibc" ]
+    volumes:
+      - ./link/attestor-a.yml:/home/ibc/ibc.yml:ro
+    ports:
+      - "127.0.0.1:3010:3000"
+    depends_on:
+      besu-a:
+        condition: service_healthy
+      kms:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "/opt/ibc", "attestor", "info", "attestor-a", "--home", "/home/ibc" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  attestor-b:
+    <<: *link-service
+    container_name: attestor-b
+    command: [ "attestor", "run", "--home", "/home/ibc" ]
+    volumes:
+      - ./link/attestor-b.yml:/home/ibc/ibc.yml:ro
+    ports:
+      - "127.0.0.1:3011:3000" 
+    depends_on:
+      besu-b:
+        condition: service_healthy
+      kms:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "/opt/ibc", "attestor", "info", "attestor-b", "--home", "/home/ibc" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  deployer:
+    image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
+    profiles: [ tools ]
+    user: "${DEPLOY_UID:-65532}:${DEPLOY_GID:-65532}"
+    volumes:
+      - ./link/deploy.yml:/home/ibc/ibc.yml:ro
+      - ./chains/local/deploy/keys:/home/ibc/keys
+      - ./chains/local/deploy/deployments:/home/ibc/deployments
+    networks: [ besu-besu-net ]
+    depends_on:
+      besu-a:
+        condition: service_healthy
+      besu-b:
+        condition: service_healthy
+
+  ibc-link:
+    <<: *link-service
+    container_name: ibc-link
+    command: [ "relayer", "run", "--home", "/home/ibc" ]
+    volumes:
+      - ibc-link-home:/home/ibc
+      - ./link/ibc.yml:/home/ibc/ibc.yml:ro
+    ports:
+      - "127.0.0.1:3000:3000"   # loopback only — see besu-a
+    depends_on:
+      attestor-a:
+        condition: service_healthy
+      attestor-b:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "127.0.0.1", "3000" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
 
 volumes:
   besu-a-data:
   besu-b-data:
+  ibc-link-home:
 
 networks:
   besu-besu-net:
