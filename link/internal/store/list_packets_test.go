@@ -52,7 +52,6 @@ func testListPackets(t *testing.T, s Store) {
 		insert := packet
 		insert.Status = RelayStatusPending
 
-		require.NoError(t, s.CreateRelayRequest(ctx, insert.SourceChainID, insert.SourceTxHash))
 		require.NoError(t, s.UpsertPacket(ctx, insert))
 		require.NoError(t, s.UpdatePacketStatus(ctx, PacketKey{
 			SourceChainID:  insert.SourceChainID,
@@ -199,7 +198,6 @@ func testListPackets(t *testing.T, s Store) {
 				PacketSourceClientID: "src-a", PacketDestinationClientID: "dst-a",
 				PacketTimeoutTimestamp: base.Add(time.Hour),
 			}
-			require.NoError(t, s.CreateRelayRequest(ctx, arrival.SourceChainID, arrival.SourceTxHash))
 			require.NoError(t, s.UpsertPacket(ctx, arrival))
 
 			rest, err := s.ListPackets(ctx, filter, Page{Limit: 100, Before: first[0].ID})

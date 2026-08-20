@@ -3,11 +3,12 @@
 //   sqlc v1.30.0
 // source: relayer.sql
 
-package sqlite
+package postgres
 
 import (
 	"context"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearPacketAckTx = `-- name: ClearPacketAckTx :exec
@@ -16,9 +17,9 @@ UPDATE packets SET
     ack_tx_time = NULL,
     ack_tx_relayer_address = NULL,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?1
-AND packet_source_client_id = ?2
-AND packet_sequence_number = ?3
+WHERE source_chain_id = $1
+AND packet_source_client_id = $2
+AND packet_sequence_number = $3
 `
 
 type ClearPacketAckTxParams struct {
@@ -28,7 +29,7 @@ type ClearPacketAckTxParams struct {
 }
 
 func (q *Queries) ClearPacketAckTx(ctx context.Context, arg ClearPacketAckTxParams) error {
-	_, err := q.db.ExecContext(ctx, clearPacketAckTx, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
+	_, err := q.db.Exec(ctx, clearPacketAckTx, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
 	return err
 }
 
@@ -38,9 +39,9 @@ UPDATE packets SET
     recv_tx_time = NULL,
     recv_tx_relayer_address = NULL,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?1
-AND packet_source_client_id = ?2
-AND packet_sequence_number = ?3
+WHERE source_chain_id = $1
+AND packet_source_client_id = $2
+AND packet_sequence_number = $3
 `
 
 type ClearPacketRecvTxParams struct {
@@ -50,7 +51,7 @@ type ClearPacketRecvTxParams struct {
 }
 
 func (q *Queries) ClearPacketRecvTx(ctx context.Context, arg ClearPacketRecvTxParams) error {
-	_, err := q.db.ExecContext(ctx, clearPacketRecvTx, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
+	_, err := q.db.Exec(ctx, clearPacketRecvTx, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
 	return err
 }
 
@@ -60,9 +61,9 @@ UPDATE packets SET
     timeout_tx_time = NULL,
     timeout_tx_relayer_address = NULL,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?1
-AND packet_source_client_id = ?2
-AND packet_sequence_number = ?3
+WHERE source_chain_id = $1
+AND packet_source_client_id = $2
+AND packet_sequence_number = $3
 `
 
 type ClearPacketTimeoutTxParams struct {
@@ -72,8 +73,41 @@ type ClearPacketTimeoutTxParams struct {
 }
 
 func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeoutTxParams) error {
-	_, err := q.db.ExecContext(ctx, clearPacketTimeoutTx, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
+	_, err := q.db.Exec(ctx, clearPacketTimeoutTx, arg.SourceChainID, arg.PacketSourceClientID, arg.PacketSequenceNumber)
 	return err
+}
+
+const createRelayRequest = `-- name: CreateRelayRequest :exec
+INSERT INTO relay_requests (source_chain_id, source_tx_hash)
+VALUES ($1, $2)
+ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
+`
+
+func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+	_, err := q.db.Exec(ctx, createRelayRequest, chainID, txHash)
+	return err
+}
+
+const getRelayRequest = `-- name: GetRelayRequest :one
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+SELECT id, source_chain_id, source_tx_hash, created_at FROM relay_requests
+WHERE source_chain_id = $1
+AND source_tx_hash = $2
+`
+
+func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash string) (RelayRequest, error) {
+	row := q.db.QueryRow(ctx, getRelayRequest, chainID, txHash)
+	var i RelayRequest
+	err := row.Scan(
+		&i.ID,
+		&i.SourceChainID,
+		&i.SourceTxHash,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const listDispatchablePackets = `-- name: ListDispatchablePackets :many
@@ -89,7 +123,7 @@ ORDER BY id
 `
 
 func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
-	rows, err := q.db.QueryContext(ctx, listDispatchablePackets)
+	rows, err := q.db.Query(ctx, listDispatchablePackets)
 	if err != nil {
 		return nil, err
 	}
@@ -127,9 +161,6 @@ func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -138,16 +169,16 @@ func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 
 const listPackets = `-- name: ListPackets :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
-WHERE ',' || ?1 || ',' LIKE '%,' || status || ',%'
-AND source_chain_id = COALESCE(?2, source_chain_id)
-AND destination_chain_id = COALESCE(?3, destination_chain_id)
-AND packet_source_client_id = COALESCE(?4, packet_source_client_id)
-AND packet_destination_client_id = COALESCE(?5, packet_destination_client_id)
-AND source_tx_hash = COALESCE(?6, source_tx_hash)
-AND packet_sequence_number = COALESCE(?7, packet_sequence_number)
-AND id < ?8
+WHERE ',' || $1 || ',' LIKE '%,' || status || ',%'
+AND source_chain_id = COALESCE($2, source_chain_id)
+AND destination_chain_id = COALESCE($3, destination_chain_id)
+AND packet_source_client_id = COALESCE($4, packet_source_client_id)
+AND packet_destination_client_id = COALESCE($5, packet_destination_client_id)
+AND source_tx_hash = COALESCE($6, source_tx_hash)
+AND packet_sequence_number = COALESCE($7, packet_sequence_number)
+AND id < $8
 ORDER BY id DESC
-LIMIT ?9
+LIMIT $9
 `
 
 type ListPacketsParams struct {
@@ -159,11 +190,11 @@ type ListPacketsParams struct {
 	SourceTxHash        *string
 	SequenceNumber      *int64
 	Before              int64
-	RowLimit            int64
+	RowLimit            int32
 }
 
 func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Packet, error) {
-	rows, err := q.db.QueryContext(ctx, listPackets,
+	rows, err := q.db.Query(ctx, listPackets,
 		arg.Statuses,
 		arg.SourceChainID,
 		arg.DestinationChainID,
@@ -211,9 +242,6 @@ func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Pac
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -222,13 +250,13 @@ func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Pac
 
 const listPacketsBySourceTx = `-- name: ListPacketsBySourceTx :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
-WHERE source_chain_id = ?1
-AND source_tx_hash = ?2
+WHERE source_chain_id = $1
+AND source_tx_hash = $2
 ORDER BY packet_sequence_number
 `
 
 func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error) {
-	rows, err := q.db.QueryContext(ctx, listPacketsBySourceTx, chainID, txHash)
+	rows, err := q.db.Query(ctx, listPacketsBySourceTx, chainID, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -266,9 +294,6 @@ func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txH
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -277,18 +302,18 @@ func (q *Queries) ListPacketsBySourceTx(ctx context.Context, chainID string, txH
 
 const updatePacketAckTx = `-- name: UpdatePacketAckTx :exec
 UPDATE packets SET
-    ack_tx_hash = ?1,
-    ack_tx_time = ?2,
-    ack_tx_relayer_address = ?3,
+    ack_tx_hash = $1,
+    ack_tx_time = $2,
+    ack_tx_relayer_address = $3,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?4
-AND packet_source_client_id = ?5
-AND packet_sequence_number = ?6
+WHERE source_chain_id = $4
+AND packet_source_client_id = $5
+AND packet_sequence_number = $6
 `
 
 type UpdatePacketAckTxParams struct {
 	AckTxHash            *string
-	AckTxTime            *time.Time
+	AckTxTime            pgtype.Timestamptz
 	AckTxRelayerAddress  *string
 	SourceChainID        string
 	PacketSourceClientID string
@@ -296,7 +321,7 @@ type UpdatePacketAckTxParams struct {
 }
 
 func (q *Queries) UpdatePacketAckTx(ctx context.Context, arg UpdatePacketAckTxParams) error {
-	_, err := q.db.ExecContext(ctx, updatePacketAckTx,
+	_, err := q.db.Exec(ctx, updatePacketAckTx,
 		arg.AckTxHash,
 		arg.AckTxTime,
 		arg.AckTxRelayerAddress,
@@ -309,18 +334,18 @@ func (q *Queries) UpdatePacketAckTx(ctx context.Context, arg UpdatePacketAckTxPa
 
 const updatePacketRecvTx = `-- name: UpdatePacketRecvTx :exec
 UPDATE packets SET
-    recv_tx_hash = ?1,
-    recv_tx_time = ?2,
-    recv_tx_relayer_address = ?3,
+    recv_tx_hash = $1,
+    recv_tx_time = $2,
+    recv_tx_relayer_address = $3,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?4
-AND packet_source_client_id = ?5
-AND packet_sequence_number = ?6
+WHERE source_chain_id = $4
+AND packet_source_client_id = $5
+AND packet_sequence_number = $6
 `
 
 type UpdatePacketRecvTxParams struct {
 	RecvTxHash           *string
-	RecvTxTime           *time.Time
+	RecvTxTime           pgtype.Timestamptz
 	RecvTxRelayerAddress *string
 	SourceChainID        string
 	PacketSourceClientID string
@@ -328,7 +353,7 @@ type UpdatePacketRecvTxParams struct {
 }
 
 func (q *Queries) UpdatePacketRecvTx(ctx context.Context, arg UpdatePacketRecvTxParams) error {
-	_, err := q.db.ExecContext(ctx, updatePacketRecvTx,
+	_, err := q.db.Exec(ctx, updatePacketRecvTx,
 		arg.RecvTxHash,
 		arg.RecvTxTime,
 		arg.RecvTxRelayerAddress,
@@ -341,11 +366,11 @@ func (q *Queries) UpdatePacketRecvTx(ctx context.Context, arg UpdatePacketRecvTx
 
 const updatePacketStatus = `-- name: UpdatePacketStatus :exec
 UPDATE packets SET
-    status = ?1,
+    status = $1,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?2
-AND packet_source_client_id = ?3
-AND packet_sequence_number = ?4
+WHERE source_chain_id = $2
+AND packet_source_client_id = $3
+AND packet_sequence_number = $4
 `
 
 type UpdatePacketStatusParams struct {
@@ -356,7 +381,7 @@ type UpdatePacketStatusParams struct {
 }
 
 func (q *Queries) UpdatePacketStatus(ctx context.Context, arg UpdatePacketStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updatePacketStatus,
+	_, err := q.db.Exec(ctx, updatePacketStatus,
 		arg.Status,
 		arg.SourceChainID,
 		arg.PacketSourceClientID,
@@ -367,18 +392,18 @@ func (q *Queries) UpdatePacketStatus(ctx context.Context, arg UpdatePacketStatus
 
 const updatePacketTimeoutTx = `-- name: UpdatePacketTimeoutTx :exec
 UPDATE packets SET
-    timeout_tx_hash = ?1,
-    timeout_tx_time = ?2,
-    timeout_tx_relayer_address = ?3,
+    timeout_tx_hash = $1,
+    timeout_tx_time = $2,
+    timeout_tx_relayer_address = $3,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?4
-AND packet_source_client_id = ?5
-AND packet_sequence_number = ?6
+WHERE source_chain_id = $4
+AND packet_source_client_id = $5
+AND packet_sequence_number = $6
 `
 
 type UpdatePacketTimeoutTxParams struct {
 	TimeoutTxHash           *string
-	TimeoutTxTime           *time.Time
+	TimeoutTxTime           pgtype.Timestamptz
 	TimeoutTxRelayerAddress *string
 	SourceChainID           string
 	PacketSourceClientID    string
@@ -386,7 +411,7 @@ type UpdatePacketTimeoutTxParams struct {
 }
 
 func (q *Queries) UpdatePacketTimeoutTx(ctx context.Context, arg UpdatePacketTimeoutTxParams) error {
-	_, err := q.db.ExecContext(ctx, updatePacketTimeoutTx,
+	_, err := q.db.Exec(ctx, updatePacketTimeoutTx,
 		arg.TimeoutTxHash,
 		arg.TimeoutTxTime,
 		arg.TimeoutTxRelayerAddress,
@@ -399,18 +424,18 @@ func (q *Queries) UpdatePacketTimeoutTx(ctx context.Context, arg UpdatePacketTim
 
 const updatePacketWriteAck = `-- name: UpdatePacketWriteAck :exec
 UPDATE packets SET
-    write_ack_tx_hash = ?1,
-    write_ack_tx_time = ?2,
-    write_ack_status = ?3,
+    write_ack_tx_hash = $1,
+    write_ack_tx_time = $2,
+    write_ack_status = $3,
     updated_at = CURRENT_TIMESTAMP
-WHERE source_chain_id = ?4
-AND packet_source_client_id = ?5
-AND packet_sequence_number = ?6
+WHERE source_chain_id = $4
+AND packet_source_client_id = $5
+AND packet_sequence_number = $6
 `
 
 type UpdatePacketWriteAckParams struct {
 	WriteAckTxHash       *string
-	WriteAckTxTime       *time.Time
+	WriteAckTxTime       pgtype.Timestamptz
 	WriteAckStatus       *string
 	SourceChainID        string
 	PacketSourceClientID string
@@ -418,7 +443,7 @@ type UpdatePacketWriteAckParams struct {
 }
 
 func (q *Queries) UpdatePacketWriteAck(ctx context.Context, arg UpdatePacketWriteAckParams) error {
-	_, err := q.db.ExecContext(ctx, updatePacketWriteAck,
+	_, err := q.db.Exec(ctx, updatePacketWriteAck,
 		arg.WriteAckTxHash,
 		arg.WriteAckTxTime,
 		arg.WriteAckStatus,
@@ -430,10 +455,6 @@ func (q *Queries) UpdatePacketWriteAck(ctx context.Context, arg UpdatePacketWrit
 }
 
 const upsertPacket = `-- name: UpsertPacket :exec
-/*
- * SPDX-License-Identifier: Apache-2.0
- */
-
 INSERT INTO packets (
     status,
     source_chain_id,
@@ -445,15 +466,15 @@ INSERT INTO packets (
     packet_destination_client_id,
     packet_timeout_timestamp
 ) VALUES (
-    ?1,
-    ?2,
-    ?3,
-    ?4,
-    ?5,
-    ?6,
-    ?7,
-    ?8,
-    ?9
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9
 )
 ON CONFLICT (source_chain_id, packet_sequence_number, packet_source_client_id) DO UPDATE SET
     status = EXCLUDED.status,
@@ -472,15 +493,15 @@ type UpsertPacketParams struct {
 	SourceChainID             string
 	DestinationChainID        string
 	SourceTxHash              string
-	SourceTxTime              time.Time
+	SourceTxTime              pgtype.Timestamptz
 	PacketSequenceNumber      int64
 	PacketSourceClientID      string
 	PacketDestinationClientID string
-	PacketTimeoutTimestamp    time.Time
+	PacketTimeoutTimestamp    pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertPacket(ctx context.Context, arg UpsertPacketParams) error {
-	_, err := q.db.ExecContext(ctx, upsertPacket,
+	_, err := q.db.Exec(ctx, upsertPacket,
 		arg.Status,
 		arg.SourceChainID,
 		arg.DestinationChainID,

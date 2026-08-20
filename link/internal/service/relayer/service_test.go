@@ -133,7 +133,6 @@ func TestRelay(t *testing.T) {
 				return fn(repo)
 			}).
 			Once()
-		repo.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
 		repo.EXPECT().UpsertPacket(ctx, store.UpsertPacket{
 			Status:                    store.RelayStatusPending,
 			SourceChainID:             chainIDEth,
@@ -160,13 +159,30 @@ func TestRelay(t *testing.T) {
 		// we do not expect UpsertPacket to be called for "unknown-0"
 
 		// ACT
-		err := service.Relay(ctx, relaySelected(chainIDEth, txHashUpper, PacketSelector{
+		packets, err := service.Relay(ctx, relaySelected(chainIDEth, txHashUpper, PacketSelector{
 			SourceClientID: "base-0",
 			SequenceNumber: 42,
 		}))
 
 		// ASSERT
 		require.NoError(t, err)
+
+		// Every observed packet is reported, including the unconfigured one that
+		// is otherwise only visible in the logs.
+		require.Equal(t, []ObservedPacket{
+			{
+				Selector:  PacketSelector{SourceClientID: "base-0", SequenceNumber: 42},
+				Selection: SelectionStateSelected,
+			},
+			{
+				Selector:  PacketSelector{SourceClientID: "base-0", SequenceNumber: 43},
+				Selection: SelectionStateNotSelected,
+			},
+			{
+				Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 7},
+				Selection: SelectionStateUnconfigured,
+			},
+		}, packets)
 	})
 
 	t.Run("allWithNoRelayablePackets", func(t *testing.T) {
@@ -190,7 +206,15 @@ func TestRelay(t *testing.T) {
 			},
 		}}, nil).Once()
 
-		require.NoError(t, service.Relay(ctx, relayAll(chainIDEth, txHashLower)))
+		packets, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		require.NoError(t, err)
+
+		// The request succeeds having relayed nothing, so the response has to
+		// say so; otherwise the caller cannot tell this from a full relay.
+		require.Equal(t, []ObservedPacket{{
+			Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 42},
+			Selection: SelectionStateUnconfigured,
+		}}, packets)
 
 		page, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: chainIDEthVar,
@@ -252,7 +276,7 @@ func TestRelay(t *testing.T) {
 				if status == store.RelayStatusPending {
 					selectors = append(selectors, selector)
 				}
-				require.NoError(t, service.Relay(ctx, relaySelected(chainIDEth, txHashLower, selectors...)))
+				require.NoError(t, relayErr(service.Relay(ctx, relaySelected(chainIDEth, txHashLower, selectors...))))
 				packets, err := st.ListPacketsBySourceTx(ctx, chainIDEth, txHashLower)
 				require.NoError(t, err)
 				require.Len(t, packets, 1)
@@ -273,7 +297,7 @@ func TestRelay(t *testing.T) {
 			},
 		}
 		for _, request := range requests {
-			require.ErrorIs(t, service.Relay(context.Background(), request), ErrInvalidInput)
+			require.ErrorIs(t, relayErr(service.Relay(context.Background(), request)), ErrInvalidInput)
 		}
 	})
 
@@ -310,7 +334,7 @@ func TestRelay(t *testing.T) {
 				clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 				client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
-				err := service.Relay(ctx, relaySelected(chainIDEth, txHashLower, tt.selector))
+				_, err := service.Relay(ctx, relaySelected(chainIDEth, txHashLower, tt.selector))
 				require.ErrorIs(t, err, tt.want)
 			})
 		}
@@ -334,7 +358,7 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
 
 		// ACT
-		err := service.Relay(context.Background(), relayAll("999", txHashLower))
+		_, err := service.Relay(context.Background(), relayAll("999", txHashLower))
 
 		// ASSERT
 		require.ErrorIs(t, err, ErrInvalidInput)
@@ -351,7 +375,7 @@ func TestRelay(t *testing.T) {
 		clients.EXPECT().Get(chainIDEth).Return(nil, false).Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		// a missing client is a server-side inconsistency, not a caller error
@@ -371,7 +395,7 @@ func TestRelay(t *testing.T) {
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, ethereum.NotFound).Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		require.ErrorIs(t, err, ErrNotFound)
@@ -390,7 +414,7 @@ func TestRelay(t *testing.T) {
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		require.ErrorContains(t, err, "extracting packet events")
@@ -414,7 +438,7 @@ func TestRelay(t *testing.T) {
 				service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
 
 				// ACT
-				err := service.Relay(context.Background(), relayAll(tt.chainID, tt.txHash))
+				_, err := service.Relay(context.Background(), relayAll(tt.chainID, tt.txHash))
 
 				// ASSERT
 				require.ErrorIs(t, err, ErrInvalidInput)
@@ -438,7 +462,7 @@ func TestRelay(t *testing.T) {
 			Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		require.ErrorContains(t, err, "recording relay request")
@@ -556,4 +580,10 @@ func TestMapPacketState(t *testing.T) {
 	assert.Equal(t, StateTimedOut, mapPacketState(store.RelayStatusCompleteWithTimeout))
 	assert.Equal(t, StateRejected, mapPacketState(store.RelayStatusCompleteWithWriteAckError))
 	assert.Equal(t, StateRelayFailed, mapPacketState(store.RelayStatusFailed))
+}
+
+// relayErr discards the relay result so tests that only assert the error stay
+// one line.
+func relayErr(_ []ObservedPacket, err error) error {
+	return err
 }

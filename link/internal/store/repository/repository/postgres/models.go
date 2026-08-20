@@ -2,36 +2,36 @@
 // versions:
 //   sqlc v1.30.0
 
-package sqlite
+package postgres
 
 import (
-	"time"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Packet struct {
 	ID                        int64
-	CreatedAt                 time.Time
-	UpdatedAt                 time.Time
+	CreatedAt                 pgtype.Timestamptz
+	UpdatedAt                 pgtype.Timestamptz
 	Status                    string
 	SourceChainID             string
 	DestinationChainID        string
 	SourceTxHash              string
-	SourceTxTime              time.Time
+	SourceTxTime              pgtype.Timestamptz
 	PacketSequenceNumber      int64
 	PacketSourceClientID      string
 	PacketDestinationClientID string
-	PacketTimeoutTimestamp    time.Time
+	PacketTimeoutTimestamp    pgtype.Timestamptz
 	RecvTxHash                *string
-	RecvTxTime                *time.Time
+	RecvTxTime                pgtype.Timestamptz
 	RecvTxRelayerAddress      *string
 	WriteAckTxHash            *string
-	WriteAckTxTime            *time.Time
+	WriteAckTxTime            pgtype.Timestamptz
 	WriteAckStatus            *string
 	AckTxHash                 *string
-	AckTxTime                 *time.Time
+	AckTxTime                 pgtype.Timestamptz
 	AckTxRelayerAddress       *string
 	TimeoutTxHash             *string
-	TimeoutTxTime             *time.Time
+	TimeoutTxTime             pgtype.Timestamptz
 	TimeoutTxRelayerAddress   *string
 }
 
@@ -40,15 +40,22 @@ type PacketTxSubmission struct {
 	SubmissionID int64
 }
 
+type RelayRequest struct {
+	ID            int64
+	SourceChainID string
+	SourceTxHash  string
+	CreatedAt     pgtype.Timestamptz
+}
+
 type RelayerTxSubmission struct {
 	ID             int64
 	TxHash         string
 	ChainID        string
 	TxType         string
 	RelayerAddress string
-	SubmittedAt    time.Time
-	ResolvedAt     *time.Time
-	GasCostAmount  *string
+	SubmittedAt    pgtype.Timestamptz
+	ResolvedAt     pgtype.Timestamptz
+	GasCostAmount  pgtype.Numeric
 	Status         string
 	ExecutionError *string
 }

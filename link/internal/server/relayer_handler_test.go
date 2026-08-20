@@ -15,12 +15,16 @@ import (
 )
 
 type relayerServiceStub struct {
-	relay  func(relayerservice.RelayRequest) error
-	status []relayerservice.PacketStatus
+	relay       func(relayerservice.RelayRequest) error
+	relayResult []relayerservice.ObservedPacket
+	status      []relayerservice.PacketStatus
 }
 
-func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.RelayRequest) error {
-	return s.relay(request)
+func (s *relayerServiceStub) Relay(
+	_ context.Context,
+	request relayerservice.RelayRequest,
+) ([]relayerservice.ObservedPacket, error) {
+	return s.relayResult, s.relay(request)
 }
 
 func (s *relayerServiceStub) Packets(
@@ -120,4 +124,43 @@ func TestRelayerHandlerPacketStateFilter(t *testing.T) {
 			require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
 		})
 	}
+}
+
+// The response reports every observed packet, including ones this relayer has
+// no route for, so a caller can tell a relay that selected nothing from one
+// that selected everything.
+func TestRelayerHandlerReportsPacketSelection(t *testing.T) {
+	handler := NewRelayerHandler(&relayerServiceStub{
+		relay: func(relayerservice.RelayRequest) error { return nil },
+		relayResult: []relayerservice.ObservedPacket{
+			{
+				Selector:  relayerservice.PacketSelector{SourceClientID: "a-0", SequenceNumber: 1},
+				Selection: relayerservice.SelectionStateSelected,
+			},
+			{
+				Selector:  relayerservice.PacketSelector{SourceClientID: "a-0", SequenceNumber: 2},
+				Selection: relayerservice.SelectionStateNotSelected,
+			},
+			{
+				Selector:  relayerservice.PacketSelector{SourceClientID: "b-0", SequenceNumber: 3},
+				Selection: relayerservice.SelectionStateUnconfigured,
+			},
+		},
+	})
+
+	res, err := handler.Relay(context.Background(), connect.NewRequest(&proto.RelayRequest{
+		SourceChainId: "1",
+		TxHash:        "0xabc",
+		Selection:     &proto.RelayRequest_AllPackets{AllPackets: &proto.AllPackets{}},
+	}))
+	require.NoError(t, err)
+
+	packets := res.Msg.GetPackets()
+	require.Len(t, packets, 3)
+
+	assert.Equal(t, "a-0", packets[0].GetSourceClientId())
+	assert.Equal(t, uint64(1), packets[0].GetSequenceNumber())
+	assert.Equal(t, proto.PacketSelection_PACKET_SELECTION_SELECTED, packets[0].GetSelection())
+	assert.Equal(t, proto.PacketSelection_PACKET_SELECTION_NOT_SELECTED, packets[1].GetSelection())
+	assert.Equal(t, proto.PacketSelection_PACKET_SELECTION_UNCONFIGURED, packets[2].GetSelection())
 }

@@ -43,7 +43,28 @@ message PacketSelector {
   uint64 sequence_number = 2;
 }
 
-message RelayResponse {}
+message RelayResponse {
+  // Every send packet in the transaction, including those this relayer will
+  // not deliver.
+  repeated ObservedPacket packets = 1;
+}
+
+message ObservedPacket {
+  string source_client_id = 1;
+  uint64 sequence_number = 2;
+  PacketSelection selection = 3;
+}
+
+enum PacketSelection {
+  PACKET_SELECTION_UNSPECIFIED = 0;
+  // Recorded for delivery by this relayer. Delivery happens afterwards and
+  // can still fail; query the packet's state to follow it.
+  PACKET_SELECTION_SELECTED = 1;
+  // Configured and routed, but this request did not select it.
+  PACKET_SELECTION_NOT_SELECTED = 2;
+  // No configured client or route, so this relayer skips it.
+  PACKET_SELECTION_UNCONFIGURED = 3;
+}
 
 message PacketsRequest {
   PacketFilter filter = 1;
