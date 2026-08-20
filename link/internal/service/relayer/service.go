@@ -86,8 +86,6 @@ type PacketStatus struct {
 	RecvTx         *TxInfo
 	AckTx          *TxInfo
 	TimeoutTx      *TxInfo
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 // Bounds on how many packets one listing returns.
@@ -121,8 +119,7 @@ func normalizeLimit(limit int64) int64 {
 	return limit
 }
 
-// PacketFilter narrows a Packets listing. State is the API-level state, which
-// the service expands into the relay statuses it covers.
+// PacketFilter narrows a Packets listing
 type PacketFilter struct {
 	SourceChainID       *string
 	DestinationChainID  *string
@@ -355,7 +352,7 @@ func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []Pack
 }
 
 // Packets lists packets most recent first and reports whether more match beyond
-// the page. An unknown transaction yields an empty result, not an error.
+// the page
 func (s *Service) Packets(
 	ctx context.Context,
 	filter PacketFilter,
@@ -396,8 +393,7 @@ func (s *Service) Packets(
 	return page, nil
 }
 
-// toStoreFilter lowers an API filter, expanding the state and normalizing the
-// tx hash so lookups stay case-insensitive.
+// toStoreFilter translates an API level filter to store level
 func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
 	out := store.PacketFilter{
 		Statuses:            dbStatusesForState(filter.State),
@@ -456,8 +452,6 @@ func toPacketStatus(packet store.Packet) PacketStatus {
 		RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
 		AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
 		TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
-		CreatedAt:      packet.CreatedAt,
-		UpdatedAt:      packet.UpdatedAt,
 	}
 }
 

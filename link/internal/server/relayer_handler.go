@@ -150,8 +150,6 @@ func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatu
 			RecvTx:         txInfoToProto(status.RecvTx),
 			AckTx:          txInfoToProto(status.AckTx),
 			TimeoutTx:      txInfoToProto(status.TimeoutTx),
-			CreatedAt:      status.CreatedAt.Unix(),
-			UpdatedAt:      status.UpdatedAt.Unix(),
 		}
 	}
 
