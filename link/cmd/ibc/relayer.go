@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
@@ -62,8 +61,6 @@ var (
 	flagRelayerPacketsDestClientID string
 	flagRelayerPacketsState        string
 	flagRelayerPacketsSequence     uint64
-	flagRelayerPacketsCreatedFrom  string
-	flagRelayerPacketsCreatedTo    string
 	flagRelayerPacketsLimit        uint32
 	flagRelayerPacketsOffset       uint32
 )
@@ -189,27 +186,6 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 		}
 
 		filter.State = &state
-	}
-
-	for _, bound := range []struct {
-		flag  string
-		value string
-		into  **int64
-	}{
-		{"created-from", flagRelayerPacketsCreatedFrom, &filter.CreatedFrom},
-		{"created-to", flagRelayerPacketsCreatedTo, &filter.CreatedTo},
-	} {
-		if bound.value == "" {
-			continue
-		}
-
-		at, err := time.Parse(time.RFC3339, bound.value)
-		if err != nil {
-			return errors.Wrapf(err, "invalid --%s %q, expected RFC3339", bound.flag, bound.value)
-		}
-
-		seconds := at.Unix()
-		*bound.into = &seconds
 	}
 
 	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Packets, &relayerv2.PacketsRequest{

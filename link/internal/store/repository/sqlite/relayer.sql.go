@@ -178,10 +178,8 @@ AND packet_source_client_id = COALESCE(?4, packet_source_client_id)
 AND packet_destination_client_id = COALESCE(?5, packet_destination_client_id)
 AND source_tx_hash = COALESCE(?6, source_tx_hash)
 AND packet_sequence_number = COALESCE(?7, packet_sequence_number)
-AND created_at >= COALESCE(?8, created_at)
-AND created_at <= COALESCE(?9, created_at)
 ORDER BY id DESC
-LIMIT ?11 OFFSET ?10
+LIMIT ?9 OFFSET ?8
 `
 
 type ListPacketsParams struct {
@@ -192,8 +190,6 @@ type ListPacketsParams struct {
 	DestinationClientID *string
 	SourceTxHash        *string
 	SequenceNumber      *int64
-	CreatedFrom         *time.Time
-	CreatedTo           *time.Time
 	RowOffset           int64
 	RowLimit            int64
 }
@@ -216,8 +212,6 @@ func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Pac
 		arg.DestinationClientID,
 		arg.SourceTxHash,
 		arg.SequenceNumber,
-		arg.CreatedFrom,
-		arg.CreatedTo,
 		arg.RowOffset,
 		arg.RowLimit,
 	)

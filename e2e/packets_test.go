@@ -167,16 +167,6 @@ func TestPacketsFiltersDiscriminate(t *testing.T) {
 		require.Empty(t, none.GetPackets())
 	})
 
-	t.Run("createdRangeBounds", func(t *testing.T) {
-		future := time.Now().Add(24 * time.Hour).Unix()
-		require.Empty(t, listPackets(ctx, t, client,
-			&relayerv2.PacketFilter{CreatedFrom: &future}).GetPackets())
-
-		past := time.Now().Add(-24 * time.Hour).Unix()
-		require.NotEmpty(t, listPackets(ctx, t, client,
-			&relayerv2.PacketFilter{CreatedFrom: &past}).GetPackets())
-	})
-
 	t.Run("pagingCoversEveryPacketOnce", func(t *testing.T) {
 		full := listPackets(ctx, t, client, nil)
 		total := len(full.GetPackets())
