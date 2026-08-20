@@ -21,7 +21,6 @@ import (
 	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 	"github.com/cosmos/ibc/link/attestor/evm/ibc"
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/chains/evm/contracts/ics26router"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
@@ -614,26 +613,21 @@ func generateECDSASigner(t *testing.T) *signer.LocalSecp256k1Signer {
 func sampleEvmPacket(t *testing.T) []byte {
 	t.Helper()
 
-	contractABI, err := ics26router.ContractMetaData.GetAbi()
-	require.NoError(t, err)
-
-	encoded, err := contractABI.Methods["isPacketReceived"].Inputs.Pack(
-		ics26router.IICS26RouterMsgsPacket{
-			Sequence:         7,
-			SourceClient:     "source-client",
-			DestClient:       "destination-client",
-			TimeoutTimestamp: 1_700_000_000,
-			Payloads: []ics26router.IICS26RouterMsgsPayload{
-				{
-					SourcePort: "transfer",
-					DestPort:   "transfer",
-					Version:    "ics20-1",
-					Encoding:   "application/json",
-					Value:      []byte("payload"),
-				},
+	encoded, err := ibc.EncodePacket(channeltypesv2.Packet{
+		Sequence:          7,
+		SourceClient:      "source-client",
+		DestinationClient: "destination-client",
+		TimeoutTimestamp:  1_700_000_000,
+		Payloads: []channeltypesv2.Payload{
+			{
+				SourcePort:      "transfer",
+				DestinationPort: "transfer",
+				Version:         "ics20-1",
+				Encoding:        "application/json",
+				Value:           []byte("payload"),
 			},
 		},
-	)
+	})
 	require.NoError(t, err)
 
 	return encoded
