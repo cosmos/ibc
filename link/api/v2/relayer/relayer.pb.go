@@ -27,7 +27,8 @@ type PacketSelection int32
 
 const (
 	PacketSelection_PACKET_SELECTION_UNSPECIFIED PacketSelection = 0
-	// This relayer recorded the packet and will deliver it.
+	// Recorded for delivery by this relayer. Delivery happens afterwards and
+	// can still fail; query the packet's state to follow it.
 	PacketSelection_PACKET_SELECTION_SELECTED PacketSelection = 1
 	// Configured and routed, but this request did not select it.
 	PacketSelection_PACKET_SELECTION_NOT_SELECTED PacketSelection = 2
@@ -390,8 +391,8 @@ func (x *PacketSelector) GetSequenceNumber() uint64 {
 type RelayResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Every send packet in the transaction, including those this relayer will
-	// not deliver.
-	Packets       []*RelayedPacket `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
+	// not deliver. Selected packets are recorded, not yet delivered.
+	Packets       []*ObservedPacket `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -426,14 +427,14 @@ func (*RelayResponse) Descriptor() ([]byte, []int) {
 	return file_relayer_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *RelayResponse) GetPackets() []*RelayedPacket {
+func (x *RelayResponse) GetPackets() []*ObservedPacket {
 	if x != nil {
 		return x.Packets
 	}
 	return nil
 }
 
-type RelayedPacket struct {
+type ObservedPacket struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SourceClientId string                 `protobuf:"bytes,1,opt,name=source_client_id,json=sourceClientId,proto3" json:"source_client_id,omitempty"`
 	SequenceNumber uint64                 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
@@ -442,20 +443,20 @@ type RelayedPacket struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *RelayedPacket) Reset() {
-	*x = RelayedPacket{}
+func (x *ObservedPacket) Reset() {
+	*x = ObservedPacket{}
 	mi := &file_relayer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RelayedPacket) String() string {
+func (x *ObservedPacket) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RelayedPacket) ProtoMessage() {}
+func (*ObservedPacket) ProtoMessage() {}
 
-func (x *RelayedPacket) ProtoReflect() protoreflect.Message {
+func (x *ObservedPacket) ProtoReflect() protoreflect.Message {
 	mi := &file_relayer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -467,26 +468,26 @@ func (x *RelayedPacket) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RelayedPacket.ProtoReflect.Descriptor instead.
-func (*RelayedPacket) Descriptor() ([]byte, []int) {
+// Deprecated: Use ObservedPacket.ProtoReflect.Descriptor instead.
+func (*ObservedPacket) Descriptor() ([]byte, []int) {
 	return file_relayer_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *RelayedPacket) GetSourceClientId() string {
+func (x *ObservedPacket) GetSourceClientId() string {
 	if x != nil {
 		return x.SourceClientId
 	}
 	return ""
 }
 
-func (x *RelayedPacket) GetSequenceNumber() uint64 {
+func (x *ObservedPacket) GetSequenceNumber() uint64 {
 	if x != nil {
 		return x.SequenceNumber
 	}
 	return 0
 }
 
-func (x *RelayedPacket) GetSelection() PacketSelection {
+func (x *ObservedPacket) GetSelection() PacketSelection {
 	if x != nil {
 		return x.Selection
 	}
@@ -881,10 +882,10 @@ const file_relayer_proto_rawDesc = "" +
 	"\apackets\x18\x01 \x03(\v2\x1e.ibc.v2.relayer.PacketSelectorR\apackets\"c\n" +
 	"\x0ePacketSelector\x12(\n" +
 	"\x10source_client_id\x18\x01 \x01(\tR\x0esourceClientId\x12'\n" +
-	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\"H\n" +
-	"\rRelayResponse\x127\n" +
-	"\apackets\x18\x01 \x03(\v2\x1d.ibc.v2.relayer.RelayedPacketR\apackets\"\xa1\x01\n" +
-	"\rRelayedPacket\x12(\n" +
+	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\"I\n" +
+	"\rRelayResponse\x128\n" +
+	"\apackets\x18\x01 \x03(\v2\x1e.ibc.v2.relayer.ObservedPacketR\apackets\"\xa2\x01\n" +
+	"\x0eObservedPacket\x12(\n" +
 	"\x10source_client_id\x18\x01 \x01(\tR\x0esourceClientId\x12'\n" +
 	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\x12=\n" +
 	"\tselection\x18\x03 \x01(\x0e2\x1f.ibc.v2.relayer.PacketSelectionR\tselection\"t\n" +
@@ -956,7 +957,7 @@ var file_relayer_proto_goTypes = []any{
 	(*SelectedPackets)(nil), // 4: ibc.v2.relayer.SelectedPackets
 	(*PacketSelector)(nil),  // 5: ibc.v2.relayer.PacketSelector
 	(*RelayResponse)(nil),   // 6: ibc.v2.relayer.RelayResponse
-	(*RelayedPacket)(nil),   // 7: ibc.v2.relayer.RelayedPacket
+	(*ObservedPacket)(nil),  // 7: ibc.v2.relayer.ObservedPacket
 	(*PacketsRequest)(nil),  // 8: ibc.v2.relayer.PacketsRequest
 	(*PacketFilter)(nil),    // 9: ibc.v2.relayer.PacketFilter
 	(*PacketsResponse)(nil), // 10: ibc.v2.relayer.PacketsResponse
@@ -967,8 +968,8 @@ var file_relayer_proto_depIdxs = []int32{
 	3,  // 0: ibc.v2.relayer.RelayRequest.all_packets:type_name -> ibc.v2.relayer.AllPackets
 	4,  // 1: ibc.v2.relayer.RelayRequest.selected_packets:type_name -> ibc.v2.relayer.SelectedPackets
 	5,  // 2: ibc.v2.relayer.SelectedPackets.packets:type_name -> ibc.v2.relayer.PacketSelector
-	7,  // 3: ibc.v2.relayer.RelayResponse.packets:type_name -> ibc.v2.relayer.RelayedPacket
-	0,  // 4: ibc.v2.relayer.RelayedPacket.selection:type_name -> ibc.v2.relayer.PacketSelection
+	7,  // 3: ibc.v2.relayer.RelayResponse.packets:type_name -> ibc.v2.relayer.ObservedPacket
+	0,  // 4: ibc.v2.relayer.ObservedPacket.selection:type_name -> ibc.v2.relayer.PacketSelection
 	9,  // 5: ibc.v2.relayer.PacketsRequest.filter:type_name -> ibc.v2.relayer.PacketFilter
 	1,  // 6: ibc.v2.relayer.PacketFilter.state:type_name -> ibc.v2.relayer.PacketState
 	12, // 7: ibc.v2.relayer.PacketsResponse.packets:type_name -> ibc.v2.relayer.PacketStatus

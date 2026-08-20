@@ -135,10 +135,10 @@ const (
 	SelectionStateUnconfigured
 )
 
-// RelayedPacket reports one packet's disposition. Unconfigured packets are
-// included so a caller can tell a relay that selected nothing from one that
-// selected everything.
-type RelayedPacket struct {
+// ObservedPacket is a send packet in the transaction and what this relayer
+// decided about it. Nothing is delivered yet: selected packets are recorded
+// pending and relayed by the pipeline afterwards.
+type ObservedPacket struct {
 	Selector  PacketSelector
 	Selection PacketSelection
 }
@@ -146,7 +146,7 @@ type RelayedPacket struct {
 // RelayResult reports what a relay request did with each packet in the
 // transaction.
 type RelayResult struct {
-	Packets []RelayedPacket
+	Packets []ObservedPacket
 }
 
 // SelectionMode controls which packets a relay request selects for relay.
@@ -311,7 +311,7 @@ func relayResult(
 		selectedSet[selector] = struct{}{}
 	}
 
-	packets := make([]RelayedPacket, 0, len(observed))
+	packets := make([]ObservedPacket, 0, len(observed))
 
 	for _, selector := range sortedPacketSelectors(observed) {
 		selection := SelectionStateUnconfigured
@@ -323,7 +323,7 @@ func relayResult(
 			}
 		}
 
-		packets = append(packets, RelayedPacket{Selector: selector, Selection: selection})
+		packets = append(packets, ObservedPacket{Selector: selector, Selection: selection})
 	}
 
 	return RelayResult{Packets: packets}
