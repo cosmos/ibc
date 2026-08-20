@@ -20,44 +20,37 @@ Interacts with: [ICS26Router](/ibc-solidity-contracts/ics26-router) for sends an
 | ICS27Lib | Library, compiled into ICS27GMP | Supplies the GMP constants, the acknowledgement encoding, and the account beacon-proxy bytecode used for CREATE2 | [ICS27Lib.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Lib.sol) |
 | IBCSenderCallbacksLib | Library, compiled into ICS27GMP | Checks a sender's ERC165 support and makes the acknowledgement or timeout callback | [IBCSenderCallbacksLib.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCSenderCallbacksLib.sol) |
 
-```mermaid
-flowchart LR
-  Router[ICS26Router]
-  GMP[ICS27GMP]
-  subgraph accounts["One ICS27Account per (clientId, sender, salt)"]
-    Acct1[ICS27Account]
-    Acct2[ICS27Account]
-  end
-  Target[Target contract]
-  Router <-- packets --> GMP
-  GMP -- deploys and drives --> Acct1
-  GMP -- deploys and drives --> Acct2
-  Acct1 -- call data --> Target
-```
-
 One ICS27Account exists per `(clientId, sender, salt)` triple, so a chain holds one account for every distinct triple that has received a call.
 
 ## How a call moves through the contracts
 
-A sender starts a call with `sendCall`, which builds the packet data and hands the packet to the router, which commits a record of it. It is then relayed to the destination chain's router.
-
-Once on the destination chain, the router verifies the packet with the light client and then calls `onRecvPacket`. ICS27GMP checks the payload's identity fields, finds or deploys the sender's account, and asks that account to call the receiver. The target's return data goes back to the router as the acknowledgement.
-
-Back on the source chain the router calls `onAcknowledgementPacket` when that acknowledgement arrives, or `onTimeoutPacket` when the deadline passes without receipt. Either handler recovers the original sender from the packet data and forwards the outcome to that sender's callback.
+A sender starts a call with `sendCall`, which builds the packet data and hands the packet to the router, which commits a record of it.
 
 ```mermaid
 sequenceDiagram
-    participant S as Sender contract<br/>chain A
-    participant G1 as ICS27GMP<br/>chain A
-    participant R1 as ICS26Router<br/>chain A
-    participant Rel as Relayer
-    participant R2 as ICS26Router<br/>chain B
-    participant G2 as ICS27GMP<br/>chain B
-    participant Ac as ICS27Account<br/>chain B
-    participant T as Target contract<br/>chain B
-
+    box Chain A
+        participant S as Sender contract
+        participant G1 as ICS27GMP
+        participant R1 as ICS26Router
+    end
     S->>G1: sendCall
     G1->>R1: sendPacket
+    R1-->>G1: sequence
+    G1-->>S: sequence
+    Note over R1: commits the packet for a relayer to pick up
+```
+
+Once a relayer carries it to the destination chain, the router verifies the packet with the light client and then calls `onRecvPacket`. ICS27GMP checks the payload's identity fields, finds or deploys the sender's account, and asks that account to call the receiver. The target's return data goes back to the router as the acknowledgement.
+
+```mermaid
+sequenceDiagram
+    participant Rel as Relayer
+    box Chain B
+        participant R2 as ICS26Router
+        participant G2 as ICS27GMP
+        participant Ac as ICS27Account
+        participant T as Target contract
+    end
     Rel->>R2: recvPacket with proof
     Note over R2: verifies with the light client
     R2->>G2: onRecvPacket
@@ -66,11 +59,31 @@ sequenceDiagram
     T-->>Ac: return data
     Ac-->>G2: result
     G2-->>R2: acknowledgement
+```
+
+Before it makes that call, `onRecvPacket` checks three things:
+
+- The payload's version, encoding, and both port identifiers match the ICS27 constants.
+- The payload carries bytes.
+- The `receiver` string parses as an EVM address, or the call reverts `ICS27InvalidReceiver`.
+
+Back on the source chain the router calls `onAcknowledgementPacket` when that acknowledgement arrives, or `onTimeoutPacket` when the deadline passes without receipt. Either handler recovers the original sender from the packet data and forwards the outcome to that sender's callback.
+
+```mermaid
+sequenceDiagram
+    participant Rel as Relayer
+    box Chain A
+        participant R1 as ICS26Router
+        participant G1 as ICS27GMP
+        participant S as Sender contract
+    end
     Rel->>R1: ackPacket with proof
     Note over R1: verifies with the light client
     R1->>G1: onAcknowledgementPacket
     G1-->>S: onAckPacket
 ```
+
+The three handlers the router calls — `onRecvPacket`, `onAcknowledgementPacket`, and `onTimeoutPacket` — accept the router alone, and revert `ICS27Unauthorized` for any other caller.
 
 ## Sending a call
 
@@ -137,28 +150,6 @@ The payload around it carries three more fields, fixed by constants in ICS27Lib 
 
 The memo travels in the packet data, and no handler reads it.
 
-## Packet handlers the router calls
-
-Packet handlers are the functions the router calls on an application when a packet arrives, when its acknowledgement comes back, and when it times out.
-
-Only the router may call the three handlers:
-
-| Function | What it does |
-|----------|--------------|
-| `onRecvPacket(OnRecvPacketCallback)` | Validates the payload, executes it through the sender's account, and returns the acknowledgement |
-| `onAcknowledgementPacket(OnAcknowledgementPacketCallback)` | Forwards the result to the original sender's callback |
-| `onTimeoutPacket(OnTimeoutPacketCallback)` | Forwards the timeout to the original sender's callback |
-
-`onRecvPacket` checks three things before the destination call:
-
-- The payload's version, encoding, and both port identifiers match the ICS27 constants.
-- The payload carries bytes.
-- The `receiver` string parses as an EVM address, or the call reverts `ICS27InvalidReceiver`.
-
-ICS27GMP then asks the account to make the call, as `account.functionCall(receiver, payload)`. The target's raw return data goes back to the router wrapped as `abi.encode(GMPAcknowledgement{ result })`.
-
-The other two handlers recover the original sender from the packet data and forward to it through IBCSenderCallbacksLib. The acknowledgement handler adds a `success` flag, set by comparing the acknowledgement against the universal error acknowledgement.
-
 ## Destination accounts and their addresses
 
 A destination account is the contract that makes a remote sender's call on this chain. It is identified by client, sender, and salt. It is deployed on first use at a CREATE2 address, which is computable in advance.
@@ -173,7 +164,7 @@ struct AccountIdentifier {
 }
 ```
 
-The salt is the sender's own choice, and changing it changes the identifier. One sender can drive several accounts on the same chain by choosing different salts.
+The salt is the sender's own choice, and changing it changes the identifier. One sender can drive several accounts on the same chain by choosing different salts. An empty salt is allowed, and gives the sender one default account per client.
 
 An account is deployed on the first inbound call for its identifier. ICS27GMP hashes the identifier, then uses that hash as the CREATE2 salt for a beacon proxy it deploys itself.
 
@@ -231,6 +222,8 @@ interface IIBCSenderCallbacks {
     function onTimeoutPacket(IIBCAppCallbacks.OnTimeoutPacketCallback calldata msg_) external;
 }
 ```
+
+The `success` flag is not carried in the acknowledgement. ICS27GMP derives it by hashing the acknowledgement bytes and comparing them against the universal error value, so anything that is not that value counts as success.
 
 IBCSenderCallbacksLib calls back only a sender that answers the ERC165 check, and skips any other in silence. A missing interface therefore costs the sender its callback, not the packet.
 

@@ -35,7 +35,7 @@ struct SendCallMsg {
 - `sourceClient`: the local client identifier to send over.
 - `receiver`: the target contract's address, as a string.
 - `salt`: bytes that pick which of the sender's destination accounts makes the call.
-- `payload`: the call data for the target.
+- `payload`: the call data for the target, encoded the way the destination chain's GMP implementation expects.
 - `timeoutTimestamp`: an absolute time, in unix seconds. The timeout must be in the future.
 - `memo`: an optional string carried with the call.
 
@@ -43,7 +43,9 @@ The sender declares where the call goes, and GMP supplies who is calling. It sta
 
 The salt picks which of the sender's accounts makes the call. GMP mixes it into the account derivation along with the client and the sender, so the same sender arrives from a different address under a different salt. Leaving it empty gives the sender one account.
 
-The payload is the call data the target will run, and GMP passes it through without interpreting it. In IBC-solidity the packet data is ABI-encoded, and every GMP packet uses the same port, version, and encoding.
+The payload is opaque to GMP. GMP carries it to the destination chain and hands it to the target without interpreting it, so encoding it in the form the destination chain's GMP implementation can execute is the sender's job. In IBC-solidity that form is an ABI-encoded Solidity call: a four-byte function selector followed by its ABI-encoded arguments, which the destination account passes to the target verbatim.
+
+That is separate from how the packet itself is encoded. Every GMP packet uses the same port, version, and encoding, and in IBC-solidity the packet data is ABI-encoded under the encoding string `application/x-solidity-abi`.
 
 ## The destination account
 
@@ -79,7 +81,7 @@ flowchart LR
 
 ## Executing the call on the destination
 
-A relayer delivers the packet to the destination chain, where the router verifies its proof with the light client. The router then hands the packet to that chain's GMP application, which turns it into a call:
+Once the packet reaches the destination chain, the router hands it to that chain's GMP application, which turns it into a call:
 
 1. Checks the packet's version, encoding, and both port identifiers against its own constants.
 2. Confirms the payload carries call data.
@@ -88,9 +90,9 @@ A relayer delivers the packet to the destination chain, where the router verifie
 5. Asks the account to call the target with the payload as call data.
 6. Wraps whatever the target returned as the acknowledgement.
 
-The router then commits the acknowledgement and emits it for a relayer to carry home. If one of those checks fails, the call never runs, and the acknowledgement carries an error instead.
+If one of those checks fails, the call never runs, and the acknowledgement carries an error instead. Either way the call runs at most once, because the [receive step](/how-ibc-works/packet-lifecycle) records a receipt for the packet on the destination chain and the same packet cannot be received twice.
 
-A call executes only once. The [receive step](/how-ibc-works/packet-lifecycle) records a receipt for the packet on the destination chain, so the same packet cannot be executed again.
+A relayer delivers the packet and pays for it. The destination call runs on whatever gas remains in the relayer's transaction, and neither the send message nor the packet carries a gas field, so gas budgeting belongs to the relayer. A delivery that reverts before the destination chain records the packet's receipt leaves the packet in flight, so a relayer can submit it again, with more gas if that was the problem, until the timeout passes. Once the receipt is written the packet is consumed, and the outcome comes back as an acknowledgement whether the call succeeded or not.
 
 ## Acknowledgements and callbacks
 
@@ -132,8 +134,6 @@ bytes internal constant UNIVERSAL_ERROR_ACK =
 ```
 
 The acknowledgement reports that the call failed. The destination chain's router emits the revert reason as an `IBCAppRecvPacketCallbackError` event, so finding out why means reading that chain's logs.
-
-The destination call runs on whatever gas remains in the relayer's transaction, and neither the send message nor the packet carries a gas field, so gas budgeting belongs to the relayer.
 
 The account forwards the destination call through `Address.functionCall`, which turns an empty revert into a `FailedCall` error. A target that runs out of gas reverts with a four-byte `FailedCall`, so the router writes the error acknowledgement and the packet is consumed. Empty revert data reaches the router only when the callback frame itself dies, and that is the case the router rejects outright, leaving the packet in flight. A relayer can then retry that packet with more gas.
 
