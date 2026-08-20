@@ -75,10 +75,8 @@ jobs:
             link/go.sum
             e2e/go.sum
             gen/go/solidity-abi/go.sum
-      - run: make build-link
       - run: docker info
-      - run: go test -count=1 ./internal/... ./cmd/...
-        working-directory: e2e
+      - run: make -C e2e test-harness
         env:
           IBC_BIN: ${{ github.workspace }}/link/bin/ibc
 
@@ -97,7 +95,7 @@ jobs:
           bun-version: 1.3.14
       - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1
       - run: go install github.com/ethereum/go-ethereum/cmd/abigen@v1.17.4
-      - run: make check-test-apps
+      - run: make -C e2e check-stale
 
   e2e:
     needs: changes
@@ -115,7 +113,7 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info
-      - run: make test-e2e
+      - run: make -C e2e test
 
   matrix:
     runs-on: ubuntu-latest
@@ -128,4 +126,4 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info
-      - run: make check-e2e-matrix
+      - run: make -C e2e check-matrix

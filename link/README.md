@@ -42,6 +42,6 @@ worked example.
 
 Repository-wide black-box tests live in [`../e2e/`](../e2e/README.md), with the harness in
 `../e2e/internal/harness` as a separate Go module. From the repository root,
-`make doctor-e2e && make test-e2e` runs the Link smoke suite.
+`make -C e2e doctor && make -C e2e test` runs the Link smoke suite.
 
 The accepted target for the harness is documented in [IBC Environment Architecture](HARNESS-ARCHITECTURE-DESIGN.md).
