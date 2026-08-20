@@ -50,13 +50,10 @@ type RelayerChain struct {
 // RelayerConnection is a reciprocal on-chain client pair. Clients are the
 // registered client identifiers (locators).
 type RelayerConnection struct {
-	ChainA  string
-	ClientA string
-	ChainB  string
-	ClientB string
-	// AutoRelayA and AutoRelayB relay packets sent from that end as they are
-	// discovered on chain. A manual route leaves its end off and is relayed
-	// only on an explicit Relay call.
+	ChainA     string
+	ClientA    string
+	ChainB     string
+	ClientB    string
 	AutoRelayA bool
 	AutoRelayB bool
 }

@@ -253,7 +253,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("resolve besu RPC port: %w", err)
 	}
 	bc.Identity = evm.NewIdentity(spec.ID, fmt.Sprintf("http://%s:%s", host, port.Port()))
-	// Besu runs its websocket JSON-RPC on a second listener, unlike Anvil.
+
 	wsPort, err := bc.container.MappedPort(ctx, "8546/tcp")
 	if err != nil {
 		return nil, fmt.Errorf("resolve besu websocket port: %w", err)

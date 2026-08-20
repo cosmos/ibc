@@ -183,8 +183,6 @@ func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient
 	return evm.NewVerifiedClient(ctx, client, spec.ChainID, fmt.Sprintf("anvil (chain %s)", spec.ID))
 }
 
-// WSURL is the RPC endpoint under a websocket scheme: Anvil serves JSON-RPC
-// and eth_subscribe from a single listener.
 func (ac *Chain) WSURL() string {
 	return "ws://" + strings.TrimPrefix(ac.RPCURL(), "http://")
 }
