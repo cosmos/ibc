@@ -32,7 +32,12 @@ type RelayerConfig struct {
 	FinalityOffset uint64
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
-	Attestors      []RelayerAttestor
+
+	// ListenAddress pins the relayer's own gRPC address. Empty takes an
+	// ephemeral loopback port; a test pins one when something must dial the
+	// relayer at an address known before it starts.
+	ListenAddress string
+	Attestors     []RelayerAttestor
 }
 
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
@@ -52,6 +57,10 @@ type RelayerConnection struct {
 	ClientA string
 	ChainB  string
 	ClientB string
+
+	// ProverURL points both client ends at a ProverService instead of
+	// resolving attestation locally. Empty keeps the attestation default.
+	ProverURL string
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -102,6 +111,11 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		return fileConfig{}, errors.New("at least one connection is required")
 	}
 
+	listenAddress := cfg.ListenAddress
+	if listenAddress == "" {
+		listenAddress = loopbackAnyPort
+	}
+
 	processSigner := signerConfig{Alias: cfg.SignerAlias, Type: signerType}
 	if signerType == RelayerSignerRemote {
 		processSigner.GRPC = cfg.SignerGRPC
@@ -110,7 +124,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		processSigner.File = cfg.SignerKeyFile
 	}
 	file := fileConfig{
-		Server:  serverConfig{ListenAddress: loopbackAnyPort},
+		Server:  serverConfig{ListenAddress: listenAddress},
 		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
 		Signers: []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
@@ -155,19 +169,26 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
+		clientType := "attestation"
+		if connection.ProverURL != "" {
+			clientType = "remoteProver"
+		}
+
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
 			Alias: connection.ClientA + "-" + connection.ClientB,
 			ClientA: clientEndFileConfig{
-				ChainID:  connection.ChainA,
-				Signer:   cfg.SignerAlias,
-				ClientID: connection.ClientA,
-				Type:     "attestation",
+				ChainID:   connection.ChainA,
+				Signer:    cfg.SignerAlias,
+				ClientID:  connection.ClientA,
+				Type:      clientType,
+				ProverURL: connection.ProverURL,
 			},
 			ClientB: clientEndFileConfig{
-				ChainID:  connection.ChainB,
-				Signer:   cfg.SignerAlias,
-				ClientID: connection.ClientB,
-				Type:     "attestation",
+				ChainID:   connection.ChainB,
+				Signer:    cfg.SignerAlias,
+				ClientID:  connection.ClientB,
+				Type:      clientType,
+				ProverURL: connection.ProverURL,
 			},
 		})
 	}
@@ -253,8 +274,9 @@ type connectionFileConfig struct {
 }
 
 type clientEndFileConfig struct {
-	ChainID  string `yaml:"chainId"`
-	Signer   string `yaml:"signer"`
-	ClientID string `yaml:"clientId"`
-	Type     string `yaml:"type"`
+	ChainID   string `yaml:"chainId"`
+	Signer    string `yaml:"signer"`
+	ClientID  string `yaml:"clientId"`
+	Type      string `yaml:"type"`
+	ProverURL string `yaml:"proverUrl,omitempty"`
 }

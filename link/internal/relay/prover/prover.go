@@ -89,6 +89,35 @@ func NewSetFromConfig(
 	return NewSet(generators), nil
 }
 
+// NewAttestationSetFromConfig resolves an attestation prover for every client
+// end regardless of its configured type. This is the set a relayer serves over
+// ProverService: resolving a remoteProver client here would dial back out and
+// recurse, so the served set is always local.
+func NewAttestationSetFromConfig(
+	ctx context.Context,
+	cfg config.Config,
+	clientSet *chains.ClientSet,
+	attestors []attestor.Attestor,
+) (*Set, error) {
+	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
+
+	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
+		gen, err := attestation.ResolveGenerator(ctx, self, counterparty, clientSet, attestors)
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
+		generators[Key(self.ChainID, self.ClientID)] = gen
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSet(generators), nil
+}
+
 // forEachClientEnd calls fn once per client end of every configured
 // connection, in both directions.
 func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counterparty config.ClientEnd) error) error {

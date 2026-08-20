@@ -116,12 +116,28 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)
 
+	// A relayer that can attest locally also serves those proofs, so a
+	// remoteProver client elsewhere can be pointed at it. The served set is
+	// always the local one; serving the relay set would dial back out.
+	var proverHandler *server.ProverHandler
+
+	servedProvers, err := prover.NewAttestationSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
+	if err != nil {
+		logger.Debug("Not serving the prover API", "err", err)
+	} else {
+		proverHandler = server.NewProverHandler(servedProvers)
+	}
+
 	// Server
 	srv := server.New(cfg.Server.ListenAddress, true)
 	srv.Register(relayerHandler)
 
 	if attestorHandler != nil {
 		srv.Register(attestorHandler)
+	}
+
+	if proverHandler != nil {
+		srv.Register(proverHandler)
 	}
 
 	return &Services{
