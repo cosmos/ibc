@@ -32,8 +32,7 @@ const (
 	PacketSelection_PACKET_SELECTION_SELECTED PacketSelection = 1
 	// Configured and routed, but this request did not select it.
 	PacketSelection_PACKET_SELECTION_NOT_SELECTED PacketSelection = 2
-	// No configured client or route, so this relayer skips it. Another relayer
-	// may still deliver it.
+	// No configured client or route, so this relayer skips it.
 	PacketSelection_PACKET_SELECTION_UNCONFIGURED PacketSelection = 3
 )
 
@@ -391,7 +390,7 @@ func (x *PacketSelector) GetSequenceNumber() uint64 {
 type RelayResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Every send packet in the transaction, including those this relayer will
-	// not deliver. Selected packets are recorded, not yet delivered.
+	// not deliver.
 	Packets       []*ObservedPacket `protobuf:"bytes,1,rep,name=packets,proto3" json:"packets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

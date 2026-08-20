@@ -135,16 +135,14 @@ const (
 	SelectionStateUnconfigured
 )
 
-// ObservedPacket is a send packet in the transaction and what this relayer
-// decided about it. Nothing is delivered yet: selected packets are recorded
-// pending and relayed by the pipeline afterwards.
+// ObservedPacket is a send packet in the transaction
 type ObservedPacket struct {
 	Selector  PacketSelector
 	Selection PacketSelection
 }
 
 // RelayResult reports what a relay request did with each packet in the
-// transaction.
+// transaction
 type RelayResult struct {
 	Packets []ObservedPacket
 }
@@ -296,7 +294,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult,
 // relayResult reports every observed packet so a caller can distinguish a
 // request that selected nothing from one that selected everything. A packet
 // this relayer has no client or route for is reported as unconfigured rather
-// than omitted, which is otherwise only visible in the logs.
+// than omitted
 func relayResult(
 	observed map[PacketSelector]struct{},
 	relayable map[PacketSelector]store.UpsertPacket,
@@ -309,8 +307,6 @@ func relayResult(
 
 	packets := make([]ObservedPacket, 0, len(observed))
 
-	// selected is a subset of relayable, which is a subset of observed, so the
-	// three cases partition the transaction's packets.
 	for _, selector := range sortedPacketSelectors(observed) {
 		_, isSelected := selectedSet[selector]
 		_, isRelayable := relayable[selector]
