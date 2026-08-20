@@ -105,18 +105,6 @@ type PacketPage struct {
 	NextCursor string
 }
 
-// normalizeLimit applies the default and cap so every listing is bounded.
-func normalizeLimit(limit int64) int64 {
-	switch {
-	case limit <= 0:
-		return DefaultPacketPageLimit
-	case limit > MaxPacketPageLimit:
-		return MaxPacketPageLimit
-	}
-
-	return limit
-}
-
 // PacketFilter narrows a Packets listing
 type PacketFilter struct {
 	SourceChainID       *string
@@ -366,7 +354,13 @@ func (s *Service) Packets(
 		return PacketPage{}, err
 	}
 
-	limit := normalizeLimit(query.Limit)
+	// Every listing is bounded, whether or not the caller asked for a limit.
+	limit := query.Limit
+	if limit <= 0 {
+		limit = DefaultPacketPageLimit
+	}
+
+	limit = min(limit, MaxPacketPageLimit)
 
 	// One row past the page reveals another page
 	packets, err := s.store.ListPackets(ctx, storeFilter, store.Page{
