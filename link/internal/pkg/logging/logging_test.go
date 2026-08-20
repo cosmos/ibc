@@ -16,7 +16,7 @@ func TestReplaceErrorAttr(t *testing.T) {
 	t.Run("normalizes error key and value", func(t *testing.T) {
 		var output bytes.Buffer
 		logger := slog.New(slog.NewTextHandler(&output, &slog.HandlerOptions{
-			ReplaceAttr: ReplaceErrorAttr,
+			ReplaceAttr: ReplaceAttrs,
 		}))
 		err := pkgerrors.WithStack(errors.New("boom"))
 
@@ -29,12 +29,12 @@ func TestReplaceErrorAttr(t *testing.T) {
 	t.Run("leaves non-errors unchanged", func(t *testing.T) {
 		attr := slog.String("status", "failed")
 
-		assert.Equal(t, attr, ReplaceErrorAttr(nil, attr))
+		assert.Equal(t, attr, ReplaceAttrs(nil, attr))
 	})
 
 	t.Run("leaves nil unchanged", func(t *testing.T) {
 		attr := slog.Any("err", nil)
 
-		assert.Equal(t, attr, ReplaceErrorAttr(nil, attr))
+		assert.Equal(t, attr, ReplaceAttrs(nil, attr))
 	})
 }
