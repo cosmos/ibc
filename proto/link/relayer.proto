@@ -65,9 +65,6 @@ message PacketFilter {
   // Matches the SendPacket transaction only, never recv, ack, or timeout.
   optional string source_tx_hash = 6;
   optional uint64 sequence_number = 7;
-  // Unix seconds, inclusive, against the packet's discovery time.
-  optional int64 created_from = 8;
-  optional int64 created_to = 9;
 }
 
 message PacketsResponse {

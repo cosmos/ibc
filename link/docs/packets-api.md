@@ -20,7 +20,6 @@ set. An absent filter matches every packet.
 | `state` | the relay state (see below) |
 | `source_tx_hash` | the source-chain `SendPacket` transaction only |
 | `sequence_number` | the packet sequence |
-| `created_from` / `created_to` | unix seconds, inclusive, against discovery time |
 
 `source_tx_hash` is normalized before lookup, so casing does not matter.
 
@@ -49,8 +48,8 @@ about as much as the page it returns.
 
 Paging is **not a consistent snapshot**. The relayer is writing to this table
 while you read it, so a packet inserted between two requests shifts later pages
-and can be seen twice or missed. For a stable view of a moving set, filter to a
-closed `created_to` bound.
+and can be seen twice. Ordering is newest first, so new arrivals land at the
+front and push earlier pages down.
 
 A cursor over `id` would not fix this and would be worse: ids come from a
 sequence, so they contain gaps from rolled-back transactions, and a packet
@@ -89,8 +88,7 @@ to add indexes the current statement cannot use.
 ibc relayer packets --state pending
 ibc relayer packets --chain-id 1 --tx-hash 0xabc
 ibc relayer packets --source-client-id base-0 --limit 20
-ibc relayer packets --created-from 2026-08-01T00:00:00Z
 ```
 
 `--state` accepts `not-selected`, `pending`, `succeeded`, `timed-out`,
-`rejected`, and `relay-failed`. Times are RFC3339. Output is JSON.
+`rejected`, and `relay-failed`. Output is JSON.

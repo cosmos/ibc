@@ -6,7 +6,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
@@ -135,16 +134,6 @@ func packetFilterFromProto(filter *proto.PacketFilter) relayer.PacketFilter {
 	if filter.State != nil {
 		state := packetStateFromProto(*filter.State)
 		out.State = &state
-	}
-
-	if filter.CreatedFrom != nil {
-		from := time.Unix(*filter.CreatedFrom, 0).UTC()
-		out.CreatedFrom = &from
-	}
-
-	if filter.CreatedTo != nil {
-		to := time.Unix(*filter.CreatedTo, 0).UTC()
-		out.CreatedTo = &to
 	}
 
 	return out

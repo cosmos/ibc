@@ -132,15 +132,6 @@ func testListPackets(t *testing.T, s Store) {
 			require.Empty(t, hashesFor(t, PacketFilter{Statuses: all, SourceTxHash: str("0xmissing")}))
 		})
 
-		t.Run("byCreatedRange", func(t *testing.T) {
-			future := base.Add(100 * 365 * 24 * time.Hour)
-			require.Empty(t, hashesFor(t, PacketFilter{Statuses: all, CreatedFrom: &future}))
-
-			past := base.Add(-100 * 365 * 24 * time.Hour)
-			require.NotEmpty(t, hashesFor(t, PacketFilter{Statuses: all, CreatedFrom: &past}))
-			require.Empty(t, hashesFor(t, PacketFilter{Statuses: all, CreatedTo: &past}))
-		})
-
 		t.Run("limitAndOffsetAreAppliedAsGiven", func(t *testing.T) {
 			// The store pages exactly as asked; defaults and has-more probing
 			// belong to the service.

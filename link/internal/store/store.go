@@ -162,8 +162,7 @@ const (
 	RelayStatusFailed                     RelayStatus = "FAILED"
 )
 
-// AllRelayStatuses lets callers derive groupings rather than restate them.
-// TestAllRelayStatusesIsComplete fails if a status above is missing here.
+// AllRelayStatuses enumerates possible packet states
 func AllRelayStatuses() []RelayStatus {
 	return []RelayStatus{
 		RelayStatusNotSelected,
@@ -286,8 +285,7 @@ func errNormalize(err error) error {
 	}
 }
 
-// PacketFilter narrows a ListPackets query. Every field is optional except
-// Statuses, which is always applied -- pass every status for no filtering.
+// PacketFilter narrows a ListPackets query.
 type PacketFilter struct {
 	Statuses            []RelayStatus
 	SourceChainID       *string
@@ -296,19 +294,15 @@ type PacketFilter struct {
 	DestinationClientID *string
 	SourceTxHash        *string
 	SequenceNumber      *uint64
-	CreatedFrom         *time.Time
-	CreatedTo           *time.Time
 }
 
-// Page bounds a ListPackets result. Limit and Offset are applied as given;
-// defaults, caps, and has-more probing are the caller's concern.
+// Page bounds a ListPackets result
 type Page struct {
 	Limit  int64
 	Offset int64
 }
 
-// statusList renders statuses for the query. Relay statuses contain no commas,
-// so delimiting is unambiguous; an empty set matches nothing, as intended.
+// statusList renders statuses for the query
 func (f PacketFilter) statusList() *string {
 	statuses := make([]string, len(f.Statuses))
 	for i, status := range f.Statuses {

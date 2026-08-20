@@ -115,10 +115,6 @@ func init() {
 	cmdRelayerPackets.Flags().
 		Uint64Var(&flagRelayerPacketsSequence, "sequence", 0, "packet sequence number")
 	cmdRelayerPackets.Flags().
-		StringVar(&flagRelayerPacketsCreatedFrom, "created-from", "", "only packets first seen at or after this RFC3339 time")
-	cmdRelayerPackets.Flags().
-		StringVar(&flagRelayerPacketsCreatedTo, "created-to", "", "only packets first seen at or before this RFC3339 time")
-	cmdRelayerPackets.Flags().
 		Uint32Var(&flagRelayerPacketsLimit, "limit", 0, "maximum packets to return (default 100, max 1000)")
 	cmdRelayerPackets.Flags().
 		Uint32Var(&flagRelayerPacketsOffset, "offset", 0, "packets to skip, for paging")

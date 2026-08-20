@@ -416,8 +416,6 @@ func (db *PostgresDB) ListPackets(
 		DestinationClientID: filter.DestinationClientID,
 		SourceTxHash:        filter.SourceTxHash,
 		SequenceNumber:      filter.sequenceFilter(),
-		CreatedFrom:         timestampFilter(filter.CreatedFrom),
-		CreatedTo:           timestampFilter(filter.CreatedTo),
 		RowLimit:            int32(page.Limit), //nolint:gosec // bounded by the caller's page cap
 		RowOffset:           int32(page.Offset),
 	})
@@ -431,12 +429,4 @@ func (db *PostgresDB) ListPackets(
 	}
 
 	return packets, nil
-}
-
-func timestampFilter(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-
-	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
