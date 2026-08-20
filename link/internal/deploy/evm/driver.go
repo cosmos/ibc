@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package evm implements the deploy Target for EVM chains. All contract
-// creation bytecode ships inside the binary (go-abigen artifacts plus the
-// embedded AccessManager artifact), so deployment needs only an RPC endpoint.
+// creation bytecode ships inside generated Go bindings, so deployment needs
+// only an RPC endpoint.
 package evm
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
@@ -23,25 +21,15 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27account"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 	"github.com/cosmos/ibc/link/internal/deploy"
-
-	_ "embed"
 )
-
-// accessManagerJSON is the OpenZeppelin AccessManager v5.6.1 foundry
-// artifact (abi + creation bytecode; solc 0.8.28, optimizer 200 runs). To
-// upgrade: forge build an OpenZeppelin checkout and extract
-// {abi, bytecode: {object}} from out/AccessManager.sol/AccessManager.json.
-//
-//go:embed artifacts/access_manager.json
-var accessManagerJSON []byte
 
 // backend is the subset of ethclient the driver needs; narrowed for tests.
 type backend interface {
@@ -104,25 +92,6 @@ func (d *Driver) requireSigner() error {
 	return nil
 }
 
-// accessManagerArtifact parses the embedded AccessManager artifact into its
-// ABI and creation bytecode.
-func accessManagerArtifact() (abi.ABI, []byte, error) {
-	var artifact struct {
-		ABI      json.RawMessage `json:"abi"`
-		Bytecode struct {
-			Object string `json:"object"`
-		} `json:"bytecode"`
-	}
-	if err := json.Unmarshal(accessManagerJSON, &artifact); err != nil {
-		return abi.ABI{}, nil, fmt.Errorf("parse access manager artifact: %w", err)
-	}
-	parsed, err := abi.JSON(bytes.NewReader(artifact.ABI))
-	if err != nil {
-		return abi.ABI{}, nil, fmt.Errorf("parse access manager abi: %w", err)
-	}
-	return parsed, common.FromHex(artifact.Bytecode.Object), nil
-}
-
 // deployProxy deploys an ERC1967 proxy for impl, initialized by packing
 // initialize(initArgs...) from meta's ABI. label names it in logs/errors.
 func (d *Driver) deployProxy(
@@ -157,12 +126,11 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	if err != nil {
 		return deploy.CoreRef{}, err
 	}
-	amABI, amBin, err := accessManagerArtifact()
-	if err != nil {
-		return deploy.CoreRef{}, err
-	}
-
-	amAddr, amTx, am, err := bind.DeployContract(opts, amABI, amBin, d.backend, crypto.PubkeyToAddress(d.key.PublicKey))
+	amAddr, amTx, am, err := accessmanager.DeployAccessManager(
+		opts,
+		d.backend,
+		crypto.PubkeyToAddress(d.key.PublicKey),
+	)
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("deploy AccessManager: %w", err)
 	}
@@ -184,7 +152,7 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	}
 
 	// OZ AccessManager PUBLIC_ROLE is type(uint64).max
-	roleTx, err := am.Transact(opts, "setTargetFunctionRole", routerAddr, selectors, uint64(math.MaxUint64))
+	roleTx, err := am.SetTargetFunctionRole(opts, routerAddr, selectors, uint64(math.MaxUint64))
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("setTargetFunctionRole: %w", err)
 	}

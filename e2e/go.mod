@@ -290,6 +290,7 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
+	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/ibc/link v0.0.0
 	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260810020832-a40957eaf878
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
@@ -346,4 +347,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-replace github.com/cosmos/ibc/link => ../link
+replace (
+	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
+	github.com/cosmos/ibc/link => ../link
+)
