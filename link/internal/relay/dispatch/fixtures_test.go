@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
 	"github.com/cosmos/ibc/link/internal/relay/processors"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
@@ -42,10 +42,10 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.ProofGenerator
+type staticProvers map[string]prover.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
-	gen, ok := s[proofgen.Key(chainID, clientID)]
+func (s staticProvers) Get(chainID, clientID string) (prover.Prover, bool) {
+	gen, ok := s[prover.Key(chainID, clientID)]
 	return gen, ok
 }
 
@@ -70,8 +70,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
-	destProofGen := mocks.NewMockProofGenerator(t)
-	sourceProofGen := mocks.NewMockProofGenerator(t)
+	destProofGen := mocks.NewMockProver(t)
+	sourceProofGen := mocks.NewMockProver(t)
 
 	deps := pipeline.Deps{
 		Storage: db,
@@ -79,9 +79,9 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.SourceChainID:      mocks.NewMockClient(t),
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
-		ProofGenerators: staticProofGenerators{
-			proofgen.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): destProofGen,
-			proofgen.Key(testRoute.SourceChainID, testRoute.SourceClientID):           sourceProofGen,
+		Provers: staticProvers{
+			prover.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): destProofGen,
+			prover.Key(testRoute.SourceChainID, testRoute.SourceClientID):           sourceProofGen,
 		},
 		TxBuilders: staticTxBuilders{
 			testRoute.SourceChainID:      mocks.NewMockTxBuilder(t),

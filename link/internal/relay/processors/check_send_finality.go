@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -20,12 +20,12 @@ import (
 // prove.
 type CheckSendFinality struct {
 	sourceChainClient chains.Client
-	proofGen          proofgen.ProofGenerator
+	proofGen          prover.Prover
 }
 
 func NewCheckSendFinality(
 	chainClients ChainClients,
-	proofGenerators ProofGenerators,
+	proofGenerators Provers,
 	route Route,
 ) (CheckSendFinality, error) {
 	sourceChainClient, ok := chainClients.Get(route.SourceChainID)

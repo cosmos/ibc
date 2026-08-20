@@ -10,7 +10,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/dispatch"
 	"github.com/cosmos/ibc/link/internal/relay/pipeline"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/server"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
@@ -79,7 +79,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Proof generators
-	proofGenerators, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
+	proofGenerators, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
 	if err != nil {
 		return nil, err
 	}
@@ -98,11 +98,11 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 
 	// Relaying dispatcher
 	pipelines := dispatch.NewPipelineSet(logger, cfg, pipeline.Deps{
-		Storage:         db,
-		Chains:          clientSet,
-		ProofGenerators: proofGenerators,
-		TxBuilders:      txBuilders,
-		TxSubmitters:    txSubmitters,
+		Storage:      db,
+		Chains:       clientSet,
+		Provers:      proofGenerators,
+		TxBuilders:   txBuilders,
+		TxSubmitters: txSubmitters,
 	})
 	pollInterval := dispatch.DefaultPollInterval
 	if cfg.Relayer.DispatchPollInterval != nil {

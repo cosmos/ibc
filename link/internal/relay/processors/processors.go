@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 )
@@ -26,9 +26,9 @@ type ChainClients interface {
 	Get(chainID string) (chains.Client, bool)
 }
 
-// ProofGenerators resolves proof generators by (chainIDclientID).
-type ProofGenerators interface {
-	Get(chainID, clientID string) (proofgen.ProofGenerator, bool)
+// Provers resolves proof generators by (chainIDclientID).
+type Provers interface {
+	Get(chainID, clientID string) (prover.Prover, bool)
 }
 
 // TxBuilders resolves tx builders by chain id.

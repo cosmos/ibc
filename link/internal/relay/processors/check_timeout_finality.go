@@ -8,7 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
@@ -16,10 +16,10 @@ import (
 // proof generator currently being able to prove a destination-chain
 // timestamp past the timeout.
 type CheckTimeoutFinality struct {
-	proofGen proofgen.ProofGenerator
+	proofGen prover.Prover
 }
 
-func NewCheckTimeoutFinality(proofGenerators ProofGenerators, route Route) (CheckTimeoutFinality, error) {
+func NewCheckTimeoutFinality(proofGenerators Provers, route Route) (CheckTimeoutFinality, error) {
 	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return CheckTimeoutFinality{}, errors.Errorf(

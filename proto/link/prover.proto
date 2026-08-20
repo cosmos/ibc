@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ibc.v2.prover;
+
+option go_package = "github.com/cosmos/ibc/link/api/v2/prover";
+
+// ProverService generates the proofs a relayer submits for one light client.
+// It mirrors the relayer's internal prover interface so a custom light client
+// can be supported by implementing this service, without the relayer exposing
+// its internals as a Go API.
+//
+// Every request names the light client it is scoped to, so one service can
+// serve many clients across many chains.
+service ProverService {
+  // LatestProvableHeight returns the highest height a subsequent StateProof
+  // and PacketProofs call sharing that height can currently succeed at, with
+  // that height's counterparty-chain timestamp.
+  rpc LatestProvableHeight(LatestProvableHeightRequest) returns (LatestProvableHeightResponse) {}
+
+  // StateProof proves the light client's counterparty state at a height.
+  rpc StateProof(StateProofRequest) returns (StateProofResponse) {}
+
+  // PacketProofs proves each packet's membership or non-membership at a
+  // height, one proof per packet with indices aligned to the request.
+  rpc PacketProofs(PacketProofsRequest) returns (PacketProofsResponse) {}
+}
+
+// Client identifies one configured light client: the chain it lives on and its
+// client id.
+message Client {
+  string chain_id = 1;
+  string client_id = 2;
+}
+
+message LatestProvableHeightRequest {
+  Client client = 1;
+}
+
+message LatestProvableHeightResponse {
+  uint64 height = 1;
+  // Unix seconds, the counterparty-chain timestamp of height.
+  int64 timestamp = 2;
+}
+
+message StateProofRequest {
+  Client client = 1;
+  uint64 height = 2;
+}
+
+message StateProofResponse {
+  bytes proof = 1;
+}
+
+message PacketProofsRequest {
+  Client client = 1;
+  uint64 height = 2;
+  ProofKind kind = 3;
+  repeated Packet packets = 4;
+}
+
+message PacketProofsResponse {
+  // One proof per requested packet, in request order.
+  repeated bytes proofs = 1;
+}
+
+enum ProofKind {
+  PROOF_KIND_UNSPECIFIED = 0;
+  PROOF_KIND_PACKET_COMMITMENT = 1;
+  PROOF_KIND_ACKNOWLEDGEMENT = 2;
+  PROOF_KIND_RECEIPT_ABSENCE = 3;
+}
+
+// Packet mirrors the IBC v2 packet the proof is generated for.
+message Packet {
+  uint64 sequence = 1;
+  string source_client = 2;
+  string destination_client = 3;
+  uint64 timeout_timestamp = 4;
+  repeated Payload payloads = 5;
+}
+
+message Payload {
+  string source_port = 1;
+  string destination_port = 2;
+  string version = 3;
+  string encoding = 4;
+  bytes value = 5;
+}

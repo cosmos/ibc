@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
@@ -22,7 +22,7 @@ import (
 type BatchTimeoutPacket struct {
 	sourceChainClient chains.Client
 	route             Route
-	proofGen          proofgen.ProofGenerator
+	proofGen          prover.Prover
 	txBuilder         txbuilder.TxBuilder
 	txSubmitter       txsubmitter.TxSubmitter
 	storage           TxStorage
@@ -30,7 +30,7 @@ type BatchTimeoutPacket struct {
 
 func NewBatchTimeoutPacket(
 	chainClients ChainClients,
-	proofGenerators ProofGenerators,
+	proofGenerators Provers,
 	txBuilders TxBuilders,
 	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,

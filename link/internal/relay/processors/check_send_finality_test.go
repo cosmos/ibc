@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 )
@@ -31,18 +31,18 @@ func TestNewCheckSendFinality(t *testing.T) {
 	t.Run("missingChainClientErrors", func(t *testing.T) {
 		_, err := NewCheckSendFinality(
 			staticChains{},
-			staticProofGenerators{
-				proofgen.Key(route.DestinationChainID, route.DestinationClientID): mocks.NewMockProofGenerator(t),
+			staticProvers{
+				prover.Key(route.DestinationChainID, route.DestinationClientID): mocks.NewMockProver(t),
 			},
 			route,
 		)
 		require.Error(t, err)
 	})
 
-	t.Run("missingProofGeneratorErrors", func(t *testing.T) {
+	t.Run("missingProverErrors", func(t *testing.T) {
 		_, err := NewCheckSendFinality(
 			staticChains{route.SourceChainID: mocks.NewMockClient(t)},
-			staticProofGenerators{},
+			staticProvers{},
 			route,
 		)
 		require.Error(t, err)
@@ -68,12 +68,12 @@ func TestCheckSendFinalityProcess(t *testing.T) {
 		sourceChainClient := mocks.NewMockClient(t)
 		sourceChainClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
-		proofGen := mocks.NewMockProofGenerator(t)
+		proofGen := mocks.NewMockProver(t)
 		proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
 		p, err := NewCheckSendFinality(
 			staticChains{route.SourceChainID: sourceChainClient},
-			staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+			staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
 			route,
 		)
 		require.NoError(t, err)
@@ -88,12 +88,12 @@ func TestCheckSendFinalityProcess(t *testing.T) {
 		sourceChainClient := mocks.NewMockClient(t)
 		sourceChainClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(150), nil).Once()
 
-		proofGen := mocks.NewMockProofGenerator(t)
+		proofGen := mocks.NewMockProver(t)
 		proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
 		p, err := NewCheckSendFinality(
 			staticChains{route.SourceChainID: sourceChainClient},
-			staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+			staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
 			route,
 		)
 		require.NoError(t, err)

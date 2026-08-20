@@ -41,11 +41,11 @@ type TxSubmitters interface {
 
 // Deps the external systems a pipeline relays through.
 type Deps struct {
-	Storage         Storage
-	Chains          processors.ChainClients
-	ProofGenerators processors.ProofGenerators
-	TxBuilders      processors.TxBuilders
-	TxSubmitters    TxSubmitters
+	Storage      Storage
+	Chains       processors.ChainClients
+	Provers      processors.Provers
+	TxBuilders   processors.TxBuilders
+	TxSubmitters TxSubmitters
 }
 
 // Pipeline relays transfers pushed to its input through the full packet
@@ -115,7 +115,7 @@ func NewPipeline(
 
 	// wait for the send tx's packet event to be at or before what the
 	// destination client can currently prove
-	checkSendFinality, err := processors.NewCheckSendFinality(deps.Chains, deps.ProofGenerators, route)
+	checkSendFinality, err := processors.NewCheckSendFinality(deps.Chains, deps.Provers, route)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing check send finality processor")
 	}
@@ -125,7 +125,7 @@ func NewPipeline(
 
 	// before timing out, wait for the source client to be able to prove a
 	// destination-chain timestamp past the timeout
-	checkTimeoutFinality, err := processors.NewCheckTimeoutFinality(deps.ProofGenerators, route)
+	checkTimeoutFinality, err := processors.NewCheckTimeoutFinality(deps.Provers, route)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing check timeout finality processor")
 	}
@@ -135,7 +135,7 @@ func NewPipeline(
 
 	// deliver timeouts in batches on the source chain
 	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
-		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
@@ -157,7 +157,7 @@ func NewPipeline(
 
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
-		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, dstTxSubmitter, route,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, dstTxSubmitter, route,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch recv packet processor")
@@ -183,7 +183,7 @@ func NewPipeline(
 
 	// wait for the write ack tx's packet event to be at or before what the
 	// source client can currently prove
-	checkWriteAckFinality, err := processors.NewCheckWriteAckFinality(deps.Chains, deps.ProofGenerators, route)
+	checkWriteAckFinality, err := processors.NewCheckWriteAckFinality(deps.Chains, deps.Provers, route)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing check write ack finality processor")
 	}
@@ -197,7 +197,7 @@ func NewPipeline(
 
 	// deliver acks in batches on the source chain
 	batchAckPacket, err := processors.NewBatchAckPacket(
-		deps.Chains, deps.ProofGenerators, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch ack packet processor")
