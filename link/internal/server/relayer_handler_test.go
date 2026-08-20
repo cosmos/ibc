@@ -15,9 +15,8 @@ import (
 )
 
 type relayerServiceStub struct {
-	relay   func(relayerservice.RelayRequest) error
-	status  []relayerservice.PacketStatus
-	packets func(relayerservice.PacketFilter, relayerservice.PacketQuery) (relayerservice.PacketPage, error)
+	relay  func(relayerservice.RelayRequest) error
+	status []relayerservice.PacketStatus
 }
 
 func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.RelayRequest) error {
@@ -26,14 +25,10 @@ func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.Rel
 
 func (s *relayerServiceStub) Packets(
 	_ context.Context,
-	filter relayerservice.PacketFilter,
-	query relayerservice.PacketQuery,
+	_ relayerservice.PacketFilter,
+	_ relayerservice.PacketQuery,
 ) (relayerservice.PacketPage, error) {
-	if s.packets == nil {
-		return relayerservice.PacketPage{Packets: s.status}, nil
-	}
-
-	return s.packets(filter, query)
+	return relayerservice.PacketPage{Packets: s.status}, nil
 }
 
 func TestRelayerHandlerRelaySelection(t *testing.T) {
