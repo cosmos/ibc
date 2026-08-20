@@ -34,16 +34,12 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
-	os.Exit(runMain())
-}
-
-func runMain() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		return 1
+		os.Exit(1)
 	}
-	return 0
 }
 
 // single init() for binding all commands to rootCmd

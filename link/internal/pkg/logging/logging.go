@@ -5,11 +5,14 @@ package logging
 import (
 	"log/slog"
 	"os"
+	"time"
 )
+
+const timeFormat = time.RFC3339
 
 func Default(json bool) *slog.Logger {
 	opts := &slog.HandlerOptions{
-		ReplaceAttr: ReplaceErrorAttr,
+		ReplaceAttr: ReplaceAttrs,
 	}
 
 	var handler slog.Handler
@@ -22,14 +25,16 @@ func Default(json bool) *slog.Logger {
 	return slog.New(handler)
 }
 
-// ReplaceErrorAttr normalizes errors before they reach a slog handler.
-func ReplaceErrorAttr(_ []string, attr slog.Attr) slog.Attr {
-	if attr.Key != "err" {
-		return attr
-	}
-
-	if err, ok := attr.Value.Any().(error); ok && err != nil {
-		return slog.String("err", err.Error())
+// ReplaceAttrs normalizes errors before they reach a slog handler.
+func ReplaceAttrs(_ []string, attr slog.Attr) slog.Attr {
+	switch attr.Key {
+	case "err", "error":
+		if err, ok := attr.Value.Any().(error); ok && err != nil {
+			return slog.String("err", err.Error())
+		}
+	case slog.TimeKey:
+		t := attr.Value.Time().UTC()
+		return slog.String("time", t.Format(timeFormat))
 	}
 
 	return attr
