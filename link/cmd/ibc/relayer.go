@@ -258,7 +258,6 @@ func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
 		if cfg.Server.ListenAddress == "" {
 			return nil, errors.New("server.listenAddr is not configured; pass --host to target a server directly")
 		}
-
 		address = cfg.Server.ListenAddress
 	}
 

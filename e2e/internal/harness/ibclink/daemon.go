@@ -263,8 +263,7 @@ func (d *Relayer) relay(ctx context.Context, sourceChainID string, request *rela
 }
 
 // PacketStatuses returns the relayer's per-packet status for one source
-// transaction. A transaction the relayer has never indexed yields an empty
-// slice rather than an error, because listing reports absence as emptiness.
+// transaction.
 func (d *Relayer) PacketStatuses(
 	ctx context.Context,
 	sourceChainID string,
