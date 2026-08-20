@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -207,6 +208,23 @@ func testListPackets(t *testing.T, s Store) {
 				require.NotEqual(t, first[0].ID, packet.ID, "page one row reappeared on page two")
 				require.NotEqual(t, "0xlistarrival", packet.SourceTxHash,
 					"a packet newer than the cursor must not appear behind it")
+			}
+		})
+
+		// Both engines must reject the same pages: sqlite would otherwise read
+		// a negative limit as unbounded, and postgres narrows the limit to
+		// int32.
+		t.Run("invalidPagesAreRejected", func(t *testing.T) {
+			for name, page := range map[string]Page{
+				"zero limit":            {Limit: 0},
+				"negative limit":        {Limit: -1},
+				"limit overflows int32": {Limit: math.MaxInt32 + 1},
+				"negative cursor":       {Limit: 10, Before: -1},
+			} {
+				t.Run(name, func(t *testing.T) {
+					_, err := s.ListPackets(ctx, PacketFilter{Statuses: all}, page)
+					require.Error(t, err)
+				})
 			}
 		})
 

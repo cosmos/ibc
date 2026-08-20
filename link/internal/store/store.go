@@ -304,6 +304,22 @@ type Page struct {
 	Before int64
 }
 
+// validate rejects pages the engines would answer differently: sqlite reads a
+// negative limit as unbounded where postgres errors, and postgres narrows the
+// limit to int32.
+func (p Page) validate() error {
+	switch {
+	case p.Limit <= 0:
+		return errors.New("page limit must be positive")
+	case p.Limit > math.MaxInt32:
+		return errors.New("page limit must not exceed max int32")
+	case p.Before < 0:
+		return errors.New("page cursor must not be negative")
+	}
+
+	return nil
+}
+
 func (p Page) before() int64 {
 	if p.Before <= 0 {
 		return math.MaxInt64
