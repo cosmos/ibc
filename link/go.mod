@@ -9,6 +9,7 @@ require (
 	connectrpc.com/grpcreflect v1.3.0
 	github.com/cometbft/cometbft v0.39.3
 	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
+	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
 	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260810020832-a40957eaf878
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
@@ -361,4 +362,7 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
+replace (
+	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
+	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
+)
