@@ -22,7 +22,7 @@ type RelayerHandler struct {
 
 // RelayerService defines relayer business logic.
 type RelayerService interface {
-	Relay(ctx context.Context, request relayer.RelayRequest) (relayer.RelayResult, error)
+	Relay(ctx context.Context, request relayer.RelayRequest) ([]relayer.ObservedPacket, error)
 	Packets(
 		ctx context.Context,
 		filter relayer.PacketFilter,
@@ -70,7 +70,7 @@ func (h *RelayerHandler) Relay(
 		}
 	}
 
-	result, err := h.srv.Relay(ctx, request)
+	packets, err := h.srv.Relay(ctx, request)
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -85,7 +85,7 @@ func (h *RelayerHandler) Relay(
 	}
 
 	return connect.NewResponse(&proto.RelayResponse{
-		Packets: observedPacketsToProto(result.Packets),
+		Packets: observedPacketsToProto(packets),
 	}), nil
 }
 
