@@ -41,8 +41,6 @@ type ChainClients interface {
 
 // Store queries used by the relayer gRPC handlers.
 type Store interface {
-	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
-	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
 	ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)
 	Transact(ctx context.Context, call func(store.Repository) error) error
 }
