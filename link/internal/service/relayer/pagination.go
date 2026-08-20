@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Cursors are opaque so the paging position stays an implementation detail:
 func encodeCursor(id int64) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
 }
