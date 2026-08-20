@@ -151,12 +151,6 @@ no separate list to keep in sync, and a client end with no connection cannot be
 watched. Auto-relay is per direction: enabling it on `clientA` alone relays only
 the packets that chain sends.
 
-With it off, the end is relayed only for packets submitted through the API, as
-in `TestTransfer_ManualRelay`. Both paths write the same packet rows and can run
-against the same client at once. Turning it on is a decision to relay everything
-that end sends, so the per-packet selection an API relay request carries does
-not apply to it.
-
 ---
 
 ## `attestors`
