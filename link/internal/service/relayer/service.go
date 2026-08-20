@@ -141,12 +141,6 @@ type ObservedPacket struct {
 	Selection PacketSelection
 }
 
-// RelayResult reports what a relay request did with each packet in the
-// transaction
-type RelayResult struct {
-	Packets []ObservedPacket
-}
-
 // SelectionMode controls which packets a relay request selects for relay.
 type SelectionMode int
 
@@ -196,43 +190,43 @@ func (s *Service) Stop() error {
 	return s.dispatcher.Stop()
 }
 
-func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult, error) {
+func (s *Service) Relay(ctx context.Context, request RelayRequest) ([]ObservedPacket, error) {
 	switch {
 	case request.Selection == SelectionUnspecified:
-		return RelayResult{}, errors.Wrap(ErrInvalidInput, "packet selection is required")
+		return nil, errors.Wrap(ErrInvalidInput, "packet selection is required")
 	case request.Selection == SelectionAll && len(request.Packets) > 0:
-		return RelayResult{}, errors.Wrap(ErrInvalidInput, "packet selectors require explicit selection")
+		return nil, errors.Wrap(ErrInvalidInput, "packet selectors require explicit selection")
 	case request.Selection == SelectionExplicit && len(request.Packets) == 0:
-		return RelayResult{}, errors.Wrap(ErrInvalidInput, "selected packet list is empty")
+		return nil, errors.Wrap(ErrInvalidInput, "selected packet list is empty")
 	case request.Selection != SelectionAll && request.Selection != SelectionExplicit:
-		return RelayResult{}, errors.Wrap(ErrInvalidInput, "invalid packet selection")
+		return nil, errors.Wrap(ErrInvalidInput, "invalid packet selection")
 	}
 
 	txHash, err := s.validateRelayArgs(request.ChainID, request.TxHash)
 	if err != nil {
-		return RelayResult{}, err
+		return nil, err
 	}
 	chainID := request.ChainID
 
 	client, ok := s.chains.Get(chainID)
 	if !ok {
-		return RelayResult{}, errors.Wrapf(ErrNotFound, "client for chain %q", chainID)
+		return nil, errors.Wrapf(ErrNotFound, "client for chain %q", chainID)
 	}
 
 	hashBytes, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
 	if err != nil {
-		return RelayResult{}, errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
+		return nil, errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
 	}
 
 	events, err := client.TxPacketEvents(ctx, hashBytes)
 	if err != nil {
 		if errors.Is(err, ethereum.NotFound) {
-			return RelayResult{}, errors.Wrapf(
+			return nil, errors.Wrapf(
 				ErrNotFound, "no packets found: transaction %s on chain %s", txHash, chainID,
 			)
 		}
 
-		return RelayResult{}, errors.Wrap(err, "extracting packet events")
+		return nil, errors.Wrap(err, "extracting packet events")
 	}
 
 	observedPackets, relayablePackets := s.packetsFromEvents(chainID, txHash, events)
@@ -242,7 +236,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult,
 		selected = request.Packets
 		for _, selector := range selected {
 			if _, ok := observedPackets[selector]; !ok {
-				return RelayResult{}, errors.Wrapf(
+				return nil, errors.Wrapf(
 					ErrInvalidInput,
 					"packet %s/%d is absent from transaction",
 					selector.SourceClientID,
@@ -250,7 +244,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult,
 				)
 			}
 			if _, ok := relayablePackets[selector]; !ok {
-				return RelayResult{}, errors.Wrapf(
+				return nil, errors.Wrapf(
 					ErrFailedPrecondition,
 					"packet %s/%d is not configured for relaying",
 					selector.SourceClientID,
@@ -277,7 +271,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) (RelayResult,
 		return nil
 	})
 	if err != nil {
-		return RelayResult{}, errors.Wrap(err, "recording relay request")
+		return nil, errors.Wrap(err, "recording relay request")
 	}
 
 	s.logger.Info(
@@ -299,7 +293,7 @@ func relayResult(
 	observed map[PacketSelector]struct{},
 	relayable map[PacketSelector]store.UpsertPacket,
 	selected []PacketSelector,
-) RelayResult {
+) []ObservedPacket {
 	selectedSet := make(map[PacketSelector]struct{}, len(selected))
 	for _, selector := range selected {
 		selectedSet[selector] = struct{}{}
@@ -323,7 +317,7 @@ func relayResult(
 		packets = append(packets, ObservedPacket{Selector: selector, Selection: selection})
 	}
 
-	return RelayResult{Packets: packets}
+	return packets
 }
 
 // packetsFromEvents extracts the transaction's send packets. observed holds

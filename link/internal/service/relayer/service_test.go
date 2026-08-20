@@ -159,7 +159,7 @@ func TestRelay(t *testing.T) {
 		// we do not expect UpsertPacket to be called for "unknown-0"
 
 		// ACT
-		result, err := service.Relay(ctx, relaySelected(chainIDEth, txHashUpper, PacketSelector{
+		packets, err := service.Relay(ctx, relaySelected(chainIDEth, txHashUpper, PacketSelector{
 			SourceClientID: "base-0",
 			SequenceNumber: 42,
 		}))
@@ -182,7 +182,7 @@ func TestRelay(t *testing.T) {
 				Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 7},
 				Selection: SelectionStateUnconfigured,
 			},
-		}, result.Packets)
+		}, packets)
 	})
 
 	t.Run("allWithNoRelayablePackets", func(t *testing.T) {
@@ -206,7 +206,7 @@ func TestRelay(t *testing.T) {
 			},
 		}}, nil).Once()
 
-		result, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		packets, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 		require.NoError(t, err)
 
 		// The request succeeds having relayed nothing, so the response has to
@@ -214,7 +214,7 @@ func TestRelay(t *testing.T) {
 		require.Equal(t, []ObservedPacket{{
 			Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 42},
 			Selection: SelectionStateUnconfigured,
-		}}, result.Packets)
+		}}, packets)
 
 		page, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: chainIDEthVar,
@@ -584,6 +584,6 @@ func TestMapPacketState(t *testing.T) {
 
 // relayErr discards the relay result so tests that only assert the error stay
 // one line.
-func relayErr(_ RelayResult, err error) error {
+func relayErr(_ []ObservedPacket, err error) error {
 	return err
 }

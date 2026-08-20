@@ -16,14 +16,14 @@ import (
 
 type relayerServiceStub struct {
 	relay       func(relayerservice.RelayRequest) error
-	relayResult relayerservice.RelayResult
+	relayResult []relayerservice.ObservedPacket
 	status      []relayerservice.PacketStatus
 }
 
 func (s *relayerServiceStub) Relay(
 	_ context.Context,
 	request relayerservice.RelayRequest,
-) (relayerservice.RelayResult, error) {
+) ([]relayerservice.ObservedPacket, error) {
 	return s.relayResult, s.relay(request)
 }
 
@@ -132,7 +132,7 @@ func TestRelayerHandlerPacketStateFilter(t *testing.T) {
 func TestRelayerHandlerReportsPacketSelection(t *testing.T) {
 	handler := NewRelayerHandler(&relayerServiceStub{
 		relay: func(relayerservice.RelayRequest) error { return nil },
-		relayResult: relayerservice.RelayResult{Packets: []relayerservice.ObservedPacket{
+		relayResult: []relayerservice.ObservedPacket{
 			{
 				Selector:  relayerservice.PacketSelector{SourceClientID: "a-0", SequenceNumber: 1},
 				Selection: relayerservice.SelectionStateSelected,
@@ -145,7 +145,7 @@ func TestRelayerHandlerReportsPacketSelection(t *testing.T) {
 				Selector:  relayerservice.PacketSelector{SourceClientID: "b-0", SequenceNumber: 3},
 				Selection: relayerservice.SelectionStateUnconfigured,
 			},
-		}},
+		},
 	})
 
 	res, err := handler.Relay(context.Background(), connect.NewRequest(&proto.RelayRequest{
