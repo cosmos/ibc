@@ -47,13 +47,9 @@ func testListPackets(t *testing.T, s Store) {
 		},
 	}
 
-	finalStatus := []RelayStatus{
-		RelayStatusPending,
-		RelayStatusCompleteWithAck,
-		RelayStatusAwaitingSendFinality,
-	}
-
-	for i, packet := range seed {
+	// UpsertPacket only accepts NOT_SELECTED or PENDING, so each packet is
+	// inserted as PENDING and then transitioned to the status it seeds with.
+	for _, packet := range seed {
 		insert := packet
 		insert.Status = RelayStatusPending
 
@@ -63,7 +59,7 @@ func testListPackets(t *testing.T, s Store) {
 			SourceChainID:  insert.SourceChainID,
 			SourceClientID: insert.PacketSourceClientID,
 			Sequence:       insert.PacketSequenceNumber,
-		}, finalStatus[i]))
+		}, packet.Status))
 	}
 
 	all := AllRelayStatuses()
