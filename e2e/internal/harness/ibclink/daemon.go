@@ -48,6 +48,9 @@ type RelayerOptions struct {
 	// ChainIDs maps harness Chain identifiers to the EVM chain ids (decimal)
 	// the relayer is configured with.
 	ChainIDs map[string]string
+	// ManualRoutes marks route identifiers whose packets must only be relayed
+	// on an explicit Relay call.
+	ManualRoutes map[string]bool
 	// WaitPolicies maps route identifiers to their end-to-end packet wait policy.
 	WaitPolicies map[string]WaitPolicy
 }
@@ -56,6 +59,7 @@ type Relayer struct {
 	readiness    relayerv2.ProcessReadiness
 	client       relayerv2.RelayerApiServiceClient
 	chainIDs     map[string]string
+	manualRoutes map[string]bool
 	waitPolicies map[string]WaitPolicy
 	h            *processHandle
 }
@@ -111,6 +115,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 
 	d := &Relayer{
 		chainIDs:     opts.ChainIDs,
+		manualRoutes: opts.ManualRoutes,
 		waitPolicies: opts.WaitPolicies,
 	}
 
@@ -207,6 +212,10 @@ func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (r
 }
 
 func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
+
+// ManualRoute reports whether packets on the route are only relayed on an
+// explicit Relay call.
+func (d *Relayer) ManualRoute(routeID string) bool { return d.manualRoutes[routeID] }
 
 // WaitPolicy returns the configured packet wait policy for routeID.
 func (d *Relayer) WaitPolicy(routeID string) (WaitPolicy, bool) {

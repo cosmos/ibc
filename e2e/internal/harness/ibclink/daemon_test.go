@@ -81,6 +81,7 @@ func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
 			"chain-a": "31337",
 			"chain-b": "31338",
 		},
+		manualRoutes: map[string]bool{"route-manual": true},
 		waitPolicies: map[string]WaitPolicy{
 			"route-manual": {CompletionBudget: time.Second, StatusPoll: time.Millisecond, StabilityWindow: time.Second},
 		},
@@ -149,6 +150,8 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.Equal(t, []*relayerv2.PacketSelector{{SourceClientId: "client-0", SequenceNumber: 7}},
 		api.relayed[1].GetSelectedPackets().GetPackets())
 
+	require.True(t, relayer.ManualRoute("route-manual"))
+	require.False(t, relayer.ManualRoute("route-auto"))
 	policy, ok := relayer.WaitPolicy("route-manual")
 	require.True(t, ok)
 	require.Equal(t, time.Second, policy.CompletionBudget)

@@ -361,6 +361,7 @@ func buildConfig(
 	}
 	options := ibclink.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
+		ManualRoutes: make(map[string]bool, len(routes)),
 		WaitPolicies: make(map[string]ibclink.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
@@ -405,6 +406,7 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
 		}
+		options.ManualRoutes[string(route.ID)] = route.Manual
 		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]
