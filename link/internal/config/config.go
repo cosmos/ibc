@@ -191,6 +191,18 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 	return config, nil
 }
 
+func (c Config) OverrideFromFlags(flags FlagSet) (Config, error) {
+	if flags.DB != "" {
+		db, err := DBConfigFromURL(flags.DB)
+		if err != nil {
+			return Config{}, errors.Wrap(err, "invalid --db")
+		}
+		c.DB = db
+	}
+
+	return c, nil
+}
+
 func (c Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
 		return errors.Wrap(err, ".server")

@@ -64,7 +64,7 @@ var (
 func keysNew(_ *cobra.Command, args []string) error {
 	globalFlags.SkipConfigValidation()
 
-	cfg, err := setupHomeWithConfig()
+	cfg, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func keysNew(_ *cobra.Command, args []string) error {
 func keysShow(_ *cobra.Command, args []string) error {
 	globalFlags.SkipConfigValidation()
 
-	_, err := setupHomeWithConfig()
+	_, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func keysShow(_ *cobra.Command, args []string) error {
 func keysList(_ *cobra.Command, _ []string) error {
 	globalFlags.SkipConfigValidation()
 
-	_, err := setupHomeWithConfig()
+	_, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func keysList(_ *cobra.Command, _ []string) error {
 func keysImport(_ *cobra.Command, args []string) error {
 	globalFlags.SkipConfigValidation()
 
-	cfg, err := setupHomeWithConfig()
+	cfg, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
 	}
