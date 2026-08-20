@@ -26,6 +26,9 @@ var (
 	cmdKeys = &cobra.Command{
 		Use:   "keys",
 		Short: "Key management commands",
+		PersistentPreRun: func(_ *cobra.Command, _ []string) {
+			globalFlags.SkipConfigValidation()
+		},
 	}
 
 	cmdKeysNew = &cobra.Command{
@@ -62,8 +65,6 @@ var (
 
 //nolint:goconst // cli usage
 func keysNew(_ *cobra.Command, args []string) error {
-	globalFlags.SkipConfigValidation()
-
 	cfg, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
@@ -124,8 +125,6 @@ func keysNew(_ *cobra.Command, args []string) error {
 }
 
 func keysShow(_ *cobra.Command, args []string) error {
-	globalFlags.SkipConfigValidation()
-
 	_, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
@@ -147,8 +146,6 @@ func keysShow(_ *cobra.Command, args []string) error {
 }
 
 func keysList(_ *cobra.Command, _ []string) error {
-	globalFlags.SkipConfigValidation()
-
 	_, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
@@ -178,8 +175,6 @@ func keysList(_ *cobra.Command, _ []string) error {
 }
 
 func keysImport(_ *cobra.Command, args []string) error {
-	globalFlags.SkipConfigValidation()
-
 	cfg, err := setupHomeWithOptionalConfig()
 	if err != nil {
 		return err
