@@ -158,8 +158,7 @@ func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatu
 }
 
 // packetStateFromProto rejects states it does not recognize rather than folding
-// them into the unspecified state, which now matches everything: a caller on a
-// newer schema must not silently receive the unfiltered listing.
+// them into the unspecified state.
 func packetStateFromProto(state proto.PacketState) (relayer.PacketState, error) {
 	switch state {
 	case proto.PacketState_PACKET_STATE_UNSPECIFIED:
