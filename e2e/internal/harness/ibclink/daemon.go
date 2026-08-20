@@ -273,16 +273,32 @@ func (d *Relayer) PacketStatuses(
 	if err != nil {
 		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	response, err := d.client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
+	request := &relayerv2.PacketsRequest{
 		Filter: &relayerv2.PacketFilter{
 			SourceChainId: &chainID,
 			SourceTxHash:  &sourceTxHash,
 		},
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	return response.Msg.GetPackets(), nil
+
+	// A transaction can emit more packets than one page holds. Stopping at the
+	// first page would report the rest as absent, which callers read as "not
+	// indexed yet" and poll on until their budget expires.
+	var statuses []*relayerv2.PacketStatus
+
+	for {
+		response, err := d.client.Packets(ctx, connect.NewRequest(request))
+		if err != nil {
+			return nil, fmt.Errorf("ibc packets: %w", err)
+		}
+
+		statuses = append(statuses, response.Msg.GetPackets()...)
+
+		if !response.Msg.GetHasMore() {
+			return statuses, nil
+		}
+
+		request.Cursor = response.Msg.GetNextCursor()
+	}
 }
 
 func (d *Relayer) wireChainID(harnessChainID string) (string, error) {

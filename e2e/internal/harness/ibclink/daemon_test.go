@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +48,9 @@ type fakeRelayerAPI struct {
 	relayerv2.UnimplementedRelayerApiServiceHandler
 	relayed  []*relayerv2.RelayRequest
 	statuses map[string][]*relayerv2.PacketStatus
+	// pageSize serves results a page at a time; zero returns them all at once.
+	pageSize     int
+	pageRequests int
 }
 
 func (f *fakeRelayerAPI) Relay(
@@ -65,9 +69,35 @@ func (f *fakeRelayerAPI) Packets(
 	// An unknown transaction lists nothing
 	packets := f.statuses[filter.GetSourceChainId()+"/"+filter.GetSourceTxHash()]
 
-	return connect.NewResponse(&relayerv2.PacketsResponse{
-		Packets: packets,
-	}), nil
+	f.pageRequests++
+
+	if f.pageSize <= 0 {
+		return connect.NewResponse(&relayerv2.PacketsResponse{Packets: packets}), nil
+	}
+
+	start := 0
+
+	if cursor := req.Msg.GetCursor(); cursor != "" {
+		parsed, err := strconv.Atoi(cursor)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+
+		start = parsed
+	}
+
+	end := start + f.pageSize
+	if end > len(packets) {
+		end = len(packets)
+	}
+
+	response := &relayerv2.PacketsResponse{Packets: packets[start:end]}
+	if end < len(packets) {
+		response.HasMore = true
+		response.NextCursor = strconv.Itoa(end)
+	}
+
+	return connect.NewResponse(response), nil
 }
 
 func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
@@ -202,4 +232,32 @@ func TestConfigureRelayerRejectsInvalidWaitPolicy(t *testing.T) {
 		WaitPolicies: map[string]WaitPolicy{"route-a": {}},
 	})
 	require.ErrorContains(t, err, `route "route-a" has invalid wait policy`)
+}
+
+// A transaction can emit more packets than one page holds; stopping at the
+// first page reports the rest as absent, which callers poll on until their
+// budget expires.
+func TestPacketStatusesFollowsEveryPage(t *testing.T) {
+	packets := make([]*relayerv2.PacketStatus, 0, 5)
+	for i := 1; i <= 5; i++ {
+		packets = append(packets, &relayerv2.PacketStatus{SequenceNumber: uint64(i)})
+	}
+
+	api := &fakeRelayerAPI{
+		statuses: map[string][]*relayerv2.PacketStatus{"31337/0xabc": packets},
+		pageSize: 2,
+	}
+	relayer := testRelayer(t, api)
+
+	got, err := relayer.PacketStatuses(context.Background(), "chain-a", "0xabc")
+	require.NoError(t, err)
+	require.Len(t, got, 5, "every page must be collected")
+
+	sequences := make([]uint64, len(got))
+	for i, packet := range got {
+		sequences[i] = packet.GetSequenceNumber()
+	}
+
+	require.Equal(t, []uint64{1, 2, 3, 4, 5}, sequences)
+	require.Equal(t, 3, api.pageRequests, "5 packets at 2 per page needs 3 requests")
 }
