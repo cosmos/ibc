@@ -4,7 +4,8 @@ package main
 
 import (
 	"encoding/json"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -75,14 +76,7 @@ var packetStates = map[string]relayerv2.PacketState{
 }
 
 func packetStateNames() []string {
-	names := make([]string, 0, len(packetStates))
-	for name := range packetStates {
-		names = append(names, name)
-	}
-
-	sort.Strings(names)
-
-	return names
+	return slices.Sorted(maps.Keys(packetStates))
 }
 
 func relayerRun(cmd *cobra.Command, _ []string) error {
