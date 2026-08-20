@@ -3,7 +3,7 @@ title: "Relayer"
 description: "The relayer decides when IBC packets move. The attestors and the light client decide what counts as true."
 ---
 
-A relayer is the off-chain service that moves IBC packets between chains. It takes a packet already sent on a source chain, assembles the proof to update the destination chain's light client, and submits it to the destination router. It also delivers acknowledgements and timeouts from the destination chain back to the source chain.
+A relayer is the off-chain service that moves IBC packets between chains. It takes a packet already sent on a source chain, assembles the proof to update the destination chain's light client, and submits it to the destination router. It also delivers acknowledgements and timeouts back to the source chain.
 
 A relayer is trusted for liveness alone: it decides when packets move, not what counts as true. Everything it carries is verified by the light client on the chain it delivers to, so an altered packet or proof would be rejected during verification.
 
@@ -17,21 +17,14 @@ Chains cannot interact with each other directly. Each one keeps a [light client]
 
 Nothing on chain does any of this by itself, so a sent packet moves only when some relayer picks it up.
 
-For a relayer on chains that use attestation light clients, that work divides into four duties:
-
-- **Gather attestations**: ask the [attestors](/light-clients/attestors) a client trusts for a signed statement, and find a quorum among their answers.
-- **Build the proofs**: turn that quorum into the state proof and the packet attestation the light client checks.
-- **Submit packets, acknowledgements, and timeouts**: deliver the packet to the destination chain, and the acknowledgement or the timeout back to the source chain. Multiple packets for the same call get batched into one transaction.
-- **Resubmit**: retry until each packet reaches a terminal state.
-
 ## Routes
 
-A route pairs one source chain and client with one destination chain and client. A packet whose source client has no configured route is never relayed. One relayer process can serve many clients and many routes.
+A route pairs one source chain and client with one destination chain and client. A packet whose source client has no configured route is never relayed.
 
 Routes come from the connections the relayer is configured with. Each connection names:
 
 - A client end on each side, `clientA` and `clientB`. Each end is the other's counterparty, so neither restates the other.
-- A signing key on each end, used to submit relay transactions on that end's own chain.
+- A signing key on each end, used to submit relay transactions on that end's own chain. Each key pays the gas for the transactions it submits, so it has to be funded on that chain. Relaying in both directions submits to both chains, so there must be a funded key on each chain.
 
 Relaying runs both ways, so one connection gives a route in each direction.
 
@@ -81,7 +74,7 @@ A timeout waits on nothing that was submitted, because no transaction carries it
 
 ## Building a proof
 
-What a proof contains depends on the client type it is built for. For [attestation light clients](/light-clients/attestation-light-client), a proof is a set of attestor signatures.
+What a proof contains depends on the client type it is built for. For [attestation light clients](/light-clients/attestation-light-client), a proof is the attested data plus the signatures over it.
 
 The relayer runs one proof generator per configured client. To build an attestation proof it queries the attestors from the client's set that its own configuration lists, all at once. It keeps the responses whose signatures check out, and groups them by byte-identical attestation data. A group that reaches the client's threshold in distinct signers becomes the proof.
 
@@ -100,6 +93,8 @@ Where a call goes depends on what it is:
 
 What each call does once it lands is covered in the [packet lifecycle](/how-ibc-works/packet-lifecycle).
 
+Relay transactions are EIP-1559 transactions, so a chain reporting no base fee is refused before one is built.
+
 A transaction that fails, or stays pending past a time limit, is cleared by the retry stage and delivered again on a later poll.
 
 ## Tracking a packet
@@ -115,7 +110,7 @@ A packet's state reads as one of:
 - **Rejected**: the acknowledgement that came back carried an error.
 - **Relay failed**: the relayer could not take the packet into a pipeline at all, which means its own configuration is wrong rather than the delivery having failed.
 
-The relayer records the stage a packet is entering before it runs that stage. Those stages stay internal: a packet reads Pending through all of them until it settles.
+The pipeline's stages stay internal: a packet reads Pending through all of them until it settles.
 
 ## What a relayer is trusted for
 
@@ -126,6 +121,8 @@ That bounds what a relayer cannot do:
 - It cannot forge or alter a proof. Any change to the signed bytes breaks the digest the signatures are checked against.
 - It cannot alter a packet's contents. The packet it submits has to hash to the commitment the source chain stored.
 
-The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs. That party can be anyone, because the [deployment the IBC CLI performs](/ibc-solidity-contracts/permissions-and-upgrades) opens the router's relay calls to every address.
+The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs.
+
+Replacement is not free, though. Nothing reimburses a relayer for the gas it spends, so packets nobody is willing to pay for stop moving.
 
 A relayer is a courier: it can be slow, and it can be replaced, but it cannot alter what it carries.
