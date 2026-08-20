@@ -130,7 +130,7 @@ func TestRelayerHandlerPacketStateFilter(t *testing.T) {
 func TestRelayerHandlerReportsPacketSelection(t *testing.T) {
 	handler := NewRelayerHandler(&relayerServiceStub{
 		relay: func(relayerservice.RelayRequest) error { return nil },
-		relayResult: relayerservice.RelayResult{Packets: []relayerservice.RelayedPacket{
+		relayResult: relayerservice.RelayResult{Packets: []relayerservice.ObservedPacket{
 			{
 				Selector:  relayerservice.PacketSelector{SourceClientID: "a-0", SequenceNumber: 1},
 				Selection: relayerservice.SelectionStateSelected,

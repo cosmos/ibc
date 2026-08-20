@@ -85,14 +85,14 @@ func (h *RelayerHandler) Relay(
 	}
 
 	return connect.NewResponse(&proto.RelayResponse{
-		Packets: relayedPacketsToProto(result.Packets),
+		Packets: observedPacketsToProto(result.Packets),
 	}), nil
 }
 
-func relayedPacketsToProto(packets []relayer.RelayedPacket) []*proto.RelayedPacket {
-	out := make([]*proto.RelayedPacket, len(packets))
+func observedPacketsToProto(packets []relayer.ObservedPacket) []*proto.ObservedPacket {
+	out := make([]*proto.ObservedPacket, len(packets))
 	for i, packet := range packets {
-		out[i] = &proto.RelayedPacket{
+		out[i] = &proto.ObservedPacket{
 			SourceClientId: packet.Selector.SourceClientID,
 			SequenceNumber: packet.Selector.SequenceNumber,
 			Selection:      packetSelectionToProto(packet.Selection),

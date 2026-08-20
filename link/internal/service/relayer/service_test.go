@@ -170,7 +170,7 @@ func TestRelay(t *testing.T) {
 
 		// Every observed packet is reported, including the unconfigured one that
 		// is otherwise only visible in the logs.
-		require.Equal(t, []RelayedPacket{
+		require.Equal(t, []ObservedPacket{
 			{
 				Selector:  PacketSelector{SourceClientID: "base-0", SequenceNumber: 42},
 				Selection: SelectionStateSelected,
@@ -212,7 +212,7 @@ func TestRelay(t *testing.T) {
 
 		// The request succeeds having relayed nothing, so the response has to
 		// say so; otherwise the caller cannot tell this from a full relay.
-		require.Equal(t, []RelayedPacket{{
+		require.Equal(t, []ObservedPacket{{
 			Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 42},
 			Selection: SelectionStateUnconfigured,
 		}}, result.Packets)
