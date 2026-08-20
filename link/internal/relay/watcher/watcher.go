@@ -183,9 +183,6 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 	return nil
 }
 
-// packetRow selects every discovered packet for relay. Auto-relay is turned on
-// per client end, so enabling it is the decision to relay what that end sends;
-// the per-packet selection an API relay request carries has no say here.
 func packetRow(chainID, destChainID string, event v2.PacketEvent) store.UpsertPacket {
 	return store.UpsertPacket{
 		Status:                    store.RelayStatusPending,
