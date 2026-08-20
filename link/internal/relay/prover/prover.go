@@ -15,6 +15,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/prover/attestation"
+	"github.com/cosmos/ibc/link/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
@@ -123,6 +124,14 @@ func addGenerator(
 		}
 
 		generators[Key(client.ChainID, client.ClientID)] = gen
+
+		return nil
+	case config.ClientTypeRemoteProver:
+		// Nothing to resolve locally: the relayer only knows the endpoint, and
+		// the service decides how the client is proven.
+		generators[Key(client.ChainID, client.ClientID)] = remote.NewFromURL(
+			client.ProverURL, client.ChainID, client.ClientID,
+		)
 
 		return nil
 	default:

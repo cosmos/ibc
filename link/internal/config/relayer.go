@@ -14,6 +14,10 @@ type ClientType string
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
+	// ClientTypeRemoteProver delegates proof generation to a ProverService
+	// over gRPC, which is how a custom light client is supported without
+	// linking its code into the relayer.
+	ClientTypeRemoteProver ClientType = "remoteProver"
 )
 
 // AttestorType how an attestor is reached.
@@ -63,6 +67,9 @@ type ClientEnd struct {
 	Signer   string     `yaml:"signer"`
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
+
+	// ProverURL is the ProverService endpoint for remoteProver clients.
+	ProverURL string `yaml:"proverUrl,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -185,8 +192,12 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".clientId required")
 	case c.Signer == "":
 		return errors.New(".signer required")
-	case c.Type != ClientTypeAttestation:
+	case c.Type == ClientTypeRemoteProver && c.ProverURL == "":
+		return errors.New(".proverUrl required for remoteProver clients")
+	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemoteProver:
 		return errors.Errorf(".type unknown client type: %q", c.Type)
+	case c.Type != ClientTypeRemoteProver && c.ProverURL != "":
+		return errors.Errorf(".proverUrl is only valid for remoteProver clients, got type %q", c.Type)
 	}
 
 	return nil
