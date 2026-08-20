@@ -553,7 +553,11 @@ type renderedDeployment struct {
 
 // renderRelayConfig projects two deployment manifests into the config
 // sections needed to relay between them for every mutual client pair.
-func renderRelayConfig(cfg config.Config, a, b *manifest.Manifest, signerA, signerB string) (renderedDeployment, map[string]string, error) {
+func renderRelayConfig(
+	cfg config.Config,
+	a, b *manifest.Manifest,
+	signerA, signerB string,
+) (renderedDeployment, map[string]string, error) {
 	full := cfg
 	full.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
 	full.Relayer.Connections = nil

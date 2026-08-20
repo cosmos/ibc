@@ -48,7 +48,8 @@ type fakeBatchProcessor struct {
 }
 
 func (p *fakeBatchProcessor) ShouldProcess(t *processors.Transfer) bool { return p.shouldProcess(t) }
-func (p *fakeBatchProcessor) Status() store.RelayStatus                 { return store.RelayStatusDeliverRecvPacket }
+
+func (p *fakeBatchProcessor) Status() store.RelayStatus { return store.RelayStatusDeliverRecvPacket }
 
 func (p *fakeBatchProcessor) Process(_ context.Context, batch []*processors.Transfer) ([]*processors.Transfer, error) {
 	p.processed = append(p.processed, batch)
