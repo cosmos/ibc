@@ -24,10 +24,6 @@ func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.Rel
 	return s.relay(request)
 }
 
-func (s *relayerServiceStub) Status(context.Context, string, string) ([]relayerservice.PacketStatus, error) {
-	return s.status, nil
-}
-
 func (s *relayerServiceStub) Packets(
 	_ context.Context,
 	filter relayerservice.PacketFilter,
