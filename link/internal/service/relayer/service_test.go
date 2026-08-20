@@ -193,8 +193,8 @@ func TestRelay(t *testing.T) {
 		require.NoError(t, service.Relay(ctx, relayAll(chainIDEth, txHashLower)))
 
 		page, err := service.Packets(ctx, PacketFilter{
-			SourceChainID: &chainIDEthVar,
-			SourceTxHash:  &txHashLowerVar,
+			SourceChainID: chainIDEthVar,
+			SourceTxHash:  txHashLowerVar,
 		}, PacketQuery{})
 		require.NoError(t, err)
 		assert.Empty(t, page.Packets)
@@ -457,8 +457,8 @@ func TestPackets(t *testing.T) {
 
 		// ACT
 		page, err := service.Packets(ctx, PacketFilter{
-			SourceChainID: &chainIDEthVar,
-			SourceTxHash:  &txHashLowerVar,
+			SourceChainID: chainIDEthVar,
+			SourceTxHash:  txHashLowerVar,
 		}, PacketQuery{})
 
 		// ASSERT
@@ -482,8 +482,8 @@ func TestPackets(t *testing.T) {
 			}).Return(nil, nil).Once()
 
 		_, err := service.Packets(ctx, PacketFilter{
-			SourceChainID: &chainIDEthVar,
-			SourceTxHash:  &txHashUpperVar,
+			SourceChainID: chainIDEthVar,
+			SourceTxHash:  txHashUpperVar,
 		}, PacketQuery{})
 
 		require.NoError(t, err)
@@ -496,7 +496,7 @@ func TestPackets(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
 
 		malformed := "not-a-hash"
-		_, err := service.Packets(ctx, PacketFilter{SourceTxHash: &malformed}, PacketQuery{})
+		_, err := service.Packets(ctx, PacketFilter{SourceTxHash: malformed}, PacketQuery{})
 
 		require.ErrorIs(t, err, ErrInvalidInput)
 	})
@@ -514,7 +514,7 @@ func TestPackets(t *testing.T) {
 			}).Return(nil, nil).Once()
 
 		pending := StatePending
-		_, err := service.Packets(ctx, PacketFilter{State: &pending}, PacketQuery{})
+		_, err := service.Packets(ctx, PacketFilter{State: pending}, PacketQuery{})
 
 		require.NoError(t, err)
 		require.Contains(t, seen, store.RelayStatusAwaitingSendFinality,
