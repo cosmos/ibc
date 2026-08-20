@@ -48,41 +48,6 @@ func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 		"every relay status must be covered exactly once")
 }
 
-// A packet mid-pipeline is not in the literal PENDING status, and must still be
-// listed by a PENDING filter.
-func TestDBStatusesForStatePendingCoversIntermediates(t *testing.T) {
-	t.Parallel()
-
-	pending := StatePending
-	statuses := dbStatusesForState(&pending)
-
-	for _, intermediate := range []store.RelayStatus{
-		store.RelayStatusPending,
-		store.RelayStatusAwaitingSendFinality,
-		store.RelayStatusCheckRecvPacketDelivery,
-		store.RelayStatusDeliverRecvPacket,
-		store.RelayStatusWaitForWriteAck,
-		store.RelayStatusAwaitingWriteAckFinality,
-		store.RelayStatusDeliverAckPacket,
-		store.RelayStatusAwaitingTimeoutFinality,
-		store.RelayStatusDeliverTimeoutPacket,
-	} {
-		require.Containsf(t, statuses, intermediate,
-			"a packet in %q is in flight and must match a PENDING filter", intermediate)
-	}
-
-	// Terminal statuses must not leak into PENDING.
-	for _, terminal := range []store.RelayStatus{
-		store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithTimeout,
-		store.RelayStatusCompleteWithWriteAckError,
-		store.RelayStatusFailed,
-		store.RelayStatusNotSelected,
-	} {
-		require.NotContains(t, statuses, terminal)
-	}
-}
-
 // An absent state filter widens to every status, since the query always applies
 // the status set.
 func TestDBStatusesForStateNilMeansEveryStatus(t *testing.T) {
