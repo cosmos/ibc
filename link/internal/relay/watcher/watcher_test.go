@@ -32,6 +32,7 @@ var blockTime = time.Unix(1_700_000_000, 0).UTC()
 // chain is both the Subscriber and the single subscription it hands out, so a
 // test can act as the chain: deliver events on out, fail the stream on errs.
 type chain struct {
+	failWith     error
 	clientIDs    []string
 	ctx          context.Context //nolint:containedctx // the test asserts on its cancellation
 	out          chan<- v2.PacketEvent
@@ -48,10 +49,19 @@ func (c *chain) SubscribeSendPackets(
 	clientIDs []string,
 	out chan<- v2.PacketEvent,
 ) (v2.Subscription, error) {
+	if err := c.failWith; err != nil {
+		c.failWith = nil
+
+		return nil, err
+	}
+
 	c.clientIDs, c.ctx, c.out = clientIDs, ctx, out
 
 	return c, nil
 }
+
+// failNext makes the next subscribe fail rather than open.
+func (c *chain) failNext(err error) { c.failWith = err }
 
 func (c *chain) Err() <-chan error { return c.errs }
 
@@ -215,6 +225,20 @@ func TestWatcherStart(t *testing.T) {
 			// subscription's goroutine; unsubscribing alone leaves it running
 			assert.True(t, c.unsubscribed)
 			require.Error(t, c.ctx.Err())
+		})
+	})
+
+	t.Run("subscribeErrorFailsStart", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			c := newChain()
+			c.failNext(errors.New("dial failed"))
+			w := newTestWatcher(c, newPacketStore(nil))
+
+			require.ErrorContains(t, w.Start(), "subscribing to send packets")
+
+			// a watcher that never started has nothing to stop, and Stop must
+			// not block waiting for a loop that was never running
+			require.NoError(t, w.Stop())
 		})
 	})
 

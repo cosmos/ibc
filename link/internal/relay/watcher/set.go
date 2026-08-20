@@ -44,6 +44,7 @@ func NewSetFromConfig(
 func (s Set) Start() error {
 	for _, w := range s {
 		if err := w.Start(); err != nil {
+			_ = s.Stop() // best effort stop on startup error
 			return errors.Wrapf(err, "starting watcher for chain %q", w.chainID)
 		}
 	}

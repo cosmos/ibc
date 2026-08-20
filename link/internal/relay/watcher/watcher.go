@@ -83,15 +83,51 @@ func destChainsOf(chainID string, connections []config.ConnectionConfig) map[str
 	return destChains
 }
 
-// Start begins the subscription loop in its own goroutine.
+// Start subscribes and begins the event loop in its own goroutine, failing if
+// the subscription cannot be opened.
 func (w *Watcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	stream, err := w.subscribe(ctx)
+	if err != nil {
+		cancel()
+
+		return err
+	}
+
 	w.cancel = cancel
 	w.stopped = make(chan struct{})
 
-	go w.run(ctx)
+	go w.run(ctx, stream)
 
 	return nil
+}
+
+// stream is one open subscription and the events it feeds.
+type stream struct {
+	sub    v2.Subscription
+	events <-chan v2.PacketEvent
+	cancel context.CancelFunc
+}
+
+// close releases all of a subscription's resources
+func (s stream) close() {
+	s.sub.Unsubscribe()
+	s.cancel()
+}
+
+func (w *Watcher) subscribe(ctx context.Context) (stream, error) {
+	events := make(chan v2.PacketEvent, eventBuffer)
+
+	subCtx, cancel := context.WithCancel(ctx)
+	sub, err := w.subscriber.SubscribeSendPackets(subCtx, w.clientIDs, events)
+	if err != nil {
+		cancel()
+
+		return stream{}, errors.Wrap(err, "subscribing to send packets")
+	}
+
+	return stream{sub: sub, events: events, cancel: cancel}, nil
 }
 
 // Stop cancels the subscription loop and blocks until it has exited.
@@ -106,22 +142,9 @@ func (w *Watcher) Stop() error {
 	return nil
 }
 
-func (w *Watcher) run(ctx context.Context) {
+func (w *Watcher) run(ctx context.Context, stream stream) {
 	defer close(w.stopped)
-
-	events := make(chan v2.PacketEvent, eventBuffer)
-
-	// canceling the per-subscription context is what releases the
-	// subscription's goroutine; unsubscribing alone leaves it running
-	subCtx, subCancel := context.WithCancel(ctx)
-	defer subCancel()
-
-	sub, err := w.subscriber.SubscribeSendPackets(subCtx, w.clientIDs, events)
-	if err != nil {
-		w.logger.Error("Subscribing to send packets failed", "err", err)
-		return
-	}
-	defer sub.Unsubscribe()
+	defer stream.close()
 
 	w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
 
@@ -129,15 +152,12 @@ func (w *Watcher) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-
-		case event := <-events:
+		case event := <-stream.events:
 			if err := w.HandleEvent(ctx, event); err != nil {
 				w.logger.Error("Recording send packet", "err", err)
 			}
-
-		case err := <-sub.Err():
+		case err := <-stream.sub.Err():
 			w.logger.Error("Send packet subscription ended", "err", err)
-
 			return
 		}
 	}

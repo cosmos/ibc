@@ -83,7 +83,7 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 	}
 
 	if err := app.RelayerService.Start(); err != nil {
-		app.Logger.Error("Failed to start relayer dispatch loop", "err", err)
+		app.Logger.Error("Failed to start relayer loop", "err", err)
 		_ = app.Server.Stop()
 		return err
 	}

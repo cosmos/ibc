@@ -5,7 +5,9 @@ package watcher
 import (
 	"log/slog"
 	"testing"
+	"testing/synctest"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -57,6 +59,26 @@ func TestNewSetFromConfig(t *testing.T) {
 		)
 		require.ErrorContains(t, err, sourceChainID)
 		assert.Nil(t, set)
+	})
+}
+
+// TestSetStartUnwinds covers the watchers a failed start leaves behind: the
+// ones already running have to be stopped, or their subscriptions outlive the
+// startup that failed.
+func TestSetStartUnwinds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		running, failing := newChain(), newChain()
+		failing.failNext(errors.New("dial failed"))
+
+		set := Set{
+			newTestWatcher(running, newPacketStore(nil)),
+			newTestWatcher(failing, newPacketStore(nil)),
+		}
+
+		require.ErrorContains(t, set.Start(), sourceChainID)
+		synctest.Wait()
+
+		assert.True(t, running.unsubscribed)
 	})
 }
 
