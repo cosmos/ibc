@@ -92,9 +92,8 @@ func TestRelayerHandlerPacketsMapsNotSelected(t *testing.T) {
 	assert.Equal(t, proto.PacketState_PACKET_STATE_NOT_SELECTED, response.Msg.GetPackets()[0].GetState())
 }
 
-// An unspecified state names no constraint, but a state this build does not
-// know must be rejected: folding it into unspecified would silently return the
-// unfiltered listing to a caller that asked for a narrow one.
+// Folding an unknown state into unspecified would hand a caller that asked for
+// a narrow listing the unfiltered one.
 func TestRelayerHandlerPacketStateFilter(t *testing.T) {
 	for _, tt := range []struct {
 		name    string

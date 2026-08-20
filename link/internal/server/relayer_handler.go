@@ -157,8 +157,7 @@ func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatu
 	return out
 }
 
-// packetStateFromProto rejects states it does not recognize rather than folding
-// them into the unspecified state.
+// Unrecognized states are rejected, not folded into unspecified.
 func packetStateFromProto(state proto.PacketState) (relayer.PacketState, error) {
 	switch state {
 	case proto.PacketState_PACKET_STATE_UNSPECIFIED:

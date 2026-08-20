@@ -160,8 +160,7 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerPackets(cmd *cobra.Command, _ []string) error {
-	// Unset flags leave the zero value, which the endpoint reads as no
-	// constraint on that field.
+	// An unset flag leaves the zero value: no constraint on that field.
 	filter := &relayerv2.PacketFilter{
 		SourceChainId:       flagRelayerSourceChainID,
 		DestinationChainId:  flagRelayerPacketsDestChainID,

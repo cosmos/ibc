@@ -430,8 +430,7 @@ func (x *PacketsRequest) GetCursor() string {
 	return ""
 }
 
-// Every field is optional; the zero value means no constraint, and all
-// constrained fields must match.
+// The zero value means no constraint; constrained fields must all match.
 type PacketFilter struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	SourceChainId       string                 `protobuf:"bytes,1,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`

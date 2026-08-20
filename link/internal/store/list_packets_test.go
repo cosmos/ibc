@@ -47,8 +47,7 @@ func testListPackets(t *testing.T, s Store) {
 		},
 	}
 
-	// UpsertPacket only accepts NOT_SELECTED or PENDING, so each packet is
-	// inserted as PENDING and then transitioned to the status it seeds with.
+	// UpsertPacket only accepts NOT_SELECTED or PENDING, so seed then transition.
 	for _, packet := range seed {
 		insert := packet
 		insert.Status = RelayStatusPending
@@ -81,8 +80,7 @@ func testListPackets(t *testing.T, s Store) {
 	str := func(v string) *string { return &v }
 
 	t.Run("listPackets", func(t *testing.T) {
-		// Every filter narrows the same fixture, so the cases differ only in the
-		// filter and what it should match.
+		// Every case narrows the same fixture.
 		t.Run("filters", func(t *testing.T) {
 			sequence := uint64(3)
 
@@ -214,9 +212,7 @@ func testListPackets(t *testing.T, s Store) {
 			}
 		})
 
-		// Both engines must reject the same pages: sqlite would otherwise read
-		// a negative limit as unbounded, and postgres narrows the limit to
-		// int32.
+		// Both engines must reject the same pages.
 		t.Run("invalidPagesAreRejected", func(t *testing.T) {
 			for name, page := range map[string]Page{
 				"zero limit":            {Limit: 0},
