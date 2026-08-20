@@ -359,8 +359,7 @@ func (s *Service) Packets(
 		return nil, false, err
 	}
 
-	// One row past the page reveals whether another page exists, without
-	// counting every match.
+	// One row past the page reveals another page without counting matches.
 	page = normalizePage(page)
 	page.Limit++
 

@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"slices"
 	"strings"
 	"time"
 
@@ -140,42 +139,53 @@ type RelayRequest struct {
 // RelayStatus the relay state of a packet.
 type RelayStatus string
 
-// Packet statuses. Declaring one registers it, so AllRelayStatuses cannot fall
-// out of step with the set that exists.
-var (
-	RelayStatusNotSelected                = relayStatus("NOT_SELECTED")
-	RelayStatusPending                    = relayStatus("PENDING")
-	RelayStatusAwaitingSendFinality       = relayStatus("AWAITING_SEND_FINALITY")
-	RelayStatusCheckRecvPacketDelivery    = relayStatus("CHECK_RECV_PACKET_DELIVERY")
-	RelayStatusGetRecvPacket              = relayStatus("GET_RECV_PACKET")
-	RelayStatusDeliverRecvPacket          = relayStatus("DELIVER_RECV_PACKET")
-	RelayStatusWaitForWriteAck            = relayStatus("WAIT_FOR_WRITE_ACK")
-	RelayStatusAwaitingWriteAckFinality   = relayStatus("AWAITING_WRITE_ACK_FINALITY")
-	RelayStatusCheckAckPacketDelivery     = relayStatus("CHECK_ACK_PACKET_DELIVERY")
-	RelayStatusGetAckPacket               = relayStatus("GET_ACK_PACKET")
-	RelayStatusDeliverAckPacket           = relayStatus("DELIVER_ACK_PACKET")
-	RelayStatusAwaitingTimeoutFinality    = relayStatus("AWAITING_TIMEOUT_FINALITY")
-	RelayStatusCheckTimeoutPacketDelivery = relayStatus("CHECK_TIMEOUT_PACKET_DELIVERY")
-	RelayStatusGetTimeoutPacket           = relayStatus("GET_TIMEOUT_PACKET")
-	RelayStatusDeliverTimeoutPacket       = relayStatus("DELIVER_TIMEOUT_PACKET")
-	RelayStatusCompleteWithAck            = relayStatus("COMPLETE_WITH_ACK")
-	RelayStatusCompleteWithWriteAckError  = relayStatus("COMPLETE_WITH_WRITE_ACK_ERROR")
-	RelayStatusCompleteWithTimeout        = relayStatus("COMPLETE_WITH_TIMEOUT")
-	RelayStatusFailed                     = relayStatus("FAILED")
+// Packet statuses
+const (
+	RelayStatusNotSelected                RelayStatus = "NOT_SELECTED"
+	RelayStatusPending                    RelayStatus = "PENDING"
+	RelayStatusAwaitingSendFinality       RelayStatus = "AWAITING_SEND_FINALITY"
+	RelayStatusCheckRecvPacketDelivery    RelayStatus = "CHECK_RECV_PACKET_DELIVERY"
+	RelayStatusGetRecvPacket              RelayStatus = "GET_RECV_PACKET"
+	RelayStatusDeliverRecvPacket          RelayStatus = "DELIVER_RECV_PACKET"
+	RelayStatusWaitForWriteAck            RelayStatus = "WAIT_FOR_WRITE_ACK"
+	RelayStatusAwaitingWriteAckFinality   RelayStatus = "AWAITING_WRITE_ACK_FINALITY"
+	RelayStatusCheckAckPacketDelivery     RelayStatus = "CHECK_ACK_PACKET_DELIVERY"
+	RelayStatusGetAckPacket               RelayStatus = "GET_ACK_PACKET"
+	RelayStatusDeliverAckPacket           RelayStatus = "DELIVER_ACK_PACKET"
+	RelayStatusAwaitingTimeoutFinality    RelayStatus = "AWAITING_TIMEOUT_FINALITY"
+	RelayStatusCheckTimeoutPacketDelivery RelayStatus = "CHECK_TIMEOUT_PACKET_DELIVERY"
+	RelayStatusGetTimeoutPacket           RelayStatus = "GET_TIMEOUT_PACKET"
+	RelayStatusDeliverTimeoutPacket       RelayStatus = "DELIVER_TIMEOUT_PACKET"
+	RelayStatusCompleteWithAck            RelayStatus = "COMPLETE_WITH_ACK"
+	RelayStatusCompleteWithWriteAckError  RelayStatus = "COMPLETE_WITH_WRITE_ACK_ERROR"
+	RelayStatusCompleteWithTimeout        RelayStatus = "COMPLETE_WITH_TIMEOUT"
+	RelayStatusFailed                     RelayStatus = "FAILED"
 )
 
-var allRelayStatuses []RelayStatus
-
-func relayStatus(name string) RelayStatus {
-	status := RelayStatus(name)
-	allRelayStatuses = append(allRelayStatuses, status)
-
-	return status
-}
-
 // AllRelayStatuses lets callers derive groupings rather than restate them.
+// TestAllRelayStatusesIsComplete fails if a status above is missing here.
 func AllRelayStatuses() []RelayStatus {
-	return slices.Clone(allRelayStatuses)
+	return []RelayStatus{
+		RelayStatusNotSelected,
+		RelayStatusPending,
+		RelayStatusAwaitingSendFinality,
+		RelayStatusCheckRecvPacketDelivery,
+		RelayStatusGetRecvPacket,
+		RelayStatusDeliverRecvPacket,
+		RelayStatusWaitForWriteAck,
+		RelayStatusAwaitingWriteAckFinality,
+		RelayStatusCheckAckPacketDelivery,
+		RelayStatusGetAckPacket,
+		RelayStatusDeliverAckPacket,
+		RelayStatusAwaitingTimeoutFinality,
+		RelayStatusCheckTimeoutPacketDelivery,
+		RelayStatusGetTimeoutPacket,
+		RelayStatusDeliverTimeoutPacket,
+		RelayStatusCompleteWithAck,
+		RelayStatusCompleteWithWriteAckError,
+		RelayStatusCompleteWithTimeout,
+		RelayStatusFailed,
+	}
 }
 
 // WriteAckStatus the execution result carried by a write ack.
