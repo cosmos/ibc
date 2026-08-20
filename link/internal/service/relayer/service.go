@@ -107,13 +107,13 @@ type PacketPage struct {
 
 // PacketFilter narrows a Packets listing
 type PacketFilter struct {
-	SourceChainID       *string
-	DestinationChainID  *string
-	SourceClientID      *string
-	DestinationClientID *string
-	State               *PacketState
-	SourceTxHash        *string
-	SequenceNumber      *uint64
+	SourceChainID       string
+	DestinationChainID  string
+	SourceClientID      string
+	DestinationClientID string
+	State               PacketState
+	SourceTxHash        string
+	SequenceNumber      uint64
 }
 
 // PacketSelector identifies a packet in a source transaction.
@@ -388,30 +388,25 @@ func (s *Service) Packets(
 func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
 	out := store.PacketFilter{
 		Statuses:            dbStatusesForState(filter.State),
-		SourceChainID:       filter.SourceChainID,
-		DestinationChainID:  filter.DestinationChainID,
-		SourceClientID:      filter.SourceClientID,
-		DestinationClientID: filter.DestinationClientID,
-		SequenceNumber:      filter.SequenceNumber,
+		SourceChainID:       constrained(filter.SourceChainID),
+		DestinationChainID:  constrained(filter.DestinationChainID),
+		SourceClientID:      constrained(filter.SourceClientID),
+		DestinationClientID: constrained(filter.DestinationClientID),
+		SequenceNumber:      constrained(filter.SequenceNumber),
 	}
 
-	for _, chainID := range []*string{filter.SourceChainID, filter.DestinationChainID} {
-		if chainID == nil {
+	for _, chainID := range []string{filter.SourceChainID, filter.DestinationChainID} {
+		if chainID == "" {
 			continue
 		}
 
-		if _, ok := s.cfg.Chain(*chainID); !ok {
-			return store.PacketFilter{}, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", *chainID)
+		if _, ok := s.cfg.Chain(chainID); !ok {
+			return store.PacketFilter{}, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 		}
 	}
 
-	if filter.SourceTxHash != nil {
-		chainID := ""
-		if filter.SourceChainID != nil {
-			chainID = *filter.SourceChainID
-		}
-
-		normalized, err := s.normalizeTxHash(chainID, *filter.SourceTxHash)
+	if filter.SourceTxHash != "" {
+		normalized, err := s.normalizeTxHash(filter.SourceChainID, filter.SourceTxHash)
 		if err != nil {
 			return store.PacketFilter{}, err
 		}
@@ -422,18 +417,31 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 	return out, nil
 }
 
+// constrained lowers a filter value for the store, where a nil parameter is the
+// absent filter. The zero value means the caller named no constraint.
+func constrained[T comparable](value T) *T {
+	var zero T
+	if value == zero {
+		return nil
+	}
+
+	return &value
+}
+
 // dbStatusesForState expands an API state into the relay statuses it covers; a
 // nil state means every status
-func dbStatusesForState(state *PacketState) []store.RelayStatus {
+// dbStatusesForState expands an API state into the relay statuses it covers.
+// StateUnspecified means the caller named no state, so every status matches.
+func dbStatusesForState(state PacketState) []store.RelayStatus {
 	all := store.AllRelayStatuses()
-	if state == nil {
+	if state == StateUnspecified {
 		return all
 	}
 
 	matching := make([]store.RelayStatus, 0, len(all))
 
 	for _, status := range all {
-		if mapPacketState(status) == *state {
+		if mapPacketState(status) == state {
 			matching = append(matching, status)
 		}
 	}

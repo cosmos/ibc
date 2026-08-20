@@ -160,23 +160,15 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerPackets(cmd *cobra.Command, _ []string) error {
-	filter := &relayerv2.PacketFilter{}
-
-	optional := func(value string, into **string) {
-		if value != "" {
-			v := value
-			*into = &v
-		}
-	}
-
-	optional(flagRelayerSourceChainID, &filter.SourceChainId)
-	optional(flagRelayerPacketsDestChainID, &filter.DestinationChainId)
-	optional(flagRelayerPacketsSrcClientID, &filter.SourceClientId)
-	optional(flagRelayerPacketsDestClientID, &filter.DestinationClientId)
-	optional(flagRelayerTxHash, &filter.SourceTxHash)
-
-	if cmd.Flags().Changed("sequence") {
-		filter.SequenceNumber = &flagRelayerPacketsSequence
+	// Unset flags leave the zero value, which the endpoint reads as no
+	// constraint on that field.
+	filter := &relayerv2.PacketFilter{
+		SourceChainId:       flagRelayerSourceChainID,
+		DestinationChainId:  flagRelayerPacketsDestChainID,
+		SourceClientId:      flagRelayerPacketsSrcClientID,
+		DestinationClientId: flagRelayerPacketsDestClientID,
+		SourceTxHash:        flagRelayerTxHash,
+		SequenceNumber:      flagRelayerPacketsSequence,
 	}
 
 	if flagRelayerPacketsState != "" {
@@ -188,7 +180,7 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 			)
 		}
 
-		filter.State = &state
+		filter.State = state
 	}
 
 	req := &relayerv2.PacketsRequest{

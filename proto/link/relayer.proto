@@ -54,15 +54,16 @@ message PacketsRequest {
   string cursor = 3;
 }
 
-// Every field is optional; all present fields must match.
+// Every field is optional; the zero value means no constraint, and all
+// constrained fields must match.
 message PacketFilter {
-  optional string source_chain_id = 1;
-  optional string destination_chain_id = 2;
-  optional string source_client_id = 3;
-  optional string destination_client_id = 4;
-  optional PacketState state = 5;
-  optional string source_tx_hash = 6;
-  optional uint64 sequence_number = 7;
+  string source_chain_id = 1;
+  string destination_chain_id = 2;
+  string source_client_id = 3;
+  string destination_client_id = 4;
+  PacketState state = 5;
+  string source_tx_hash = 6;
+  uint64 sequence_number = 7;
 }
 
 message PacketsResponse {

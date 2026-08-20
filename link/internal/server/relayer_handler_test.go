@@ -91,3 +91,34 @@ func TestRelayerHandlerPacketsMapsNotSelected(t *testing.T) {
 	require.Len(t, response.Msg.GetPackets(), 1)
 	assert.Equal(t, proto.PacketState_PACKET_STATE_NOT_SELECTED, response.Msg.GetPackets()[0].GetState())
 }
+
+// An unspecified state names no constraint, but a state this build does not
+// know must be rejected: folding it into unspecified would silently return the
+// unfiltered listing to a caller that asked for a narrow one.
+func TestRelayerHandlerPacketStateFilter(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		state   proto.PacketState
+		wantErr bool
+	}{
+		{"unspecified matches everything", proto.PacketState_PACKET_STATE_UNSPECIFIED, false},
+		{"known state", proto.PacketState_PACKET_STATE_SUCCEEDED, false},
+		{"unknown state is rejected", proto.PacketState(9999), true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewRelayerHandler(&relayerServiceStub{})
+
+			_, err := handler.Packets(context.Background(), connect.NewRequest(&proto.PacketsRequest{
+				Filter: &proto.PacketFilter{State: tt.state},
+			}))
+
+			if !tt.wantErr {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+		})
+	}
+}

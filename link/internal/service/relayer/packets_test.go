@@ -28,7 +28,7 @@ func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 		StateRejected,
 		StateRelayFailed,
 	} {
-		for _, status := range dbStatusesForState(&state) {
+		for _, status := range dbStatusesForState(state) {
 			if previous, seen := covered[status]; seen {
 				t.Fatalf("status %q claimed by both %v and %v", status, previous, state)
 			}
@@ -48,20 +48,12 @@ func TestDBStatusesForStateIsExhaustive(t *testing.T) {
 		"every relay status must be covered exactly once")
 }
 
-// An absent state filter widens to every status, since the query always applies
-// the status set.
-func TestDBStatusesForStateNilMeansEveryStatus(t *testing.T) {
+// The zero value names no state, so the listing is not narrowed. A filter that
+// matched nothing would be indistinguishable from an empty table.
+func TestDBStatusesForStateUnspecifiedMeansEveryStatus(t *testing.T) {
 	t.Parallel()
 
-	require.ElementsMatch(t, store.AllRelayStatuses(), dbStatusesForState(nil))
-}
-
-// The inverse: an unmapped state narrows to nothing rather than widening.
-func TestDBStatusesForStateUnspecifiedMatchesNothing(t *testing.T) {
-	t.Parallel()
-
-	unspecified := StateUnspecified
-	require.Empty(t, dbStatusesForState(&unspecified))
+	require.ElementsMatch(t, store.AllRelayStatuses(), dbStatusesForState(StateUnspecified))
 }
 
 // The service pages by asking for one row past the page and trimming it, so a
@@ -175,11 +167,11 @@ func TestPacketsRejectsUnconfiguredChains(t *testing.T) {
 		name   string
 		filter PacketFilter
 	}{
-		{"source chain alone", PacketFilter{SourceChainID: &unknown}},
-		{"destination chain alone", PacketFilter{DestinationChainID: &unknown}},
-		{"source chain with tx hash", PacketFilter{SourceChainID: &unknown, SourceTxHash: &hash}},
+		{"source chain alone", PacketFilter{SourceChainID: unknown}},
+		{"destination chain alone", PacketFilter{DestinationChainID: unknown}},
+		{"source chain with tx hash", PacketFilter{SourceChainID: unknown, SourceTxHash: hash}},
 		{"unknown destination with known source", PacketFilter{
-			SourceChainID: &known, DestinationChainID: &unknown,
+			SourceChainID: known, DestinationChainID: unknown,
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -210,7 +202,7 @@ func TestPacketsUnknownDataFiltersReturnEmpty(t *testing.T) {
 	client := "no-such-client"
 
 	page, err := service.Packets(ctx, PacketFilter{
-		SourceTxHash: &hash, SequenceNumber: &sequence, SourceClientID: &client,
+		SourceTxHash: hash, SequenceNumber: sequence, SourceClientID: client,
 	}, PacketQuery{})
 	require.NoError(t, err)
 	require.Empty(t, page.Packets)

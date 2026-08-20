@@ -91,7 +91,10 @@ func (h *RelayerHandler) Packets(
 	ctx context.Context,
 	req *connect.Request[proto.PacketsRequest],
 ) (*connect.Response[proto.PacketsResponse], error) {
-	filter := packetFilterFromProto(req.Msg.GetFilter())
+	filter, err := packetFilterFromProto(req.Msg.GetFilter())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 
 	h.logger.Info("Packets", "limit", req.Msg.GetLimit(), "cursor", req.Msg.GetCursor())
 
@@ -116,26 +119,25 @@ func (h *RelayerHandler) Packets(
 	}), nil
 }
 
-func packetFilterFromProto(filter *proto.PacketFilter) relayer.PacketFilter {
+func packetFilterFromProto(filter *proto.PacketFilter) (relayer.PacketFilter, error) {
 	if filter == nil {
-		return relayer.PacketFilter{}
+		return relayer.PacketFilter{}, nil
 	}
 
-	out := relayer.PacketFilter{
-		SourceChainID:       filter.SourceChainId,
-		DestinationChainID:  filter.DestinationChainId,
-		SourceClientID:      filter.SourceClientId,
-		DestinationClientID: filter.DestinationClientId,
-		SourceTxHash:        filter.SourceTxHash,
-		SequenceNumber:      filter.SequenceNumber,
+	state, err := packetStateFromProto(filter.GetState())
+	if err != nil {
+		return relayer.PacketFilter{}, err
 	}
 
-	if filter.State != nil {
-		state := packetStateFromProto(*filter.State)
-		out.State = &state
-	}
-
-	return out
+	return relayer.PacketFilter{
+		SourceChainID:       filter.GetSourceChainId(),
+		DestinationChainID:  filter.GetDestinationChainId(),
+		SourceClientID:      filter.GetSourceClientId(),
+		DestinationClientID: filter.GetDestinationClientId(),
+		SourceTxHash:        filter.GetSourceTxHash(),
+		SequenceNumber:      filter.GetSequenceNumber(),
+		State:               state,
+	}, nil
 }
 
 func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatus {
@@ -155,22 +157,27 @@ func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatu
 	return out
 }
 
-func packetStateFromProto(state proto.PacketState) relayer.PacketState {
+// packetStateFromProto rejects states it does not recognize rather than folding
+// them into the unspecified state, which now matches everything: a caller on a
+// newer schema must not silently receive the unfiltered listing.
+func packetStateFromProto(state proto.PacketState) (relayer.PacketState, error) {
 	switch state {
+	case proto.PacketState_PACKET_STATE_UNSPECIFIED:
+		return relayer.StateUnspecified, nil
 	case proto.PacketState_PACKET_STATE_NOT_SELECTED:
-		return relayer.StateNotSelected
+		return relayer.StateNotSelected, nil
 	case proto.PacketState_PACKET_STATE_PENDING:
-		return relayer.StatePending
+		return relayer.StatePending, nil
 	case proto.PacketState_PACKET_STATE_SUCCEEDED:
-		return relayer.StateSucceeded
+		return relayer.StateSucceeded, nil
 	case proto.PacketState_PACKET_STATE_TIMED_OUT:
-		return relayer.StateTimedOut
+		return relayer.StateTimedOut, nil
 	case proto.PacketState_PACKET_STATE_REJECTED:
-		return relayer.StateRejected
+		return relayer.StateRejected, nil
 	case proto.PacketState_PACKET_STATE_RELAY_FAILED:
-		return relayer.StateRelayFailed
+		return relayer.StateRelayFailed, nil
 	default:
-		return relayer.StateUnspecified
+		return relayer.StateUnspecified, errors.Wrapf(relayer.ErrInvalidInput, "unknown packet state %d", state)
 	}
 }
 

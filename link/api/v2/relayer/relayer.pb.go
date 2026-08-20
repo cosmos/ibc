@@ -430,16 +430,17 @@ func (x *PacketsRequest) GetCursor() string {
 	return ""
 }
 
-// Every field is optional; all present fields must match.
+// Every field is optional; the zero value means no constraint, and all
+// constrained fields must match.
 type PacketFilter struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	SourceChainId       *string                `protobuf:"bytes,1,opt,name=source_chain_id,json=sourceChainId,proto3,oneof" json:"source_chain_id,omitempty"`
-	DestinationChainId  *string                `protobuf:"bytes,2,opt,name=destination_chain_id,json=destinationChainId,proto3,oneof" json:"destination_chain_id,omitempty"`
-	SourceClientId      *string                `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3,oneof" json:"source_client_id,omitempty"`
-	DestinationClientId *string                `protobuf:"bytes,4,opt,name=destination_client_id,json=destinationClientId,proto3,oneof" json:"destination_client_id,omitempty"`
-	State               *PacketState           `protobuf:"varint,5,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState,oneof" json:"state,omitempty"`
-	SourceTxHash        *string                `protobuf:"bytes,6,opt,name=source_tx_hash,json=sourceTxHash,proto3,oneof" json:"source_tx_hash,omitempty"`
-	SequenceNumber      *uint64                `protobuf:"varint,7,opt,name=sequence_number,json=sequenceNumber,proto3,oneof" json:"sequence_number,omitempty"`
+	SourceChainId       string                 `protobuf:"bytes,1,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
+	DestinationChainId  string                 `protobuf:"bytes,2,opt,name=destination_chain_id,json=destinationChainId,proto3" json:"destination_chain_id,omitempty"`
+	SourceClientId      string                 `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3" json:"source_client_id,omitempty"`
+	DestinationClientId string                 `protobuf:"bytes,4,opt,name=destination_client_id,json=destinationClientId,proto3" json:"destination_client_id,omitempty"`
+	State               PacketState            `protobuf:"varint,5,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState" json:"state,omitempty"`
+	SourceTxHash        string                 `protobuf:"bytes,6,opt,name=source_tx_hash,json=sourceTxHash,proto3" json:"source_tx_hash,omitempty"`
+	SequenceNumber      uint64                 `protobuf:"varint,7,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -475,50 +476,50 @@ func (*PacketFilter) Descriptor() ([]byte, []int) {
 }
 
 func (x *PacketFilter) GetSourceChainId() string {
-	if x != nil && x.SourceChainId != nil {
-		return *x.SourceChainId
+	if x != nil {
+		return x.SourceChainId
 	}
 	return ""
 }
 
 func (x *PacketFilter) GetDestinationChainId() string {
-	if x != nil && x.DestinationChainId != nil {
-		return *x.DestinationChainId
+	if x != nil {
+		return x.DestinationChainId
 	}
 	return ""
 }
 
 func (x *PacketFilter) GetSourceClientId() string {
-	if x != nil && x.SourceClientId != nil {
-		return *x.SourceClientId
+	if x != nil {
+		return x.SourceClientId
 	}
 	return ""
 }
 
 func (x *PacketFilter) GetDestinationClientId() string {
-	if x != nil && x.DestinationClientId != nil {
-		return *x.DestinationClientId
+	if x != nil {
+		return x.DestinationClientId
 	}
 	return ""
 }
 
 func (x *PacketFilter) GetState() PacketState {
-	if x != nil && x.State != nil {
-		return *x.State
+	if x != nil {
+		return x.State
 	}
 	return PacketState_PACKET_STATE_UNSPECIFIED
 }
 
 func (x *PacketFilter) GetSourceTxHash() string {
-	if x != nil && x.SourceTxHash != nil {
-		return *x.SourceTxHash
+	if x != nil {
+		return x.SourceTxHash
 	}
 	return ""
 }
 
 func (x *PacketFilter) GetSequenceNumber() uint64 {
-	if x != nil && x.SequenceNumber != nil {
-		return *x.SequenceNumber
+	if x != nil {
+		return x.SequenceNumber
 	}
 	return 0
 }
@@ -760,22 +761,15 @@ const file_relayer_proto_rawDesc = "" +
 	"\x0ePacketsRequest\x124\n" +
 	"\x06filter\x18\x01 \x01(\v2\x1c.ibc.v2.relayer.PacketFilterR\x06filter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit\x12\x16\n" +
-	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xf8\x03\n" +
-	"\fPacketFilter\x12+\n" +
-	"\x0fsource_chain_id\x18\x01 \x01(\tH\x00R\rsourceChainId\x88\x01\x01\x125\n" +
-	"\x14destination_chain_id\x18\x02 \x01(\tH\x01R\x12destinationChainId\x88\x01\x01\x12-\n" +
-	"\x10source_client_id\x18\x03 \x01(\tH\x02R\x0esourceClientId\x88\x01\x01\x127\n" +
-	"\x15destination_client_id\x18\x04 \x01(\tH\x03R\x13destinationClientId\x88\x01\x01\x126\n" +
-	"\x05state\x18\x05 \x01(\x0e2\x1b.ibc.v2.relayer.PacketStateH\x04R\x05state\x88\x01\x01\x12)\n" +
-	"\x0esource_tx_hash\x18\x06 \x01(\tH\x05R\fsourceTxHash\x88\x01\x01\x12,\n" +
-	"\x0fsequence_number\x18\a \x01(\x04H\x06R\x0esequenceNumber\x88\x01\x01B\x12\n" +
-	"\x10_source_chain_idB\x17\n" +
-	"\x15_destination_chain_idB\x13\n" +
-	"\x11_source_client_idB\x18\n" +
-	"\x16_destination_client_idB\b\n" +
-	"\x06_stateB\x11\n" +
-	"\x0f_source_tx_hashB\x12\n" +
-	"\x10_sequence_number\"\x85\x01\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xc8\x02\n" +
+	"\fPacketFilter\x12&\n" +
+	"\x0fsource_chain_id\x18\x01 \x01(\tR\rsourceChainId\x120\n" +
+	"\x14destination_chain_id\x18\x02 \x01(\tR\x12destinationChainId\x12(\n" +
+	"\x10source_client_id\x18\x03 \x01(\tR\x0esourceClientId\x122\n" +
+	"\x15destination_client_id\x18\x04 \x01(\tR\x13destinationClientId\x121\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x1b.ibc.v2.relayer.PacketStateR\x05state\x12$\n" +
+	"\x0esource_tx_hash\x18\x06 \x01(\tR\fsourceTxHash\x12'\n" +
+	"\x0fsequence_number\x18\a \x01(\x04R\x0esequenceNumber\"\x85\x01\n" +
 	"\x0fPacketsResponse\x126\n" +
 	"\apackets\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\apackets\x12\x19\n" +
 	"\bhas_more\x18\x02 \x01(\bR\ahasMore\x12\x1f\n" +
@@ -864,7 +858,6 @@ func file_relayer_proto_init() {
 		(*RelayRequest_AllPackets)(nil),
 		(*RelayRequest_SelectedPackets)(nil),
 	}
-	file_relayer_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
