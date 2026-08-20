@@ -76,7 +76,6 @@ packages:
       pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
-      Subscriber:
       PacketStore:
   github.com/cosmos/ibc/link/internal/types/v2:
     config:

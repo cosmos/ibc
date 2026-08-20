@@ -5,7 +5,6 @@ package watcher
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"testing"
 	"time"
 
@@ -52,7 +51,6 @@ func testConnections() []config.ConnectionConfig {
 
 func newTestWatcher(t *testing.T, subscriber Subscriber, storage PacketStore) *Watcher {
 	t.Helper()
-
 	return New(sourceChainID, testConnections(), subscriber, storage, slog.Default())
 }
 
@@ -84,53 +82,31 @@ func watcherStore(t *testing.T) *store.SqliteDB {
 	return db
 }
 
-// subscriber scripts a MockSubscriber so that every subscribe hands the test a
-// live subscription. The watcher opens one per reconnect, so they queue up in
-// the order it opened them.
+// subscriber hands the test a live subscription for every subscribe, so the
+// test can act as the chain. The watcher opens one per reconnect, so they queue
+// up in the order it opened them.
 type subscriber struct {
-	*mocks.MockSubscriber
-
-	t *testing.T
-
-	mu        sync.Mutex
-	clientIDs []string
-
+	t      *testing.T
 	opened chan *subscription
 }
 
 func newSubscriber(t *testing.T) *subscriber {
 	t.Helper()
 
-	s := &subscriber{
-		MockSubscriber: mocks.NewMockSubscriber(t),
-		t:              t,
-		opened:         make(chan *subscription, 8),
-	}
-
-	s.EXPECT().
-		SubscribeSendPackets(mock.Anything, mock.Anything, mock.Anything).
-		RunAndReturn(func(
-			ctx context.Context,
-			clientIDs []string,
-			out chan<- v2.PacketEvent,
-		) (v2.Subscription, error) {
-			s.mu.Lock()
-			s.clientIDs = clientIDs
-			s.mu.Unlock()
-
-			return s.open(ctx, out), nil
-		}).
-		Maybe()
-
-	return s
+	return &subscriber{t: t, opened: make(chan *subscription, 8)}
 }
 
-func (s *subscriber) open(ctx context.Context, out chan<- v2.PacketEvent) v2.Subscription {
+func (s *subscriber) SubscribeSendPackets(
+	ctx context.Context,
+	clientIDs []string,
+	out chan<- v2.PacketEvent,
+) (v2.Subscription, error) {
 	opened := &subscription{
-		ctx:      ctx,
-		out:      out,
-		errs:     make(chan error, 1),
-		released: make(chan struct{}),
+		clientIDs: clientIDs,
+		ctx:       ctx,
+		out:       out,
+		errs:      make(chan error, 1),
+		released:  make(chan struct{}),
 	}
 
 	// stands in for the real subscription's goroutine: it lives until its
@@ -146,14 +122,7 @@ func (s *subscriber) open(ctx context.Context, out chan<- v2.PacketEvent) v2.Sub
 
 	s.opened <- opened
 
-	return opened.mock
-}
-
-func (s *subscriber) watchedClientIDs() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.clientIDs
+	return opened.mock, nil
 }
 
 // next blocks until the watcher opens its next subscription.
@@ -172,11 +141,12 @@ func (s *subscriber) next(t *testing.T) *subscription {
 
 // subscription is one opened stream, which the test drives as the chain would.
 type subscription struct {
-	mock     *mocks.MockSubscription
-	ctx      context.Context //nolint:containedctx // the test asserts on its cancellation
-	out      chan<- v2.PacketEvent
-	errs     chan error
-	released chan struct{}
+	mock      *mocks.MockSubscription
+	clientIDs []string
+	ctx       context.Context //nolint:containedctx // the test asserts on its cancellation
+	out       chan<- v2.PacketEvent
+	errs      chan error
+	released  chan struct{}
 }
 
 func (s *subscription) deliver(t *testing.T, event v2.PacketEvent) {
@@ -281,8 +251,7 @@ func TestWatcherLoop(t *testing.T) {
 		require.NoError(t, w.Start())
 		t.Cleanup(func() { require.NoError(t, w.Stop()) })
 
-		chain.next(t)
-		assert.Equal(t, []string{sourceClientID}, chain.watchedClientIDs())
+		assert.Equal(t, []string{sourceClientID}, chain.next(t).clientIDs)
 	})
 
 	t.Run("storeErrorDoesNotKillTheLoop", func(t *testing.T) {
