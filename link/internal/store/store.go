@@ -304,9 +304,8 @@ type Page struct {
 	Before int64
 }
 
-// validate rejects pages the engines would answer differently: sqlite reads a
-// negative limit as unbounded where postgres errors, and postgres narrows the
-// limit to int32.
+// validate rejects pages the engines answer differently: sqlite reads a
+// negative limit as unbounded, postgres errors and narrows to int32.
 func (p Page) validate() error {
 	switch {
 	case p.Limit <= 0:

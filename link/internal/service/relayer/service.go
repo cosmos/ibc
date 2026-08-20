@@ -441,8 +441,7 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 	return out, nil
 }
 
-// constrained lowers a filter value for the store, where a nil parameter is the
-// absent filter. The zero value means the caller named no constraint.
+// constrained lowers a filter value: the store reads nil as no constraint.
 func constrained[T comparable](value T) *T {
 	var zero T
 	if value == zero {
@@ -454,8 +453,8 @@ func constrained[T comparable](value T) *T {
 
 // dbStatusesForState expands an API state into the relay statuses it covers; a
 // nil state means every status
-// dbStatusesForState expands an API state into the relay statuses it covers.
-// StateUnspecified means the caller named no state, so every status matches.
+// dbStatusesForState expands a state into the statuses it covers; the zero
+// value covers all of them.
 func dbStatusesForState(state PacketState) []store.RelayStatus {
 	all := store.AllRelayStatuses()
 	if state == StateUnspecified {

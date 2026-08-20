@@ -59,8 +59,7 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 		rowsFromDB  int
 		wantPackets int
 		wantHasMore bool
-		// wantAsked is the limit the store must be given: one row past the
-		// page, after the default and the cap are applied.
+		// The limit the store is given: one past the page, defaulted and capped.
 		wantAsked int64
 	}{
 		{"partial page", 5, 3, 3, false, 6},

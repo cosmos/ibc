@@ -54,8 +54,7 @@ message PacketsRequest {
   string cursor = 3;
 }
 
-// Every field is optional; the zero value means no constraint, and all
-// constrained fields must match.
+// The zero value means no constraint; constrained fields must all match.
 message PacketFilter {
   string source_chain_id = 1;
   string destination_chain_id = 2;
