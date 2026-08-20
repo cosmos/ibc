@@ -408,6 +408,16 @@ func (c Config) Signer(alias string) (SignerConfig, bool) {
 	return SignerConfig{}, false
 }
 
+func (c Config) AddSigner(signer SignerConfig) (Config, bool) {
+	if _, exists := c.Signer(signer.Alias); exists {
+		return c, false
+	}
+
+	c.Signers = append(c.Signers, signer)
+
+	return c, true
+}
+
 // AttestorByName returns the configured attestor with the given name.
 func (c Config) AttestorByName(name string) (AttestorConfig, bool) {
 	for _, attestor := range c.Attestors {
