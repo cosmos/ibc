@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"sort"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
@@ -150,11 +148,21 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerRelay(cmd *cobra.Command, _ []string) error {
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Relay, &relayerv2.RelayRequest{
+	client, err := relayerClient()
+	if err != nil {
+		return err
+	}
+
+	res, err := client.Relay(cmd.Context(), connect.NewRequest(&relayerv2.RelayRequest{
 		TxHash:        flagRelayerTxHash,
 		SourceChainId: flagRelayerSourceChainID,
 		Selection:     &relayerv2.RelayRequest_AllPackets{AllPackets: &relayerv2.AllPackets{}},
-	})
+	}))
+	if err != nil {
+		return errors.Wrap(err, cmd.Name())
+	}
+
+	return config.PrintProtoJSON(res.Msg)
 }
 
 func relayerPackets(cmd *cobra.Command, _ []string) error {
@@ -199,12 +207,21 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 		return relayerPacketsAll(cmd, req)
 	}
 
-	return relayerCall(cmd, relayerv2.RelayerApiServiceClient.Packets, req)
+	client, err := relayerClient()
+	if err != nil {
+		return err
+	}
+
+	res, err := client.Packets(cmd.Context(), connect.NewRequest(req))
+	if err != nil {
+		return errors.Wrap(err, cmd.Name())
+	}
+
+	return config.PrintProtoJSON(res.Msg)
 }
 
-// relayerPacketsAll follows next_cursor to completion and prints the packets as
-// one response. Cursors make this safe to do page by page: each request resumes
-// from a fixed position rather than a row count that later inserts would shift.
+// relayerPacketsAll follows next_cursor to completion and prints all packets as
+// one response
 func relayerPacketsAll(cmd *cobra.Command, req *relayerv2.PacketsRequest) error {
 	client, err := relayerClient()
 	if err != nil {
@@ -248,28 +265,4 @@ func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
 	return relayerv2.NewRelayerApiServiceClient(
 		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
 	), nil
-}
-
-// relayerCall resolves this config's relayer address, sends req via call,
-// and prints the response as JSON.
-func relayerCall[Req, Resp any](
-	cmd *cobra.Command,
-	call func(relayerv2.RelayerApiServiceClient, context.Context, *connect.Request[Req]) (*connect.Response[Resp], error),
-	req *Req,
-) error {
-	client, err := relayerClient()
-	if err != nil {
-		return err
-	}
-
-	res, err := call(client, cmd.Context(), connect.NewRequest(req))
-	if err != nil {
-		return errors.Wrap(err, cmd.Name())
-	}
-
-	if pm, ok := any(res.Msg).(proto.Message); ok {
-		return config.PrintProtoJSON(pm)
-	}
-
-	return config.PrintJSON(res.Msg)
 }
