@@ -370,7 +370,7 @@ func (s *Service) Packets(
 
 	limit := normalizeLimit(query.Limit)
 
-	// One row past the page reveals another page without counting matches.
+	// One row past the page reveals another page
 	packets, err := s.store.ListPackets(ctx, storeFilter, store.Page{
 		Limit:  limit + 1,
 		Before: before,
@@ -393,7 +393,6 @@ func (s *Service) Packets(
 	return page, nil
 }
 
-// toStoreFilter translates an API level filter to store level
 func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
 	out := store.PacketFilter{
 		Statuses:            dbStatusesForState(filter.State),
@@ -402,6 +401,16 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 		SourceClientID:      filter.SourceClientID,
 		DestinationClientID: filter.DestinationClientID,
 		SequenceNumber:      filter.SequenceNumber,
+	}
+
+	for _, chainID := range []*string{filter.SourceChainID, filter.DestinationChainID} {
+		if chainID == nil {
+			continue
+		}
+
+		if _, ok := s.cfg.Chain(*chainID); !ok {
+			return store.PacketFilter{}, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", *chainID)
+		}
 	}
 
 	if filter.SourceTxHash != nil {
@@ -422,10 +431,7 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 }
 
 // dbStatusesForState expands an API state into the relay statuses it covers; a
-// nil state means every status, since the query always applies the list.
-//
-// Derived from mapPacketState rather than hand-listed, so a new relay status
-// cannot be classified one way here and another way there.
+// nil state means every status
 func dbStatusesForState(state *PacketState) []store.RelayStatus {
 	all := store.AllRelayStatuses()
 	if state == nil {
@@ -468,9 +474,6 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 	return s.normalizeTxHash(chainID, txHash)
 }
 
-// normalizeTxHash canonicalizes casing; without it a differently-cased hash
-// silently matches nothing. chainID may be empty when a filter names a hash
-// without a chain, in which case the hash is validated as EVM.
 func (s *Service) normalizeTxHash(chainID, txHash string) (string, error) {
 	if chainID == "" {
 		return normalizeEVMTxHash(txHash)
