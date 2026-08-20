@@ -132,7 +132,7 @@ func testListPackets(t *testing.T, s Store) {
 			require.Empty(t, hashesFor(t, PacketFilter{Statuses: all, SourceTxHash: str("0xmissing")}))
 		})
 
-		t.Run("limitAndOffsetAreAppliedAsGiven", func(t *testing.T) {
+		t.Run("limitIsAppliedAsGiven", func(t *testing.T) {
 			// The store pages exactly as asked; defaults and has-more probing
 			// belong to the service.
 			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
@@ -156,14 +156,58 @@ func testListPackets(t *testing.T, s Store) {
 		t.Run("pagingCoversEveryRowExactlyOnce", func(t *testing.T) {
 			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
 
-			first, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 0})
+			first, err := s.ListPackets(ctx, filter, Page{Limit: 1})
 			require.NoError(t, err)
-			second, err := s.ListPackets(ctx, filter, Page{Limit: 1, Offset: 1})
+			require.Len(t, first, 1)
+
+			second, err := s.ListPackets(ctx, filter, Page{Limit: 1, Before: first[0].ID})
+			require.NoError(t, err)
+			require.Len(t, second, 1)
+
+			require.NotEqual(t, first[0].SourceTxHash, second[0].SourceTxHash)
+			require.Less(t, second[0].ID, first[0].ID)
+		})
+
+		t.Run("zeroCursorStartsAtTheNewestPacket", func(t *testing.T) {
+			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
+
+			unbounded, err := s.ListPackets(ctx, filter, Page{Limit: 100})
+			require.NoError(t, err)
+			require.NotEmpty(t, unbounded)
+
+			explicit, err := s.ListPackets(ctx, filter,
+				Page{Limit: 100, Before: unbounded[0].ID + 1})
+			require.NoError(t, err)
+			require.Equal(t, unbounded, explicit)
+		})
+
+		// The point of paging by cursor rather than offset: a packet arriving
+		// mid-walk must not push a row from page one onto page two, where an
+		// offset pager would return it twice.
+		t.Run("insertsDuringPagingDoNotShiftPages", func(t *testing.T) {
+			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
+
+			first, err := s.ListPackets(ctx, filter, Page{Limit: 1})
+			require.NoError(t, err)
+			require.Len(t, first, 1)
+
+			arrival := UpsertPacket{
+				Status: RelayStatusPending, SourceChainID: chainOne, DestinationChainID: chainTwo,
+				SourceTxHash: "0xlistarrival", SourceTxTime: base, PacketSequenceNumber: 99,
+				PacketSourceClientID: "src-a", PacketDestinationClientID: "dst-a",
+				PacketTimeoutTimestamp: base.Add(time.Hour),
+			}
+			require.NoError(t, s.CreateRelayRequest(ctx, arrival.SourceChainID, arrival.SourceTxHash))
+			require.NoError(t, s.UpsertPacket(ctx, arrival))
+
+			rest, err := s.ListPackets(ctx, filter, Page{Limit: 100, Before: first[0].ID})
 			require.NoError(t, err)
 
-			require.Len(t, first, 1)
-			require.Len(t, second, 1)
-			require.NotEqual(t, first[0].SourceTxHash, second[0].SourceTxHash)
+			for _, packet := range rest {
+				require.NotEqual(t, first[0].ID, packet.ID, "page one row reappeared on page two")
+				require.NotEqual(t, "0xlistarrival", packet.SourceTxHash,
+					"a packet newer than the cursor must not appear behind it")
+			}
 		})
 
 		t.Run("orderedMostRecentFirst", func(t *testing.T) {

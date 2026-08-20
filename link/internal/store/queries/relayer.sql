@@ -158,5 +158,6 @@ AND packet_source_client_id = COALESCE(sqlc.narg(source_client_id), packet_sourc
 AND packet_destination_client_id = COALESCE(sqlc.narg(destination_client_id), packet_destination_client_id)
 AND source_tx_hash = COALESCE(sqlc.narg(source_tx_hash), source_tx_hash)
 AND packet_sequence_number = COALESCE(sqlc.narg(sequence_number), packet_sequence_number)
+AND id < sqlc.arg(before)
 ORDER BY id DESC
-LIMIT sqlc.arg(row_limit) OFFSET sqlc.arg(row_offset);
+LIMIT sqlc.arg(row_limit);

@@ -192,12 +192,12 @@ func TestRelay(t *testing.T) {
 
 		require.NoError(t, service.Relay(ctx, relayAll(chainIDEth, txHashLower)))
 
-		statuses, _, err := service.Packets(ctx, PacketFilter{
+		page, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: &chainIDEthVar,
 			SourceTxHash:  &txHashLowerVar,
-		}, store.Page{})
+		}, PacketQuery{})
 		require.NoError(t, err)
-		assert.Empty(t, statuses)
+		assert.Empty(t, page.Packets)
 	})
 
 	t.Run("selectionIsIdempotent", func(t *testing.T) {
@@ -456,15 +456,15 @@ func TestPackets(t *testing.T) {
 		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
 
 		// ACT
-		statuses, hasMore, err := service.Packets(ctx, PacketFilter{
+		page, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: &chainIDEthVar,
 			SourceTxHash:  &txHashLowerVar,
-		}, store.Page{})
+		}, PacketQuery{})
 
 		// ASSERT
 		require.NoError(t, err)
-		require.Empty(t, statuses)
-		require.False(t, hasMore)
+		require.Empty(t, page.Packets)
+		require.False(t, page.HasMore)
 	})
 
 	t.Run("normalizesTxHashCasing", func(t *testing.T) {
@@ -481,10 +481,10 @@ func TestPackets(t *testing.T) {
 				seen = filter.SourceTxHash
 			}).Return(nil, nil).Once()
 
-		_, _, err := service.Packets(ctx, PacketFilter{
+		_, err := service.Packets(ctx, PacketFilter{
 			SourceChainID: &chainIDEthVar,
 			SourceTxHash:  &txHashUpperVar,
-		}, store.Page{})
+		}, PacketQuery{})
 
 		require.NoError(t, err)
 		require.NotNil(t, seen)
@@ -496,7 +496,7 @@ func TestPackets(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
 
 		malformed := "not-a-hash"
-		_, _, err := service.Packets(ctx, PacketFilter{SourceTxHash: &malformed}, store.Page{})
+		_, err := service.Packets(ctx, PacketFilter{SourceTxHash: &malformed}, PacketQuery{})
 
 		require.ErrorIs(t, err, ErrInvalidInput)
 	})
@@ -514,7 +514,7 @@ func TestPackets(t *testing.T) {
 			}).Return(nil, nil).Once()
 
 		pending := StatePending
-		_, _, err := service.Packets(ctx, PacketFilter{State: &pending}, store.Page{})
+		_, err := service.Packets(ctx, PacketFilter{State: &pending}, PacketQuery{})
 
 		require.NoError(t, err)
 		require.Contains(t, seen, store.RelayStatusAwaitingSendFinality,

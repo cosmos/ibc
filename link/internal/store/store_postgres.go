@@ -416,8 +416,8 @@ func (db *PostgresDB) ListPackets(
 		DestinationClientID: filter.DestinationClientID,
 		SourceTxHash:        filter.SourceTxHash,
 		SequenceNumber:      filter.sequenceFilter(),
+		Before:              page.before(),
 		RowLimit:            int32(page.Limit), //nolint:gosec // bounded by the caller's page cap
-		RowOffset:           int32(page.Offset),
 	})
 	if err != nil {
 		return nil, errNormalize(err)
