@@ -18,6 +18,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 func testTransfer(t *testing.T) *processors.Transfer {
@@ -42,9 +43,9 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.ProofGenerator
+type staticProofGenerators map[string]lightclient.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+func (s staticProofGenerators) Get(chainID, clientID string) (lightclient.Prover, bool) {
 	gen, ok := s[proofgen.Key(chainID, clientID)]
 	return gen, ok
 }
@@ -70,8 +71,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
-	destProofGen := mocks.NewMockProofGenerator(t)
-	sourceProofGen := mocks.NewMockProofGenerator(t)
+	destProofGen := mocks.NewMockProver(t)
+	sourceProofGen := mocks.NewMockProver(t)
 
 	deps := pipeline.Deps{
 		Storage: db,

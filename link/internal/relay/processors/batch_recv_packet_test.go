@@ -21,6 +21,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 type staticChains map[string]chains.Client
@@ -30,9 +31,9 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.ProofGenerator
+type staticProofGenerators map[string]lightclient.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
+func (s staticProofGenerators) Get(chainID, clientID string) (lightclient.Prover, bool) {
 	gen, ok := s[proofgen.Key(chainID, clientID)]
 	return gen, ok
 }
@@ -101,10 +102,10 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			}, nil
 		}).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
+	proofGen := mocks.NewMockProver(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -198,10 +199,10 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	}, nil).Once()
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
+	proofGen := mocks.NewMockProver(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -303,10 +304,10 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		},
 	}, nil).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
+	proofGen := mocks.NewMockProver(t)
 	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
 	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), lightclient.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)

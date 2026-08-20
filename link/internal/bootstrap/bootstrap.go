@@ -18,6 +18,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/service/signer"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // Services is an outcome of IBC Link wiring (dep inject)
@@ -33,8 +34,14 @@ type Services struct {
 	AttestorService *attestor.Service
 }
 
-// BuildRelayer converts config into a runnable relayer process with all of the deps provisioned
-func BuildRelayer(cfg config.Config) (*Services, error) {
+// RelayerOptions supplies optional relayer extensions.
+type RelayerOptions struct {
+	// ProverFactories contains custom prover factories.
+	ProverFactories *lightclient.Registry
+}
+
+// BuildRelayer converts config into a runnable relayer process with all of the deps provisioned.
+func BuildRelayer(cfg config.Config, opts RelayerOptions) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
 
@@ -79,7 +86,9 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Proof generators
-	proofGenerators, err := proofgen.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
+	proofGenerators, err := proofgen.NewSetFromConfig(
+		ctx, cfg, clientSet, append(local, remote...), opts.ProverFactories,
+	)
 	if err != nil {
 		return nil, err
 	}

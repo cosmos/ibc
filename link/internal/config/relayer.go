@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // ClientType the light client type.
@@ -63,6 +65,9 @@ type ClientEnd struct {
 	Signer   string     `yaml:"signer"`
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
+
+	// ClientParams is interpreted by the factory registered for Type.
+	ClientParams *lightclient.RawParams `yaml:"clientParams,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -185,8 +190,8 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".clientId required")
 	case c.Signer == "":
 		return errors.New(".signer required")
-	case c.Type != ClientTypeAttestation:
-		return errors.Errorf(".type unknown client type: %q", c.Type)
+	case c.Type == "":
+		return errors.New(".type required")
 	}
 
 	return nil

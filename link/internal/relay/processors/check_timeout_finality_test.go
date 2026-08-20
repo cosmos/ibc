@@ -27,7 +27,7 @@ func TestNewCheckTimeoutFinality(t *testing.T) {
 	t.Run("resolvesProofGenerator", func(t *testing.T) {
 		_, err := NewCheckTimeoutFinality(
 			staticProofGenerators{
-				proofgen.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProofGenerator(t),
+				proofgen.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProver(t),
 			},
 			route,
 		)
@@ -50,7 +50,7 @@ func TestCheckTimeoutFinalityProcess(t *testing.T) {
 	}
 
 	t.Run("timestampPastTimeoutIsFinalized", func(t *testing.T) {
-		proofGen := mocks.NewMockProofGenerator(t)
+		proofGen := mocks.NewMockProver(t)
 		proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Unix(2000, 0), nil).Once()
 
 		p, err := NewCheckTimeoutFinality(
@@ -66,7 +66,7 @@ func TestCheckTimeoutFinalityProcess(t *testing.T) {
 	})
 
 	t.Run("timestampBeforeTimeoutErrorsRetryable", func(t *testing.T) {
-		proofGen := mocks.NewMockProofGenerator(t)
+		proofGen := mocks.NewMockProver(t)
 		proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Unix(500, 0), nil).Once()
 
 		p, err := NewCheckTimeoutFinality(

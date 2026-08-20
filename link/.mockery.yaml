@@ -44,7 +44,7 @@ packages:
       pkgname: "mocks"
       structname: "Mock{{.InterfaceName}}"
     interfaces:
-      ProofGenerator:
+      Prover:
   github.com/cosmos/ibc/link/internal/relay/txbuilder:
     config:
       dir: "internal/tests/mocks"

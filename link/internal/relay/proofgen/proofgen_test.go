@@ -12,6 +12,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/tests/mocks"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 func testConnection() config.ConnectionConfig {
@@ -80,12 +81,11 @@ func TestNewSetFromConfig(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("resolvesBothDirections", func(t *testing.T) {
-		// proves forEachClientEnd/addGenerator wiring: both the connection's
-		// client ends land in the returned Set under their own key.
+		// Both client ends must resolve under their own key.
 		cfg, clientSet, attestors := testConfig(t)
 		conn := cfg.Relayer.Connections[0]
 
-		set, err := NewSetFromConfig(ctx, cfg, clientSet, attestors)
+		set, err := NewSetFromConfig(ctx, cfg, clientSet, attestors, nil)
 		require.NoError(t, err)
 
 		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
@@ -106,12 +106,73 @@ func TestNewSetFromConfig(t *testing.T) {
 			conn.ClientB.ChainID: mocks.NewMockClient(t),
 		})
 
-		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+		cfg := config.Config{
+			Chains: []config.ChainConfig{
+				{ChainID: conn.ClientA.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-a", ICS26Router: "0xa"}},
+				{ChainID: conn.ClientB.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-b", ICS26Router: "0xb"}},
+			},
+			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+		}
 
 		// ACT
-		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil)
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, nil)
 
 		// ASSERT
-		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
+		require.ErrorContains(t, err, `no prover registered for client type "tendermint"`)
+	})
+
+	t.Run("arbitraryRegisteredClientTypeResolves", func(t *testing.T) {
+		// the registry, not a hardcoded switch, decides what is relayable:
+		// a client type with no attestors and no built-in support resolves
+		// purely because a factory was registered for it.
+		conn := testConnection()
+		conn.ClientA.Type = "myclient"
+		conn.ClientB.Type = "myclient"
+
+		clientSet := chains.NewClientSet(map[string]chains.Client{
+			conn.ClientA.ChainID: mocks.NewMockClient(t),
+			conn.ClientB.ChainID: mocks.NewMockClient(t),
+		})
+
+		cfg := config.Config{
+			Chains: []config.ChainConfig{
+				{ChainID: conn.ClientA.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-a", ICS26Router: "0xa"}},
+				{ChainID: conn.ClientB.ChainID, EVM: &config.EVMChainConfig{RPC: "http://chain-b", ICS26Router: "0xb"}},
+			},
+			Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+		}
+
+		reg := lightclient.NewRegistry()
+		built := make(chan lightclient.ProverFactoryOptions, 2)
+		require.NoError(t, reg.Register(stubFactory{built: built}))
+
+		set, err := NewSetFromConfig(ctx, cfg, clientSet, nil, reg)
+		require.NoError(t, err)
+		first := <-built
+		require.Equal(t, conn.ClientA.ChainID, first.HostChain.ChainID)
+		require.Equal(t, "http://chain-a", first.HostChain.EVM.RPC)
+		require.Equal(t, conn.ClientB.ChainID, first.CounterpartyChain.ChainID)
+		require.Equal(t, "http://chain-b", first.CounterpartyChain.EVM.RPC)
+
+		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
+		require.True(t, ok)
 	})
 }
+
+// stubFactory is a light client type that exists only in this test.
+type stubFactory struct {
+	built chan<- lightclient.ProverFactoryOptions
+}
+
+func (stubFactory) Type() string { return "myclient" }
+
+func (f stubFactory) New(
+	_ context.Context, options lightclient.ProverFactoryOptions,
+) (lightclient.Prover, error) {
+	if f.built != nil {
+		f.built <- options
+	}
+	return stubProver{}, nil
+}
+
+type stubProver struct{ lightclient.Prover }

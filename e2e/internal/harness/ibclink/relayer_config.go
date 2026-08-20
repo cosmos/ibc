@@ -48,10 +48,14 @@ type RelayerChain struct {
 // RelayerConnection is a reciprocal on-chain client pair. Clients are the
 // registered client identifiers (locators).
 type RelayerConnection struct {
-	ChainA  string
-	ClientA string
-	ChainB  string
-	ClientB string
+	ChainA        string
+	ClientA       string
+	ClientAType   string
+	ClientAParams map[string]any
+	ChainB        string
+	ClientB       string
+	ClientBType   string
+	ClientBParams map[string]any
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -155,19 +159,29 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
+		clientAType := connection.ClientAType
+		if clientAType == "" {
+			clientAType = "attestation"
+		}
+		clientBType := connection.ClientBType
+		if clientBType == "" {
+			clientBType = "attestation"
+		}
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
 			Alias: connection.ClientA + "-" + connection.ClientB,
 			ClientA: clientEndFileConfig{
-				ChainID:  connection.ChainA,
-				Signer:   cfg.SignerAlias,
-				ClientID: connection.ClientA,
-				Type:     "attestation",
+				ChainID:      connection.ChainA,
+				Signer:       cfg.SignerAlias,
+				ClientID:     connection.ClientA,
+				Type:         clientAType,
+				ClientParams: connection.ClientAParams,
 			},
 			ClientB: clientEndFileConfig{
-				ChainID:  connection.ChainB,
-				Signer:   cfg.SignerAlias,
-				ClientID: connection.ClientB,
-				Type:     "attestation",
+				ChainID:      connection.ChainB,
+				Signer:       cfg.SignerAlias,
+				ClientID:     connection.ClientB,
+				Type:         clientBType,
+				ClientParams: connection.ClientBParams,
 			},
 		})
 	}
@@ -253,8 +267,9 @@ type connectionFileConfig struct {
 }
 
 type clientEndFileConfig struct {
-	ChainID  string `yaml:"chainId"`
-	Signer   string `yaml:"signer"`
-	ClientID string `yaml:"clientId"`
-	Type     string `yaml:"type"`
+	ChainID      string         `yaml:"chainId"`
+	Signer       string         `yaml:"signer"`
+	ClientID     string         `yaml:"clientId"`
+	Type         string         `yaml:"type"`
+	ClientParams map[string]any `yaml:"clientParams,omitempty"`
 }

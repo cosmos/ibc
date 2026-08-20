@@ -10,11 +10,11 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/link/internal/chains"
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
 	"github.com/cosmos/ibc/link/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/link/internal/store"
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // BatchTimeoutPacket delivers one timeout tx on the source chain for a batch
@@ -22,7 +22,7 @@ import (
 type BatchTimeoutPacket struct {
 	sourceChainClient chains.Client
 	route             Route
-	proofGen          proofgen.ProofGenerator
+	proofGen          lightclient.Prover
 	txBuilder         txbuilder.TxBuilder
 	txSubmitter       txsubmitter.TxSubmitter
 	storage           TxStorage

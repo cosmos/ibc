@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# CLI development (located in cmd/ibc/)
+# CLI development (located in cli/)
 
-1. Use a single `init()` function in main.go to wire all subcommands. Never create init() per CLI file.
+1. Use a single `init()` function in root.go to wire all subcommands. Never create init() per CLI file.
 2. Commands implemented in this package should be variables and start with a `cmd*` prefix. The relayer
    family is constructed by an importable command package because its transport types are shared with
    the e2e harness. Examples for commands that remain here:

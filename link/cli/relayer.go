@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package main
+package cli
 
 import (
 	"context"
@@ -43,6 +43,7 @@ var (
 )
 
 var (
+	relayerOptions           RelayerOptions
 	flagRelayerNoMigrate     bool
 	flagRelayerHost          string
 	flagRelayerTxHash        string
@@ -55,7 +56,9 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	app, err := bootstrap.BuildRelayer(cfg)
+	app, err := bootstrap.BuildRelayer(cfg, bootstrap.RelayerOptions{
+		ProverFactories: relayerOptions.ProverFactories,
+	})
 	if err != nil {
 		return err
 	}

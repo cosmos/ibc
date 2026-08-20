@@ -29,17 +29,6 @@ const (
 	WriteAckStatusError
 )
 
-// ProofKind the kind of packet claim a proof attests to.
-type ProofKind int
-
-// Proof kinds
-const (
-	ProofKindUnknown ProofKind = iota
-	ProofKindPacketCommitment
-	ProofKindAcknowledgement
-	ProofKindReceiptAbsence
-)
-
 // RelayKind the packet operation one PacketRelayItem asks to perform.
 type RelayKind int
 
