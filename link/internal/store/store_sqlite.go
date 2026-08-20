@@ -456,6 +456,10 @@ func (db *SqliteDB) ListPackets(
 ) ([]Packet, error) {
 	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
 
+	if err := page.validate(); err != nil {
+		return nil, err
+	}
+
 	rows, err := db.repo.ListPackets(ctx, reposqlite.ListPacketsParams{
 		Statuses:            filter.statusList(),
 		SourceChainID:       filter.SourceChainID,
