@@ -1,9 +1,9 @@
 ---
 title: "Packets and applications"
-description: "A packet is what IBC moves between two chains, and an application is what gives its content meaning."
+description: "A packet is what IBC moves between two chains, and an application is what interprets the contents."
 ---
 
-An application is the actor on one chain that wants to talk to another chain over IBC. They communicate by sending and receiving packets across an IBC connection. This page covers a packet's fields, the payload inside it, what an application is, ports, and the callbacks every application implements.
+An application is the actor on one chain that wants to talk to another chain over IBC. They communicate by sending and receiving packets across an IBC connection. This page covers a packet's fields, the payload inside it, what an application is, ports, and the callbacks applications can implement.
 
 A packet is like a piece of mail. The packet is the envelope with routing information, and the payload inside is the letter. The application that is the recipient of the packet opens it and decides what to do with the information.
 
@@ -23,10 +23,10 @@ struct Packet {
 
 The first four fields are the routing information. The last one is the application's content. This is similar to the same split TCP makes between a header and a payload.
 
-- `sequence`: the packet's number on its source client. It comes from a counter that starts at 1 and rises by one with every send, so both chains can refer to the same packet.
-- `sourceClient` and `destClient`: the two ends of the route. `sourceClient` is the sending chain's [light client](/how-ibc-works/clients-and-counterparties) of the destination; `destClient` is the destination chain's client of the source.
-- `timeoutTimestamp`: the deadline in unix seconds, after which the packet can no longer be received. A relayer times it out on the source chain instead. Sending and receiving check it against the local clock , and a timeout checks it against the destination chain's clock as the light client proves it , and on send the router requires it to be in the future and no more than one day out.
-- `payloads`: the application's content. The field is a list, and the router carries exactly one payload per packet.
+- `sequence`: the packet's number on its source client. It comes from a counter that starts at 1 and increments by one with every send, so both chains can refer to the same packet.
+- `sourceClient` and `destClient`: the two ends of the route. `sourceClient` is the source chain's [light client](/how-ibc-works/clients-and-counterparties) of the destination; `destClient` is the destination chain's client of the source.
+- `timeoutTimestamp`: the deadline in unix seconds, after which the packet can no longer be received. The timestamp represents the destination chain's block time, and a relayer times it out on the source chain. On send the router requires it to be in the future and no more than one day out.
+- `payloads`: the application's content. The field is a list, but the protocol currently supports exactly one payload per packet.
 
 ## The payload
 
@@ -85,7 +85,7 @@ Every payload names two ports:
 
 ## Application callbacks
 
-To take part in the packet flow, an application implements three callbacks. The IBC router calls them at the right moments, and an application accepts them only from the router.
+Applications can register callbacks that the router executes at different stages of the packet lifecycle.
 
 ```solidity
 interface IIBCApp {
