@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Command proverservice runs a ProverService a relayer can be pointed at. It
-// serves the attestation prover from a relayer config, so the wire contract
-// can be exercised without a second light-client implementation.
+// Command testprover runs a ProverService a relayer can be pointed at, serving
+// the attestation prover from a relayer config so the wire contract can be
+// exercised without a second light-client implementation.
 //
-// It is a test and demonstration binary, not part of the ibc CLI.
+// It exists for tests and demonstration. It is not part of the ibc CLI and is
+// not built by the default build target.
 package main
 
 import (
@@ -18,12 +19,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/cosmos/ibc/link/internal/proverservice"
+	"github.com/cosmos/ibc/link/internal/testutil/proverservice"
 )
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "proverservice:", err)
+		fmt.Fprintln(os.Stderr, "testprover:", err)
 		os.Exit(1)
 	}
 }

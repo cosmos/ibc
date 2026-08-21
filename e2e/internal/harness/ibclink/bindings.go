@@ -67,10 +67,11 @@ func (r *Driver) ChainRPC(chainID string) (string, error) {
 	return "${" + binding.envName + "}", nil
 }
 
-// acquireProcessEnv resolves the child-process environment while borrowing
-// the binding lease; the caller must invoke release when the process no
-// longer needs the bound resources.
-func (r *Driver) acquireProcessEnv() ([]string, func(), error) {
+// ProcessEnv resolves the child-process environment, which is where the
+// relayer config reads its chain RPCs from, while borrowing the binding lease;
+// the caller must invoke release when the process no longer needs the bound
+// resources.
+func (r *Driver) ProcessEnv() ([]string, func(), error) {
 	if r.bindings == nil {
 		return nil, func() {}, nil
 	}
@@ -87,33 +88,6 @@ func (r *Driver) acquireProcessEnv() ([]string, func(), error) {
 		return nil, nil, err
 	}
 	return env, release, nil
-}
-
-// ChainRPCEnv resolves the chain RPC variables the relayer config expands, for
-// a test that runs part of the relayer in-process. Release frees the lease.
-func (r *Driver) ChainRPCEnv() (map[string]string, func(), error) {
-	if r.bindings == nil {
-		return nil, func() {}, nil
-	}
-
-	release, err := r.bindings.acquireLease()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	vars := make(map[string]string, len(r.bindings.chainRPC))
-
-	for chainID, binding := range r.bindings.chainRPC {
-		value, resolveErr := resolveChainRPC(chainID, binding)
-		if resolveErr != nil {
-			release()
-			return nil, nil, resolveErr
-		}
-
-		vars[binding.envName] = value
-	}
-
-	return vars, release, nil
 }
 
 // resolveProcessEnv runs while the binding lease is held. Environment-backed

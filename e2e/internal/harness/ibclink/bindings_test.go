@@ -26,7 +26,7 @@ func TestChainRPCBindingKeepsEndpointOutOfConfiguration(t *testing.T) {
 	require.NotContains(t, rpc, endpoint)
 	require.Equal(t, "${"+chainRPCEnvName(chainID)+"}", rpc)
 
-	env, release, err := driver.acquireProcessEnv()
+	env, release, err := driver.ProcessEnv()
 	require.NoError(t, err)
 	defer release()
 	require.Contains(t, env, chainRPCEnvName(chainID)+"="+endpoint)
@@ -43,7 +43,7 @@ func TestChainRPCBindingPropagatesResolverFailureWithoutEndpointData(t *testing.
 	rpc, err := driver.ChainRPC("chain-a")
 	require.NoError(t, err)
 	require.NotEmpty(t, rpc)
-	_, _, err = driver.acquireProcessEnv()
+	_, _, err = driver.ProcessEnv()
 	require.ErrorIs(t, err, closed)
 }
 

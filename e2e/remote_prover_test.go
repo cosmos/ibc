@@ -23,17 +23,12 @@ import (
 func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
 	t.Helper()
 
-	// The config expands chain RPCs from the environment, which the relayer
-	// process is given; the prover needs the same.
-	vars, release, err := driver.ChainRPCEnv()
-	require.NoError(t, err, "resolve chain rpc env")
+	// The config expands chain RPCs from the environment, as it does for the
+	// relayer process.
+	env, release, err := driver.ProcessEnv()
+	require.NoError(t, err, "resolve process env")
 
 	t.Cleanup(release)
-
-	env := os.Environ()
-	for name, value := range vars {
-		env = append(env, name+"="+value)
-	}
 
 	cmd := exec.Command(ibclink.ResolvedProverBin(),
 		"--config", driver.ConfigPath(), "--listen", address)
