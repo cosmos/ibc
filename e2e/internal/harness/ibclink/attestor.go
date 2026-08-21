@@ -4,7 +4,6 @@
 package ibclink
 
 import (
-	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -143,7 +142,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	stderrDone := make(chan struct{})
 	go func() {
 		defer close(stderrDone)
-		observeReadiness(stderr, out, readiness)
+		watchAttestorLogs(stderr, out, readiness)
 	}()
 
 	p := &AttestorProcess{
@@ -474,26 +473,16 @@ func (w *logWriter) Write(data []byte) (int, error) {
 	return w.file.Write(data)
 }
 
-func observeReadiness(stderr io.Reader, logs io.Writer, ready chan<- readinessResult) {
-	reader := bufio.NewReaderSize(stderr, startupLogTailBytes)
-	announced := false
-	for {
-		line, err := reader.ReadString('\n')
-		if len(line) > 0 {
-			_, _ = io.WriteString(logs, line)
-			if !announced {
-				if result, ok := parseAttestorReadinessLog(line); ok {
-					ready <- result
-					announced = true
-				}
-			}
+func watchAttestorLogs(stderr io.Reader, logsSink io.Writer, ready chan<- readinessResult) {
+	readinessMatcher := func(line string) bool {
+		result, ok := parseAttestorReadinessLog(line)
+		if ok {
+			ready <- result
 		}
-		if err != nil {
-			if !announced {
-				ready <- readinessResult{err: fmt.Errorf("no readiness log on stderr: %w", err)}
-			}
-			return
-		}
+		return ok
+	}
+	if err := pipeLogs(stderr, logsSink, readinessMatcher); err != nil {
+		ready <- readinessResult{err: err}
 	}
 }
 

@@ -151,30 +151,43 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	return d, nil
 }
 
-func watchRelayerLogs(rc io.Reader, logs io.Writer, readyCh chan<- readyResult) {
-	br := bufio.NewReader(rc)
-	announced := false
+func watchRelayerLogs(stderr io.Reader, logsSink io.Writer, readyCh chan<- readyResult) {
+	readinessMatcher := func(line string) bool {
+		result, ok := parseRelayerReadinessLog(line)
+		if ok {
+			readyCh <- result
+		}
+
+		return ok
+	}
+
+	if err := pipeLogs(stderr, logsSink, readinessMatcher); err != nil {
+		readyCh <- readyResult{err: err}
+	}
+}
+
+func pipeLogs(stderr io.Reader, logs io.Writer, readinessMatcher func(line string) bool) error {
+	reader := bufio.NewReader(stderr)
+
+	var matched bool
 	for {
-		line, err := br.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
 			_, _ = io.WriteString(logs, line)
-			if !announced {
-				if result, ok := parseReadinessLog(line); ok {
-					readyCh <- result
-					announced = true
-				}
+			if !matched {
+				matched = readinessMatcher(line)
 			}
 		}
 		if err != nil {
-			if !announced {
-				readyCh <- readyResult{err: fmt.Errorf("no readiness log on stderr: %w", err)}
+			if !matched {
+				return fmt.Errorf("no readiness log on stderr: %w", err)
 			}
-			return
+			return nil
 		}
 	}
 }
 
-func parseReadinessLog(line string) (result readyResult, matched bool) {
+func parseRelayerReadinessLog(line string) (result readyResult, matched bool) {
 	var entry struct {
 		Readiness relayerv2.ProcessReadiness `json:"readiness"`
 	}
