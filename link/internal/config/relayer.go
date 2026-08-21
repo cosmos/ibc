@@ -114,28 +114,23 @@ func (p *RemoteProverParams) Validate() error {
 	return nil
 }
 
-// decodeClientParams maps a client type to its params, without applying the
-// type's rules. It is the only place that mapping lives, so a new type adds a
-// case here rather than a method on ClientEnd.
+// ClientParams is this client's decoded params, without the type's rules
+// applied. One accessor covers every type, so a new client type adds a case
+// here rather than a method on ClientEnd.
 //
 // Every case returns non-nil params on success, so callers never guard against
 // a nil interface. A type that takes no params declares an empty struct, as
 // AttestationParams does, rather than returning nil.
-func decodeClientParams(clientType ClientType, raw yaml.RawMessage) (ClientParams, error) {
-	switch clientType {
+func (c ClientEnd) ClientParams() (ClientParams, error) {
+	switch c.Type {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
-		return strictDecode[AttestationParams](raw)
+		return strictDecode[AttestationParams](c.Params)
 	case ClientTypeRemoteProver:
-		return strictDecode[RemoteProverParams](raw)
+		return strictDecode[RemoteProverParams](c.Params)
 	default:
-		return nil, errors.Errorf(".type unknown client type: %q", clientType)
+		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
 	}
-}
-
-// ClientParams is this client's decoded params.
-func (c ClientEnd) ClientParams() (ClientParams, error) {
-	return decodeClientParams(c.Type, c.Params)
 }
 
 // decodeParams reads a params block strictly: a misspelled key is an error,
