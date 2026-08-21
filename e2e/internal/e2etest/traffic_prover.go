@@ -32,15 +32,30 @@ func buildProverConfig(
 		FinalityOffset: ibclink.HarnessFinalityOffset,
 	}
 
-	// The prover dials chains directly, so its config carries the address
-	// rather than the variable the relayer's process resolves.
-	config.Chains = chainConfigs(t, env, func(id environment.ChainID) string {
+	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
 		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 
-		return chain.RPCURL()
-	})
-	config.Attestors = attestorConfigs(t, env)
+		instance, err := env.IBCInstanceForChain(id)
+		require.NoError(t, err, "e2etest: resolve IBC instance for Chain %q", id)
+
+		// The prover dials chains directly, so its config carries the address
+		// rather than the variable the relayer's process resolves.
+		config.Chains = append(config.Chains, ibclink.RelayerChain{
+			ChainID:     chainEVMID(t, env, id),
+			RPC:         chain.RPCURL(),
+			ICS26Router: string(instance.Locator()),
+		})
+	}
+
+	for _, id := range env.Attestors() {
+		attestor, err := env.Attestor(id)
+		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
+
+		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		})
+	}
 
 	for _, id := range env.Connections() {
 		connection, err := env.Connection(id)
@@ -84,48 +99,4 @@ func chainEVMID(t testing.TB, env *environment.Environment, id environment.Chain
 	require.NoError(t, err, "e2etest: resolve Chain %q", id)
 
 	return strconv.FormatUint(chain.EVMChainID(), 10)
-}
-
-// chainConfigs describes every chain in the environment, taking each chain's
-// RPC from rpcFor so the relayer and the prover can name it differently.
-func chainConfigs(
-	t testing.TB,
-	env *environment.Environment,
-	rpcFor func(environment.ChainID) string,
-) []ibclink.RelayerChain {
-	t.Helper()
-
-	chains := make([]ibclink.RelayerChain, 0, len(env.Chains()))
-
-	for _, id := range env.Chains() {
-		instance, err := env.IBCInstanceForChain(id)
-		require.NoError(t, err, "e2etest: resolve IBC instance for Chain %q", id)
-
-		chains = append(chains, ibclink.RelayerChain{
-			ChainID:     chainEVMID(t, env, id),
-			RPC:         rpcFor(id),
-			ICS26Router: string(instance.Locator()),
-		})
-	}
-
-	return chains
-}
-
-// attestorConfigs describes every attestor in the environment. Attestors run as
-// their own processes, so both the relayer and the prover reach them remotely.
-func attestorConfigs(t testing.TB, env *environment.Environment) []ibclink.RelayerAttestor {
-	t.Helper()
-
-	attestors := make([]ibclink.RelayerAttestor, 0, len(env.Attestors()))
-
-	for _, id := range env.Attestors() {
-		attestor, err := env.Attestor(id)
-		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
-
-		attestors = append(attestors, ibclink.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
-		})
-	}
-
-	return attestors
 }

@@ -364,19 +364,29 @@ func buildConfig(
 		ManualRoutes: make(map[string]bool, len(routes)),
 		WaitPolicies: make(map[string]ibclink.WaitPolicy, len(routes)),
 	}
-	// The relayer reads its chain RPCs from the environment its process is
-	// given, so the config names the variable rather than the address.
-	config.Chains = chainConfigs(t, env, func(id environment.ChainID) string {
+	for _, id := range env.Chains() {
+		chain, err := env.Chain(id)
+		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		rpc, err := driver.ChainRPC(string(id))
 		require.NoError(t, err, "e2etest: resolve Chain %q process binding", id)
-
-		return rpc
-	})
-
-	for _, id := range env.Chains() {
-		options.ChainIDs[string(id)] = chainEVMID(t, env, id)
+		apps, ok := deployment.Chain(id)
+		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
+		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
+		config.Chains = append(config.Chains, ibclink.RelayerChain{
+			ChainID:     options.ChainIDs[string(id)],
+			RPC:         rpc,
+			ICS26Router: apps.ICS26Router.Hex(),
+		})
 	}
-	config.Attestors = attestorConfigs(t, env)
+	for _, id := range env.Attestors() {
+		attestor, err := env.Attestor(id)
+		if err != nil {
+			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
+		}
+		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		})
+	}
 
 	connections := map[string]bool{}
 	for _, route := range routes {
