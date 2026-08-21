@@ -74,10 +74,17 @@ type ClientEnd struct {
 	// means a new client type adds nothing to every client.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
+	// decoded is Params for this client's type, resolved while parsing.
+	decoded ClientParams `yaml:"-"`
+
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
+
+// ErrUnknownClientType marks a type this build does not implement. Parsing
+// tolerates it so a config still being assembled loads; Validate reports it.
+var ErrUnknownClientType = errors.New("unknown client type")
 
 // ClientParams is a client type's decoded params. The unexported method seals
 // the interface, so only the types below satisfy it.
@@ -103,6 +110,10 @@ func (*RemoteProverParams) isClientParams() {}
 // every type, so a new type adds a case here rather than a method on
 // ClientEnd.
 func (c ClientEnd) ClientParams() (ClientParams, error) {
+	if c.decoded != nil {
+		return c.decoded, nil
+	}
+
 	switch c.Type {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
@@ -119,7 +130,7 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 
 		return params, nil
 	default:
-		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
+		return nil, errors.Wrapf(ErrUnknownClientType, ".type %q", c.Type)
 	}
 }
 
@@ -137,6 +148,32 @@ func decodeParams[T any](raw yaml.RawMessage) (*T, error) {
 	}
 
 	return &params, nil
+}
+
+// UnmarshalYAML decodes the params block for this client's type, so malformed
+// params fail the load rather than the first proof request.
+func (c *ClientEnd) UnmarshalYAML(data []byte) error {
+	// plain drops the methods, so unmarshalling it does not re-enter here.
+	type plain ClientEnd
+
+	var raw plain
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*c = ClientEnd(raw)
+
+	params, err := c.ClientParams()
+	switch {
+	case errors.Is(err, ErrUnknownClientType):
+		return nil
+	case err != nil:
+		return err
+	}
+
+	c.decoded = params
+
+	return nil
 }
 
 // AutoRelayConfig automatic relaying settings.

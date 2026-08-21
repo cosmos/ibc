@@ -350,3 +350,63 @@ func TestClientEndAttestationParams(t *testing.T) {
 	client.Params = yaml.RawMessage("url: http://prover:9090\n")
 	require.ErrorContains(t, client.Validate(), "unknown field")
 }
+
+// Params are decoded while parsing, so a malformed block fails the load. An
+// unknown type still parses: a config being assembled must stay loadable, and
+// Validate reports the type.
+func TestClientEndUnmarshalDecodesParams(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name         string
+		doc          string
+		wantLoadErr  string
+		wantValidErr string
+	}{
+		{
+			name: "remote prover params decoded at parse",
+			doc:  "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  url: http://prover:9090\n",
+		},
+		{
+			name:        "malformed params fail the parse",
+			doc:         "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  endpoint: http://prover:9090\n",
+			wantLoadErr: "unknown field",
+		},
+		{
+			name:        "missing url fails the parse",
+			doc:         "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\n",
+			wantLoadErr: ".params.url required",
+		},
+		{
+			name:         "unknown type still parses",
+			doc:          "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: someFutureClient\n",
+			wantValidErr: "someFutureClient",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var client ClientEnd
+
+			err := yaml.Unmarshal([]byte(tt.doc), &client)
+			if tt.wantLoadErr != "" {
+				require.ErrorContains(t, err, tt.wantLoadErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.wantValidErr != "" {
+				require.ErrorContains(t, client.Validate(), tt.wantValidErr)
+				return
+			}
+
+			require.NoError(t, client.Validate())
+
+			// Resolved during parsing, so reading it cannot fail.
+			params, err := client.ClientParams()
+			require.NoError(t, err)
+			require.Equal(t, "http://prover:9090", params.(*RemoteProverParams).URL)
+		})
+	}
+}
