@@ -74,9 +74,6 @@ type ClientEnd struct {
 	// means a new client type adds nothing to every client.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
-	// decoded is Params for this client's type, resolved while parsing.
-	decoded ClientParams `yaml:"-"`
-
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
@@ -123,10 +120,6 @@ func (p *RemoteProverParams) Validate() error {
 // type's rules. One accessor covers every type, so a new type adds a case here
 // rather than a method on ClientEnd.
 func (c ClientEnd) ClientParams() (ClientParams, error) {
-	if c.decoded != nil {
-		return c.decoded, nil
-	}
-
 	switch c.Type {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
@@ -154,8 +147,10 @@ func decodeParams[T any](raw yaml.RawMessage) (*T, error) {
 	return &params, nil
 }
 
-// UnmarshalYAML decodes the params block for this client's type, so malformed
-// params fail the load rather than the first proof request.
+// UnmarshalYAML reads the fields, then checks that the params block decodes
+// for the declared type, so a malformed block fails the load rather than the
+// first read. An unknown type is left for Validate to report, so a config
+// still being assembled loads.
 func (c *ClientEnd) UnmarshalYAML(data []byte) error {
 	// plain drops the methods, so unmarshalling it does not re-enter here.
 	type plain ClientEnd
@@ -167,15 +162,9 @@ func (c *ClientEnd) UnmarshalYAML(data []byte) error {
 
 	*c = ClientEnd(raw)
 
-	params, err := c.ClientParams()
-	switch {
-	case errors.Is(err, ErrUnknownClientType):
-		return nil
-	case err != nil:
+	if _, err := c.ClientParams(); err != nil && !errors.Is(err, ErrUnknownClientType) {
 		return err
 	}
-
-	c.decoded = params
 
 	return nil
 }
