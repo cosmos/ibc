@@ -87,9 +87,11 @@ type ClientEnd struct {
 var ErrUnknownClientType = errors.New("unknown client type")
 
 // ClientParams is a client type's decoded params. The unexported method seals
-// the interface, so only the types below satisfy it.
+// the interface, so only the types below satisfy it. Each type owns both its
+// schema and its rules.
 type ClientParams interface {
 	isClientParams()
+	Validate() error
 }
 
 // AttestationParams is empty: an attestation client is described entirely by
@@ -97,6 +99,9 @@ type ClientParams interface {
 type AttestationParams struct{}
 
 func (*AttestationParams) isClientParams() {}
+
+// Validate reports nothing: an attestation client declares no params.
+func (*AttestationParams) Validate() error { return nil }
 
 // RemoteProverParams is the params block a remoteProver client declares.
 type RemoteProverParams struct {
@@ -106,9 +111,17 @@ type RemoteProverParams struct {
 
 func (*RemoteProverParams) isClientParams() {}
 
-// ClientParams decodes this client's params for its type. One accessor covers
-// every type, so a new type adds a case here rather than a method on
-// ClientEnd.
+func (p *RemoteProverParams) Validate() error {
+	if p.URL == "" {
+		return errors.New(".params.url required")
+	}
+
+	return nil
+}
+
+// ClientParams decodes this client's params for its type, without applying the
+// type's rules. One accessor covers every type, so a new type adds a case here
+// rather than a method on ClientEnd.
 func (c ClientEnd) ClientParams() (ClientParams, error) {
 	if c.decoded != nil {
 		return c.decoded, nil
@@ -119,16 +132,7 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 		// Strict decoding rejects a params block on a type that takes none.
 		return decodeParams[AttestationParams](c.Params)
 	case ClientTypeRemoteProver:
-		params, err := decodeParams[RemoteProverParams](c.Params)
-		if err != nil {
-			return nil, err
-		}
-
-		if params.URL == "" {
-			return nil, errors.New(".params.url required")
-		}
-
-		return params, nil
+		return decodeParams[RemoteProverParams](c.Params)
 	default:
 		return nil, errors.Wrapf(ErrUnknownClientType, ".type %q", c.Type)
 	}
@@ -296,11 +300,12 @@ func (c ClientEnd) Validate() error {
 		return errors.Errorf(".type unknown client type: %q", c.Type)
 	}
 
-	if _, err := c.ClientParams(); err != nil {
+	params, err := c.ClientParams()
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return params.Validate()
 }
 
 func (c RelayerChainOverride) Validate() error {

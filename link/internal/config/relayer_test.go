@@ -300,30 +300,40 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 		return client
 	}
 
+	// Decoding reads the block; the rules are the type's own. A block that
+	// decodes but breaks a rule must therefore fail Validate, not the decode.
 	for _, tt := range []struct {
-		name    string
-		raw     string
-		wantURL string
-		wantErr string
+		name       string
+		raw        string
+		wantURL    string
+		wantDecErr string
+		wantValErr string
 	}{
-		{"url", "url: http://prover:9090\n", "http://prover:9090", ""},
-		{"absent params", "", "", ".params.url required"},
-		{"empty url", "url: \"\"\n", "", ".params.url required"},
-		{"unknown field", "endpoint: http://prover:9090\n", "", "unknown field"},
+		{name: "url", raw: "url: http://prover:9090\n", wantURL: "http://prover:9090"},
+		{name: "absent params", wantValErr: ".params.url required"},
+		{name: "empty url", raw: "url: \"\"\n", wantValErr: ".params.url required"},
+		{name: "unknown field", raw: "endpoint: http://prover:9090\n", wantDecErr: "unknown field"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			params, err := end(tt.raw).ClientParams()
-			if tt.wantErr != "" {
-				require.ErrorContains(t, err, tt.wantErr)
-				// The same block fails validation, not just the accessor.
-				require.ErrorContains(t, end(tt.raw).Validate(), tt.wantErr)
+			if tt.wantDecErr != "" {
+				require.ErrorContains(t, err, tt.wantDecErr)
+				require.ErrorContains(t, end(tt.raw).Validate(), tt.wantDecErr)
 
 				return
 			}
 
-			require.NoError(t, err)
+			require.NoError(t, err, "a decodable block must decode")
+
+			if tt.wantValErr != "" {
+				require.ErrorContains(t, params.Validate(), tt.wantValErr)
+				require.ErrorContains(t, end(tt.raw).Validate(), tt.wantValErr)
+
+				return
+			}
+
 			require.Equal(t, tt.wantURL, params.(*RemoteProverParams).URL)
 			require.NoError(t, end(tt.raw).Validate())
 		})
@@ -373,9 +383,11 @@ func TestClientEndUnmarshalDecodesParams(t *testing.T) {
 			wantLoadErr: "unknown field",
 		},
 		{
-			name:        "missing url fails the parse",
-			doc:         "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\n",
-			wantLoadErr: ".params.url required",
+			// A rule break parses: the config still loads for commands that do
+			// not validate, and Validate reports it.
+			name:         "missing url fails validation, not the parse",
+			doc:          "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\n",
+			wantValidErr: ".params.url required",
 		},
 		{
 			name:         "unknown type still parses",
