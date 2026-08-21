@@ -68,8 +68,7 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// Params is this type's settings, captured uninterpreted so a new client
-	// type adds no fields here.
+	// Params is this client type's settings.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
@@ -77,16 +76,13 @@ type ClientEnd struct {
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
-// ClientParams is a client type's decoded params; each type owns its schema
-// and its rules. The unexported method seals the interface.
+// ClientParams is a client type's decoded params
 type ClientParams interface {
 	isClientParams()
 	Validate() error
 }
 
-// AttestationParams is empty: the client is described by its on-chain attestor
-// set. It exists so every type has params to return, and so a params block on
-// one is rejected rather than ignored.
+// AttestationParams is empty
 type AttestationParams struct{}
 
 func (*AttestationParams) isClientParams() {}
@@ -109,24 +105,21 @@ func (p *RemoteParams) Validate() error {
 	return nil
 }
 
-// ClientParams decodes this client's params, without applying the type's
-// rules. A new client type adds a case here, not a method on ClientEnd, and
-// returns non-nil params so callers never guard against a nil interface.
+// ClientParams decodes this client's params
 func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
-		return strictDecode[AttestationParams](c.Params)
+		return decode[AttestationParams](c.Params)
 	case ClientTypeRemote:
-		return strictDecode[RemoteParams](c.Params)
+		return decode[RemoteParams](c.Params)
 	default:
 		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
 	}
 }
 
-// strictDecode reads a params block into T, where a misspelled key is an error
-// rather than a silently absent value.
-func strictDecode[T any](raw yaml.RawMessage) (*T, error) {
+// decode reads a params block into T
+func decode[T any](raw yaml.RawMessage) (*T, error) {
 	var params T
 
 	if len(raw) == 0 {

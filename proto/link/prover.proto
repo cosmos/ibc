@@ -8,8 +8,7 @@ option go_package = "github.com/cosmos/ibc/link/api/v2/prover";
 
 // ProverService generates the proofs a relayer submits for one light client.
 // It mirrors the relayer's internal prover interface so a custom light client
-// can be supported by implementing this service, without the relayer exposing
-// its internals as a Go API.
+// can be supported by implementing this service.
 //
 // Every request names the light client it is scoped to, so one service can
 // serve many clients across many chains.
