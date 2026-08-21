@@ -8,7 +8,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
@@ -148,10 +147,6 @@ func relayerCall[Req, Resp any](
 	res, err := call(client, cmd.Context(), connect.NewRequest(req))
 	if err != nil {
 		return errors.Wrap(err, cmd.Name())
-	}
-
-	if pm, ok := any(res.Msg).(proto.Message); ok {
-		return config.PrintProtoJSON(pm)
 	}
 
 	return config.PrintJSON(res.Msg)
