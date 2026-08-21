@@ -16,7 +16,7 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// Generator implements proofgen.ProofGenerator for one configured
+// Generator implements prover.Prover for one configured
 // attestation light client: LatestProvableHeight/StateProof/PacketProofs all
 // query the same fixed attestor set with the same quorum threshold
 type Generator struct {

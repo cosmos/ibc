@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package proofgen
+package prover
 
 import (
 	"context"
@@ -47,7 +47,7 @@ func localCandidate(t *testing.T, alias, watchedChainID, address string) attesto
 // testConfig builds a config, matching *ClientSet, and candidate list whose
 // connection is trivially satisfiable, isolating dispatch-level coverage
 // from the attestor-matching specifics (covered in
-// internal/relay/proofgen/attestation).
+// internal/relay/prover/attestation).
 func testConfig(t *testing.T) (config.Config, *chains.ClientSet, []attestor.Attestor) {
 	t.Helper()
 

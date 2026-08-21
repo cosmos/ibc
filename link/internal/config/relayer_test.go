@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -278,4 +279,51 @@ func TestRelayerConfig(t *testing.T) {
 			})
 		}
 	})
+}
+
+// Params are checked by Validate, not by parsing, so commands that load a
+// config without validating it still work.
+func TestClientEndParams(t *testing.T) {
+	t.Parallel()
+
+	const base = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\n"
+
+	for _, tt := range []struct {
+		name    string
+		doc     string
+		wantURL string
+		wantErr string
+	}{
+		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
+		{name: "remote without params", doc: "type: remote\n", wantErr: ".params.url required"},
+		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: ".params.url required"},
+		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "attestation", doc: "type: attestation\n"},
+		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var client ClientEnd
+			require.NoError(t, yaml.Unmarshal([]byte(base+tt.doc), &client))
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, client.Validate(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, client.Validate())
+
+			params, err := client.ClientParams()
+			require.NoError(t, err)
+
+			if tt.wantURL == "" {
+				require.IsType(t, &AttestationParams{}, params)
+				return
+			}
+
+			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
+		})
+	}
 }

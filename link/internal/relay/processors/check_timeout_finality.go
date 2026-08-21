@@ -8,30 +8,30 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/link/internal/relay/proofgen"
+	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/store"
 )
 
 // CheckTimeoutFinality gates timing out a packet on the source client's
-// proof generator currently being able to prove a destination-chain
+// prover currently being able to prove a destination-chain
 // timestamp past the timeout.
 type CheckTimeoutFinality struct {
-	proofGen proofgen.ProofGenerator
+	prover prover.Prover
 }
 
-func NewCheckTimeoutFinality(proofGenerators ProofGenerators, route Route) (CheckTimeoutFinality, error) {
-	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+func NewCheckTimeoutFinality(provers Provers, route Route) (CheckTimeoutFinality, error) {
+	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return CheckTimeoutFinality{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
+			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
 		)
 	}
 
-	return CheckTimeoutFinality{proofGen: proofGen}, nil
+	return CheckTimeoutFinality{prover: prover}, nil
 }
 
 func (p CheckTimeoutFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	_, timestamp, err := p.proofGen.LatestProvableHeight(ctx)
+	_, timestamp, err := p.prover.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}

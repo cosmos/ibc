@@ -5,6 +5,7 @@ package config
 import (
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
 )
 
@@ -14,6 +15,8 @@ type ClientType string
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
+	// ClientTypeRemote delegates proof generation to a remote service
+	ClientTypeRemote ClientType = "remote"
 )
 
 // AttestorType how an attestor is reached.
@@ -64,9 +67,68 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
+	// Params is this client type's settings.
+	Params yaml.RawMessage `yaml:"params,omitempty"`
+
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
+}
+
+// ClientParams is a client type's decoded params
+type ClientParams interface {
+	isClientParams()
+	Validate() error
+}
+
+// AttestationParams is empty
+type AttestationParams struct{}
+
+func (*AttestationParams) isClientParams() {}
+
+func (*AttestationParams) Validate() error { return nil }
+
+// RemoteParams is the params block a remote client declares.
+type RemoteParams struct {
+	// URL is the ProverService endpoint.
+	URL string `yaml:"url"`
+}
+
+func (*RemoteParams) isClientParams() {}
+
+func (p *RemoteParams) Validate() error {
+	if p.URL == "" {
+		return errors.New(".params.url required")
+	}
+
+	return nil
+}
+
+// ClientParams decodes this client's params
+func (c ClientEnd) ClientParams() (ClientParams, error) {
+	switch c.Type {
+	case ClientTypeAttestation:
+		return decode[AttestationParams](c.Params)
+	case ClientTypeRemote:
+		return decode[RemoteParams](c.Params)
+	default:
+		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
+	}
+}
+
+// decode reads a params block into T
+func decode[T any](raw yaml.RawMessage) (*T, error) {
+	var params T
+
+	if len(raw) == 0 {
+		return &params, nil
+	}
+
+	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
+		return nil, errors.Wrap(err, "decoding params")
+	}
+
+	return &params, nil
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -185,11 +247,16 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".clientId required")
 	case c.Signer == "":
 		return errors.New(".signer required")
-	case c.Type != ClientTypeAttestation:
+	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
 		return errors.Errorf(".type unknown client type: %q", c.Type)
 	}
 
-	return nil
+	params, err := c.ClientParams()
+	if err != nil {
+		return err
+	}
+
+	return params.Validate()
 }
 
 func (c RelayerChainOverride) Validate() error {
