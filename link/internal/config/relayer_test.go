@@ -281,8 +281,7 @@ func TestRelayerConfig(t *testing.T) {
 	})
 }
 
-// The client type's params are validated with the config, so a bad block is a
-// startup error rather than a failure on the first proof request.
+// A bad params block is a startup error, not a failure on the first proof.
 func TestClientEndRemoteProverParams(t *testing.T) {
 	t.Parallel()
 
@@ -300,8 +299,7 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 		return client
 	}
 
-	// Decoding reads the block; the rules are the type's own. A block that
-	// decodes but breaks a rule must therefore fail Validate, not the decode.
+	// A block that decodes but breaks a rule fails Validate, not the decode.
 	for _, tt := range []struct {
 		name       string
 		raw        string
@@ -340,8 +338,7 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 	}
 }
 
-// An attestation client needs no params, and declaring some is a mistake worth
-// reporting rather than ignoring.
+// Declaring params on a client that takes none is worth reporting.
 func TestClientEndAttestationParams(t *testing.T) {
 	t.Parallel()
 
@@ -361,9 +358,8 @@ func TestClientEndAttestationParams(t *testing.T) {
 	require.ErrorContains(t, client.Validate(), "unknown field")
 }
 
-// Params are checked when the config is validated, not when it is parsed, so
-// commands that load without validating still work against a config whose
-// client params they do not care about.
+// Params are checked by Validate, not by parsing, so commands that load
+// without validating still work.
 func TestClientEndParamsAreValidatedNotParsed(t *testing.T) {
 	t.Parallel()
 

@@ -15,9 +15,8 @@ type ClientType string
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
-	// ClientTypeRemoteProver delegates proof generation to a ProverService
-	// over gRPC, which is how a custom light client is supported without
-	// linking its code into the relayer.
+	// ClientTypeRemoteProver delegates proof generation to a ProverService,
+	// so a custom light client needs no code in the relayer.
 	ClientTypeRemoteProver ClientType = "remoteProver"
 )
 
@@ -69,9 +68,8 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// Params carries the settings this client type needs, captured without
-	// being interpreted. Keeping them here rather than as fields on ClientEnd
-	// means a new client type adds nothing to every client.
+	// Params is this type's settings, captured uninterpreted so a new client
+	// type adds no fields here.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
@@ -79,23 +77,20 @@ type ClientEnd struct {
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
-// ClientParams is a client type's decoded params. The unexported method seals
-// the interface, so only the types below satisfy it. Each type owns both its
-// schema and its rules.
+// ClientParams is a client type's decoded params; each type owns its schema
+// and its rules. The unexported method seals the interface.
 type ClientParams interface {
 	isClientParams()
 	Validate() error
 }
 
-// AttestationParams is empty: an attestation client is described entirely by
-// its on-chain attestor set. It exists so the type still has params to return,
-// keeping ClientParams non-nil for every client, and so a params block on an
-// attestation client is rejected rather than ignored.
+// AttestationParams is empty: the client is described by its on-chain attestor
+// set. It exists so every type has params to return, and so a params block on
+// one is rejected rather than ignored.
 type AttestationParams struct{}
 
 func (*AttestationParams) isClientParams() {}
 
-// Validate reports nothing: an attestation client declares no params.
 func (*AttestationParams) Validate() error { return nil }
 
 // RemoteProverParams is the params block a remoteProver client declares.
@@ -114,13 +109,9 @@ func (p *RemoteProverParams) Validate() error {
 	return nil
 }
 
-// ClientParams is this client's decoded params, without the type's rules
-// applied. One accessor covers every type, so a new client type adds a case
-// here rather than a method on ClientEnd.
-//
-// Every case returns non-nil params on success, so callers never guard against
-// a nil interface. A type that takes no params declares an empty struct, as
-// AttestationParams does, rather than returning nil.
+// ClientParams decodes this client's params, without applying the type's
+// rules. A new client type adds a case here, not a method on ClientEnd, and
+// returns non-nil params so callers never guard against a nil interface.
 func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
@@ -133,8 +124,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	}
 }
 
-// decodeParams reads a params block strictly: a misspelled key is an error,
-// not a silently absent value.
+// strictDecode reads a params block into T, where a misspelled key is an error
+// rather than a silently absent value.
 func strictDecode[T any](raw yaml.RawMessage) (*T, error) {
 	var params T
 

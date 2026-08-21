@@ -101,10 +101,10 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			}, nil
 		}).Once()
 
-	proofGen := mocks.NewMockProver(t)
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	mockProver := mocks.NewMockProver(t)
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -120,7 +120,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
 		txSubmitter,
@@ -198,10 +198,10 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	}, nil).Once()
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
 
-	proofGen := mocks.NewMockProver(t)
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	mockProver := mocks.NewMockProver(t)
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -217,7 +217,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
 		txSubmitter,
@@ -303,10 +303,10 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		},
 	}, nil).Once()
 
-	proofGen := mocks.NewMockProver(t)
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	mockProver := mocks.NewMockProver(t)
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -322,7 +322,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
 		txSubmitter,

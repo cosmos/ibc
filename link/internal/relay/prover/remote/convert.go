@@ -10,8 +10,7 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// ErrUnsupported is returned for values this build cannot represent on the
-// wire, rather than silently sending a zero value.
+// ErrUnsupported marks a value this build cannot put on the wire.
 var ErrUnsupported = errors.New("unsupported by the prover wire contract")
 
 func proofKindToProto(kind v2.ProofKind) (proverv2.ProofKind, error) {
@@ -61,8 +60,7 @@ func packetsToProto(packets []channeltypesv2.Packet) []*proverv2.Packet {
 }
 
 // PacketsFromProto is the inverse, for service implementations. Conversion is
-// an identity in both directions, including the empty case, so a proof is
-// always generated over exactly the packet the relayer sent.
+// an identity both ways, so a proof covers exactly the packet that was sent.
 func PacketsFromProto(packets []*proverv2.Packet) []channeltypesv2.Packet {
 	if len(packets) == 0 {
 		return nil

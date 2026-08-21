@@ -78,8 +78,8 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		}
 	}
 
-	// Proof generators
-	proofGenerators, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
+	// Provers
+	provers, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	pipelines := dispatch.NewPipelineSet(logger, cfg, pipeline.Deps{
 		Storage:      db,
 		Chains:       clientSet,
-		Provers:      proofGenerators,
+		Provers:      provers,
 		TxBuilders:   txBuilders,
 		TxSubmitters: txSubmitters,
 	})

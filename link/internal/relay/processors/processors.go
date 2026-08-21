@@ -26,7 +26,7 @@ type ChainClients interface {
 	Get(chainID string) (chains.Client, bool)
 }
 
-// Provers resolves proof generators by (chainIDclientID).
+// Provers resolves provers by (chainIDclientID).
 type Provers interface {
 	Get(chainID, clientID string) (prover.Prover, bool)
 }

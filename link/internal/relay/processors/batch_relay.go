@@ -71,7 +71,7 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 func relayPackets(
 	ctx context.Context,
 	chainClient chains.Client,
-	proofGen prover.Prover,
+	prover prover.Prover,
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,
@@ -79,7 +79,7 @@ func relayPackets(
 	proofHeight uint64,
 	events []v2.PacketEvent,
 ) (*v2.Submission, error) {
-	stateProof, err := proofGen.StateProof(ctx, proofHeight)
+	stateProof, err := prover.StateProof(ctx, proofHeight)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating state proof")
 	}
@@ -89,7 +89,7 @@ func relayPackets(
 		packets[i] = event.Packet
 	}
 
-	packetProofs, err := proofGen.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets)
+	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating packet proofs")
 	}

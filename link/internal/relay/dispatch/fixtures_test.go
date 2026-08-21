@@ -70,8 +70,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 	_, err = db.MigrateUp()
 	require.NoError(t, err)
 
-	destProofGen := mocks.NewMockProver(t)
-	sourceProofGen := mocks.NewMockProver(t)
+	destProver := mocks.NewMockProver(t)
+	sourceProver := mocks.NewMockProver(t)
 
 	deps := pipeline.Deps{
 		Storage: db,
@@ -80,8 +80,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, pipeline.Deps) {
 			testRoute.DestinationChainID: mocks.NewMockClient(t),
 		},
 		Provers: staticProvers{
-			prover.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): destProofGen,
-			prover.Key(testRoute.SourceChainID, testRoute.SourceClientID):           sourceProofGen,
+			prover.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): destProver,
+			prover.Key(testRoute.SourceChainID, testRoute.SourceClientID):           sourceProver,
 		},
 		TxBuilders: staticTxBuilders{
 			testRoute.SourceChainID:      mocks.NewMockTxBuilder(t),

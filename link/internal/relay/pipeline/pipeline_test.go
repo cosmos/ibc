@@ -41,11 +41,11 @@ type pipelineEnv struct {
 	store     *store.SqliteDB
 	srcClient *mocks.MockClient
 	dstClient *mocks.MockClient
-	// dstProofGen/dstTxBuilder are resolved for the destination client/chain,
-	// used by recv delivery; srcProofGen/srcTxBuilder are resolved for the
+	// dstProver/dstTxBuilder are resolved for the destination client/chain,
+	// used by recv delivery; srcProver/srcTxBuilder are resolved for the
 	// source client/chain, used by ack and timeout delivery.
-	dstProofGen    *mocks.MockProver
-	srcProofGen    *mocks.MockProver
+	dstProver      *mocks.MockProver
+	srcProver      *mocks.MockProver
 	dstTxBuilder   *mocks.MockTxBuilder
 	srcTxBuilder   *mocks.MockTxBuilder
 	srcTxSubmitter *mocks.MockTxSubmitter
@@ -87,8 +87,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		store:          db,
 		srcClient:      mocks.NewMockClient(t),
 		dstClient:      mocks.NewMockClient(t),
-		dstProofGen:    mocks.NewMockProver(t),
-		srcProofGen:    mocks.NewMockProver(t),
+		dstProver:      mocks.NewMockProver(t),
+		srcProver:      mocks.NewMockProver(t),
 		dstTxBuilder:   mocks.NewMockTxBuilder(t),
 		srcTxBuilder:   mocks.NewMockTxBuilder(t),
 		srcTxSubmitter: mocks.NewMockTxSubmitter(t),
@@ -99,8 +99,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		Storage: db,
 		Chains:  staticChains{testRoute.SourceChainID: env.srcClient, testRoute.DestinationChainID: env.dstClient},
 		Provers: staticProvers{
-			prover.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): env.dstProofGen,
-			prover.Key(testRoute.SourceChainID, testRoute.SourceClientID):           env.srcProofGen,
+			prover.Key(testRoute.DestinationChainID, testRoute.DestinationClientID): env.dstProver,
+			prover.Key(testRoute.SourceChainID, testRoute.SourceClientID):           env.srcProver,
 		},
 		TxBuilders: staticTxBuilders{
 			testRoute.DestinationChainID: env.dstTxBuilder,
@@ -121,7 +121,7 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 // for whichever chain the batch reads packet events from.
 func mockRelay(
 	client *mocks.MockClient,
-	proofGen *mocks.MockProver,
+	mockProver *mocks.MockProver,
 	txBuilder *mocks.MockTxBuilder,
 	events []v2.PacketEvent,
 	to string,
@@ -129,9 +129,9 @@ func mockRelay(
 	const height = uint64(100)
 
 	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
-	proofGen.EXPECT().StateProof(mock.Anything, height).Return([]byte{0x01}, nil).Once()
-	proofGen.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
+	mockProver.EXPECT().StateProof(mock.Anything, height).Return([]byte{0x01}, nil).Once()
+	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
 		Return(make([][]byte, len(events)), nil).Once()
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]v2.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
@@ -255,12 +255,12 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Times(2)
 
-		// check send finality: destination client's proof generator must be able to prove the send tx
-		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		// check send finality: destination client's mockProver must be able to prove the send tx
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
 		// recv delivery
-		mockRelay(env.srcClient, env.dstProofGen, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
+		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash:         recvTxHash,
@@ -275,12 +275,12 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(chainsWriteAckSuccess(), nil).
 			Once()
 
-		// check write ack finality: source client's proof generator must be able to prove the write ack tx
-		env.srcProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		// check write ack finality: source client's mockProver must be able to prove the write ack tx
+		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
 		// ack delivery on the source chain
-		mockRelay(env.dstClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
+		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -314,12 +314,12 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Times(2)
 
-		// check send finality: destination client's proof generator must be able to prove the send tx
-		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		// check send finality: destination client's mockProver must be able to prove the send tx
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
 		// recv delivery
-		mockRelay(env.srcClient, env.dstProofGen, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
+		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -332,12 +332,12 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(chainsWriteAckError(), nil).
 			Once()
 
-		// check write ack finality: source client's proof generator must be able to prove the write ack tx
-		env.srcProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		// check write ack finality: source client's mockProver must be able to prove the write ack tx
+		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
 		// ack delivery on the source chain
-		mockRelay(env.dstClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
+		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -368,17 +368,17 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Once()
 
-		// check send finality: destination client's proof generator must be able to prove the send tx
-		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		// check send finality: destination client's mockProver must be able to prove the send tx
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
-		// check timeout finality: source client's proof generator must be able to prove a destination timestamp past the timeout
-		env.srcProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		// check timeout finality: source client's mockProver must be able to prove a destination timestamp past the timeout
+		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 
 		// timeout delivery on the source chain
 		timeoutEvent := sendPacketEvent(42)
 		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
-		mockRelay(env.srcClient, env.srcProofGen, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
+		mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
@@ -410,8 +410,8 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Once()
 
-		// check send finality: the send event's height is past what the destination proof generator can prove
-		env.dstProofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(50), time.Now(), nil).Once()
+		// check send finality: the send event's height is past what the destination mockProver can prove
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(50), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)

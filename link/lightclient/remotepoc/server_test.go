@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package server
+package remotepoc
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -51,29 +50,12 @@ func (s *stubProver) PacketProofs(
 	return s.proofs, nil
 }
 
-type stubSet struct {
-	prover    prover.Prover
-	gotChain  string
-	gotClient string
-}
-
-func (s *stubSet) Get(chainID, clientID string) (prover.Prover, bool) {
-	s.gotChain, s.gotClient = chainID, clientID
-	if s.prover == nil {
-		return nil, false
-	}
-
-	return s.prover, true
-}
-
-func proverPair(t *testing.T, set ProverSet, chainID, clientID string) *remote.Prover {
+func proverPair(t *testing.T, set *prover.Set, chainID, clientID string) *remote.Prover {
 	t.Helper()
 
-	mux := http.NewServeMux()
-	path, handler := NewProverHandler(set).Register()
-	mux.Handle(path, handler)
-
-	server := httptest.NewServer(mux)
+	server := httptest.NewUnstartedServer(NewServer(set).Handler)
+	server.EnableHTTP2 = true
+	server.StartTLS()
 	t.Cleanup(server.Close)
 
 	return remote.New(server.Client(), server.URL, chainID, clientID)
@@ -89,7 +71,7 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		stateProof: []byte("state-proof"),
 		proofs:     [][]byte{[]byte("proof-a"), []byte("proof-b")},
 	}
-	set := &stubSet{prover: stub}
+	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
 	client := proverPair(t, set, "chain-a", "client-0")
 
 	t.Run("latest provable height", func(t *testing.T) {
@@ -136,13 +118,15 @@ func TestProverServiceRoundTrip(t *testing.T) {
 	})
 
 	t.Run("the client is named on every request", func(t *testing.T) {
-		require.Equal(t, "chain-a", set.gotChain)
-		require.Equal(t, "client-0", set.gotClient)
+		// Resolution only succeeds when the request carries the right client,
+		// so every call above proves it.
+		_, err := proverPair(t, set, "chain-a", "wrong-client").StateProof(ctx, 1)
+		require.Error(t, err)
 	})
 }
 
 func TestProverServiceUnknownClient(t *testing.T) {
-	client := proverPair(t, &stubSet{}, "chain-z", "client-9")
+	client := proverPair(t, prover.NewSet(nil), "chain-z", "client-9")
 
 	_, _, err := client.LatestProvableHeight(context.Background())
 	require.Error(t, err)
@@ -152,7 +136,8 @@ func TestProverServiceUnknownClient(t *testing.T) {
 // A short response would attach one packet's proof to another packet.
 func TestProverServiceRejectsMismatchedProofCount(t *testing.T) {
 	stub := &stubProver{proofs: [][]byte{[]byte("only-one")}}
-	client := proverPair(t, &stubSet{prover: stub}, "chain-a", "client-0")
+	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
+	client := proverPair(t, set, "chain-a", "client-0")
 
 	_, err := client.PacketProofs(context.Background(), 1, v2.ProofKindPacketCommitment,
 		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}})

@@ -89,9 +89,8 @@ func (r *Driver) acquireProcessEnv() ([]string, func(), error) {
 	return env, release, nil
 }
 
-// ChainRPCEnv resolves the chain RPC variables the relayer config expands,
-// with a release for the binding lease. A test that runs part of the relayer
-// in-process needs these in its own environment.
+// ChainRPCEnv resolves the chain RPC variables the relayer config expands, for
+// a test that runs part of the relayer in-process. Release frees the lease.
 func (r *Driver) ChainRPCEnv() (map[string]string, func(), error) {
 	if r.bindings == nil {
 		return nil, func() {}, nil

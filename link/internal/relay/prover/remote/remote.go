@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package remote implements the relayer's Prover against a ProverService over
-// gRPC, so a custom light client can be supported by running a service rather
-// than by linking Go code into the relayer.
+// Package remote implements the relayer's Prover against a ProverService, so a
+// custom light client is a service rather than code in the relayer.
 package remote
 
 import (
@@ -18,9 +17,8 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// Prover proves one configured light client by calling a remote service. The
-// chain and client ids are sent on every request, so one service can serve
-// many clients.
+// Prover proves one light client remotely. Every request names the client, so
+// one service can serve many.
 type Prover struct {
 	client   proverv2.ProverServiceClient
 	chainID  string
@@ -89,8 +87,7 @@ func (p *Prover) PacketProofs(
 	}
 
 	proofs := res.Msg.GetProofs()
-	// Proofs are matched to packets by index, so a short response would
-	// silently attach the wrong proof to a packet.
+	// Proofs match packets by index, so a short response misattributes them.
 	if len(proofs) != len(packets) {
 		return nil, errors.Errorf(
 			"remote prover returned %d proofs for %d packets", len(proofs), len(packets),

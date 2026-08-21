@@ -60,12 +60,12 @@ func TestCheckWriteAckFinalityProcess(t *testing.T) {
 		destinationChainClient := mocks.NewMockClient(t)
 		destinationChainClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
-		proofGen := mocks.NewMockProver(t)
-		proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
+		mockProver := mocks.NewMockProver(t)
+		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
 		p, err := NewCheckWriteAckFinality(
 			staticChains{route.DestinationChainID: destinationChainClient},
-			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): proofGen},
+			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): mockProver},
 			route,
 		)
 		require.NoError(t, err)
@@ -80,12 +80,12 @@ func TestCheckWriteAckFinalityProcess(t *testing.T) {
 		destinationChainClient := mocks.NewMockClient(t)
 		destinationChainClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(150), nil).Once()
 
-		proofGen := mocks.NewMockProver(t)
-		proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
+		mockProver := mocks.NewMockProver(t)
+		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
 		p, err := NewCheckWriteAckFinality(
 			staticChains{route.DestinationChainID: destinationChainClient},
-			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): proofGen},
+			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): mockProver},
 			route,
 		)
 		require.NoError(t, err)

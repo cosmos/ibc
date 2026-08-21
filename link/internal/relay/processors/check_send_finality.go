@@ -16,16 +16,16 @@ import (
 )
 
 // CheckSendFinality gates relaying on the send tx's height being at or
-// before the height the destination client's proof generator can currently
+// before the height the destination client's prover can currently
 // prove.
 type CheckSendFinality struct {
 	sourceChainClient chains.Client
-	proofGen          prover.Prover
+	prover            prover.Prover
 }
 
 func NewCheckSendFinality(
 	chainClients ChainClients,
-	proofGenerators Provers,
+	provers Provers,
 	route Route,
 ) (CheckSendFinality, error) {
 	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
@@ -33,19 +33,19 @@ func NewCheckSendFinality(
 		return CheckSendFinality{}, errors.Errorf("no configured chain client for source chain %s", route.SourceChainID)
 	}
 
-	proofGen, ok := proofGenerators.Get(route.DestinationChainID, route.DestinationClientID)
+	prover, ok := provers.Get(route.DestinationChainID, route.DestinationClientID)
 	if !ok {
 		return CheckSendFinality{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q",
+			"no prover configured for client %q on chain %q",
 			route.DestinationClientID, route.DestinationChainID,
 		)
 	}
 
-	return CheckSendFinality{sourceChainClient: sourceChainClient, proofGen: proofGen}, nil
+	return CheckSendFinality{sourceChainClient: sourceChainClient, prover: prover}, nil
 }
 
 func (p CheckSendFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	proofHeight, _, err := p.proofGen.LatestProvableHeight(ctx)
+	proofHeight, _, err := p.prover.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}

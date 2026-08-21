@@ -19,14 +19,12 @@ import (
 	"github.com/cosmos/ibc/link/lightclient/remotepoc"
 )
 
-// startProverService runs a ProverService on address, built from the relayer's
-// own config file. It is a separate service: the relayer holds no attestors
-// and no chain clients for proving, only this endpoint.
+// startProverService runs a ProverService built from the relayer's config. It
+// is separate: the relayer holds only the endpoint.
 func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
 	t.Helper()
 
-	// The config expands chain RPCs from the environment, which the relayer
-	// process is given. Building the prover here needs the same.
+	// The config expands chain RPCs from the environment; so must this.
 	vars, release, err := driver.ChainRPCEnv()
 	require.NoError(t, err, "resolve chain rpc env")
 
@@ -36,7 +34,7 @@ func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
 		t.Setenv(name, value)
 	}
 
-	server, err := remotepoc.NewAttestationHandler(t.Context(), driver.ConfigPath())
+	server, err := remotepoc.NewAttestationServer(t.Context(), driver.ConfigPath())
 	require.NoError(t, err, "build prover service")
 
 	listener, err := net.Listen("tcp", address)
@@ -56,8 +54,8 @@ func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
 	})
 }
 
-// reserveLoopbackAddress picks a port the prover service can be pointed at
-// before it starts, since the relayer config must name it up front.
+// reserveLoopbackAddress picks a port, since the config names it before the
+// service starts.
 func reserveLoopbackAddress(t *testing.T) string {
 	t.Helper()
 
@@ -70,11 +68,9 @@ func reserveLoopbackAddress(t *testing.T) string {
 	return address
 }
 
-// A custom light client is supported by implementing ProverService, not by
-// linking Go code into the relayer. This relays a real packet with every proof
-// fetched over gRPC from a service the relayer does not host.
-// Not parallel: the prover is built in-process and the config expands chain
-// RPCs from the environment.
+// Relays a real packet with every proof fetched over gRPC from a service the
+// relayer does not host.
+// Not parallel: t.Setenv is needed for the in-process prover.
 func TestRemoteProver_RelaysPacket(t *testing.T) {
 	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
@@ -110,8 +106,7 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
-	// Every proof behind this lifecycle came from the remote service, so a
-	// wire contract that dropped a field would fail on chain, not silently.
+	// Every proof came from the remote service, so a dropped field fails here.
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyCommitmentCreated(ctx))
 	require.NoError(t, transfer.VerifyReceiptCreated(ctx))

@@ -54,8 +54,8 @@ type RelayerConnection struct {
 	ChainB  string
 	ClientB string
 
-	// ProverURL points both client ends at a ProverService instead of
-	// resolving attestation locally. Empty keeps the attestation default.
+	// ProverURL points both client ends at a ProverService. Empty keeps
+	// attestation.
 	ProverURL string
 }
 
