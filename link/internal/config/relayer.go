@@ -74,19 +74,10 @@ type ClientEnd struct {
 	// means a new client type adds nothing to every client.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
-	// decoded is Params resolved for Type, filled while parsing. Decoding is a
-	// pure function of Type and Params, so this is a cache, never a source of
-	// truth: a ClientEnd built in code decodes on demand instead.
-	decoded ClientParams `yaml:"-"`
-
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
-
-// ErrUnknownClientType marks a type this build does not implement. Parsing
-// tolerates it so a config still being assembled loads; Validate reports it.
-var ErrUnknownClientType = errors.New("unknown client type")
 
 // ClientParams is a client type's decoded params. The unexported method seals
 // the interface, so only the types below satisfy it. Each type owns both its
@@ -132,17 +123,12 @@ func decodeClientParams(clientType ClientType, raw yaml.RawMessage) (ClientParam
 	case ClientTypeRemoteProver:
 		return strictDecode[RemoteProverParams](raw)
 	default:
-		return nil, errors.Wrapf(ErrUnknownClientType, ".type %q", clientType)
+		return nil, errors.Errorf(".type unknown client type: %q", clientType)
 	}
 }
 
-// ClientParams is this client's decoded params, resolved while parsing or on
-// demand for a ClientEnd built in code.
+// ClientParams is this client's decoded params.
 func (c ClientEnd) ClientParams() (ClientParams, error) {
-	if c.decoded != nil {
-		return c.decoded, nil
-	}
-
 	return decodeClientParams(c.Type, c.Params)
 }
 
@@ -160,33 +146,6 @@ func strictDecode[T any](raw yaml.RawMessage) (*T, error) {
 	}
 
 	return &params, nil
-}
-
-// UnmarshalYAML reads the fields and resolves the params block, so a malformed
-// block fails the load rather than the first read. An unknown type is left for
-// Validate to report, so a config still being assembled loads.
-func (c *ClientEnd) UnmarshalYAML(data []byte) error {
-	// plain drops the methods, so unmarshalling it does not re-enter here.
-	type plain ClientEnd
-
-	var raw plain
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	*c = ClientEnd(raw)
-
-	params, err := decodeClientParams(c.Type, c.Params)
-	switch {
-	case errors.Is(err, ErrUnknownClientType):
-		return nil
-	case err != nil:
-		return err
-	}
-
-	c.decoded = params
-
-	return nil
 }
 
 // AutoRelayConfig automatic relaying settings.

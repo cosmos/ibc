@@ -361,38 +361,35 @@ func TestClientEndAttestationParams(t *testing.T) {
 	require.ErrorContains(t, client.Validate(), "unknown field")
 }
 
-// Params are decoded while parsing, so a malformed block fails the load. An
-// unknown type still parses: a config being assembled must stay loadable, and
-// Validate reports the type.
-func TestClientEndUnmarshalDecodesParams(t *testing.T) {
+// Params are checked when the config is validated, not when it is parsed, so
+// commands that load without validating still work against a config whose
+// client params they do not care about.
+func TestClientEndParamsAreValidatedNotParsed(t *testing.T) {
 	t.Parallel()
 
 	for _, tt := range []struct {
-		name         string
-		doc          string
-		wantLoadErr  string
-		wantValidErr string
+		name    string
+		doc     string
+		wantErr string
 	}{
 		{
-			name: "remote prover params decoded at parse",
+			name: "valid",
 			doc:  "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  url: http://prover:9090\n",
 		},
 		{
-			name:        "malformed params fail the parse",
-			doc:         "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  endpoint: http://prover:9090\n",
-			wantLoadErr: "unknown field",
+			name:    "misspelled key",
+			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  endpoint: http://prover:9090\n",
+			wantErr: "unknown field",
 		},
 		{
-			// A rule break parses: the config still loads for commands that do
-			// not validate, and Validate reports it.
-			name:         "missing url fails validation, not the parse",
-			doc:          "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\n",
-			wantValidErr: ".params.url required",
+			name:    "missing url",
+			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\n",
+			wantErr: ".params.url required",
 		},
 		{
-			name:         "unknown type still parses",
-			doc:          "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: someFutureClient\n",
-			wantValidErr: "someFutureClient",
+			name:    "unknown type",
+			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: someFutureClient\n",
+			wantErr: "someFutureClient",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -400,61 +397,19 @@ func TestClientEndUnmarshalDecodesParams(t *testing.T) {
 
 			var client ClientEnd
 
-			err := yaml.Unmarshal([]byte(tt.doc), &client)
-			if tt.wantLoadErr != "" {
-				require.ErrorContains(t, err, tt.wantLoadErr)
-				return
-			}
+			// Parsing never rejects: only Validate judges.
+			require.NoError(t, yaml.Unmarshal([]byte(tt.doc), &client))
 
-			require.NoError(t, err)
-
-			if tt.wantValidErr != "" {
-				require.ErrorContains(t, client.Validate(), tt.wantValidErr)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, client.Validate(), tt.wantErr)
 				return
 			}
 
 			require.NoError(t, client.Validate())
 
-			// Resolved during parsing, so reading it cannot fail.
 			params, err := client.ClientParams()
 			require.NoError(t, err)
 			require.Equal(t, "http://prover:9090", params.(*RemoteProverParams).URL)
 		})
 	}
-}
-
-// The decoded field is a cache, so a parsed client and one built in code must
-// resolve to the same params.
-func TestClientParamsCacheMatchesFreshDecode(t *testing.T) {
-	t.Parallel()
-
-	const doc = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  url: http://prover:9090\n"
-
-	var parsed ClientEnd
-	require.NoError(t, yaml.Unmarshal([]byte(doc), &parsed))
-	require.NotNil(t, parsed.decoded, "parsing fills the cache")
-
-	fromCache, err := parsed.ClientParams()
-	require.NoError(t, err)
-
-	// Same fields, no cache.
-	built := ClientEnd{
-		ChainID:  parsed.ChainID,
-		Signer:   parsed.Signer,
-		ClientID: parsed.ClientID,
-		Type:     parsed.Type,
-		Params:   parsed.Params,
-	}
-	require.Nil(t, built.decoded)
-
-	fresh, err := built.ClientParams()
-	require.NoError(t, err)
-
-	require.Equal(t, fresh, fromCache)
-
-	// A copy carries the cache, which is how consumers receive it.
-	copied := parsed
-	fromCopy, err := copied.ClientParams()
-	require.NoError(t, err)
-	require.Equal(t, fromCache, fromCopy)
 }
