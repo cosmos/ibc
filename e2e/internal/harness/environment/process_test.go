@@ -170,7 +170,7 @@ exit 1
 	t.Run("daemon readiness", func(t *testing.T) {
 		script := writeProcessBindingExecutable(t, `#!/bin/sh
 set -eu
-printf '%s\n' '`+endpoint+`'
+printf '%s\n' '`+endpoint+`' >&2
 `)
 		t.Setenv("IBC_BIN", script)
 		env := newProcessBindingTestEnvironment(t)
@@ -276,8 +276,9 @@ func runBoundRelayerHelper() error {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	fmt.Printf(
-		"{\"event\":\"ready\",\"chainsConnected\":[\"managed\"],\"http\":%q}\n",
+	fmt.Fprintf(
+		os.Stderr,
+		"{\"level\":\"INFO\",\"msg\":\"Readiness\",\"readiness\":{\"event\":\"ready\",\"chainsConnected\":[\"managed\"],\"http\":%q}}\n",
 		listener.Addr().String(),
 	)
 

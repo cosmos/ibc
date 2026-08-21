@@ -84,21 +84,15 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 		}
 	}()
 
-	args := append([]string{"relayer", "run"}, r.configArgs()...)
+	args := append([]string{"relayer", "run", "--log-json"}, r.configArgs()...)
 	bin := r.bin
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.Env = processEnv
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// First stdout line is the readiness JSON; stderr carries human logs and
-	// lands in relayer.log next to the config for post-mortems. A bounded tail
-	// is kept in memory because startup failures (config rejections above all)
-	// only explain themselves on stderr, and the log file dies with TempDir.
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("ibc relayer run: stdout pipe: %w", err)
-	}
+	// Structured stderr logs carry readiness and land in relayer.log for post-mortems.
+	// A bounded tail is kept in memory because the log file dies with TempDir.
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: stderr pipe: %w", err)
@@ -126,12 +120,12 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 
 	readyCh := make(chan readyResult, 1)
 	var drained sync.WaitGroup
-	drained.Add(2)
-	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
+	drained.Add(1)
 	go func() {
 		defer drained.Done()
-		_, _ = io.Copy(logs, stderr)
-		logs.close()
+		defer logs.close()
+
+		watchRelayerLogs(stderr, logs, readyCh)
 	}()
 	d.h = reapProcess(cmd, processHooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
 	releaseBinding = nil
@@ -157,42 +151,64 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	return d, nil
 }
 
-func drainStdout(rc io.Reader, readyCh chan<- readyResult) {
-	br := bufio.NewReader(rc)
-	first := true
+func watchRelayerLogs(stderr io.Reader, logsSink io.Writer, readyCh chan<- readyResult) {
+	readinessMatcher := func(line string) bool {
+		result, ok := parseRelayerReadinessLog(line)
+		if ok {
+			readyCh <- result
+		}
+
+		return ok
+	}
+
+	if err := pipeLogs(stderr, logsSink, readinessMatcher); err != nil {
+		readyCh <- readyResult{err: err}
+	}
+}
+
+func pipeLogs(stderr io.Reader, logs io.Writer, readinessMatcher func(line string) bool) error {
+	reader := bufio.NewReader(stderr)
+
+	var matched bool
 	for {
-		line, err := br.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
-			if first {
-				first = false
-				readyCh <- parseReadiness(line)
+			_, _ = io.WriteString(logs, line)
+			if !matched {
+				matched = readinessMatcher(line)
 			}
 		}
 		if err != nil {
-			if first {
-				readyCh <- readyResult{err: fmt.Errorf("no readiness line on stdout: %w", err)}
+			if !matched {
+				return fmt.Errorf("no readiness log on stderr: %w", err)
 			}
-			return
+			return nil
 		}
 	}
 }
 
-func parseReadiness(line string) readyResult {
-	var r relayerv2.ProcessReadiness
-	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &r); err != nil {
-		return readyResult{
-			err: fmt.Errorf("first stdout line is not readiness JSON (%q): %w", strings.TrimSpace(line), err),
-		}
+func parseRelayerReadinessLog(line string) (result readyResult, matched bool) {
+	var entry struct {
+		Readiness relayerv2.ProcessReadiness `json:"readiness"`
 	}
-	if r.Event != relayerv2.ProcessReadinessEvent {
-		return readyResult{
-			err: fmt.Errorf("invalid readiness: event = %q, want %q", r.Event, relayerv2.ProcessReadinessEvent),
-		}
+
+	var (
+		input     = []byte(strings.TrimSpace(line))
+		err       = json.Unmarshal(input, &entry)
+		readiness = entry.Readiness
+	)
+
+	switch {
+	case err != nil || readiness.Event == "":
+		return readyResult{}, false
+	case readiness.Event != relayerv2.ProcessReadinessEvent:
+		err := fmt.Errorf("invalid readiness: event = %q, want %q", readiness.Event, relayerv2.ProcessReadinessEvent)
+		return readyResult{err: err}, true
+	case readiness.HTTP == "":
+		return readyResult{err: errors.New("invalid readiness: http is empty")}, true
+	default:
+		return readyResult{readiness: readiness}, true
 	}
-	if r.HTTP == "" {
-		return readyResult{err: errors.New("invalid readiness: http is empty")}
-	}
-	return readyResult{readiness: r}
 }
 
 func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayerv2.ProcessReadiness, error) {

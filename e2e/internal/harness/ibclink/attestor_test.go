@@ -32,6 +32,27 @@ import (
 
 const testPrivateKey = "0000000000000000000000000000000000000000000000000000000000000006"
 
+func TestParseAttestorReadinessLog(t *testing.T) {
+	valid := `{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","http":"127.0.0.1:4242"}}`
+	result, ok := parseAttestorReadinessLog(valid)
+	require.True(t, ok)
+	require.NoError(t, result.err)
+	require.Equal(t, "127.0.0.1:4242", result.address)
+
+	_, ok = parseAttestorReadinessLog(`{"level":"INFO","msg":"Starting attestor"}`)
+	require.False(t, ok)
+
+	wrongEvent := `{"msg":"Readiness","readiness":{"event":"started","http":"127.0.0.1:4242"}}`
+	result, ok = parseAttestorReadinessLog(wrongEvent)
+	require.True(t, ok)
+	require.ErrorContains(t, result.err, "invalid readiness")
+
+	missingHTTP := `{"msg":"Readiness","readiness":{"event":"ready"}}`
+	result, ok = parseAttestorReadinessLog(missingHTTP)
+	require.True(t, ok)
+	require.ErrorContains(t, result.err, "http")
+}
+
 func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	binary := helperBinary(t)
 	workDir := filepath.Join(t.TempDir(), "attestor")
@@ -294,9 +315,17 @@ func runAttestorHelper() error {
 	if err != nil {
 		return fmt.Errorf("helper listen: %w", err)
 	}
-	if err := json.NewEncoder(os.Stdout).Encode(attestorv2.ProcessReadiness{
-		Event: attestorv2.ProcessReadinessEvent,
-		HTTP:  listener.Addr().String(),
+	if err := json.NewEncoder(os.Stderr).Encode(struct {
+		Level     string                      `json:"level"`
+		Message   string                      `json:"msg"`
+		Readiness attestorv2.ProcessReadiness `json:"readiness"`
+	}{
+		Level:   "INFO",
+		Message: "Readiness",
+		Readiness: attestorv2.ProcessReadiness{
+			Event: attestorv2.ProcessReadinessEvent,
+			HTTP:  listener.Addr().String(),
+		},
 	}); err != nil {
 		return fmt.Errorf("helper announce readiness: %w", err)
 	}

@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"net/http"
 
@@ -57,7 +56,7 @@ var (
 	}
 )
 
-func attestorRun(cmd *cobra.Command, _ []string) error {
+func attestorRun(_ *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -75,13 +74,11 @@ func attestorRun(cmd *cobra.Command, _ []string) error {
 		app.Logger.Error("Failed to start attestor server", "err", err)
 		return err
 	}
-	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(attestorv2.ProcessReadiness{
+
+	app.Logger.Info("Readiness", "readiness", attestorv2.ProcessReadiness{
 		Event: attestorv2.ProcessReadinessEvent,
 		HTTP:  address.String(),
-	}); err != nil {
-		_ = app.Server.Stop()
-		return err
-	}
+	})
 
 	graceful.AddCallback(app.Server.Stop)
 
