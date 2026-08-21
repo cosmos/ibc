@@ -187,6 +187,18 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 	return config, nil
 }
 
+func (c Config) OverrideFromFlags(flags FlagSet) (Config, error) {
+	if flags.DB != "" {
+		db, err := DBConfigFromURL(flags.DB)
+		if err != nil {
+			return Config{}, errors.Wrap(err, "invalid --db")
+		}
+		c.DB = db
+	}
+
+	return c, nil
+}
+
 func (c Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
 		return errors.Wrap(err, ".server")
@@ -354,6 +366,16 @@ func (c Config) Signer(alias string) (SignerConfig, bool) {
 	}
 
 	return SignerConfig{}, false
+}
+
+func (c Config) AddSigner(signer SignerConfig) (Config, bool) {
+	if _, exists := c.Signer(signer.Alias); exists {
+		return c, false
+	}
+
+	c.Signers = append(c.Signers, signer)
+
+	return c, true
 }
 
 // AttestorByName returns the configured attestor with the given name.

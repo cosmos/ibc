@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/pkg/errors"
@@ -164,13 +165,43 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, err
 	}
 
-	// allow db override
-	if globalFlags.DB != "" {
-		cfg.DB, err = config.DBConfigFromURL(globalFlags.DB)
-		if err != nil {
-			return config.Config{}, errors.Wrap(err, "invalid --db")
-		}
+	return cfg.OverrideFromFlags(globalFlags)
+}
+
+// setupHomeWithOptionalConfig changes process directory to `--home` and parses the config
+// if the config file doesn't exist, returns the default config
+func setupHomeWithOptionalConfig() (config.Config, error) {
+	logger := slog.Default().With("module", "config")
+
+	home, err := config.ExpandHome(globalFlags.Home)
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "home")
 	}
 
-	return cfg, nil
+	configPath, err := globalFlags.ConfigPath()
+	if err != nil {
+		return config.Config{}, errors.Wrap(err, "unable to get config path")
+	}
+
+	// ephemeral config
+	defaultConfig := config.DefaultConfig()
+
+	// if directory doesn't exist, return default config
+	if err = config.EnsureDirectory(configPath); err != nil {
+		logger.Debug("Config directory does not exist, returning default config", "path", configPath)
+		return defaultConfig, nil
+	}
+
+	if err = os.Chdir(home); err != nil {
+		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
+	}
+
+	// if file doesn't exist, return default config
+	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig(), flagConfigValidateStrict)
+	if err != nil {
+		logger.Debug("Error loading config file, returning default config", "error", err, "path", configPath)
+		return defaultConfig, nil
+	}
+
+	return cfg.OverrideFromFlags(globalFlags)
 }
