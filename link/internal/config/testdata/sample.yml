@@ -18,6 +18,7 @@ chains:
   - chainId: "1"
     evm:
       rpc: https://ethereum-rpc.example.com
+      ws: wss://ethereum-rpc.example.com
       ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
   - chainId: "8453"
     evm:
@@ -43,7 +44,6 @@ relayer:
         type: "attestation"
         autoRelay:
           enabled: false
-          lookback: 100
       clientB:
         chainId: "8453"
         signer: "relayer-key"

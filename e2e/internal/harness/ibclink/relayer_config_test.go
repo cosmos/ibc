@@ -24,6 +24,7 @@ chains:
     - chainId: "1"
       evm:
         rpc: http://chain-1
+        ws: ws://chain-1
         ics26Router: router-1
     - chainId: "2"
       evm:
@@ -45,6 +46,8 @@ relayer:
             signer: tx
             clientId: client-1
             type: attestation
+            autoRelay:
+                enabled: true
           clientB:
             chainId: "2"
             signer: tx
@@ -72,6 +75,16 @@ signers:
       type: local
       file: /tmp/default.key
 `, string(data))
+}
+
+func TestClientEndsOptOutOfAutoRelay(t *testing.T) {
+	cfg := testRelayerConfig()
+	cfg.Connections[0].AutoRelayA = false
+
+	file, err := buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Nil(t, file.Relayer.Connections[0].ClientA.AutoRelay)
+	require.Nil(t, file.Relayer.Connections[0].ClientB.AutoRelay)
 }
 
 func TestBuildRelayerConfigOverrides(t *testing.T) {
@@ -175,11 +188,12 @@ func testRelayerConfig() RelayerConfig {
 	return RelayerConfig{
 		DBPath: "/tmp/ibc.db", SignerAlias: "tx", SignerKeyFile: "/tmp/default.key", FinalityOffset: 3,
 		Chains: []RelayerChain{
-			{ChainID: "1", RPC: "http://chain-1", ICS26Router: "router-1"},
+			{ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1", ICS26Router: "router-1"},
 			{ChainID: "2", RPC: "http://chain-2", ICS26Router: "router-2"},
 		},
 		Connections: []RelayerConnection{{
 			ChainA: "1", ClientA: "client-1", ChainB: "2", ClientB: "client-2",
+			AutoRelayA: true,
 		}},
 	}
 }
