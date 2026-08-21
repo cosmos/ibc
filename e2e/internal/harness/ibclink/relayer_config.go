@@ -160,12 +160,12 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		clientType := "attestation"
+		clientType := relayerClientAttestation
 
 		var params map[string]any
 
 		if connection.ProverURL != "" {
-			clientType = "remote"
+			clientType = relayerClientRemote
 			params = map[string]any{"url": connection.ProverURL}
 		}
 
@@ -243,7 +243,12 @@ func localAttestorName(chainID string) string {
 }
 
 const (
-	RelayerSignerLocal    = "local"
+	RelayerSignerLocal = "local"
+	// Client types, which happen to share spellings with signer and attestor
+	// types but are a separate vocabulary.
+	relayerClientAttestation = "attestation"
+	relayerClientRemote      = "remote"
+
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"
 	RelayerAttestorRemote = "remote"

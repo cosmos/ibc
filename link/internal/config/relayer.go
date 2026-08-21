@@ -109,7 +109,6 @@ func (p *RemoteParams) Validate() error {
 func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
-		// Strict decoding rejects a params block on a type that takes none.
 		return decode[AttestationParams](c.Params)
 	case ClientTypeRemote:
 		return decode[RemoteParams](c.Params)

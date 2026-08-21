@@ -5,55 +5,15 @@ package e2e_test
 import (
 	"math/big"
 	"net"
-	"os"
-	"os/exec"
-	"syscall"
 	"testing"
-	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
-
-// startProverService runs the prover binary against the relayer's config. It
-// is a separate process: the relayer holds only the endpoint.
-func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
-	t.Helper()
-
-	// The config expands chain RPCs from the environment, as it does for the
-	// relayer process.
-	env, release, err := driver.ProcessEnv()
-	require.NoError(t, err, "resolve process env")
-
-	t.Cleanup(release)
-
-	cmd := exec.Command(ibclink.ResolvedProverBin(),
-		"--config", driver.ConfigPath(), "--listen", address)
-	cmd.Env = env
-	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-
-	require.NoError(t, cmd.Start(), "start prover service")
-
-	t.Cleanup(func() {
-		_ = cmd.Process.Signal(syscall.SIGTERM)
-		_ = cmd.Wait()
-	})
-
-	// The relayer must not ask for a proof before the service answers.
-	require.Eventually(t, func() bool {
-		conn, dialErr := net.DialTimeout("tcp", address, time.Second)
-		if dialErr != nil {
-			return false
-		}
-
-		_ = conn.Close()
-
-		return true
-	}, 30*time.Second, 100*time.Millisecond, "prover service did not start listening")
-}
 
 // reserveLoopbackAddress picks a port, since the config names it before the
 // service starts.
@@ -89,8 +49,10 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 			}
 		}, route)
 
-	// The service must answer before the relayer asks it for a proof.
-	startProverService(t, driver, proverAddress)
+	prover, err := driver.StartProver(proverAddress)
+	require.NoError(t, err, "start prover service")
+
+	t.Cleanup(func() { assert.NoError(t, prover.Stop(), "stop prover service") })
 
 	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)

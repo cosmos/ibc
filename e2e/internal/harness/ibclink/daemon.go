@@ -74,7 +74,7 @@ type readyResult struct {
 }
 
 func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer, error) {
-	processEnv, releaseBinding, err := r.ProcessEnv()
+	processEnv, releaseBinding, err := r.acquireProcessEnv()
 	if err != nil {
 		return nil, err
 	}

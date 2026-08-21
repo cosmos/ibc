@@ -15,10 +15,7 @@ import (
 	"time"
 )
 
-const (
-	binEnv       = "IBC_BIN"
-	proverBinEnv = "IBC_TEST_PROVER_BIN"
-)
+const binEnv = "IBC_BIN"
 
 const maxStderrSnippet = 600
 
@@ -34,7 +31,7 @@ type result struct {
 func (r *Driver) exec(ctx context.Context, bin, label string, timeout time.Duration, args ...string) (*result, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	processEnv, release, err := r.ProcessEnv()
+	processEnv, release, err := r.acquireProcessEnv()
 	if err != nil {
 		return nil, err
 	}
@@ -81,15 +78,6 @@ func ResolvedBin() string {
 		return v
 	}
 	return defaultBinPath("ibc")
-}
-
-// ResolvedProverBin is the test prover binary, built by build-test-bins.
-func ResolvedProverBin() string {
-	if v := os.Getenv(proverBinEnv); v != "" {
-		return v
-	}
-
-	return defaultBinPath("testprover")
 }
 
 // Resolves link/bin relative to this source file, not the process cwd.
