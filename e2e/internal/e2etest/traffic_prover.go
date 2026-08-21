@@ -14,14 +14,18 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 )
 
-// ProverConfig builds the prover service's own configuration from the
-// environment. The prover is a separate service with its own config, as it
-// would be in a deployment: it needs the chains, attestors, and client ends it
-// proves, and nothing else the relayer config carries.
-func ProverConfig(t testing.TB, env *environment.Environment, signerKeyPath string) ibclink.RelayerConfig {
+// buildProverConfig is buildConfig's counterpart for the prover: a separate
+// service with its own config, as it would be in a deployment. It needs the
+// chains, attestors, and client ends it proves, and nothing else the relayer
+// config carries.
+func buildProverConfig(
+	t testing.TB,
+	env *environment.Environment,
+	signerKeyPath string,
+) ibclink.ProverConfig {
 	t.Helper()
 
-	config := ibclink.RelayerConfig{
+	config := ibclink.ProverConfig{
 		DBPath:         filepath.Join(t.TempDir(), "prover.db"),
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
@@ -61,9 +65,9 @@ func StartProver(t testing.TB, env *environment.Environment, signer Signer) *ibc
 	signerKeyPath := filepath.Join(dir, "prover-signer.json")
 	require.NoError(t, signer.storeKey(signerKeyPath), "e2etest: store prover signer key")
 
-	config := ProverConfig(t, env, signerKeyPath)
+	config := buildProverConfig(t, env, signerKeyPath)
 	configPath := filepath.Join(dir, "prover.config.yaml")
-	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write prover config")
+	require.NoError(t, ibclink.WriteProverConfig(configPath, config), "e2etest: write prover config")
 
 	prover, err := ibclink.StartProver(configPath)
 	require.NoError(t, err, "e2etest: start prover service")
