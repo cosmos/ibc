@@ -53,7 +53,7 @@ func (s *stubProver) PacketProofs(
 func proverPair(t *testing.T, set *prover.Set, chainID, clientID string) *remote.Prover {
 	t.Helper()
 
-	server := httptest.NewUnstartedServer(NewServer(set).Handler)
+	server := httptest.NewUnstartedServer(newServer(set).Handler)
 	server.EnableHTTP2 = true
 	server.StartTLS()
 	t.Cleanup(server.Close)

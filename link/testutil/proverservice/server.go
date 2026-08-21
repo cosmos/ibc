@@ -34,19 +34,19 @@ const readHeaderTimeout = 5 * time.Second
 
 var errInternal = connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 
-// Handler answers ProverService requests from a set of provers. A custom light
+// handler answers ProverService requests from a set of provers. A custom light
 // client replaces it with its own implementation of the same contract.
-type Handler struct {
+type handler struct {
 	logger *slog.Logger
 	set    *prover.Set
 }
 
-var _ proverv2.ProverServiceHandler = (*Handler)(nil)
+var _ proverv2.ProverServiceHandler = (*handler)(nil)
 
-// NewServer serves provers over the ProverService contract.
-func NewServer(set *prover.Set) *http.Server {
+// newServer serves provers over the ProverService contract.
+func newServer(set *prover.Set) *http.Server {
 	mux := http.NewServeMux()
-	path, handler := proverv2.NewProverServiceHandler(&Handler{
+	path, handler := proverv2.NewProverServiceHandler(&handler{
 		logger: slog.With("module", "prover"),
 		set:    set,
 	})
@@ -108,11 +108,11 @@ func NewAttestationServer(ctx context.Context, configPath string) (*http.Server,
 		}
 	}
 
-	return NewServer(prover.NewSet(provers)), nil
+	return newServer(prover.NewSet(provers)), nil
 }
 
 // prover resolves the client a request names; an unknown one is a caller error.
-func (h *Handler) prover(client *proverv2.Client) (prover.Prover, error) {
+func (h *handler) prover(client *proverv2.Client) (prover.Prover, error) {
 	chainID, clientID := client.GetChainId(), client.GetClientId()
 
 	found, ok := h.set.Get(chainID, clientID)
@@ -126,7 +126,7 @@ func (h *Handler) prover(client *proverv2.Client) (prover.Prover, error) {
 	return found, nil
 }
 
-func (h *Handler) LatestProvableHeight(
+func (h *handler) LatestProvableHeight(
 	ctx context.Context,
 	req *connect.Request[proverv2.LatestProvableHeightRequest],
 ) (*connect.Response[proverv2.LatestProvableHeightResponse], error) {
@@ -147,7 +147,7 @@ func (h *Handler) LatestProvableHeight(
 	}), nil
 }
 
-func (h *Handler) StateProof(
+func (h *handler) StateProof(
 	ctx context.Context,
 	req *connect.Request[proverv2.StateProofRequest],
 ) (*connect.Response[proverv2.StateProofResponse], error) {
@@ -165,7 +165,7 @@ func (h *Handler) StateProof(
 	return connect.NewResponse(&proverv2.StateProofResponse{Proof: proof}), nil
 }
 
-func (h *Handler) PacketProofs(
+func (h *handler) PacketProofs(
 	ctx context.Context,
 	req *connect.Request[proverv2.PacketProofsRequest],
 ) (*connect.Response[proverv2.PacketProofsResponse], error) {

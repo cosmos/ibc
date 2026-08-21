@@ -33,7 +33,11 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string) *Prover {
 	}
 }
 
-// NewFromURL dials url with a plain HTTP/2 client.
+// NewFromURL dials url with the default client, which needs no extra setup for
+// an https url.
+//
+// TODO: custom CAs, client certificates, and request timeouts need a client
+// passed to New instead; RemoteProverParams is where those settings belong.
 func NewFromURL(url, chainID, clientID string) *Prover {
 	return New(http.DefaultClient, url, chainID, clientID)
 }
