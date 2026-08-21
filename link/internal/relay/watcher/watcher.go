@@ -34,7 +34,7 @@ type PacketStore interface {
 type Watcher struct {
 	chainID    string
 	clientIDs  []string
-	destChains map[string]string
+	routes     map[string]config.ClientEnd
 	subscriber Subscriber
 	storage    PacketStore
 
@@ -63,24 +63,24 @@ func New(
 	return &Watcher{
 		chainID:    chainID,
 		clientIDs:  clientIDs,
-		destChains: destChainsOf(chainID, connections),
+		routes:     routesOf(chainID, connections),
 		subscriber: subscriber,
 		storage:    storage,
 		logger:     logger.With("module", "watcher", "chainID", chainID),
 	}
 }
 
-// destChainsOf maps each watched client to the chain its packets are relayed to.
-func destChainsOf(chainID string, connections []config.ConnectionConfig) map[string]string {
-	destChains := make(map[string]string, len(connections))
+// routesOf maps each watched client to the end its packets are relayed to.
+func routesOf(chainID string, connections []config.ConnectionConfig) map[string]config.ClientEnd {
+	routes := make(map[string]config.ClientEnd, len(connections))
 
 	for _, conn := range connections {
 		if source, destination, ok := conn.SourceEnd(chainID); ok {
-			destChains[source.ClientID] = destination.ChainID
+			routes[source.ClientID] = destination
 		}
 	}
 
-	return destChains
+	return routes
 }
 
 // Start subscribes and begins the event loop in its own goroutine, failing if
@@ -180,7 +180,28 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 			"sequence", event.Packet.Sequence,
 			"txHash", event.TxHash,
 		)
+		return nil
+	}
 
+	// the subscription filters on the source client alone, so the counterparty
+	// the packet actually names is checked here, as the explicit relay path does
+	route, configured := w.routes[event.Packet.SourceClient]
+
+	switch {
+	case !configured:
+		w.logger.Warn(
+			"Skipping packet from unconfigured client",
+			"clientID", event.Packet.SourceClient,
+			"sequence", event.Packet.Sequence,
+		)
+		return nil
+	case event.Packet.DestinationClient != route.ClientID:
+		w.logger.Debug(
+			"Skipping packet with unconfigured destination client",
+			"clientID", event.Packet.SourceClient,
+			"destinationClientID", event.Packet.DestinationClient,
+			"sequence", event.Packet.Sequence,
+		)
 		return nil
 	}
 
@@ -191,8 +212,7 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 		"txHash", event.TxHash,
 	)
 
-	row := packetRow(w.chainID, w.destChains[event.Packet.SourceClient], event)
-
+	row := packetRow(w.chainID, route.ChainID, event)
 	if err := w.storage.UpsertPacket(ctx, row); err != nil {
 		return errors.Wrapf(
 			err,

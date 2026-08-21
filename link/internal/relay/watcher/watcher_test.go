@@ -161,6 +161,28 @@ func TestWatcherHandleEvent(t *testing.T) {
 		assert.Empty(t, storage.written)
 	})
 
+	t.Run("anotherDestinationClientWritesNothing", func(t *testing.T) {
+		storage := newPacketStore(nil)
+		w := newTestWatcher(newChain(), storage)
+
+		event := sendPacketEvent(7)
+		event.Packet.DestinationClient = "ethereum-9"
+
+		require.NoError(t, w.HandleEvent(ctx, event))
+		assert.Empty(t, storage.written)
+	})
+
+	t.Run("anUnconfiguredSourceClientWritesNothing", func(t *testing.T) {
+		storage := newPacketStore(nil)
+		w := newTestWatcher(newChain(), storage)
+
+		event := sendPacketEvent(7)
+		event.Packet.SourceClient = "base-9"
+
+		require.NoError(t, w.HandleEvent(ctx, event))
+		assert.Empty(t, storage.written)
+	})
+
 	t.Run("otherEventKindsWriteNothing", func(t *testing.T) {
 		storage := newPacketStore(nil)
 		w := newTestWatcher(newChain(), storage)
