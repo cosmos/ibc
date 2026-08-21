@@ -16,7 +16,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
-	"github.com/cosmos/ibc/link/lightclient/remotepoc"
+	"github.com/cosmos/ibc/link/testutil/proverservice"
 )
 
 // startProverService runs a ProverService built from the relayer's config. It
@@ -34,7 +34,7 @@ func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
 		t.Setenv(name, value)
 	}
 
-	server, err := remotepoc.NewAttestationServer(t.Context(), driver.ConfigPath())
+	server, err := proverservice.NewAttestationServer(t.Context(), driver.ConfigPath())
 	require.NoError(t, err, "build prover service")
 
 	listener, err := net.Listen("tcp", address)
