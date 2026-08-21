@@ -37,6 +37,8 @@ type StepResult struct {
 // RunSteps executes steps in order, skipping satisfied ones. With dryRun it
 // only reports what would run. Stops at the first error.
 func RunSteps(ctx context.Context, log *slog.Logger, dryRun bool, steps []Step) ([]StepResult, error) {
+	log = log.With("dryRun", dryRun)
+
 	results := make([]StepResult, 0, len(steps))
 	for _, step := range steps {
 		if step.Done != nil {
