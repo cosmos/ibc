@@ -9,16 +9,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-// Relays a real packet with every proof fetched over gRPC from a service the
-// relayer does not host.
-func TestRemoteProver_RelaysPacket(t *testing.T) {
-	t.Parallel()
+// remoteProverEnv is a mesh whose clients are proven by a separate prover
+// service rather than by the relayer itself.
+type remoteProverEnv struct {
+	env        *environment.Environment
+	driver     *ibclink.Driver
+	deployment *e2etest.Deployment
+	route      e2etest.Route
+	sender     e2etest.Signer
+}
 
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+func startRemoteProverEnv(t *testing.T, requirements e2etest.EVMRequirements) remoteProverEnv {
+	t.Helper()
+
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -35,8 +44,18 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 			}
 		}, route)
 
-	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
-	relayer := e2etest.StartRelayer(t, driver, env)
+	return remoteProverEnv{env: env, driver: driver, deployment: deployment, route: route, sender: sender}
+}
+
+// Relays a real packet with every proof fetched over gRPC from a service the
+// relayer does not host.
+func TestRemoteProver_RelaysPacket(t *testing.T) {
+	t.Parallel()
+
+	setup := startRemoteProverEnv(t, e2etest.EVMRequirements{})
+
+	transferApp := e2etest.NewTransfer(t, setup.env, setup.deployment, setup.sender, setup.route)
+	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
 	ctx := t.Context()
 
 	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
@@ -58,4 +77,61 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
 	require.NoError(t, transfer.VerifyAcknowledgementWritten(ctx, status.GetRecvTx().GetTxHash()))
 	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
+}
+
+// A timeout proves non-membership of the receipt, a different proof kind from
+// the membership proofs a successful relay needs.
+func TestRemoteProver_TimesOutPacket(t *testing.T) {
+	t.Parallel()
+
+	setup := startRemoteProverEnv(t, e2etest.EVMRequirements{ControlledMining: true})
+
+	transferApp := e2etest.NewTransfer(t, setup.env, setup.deployment, setup.sender, setup.route)
+	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
+	ctx := t.Context()
+
+	// Nothing must deliver the packet before it expires.
+	require.NoError(t, relayer.Stop(ctx))
+
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+		Amount:  big.NewInt(3_000_000),
+		Timeout: packetTimeout,
+	})
+	require.NoError(t, err)
+
+	chainB, err := setup.env.Chain(setup.route.Destination)
+	require.NoError(t, err)
+
+	mining, err := chainB.Mining()
+	require.NoError(t, err)
+	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
+
+	relayer = e2etest.StartRelayer(t, setup.driver, setup.env)
+
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyRefunded(ctx, status.GetTimeoutTx().GetTxHash()))
+	require.NoError(t, transfer.VerifyNotMinted(ctx))
+	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
+}
+
+// An error acknowledgement still travels back to the source chain, so the ack
+// proof must verify even though the application rejected the packet.
+func TestRemoteProver_ErrorAcknowledgement(t *testing.T) {
+	t.Parallel()
+
+	setup := startRemoteProverEnv(t, e2etest.EVMRequirements{})
+
+	gmp := e2etest.NewGMP(t, setup.env, setup.deployment, setup.sender, setup.route)
+	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
+	ctx := t.Context()
+
+	call, err := gmp.Call(ctx, e2etest.GMPRequest{Payload: invalidGMPPayload})
+	require.NoError(t, err)
+
+	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_REJECTED)
+	require.NoError(t, err)
+	require.NoError(t, call.VerifyCounterUnchanged(ctx))
 }
