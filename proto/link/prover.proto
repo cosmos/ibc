@@ -39,8 +39,8 @@ message LatestProvableHeightRequest {
 
 message LatestProvableHeightResponse {
   uint64 height = 1;
-  // Unix seconds, the counterparty-chain timestamp of height.
-  int64 timestamp = 2;
+  // counterparty-chain timestamp of height, in seconds.
+  uint64 timestamp = 2;
 }
 
 message StateProofRequest {

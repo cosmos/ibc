@@ -176,8 +176,8 @@ func (x *LatestProvableHeightRequest) GetClient() *Client {
 type LatestProvableHeightResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Height uint64                 `protobuf:"varint,1,opt,name=height,proto3" json:"height,omitempty"`
-	// Unix seconds, the counterparty-chain timestamp of height.
-	Timestamp     int64 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// counterparty-chain timestamp of height, in seconds.
+	Timestamp     uint64 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -219,7 +219,7 @@ func (x *LatestProvableHeightResponse) GetHeight() uint64 {
 	return 0
 }
 
-func (x *LatestProvableHeightResponse) GetTimestamp() int64 {
+func (x *LatestProvableHeightResponse) GetTimestamp() uint64 {
 	if x != nil {
 		return x.Timestamp
 	}
@@ -600,7 +600,7 @@ const file_prover_proto_rawDesc = "" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\"T\n" +
 	"\x1cLatestProvableHeightResponse\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x1c\n" +
-	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\"Z\n" +
+	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\"Z\n" +
 	"\x11StateProofRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\"*\n" +

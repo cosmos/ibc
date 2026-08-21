@@ -140,8 +140,9 @@ func (h *handler) LatestProvableHeight(
 	}
 
 	return connect.NewResponse(&proverv2.LatestProvableHeightResponse{
-		Height:    height,
-		Timestamp: timestamp.Unix(),
+		Height: height,
+		//nolint:gosec // seconds since the epoch, matching the ibc packet timestamp
+		Timestamp: uint64(timestamp.Unix()),
 	}), nil
 }
 

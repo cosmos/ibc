@@ -59,10 +59,7 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 	ctx := t.Context()
 
 	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
-		Amount: amount,
-		Memo:   "remote-prover",
-	})
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: amount})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 

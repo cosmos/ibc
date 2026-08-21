@@ -50,7 +50,10 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 		return 0, time.Time{}, errors.Wrap(err, "remote prover: latest provable height")
 	}
 
-	return res.Msg.GetHeight(), time.Unix(res.Msg.GetTimestamp(), 0).UTC(), nil
+	//nolint:gosec // seconds since the epoch, matching the ibc packet timestamp
+	seconds := int64(res.Msg.GetTimestamp())
+
+	return res.Msg.GetHeight(), time.Unix(seconds, 0).UTC(), nil
 }
 
 func (p *Prover) StateProof(ctx context.Context, height uint64) ([]byte, error) {
