@@ -79,30 +79,64 @@ type ClientEnd struct {
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
-// RemoteProverParams is the params block a remoteProver client declares. It
-// lives here while there is one custom client type; a second type would move
-// each schema next to the code that implements it.
+// ClientParams is a client type's decoded params. The unexported method seals
+// the interface, so only the types below satisfy it.
+type ClientParams interface {
+	isClientParams()
+}
+
+// AttestationParams is empty: an attestation client is described entirely by
+// its on-chain attestor set. Declaring it keeps every type in one switch.
+type AttestationParams struct{}
+
+func (*AttestationParams) isClientParams() {}
+
+// RemoteProverParams is the params block a remoteProver client declares.
 type RemoteProverParams struct {
 	// URL is the ProverService endpoint.
 	URL string `yaml:"url"`
 }
 
-// RemoteProverParams decodes and validates this client's params.
-func (c ClientEnd) RemoteProverParams() (RemoteProverParams, error) {
-	var params RemoteProverParams
+func (*RemoteProverParams) isClientParams() {}
 
-	if len(c.Params) > 0 {
-		// Strict: a misspelled key must not read as an absent one.
-		if err := yaml.UnmarshalWithOptions(c.Params, &params, yaml.DisallowUnknownField()); err != nil {
-			return RemoteProverParams{}, errors.Wrap(err, "decoding params")
+// ClientParams decodes this client's params for its type. One accessor covers
+// every type, so a new type adds a case here rather than a method on
+// ClientEnd.
+func (c ClientEnd) ClientParams() (ClientParams, error) {
+	switch c.Type {
+	case ClientTypeAttestation:
+		// Strict decoding rejects a params block on a type that takes none.
+		return decodeParams[AttestationParams](c.Params)
+	case ClientTypeRemoteProver:
+		params, err := decodeParams[RemoteProverParams](c.Params)
+		if err != nil {
+			return nil, err
 		}
+
+		if params.URL == "" {
+			return nil, errors.New(".params.url required")
+		}
+
+		return params, nil
+	default:
+		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
+	}
+}
+
+// decodeParams reads a params block strictly: a misspelled key is an error,
+// not a silently absent value.
+func decodeParams[T any](raw yaml.RawMessage) (*T, error) {
+	var params T
+
+	if len(raw) == 0 {
+		return &params, nil
 	}
 
-	if params.URL == "" {
-		return RemoteProverParams{}, errors.New(".params.url required")
+	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
+		return nil, errors.Wrap(err, "decoding params")
 	}
 
-	return params, nil
+	return &params, nil
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -225,10 +259,8 @@ func (c ClientEnd) Validate() error {
 		return errors.Errorf(".type unknown client type: %q", c.Type)
 	}
 
-	if c.Type == ClientTypeRemoteProver {
-		if _, err := c.RemoteProverParams(); err != nil {
-			return err
-		}
+	if _, err := c.ClientParams(); err != nil {
+		return err
 	}
 
 	return nil

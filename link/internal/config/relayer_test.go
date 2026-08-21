@@ -314,7 +314,7 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			params, err := end(tt.raw).RemoteProverParams()
+			params, err := end(tt.raw).ClientParams()
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				// The same block fails validation, not just the accessor.
@@ -324,14 +324,15 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.wantURL, params.URL)
+			require.Equal(t, tt.wantURL, params.(*RemoteProverParams).URL)
 			require.NoError(t, end(tt.raw).Validate())
 		})
 	}
 }
 
-// An attestation client needs no params, so validation must not demand them.
-func TestClientEndAttestationNeedsNoParams(t *testing.T) {
+// An attestation client needs no params, and declaring some is a mistake worth
+// reporting rather than ignoring.
+func TestClientEndAttestationParams(t *testing.T) {
 	t.Parallel()
 
 	client := ClientEnd{
@@ -340,5 +341,12 @@ func TestClientEndAttestationNeedsNoParams(t *testing.T) {
 		Signer:   "relayer",
 		Type:     ClientTypeAttestation,
 	}
+
+	params, err := client.ClientParams()
+	require.NoError(t, err)
+	require.IsType(t, &AttestationParams{}, params)
 	require.NoError(t, client.Validate())
+
+	client.Params = yaml.RawMessage("url: http://prover:9090\n")
+	require.ErrorContains(t, client.Validate(), "unknown field")
 }
