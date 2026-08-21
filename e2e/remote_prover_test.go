@@ -6,7 +6,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -25,23 +24,22 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 
-	// The config is written twice: the prover reads it to build its provers,
-	// and only then can announce the port the relayer must dial.
+	// The prover runs from its own config, built from the environment, so it
+	// is serving before the relayer's config has to name it.
+	prover, proverConfig := e2etest.StartProver(t, env, relayerSigner)
+
 	var relayerConfig ibclink.RelayerConfig
 
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner,
-		func(cfg *ibclink.RelayerConfig) { relayerConfig = *cfg }, route)
+		func(cfg *ibclink.RelayerConfig) {
+			for i := range cfg.Connections {
+				cfg.Connections[i].ProverURL = "http://" + prover.Address()
+			}
 
-	prover, err := driver.StartProver()
-	require.NoError(t, err, "start prover service")
+			relayerConfig = *cfg
+		}, route)
 
-	t.Cleanup(func() { assert.NoError(t, prover.Stop(), "stop prover service") })
-
-	for i := range relayerConfig.Connections {
-		relayerConfig.Connections[i].ProverURL = "http://" + prover.Address()
-	}
-
-	require.NoError(t, driver.WriteConfig(relayerConfig), "rewrite relayer config")
+	e2etest.AssertProverConfigMatches(t, proverConfig, relayerConfig)
 
 	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)

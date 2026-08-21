@@ -9,7 +9,6 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -37,24 +36,11 @@ func (p *Prover) Address() string {
 	return p.address
 }
 
-// StartProver runs the test prover against this driver's relayer config. It
-// takes an ephemeral port and announces the one it got, so no caller has to
-// reserve a port the prover might not win.
-func (r *Driver) StartProver() (*Prover, error) {
-	env, release, err := r.acquireProcessEnv()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if release != nil {
-			release()
-		}
-	}()
-
-	configPath := filepath.Join(r.configHome, r.configName)
-
+// StartProver runs the test prover against its own config. It takes an
+// ephemeral port and announces the one it got, so no caller has to reserve a
+// port the prover might not win.
+func StartProver(configPath string) (*Prover, error) {
 	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", loopbackAnyPort)
-	cmd.Env = env
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
