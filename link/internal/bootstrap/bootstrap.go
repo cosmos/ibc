@@ -111,7 +111,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, pollInterval, logger)
 
-	// Packet discovery
+	// Packet discovery (auto-relaying)
 	watchers, err := watcher.NewSetFromConfig(cfg, clientSet, db, logger)
 	if err != nil {
 		return nil, err

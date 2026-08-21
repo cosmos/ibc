@@ -146,6 +146,12 @@ func (w *Watcher) run(ctx context.Context, stream stream) {
 	defer close(w.stopped)
 	defer stream.close()
 
+	defer func() {
+		if err := recover(); err != nil {
+			w.logger.Error("Panic recovery in running watcher", "panic", err)
+		}
+	}()
+
 	w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
 
 	for {
