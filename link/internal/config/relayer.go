@@ -79,6 +79,32 @@ type ClientEnd struct {
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
+// RemoteProverParams is the params block a remoteProver client declares. It
+// lives here while there is one custom client type; a second type would move
+// each schema next to the code that implements it.
+type RemoteProverParams struct {
+	// URL is the ProverService endpoint.
+	URL string `yaml:"url"`
+}
+
+// RemoteProverParams decodes and validates this client's params.
+func (c ClientEnd) RemoteProverParams() (RemoteProverParams, error) {
+	var params RemoteProverParams
+
+	if len(c.Params) > 0 {
+		// Strict: a misspelled key must not read as an absent one.
+		if err := yaml.UnmarshalWithOptions(c.Params, &params, yaml.DisallowUnknownField()); err != nil {
+			return RemoteProverParams{}, errors.Wrap(err, "decoding params")
+		}
+	}
+
+	if params.URL == "" {
+		return RemoteProverParams{}, errors.New(".params.url required")
+	}
+
+	return params, nil
+}
+
 // AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
@@ -185,32 +211,6 @@ func (c ConnectionConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// RemoteProverParams is the params block a remoteProver client declares. It
-// lives here while there is one custom client type; a second type would move
-// each schema next to the code that implements it.
-type RemoteProverParams struct {
-	// URL is the ProverService endpoint.
-	URL string `yaml:"url"`
-}
-
-// RemoteProverParams decodes and validates this client's params.
-func (c ClientEnd) RemoteProverParams() (RemoteProverParams, error) {
-	var params RemoteProverParams
-
-	if len(c.Params) > 0 {
-		// Strict: a misspelled key must not read as an absent one.
-		if err := yaml.UnmarshalWithOptions(c.Params, &params, yaml.DisallowUnknownField()); err != nil {
-			return RemoteProverParams{}, errors.Wrap(err, "decoding params")
-		}
-	}
-
-	if params.URL == "" {
-		return RemoteProverParams{}, errors.New(".params.url required")
-	}
-
-	return params, nil
 }
 
 func (c ClientEnd) Validate() error {
