@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/cosmos/ibc/link/lightclient"
 )
 
 func TestRelayerConfig(t *testing.T) {
@@ -295,7 +294,7 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 			Type:     ClientTypeRemoteProver,
 		}
 		if raw != "" {
-			client.Params = lightclient.NewRawParams([]byte(raw))
+			client.Params = yaml.RawMessage(raw)
 		}
 
 		return client

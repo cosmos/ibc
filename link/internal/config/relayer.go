@@ -5,9 +5,8 @@ package config
 import (
 	"time"
 
+	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
-
-	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // ClientType the light client type.
@@ -70,10 +69,10 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// Params carries the settings this client type needs, decoded by the
-	// type itself. Keeping them here rather than on ClientEnd means a new
-	// client type adds no fields to every client.
-	Params *lightclient.RawParams `yaml:"params,omitempty"`
+	// Params carries the settings this client type needs, captured without
+	// being interpreted. Keeping them here rather than as fields on ClientEnd
+	// means a new client type adds nothing to every client.
+	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -199,8 +198,12 @@ type RemoteProverParams struct {
 // RemoteProverParams decodes and validates this client's params.
 func (c ClientEnd) RemoteProverParams() (RemoteProverParams, error) {
 	var params RemoteProverParams
-	if err := c.Params.Decode(&params); err != nil {
-		return RemoteProverParams{}, err
+
+	if len(c.Params) > 0 {
+		// Strict: a misspelled key must not read as an absent one.
+		if err := yaml.UnmarshalWithOptions(c.Params, &params, yaml.DisallowUnknownField()); err != nil {
+			return RemoteProverParams{}, errors.Wrap(err, "decoding params")
+		}
 	}
 
 	if params.URL == "" {
