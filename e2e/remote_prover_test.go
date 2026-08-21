@@ -3,11 +3,11 @@
 package e2e_test
 
 import (
-	"context"
-	"errors"
 	"math/big"
 	"net"
-	"net/http"
+	"os"
+	"os/exec"
+	"syscall"
 	"testing"
 	"time"
 
@@ -16,42 +16,48 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
-	"github.com/cosmos/ibc/link/testutil/proverservice"
 )
 
-// startProverService runs a ProverService built from the relayer's config. It
-// is separate: the relayer holds only the endpoint.
+// startProverService runs the prover binary against the relayer's config. It
+// is a separate process: the relayer holds only the endpoint.
 func startProverService(t *testing.T, driver *ibclink.Driver, address string) {
 	t.Helper()
 
-	// The config expands chain RPCs from the environment; so must this.
+	// The config expands chain RPCs from the environment, which the relayer
+	// process is given; the prover needs the same.
 	vars, release, err := driver.ChainRPCEnv()
 	require.NoError(t, err, "resolve chain rpc env")
 
 	t.Cleanup(release)
 
+	env := os.Environ()
 	for name, value := range vars {
-		t.Setenv(name, value)
+		env = append(env, name+"="+value)
 	}
 
-	server, err := proverservice.NewAttestationServer(t.Context(), driver.ConfigPath())
-	require.NoError(t, err, "build prover service")
+	cmd := exec.Command(ibclink.ResolvedProverBin(),
+		"--config", driver.ConfigPath(), "--listen", address)
+	cmd.Env = env
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 
-	listener, err := net.Listen("tcp", address)
-	require.NoError(t, err, "listen for prover service")
-
-	served := make(chan error, 1)
-	go func() { served <- server.Serve(listener) }()
+	require.NoError(t, cmd.Start(), "start prover service")
 
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
-
-		if err := <-served; err != nil && !errors.Is(err, http.ErrServerClosed) {
-			t.Errorf("prover service: %v", err)
-		}
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Wait()
 	})
+
+	// The relayer must not ask for a proof before the service answers.
+	require.Eventually(t, func() bool {
+		conn, dialErr := net.DialTimeout("tcp", address, time.Second)
+		if dialErr != nil {
+			return false
+		}
+
+		_ = conn.Close()
+
+		return true
+	}, 30*time.Second, 100*time.Millisecond, "prover service did not start listening")
 }
 
 // reserveLoopbackAddress picks a port, since the config names it before the
@@ -70,8 +76,9 @@ func reserveLoopbackAddress(t *testing.T) string {
 
 // Relays a real packet with every proof fetched over gRPC from a service the
 // relayer does not host.
-// Not parallel: t.Setenv is needed for the in-process prover.
 func TestRemoteProver_RelaysPacket(t *testing.T) {
+	t.Parallel()
+
 	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)

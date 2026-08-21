@@ -4,10 +4,8 @@
 // the contract can be exercised end to end without a second light-client
 // implementation. It serves the attestation prover.
 //
-// This is test support, not API: it exists so tests can run a prover outside
-// the relayer, and it carries no compatibility promise. A custom light client
-// implements the ProverService proto contract in whatever language it likes;
-// it does not import this package.
+// A custom light client implements the ProverService proto contract in
+// whatever language it likes; it does not import this package.
 package proverservice
 
 import (

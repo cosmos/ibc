@@ -15,7 +15,10 @@ import (
 	"time"
 )
 
-const binEnv = "IBC_BIN"
+const (
+	binEnv       = "IBC_BIN"
+	proverBinEnv = "IBC_PROVER_BIN"
+)
 
 const maxStderrSnippet = 600
 
@@ -78,6 +81,15 @@ func ResolvedBin() string {
 		return v
 	}
 	return defaultBinPath("ibc")
+}
+
+// ResolvedProverBin is the prover service binary, built alongside ibc.
+func ResolvedProverBin() string {
+	if v := os.Getenv(proverBinEnv); v != "" {
+		return v
+	}
+
+	return defaultBinPath("proverservice")
 }
 
 // Resolves link/bin relative to this source file, not the process cwd.
