@@ -3,7 +3,9 @@
 package ibclink
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"connectrpc.com/connect"
@@ -21,27 +24,65 @@ import (
 
 func TestParseReadinessLog(t *testing.T) {
 	valid := `{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}}` + "\n"
-	res, ok := parseReadinessLog(valid)
+	res, ok := parseRelayerReadinessLog(valid)
 	require.True(t, ok)
 	require.NoError(t, res.err)
 	require.Equal(t, "127.0.0.1:4242", res.readiness.HTTP)
 	require.Equal(t, []string{"chain-a"}, res.readiness.ChainsConnected)
 
-	_, ok = parseReadinessLog(`{"level":"INFO","msg":"Starting relayer"}`)
+	_, ok = parseRelayerReadinessLog(`{"level":"INFO","msg":"Starting relayer"}`)
 	require.False(t, ok)
 
 	wrongEvent := `{"msg":"Readiness","readiness":{"event":"started","http":"127.0.0.1:4242"}}`
-	res, ok = parseReadinessLog(wrongEvent)
+	res, ok = parseRelayerReadinessLog(wrongEvent)
 	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "invalid readiness")
 
 	notReady := `{"msg":"Readiness","readiness":{"event":"ready"}}`
-	res, ok = parseReadinessLog(notReady)
+	res, ok = parseRelayerReadinessLog(notReady)
 	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "http")
 }
+
+func TestPipeLogs(t *testing.T) {
+	const input = "starting\nready\nafter readiness"
+	var logs bytes.Buffer
+	var observed []string
+
+	err := pipeLogs(strings.NewReader(input), &logs, func(line string) bool {
+		observed = append(observed, line)
+		return line == "ready\n"
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, input, logs.String())
+	require.Equal(t, []string{"starting\n", "ready\n"}, observed)
+}
+
+func TestPipeLogsRequiresReadiness(t *testing.T) {
+	const input = "starting\nstopped"
+	var logs bytes.Buffer
+
+	err := pipeLogs(strings.NewReader(input), &logs, func(string) bool { return false })
+
+	require.ErrorContains(t, err, "no readiness log on stderr")
+	require.Equal(t, input, logs.String())
+}
+
+func TestPipeLogsDrainsAfterLogWriteFailure(t *testing.T) {
+	stderr := iotest.OneByteReader(strings.NewReader("ready\n"))
+	logs := errorWriter{err: errors.New("write failed")}
+
+	err := pipeLogs(stderr, logs, func(line string) bool { return line == "ready\n" })
+
+	require.NoError(t, err)
+}
+
+type errorWriter struct{ err error }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
 
 // fakeRelayerAPI serves the relayer wire contract: Status on an unknown
 // transaction reports CodeNotFound; Relay records the submitted arguments.
