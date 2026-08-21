@@ -128,9 +128,9 @@ func decodeClientParams(clientType ClientType, raw yaml.RawMessage) (ClientParam
 	switch clientType {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
-		return decodeParams[AttestationParams](raw)
+		return strictDecode[AttestationParams](raw)
 	case ClientTypeRemoteProver:
-		return decodeParams[RemoteProverParams](raw)
+		return strictDecode[RemoteProverParams](raw)
 	default:
 		return nil, errors.Wrapf(ErrUnknownClientType, ".type %q", clientType)
 	}
@@ -148,7 +148,7 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 
 // decodeParams reads a params block strictly: a misspelled key is an error,
 // not a silently absent value.
-func decodeParams[T any](raw yaml.RawMessage) (*T, error) {
+func strictDecode[T any](raw yaml.RawMessage) (*T, error) {
 	var params T
 
 	if len(raw) == 0 {
