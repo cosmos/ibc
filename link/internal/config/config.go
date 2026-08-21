@@ -6,6 +6,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -638,27 +639,39 @@ func KeyFileFallbacks(keyPath string) []string {
 
 // PrintJSON prints anything as JSON to stdout.
 func PrintJSON(v any) error {
+	return printJSON(os.Stdout, v)
+}
+
+func printJSON(out io.Writer, v any) error {
+	if msg, ok := v.(proto.Message); ok {
+		return printProtoJSON(out, msg)
+	}
+
 	bz, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(string(bz))
+	_, err = fmt.Fprintln(out, string(bz))
 
-	return nil
+	return err
 }
 
-// PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
-// fields by name
-func PrintProtoJSON(msg proto.Message) error {
-	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
+func printProtoJSON(out io.Writer, msg proto.Message) error {
+	opts := protojson.MarshalOptions{
+		Indent:          "  ",
+		UseProtoNames:   false,
+		EmitUnpopulated: true,
+	}
+
+	bz, err := opts.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(string(bz))
+	_, err = fmt.Fprintln(out, string(bz))
 
-	return nil
+	return err
 }
 
 // PrintYAML prints anything as YAML to stdout.
