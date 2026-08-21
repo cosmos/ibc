@@ -14,8 +14,6 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-// remoteProverEnv is a mesh whose clients are proven by a separate prover
-// service rather than by the relayer itself.
 type remoteProverEnv struct {
 	env        *environment.Environment
 	driver     *ibclink.Driver
@@ -33,8 +31,6 @@ func startRemoteProverEnv(t *testing.T, requirements e2etest.EVMRequirements) re
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 
-	// The prover runs from its own config, built from the environment, so it
-	// is serving before the relayer's config has to name it.
 	prover := e2etest.StartProver(t, env, relayerSigner)
 
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner,
@@ -67,7 +63,6 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
-	// Every proof came from the remote service, so a dropped field fails here.
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyCommitmentCreated(ctx))
 	require.NoError(t, transfer.VerifyReceiptCreated(ctx))
@@ -76,8 +71,6 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
 }
 
-// A timeout proves non-membership of the receipt, a different proof kind from
-// the membership proofs a successful relay needs.
 func TestRemoteProver_TimesOutPacket(t *testing.T) {
 	t.Parallel()
 
@@ -87,7 +80,6 @@ func TestRemoteProver_TimesOutPacket(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
 	ctx := t.Context()
 
-	// Nothing must deliver the packet before it expires.
 	require.NoError(t, relayer.Stop(ctx))
 
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
@@ -113,8 +105,6 @@ func TestRemoteProver_TimesOutPacket(t *testing.T) {
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
 }
 
-// An error acknowledgement still travels back to the source chain, so the ack
-// proof must verify even though the application rejected the packet.
 func TestRemoteProver_ErrorAcknowledgement(t *testing.T) {
 	t.Parallel()
 

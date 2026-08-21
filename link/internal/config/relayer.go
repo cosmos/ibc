@@ -15,8 +15,7 @@ type ClientType string
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
-	// ClientTypeRemote delegates proof generation to a remote service,
-	// so a custom light client needs no code in the relayer.
+	// ClientTypeRemote delegates proof generation to a remote service
 	ClientTypeRemote ClientType = "remote"
 )
 

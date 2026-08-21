@@ -71,7 +71,6 @@ enum ProofKind {
   PROOF_KIND_RECEIPT_ABSENCE = 3;
 }
 
-// Packet mirrors the IBC v2 packet the proof is generated for.
 message Packet {
   uint64 sequence = 1;
   string source_client = 2;

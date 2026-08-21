@@ -435,7 +435,6 @@ func (x *PacketProofsResponse) GetProofs() [][]byte {
 	return nil
 }
 
-// Packet mirrors the IBC v2 packet the proof is generated for.
 type Packet struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Sequence          uint64                 `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`

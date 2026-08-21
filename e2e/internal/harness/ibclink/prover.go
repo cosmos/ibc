@@ -36,7 +36,7 @@ func (p *Prover) Address() string {
 }
 
 // StartProver runs the test prover on an ephemeral port, waiting for it to
-// announce the one it got, so no caller has to reserve a port it might not win.
+// announce the one it got
 func StartProver(configPath string) (*Prover, error) {
 	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", loopbackAnyPort)
 	cmd.Stderr = os.Stderr

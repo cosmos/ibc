@@ -62,7 +62,7 @@ func newServer(set *prover.Set) *http.Server {
 }
 
 // NewAttestationServer serves an attestation prover per client end in the
-// config. It holds the attestors and chain clients; the relayer holds neither.
+// config.
 func NewAttestationServer(ctx context.Context, configPath string) (*http.Server, error) {
 	cfg, err := config.LoadFromFile(configPath, true, true)
 	if err != nil {
