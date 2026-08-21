@@ -1,0 +1,71 @@
+# Check mode for the generated reference pages.
+#
+# The three reference pages under ibc-docs/ibc-cli/ carry tables derived from
+# the pinned `ibc` clone: the config structs, the proto files, and the CLI's
+# own --help output. This job regenerates them to memory and fails if what is
+# on disk differs, so a stale table shows up in the pull request that made it
+# stale rather than in a reader's browser.
+#
+# Check mode only, on purpose. A job that regenerates and commits comes later,
+# once this one has been quiet for a while: a bot rewriting documentation that
+# nobody reviews is worse than a stale table.
+#
+# The trigger differs by repo, and this is the docs-repo version. Here the only
+# things that can change are the pages and the generator, so those are the
+# paths. Upstream in cosmos/ibc, where the code lives, the trigger is a change
+# under link/ or proto/, which is the version that puts a red check in front of
+# the developer who added the flag:
+#
+#   paths:
+#     - "link/**"
+#     - "proto/**"
+#
+# The pin below mirrors CLAUDE.md. Re-pinning the clone means updating it here
+# too, and re-running check mode is part of the re-pin ritual.
+name: reference currency
+
+on:
+  pull_request:
+    paths:
+      - "link/**"
+      - "proto/**"
+      - "gen/**"
+      - "link/docs/**"
+      - ".github/workflows/reference-currency.yml"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The CLI generator builds the binary, because Cobra computes a flag's
+      # default when the flag is registered, so --help is the honest source.
+      - uses: actions/setup-go@v5
+        with:
+          # read from the module rather than pinned here, so a Go bump in
+          # link/go.mod does not silently break this job
+          go-version-file: link/go.mod
+
+      - name: Generator tests
+        run: python3 link/docs/tools/test-refgen.py
+
+      # Mutates a temp copy of the source and asserts that a stale page goes
+      # red and that each loud failure fires. Slower, because four cases
+      # rebuild the binary.
+      - name: The loop still fails when the source moves
+        run: python3 link/docs/tools/test-refgen-e2e.py
+
+      - name: Reference pages are current
+        run: python3 link/docs/tools/refgen.py all --check
+
+      # When the step above fails, the prose around those tables is suspect
+      # too. `--list-regions` names what moved, for the reference-drift pass.
+      - name: Name the stale regions
+        if: failure()
+        run: python3 link/docs/tools/refgen.py all --list-regions || true
