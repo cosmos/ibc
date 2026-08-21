@@ -126,13 +126,13 @@ func addGenerator(
 		generators[Key(client.ChainID, client.ClientID)] = gen
 
 		return nil
-	case config.ClientTypeRemoteProver:
+	case config.ClientTypeRemote:
 		params, err := client.ClientParams()
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)
 		}
 
-		remoteParams, ok := params.(*config.RemoteProverParams)
+		remoteParams, ok := params.(*config.RemoteParams)
 		if !ok {
 			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
 		}

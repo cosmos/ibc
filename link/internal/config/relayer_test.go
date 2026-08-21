@@ -282,7 +282,7 @@ func TestRelayerConfig(t *testing.T) {
 }
 
 // A bad params block is a startup error, not a failure on the first proof.
-func TestClientEndRemoteProverParams(t *testing.T) {
+func TestClientEndRemoteParams(t *testing.T) {
 	t.Parallel()
 
 	end := func(raw string) ClientEnd {
@@ -290,7 +290,7 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 			ChainID:  "1",
 			ClientID: "client-0",
 			Signer:   "relayer",
-			Type:     ClientTypeRemoteProver,
+			Type:     ClientTypeRemote,
 		}
 		if raw != "" {
 			client.Params = yaml.RawMessage(raw)
@@ -332,7 +332,7 @@ func TestClientEndRemoteProverParams(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, tt.wantURL, params.(*RemoteProverParams).URL)
+			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
 			require.NoError(t, end(tt.raw).Validate())
 		})
 	}
@@ -370,16 +370,16 @@ func TestClientEndParamsAreValidatedNotParsed(t *testing.T) {
 	}{
 		{
 			name: "valid",
-			doc:  "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  url: http://prover:9090\n",
+			doc:  "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remote\nparams:\n  url: http://prover:9090\n",
 		},
 		{
 			name:    "misspelled key",
-			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  endpoint: http://prover:9090\n",
+			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remote\nparams:\n  endpoint: http://prover:9090\n",
 			wantErr: "unknown field",
 		},
 		{
 			name:    "missing url",
-			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\n",
+			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remote\n",
 			wantErr: ".params.url required",
 		},
 		{
@@ -405,7 +405,7 @@ func TestClientEndParamsAreValidatedNotParsed(t *testing.T) {
 
 			params, err := client.ClientParams()
 			require.NoError(t, err)
-			require.Equal(t, "http://prover:9090", params.(*RemoteProverParams).URL)
+			require.Equal(t, "http://prover:9090", params.(*RemoteParams).URL)
 		})
 	}
 }

@@ -15,9 +15,9 @@ type ClientType string
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
-	// ClientTypeRemoteProver delegates proof generation to a ProverService,
+	// ClientTypeRemote delegates proof generation to a remote service,
 	// so a custom light client needs no code in the relayer.
-	ClientTypeRemoteProver ClientType = "remoteProver"
+	ClientTypeRemote ClientType = "remote"
 )
 
 // AttestorType how an attestor is reached.
@@ -93,15 +93,15 @@ func (*AttestationParams) isClientParams() {}
 
 func (*AttestationParams) Validate() error { return nil }
 
-// RemoteProverParams is the params block a remoteProver client declares.
-type RemoteProverParams struct {
+// RemoteParams is the params block a remote client declares.
+type RemoteParams struct {
 	// URL is the ProverService endpoint.
 	URL string `yaml:"url"`
 }
 
-func (*RemoteProverParams) isClientParams() {}
+func (*RemoteParams) isClientParams() {}
 
-func (p *RemoteProverParams) Validate() error {
+func (p *RemoteParams) Validate() error {
 	if p.URL == "" {
 		return errors.New(".params.url required")
 	}
@@ -117,8 +117,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
 		return strictDecode[AttestationParams](c.Params)
-	case ClientTypeRemoteProver:
-		return strictDecode[RemoteProverParams](c.Params)
+	case ClientTypeRemote:
+		return strictDecode[RemoteParams](c.Params)
 	default:
 		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
 	}
@@ -256,7 +256,7 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".clientId required")
 	case c.Signer == "":
 		return errors.New(".signer required")
-	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemoteProver:
+	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
 		return errors.Errorf(".type unknown client type: %q", c.Type)
 	}
 

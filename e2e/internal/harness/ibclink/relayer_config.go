@@ -165,7 +165,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		var params map[string]any
 
 		if connection.ProverURL != "" {
-			clientType = "remoteProver"
+			clientType = "remote"
 			params = map[string]any{"url": connection.ProverURL}
 		}
 
