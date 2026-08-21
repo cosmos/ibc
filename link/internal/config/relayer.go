@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 // ClientType the light client type.
@@ -68,8 +70,10 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// ProverURL is the ProverService endpoint for remoteProver clients.
-	ProverURL string `yaml:"proverUrl,omitempty"`
+	// Params carries the settings this client type needs, decoded by the
+	// type itself. Keeping them here rather than on ClientEnd means a new
+	// client type adds no fields to every client.
+	Params *lightclient.RawParams `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -184,6 +188,28 @@ func (c ConnectionConfig) Validate() error {
 	return nil
 }
 
+// RemoteProverParams is the params block a remoteProver client declares. It
+// lives here while there is one custom client type; a second type would move
+// each schema next to the code that implements it.
+type RemoteProverParams struct {
+	// URL is the ProverService endpoint.
+	URL string `yaml:"url"`
+}
+
+// RemoteProverParams decodes and validates this client's params.
+func (c ClientEnd) RemoteProverParams() (RemoteProverParams, error) {
+	var params RemoteProverParams
+	if err := c.Params.Decode(&params); err != nil {
+		return RemoteProverParams{}, err
+	}
+
+	if params.URL == "" {
+		return RemoteProverParams{}, errors.New(".params.url required")
+	}
+
+	return params, nil
+}
+
 func (c ClientEnd) Validate() error {
 	switch {
 	case c.ChainID == "":
@@ -192,12 +218,14 @@ func (c ClientEnd) Validate() error {
 		return errors.New(".clientId required")
 	case c.Signer == "":
 		return errors.New(".signer required")
-	case c.Type == ClientTypeRemoteProver && c.ProverURL == "":
-		return errors.New(".proverUrl required for remoteProver clients")
 	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemoteProver:
 		return errors.Errorf(".type unknown client type: %q", c.Type)
-	case c.Type != ClientTypeRemoteProver && c.ProverURL != "":
-		return errors.Errorf(".proverUrl is only valid for remoteProver clients, got type %q", c.Type)
+	}
+
+	if c.Type == ClientTypeRemoteProver {
+		if _, err := c.RemoteProverParams(); err != nil {
+			return err
+		}
 	}
 
 	return nil

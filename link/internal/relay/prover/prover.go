@@ -129,8 +129,13 @@ func addGenerator(
 	case config.ClientTypeRemoteProver:
 		// Nothing to resolve locally: the relayer only knows the endpoint, and
 		// the service decides how the client is proven.
+		params, err := client.RemoteProverParams()
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
 		generators[Key(client.ChainID, client.ClientID)] = remote.NewFromURL(
-			client.ProverURL, client.ChainID, client.ClientID,
+			params.URL, client.ChainID, client.ClientID,
 		)
 
 		return nil

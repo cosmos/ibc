@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/lightclient"
 )
 
 func TestRelayerConfig(t *testing.T) {
@@ -278,4 +280,66 @@ func TestRelayerConfig(t *testing.T) {
 			})
 		}
 	})
+}
+
+// The client type's params are validated with the config, so a bad block is a
+// startup error rather than a failure on the first proof request.
+func TestClientEndRemoteProverParams(t *testing.T) {
+	t.Parallel()
+
+	end := func(raw string) ClientEnd {
+		client := ClientEnd{
+			ChainID:  "1",
+			ClientID: "client-0",
+			Signer:   "relayer",
+			Type:     ClientTypeRemoteProver,
+		}
+		if raw != "" {
+			client.Params = lightclient.NewRawParams([]byte(raw))
+		}
+
+		return client
+	}
+
+	for _, tt := range []struct {
+		name    string
+		raw     string
+		wantURL string
+		wantErr string
+	}{
+		{"url", "url: http://prover:9090\n", "http://prover:9090", ""},
+		{"absent params", "", "", ".params.url required"},
+		{"empty url", "url: \"\"\n", "", ".params.url required"},
+		{"unknown field", "endpoint: http://prover:9090\n", "", "unknown field"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			params, err := end(tt.raw).RemoteProverParams()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				// The same block fails validation, not just the accessor.
+				require.ErrorContains(t, end(tt.raw).Validate(), tt.wantErr)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.wantURL, params.URL)
+			require.NoError(t, end(tt.raw).Validate())
+		})
+	}
+}
+
+// An attestation client needs no params, so validation must not demand them.
+func TestClientEndAttestationNeedsNoParams(t *testing.T) {
+	t.Parallel()
+
+	client := ClientEnd{
+		ChainID:  "1",
+		ClientID: "client-0",
+		Signer:   "relayer",
+		Type:     ClientTypeAttestation,
+	}
+	require.NoError(t, client.Validate())
 }
