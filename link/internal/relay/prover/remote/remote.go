@@ -96,3 +96,57 @@ func (p *Prover) PacketProofs(
 
 	return proofs, nil
 }
+
+func proofKindToProto(kind v2.ProofKind) (proverv2.ProofKind, error) {
+	switch kind {
+	case v2.ProofKindPacketCommitment:
+		return proverv2.ProofKind_PROOF_KIND_PACKET_COMMITMENT, nil
+	case v2.ProofKindAcknowledgement:
+		return proverv2.ProofKind_PROOF_KIND_ACKNOWLEDGEMENT, nil
+	case v2.ProofKindReceiptAbsence:
+		return proverv2.ProofKind_PROOF_KIND_RECEIPT_ABSENCE, nil
+	default:
+		return proverv2.ProofKind_PROOF_KIND_UNSPECIFIED,
+			errors.Errorf("remote prover: proof kind %d has no wire representation", kind)
+	}
+}
+
+// packetsToProto converts without reshaping: an empty list stays nil, so a
+// proof covers exactly the packet that was sent.
+func packetsToProto(packets []channeltypesv2.Packet) []*proverv2.Packet {
+	if len(packets) == 0 {
+		return nil
+	}
+
+	out := make([]*proverv2.Packet, len(packets))
+	for i, packet := range packets {
+		out[i] = &proverv2.Packet{
+			Sequence:          packet.Sequence,
+			SourceClient:      packet.SourceClient,
+			DestinationClient: packet.DestinationClient,
+			TimeoutTimestamp:  packet.TimeoutTimestamp,
+			Payloads:          payloadsToProto(packet.Payloads),
+		}
+	}
+
+	return out
+}
+
+func payloadsToProto(payloads []channeltypesv2.Payload) []*proverv2.Payload {
+	if len(payloads) == 0 {
+		return nil
+	}
+
+	out := make([]*proverv2.Payload, len(payloads))
+	for i, payload := range payloads {
+		out[i] = &proverv2.Payload{
+			SourcePort:      payload.SourcePort,
+			DestinationPort: payload.DestinationPort,
+			Version:         payload.Version,
+			Encoding:        payload.Encoding,
+			Value:           payload.Value,
+		}
+	}
+
+	return out
+}

@@ -19,14 +19,15 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	proverv2 "github.com/cosmos/ibc/link/api/v2/prover"
 	"github.com/cosmos/ibc/link/internal/chains"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/relay/prover"
 	"github.com/cosmos/ibc/link/internal/relay/prover/attestation"
-	"github.com/cosmos/ibc/link/internal/relay/prover/remote"
 	attestorservice "github.com/cosmos/ibc/link/internal/service/attestor"
 	"github.com/cosmos/ibc/link/internal/service/signer"
+	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
 const readHeaderTimeout = 5 * time.Second
@@ -173,13 +174,13 @@ func (h *Handler) PacketProofs(
 		return nil, err
 	}
 
-	kind, err := remote.ProofKindFromProto(req.Msg.GetKind())
+	kind, err := proofKindFromProto(req.Msg.GetKind())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
 	proofs, err := target.PacketProofs(
-		ctx, req.Msg.GetHeight(), kind, remote.PacketsFromProto(req.Msg.GetPackets()),
+		ctx, req.Msg.GetHeight(), kind, packetsFromProto(req.Msg.GetPackets()),
 	)
 	if err != nil {
 		h.logger.Error("PacketProofs", "err", err)
@@ -187,4 +188,57 @@ func (h *Handler) PacketProofs(
 	}
 
 	return connect.NewResponse(&proverv2.PacketProofsResponse{Proofs: proofs}), nil
+}
+
+func proofKindFromProto(kind proverv2.ProofKind) (v2.ProofKind, error) {
+	switch kind {
+	case proverv2.ProofKind_PROOF_KIND_PACKET_COMMITMENT:
+		return v2.ProofKindPacketCommitment, nil
+	case proverv2.ProofKind_PROOF_KIND_ACKNOWLEDGEMENT:
+		return v2.ProofKindAcknowledgement, nil
+	case proverv2.ProofKind_PROOF_KIND_RECEIPT_ABSENCE:
+		return v2.ProofKindReceiptAbsence, nil
+	default:
+		return v2.ProofKindUnknown, errors.Errorf("unknown proof kind %v", kind)
+	}
+}
+
+// packetsFromProto converts without reshaping: an empty list stays nil, so a
+// proof covers exactly the packet that was sent.
+func packetsFromProto(packets []*proverv2.Packet) []channeltypesv2.Packet {
+	if len(packets) == 0 {
+		return nil
+	}
+
+	out := make([]channeltypesv2.Packet, len(packets))
+	for i, packet := range packets {
+		out[i] = channeltypesv2.Packet{
+			Sequence:          packet.GetSequence(),
+			SourceClient:      packet.GetSourceClient(),
+			DestinationClient: packet.GetDestinationClient(),
+			TimeoutTimestamp:  packet.GetTimeoutTimestamp(),
+			Payloads:          payloadsFromProto(packet.GetPayloads()),
+		}
+	}
+
+	return out
+}
+
+func payloadsFromProto(payloads []*proverv2.Payload) []channeltypesv2.Payload {
+	if len(payloads) == 0 {
+		return nil
+	}
+
+	out := make([]channeltypesv2.Payload, len(payloads))
+	for i, payload := range payloads {
+		out[i] = channeltypesv2.Payload{
+			SourcePort:      payload.GetSourcePort(),
+			DestinationPort: payload.GetDestinationPort(),
+			Version:         payload.GetVersion(),
+			Encoding:        payload.GetEncoding(),
+			Value:           payload.GetValue(),
+		}
+	}
+
+	return out
 }
