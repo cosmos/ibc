@@ -88,7 +88,9 @@ type ClientParams interface {
 }
 
 // AttestationParams is empty: an attestation client is described entirely by
-// its on-chain attestor set. Declaring it keeps every type in one switch.
+// its on-chain attestor set. It exists so the type still has params to return,
+// keeping ClientParams non-nil for every client, and so a params block on an
+// attestation client is rejected rather than ignored.
 type AttestationParams struct{}
 
 func (*AttestationParams) isClientParams() {}
@@ -115,6 +117,10 @@ func (p *RemoteProverParams) Validate() error {
 // decodeClientParams maps a client type to its params, without applying the
 // type's rules. It is the only place that mapping lives, so a new type adds a
 // case here rather than a method on ClientEnd.
+//
+// Every case returns non-nil params on success, so callers never guard against
+// a nil interface. A type that takes no params declares an empty struct, as
+// AttestationParams does, rather than returning nil.
 func decodeClientParams(clientType ClientType, raw yaml.RawMessage) (ClientParams, error) {
 	switch clientType {
 	case ClientTypeAttestation:
