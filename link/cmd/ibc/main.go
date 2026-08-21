@@ -28,6 +28,10 @@ const useStatus = "status"
 // goconst across cmd/ibc.
 const useIFT = "ift"
 
+// flagChain is the shared "--chain" flag name, factored out to satisfy
+// goconst across cmd/ibc.
+const flagChain = "chain"
+
 var rootCmd = &cobra.Command{
 	Use:   "ibc",
 	Short: "IBC Link",
@@ -71,13 +75,13 @@ func init() {
 	cmdConfigValidate.Flags().BoolVar(&flagConfigValidateLive, "live", false, "extra validation checks")
 	cmdConfigValidate.Flags().
 		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")
-	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainID, "chain-id", "", "chain ID")
+	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainID, flagChain, "", "chain ID")
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainRPC, "rpc", "", "chain RPC URL")
 	cmdConfigAddChain.Flags().
 		StringVar(&flagConfigAddChainRouter, "router", "", "ics26Router address (default: left blank, fill in via render-config)")
 	cmdConfigAddChain.Flags().
 		StringVar(&flagConfigAddChainDeployer, "deployer", "", "signer alias used by ibc deploy for this chain")
-	for _, req := range []string{"chain-id", "rpc"} {
+	for _, req := range []string{flagChain, "rpc"} {
 		_ = cmdConfigAddChain.MarkFlagRequired(req)
 	}
 
@@ -96,9 +100,9 @@ func init() {
 	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
 		c.Flags().StringVar(&flagRelayerHost, "host", "", "dial this address instead of resolving from config")
 		c.Flags().StringVar(&flagRelayerTxHash, "tx-hash", "", "source transaction hash")
-		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
+		c.Flags().StringVar(&flagRelayerSourceChainID, flagChain, "", "source chain id")
 		_ = c.MarkFlagRequired("tx-hash")
-		_ = c.MarkFlagRequired("chain-id")
+		_ = c.MarkFlagRequired(flagChain)
 	}
 
 	// Attestor commands
@@ -112,9 +116,9 @@ func init() {
 	cmdQuery.AddCommand(cmdQueryIFT)
 	cmdQueryIFT.AddCommand(cmdQueryIFTBalance)
 	qpf := cmdQueryIFT.PersistentFlags()
-	qpf.StringVar(&flagQueryIFTChain, "chain", "", "chain ID the IFT token is deployed on")
+	qpf.StringVar(&flagQueryIFTChain, flagChain, "", "chain ID the IFT token is deployed on")
 	qpf.StringVar(&flagQueryIFTAddress, "ift", "", "IFT token address")
-	for _, req := range []string{"chain", useIFT} {
+	for _, req := range []string{flagChain, useIFT} {
 		_ = cmdQueryIFT.MarkPersistentFlagRequired(req)
 	}
 	cmdQueryIFTBalance.Flags().
@@ -133,7 +137,7 @@ func init() {
 	dpf := cmdDeploy.PersistentFlags()
 	dpf.StringVar(&flagDeployManifestDir, "manifest-dir", "deployments", "manifest directory relative to home")
 	dpf.StringVar(&flagDeployDeployer, "deployer", "", "signer alias override for deployment transactions")
-	dpf.StringVar(&flagDeployChain, "chain", "", "chain ID for the chain being deployed to")
+	dpf.StringVar(&flagDeployChain, flagChain, "", "chain ID for the chain being deployed to")
 	dpf.BoolVar(&flagDeployDryRun, "dry-run", false, "print the step plan without submitting transactions")
 	dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")
 
@@ -186,10 +190,10 @@ func init() {
 	cmdTx.AddCommand(cmdTxIFT)
 	cmdTxIFT.AddCommand(cmdTxIFTMint, cmdTxIFTSend)
 	tpf := cmdTxIFT.PersistentFlags()
-	tpf.StringVar(&flagTxIFTChain, "chain", "", "chain ID the IFT token is deployed on")
+	tpf.StringVar(&flagTxIFTChain, flagChain, "", "chain ID the IFT token is deployed on")
 	tpf.StringVar(&flagTxIFTAddress, "ift", "", "IFT token address")
 	tpf.StringVar(&flagTxIFTFrom, "from", "", "signer alias to submit the transaction with")
-	for _, req := range []string{"chain", useIFT, "from"} {
+	for _, req := range []string{flagChain, useIFT, "from"} {
 		_ = cmdTxIFT.MarkPersistentFlagRequired(req)
 	}
 	cmdTxIFTMint.Flags().StringVar(&flagTxIFTTo, "to", "", "recipient address, or a configured signer alias")
