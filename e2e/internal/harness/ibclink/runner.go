@@ -59,11 +59,6 @@ func NewDriver(configPath string) (*Driver, error) {
 	}, nil
 }
 
-// configFilePath is the relayer config this driver writes and runs against.
-func (r *Driver) configFilePath() string {
-	return filepath.Join(r.configHome, r.configName)
-}
-
 func (r *Driver) MigrateUp(ctx context.Context) error {
 	args := append([]string{"migrate", "up"}, r.configArgs()...)
 	res, err := r.exec(ctx, r.bin, "migrate up", defaultCommandTimeout, args...)

@@ -67,10 +67,9 @@ func (r *Driver) ChainRPC(chainID string) (string, error) {
 	return "${" + binding.envName + "}", nil
 }
 
-// acquireProcessEnv resolves the child-process environment, which is where the
-// relayer config reads its chain RPCs from, while borrowing the binding lease;
-// the caller must invoke release when the process no longer needs the bound
-// resources.
+// acquireProcessEnv resolves the child-process environment while borrowing
+// the binding lease; the caller must invoke release when the process no
+// longer needs the bound resources.
 func (r *Driver) acquireProcessEnv() ([]string, func(), error) {
 	if r.bindings == nil {
 		return nil, func() {}, nil

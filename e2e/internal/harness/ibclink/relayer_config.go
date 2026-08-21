@@ -32,8 +32,7 @@ type RelayerConfig struct {
 	FinalityOffset uint64
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
-
-	Attestors []RelayerAttestor
+	Attestors      []RelayerAttestor
 }
 
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
@@ -243,9 +242,7 @@ func localAttestorName(chainID string) string {
 }
 
 const (
-	RelayerSignerLocal = "local"
-	// Client types, which happen to share spellings with signer and attestor
-	// types but are a separate vocabulary.
+	RelayerSignerLocal       = "local"
 	relayerClientAttestation = "attestation"
 	relayerClientRemote      = "remote"
 

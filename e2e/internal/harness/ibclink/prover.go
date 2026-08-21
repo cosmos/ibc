@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -37,7 +38,9 @@ func (r *Driver) StartProver(address string) (*Prover, error) {
 		}
 	}()
 
-	cmd := exec.Command(resolvedProverBin(), "--config", r.configFilePath(), "--listen", address)
+	configPath := filepath.Join(r.configHome, r.configName)
+
+	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", address)
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
