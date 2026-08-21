@@ -8,12 +8,8 @@ import (
 	"time"
 )
 
-const timeFormat = time.RFC3339
-
 func Default(json bool) *slog.Logger {
-	opts := &slog.HandlerOptions{
-		ReplaceAttr: ReplaceAttrs,
-	}
+	opts := &slog.HandlerOptions{ReplaceAttr: ReplaceAttrs}
 
 	var handler slog.Handler
 	if json {
@@ -29,9 +25,10 @@ func Default(json bool) *slog.Logger {
 func ReplaceAttrs(_ []string, attr slog.Attr) slog.Attr {
 	switch attr.Key {
 	case slog.TimeKey:
-		// log utc timestamp
-		t := attr.Value.Time().UTC()
-		return slog.String("time", t.Format(timeFormat))
+		// enforce UTC timestamp
+		if t, ok := attr.Value.Any().(time.Time); ok {
+			return slog.Time(attr.Key, t.UTC())
+		}
 	case "err", "error":
 		// normalize error w/o stack trace
 		if err, ok := attr.Value.Any().(error); ok && err != nil {
