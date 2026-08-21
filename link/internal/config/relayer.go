@@ -74,6 +74,11 @@ type ClientEnd struct {
 	// means a new client type adds nothing to every client.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
+	// decoded is Params resolved for Type, filled while parsing. Decoding is a
+	// pure function of Type and Params, so this is a cache, never a source of
+	// truth: a ClientEnd built in code decodes on demand instead.
+	decoded ClientParams `yaml:"-"`
+
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
@@ -116,19 +121,29 @@ func (p *RemoteProverParams) Validate() error {
 	return nil
 }
 
-// ClientParams decodes this client's params for its type, without applying the
-// type's rules. One accessor covers every type, so a new type adds a case here
-// rather than a method on ClientEnd.
-func (c ClientEnd) ClientParams() (ClientParams, error) {
-	switch c.Type {
+// decodeClientParams maps a client type to its params, without applying the
+// type's rules. It is the only place that mapping lives, so a new type adds a
+// case here rather than a method on ClientEnd.
+func decodeClientParams(clientType ClientType, raw yaml.RawMessage) (ClientParams, error) {
+	switch clientType {
 	case ClientTypeAttestation:
 		// Strict decoding rejects a params block on a type that takes none.
-		return decodeParams[AttestationParams](c.Params)
+		return decodeParams[AttestationParams](raw)
 	case ClientTypeRemoteProver:
-		return decodeParams[RemoteProverParams](c.Params)
+		return decodeParams[RemoteProverParams](raw)
 	default:
-		return nil, errors.Wrapf(ErrUnknownClientType, ".type %q", c.Type)
+		return nil, errors.Wrapf(ErrUnknownClientType, ".type %q", clientType)
 	}
+}
+
+// ClientParams is this client's decoded params, resolved while parsing or on
+// demand for a ClientEnd built in code.
+func (c ClientEnd) ClientParams() (ClientParams, error) {
+	if c.decoded != nil {
+		return c.decoded, nil
+	}
+
+	return decodeClientParams(c.Type, c.Params)
 }
 
 // decodeParams reads a params block strictly: a misspelled key is an error,
@@ -147,10 +162,9 @@ func decodeParams[T any](raw yaml.RawMessage) (*T, error) {
 	return &params, nil
 }
 
-// UnmarshalYAML reads the fields, then checks that the params block decodes
-// for the declared type, so a malformed block fails the load rather than the
-// first read. An unknown type is left for Validate to report, so a config
-// still being assembled loads.
+// UnmarshalYAML reads the fields and resolves the params block, so a malformed
+// block fails the load rather than the first read. An unknown type is left for
+// Validate to report, so a config still being assembled loads.
 func (c *ClientEnd) UnmarshalYAML(data []byte) error {
 	// plain drops the methods, so unmarshalling it does not re-enter here.
 	type plain ClientEnd
@@ -162,9 +176,15 @@ func (c *ClientEnd) UnmarshalYAML(data []byte) error {
 
 	*c = ClientEnd(raw)
 
-	if _, err := c.ClientParams(); err != nil && !errors.Is(err, ErrUnknownClientType) {
+	params, err := decodeClientParams(c.Type, c.Params)
+	switch {
+	case errors.Is(err, ErrUnknownClientType):
+		return nil
+	case err != nil:
 		return err
 	}
+
+	c.decoded = params
 
 	return nil
 }

@@ -422,3 +422,39 @@ func TestClientEndUnmarshalDecodesParams(t *testing.T) {
 		})
 	}
 }
+
+// The decoded field is a cache, so a parsed client and one built in code must
+// resolve to the same params.
+func TestClientParamsCacheMatchesFreshDecode(t *testing.T) {
+	t.Parallel()
+
+	const doc = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remoteProver\nparams:\n  url: http://prover:9090\n"
+
+	var parsed ClientEnd
+	require.NoError(t, yaml.Unmarshal([]byte(doc), &parsed))
+	require.NotNil(t, parsed.decoded, "parsing fills the cache")
+
+	fromCache, err := parsed.ClientParams()
+	require.NoError(t, err)
+
+	// Same fields, no cache.
+	built := ClientEnd{
+		ChainID:  parsed.ChainID,
+		Signer:   parsed.Signer,
+		ClientID: parsed.ClientID,
+		Type:     parsed.Type,
+		Params:   parsed.Params,
+	}
+	require.Nil(t, built.decoded)
+
+	fresh, err := built.ClientParams()
+	require.NoError(t, err)
+
+	require.Equal(t, fresh, fromCache)
+
+	// A copy carries the cache, which is how consumers receive it.
+	copied := parsed
+	fromCopy, err := copied.ClientParams()
+	require.NoError(t, err)
+	require.Equal(t, fromCache, fromCopy)
+}
