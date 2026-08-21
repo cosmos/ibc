@@ -12,16 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ProverConfig is the prover service's configuration. The prover reads the same
-// file schema as the relayer, taking the chains, attestors, and clients from
-// it and ignoring the rest.
-type ProverConfig = RelayerConfig
-
-// WriteProverConfig writes a prover service configuration.
-func WriteProverConfig(path string, cfg ProverConfig) error {
-	return WriteRelayerConfig(path, cfg)
-}
-
 // RelayerConfig describes one relayer process configuration for the black-box
 // binary. If Attestors is empty, one default local attestor per chain is used.
 type RelayerConfig struct {

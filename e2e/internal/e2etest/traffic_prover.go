@@ -22,10 +22,10 @@ func buildProverConfig(
 	t testing.TB,
 	env *environment.Environment,
 	signerKeyPath string,
-) ibclink.ProverConfig {
+) ibclink.RelayerConfig {
 	t.Helper()
 
-	config := ibclink.ProverConfig{
+	config := ibclink.RelayerConfig{
 		DBPath:         filepath.Join(t.TempDir(), "prover.db"),
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
@@ -82,7 +82,7 @@ func StartProver(t testing.TB, env *environment.Environment, signer Signer) *ibc
 
 	config := buildProverConfig(t, env, signerKeyPath)
 	configPath := filepath.Join(dir, "prover.config.yaml")
-	require.NoError(t, ibclink.WriteProverConfig(configPath, config), "e2etest: write prover config")
+	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write prover config")
 
 	prover, err := ibclink.StartProver(configPath)
 	require.NoError(t, err, "e2etest: start prover service")
