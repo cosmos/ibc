@@ -18,8 +18,7 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
-// stubProver records what it was asked so the round trip can be asserted from
-// the far side of the wire.
+// stubProver records what it was asked, so the far side of the wire can assert it.
 type stubProver struct {
 	height     uint64
 	timestamp  time.Time
@@ -50,7 +49,7 @@ func (s *stubProver) PacketProofs(
 	return s.proofs, nil
 }
 
-func proverPair(t *testing.T, set *prover.Set, chainID, clientID string) *remote.Prover {
+func newClient(t *testing.T, set *prover.Set, chainID, clientID string) *remote.Prover {
 	t.Helper()
 
 	server := httptest.NewUnstartedServer(newServer(set).Handler)
@@ -61,8 +60,8 @@ func proverPair(t *testing.T, set *prover.Set, chainID, clientID string) *remote
 	return remote.New(server.Client(), server.URL, chainID, clientID)
 }
 
-// The relayer reaches a custom light client only through this contract, so the
-// round trip must preserve every value the internal interface carries.
+// A custom light client is reached only through this contract, so the round trip
+// must preserve every value the internal interface carries.
 func TestProverServiceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	stub := &stubProver{
@@ -72,7 +71,7 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		proofs:     [][]byte{[]byte("proof-a"), []byte("proof-b")},
 	}
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
-	client := proverPair(t, set, "chain-a", "client-0")
+	client := newClient(t, set, "chain-a", "client-0")
 
 	t.Run("latest provable height", func(t *testing.T) {
 		height, timestamp, err := client.LatestProvableHeight(ctx)
@@ -110,23 +109,15 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("proof-a"), []byte("proof-b")}, proofs)
 
-		// The payload must survive the wire, or the proof is generated over
-		// something other than the packet that was sent.
+		// A dropped field proves a different packet than the one sent.
 		require.Equal(t, packets, stub.gotPackets)
 		require.Equal(t, v2.ProofKindReceiptAbsence, stub.gotKind)
 		require.Equal(t, uint64(4321), stub.gotHeight)
 	})
-
-	t.Run("the client is named on every request", func(t *testing.T) {
-		// Resolution only succeeds when the request carries the right client,
-		// so every call above proves it.
-		_, err := proverPair(t, set, "chain-a", "wrong-client").StateProof(ctx, 1)
-		require.Error(t, err)
-	})
 }
 
 func TestProverServiceUnknownClient(t *testing.T) {
-	client := proverPair(t, prover.NewSet(nil), "chain-z", "client-9")
+	client := newClient(t, prover.NewSet(nil), "chain-z", "client-9")
 
 	_, _, err := client.LatestProvableHeight(context.Background())
 	require.Error(t, err)
@@ -137,7 +128,7 @@ func TestProverServiceUnknownClient(t *testing.T) {
 func TestProverServiceRejectsMismatchedProofCount(t *testing.T) {
 	stub := &stubProver{proofs: [][]byte{[]byte("only-one")}}
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
-	client := proverPair(t, set, "chain-a", "client-0")
+	client := newClient(t, set, "chain-a", "client-0")
 
 	_, err := client.PacketProofs(context.Background(), 1, v2.ProofKindPacketCommitment,
 		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}})

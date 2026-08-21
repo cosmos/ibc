@@ -281,120 +281,32 @@ func TestRelayerConfig(t *testing.T) {
 	})
 }
 
-// A bad params block is a startup error, not a failure on the first proof.
-func TestClientEndRemoteParams(t *testing.T) {
+// Params are checked by Validate, not by parsing, so commands that load a
+// config without validating it still work.
+func TestClientEndParams(t *testing.T) {
 	t.Parallel()
 
-	end := func(raw string) ClientEnd {
-		client := ClientEnd{
-			ChainID:  "1",
-			ClientID: "client-0",
-			Signer:   "relayer",
-			Type:     ClientTypeRemote,
-		}
-		if raw != "" {
-			client.Params = yaml.RawMessage(raw)
-		}
-
-		return client
-	}
-
-	// A block that decodes but breaks a rule fails Validate, not the decode.
-	for _, tt := range []struct {
-		name       string
-		raw        string
-		wantURL    string
-		wantDecErr string
-		wantValErr string
-	}{
-		{name: "url", raw: "url: http://prover:9090\n", wantURL: "http://prover:9090"},
-		{name: "absent params", wantValErr: ".params.url required"},
-		{name: "empty url", raw: "url: \"\"\n", wantValErr: ".params.url required"},
-		{name: "unknown field", raw: "endpoint: http://prover:9090\n", wantDecErr: "unknown field"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			params, err := end(tt.raw).ClientParams()
-			if tt.wantDecErr != "" {
-				require.ErrorContains(t, err, tt.wantDecErr)
-				require.ErrorContains(t, end(tt.raw).Validate(), tt.wantDecErr)
-
-				return
-			}
-
-			require.NoError(t, err, "a decodable block must decode")
-
-			if tt.wantValErr != "" {
-				require.ErrorContains(t, params.Validate(), tt.wantValErr)
-				require.ErrorContains(t, end(tt.raw).Validate(), tt.wantValErr)
-
-				return
-			}
-
-			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
-			require.NoError(t, end(tt.raw).Validate())
-		})
-	}
-}
-
-// Declaring params on a client that takes none is worth reporting.
-func TestClientEndAttestationParams(t *testing.T) {
-	t.Parallel()
-
-	client := ClientEnd{
-		ChainID:  "1",
-		ClientID: "client-0",
-		Signer:   "relayer",
-		Type:     ClientTypeAttestation,
-	}
-
-	params, err := client.ClientParams()
-	require.NoError(t, err)
-	require.IsType(t, &AttestationParams{}, params)
-	require.NoError(t, client.Validate())
-
-	client.Params = yaml.RawMessage("url: http://prover:9090\n")
-	require.ErrorContains(t, client.Validate(), "unknown field")
-}
-
-// Params are checked by Validate, not by parsing, so commands that load
-// without validating still work.
-func TestClientEndParamsAreValidatedNotParsed(t *testing.T) {
-	t.Parallel()
+	const base = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\n"
 
 	for _, tt := range []struct {
 		name    string
 		doc     string
+		wantURL string
 		wantErr string
 	}{
-		{
-			name: "valid",
-			doc:  "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remote\nparams:\n  url: http://prover:9090\n",
-		},
-		{
-			name:    "misspelled key",
-			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remote\nparams:\n  endpoint: http://prover:9090\n",
-			wantErr: "unknown field",
-		},
-		{
-			name:    "missing url",
-			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: remote\n",
-			wantErr: ".params.url required",
-		},
-		{
-			name:    "unknown type",
-			doc:     "chainId: \"1\"\nsigner: relayer\nclientId: c-0\ntype: someFutureClient\n",
-			wantErr: "someFutureClient",
-		},
+		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
+		{name: "remote without params", doc: "type: remote\n", wantErr: ".params.url required"},
+		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: ".params.url required"},
+		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "attestation", doc: "type: attestation\n"},
+		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			var client ClientEnd
-
-			// Parsing never rejects: only Validate judges.
-			require.NoError(t, yaml.Unmarshal([]byte(tt.doc), &client))
+			require.NoError(t, yaml.Unmarshal([]byte(base+tt.doc), &client))
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, client.Validate(), tt.wantErr)
@@ -405,7 +317,13 @@ func TestClientEndParamsAreValidatedNotParsed(t *testing.T) {
 
 			params, err := client.ClientParams()
 			require.NoError(t, err)
-			require.Equal(t, "http://prover:9090", params.(*RemoteParams).URL)
+
+			if tt.wantURL == "" {
+				require.IsType(t, &AttestationParams{}, params)
+				return
+			}
+
+			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
 		})
 	}
 }

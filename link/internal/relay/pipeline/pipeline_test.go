@@ -255,7 +255,7 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Times(2)
 
-		// check send finality: destination client's mockProver must be able to prove the send tx
+		// check send finality: destination client's prover must be able to prove the send tx
 		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
@@ -275,7 +275,7 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(chainsWriteAckSuccess(), nil).
 			Once()
 
-		// check write ack finality: source client's mockProver must be able to prove the write ack tx
+		// check write ack finality: source client's prover must be able to prove the write ack tx
 		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
@@ -314,7 +314,7 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Times(2)
 
-		// check send finality: destination client's mockProver must be able to prove the send tx
+		// check send finality: destination client's prover must be able to prove the send tx
 		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
@@ -332,7 +332,7 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(chainsWriteAckError(), nil).
 			Once()
 
-		// check write ack finality: source client's mockProver must be able to prove the write ack tx
+		// check write ack finality: source client's prover must be able to prove the write ack tx
 		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
@@ -368,11 +368,11 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Once()
 
-		// check send finality: destination client's mockProver must be able to prove the send tx
+		// check send finality: destination client's prover must be able to prove the send tx
 		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
-		// check timeout finality: source client's mockProver must be able to prove a destination timestamp past the timeout
+		// check timeout finality: source client's prover must be able to prove a destination timestamp past the timeout
 		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 
 		// timeout delivery on the source chain
@@ -410,7 +410,7 @@ func TestPipelineLifecycle(t *testing.T) {
 			Return(true, nil).
 			Once()
 
-		// check send finality: the send event's height is past what the destination mockProver can prove
+		// check send finality: the send event's height is past what the destination prover can prove
 		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(50), time.Now(), nil).Once()
 		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
