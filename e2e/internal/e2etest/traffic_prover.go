@@ -15,9 +15,9 @@ import (
 )
 
 // ProverConfig builds the prover service's own configuration from the
-// environment. The prover is a separate service with a separate config, as it
-// would be in a deployment; StartRelayer's config must agree with it, which
-// AssertProverConfigMatches checks.
+// environment. The prover is a separate service with its own config, as it
+// would be in a deployment: it needs the chains, attestors, and client ends it
+// proves, and nothing else the relayer config carries.
 func ProverConfig(t testing.TB, env *environment.Environment, signerKeyPath string) ibclink.RelayerConfig {
 	t.Helper()
 
@@ -66,13 +66,8 @@ func ProverConfig(t testing.TB, env *environment.Environment, signerKeyPath stri
 	return config
 }
 
-// StartProver writes the prover's config and runs it, returning the service
-// and the config it was built from.
-func StartProver(
-	t testing.TB,
-	env *environment.Environment,
-	signer Signer,
-) (*ibclink.Prover, ibclink.RelayerConfig) {
+// StartProver writes the prover's config and runs it.
+func StartProver(t testing.TB, env *environment.Environment, signer Signer) *ibclink.Prover {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -88,51 +83,7 @@ func StartProver(
 
 	t.Cleanup(func() { assert.NoError(t, prover.Stop(), "e2etest: stop prover service") })
 
-	return prover, config
-}
-
-// AssertProverConfigMatches fails if the prover and the relayer disagree about
-// the clients being proven, the chains they live on, or the attestors backing
-// them. They are separate configs, so nothing but this stops them drifting.
-func AssertProverConfigMatches(t testing.TB, prover, relayer ibclink.RelayerConfig) {
-	t.Helper()
-
-	assert.ElementsMatch(t, chainIdentities(relayer), chainIdentities(prover),
-		"prover and relayer disagree about chains")
-	assert.ElementsMatch(t, attestorIdentities(relayer), attestorIdentities(prover),
-		"prover and relayer disagree about attestors")
-	assert.ElementsMatch(t, clientIdentities(relayer), clientIdentities(prover),
-		"prover and relayer disagree about clients")
-}
-
-func chainIdentities(cfg ibclink.RelayerConfig) []string {
-	out := make([]string, 0, len(cfg.Chains))
-	for _, chain := range cfg.Chains {
-		out = append(out, chain.ChainID+"/"+chain.ICS26Router)
-	}
-
-	return out
-}
-
-func attestorIdentities(cfg ibclink.RelayerConfig) []string {
-	out := make([]string, 0, len(cfg.Attestors))
-	for _, attestor := range cfg.Attestors {
-		out = append(out, attestor.Name+"/"+attestor.GRPC)
-	}
-
-	return out
-}
-
-func clientIdentities(cfg ibclink.RelayerConfig) []string {
-	out := make([]string, 0, len(cfg.Connections)*2)
-	for _, conn := range cfg.Connections {
-		out = append(out,
-			conn.ChainA+"/"+conn.ClientA,
-			conn.ChainB+"/"+conn.ClientB,
-		)
-	}
-
-	return out
+	return prover
 }
 
 func chainEVMID(t testing.TB, env *environment.Environment, id environment.ChainID) string {

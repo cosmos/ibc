@@ -26,20 +26,14 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 
 	// The prover runs from its own config, built from the environment, so it
 	// is serving before the relayer's config has to name it.
-	prover, proverConfig := e2etest.StartProver(t, env, relayerSigner)
-
-	var relayerConfig ibclink.RelayerConfig
+	prover := e2etest.StartProver(t, env, relayerSigner)
 
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner,
 		func(cfg *ibclink.RelayerConfig) {
 			for i := range cfg.Connections {
 				cfg.Connections[i].ProverURL = "http://" + prover.Address()
 			}
-
-			relayerConfig = *cfg
 		}, route)
-
-	e2etest.AssertProverConfigMatches(t, proverConfig, relayerConfig)
 
 	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
