@@ -74,6 +74,12 @@ func (r *Driver) MigrateUp(ctx context.Context) error {
 	return nil
 }
 
+// WriteConfig rewrites this driver's relayer config, for a test that must
+// settle a value the config names only after the config first exists.
+func (r *Driver) WriteConfig(cfg RelayerConfig) error {
+	return WriteRelayerConfig(filepath.Join(r.configHome, r.configName), cfg)
+}
+
 func (r *Driver) configArgs() []string {
 	return []string{"--home", r.configHome, "--config", r.configName}
 }

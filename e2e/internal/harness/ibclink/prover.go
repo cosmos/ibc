@@ -3,31 +3,44 @@
 package ibclink
 
 import (
+	"bufio"
 	"fmt"
-	"net"
+	"io"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
 
 const (
 	proverBinEnv     = "IBC_TEST_PROVER_BIN"
-	proverStartWait  = 30 * time.Second
-	proverStartPoll  = 100 * time.Millisecond
-	proverDialWindow = time.Second
+	proverReadyWait  = 30 * time.Second
+	proverReadyToken = "listening"
 )
 
 // Prover is a running prover service.
 type Prover struct {
-	cmd *exec.Cmd
+	cmd     *exec.Cmd
+	address string
 }
 
-// StartProver runs the test prover against this driver's relayer config,
-// serving on address. The relayer reaches it over gRPC and holds no attestors
-// or chain clients of its own.
-func (r *Driver) StartProver(address string) (*Prover, error) {
+// Address is the endpoint the prover is serving on, known only once it has
+// bound its port.
+func (p *Prover) Address() string {
+	if p == nil {
+		return ""
+	}
+
+	return p.address
+}
+
+// StartProver runs the test prover against this driver's relayer config. It
+// takes an ephemeral port and announces the one it got, so no caller has to
+// reserve a port the prover might not win.
+func (r *Driver) StartProver() (*Prover, error) {
 	env, release, err := r.acquireProcessEnv()
 	if err != nil {
 		return nil, err
@@ -40,22 +53,30 @@ func (r *Driver) StartProver(address string) (*Prover, error) {
 
 	configPath := filepath.Join(r.configHome, r.configName)
 
-	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", address)
+	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", loopbackAnyPort)
 	cmd.Env = env
+	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	if err := cmd.Start(); err != nil {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("ibc prover: stdout pipe: %w", err)
+	}
+
+	if err = cmd.Start(); err != nil {
 		return nil, fmt.Errorf("ibc prover: start: %w", err)
 	}
 
 	prover := &Prover{cmd: cmd}
 
-	// The relayer must not ask for a proof before the service answers.
-	if err := waitForListener(address); err != nil {
+	address, err := awaitProverAddress(stdout)
+	if err != nil {
 		_ = prover.Stop()
 
 		return nil, err
 	}
+
+	prover.address = address
 
 	return prover, nil
 }
@@ -72,21 +93,49 @@ func (p *Prover) Stop() error {
 	return nil
 }
 
-func waitForListener(address string) error {
-	deadline := time.Now().Add(proverStartWait)
-
-	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", address, proverDialWindow)
-		if err == nil {
-			_ = conn.Close()
-
-			return nil
-		}
-
-		time.Sleep(proverStartPoll)
+// awaitProverAddress reads the address the prover announces on its first
+// stdout line, rejecting anything that is not a bound loopback port.
+func awaitProverAddress(stdout io.ReadCloser) (string, error) {
+	type result struct {
+		address string
+		err     error
 	}
 
-	return fmt.Errorf("ibc prover: %s did not start listening", address)
+	announced := make(chan result, 1)
+
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		if !scanner.Scan() {
+			announced <- result{err: fmt.Errorf("ibc prover: no readiness line: %w", scanner.Err())}
+
+			return
+		}
+
+		fields := strings.Fields(scanner.Text())
+		if len(fields) != 2 || fields[0] != proverReadyToken {
+			announced <- result{err: fmt.Errorf("ibc prover: unexpected readiness line %q", scanner.Text())}
+
+			return
+		}
+
+		announced <- result{address: fields[1]}
+	}()
+
+	select {
+	case got := <-announced:
+		if got.err != nil {
+			return "", got.err
+		}
+
+		parsed, err := netip.ParseAddrPort(got.address)
+		if err != nil || !parsed.Addr().IsLoopback() || parsed.Port() == 0 {
+			return "", fmt.Errorf("ibc prover: announced invalid address %q", got.address)
+		}
+
+		return got.address, nil
+	case <-time.After(proverReadyWait):
+		return "", fmt.Errorf("ibc prover: did not announce an address within %s", proverReadyWait)
+	}
 }
 
 func resolvedProverBin() string {
