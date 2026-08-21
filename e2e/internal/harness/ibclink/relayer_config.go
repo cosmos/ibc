@@ -33,11 +33,7 @@ type RelayerConfig struct {
 	Chains         []RelayerChain
 	Connections    []RelayerConnection
 
-	// ListenAddress pins the relayer's own gRPC address. Empty takes an
-	// ephemeral loopback port; a test pins one when something must dial the
-	// relayer at an address known before it starts.
-	ListenAddress string
-	Attestors     []RelayerAttestor
+	Attestors []RelayerAttestor
 }
 
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
@@ -111,11 +107,6 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		return fileConfig{}, errors.New("at least one connection is required")
 	}
 
-	listenAddress := cfg.ListenAddress
-	if listenAddress == "" {
-		listenAddress = loopbackAnyPort
-	}
-
 	processSigner := signerConfig{Alias: cfg.SignerAlias, Type: signerType}
 	if signerType == RelayerSignerRemote {
 		processSigner.GRPC = cfg.SignerGRPC
@@ -124,7 +115,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		processSigner.File = cfg.SignerKeyFile
 	}
 	file := fileConfig{
-		Server:  serverConfig{ListenAddress: listenAddress},
+		Server:  serverConfig{ListenAddress: loopbackAnyPort},
 		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
 		Signers: []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
