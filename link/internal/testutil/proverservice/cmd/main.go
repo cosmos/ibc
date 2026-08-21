@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Command testprover runs a ProverService a relayer can be pointed at, serving
-// the attestation prover from a relayer config so the wire contract can be
-// exercised without a second light-client implementation.
+// Command testprover serves the attestation prover over ProverService so the
+// wire contract can be exercised end to end.
 //
-// It exists for tests and demonstration. It is not part of the ibc CLI and is
+// It exists for tests and demonstration: it is not part of the ibc CLI and is
 // not built by the default build target.
 package main
 

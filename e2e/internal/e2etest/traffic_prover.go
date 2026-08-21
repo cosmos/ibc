@@ -14,10 +14,8 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
 )
 
-// buildProverConfig is buildConfig's counterpart for the prover: a separate
-// service with its own config, as it would be in a deployment. It needs the
-// chains, attestors, and client ends it proves, and nothing else the relayer
-// config carries.
+// buildProverConfig is buildConfig's counterpart: the prover is a separate
+// service with its own config, as it would be in a deployment.
 func buildProverConfig(
 	t testing.TB,
 	env *environment.Environment,
@@ -39,8 +37,8 @@ func buildProverConfig(
 		instance, err := env.IBCInstanceForChain(id)
 		require.NoError(t, err, "e2etest: resolve IBC instance for Chain %q", id)
 
-		// The prover dials chains directly, so its config carries the address
-		// rather than the variable the relayer's process resolves.
+		// The prover dials chains itself, so it needs the address rather than
+		// the variable the relayer's process resolves.
 		config.Chains = append(config.Chains, ibclink.RelayerChain{
 			ChainID:     chainEVMID(t, env, id),
 			RPC:         chain.RPCURL(),

@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package proverservice runs a ProverService a relayer can be pointed at, so
-// the contract can be exercised end to end without a second light-client
-// implementation. It serves the attestation prover.
+// Package proverservice serves the attestation prover over ProverService, so
+// the contract can be exercised without a second light-client implementation.
 //
-// A custom light client implements the ProverService proto contract in
-// whatever language it likes; it does not import this package.
+// A real custom light client implements the proto contract in whatever language
+// it likes; it does not import this package.
 package proverservice
 
 import (
@@ -62,9 +61,8 @@ func newServer(set *prover.Set) *http.Server {
 	}
 }
 
-// NewAttestationServer serves an attestation prover per configured client end,
-// built from a relayer config. It holds the attestors and chain clients; the
-// relayer holds neither.
+// NewAttestationServer serves an attestation prover per client end in the
+// config. It holds the attestors and chain clients; the relayer holds neither.
 func NewAttestationServer(ctx context.Context, configPath string) (*http.Server, error) {
 	cfg, err := config.LoadFromFile(configPath, true, true)
 	if err != nil {
@@ -202,8 +200,8 @@ func proofKindFromProto(kind proverv2.ProofKind) (v2.ProofKind, error) {
 	}
 }
 
-// packetsFromProto converts without reshaping: an empty list stays nil, so a
-// proof covers exactly the packet that was sent.
+// packetsFromProto converts without reshaping, so a proof covers exactly the
+// packet that was sent.
 func packetsFromProto(packets []*proverv2.Packet) []channeltypesv2.Packet {
 	if len(packets) == 0 {
 		return nil

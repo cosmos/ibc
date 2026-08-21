@@ -26,8 +26,7 @@ type Prover struct {
 	address string
 }
 
-// Address is the endpoint the prover is serving on, known only once it has
-// bound its port.
+// Address is where the prover is serving, known only once it has bound.
 func (p *Prover) Address() string {
 	if p == nil {
 		return ""
@@ -36,9 +35,8 @@ func (p *Prover) Address() string {
 	return p.address
 }
 
-// StartProver runs the test prover against its own config. It takes an
-// ephemeral port and announces the one it got, so no caller has to reserve a
-// port the prover might not win.
+// StartProver runs the test prover on an ephemeral port, waiting for it to
+// announce the one it got, so no caller has to reserve a port it might not win.
 func StartProver(configPath string) (*Prover, error) {
 	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", loopbackAnyPort)
 	cmd.Stderr = os.Stderr
@@ -79,8 +77,7 @@ func (p *Prover) Stop() error {
 	return nil
 }
 
-// awaitProverAddress reads the address the prover announces on its first
-// stdout line, rejecting anything that is not a bound loopback port.
+// awaitProverAddress reads the address announced on the prover's first stdout line.
 func awaitProverAddress(stdout io.ReadCloser) (string, error) {
 	type result struct {
 		address string
