@@ -9,30 +9,26 @@ A relayer is trusted for liveness alone: it decides when packets move, not what 
 
 ## What a relayer does
 
-Chains cannot interact with each other directly. Each one keeps a [light client](/how-ibc-works/clients-and-counterparties) of the other, and that client verifies a packet only against state it already holds. A relayer carries everything the other chain needs to accept a packet.
+Chains cannot interact with each other directly. Each one keeps a [light client](/how-ibc-works/clients-and-counterparties) of the other, but these only contain a snapshot of the counterparty's chain state that must be updated by external input. A relayer delivers everything a chain needs to accept state updates and packets from a counterparty.
 
-- **The packet**: The relayer delivers it to the destination chain's [router](/how-ibc-works/core-router-and-store).
-- **The proof, and the client update it is checked against.** The relayer calls `updateClient` to advance the destination client's view, then submits the packet with a proof at that height. Every client type works this way, and what the update contains is the client's own business: for an [attestation light client](/light-clients/attestation-light-client) it is a quorum of attestor signatures.
-- **The answer.** The acknowledgement the receiving application returned, whether it reports success or an error, goes back to the source chain. If the deadline passes with nothing received, a proof of that goes back instead.
+- **The client update** The relayer calls `updateClient` with a proof of some state on the source chain to advance the destination client's snapshot. Every client type works this way, but the type of state and proof vary by client: for an [attestation light client](/light-clients/attestation-light-client) it is the source chain's height and timestamp proved by a quorum of attestor signatures.
+- **The packet**: This is state committed on the source chain that the relayer delivers to the destination chain's [router](/how-ibc-works/core-router-and-store) along with a proof.
+- **The answer.** To complete the packet lifecycle, there is a symmetric flow where the relayer relays state from the destination chain back to the source. This is either an acknowledgement created during packet receipt or a proof that packet receipt never occurred.
 
-Nothing on chain does any of this by itself, so a sent packet moves only when some relayer picks it up.
+## Connections
 
-## Routes
+The relayer must be configured with the details of a connection between two clients to relay it. Each connection in the relayer's configuration contains:
 
-A route pairs one source chain and client with one destination chain and client. A packet whose source client has no configured route is never relayed.
-
-Routes come from the connections the relayer is configured with. Each connection names:
-
-- A client end on each side, `clientA` and `clientB`. Each end is the other's counterparty, so neither restates the other.
+- Client information for each side, `clientA` and `clientB`, each identifying a client by its on-chain identifier, its type, and additional parameters that vary by client type.
 - A signing key on each end, used to submit relay transactions on that end's own chain. Each key pays the gas for the transactions it submits, so it has to be funded on that chain. Relaying in both directions submits to both chains, so there must be a funded key on each chain.
 
-Relaying runs both ways, so one connection gives a route in each direction.
+Each configured connection is relayed bidirectionally so packets originating from either end are relayed.
 
 ## What starts a relay
 
-Once an application sends a packet to the router on the source chain, the router commits it and emits its `SendPacket` event, which means it is ready to be relayed. The relayer learns of that packet when a caller hands its API the source chain ID, the hash of the transaction that sent it, and which of that transaction's packets to relay.
+Once an application sends a packet to the router on the source chain, the router commits it and emits its `SendPacket` event, which means it is ready to be relayed. The relayer configuration allows two options for packet discovery - if auto-relay is enabled the relayer detects the packet automatically and if it is disabled the transaction containing the packet must be submitted to the relayer api.
 
-When a request arrives, the relayer reads the packet events out of the transaction, records the request, and stores one packet for each send event on a configured client. The packets the request left out are stored too, and left alone until a later request selects them. Chain state holds only a 32-byte commitment, so a packet's contents live in the event the send emitted, which is why a request names a transaction. What the relayer stores is metadata, not the packet itself. Delivering the packet and delivering a timeout both read that transaction's events from the source chain again and pick out the sequence they need. So a source node that cannot serve the transaction stalls delivery, even for a packet the relayer already recorded.
+When a transaction creating packets is identified, the relayer reads the packet events, and stores packet details for configured connections in its database. Chain state holds only a 32-byte commitment, so a packet's contents live in the event the send emitted. Relaying depends on the ability to read transaction events, so relying on nodes that have pruned relevant transaction data stalls delivery.
 
 ## The relay pipeline
 
