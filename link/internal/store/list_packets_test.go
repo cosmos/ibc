@@ -47,7 +47,6 @@ func testListPackets(t *testing.T, s Store) {
 		},
 	}
 
-	// UpsertPacket only accepts NOT_SELECTED or PENDING, so seed then transition.
 	for _, packet := range seed {
 		insert := packet
 		insert.Status = RelayStatusPending
@@ -77,10 +76,7 @@ func testListPackets(t *testing.T, s Store) {
 		return hashes
 	}
 
-	str := func(v string) *string { return &v }
-
 	t.Run("listPackets", func(t *testing.T) {
-		// Every case narrows the same fixture.
 		t.Run("filters", func(t *testing.T) {
 			sequence := uint64(3)
 
@@ -91,47 +87,47 @@ func testListPackets(t *testing.T, s Store) {
 			}{
 				{
 					"source chain",
-					PacketFilter{Statuses: all, SourceChainID: str(chainOne)},
+					PacketFilter{Statuses: all, SourceChainID: chainOne},
 					[]string{"0xlist1", "0xlist2"},
 				},
 				{
 					"source client",
-					PacketFilter{Statuses: all, SourceClientID: str("src-b")},
+					PacketFilter{Statuses: all, SourceClientID: "src-b"},
 					[]string{"0xlist3"},
 				},
 				{
 					"destination client",
-					PacketFilter{Statuses: all, DestinationClientID: str("dst-a")},
+					PacketFilter{Statuses: all, DestinationClientID: "dst-a"},
 					[]string{"0xlist1", "0xlist2"},
 				},
 				{
 					"source tx hash",
-					PacketFilter{Statuses: all, SourceTxHash: str("0xlist2")},
+					PacketFilter{Statuses: all, SourceTxHash: "0xlist2"},
 					[]string{"0xlist2"},
 				},
 				{
 					// Scoped by chain: testRepoReadWrite reuses low sequences.
 					"sequence",
-					PacketFilter{Statuses: all, SourceChainID: str(chainTwo), SequenceNumber: &sequence},
+					PacketFilter{Statuses: all, SourceChainID: chainTwo, SequenceNumber: sequence},
 					[]string{"0xlist3"},
 				},
 				{
 					"status subset",
 					PacketFilter{
 						Statuses:      []RelayStatus{RelayStatusCompleteWithAck},
-						SourceChainID: str(chainOne),
+						SourceChainID: chainOne,
 					},
 					[]string{"0xlist2"},
 				},
 				{
 					// chainOne holds no src-b packet.
 					"filters combine as and",
-					PacketFilter{Statuses: all, SourceChainID: str(chainOne), SourceClientID: str("src-b")},
+					PacketFilter{Statuses: all, SourceChainID: chainOne, SourceClientID: "src-b"},
 					nil,
 				},
 				{
 					"unknown value is empty, not an error",
-					PacketFilter{Statuses: all, SourceTxHash: str("0xmissing")},
+					PacketFilter{Statuses: all, SourceTxHash: "0xmissing"},
 					nil,
 				},
 			} {
@@ -144,7 +140,7 @@ func testListPackets(t *testing.T, s Store) {
 		t.Run("limitIsAppliedAsGiven", func(t *testing.T) {
 			// The store pages exactly as asked; defaults and has-more probing
 			// belong to the service.
-			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
+			filter := PacketFilter{Statuses: all, SourceChainID: chainOne}
 
 			page, err := s.ListPackets(ctx, filter, Page{Limit: 1})
 			require.NoError(t, err)
@@ -156,7 +152,7 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("pagingCoversEveryRowExactlyOnce", func(t *testing.T) {
-			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
+			filter := PacketFilter{Statuses: all, SourceChainID: chainOne}
 
 			first, err := s.ListPackets(ctx, filter, Page{Limit: 1})
 			require.NoError(t, err)
@@ -171,7 +167,7 @@ func testListPackets(t *testing.T, s Store) {
 		})
 
 		t.Run("zeroCursorStartsAtTheNewestPacket", func(t *testing.T) {
-			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
+			filter := PacketFilter{Statuses: all, SourceChainID: chainOne}
 
 			unbounded, err := s.ListPackets(ctx, filter, Page{Limit: 100})
 			require.NoError(t, err)
@@ -187,7 +183,7 @@ func testListPackets(t *testing.T, s Store) {
 		// mid-walk must not push a row from page one onto page two, where an
 		// offset pager would return it twice.
 		t.Run("insertsDuringPagingDoNotShiftPages", func(t *testing.T) {
-			filter := PacketFilter{Statuses: all, SourceChainID: str(chainOne)}
+			filter := PacketFilter{Statuses: all, SourceChainID: chainOne}
 
 			first, err := s.ListPackets(ctx, filter, Page{Limit: 1})
 			require.NoError(t, err)

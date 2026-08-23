@@ -289,12 +289,12 @@ func errNormalize(err error) error {
 // PacketFilter narrows a ListPackets query.
 type PacketFilter struct {
 	Statuses            []RelayStatus
-	SourceChainID       *string
-	DestinationChainID  *string
-	SourceClientID      *string
-	DestinationClientID *string
-	SourceTxHash        *string
-	SequenceNumber      *uint64
+	SourceChainID       string
+	DestinationChainID  string
+	SourceClientID      string
+	DestinationClientID string
+	SourceTxHash        string
+	SequenceNumber      uint64
 }
 
 // Page bounds a ListPackets result. Before is an exclusive upper bound on
@@ -304,8 +304,6 @@ type Page struct {
 	Before int64
 }
 
-// validate rejects pages the engines answer differently: sqlite reads a
-// negative limit as unbounded, postgres errors and narrows to int32.
 func (p Page) validate() error {
 	switch {
 	case p.Limit <= 0:
@@ -337,12 +335,6 @@ func (f PacketFilter) statusList() *string {
 	return &list
 }
 
-func (f PacketFilter) sequenceFilter() *int64 {
-	if f.SequenceNumber == nil {
-		return nil
-	}
-
-	sequence := int64(*f.SequenceNumber) //nolint:gosec // IBC sequences fit in int64
-
-	return &sequence
+func (f PacketFilter) sequenceFilter() int64 {
+	return int64(f.SequenceNumber) //nolint:gosec // IBC sequences fit in int64
 }

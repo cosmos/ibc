@@ -356,7 +356,6 @@ func (s *Service) Packets(
 		return PacketPage{}, err
 	}
 
-	// Every listing is bounded, whether or not the caller asked for a limit.
 	limit := query.Limit
 	if limit <= 0 {
 		limit = DefaultPacketPageLimit
@@ -412,11 +411,11 @@ func decodeCursor(cursor string) (int64, error) {
 func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
 	out := store.PacketFilter{
 		Statuses:            dbStatusesForState(filter.State),
-		SourceChainID:       constrained(filter.SourceChainID),
-		DestinationChainID:  constrained(filter.DestinationChainID),
-		SourceClientID:      constrained(filter.SourceClientID),
-		DestinationClientID: constrained(filter.DestinationClientID),
-		SequenceNumber:      constrained(filter.SequenceNumber),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SequenceNumber:      filter.SequenceNumber,
 	}
 
 	for _, chainID := range []string{filter.SourceChainID, filter.DestinationChainID} {
@@ -435,24 +434,12 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 			return store.PacketFilter{}, err
 		}
 
-		out.SourceTxHash = &normalized
+		out.SourceTxHash = normalized
 	}
 
 	return out, nil
 }
 
-// constrained lowers a filter value: the store reads nil as no constraint.
-func constrained[T comparable](value T) *T {
-	var zero T
-	if value == zero {
-		return nil
-	}
-
-	return &value
-}
-
-// dbStatusesForState expands an API state into the relay statuses it covers; a
-// nil state means every status
 // dbStatusesForState expands a state into the statuses it covers; the zero
 // value covers all of them.
 func dbStatusesForState(state PacketState) []store.RelayStatus {

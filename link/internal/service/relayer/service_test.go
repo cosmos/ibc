@@ -474,7 +474,7 @@ func TestPackets(t *testing.T) {
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClients(t), nil)
 
-		var seen *string
+		var seen string
 
 		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
 			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
@@ -487,8 +487,7 @@ func TestPackets(t *testing.T) {
 		}, PacketQuery{})
 
 		require.NoError(t, err)
-		require.NotNil(t, seen)
-		require.Equal(t, txHashLower, *seen)
+		require.Equal(t, txHashLower, seen)
 	})
 
 	t.Run("rejectsMalformedTxHash", func(t *testing.T) {
