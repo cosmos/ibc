@@ -160,14 +160,13 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerPackets(cmd *cobra.Command, _ []string) error {
-	// An unset flag leaves the zero value: no constraint on that field.
 	filter := &relayerv2.PacketFilter{
-		SourceChainId:       flagRelayerSourceChainID,
-		DestinationChainId:  flagRelayerPacketsDestChainID,
-		SourceClientId:      flagRelayerPacketsSrcClientID,
-		DestinationClientId: flagRelayerPacketsDestClientID,
-		SourceTxHash:        flagRelayerTxHash,
-		SequenceNumber:      flagRelayerPacketsSequence,
+		SourceChainId:       optional(flagRelayerSourceChainID),
+		DestinationChainId:  optional(flagRelayerPacketsDestChainID),
+		SourceClientId:      optional(flagRelayerPacketsSrcClientID),
+		DestinationClientId: optional(flagRelayerPacketsDestClientID),
+		SourceTxHash:        optional(flagRelayerTxHash),
+		SequenceNumber:      optional(flagRelayerPacketsSequence),
 	}
 
 	if flagRelayerPacketsState != "" {
@@ -249,4 +248,13 @@ func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
 	return relayerv2.NewRelayerApiServiceClient(
 		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
 	), nil
+}
+
+func optional[T comparable](value T) *T {
+	var zero T
+	if value == zero {
+		return nil
+	}
+
+	return &value
 }
