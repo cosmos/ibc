@@ -1003,7 +1003,7 @@ func file_relayer_proto_init() {
 		(*RelayRequest_AllPackets)(nil),
 		(*RelayRequest_SelectedPackets)(nil),
 	}
-	file_relayer_proto_msgTypes[6].OneofWrappers = []any{}
+	file_relayer_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
