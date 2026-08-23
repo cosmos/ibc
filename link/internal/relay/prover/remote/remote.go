@@ -17,6 +17,8 @@ import (
 	v2 "github.com/cosmos/ibc/link/internal/types/v2"
 )
 
+const requestTimeout = time.Minute
+
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.
 type Prover struct {
@@ -43,6 +45,9 @@ func (p *Prover) target() *proverv2.Client {
 }
 
 func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
 	res, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
 		Client: p.target(),
 	}))
@@ -57,6 +62,9 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 }
 
 func (p *Prover) StateProof(ctx context.Context, height uint64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
 	res, err := p.client.StateProof(ctx, connect.NewRequest(&proverv2.StateProofRequest{
 		Client: p.target(),
 		Height: height,
@@ -78,6 +86,9 @@ func (p *Prover) PacketProofs(
 	if err != nil {
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 
 	res, err := p.client.PacketProofs(ctx, connect.NewRequest(&proverv2.PacketProofsRequest{
 		Client:  p.target(),
