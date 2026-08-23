@@ -106,7 +106,7 @@ func TestRelayerHandlerPacketStateFilter(t *testing.T) {
 			handler := NewRelayerHandler(&relayerServiceStub{})
 
 			_, err := handler.Packets(context.Background(), connect.NewRequest(&proto.PacketsRequest{
-				Filter: &proto.PacketFilter{State: tt.state},
+				Filter: &proto.PacketFilter{State: &tt.state},
 			}))
 
 			if !tt.wantErr {

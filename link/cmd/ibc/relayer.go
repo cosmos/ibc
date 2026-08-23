@@ -178,7 +178,7 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 			)
 		}
 
-		filter.State = state
+		filter.State = &state
 	}
 
 	req := &relayerv2.PacketsRequest{
