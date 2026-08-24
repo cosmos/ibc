@@ -180,9 +180,9 @@ def _():
 @case("proto parse: an empty message closed on its own line does not swallow the next one")
 def _():
     b = refgen.gen_api()
-    # StatusRequest follows `message RelayResponse {}` in relayer.proto
-    assert "`tx_hash`" in b["api:msg:StatusRequest"]
-    assert "api:msg:RelayResponse" not in b, "empty message should produce no table"
+    # SelectedPackets follows `message AllPackets {}` in relayer.proto
+    assert "`packets`" in b["api:msg:SelectedPackets"]
+    assert "api:msg:AllPackets" not in b, "empty message should produce no table"
 
 
 @case("proto parse: enum drops the UNSPECIFIED zero value")
@@ -253,7 +253,7 @@ def _():
 @case("api: every RPC has its own region, so a new one cannot arrive unnoticed")
 def _():
     b = refgen.gen_api()
-    for rpc in ("Relay", "Status", "StateAttestation", "PacketAttestation",
+    for rpc in ("Relay", "Packets", "StateAttestation", "PacketAttestation",
                 "LatestHeight", "Info"):
         assert f"api:rpc:{rpc}" in b, rpc
     assert not [k for k in b if k.endswith(":rpcs")], "the summary tables are gone"

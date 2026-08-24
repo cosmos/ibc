@@ -426,9 +426,18 @@ FIELD_DOCS = {
     ("SelectedPackets", "packets"): ("The packets to relay. At least one.", "d196665f"),
     ("PacketSelector", "source_client_id"): ("The client the packet was sent on.", "947d8614"),
     ("PacketSelector", "sequence_number"): ("The packet's number on that client.", "71c4fc7e"),
-    ("StatusRequest", "tx_hash"): ("The transaction whose packets to report on.", "e86e1cfa"),
-    ("StatusRequest", "source_chain_id"): ("The chain that transaction was sent on.", "47d6b1f4"),
-    ("StatusResponse", "packet_statuses"): ("One entry per packet this relayer recorded for the transaction.", "d1ef2018"),
+    ("ObservedPacket", "source_client_id"): ("The client the packet was sent on.", "947d8614"),
+    ("ObservedPacket", "sequence_number"): ("The packet's number on that client.", "71c4fc7e"),
+    ("ObservedPacket", "selection"): ("Whether this relayer took the packet. See the values below.", "8fb64d4f"),
+    ("PacketsRequest", "filter"): ("Narrows the results. Every field is optional.", "a4b73c55"),
+    ("PacketFilter", "source_chain_id"): ("Only packets sent from this chain.", "c649a782"),
+    ("PacketFilter", "destination_chain_id"): ("Only packets bound for this chain.", "8fed4c25"),
+    ("PacketFilter", "source_client_id"): ("Only packets sent on this client.", "e2f36fe9"),
+    ("PacketFilter", "destination_client_id"): ("Only packets received on this client.", "63078f21"),
+    ("PacketFilter", "state"): ("Only packets in this state.", "feb79267"),
+    ("PacketFilter", "source_tx_hash"): ("Only packets sent by this transaction.", "224d8872"),
+    ("PacketFilter", "sequence_number"): ("Only packets with this sequence number.", "25882ec9"),
+    ("PacketsResponse", "packets"): ("One entry per matching packet on this page, newest first.", "039ea081"),
     ("PacketStatus", "state"): ("Where the packet got to. See the states below.", "5c7b7988"),
     ("TransactionInfo", "tx_hash"): ("The transaction's hash.", "e86e1cfa"),
     ("TransactionInfo", "chain_id"): ("The chain it was submitted to.", "8140443d"),
@@ -582,24 +591,25 @@ FALLBACK_DOCS = {
     ("RelayerEVMConfig", "GasFeeCapMultiplier"): ("Multiplies the fee cap the node suggests.", "b9de0a8d"),
     ("RelayerEVMConfig", "GasTipCapMultiplier"): ("Multiplies the tip cap the node suggests.", "634e0708"),
     ("ConnectionConfig", "Alias"): ("Name for the connection, unique in the file.", "7e352d14"),
+    ("AutoRelayConfig", "Enabled"): ("Whether the relayer carries packets leaving this end without being asked.", "d693129e"),
     ("ClientEnd", "ChainID"): ("The chain this end's client lives on.", "69a3e543"),
     ("ClientEnd", "Signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
     ("ClientEnd", "ClientID"): ("The light client's id on this chain.", "bb596da7"),
     ("ClientEnd", "Type"): ("Light client type.", "85b1564f"),
 }
 
-# autoRelay parses and has no consumer at this pin, so no reader-facing row
-# describes it. See the TODO(autorelay) comment on the page.
-#
-# FLAG-17: this is the one omission nothing here detects. Every other gap
-# raises; a deliberate skip cannot. When auto-relay lands, delete the entry,
-# regenerate, and write the prose those two keys need.
-SKIP_FIELDS = {("ClientEnd", "AutoRelay")}
+# Nothing is skipped. autoRelay was excluded while it parsed and had no
+# consumer; it is consumed at ccc3449 (watcher/set.go, and deploy
+# render-config writes it), so FLAG-17 is closed and the block is documented.
+SKIP_FIELDS = set()
 
 # Pointer fields whose default is not a named constant anywhere: unset means
 # unset, and the prose says what that implies. Listed so that a new pointer
 # field cannot quietly read as "optional" when a default exists for it.
 NO_NAMED_DEFAULT = {
+    # nil and false are the same input: a connection end without it is not
+    # auto-relayed (relayer.go:L127)
+    ("AutoRelayConfig", "Enabled"),
     ("RelayerEVMConfig", "GasFeeCapMultiplier"),
     ("RelayerEVMConfig", "GasTipCapMultiplier"),
 }
@@ -1103,6 +1113,9 @@ def gen_config():
 
 CLI_DIR = "link"
 CLI_SRC = "link/cmd/ibc"
+
+# The root command's own flags are declared here rather than in main.go.
+GLOBAL_FLAGS_FILE = "link/internal/config/flags.go"
 CLI_BIN = "link/bin/ibc"
 
 # Cobra generates these and nobody reads a page about them. Excluded here so
@@ -1245,7 +1258,14 @@ def parse_cli_source():
     root = re.search(r"rootCmd\.AddCommand\(", wiring)
     if not root:
         raise SourceError("main.go no longer assembles the tree with rootCmd.AddCommand")
+    # the root's own flags are declared in the config package, so citing
+    # main.go's AddCommand for them points a reader at the wrong file
     lines[""] = wiring[:root.start()].count("\n") + 1
+    flags_src = _read(GLOBAL_FLAGS_FILE)
+    decl = re.search(r"func DeclarePersistentFlags\(", flags_src)
+    if not decl:
+        raise SourceError(f"{GLOBAL_FLAGS_FILE} no longer declares the persistent flags")
+    lines["__global__"] = flags_src[:decl.start()].count("\n") + 1
     for var, path in ((v, path_of(v)) for v in use):
         m = re.search(r"\b" + var + r"\.(?:Persistent)?Flags\(\)", wiring)
         if m:
@@ -1363,7 +1383,7 @@ def gen_cli():
     blocks["cli:global-flags"] = (
         table(FLAG_COLUMNS,
               _flag_rows(_parse_flags(tree[""]["help"], "Flags:"), "", source))
-        + "\n\n" + tree_citation)
+        + "\n\n" + cite(GLOBAL_FLAGS_FILE, source["lines"]["__global__"]))
 
     groups = {}
     for path in leaves:

@@ -5,10 +5,10 @@ description: "The two gRPC services a running relayer and attestor serve, and ho
 
 The IBC CLI exposes two APIs: a relayer API and an attestation API.
 
-Packets are moved by calling the relayer's API, which has two main parts:
+The relayer's API has two main parts:
 
 - `Relay` takes the transaction that sent the packets.
-- `Status` reports how far each of them got.
+- `Packets` reports how far each of them got.
 
 The attestor's API serves the attestations a light client verifies. A relayer is its usual caller, gathering proofs for a packet it is delivering. An operator calls it directly to check which attestor is answering and how far behind the head it will sign.
 
@@ -28,7 +28,7 @@ ibc.v2.relayer.RelayerApiService
 
 ## Relayer service
 
-`ibc.v2.relayer.RelayerApiService`. `ibc relayer relay` and `ibc relayer status` call these two.
+`ibc.v2.relayer.RelayerApiService`. `ibc relayer relay` and `ibc relayer packets` call these two.
 
 ### `Relay`
 
@@ -50,7 +50,7 @@ Tracks the packets emitted by a source transaction and submits the transactions 
 | `source_chain_id` | `string` | The chain that transaction was sent on. |
 | `selection` | oneof: `all_packets` or `selected_packets` | Required and controls only this relayer instance; IBC relaying remains permissionless. |
 
-<!-- [relayer.proto:L19](proto/link/relayer.proto#L19) -->
+<!-- [relayer.proto:L18](proto/link/relayer.proto#L18) -->
 
 <!-- GEN:api:msg:RelayRequest END -->
 
@@ -66,7 +66,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 |---|---|---|
 | `packets` | `PacketSelector[]` | The packets to relay. At least one. |
 
-<!-- [relayer.proto:L38](proto/link/relayer.proto#L38) -->
+<!-- [relayer.proto:L37](proto/link/relayer.proto#L37) -->
 
 <!-- GEN:api:msg:SelectedPackets END -->
 
@@ -79,53 +79,120 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 | `source_client_id` | `string` | The client the packet was sent on. |
 | `sequence_number` | `uint64` | The packet's number on that client. |
 
-<!-- [relayer.proto:L42](proto/link/relayer.proto#L42) -->
+<!-- [relayer.proto:L41](proto/link/relayer.proto#L41) -->
 
 <!-- GEN:api:msg:PacketSelector END -->
 
 A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [relayer.proto:L35-L37](proto/link/relayer.proto#L35-L37) -->
 
-`Relay` returns nothing. A successful call means the relayer recorded the request, and `Status` reports what happens after that.
+`Relay` answers with every send packet in the transaction, including the ones it will not carry.
+
+#### `RelayResponse`
+
+<!-- GEN:api:msg:RelayResponse START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `packets` | `ObservedPacket[]` | Every send packet in the transaction, including those this relayer will not deliver. |
+
+<!-- [relayer.proto:L46](proto/link/relayer.proto#L46) -->
+
+<!-- GEN:api:msg:RelayResponse END -->
+
+#### `ObservedPacket`
+
+<!-- GEN:api:msg:ObservedPacket START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `source_client_id` | `string` | The client the packet was sent on. |
+| `sequence_number` | `uint64` | The packet's number on that client. |
+| `selection` | `PacketSelection` | Whether this relayer took the packet. See the values below. |
+
+<!-- [relayer.proto:L52](proto/link/relayer.proto#L52) -->
+
+<!-- GEN:api:msg:ObservedPacket END -->
+
+#### `PacketSelection`
+
+<!-- GEN:api:enum:PacketSelection START -->
+
+| Value | Meaning |
+|---|---|
+| `PACKET_SELECTION_SELECTED` | Recorded for delivery by this relayer. Delivery happens afterwards and can still fail; query the packet's state to follow it. |
+| `PACKET_SELECTION_NOT_SELECTED` | Configured and routed, but this request did not select it. |
+| `PACKET_SELECTION_UNCONFIGURED` | No configured client or route, so this relayer skips it. |
+
+<!-- [relayer.proto:L58](proto/link/relayer.proto#L58) -->
+
+<!-- GEN:api:enum:PacketSelection END -->
+
+A successful call means the relayer recorded the request. `Packets` reports what happens after that.
 
 ```bash
 grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPackets":{}}' \
   localhost:3000 ibc.v2.relayer.RelayerApiService/Relay
 ```
 
-### `Status`
+### `Packets`
 
-<!-- GEN:api:rpc:Status START -->
+<!-- GEN:api:rpc:Packets START -->
 
-Returns per-packet relay status for a transaction previously submitted via Relay.
+Lists the packets this relayer is aware of, most recent first.
 
-<!-- [relayer.proto:L16](proto/link/relayer.proto#L16) -->
+<!-- [relayer.proto:L15](proto/link/relayer.proto#L15) -->
 
-<!-- GEN:api:rpc:Status END -->
+<!-- GEN:api:rpc:Packets END -->
 
-#### `StatusRequest`
+#### `PacketsRequest`
 
-<!-- GEN:api:msg:StatusRequest START -->
-
-| Field | Type | Description |
-|---|---|---|
-| `tx_hash` | `string` | The transaction whose packets to report on. |
-| `source_chain_id` | `string` | The chain that transaction was sent on. |
-
-<!-- [relayer.proto:L49](proto/link/relayer.proto#L49) -->
-
-<!-- GEN:api:msg:StatusRequest END -->
-
-#### `StatusResponse`
-
-<!-- GEN:api:msg:StatusResponse START -->
+<!-- GEN:api:msg:PacketsRequest START -->
 
 | Field | Type | Description |
 |---|---|---|
-| `packet_statuses` | `PacketStatus[]` | One entry per packet this relayer recorded for the transaction. |
+| `filter` | `PacketFilter` | Narrows the results. Every field is optional. |
+| `limit` | `uint32` | Zero applies the default of 100; values above 1000 are capped. |
+| `cursor` | `string` | Opaque next_cursor from a previous response. Empty starts at the newest packet. |
 
-<!-- [relayer.proto:L54](proto/link/relayer.proto#L54) -->
+<!-- [relayer.proto:L69](proto/link/relayer.proto#L69) -->
 
-<!-- GEN:api:msg:StatusResponse END -->
+<!-- GEN:api:msg:PacketsRequest END -->
+
+#### `PacketFilter`
+
+Every field is optional, and a request with none returns everything the relayer has recorded.
+
+<!-- GEN:api:msg:PacketFilter START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `source_chain_id` | `string` (optional) | Only packets sent from this chain. |
+| `destination_chain_id` | `string` (optional) | Only packets bound for this chain. |
+| `source_client_id` | `string` (optional) | Only packets sent on this client. |
+| `destination_client_id` | `string` (optional) | Only packets received on this client. |
+| `state` | `PacketState` (optional) | Only packets in this state. |
+| `source_tx_hash` | `string` (optional) | Only packets sent by this transaction. |
+| `sequence_number` | `uint64` (optional) | Only packets with this sequence number. |
+
+<!-- [relayer.proto:L78](proto/link/relayer.proto#L78) -->
+
+<!-- GEN:api:msg:PacketFilter END -->
+
+#### `PacketsResponse`
+
+<!-- GEN:api:msg:PacketsResponse START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `packets` | `PacketStatus[]` | One entry per matching packet on this page, newest first. |
+| `has_more` | `bool` | More `packets` match beyond this page. |
+| `next_cursor` | `string` | Cursor for the next page, set only when `has_more`. |
+
+<!-- [relayer.proto:L88](proto/link/relayer.proto#L88) -->
+
+<!-- GEN:api:msg:PacketsResponse END -->
+
+Results are paged. Ask again with `next_cursor` while `has_more` is set.
 
 #### `PacketStatus`
 
@@ -141,7 +208,7 @@ Returns per-packet relay status for a transaction previously submitted via Relay
 | `ack_tx` | `TransactionInfo` | The source-chain acknowledgement transaction. Present for succeeded and rejected packets, and may be present while pending. |
 | `timeout_tx` | `TransactionInfo` | The source-chain timeout transaction. Present for timed-out packets, and may be present while pending. |
 
-<!-- [relayer.proto:L81](proto/link/relayer.proto#L81) -->
+<!-- [relayer.proto:L119](proto/link/relayer.proto#L119) -->
 
 <!-- GEN:api:msg:PacketStatus END -->
 
@@ -154,7 +221,7 @@ Returns per-packet relay status for a transaction previously submitted via Relay
 | `tx_hash` | `string` | The transaction's hash. |
 | `chain_id` | `string` | The chain it was submitted to. |
 
-<!-- [relayer.proto:L76](proto/link/relayer.proto#L76) -->
+<!-- [relayer.proto:L114](proto/link/relayer.proto#L114) -->
 
 <!-- GEN:api:msg:TransactionInfo END -->
 
@@ -173,42 +240,16 @@ Returns per-packet relay status for a transaction previously submitted via Relay
 | `PACKET_STATE_REJECTED` | The packet completed with an error acknowledgement on the source chain. |
 | `PACKET_STATE_RELAY_FAILED` | A permanent error prevents the relayer from processing the packet. |
 
-<!-- [relayer.proto:L58](proto/link/relayer.proto#L58) -->
+<!-- [relayer.proto:L96](proto/link/relayer.proto#L96) -->
 
 <!-- GEN:api:enum:PacketState END -->
 
 `REJECTED` means the packet arrived and the application refused it, which is a completed relay and a failed application call. `RELAY_FAILED` means a permanent error stopped the relayer, wherever the packet had got to.
 
 ```bash
-grpcurl -plaintext -d '{"txHash":"0xa3222ab810c72019802aeb1e0c53d1b7cd914318e3f77a24b9c69a2c9810b45f","sourceChainId":"41001"}' \
-  localhost:3000 ibc.v2.relayer.RelayerApiService/Status
+grpcurl -plaintext -d '{"filter":{"sourceChainId":"41001"},"limit":20}' \
+  localhost:3000 ibc.v2.relayer.RelayerApiService/Packets
 ```
-
-```json
-{
-  "packetStatuses": [
-    {
-      "state": "PACKET_STATE_SUCCEEDED",
-      "sequenceNumber": "3",
-      "sourceClientId": "link-41001-41002",
-      "sendTx": {
-        "txHash": "0xa3222ab810c72019802aeb1e0c53d1b7cd914318e3f77a24b9c69a2c9810b45f",
-        "chainId": "41001"
-      },
-      "recvTx": {
-        "txHash": "0x665fef2903364258e99e204eec917e47d3bb478a88772ba1509c4aeded80973c",
-        "chainId": "41002"
-      },
-      "ackTx": {
-        "txHash": "0x2bc07edaea5302b66ecec06163be3bb11924af9402cd0a8a55f5ca9426080557",
-        "chainId": "41001"
-      }
-    }
-  ]
-}
-```
-
-A transaction with no entry yet is absent from the response.
 
 ## Attestation service
 
@@ -231,7 +272,7 @@ Both attestation calls return this shape.
 
 <!-- GEN:api:msg:Attestation END -->
 
-`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [quorum.go:L73-L77](link/internal/relay/proofgen/attestation/quorum.go#L73-L77) -->
+`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [resolve.go:L37-L60](link/internal/relay/proofgen/attestation/resolve.go#L37-L60) -->
 
 ### `StateAttestation`
 

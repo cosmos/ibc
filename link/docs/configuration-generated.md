@@ -145,6 +145,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/boot
 | `chainId` | `string` | **required** | The chain's id, as the chain reports it. |
 | `deployer` | `string` | optional | Optional signer alias used by `ibc deploy` for this chain. |
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
+| `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
 
 <!-- [config.go:L115](link/internal/config/config.go#L115) -->
@@ -170,6 +171,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
 | `connections[].clientA.type, connections[].clientB.type` | `attestation` | **required** | Light client type. |
+| `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
 <!-- [relayer.go:L53](link/internal/config/relayer.go#L53) -->
 
@@ -178,6 +180,8 @@ The deployer must be a local signer, because deployment requires direct access t
 Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](link/cmd/ibc/deploy.go#L256-L262) -->
 
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](link/internal/config/relayer.go#L149-L176) -->
+
+With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](link/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L237-L264](link/internal/config/config.go#L237-L264) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](link/internal/config/relayer.go#L118-L135) -->
 
 ### Relay settings
 
