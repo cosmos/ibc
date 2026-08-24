@@ -12,7 +12,7 @@ import (
 // Batch defaults applied when a chain has no overrides.
 const (
 	DefaultBatchSize           = 50
-	DefaultBatchTimeout        = 10 * time.Second
+	DefaultBatchTimeout        = 3 * time.Second
 	DefaultTimeoutBatchTimeout = time.Minute
 )
 
