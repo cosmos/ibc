@@ -6,10 +6,12 @@ package relayer
 import (
 	"cmp"
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,8 +43,7 @@ type ChainClients interface {
 
 // Store queries used by the relayer gRPC handlers.
 type Store interface {
-	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*store.RelayRequest, error)
-	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)
+	ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)
 	Transact(ctx context.Context, call func(store.Repository) error) error
 }
 
@@ -85,6 +86,36 @@ type PacketStatus struct {
 	RecvTx         *TxInfo
 	AckTx          *TxInfo
 	TimeoutTx      *TxInfo
+}
+
+// Bounds on how many packets one listing returns.
+const (
+	DefaultPacketPageLimit = 100
+	MaxPacketPageLimit     = 1000
+)
+
+// PacketQuery bounds a Packets listing.
+type PacketQuery struct {
+	Limit  int64
+	Cursor string
+}
+
+// PacketPage is one page of a Packets listing.
+type PacketPage struct {
+	Packets    []PacketStatus
+	HasMore    bool
+	NextCursor string
+}
+
+// PacketFilter narrows a Packets listing
+type PacketFilter struct {
+	SourceChainID       string
+	DestinationChainID  string
+	SourceClientID      string
+	DestinationClientID string
+	State               PacketState
+	SourceTxHash        string
+	SequenceNumber      uint64
 }
 
 // PacketSelector identifies a packet in a source transaction.
@@ -308,38 +339,136 @@ func sortedPacketSelectors(packets map[PacketSelector]store.UpsertPacket) []Pack
 	})
 }
 
-func (s *Service) Status(ctx context.Context, chainID, txHash string) ([]PacketStatus, error) {
-	txHash, err := s.validateRelayArgs(chainID, txHash)
+// Packets lists packets most recent first and reports whether more match beyond
+// the page
+func (s *Service) Packets(
+	ctx context.Context,
+	filter PacketFilter,
+	query PacketQuery,
+) (PacketPage, error) {
+	storeFilter, err := s.toStoreFilter(filter)
 	if err != nil {
-		return nil, err
+		return PacketPage{}, err
 	}
 
-	switch _, errGet := s.store.GetRelayRequest(ctx, chainID, txHash); {
-	case errors.Is(errGet, store.ErrNotFound):
-		return nil, errors.Wrap(ErrNotFound, "transaction not submitted to relayer")
-	case errGet != nil:
-		return nil, errors.Wrap(errGet, "getting relay request")
-	}
-
-	packets, err := s.store.ListPacketsBySourceTx(ctx, chainID, txHash)
+	before, err := decodeCursor(query.Cursor)
 	if err != nil {
-		return nil, errors.Wrap(err, "listing packets")
+		return PacketPage{}, err
 	}
 
-	statuses := make([]PacketStatus, len(packets))
+	limit := query.Limit
+	if limit <= 0 {
+		limit = DefaultPacketPageLimit
+	}
+
+	limit = min(limit, MaxPacketPageLimit)
+
+	// One row past the page reveals another page
+	packets, err := s.store.ListPackets(ctx, storeFilter, store.Page{
+		Limit:  limit + 1,
+		Before: before,
+	})
+	if err != nil {
+		return PacketPage{}, errors.Wrap(err, "listing packets")
+	}
+
+	page := PacketPage{HasMore: int64(len(packets)) > limit}
+	if page.HasMore {
+		packets = packets[:limit]
+		page.NextCursor = encodeCursor(packets[len(packets)-1].ID)
+	}
+
+	page.Packets = make([]PacketStatus, len(packets))
 	for i, packet := range packets {
-		statuses[i] = PacketStatus{
-			State:          mapPacketState(packet.Status),
-			SequenceNumber: packet.PacketSequenceNumber,
-			SourceClientID: packet.PacketSourceClientID,
-			SendTx:         TxInfo{TxHash: packet.SourceTxHash, ChainID: packet.SourceChainID},
-			RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
-			AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
-			TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
+		page.Packets[i] = toPacketStatus(packet)
+	}
+
+	return page, nil
+}
+
+func encodeCursor(id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(id, 10)))
+}
+
+func decodeCursor(cursor string) (int64, error) {
+	if cursor == "" {
+		return 0, nil
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0, errors.Wrap(ErrInvalidInput, "cursor is malformed")
+	}
+
+	id, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errors.Wrap(ErrInvalidInput, "cursor is malformed")
+	}
+
+	return id, nil
+}
+
+func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error) {
+	out := store.PacketFilter{
+		Statuses:            dbStatusesForState(filter.State),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SequenceNumber:      filter.SequenceNumber,
+	}
+
+	for _, chainID := range []string{filter.SourceChainID, filter.DestinationChainID} {
+		if chainID == "" {
+			continue
+		}
+
+		if _, ok := s.cfg.Chain(chainID); !ok {
+			return store.PacketFilter{}, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 		}
 	}
 
-	return statuses, nil
+	if filter.SourceTxHash != "" {
+		normalized, err := s.normalizeTxHash(filter.SourceChainID, filter.SourceTxHash)
+		if err != nil {
+			return store.PacketFilter{}, err
+		}
+
+		out.SourceTxHash = normalized
+	}
+
+	return out, nil
+}
+
+// dbStatusesForState expands a state into the statuses it covers; the zero
+// value covers all of them.
+func dbStatusesForState(state PacketState) []store.RelayStatus {
+	all := store.AllRelayStatuses()
+	if state == StateUnspecified {
+		return all
+	}
+
+	matching := make([]store.RelayStatus, 0, len(all))
+
+	for _, status := range all {
+		if mapPacketState(status) == state {
+			matching = append(matching, status)
+		}
+	}
+
+	return matching
+}
+
+func toPacketStatus(packet store.Packet) PacketStatus {
+	return PacketStatus{
+		State:          mapPacketState(packet.Status),
+		SequenceNumber: packet.PacketSequenceNumber,
+		SourceClientID: packet.PacketSourceClientID,
+		SendTx:         TxInfo{TxHash: packet.SourceTxHash, ChainID: packet.SourceChainID},
+		RecvTx:         toTxInfo(packet.RecvTxHash, packet.DestinationChainID),
+		AckTx:          toTxInfo(packet.AckTxHash, packet.SourceChainID),
+		TimeoutTx:      toTxInfo(packet.TimeoutTxHash, packet.SourceChainID),
+	}
 }
 
 // validateRelayArgs validates the tx hash for the chain's type and applies
@@ -352,6 +481,14 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 		return "", errors.Wrap(ErrInvalidInput, "txHash is required")
 	}
 
+	return s.normalizeTxHash(chainID, txHash)
+}
+
+func (s *Service) normalizeTxHash(chainID, txHash string) (string, error) {
+	if chainID == "" {
+		return normalizeEVMTxHash(txHash)
+	}
+
 	chain, ok := s.cfg.Chain(chainID)
 	if !ok {
 		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
@@ -359,15 +496,19 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
 
 	switch chain.Type() {
 	case config.ChainTypeEVM:
-		var hash common.Hash
-		if err := hash.UnmarshalText([]byte(txHash)); err != nil {
-			return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
-		}
-
-		return hash.Hex(), nil
+		return normalizeEVMTxHash(txHash)
 	default:
 		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain type for chain %q", chainID)
 	}
+}
+
+func normalizeEVMTxHash(txHash string) (string, error) {
+	var hash common.Hash
+	if err := hash.UnmarshalText([]byte(txHash)); err != nil {
+		return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
+	}
+
+	return hash.Hex(), nil
 }
 
 func mapPacketState(status store.RelayStatus) PacketState {

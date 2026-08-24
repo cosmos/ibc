@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,12 +42,15 @@ func TestParseReadiness(t *testing.T) {
 	require.ErrorContains(t, res.err, "http")
 }
 
-// fakeRelayerAPI serves the relayer wire contract: Status on an unknown
-// transaction reports CodeNotFound; Relay records the submitted arguments.
+// fakeRelayerAPI serves the relayer wire contract: Packets returns matching
+// statuses; Relay records the submitted arguments.
 type fakeRelayerAPI struct {
 	relayerv2.UnimplementedRelayerApiServiceHandler
 	relayed  []*relayerv2.RelayRequest
 	statuses map[string][]*relayerv2.PacketStatus
+	// pageSize serves results a page at a time; zero returns them all at once.
+	pageSize     int
+	pageRequests int
 }
 
 func (f *fakeRelayerAPI) Relay(
@@ -57,15 +61,43 @@ func (f *fakeRelayerAPI) Relay(
 	return connect.NewResponse(&relayerv2.RelayResponse{}), nil
 }
 
-func (f *fakeRelayerAPI) Status(
+func (f *fakeRelayerAPI) Packets(
 	_ context.Context,
-	req *connect.Request[relayerv2.StatusRequest],
-) (*connect.Response[relayerv2.StatusResponse], error) {
-	statuses, ok := f.statuses[req.Msg.SourceChainId+"/"+req.Msg.TxHash]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("transaction not submitted to relayer"))
+	req *connect.Request[relayerv2.PacketsRequest],
+) (*connect.Response[relayerv2.PacketsResponse], error) {
+	filter := req.Msg.GetFilter()
+	// An unknown transaction lists nothing
+	packets := f.statuses[filter.GetSourceChainId()+"/"+filter.GetSourceTxHash()]
+
+	f.pageRequests++
+
+	if f.pageSize <= 0 {
+		return connect.NewResponse(&relayerv2.PacketsResponse{Packets: packets}), nil
 	}
-	return connect.NewResponse(&relayerv2.StatusResponse{PacketStatuses: statuses}), nil
+
+	start := 0
+
+	if cursor := req.Msg.GetCursor(); cursor != "" {
+		parsed, err := strconv.Atoi(cursor)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+
+		start = parsed
+	}
+
+	end := start + f.pageSize
+	if end > len(packets) {
+		end = len(packets)
+	}
+
+	response := &relayerv2.PacketsResponse{Packets: packets[start:end]}
+	if end < len(packets) {
+		response.HasMore = true
+		response.NextCursor = strconv.Itoa(end)
+	}
+
+	return connect.NewResponse(response), nil
 }
 
 func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
@@ -108,9 +140,9 @@ func TestStartRelayerSurfacesStartupLogs(t *testing.T) {
 	require.ErrorContains(t, err, ".signers[0].grpc required for remote signer")
 }
 
-func TestRelayerProbeAcceptsNotFoundStatus(t *testing.T) {
+func TestRelayerProbeAcceptsEmptyPacketListing(t *testing.T) {
 	relayer := testRelayer(t, &fakeRelayerAPI{})
-	require.NoError(t, relayer.probeStatusEndpoint(context.Background()))
+	require.NoError(t, relayer.probePacketsEndpoint(context.Background()))
 }
 
 func TestRelayerTranslatesChainIDs(t *testing.T) {
@@ -125,13 +157,13 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.Len(t, statuses, 1)
 	require.Equal(t, uint64(7), statuses[0].SequenceNumber)
 
-	_, err = relayer.PacketStatuses(ctx, "chain-a", "0xother")
-	require.Error(t, err)
-	require.True(t, IsStatusNotFound(err))
+	// An unindexed transaction lists nothing; it is not an error.
+	unknown, err := relayer.PacketStatuses(ctx, "chain-a", "0xother")
+	require.NoError(t, err)
+	require.Empty(t, unknown)
 
 	_, err = relayer.PacketStatuses(ctx, "chain-c", "0xabc")
 	require.Error(t, err)
-	require.False(t, IsStatusNotFound(err))
 	require.ErrorContains(t, err, "no configured chain id")
 
 	require.NoError(t, relayer.RelayAll(ctx, "chain-b", "0xdef"))
@@ -200,4 +232,32 @@ func TestConfigureRelayerRejectsInvalidWaitPolicy(t *testing.T) {
 		WaitPolicies: map[string]WaitPolicy{"route-a": {}},
 	})
 	require.ErrorContains(t, err, `route "route-a" has invalid wait policy`)
+}
+
+// A transaction can emit more packets than one page holds; stopping at the
+// first page reports the rest as absent, which callers poll on until their
+// budget expires.
+func TestPacketStatusesFollowsEveryPage(t *testing.T) {
+	packets := make([]*relayerv2.PacketStatus, 0, 5)
+	for i := 1; i <= 5; i++ {
+		packets = append(packets, &relayerv2.PacketStatus{SequenceNumber: uint64(i)})
+	}
+
+	api := &fakeRelayerAPI{
+		statuses: map[string][]*relayerv2.PacketStatus{"31337/0xabc": packets},
+		pageSize: 2,
+	}
+	relayer := testRelayer(t, api)
+
+	got, err := relayer.PacketStatuses(context.Background(), "chain-a", "0xabc")
+	require.NoError(t, err)
+	require.Len(t, got, 5, "every page must be collected")
+
+	sequences := make([]uint64, len(got))
+	for i, packet := range got {
+		sequences[i] = packet.GetSequenceNumber()
+	}
+
+	require.Equal(t, []uint64{1, 2, 3, 4, 5}, sequences)
+	require.Equal(t, 3, api.pageRequests, "5 packets at 2 per page needs 3 requests")
 }

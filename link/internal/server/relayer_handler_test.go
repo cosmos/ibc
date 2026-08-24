@@ -23,8 +23,12 @@ func (s *relayerServiceStub) Relay(_ context.Context, request relayerservice.Rel
 	return s.relay(request)
 }
 
-func (s *relayerServiceStub) Status(context.Context, string, string) ([]relayerservice.PacketStatus, error) {
-	return s.status, nil
+func (s *relayerServiceStub) Packets(
+	_ context.Context,
+	_ relayerservice.PacketFilter,
+	_ relayerservice.PacketQuery,
+) (relayerservice.PacketPage, error) {
+	return relayerservice.PacketPage{Packets: s.status}, nil
 }
 
 func TestRelayerHandlerRelaySelection(t *testing.T) {
@@ -77,13 +81,41 @@ func TestRelayerHandlerRelaySelection(t *testing.T) {
 	})
 }
 
-func TestRelayerHandlerStatusMapsNotSelected(t *testing.T) {
+func TestRelayerHandlerPacketsMapsNotSelected(t *testing.T) {
 	handler := NewRelayerHandler(&relayerServiceStub{
 		status: []relayerservice.PacketStatus{{State: relayerservice.StateNotSelected}},
 	})
 
-	response, err := handler.Status(context.Background(), connect.NewRequest(&proto.StatusRequest{}))
+	response, err := handler.Packets(context.Background(), connect.NewRequest(&proto.PacketsRequest{}))
 	require.NoError(t, err)
-	require.Len(t, response.Msg.PacketStatuses, 1)
-	assert.Equal(t, proto.PacketState_PACKET_STATE_NOT_SELECTED, response.Msg.PacketStatuses[0].State)
+	require.Len(t, response.Msg.GetPackets(), 1)
+	assert.Equal(t, proto.PacketState_PACKET_STATE_NOT_SELECTED, response.Msg.GetPackets()[0].GetState())
+}
+
+func TestRelayerHandlerPacketStateFilter(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		state   proto.PacketState
+		wantErr bool
+	}{
+		{"unspecified matches everything", proto.PacketState_PACKET_STATE_UNSPECIFIED, false},
+		{"known state", proto.PacketState_PACKET_STATE_SUCCEEDED, false},
+		{"unknown state is rejected", proto.PacketState(9999), true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewRelayerHandler(&relayerServiceStub{})
+
+			_, err := handler.Packets(context.Background(), connect.NewRequest(&proto.PacketsRequest{
+				Filter: &proto.PacketFilter{State: &tt.state},
+			}))
+
+			if !tt.wantErr {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			require.Equal(t, connect.CodeInvalidArgument, connect.CodeOf(err))
+		})
+	}
 }

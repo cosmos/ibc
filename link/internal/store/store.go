@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"math"
+	"strings"
 	"time"
 
 	pgx "github.com/jackc/pgx/v5"
@@ -41,6 +43,8 @@ type Repository interface {
 	UpsertPacket(ctx context.Context, input UpsertPacket) error
 
 	ListPacketsBySourceTx(ctx context.Context, chainID string, txHash string) ([]Packet, error)
+
+	ListPackets(ctx context.Context, filter PacketFilter, page Page) ([]Packet, error)
 
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
 	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
@@ -159,6 +163,31 @@ const (
 	RelayStatusFailed                     RelayStatus = "FAILED"
 )
 
+// AllRelayStatuses enumerates possible packet states
+func AllRelayStatuses() []RelayStatus {
+	return []RelayStatus{
+		RelayStatusNotSelected,
+		RelayStatusPending,
+		RelayStatusAwaitingSendFinality,
+		RelayStatusCheckRecvPacketDelivery,
+		RelayStatusGetRecvPacket,
+		RelayStatusDeliverRecvPacket,
+		RelayStatusWaitForWriteAck,
+		RelayStatusAwaitingWriteAckFinality,
+		RelayStatusCheckAckPacketDelivery,
+		RelayStatusGetAckPacket,
+		RelayStatusDeliverAckPacket,
+		RelayStatusAwaitingTimeoutFinality,
+		RelayStatusCheckTimeoutPacketDelivery,
+		RelayStatusGetTimeoutPacket,
+		RelayStatusDeliverTimeoutPacket,
+		RelayStatusCompleteWithAck,
+		RelayStatusCompleteWithWriteAckError,
+		RelayStatusCompleteWithTimeout,
+		RelayStatusFailed,
+	}
+}
+
 // WriteAckStatus the execution result carried by a write ack.
 type WriteAckStatus string
 
@@ -255,4 +284,57 @@ func errNormalize(err error) error {
 	default:
 		return err
 	}
+}
+
+// PacketFilter narrows a ListPackets query.
+type PacketFilter struct {
+	Statuses            []RelayStatus
+	SourceChainID       string
+	DestinationChainID  string
+	SourceClientID      string
+	DestinationClientID string
+	SourceTxHash        string
+	SequenceNumber      uint64
+}
+
+// Page bounds a ListPackets result. Before is an exclusive upper bound on
+// packet id
+type Page struct {
+	Limit  int64
+	Before int64
+}
+
+func (p Page) validate() error {
+	switch {
+	case p.Limit <= 0:
+		return errors.New("page limit must be positive")
+	case p.Limit > math.MaxInt32:
+		return errors.New("page limit must not exceed max int32")
+	case p.Before < 0:
+		return errors.New("page cursor must not be negative")
+	}
+
+	return nil
+}
+
+func (p Page) before() int64 {
+	if p.Before <= 0 {
+		return math.MaxInt64
+	}
+	return p.Before
+}
+
+func (f PacketFilter) statusList() *string {
+	statuses := make([]string, len(f.Statuses))
+	for i, status := range f.Statuses {
+		statuses[i] = string(status)
+	}
+
+	list := strings.Join(statuses, ",")
+
+	return &list
+}
+
+func (f PacketFilter) sequenceFilter() int64 {
+	return int64(f.SequenceNumber) //nolint:gosec // IBC sequences fit in int64
 }

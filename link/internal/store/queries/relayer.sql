@@ -139,3 +139,16 @@ WHERE status NOT IN (
     'FAILED'
 )
 ORDER BY id;
+
+-- name: ListPackets :many
+SELECT * FROM packets
+WHERE ',' || sqlc.arg(statuses) || ',' LIKE '%,' || status || ',%'
+AND (source_chain_id = sqlc.arg(source_chain_id) OR sqlc.arg(source_chain_id) = '')
+AND (destination_chain_id = sqlc.arg(destination_chain_id) OR sqlc.arg(destination_chain_id) = '')
+AND (packet_source_client_id = sqlc.arg(source_client_id) OR sqlc.arg(source_client_id) = '')
+AND (packet_destination_client_id = sqlc.arg(destination_client_id) OR sqlc.arg(destination_client_id) = '')
+AND (source_tx_hash = sqlc.arg(source_tx_hash) OR sqlc.arg(source_tx_hash) = '')
+AND (packet_sequence_number = sqlc.arg(sequence_number) OR sqlc.arg(sequence_number) = 0)
+AND id < sqlc.arg(before)
+ORDER BY id DESC
+LIMIT sqlc.arg(row_limit);

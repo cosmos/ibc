@@ -11,9 +11,8 @@ service RelayerApiService {
   // transactions required to complete them.
   rpc Relay(RelayRequest) returns (RelayResponse) {}
 
-  // Status returns per-packet relay status for a transaction previously
-  // submitted via Relay.
-  rpc Status(StatusRequest) returns (StatusResponse) {}
+  // Packets lists the packets this relayer is aware of, most recent first.
+  rpc Packets(PacketsRequest) returns (PacketsResponse) {}
 }
 
 message RelayRequest {
@@ -46,13 +45,31 @@ message PacketSelector {
 
 message RelayResponse {}
 
-message StatusRequest {
-  string tx_hash = 1;
-  string source_chain_id = 2;
+message PacketsRequest {
+  PacketFilter filter = 1;
+  // Zero applies the default of 100; values above 1000 are capped.
+  uint32 limit = 2;
+  // Opaque next_cursor from a previous response. Empty starts at the newest
+  // packet.
+  string cursor = 3;
 }
 
-message StatusResponse {
-  repeated PacketStatus packet_statuses = 1;
+message PacketFilter {
+  optional string source_chain_id = 1;
+  optional string destination_chain_id = 2;
+  optional string source_client_id = 3;
+  optional string destination_client_id = 4;
+  optional PacketState state = 5;
+  optional string source_tx_hash = 6;
+  optional uint64 sequence_number = 7;
+}
+
+message PacketsResponse {
+  repeated PacketStatus packets = 1;
+  // More packets match beyond this page.
+  bool has_more = 2;
+  // Cursor for the next page, set only when has_more.
+  string next_cursor = 3;
 }
 
 enum PacketState {

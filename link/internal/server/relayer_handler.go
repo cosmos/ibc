@@ -23,7 +23,11 @@ type RelayerHandler struct {
 // RelayerService defines relayer business logic.
 type RelayerService interface {
 	Relay(ctx context.Context, request relayer.RelayRequest) error
-	Status(ctx context.Context, chainID string, txHash string) ([]relayer.PacketStatus, error)
+	Packets(
+		ctx context.Context,
+		filter relayer.PacketFilter,
+		query relayer.PacketQuery,
+	) (relayer.PacketPage, error)
 }
 
 var (
@@ -83,27 +87,63 @@ func (h *RelayerHandler) Relay(
 	return connect.NewResponse(&proto.RelayResponse{}), nil
 }
 
-func (h *RelayerHandler) Status(
+func (h *RelayerHandler) Packets(
 	ctx context.Context,
-	req *connect.Request[proto.StatusRequest],
-) (*connect.Response[proto.StatusResponse], error) {
-	h.logger.Info("Status", "sourceChainID", req.Msg.SourceChainId, "txHash", req.Msg.TxHash)
+	req *connect.Request[proto.PacketsRequest],
+) (*connect.Response[proto.PacketsResponse], error) {
+	filter, err := packetFilterFromProto(req.Msg.GetFilter())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 
-	statuses, err := h.srv.Status(ctx, req.Msg.SourceChainId, req.Msg.TxHash)
+	h.logger.Info("Packets", "limit", req.Msg.GetLimit(), "cursor", req.Msg.GetCursor())
+
+	page, err := h.srv.Packets(ctx, filter, relayer.PacketQuery{
+		Limit:  int64(req.Msg.GetLimit()),
+		Cursor: req.Msg.GetCursor(),
+	})
+
 	switch {
 	case errors.Is(err, relayer.ErrInvalidInput):
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, relayer.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, err)
 	case err != nil:
 		// todo: move to interceptor
-		h.logger.Error("Status", "err", err)
+		h.logger.Error("Packets", "err", err)
 		return nil, errInternal
 	}
 
-	packetStatuses := make([]*proto.PacketStatus, len(statuses))
+	return connect.NewResponse(&proto.PacketsResponse{
+		Packets:    packetStatusesToProto(page.Packets),
+		HasMore:    page.HasMore,
+		NextCursor: page.NextCursor,
+	}), nil
+}
+
+func packetFilterFromProto(filter *proto.PacketFilter) (relayer.PacketFilter, error) {
+	if filter == nil {
+		return relayer.PacketFilter{}, nil
+	}
+
+	state, err := packetStateFromProto(filter.GetState())
+	if err != nil {
+		return relayer.PacketFilter{}, err
+	}
+
+	return relayer.PacketFilter{
+		SourceChainID:       filter.GetSourceChainId(),
+		DestinationChainID:  filter.GetDestinationChainId(),
+		SourceClientID:      filter.GetSourceClientId(),
+		DestinationClientID: filter.GetDestinationClientId(),
+		SourceTxHash:        filter.GetSourceTxHash(),
+		SequenceNumber:      filter.GetSequenceNumber(),
+		State:               state,
+	}, nil
+}
+
+func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatus {
+	out := make([]*proto.PacketStatus, len(statuses))
 	for i, status := range statuses {
-		packetStatuses[i] = &proto.PacketStatus{
+		out[i] = &proto.PacketStatus{
 			State:          packetStateToProto(status.State),
 			SequenceNumber: status.SequenceNumber,
 			SourceClientId: status.SourceClientID,
@@ -114,7 +154,28 @@ func (h *RelayerHandler) Status(
 		}
 	}
 
-	return connect.NewResponse(&proto.StatusResponse{PacketStatuses: packetStatuses}), nil
+	return out
+}
+
+func packetStateFromProto(state proto.PacketState) (relayer.PacketState, error) {
+	switch state {
+	case proto.PacketState_PACKET_STATE_UNSPECIFIED:
+		return relayer.StateUnspecified, nil
+	case proto.PacketState_PACKET_STATE_NOT_SELECTED:
+		return relayer.StateNotSelected, nil
+	case proto.PacketState_PACKET_STATE_PENDING:
+		return relayer.StatePending, nil
+	case proto.PacketState_PACKET_STATE_SUCCEEDED:
+		return relayer.StateSucceeded, nil
+	case proto.PacketState_PACKET_STATE_TIMED_OUT:
+		return relayer.StateTimedOut, nil
+	case proto.PacketState_PACKET_STATE_REJECTED:
+		return relayer.StateRejected, nil
+	case proto.PacketState_PACKET_STATE_RELAY_FAILED:
+		return relayer.StateRelayFailed, nil
+	default:
+		return relayer.StateUnspecified, errors.Wrapf(relayer.ErrInvalidInput, "unknown packet state %d", state)
+	}
 }
 
 func packetStateToProto(state relayer.PacketState) proto.PacketState {
