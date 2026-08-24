@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -180,6 +181,10 @@ func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient
 	}
 
 	return evm.NewVerifiedClient(ctx, client, spec.ChainID, fmt.Sprintf("anvil (chain %s)", spec.ID))
+}
+
+func (ac *Chain) WSURL() string {
+	return "ws://" + strings.TrimPrefix(ac.RPCURL(), "http://")
 }
 
 func (ac *Chain) WithEVMClient(use func(*evm.EVMClient) error) error {

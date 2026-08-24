@@ -77,39 +77,6 @@ func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeo
 	return err
 }
 
-const createRelayRequest = `-- name: CreateRelayRequest :exec
-INSERT INTO relay_requests (source_chain_id, source_tx_hash)
-VALUES ($1, $2)
-ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
-`
-
-func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
-	_, err := q.db.Exec(ctx, createRelayRequest, chainID, txHash)
-	return err
-}
-
-const getRelayRequest = `-- name: GetRelayRequest :one
-/*
- * SPDX-License-Identifier: Apache-2.0
- */
-
-SELECT id, source_chain_id, source_tx_hash, created_at FROM relay_requests
-WHERE source_chain_id = $1
-AND source_tx_hash = $2
-`
-
-func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash string) (RelayRequest, error) {
-	row := q.db.QueryRow(ctx, getRelayRequest, chainID, txHash)
-	var i RelayRequest
-	err := row.Scan(
-		&i.ID,
-		&i.SourceChainID,
-		&i.SourceTxHash,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const listDispatchablePackets = `-- name: ListDispatchablePackets :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE status NOT IN (
@@ -124,6 +91,87 @@ ORDER BY id
 
 func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
 	rows, err := q.db.Query(ctx, listDispatchablePackets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Packet
+	for rows.Next() {
+		var i Packet
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+			&i.SourceChainID,
+			&i.DestinationChainID,
+			&i.SourceTxHash,
+			&i.SourceTxTime,
+			&i.PacketSequenceNumber,
+			&i.PacketSourceClientID,
+			&i.PacketDestinationClientID,
+			&i.PacketTimeoutTimestamp,
+			&i.RecvTxHash,
+			&i.RecvTxTime,
+			&i.RecvTxRelayerAddress,
+			&i.WriteAckTxHash,
+			&i.WriteAckTxTime,
+			&i.WriteAckStatus,
+			&i.AckTxHash,
+			&i.AckTxTime,
+			&i.AckTxRelayerAddress,
+			&i.TimeoutTxHash,
+			&i.TimeoutTxTime,
+			&i.TimeoutTxRelayerAddress,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPackets = `-- name: ListPackets :many
+SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
+WHERE ',' || $1 || ',' LIKE '%,' || status || ',%'
+AND (source_chain_id = $2 OR $2 = '')
+AND (destination_chain_id = $3 OR $3 = '')
+AND (packet_source_client_id = $4 OR $4 = '')
+AND (packet_destination_client_id = $5 OR $5 = '')
+AND (source_tx_hash = $6 OR $6 = '')
+AND (packet_sequence_number = $7 OR $7 = 0)
+AND id < $8
+ORDER BY id DESC
+LIMIT $9
+`
+
+type ListPacketsParams struct {
+	Statuses            *string
+	SourceChainID       string
+	DestinationChainID  string
+	SourceClientID      string
+	DestinationClientID string
+	SourceTxHash        string
+	SequenceNumber      int64
+	Before              int64
+	RowLimit            int32
+}
+
+func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Packet, error) {
+	rows, err := q.db.Query(ctx, listPackets,
+		arg.Statuses,
+		arg.SourceChainID,
+		arg.DestinationChainID,
+		arg.SourceClientID,
+		arg.DestinationClientID,
+		arg.SourceTxHash,
+		arg.SequenceNumber,
+		arg.Before,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -374,6 +422,10 @@ func (q *Queries) UpdatePacketWriteAck(ctx context.Context, arg UpdatePacketWrit
 }
 
 const upsertPacket = `-- name: UpsertPacket :exec
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 INSERT INTO packets (
     status,
     source_chain_id,
