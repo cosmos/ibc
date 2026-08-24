@@ -35,9 +35,18 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string) *Prover {
 	}
 }
 
-// NewFromURL dials url with the default client
+// NewFromURL dials url with a client that can negotiate h2c, which gRPC
+// requires over plaintext.
 func NewFromURL(url, chainID, clientID string) *Prover {
-	return New(http.DefaultClient, url, chainID, clientID)
+	return New(newHTTPClient(), url, chainID, clientID)
+}
+
+func newHTTPClient() *http.Client {
+	protocols := new(http.Protocols)
+	protocols.SetHTTP2(true)
+	protocols.SetUnencryptedHTTP2(true)
+
+	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
 }
 
 func (p *Prover) target() *proverv2.Client {
