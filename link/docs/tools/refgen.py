@@ -235,10 +235,11 @@ RPC = re.compile(r"rpc\s+(\w+)\s*\(\s*([\w.]+)\s*\)\s*returns\s*\(\s*([\w.]+)\s*
 
 
 def _statements(body):
-    """Yield (doc, statement) for each `;`-terminated statement in a body,
-    carrying the comment lines that precede it. Statements may share a line."""
+    """Yield (doc, statement, offset) for each `;`-terminated statement in a
+    body, carrying the comment lines that precede it and the line it sits on,
+    counted from the body's first line. Statements may share a line."""
     doc = []
-    for raw in body.split("\n"):
+    for offset, raw in enumerate(body.split("\n")):
         line = raw.strip()
         if line.startswith("//"):
             doc.append(line[2:].strip())
@@ -247,7 +248,7 @@ def _statements(body):
             part = part.strip()
             if not part:
                 continue
-            yield " ".join(doc), part
+            yield " ".join(doc), part, offset
             doc = []
 
 
@@ -255,7 +256,7 @@ def _fields(body):
     """Fields of a message body, in declaration order, with a oneof folded
     into one entry."""
     oneofs = {name: {"name": name, "type": "oneof", "doc": doc,
-                     "opts": [f.group(3) for _d, s in _statements(inner)
+                     "opts": [f.group(3) for _d, s, _o in _statements(inner)
                               for f in [FIELD.match(s)] if f]}
               for name, doc, inner in _decl_oneofs(body)}
     # blank the oneof bodies, keeping line positions, so one ordered pass works
@@ -327,18 +328,21 @@ def parse_proto(path):
     for kind, name, line, doc, body in _decl_blocks(src):
         if kind == "service":
             rpcs = []
-            for rdoc, stmt in _statements(body):
+            for rdoc, stmt, offset in _statements(body):
                 m = RPC.match(stmt)
                 if m:
+                    # the rpc's own line, so its citation points at itself
+                    # rather than at the service declaration above it
                     rpcs.append({"name": m.group(1), "req": m.group(2),
-                                 "resp": m.group(3), "doc": rdoc})
+                                 "resp": m.group(3), "doc": rdoc,
+                                 "line": line + offset})
             out["services"].append({"name": name, "doc": doc, "line": line, "rpcs": rpcs})
         elif kind == "message":
             out["messages"].append({"name": name, "doc": doc, "line": line,
                                     "fields": _fields(body)})
         else:
             values = []
-            for vdoc, stmt in _statements(body):
+            for vdoc, stmt, _offset in _statements(body):
                 m = re.match(r"(\w+)\s*=\s*\d+", stmt)
                 if m:
                     values.append({"name": m.group(1), "doc": vdoc})
@@ -419,12 +423,12 @@ SERVICES = [("relayer", "Relayer service"), ("attestor", "Attestation service")]
 FIELD_DOCS = {
     ("RelayRequest", "tx_hash"): ("The transaction that sent the packets, on the source chain.", "e86e1cfa"),
     ("RelayRequest", "source_chain_id"): ("The chain that transaction was sent on.", "47d6b1f4"),
-    ("SelectedPackets", "packets"): ("The packets to relay. One entry each.", "d196665f"),
+    ("SelectedPackets", "packets"): ("The packets to relay. At least one.", "d196665f"),
     ("PacketSelector", "source_client_id"): ("The client the packet was sent on.", "947d8614"),
     ("PacketSelector", "sequence_number"): ("The packet's number on that client.", "71c4fc7e"),
     ("StatusRequest", "tx_hash"): ("The transaction whose packets to report on.", "e86e1cfa"),
     ("StatusRequest", "source_chain_id"): ("The chain that transaction was sent on.", "47d6b1f4"),
-    ("StatusResponse", "packet_statuses"): ("One entry per packet in the transaction.", "d1ef2018"),
+    ("StatusResponse", "packet_statuses"): ("One entry per packet this relayer recorded for the transaction.", "d1ef2018"),
     ("PacketStatus", "state"): ("Where the packet got to. See the states below.", "5c7b7988"),
     ("TransactionInfo", "tx_hash"): ("The transaction's hash.", "e86e1cfa"),
     ("TransactionInfo", "chain_id"): ("The chain it was submitted to.", "8140443d"),
@@ -491,7 +495,7 @@ def gen_api():
                 # one region per RPC, so an RPC that reuses existing messages
                 # still needs a section and cannot arrive unnoticed
                 blocks[f"api:rpc:{r['name']}"] = (
-                    _lead_strip(r["name"], r["doc"]) + "\n\n" + cite(fname, svc["line"]))
+                    _lead_strip(r["name"], r["doc"]) + "\n\n" + cite(fname, r["line"]))
         for msg in p["messages"]:
             if not msg["fields"]:
                 continue

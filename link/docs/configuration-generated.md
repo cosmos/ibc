@@ -11,18 +11,18 @@ The IBC CLI reads its configuration from `ibc.yml`. The file tells the CLI:
 - which keys to use for deployment, relaying, and attestation
 - where the relayer stores packet state
 
-Run the following commands to create and check the file:
+Run the following commands to create and validate the file:
 
 ```sh
 ibc config new
 ibc config validate
 ```
 
-Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. Use environment variables for values such as database connection strings. <!-- [config.go:L169](link/internal/config/config.go#L169) -->
+Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [config.go:L169](link/internal/config/config.go#L169) -->
 
-## Complete example
+## Example config.yml
 
-This configuration connects two local EVM chains with attestation clients. One process runs the relayer and one attestor for each chain.
+This configuration comes from the tutorial. In this setup, a single process runs the relayer and one attestor for each chain.
 
 ```yaml
 server:
@@ -94,12 +94,12 @@ The names in this file are references:
 
 | Reference | Must match |
 | --- | --- |
-| `clientA.chainId`, `clientB.chainId`, and a local attestor's `chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](link/internal/config/config.go#L300-L319) --> |
+| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](link/internal/config/config.go#L300-L319) --> |
 | `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L323-L336](link/internal/config/config.go#L323-L336) --> |
 | A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L232-L239](link/internal/config/config.go#L232-L239) --> |
-| `chains[].deployer` | A local `signers[].alias` value <!-- [config.go:L241-L248](link/internal/config/config.go#L241-L248) --> |
+| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L241-L248](link/internal/config/config.go#L241-L248) --> |
 
-For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. An unresolved reference causes validation to fail.
+For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference. A local attestor's `chainId` is checked when the process starts rather than by validation. <!-- [resolve.go:L55-L57](link/internal/service/attestor/resolve.go#L55-L57) -->
 
 ## `server`
 
@@ -107,15 +107,28 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 
 <!-- GEN:config:server START -->
 
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `listenAddr` | `string` | `0.0.0.0:3000` | Address the gRPC server binds. It serves the relayer and attestor APIs together. |
+
+<!-- [config.go:L47](link/internal/config/config.go#L47) -->
+
 <!-- GEN:config:server END -->
 
-The port serves gRPC, gRPC-Web, and Connect. Server reflection is enabled. <!-- [bootstrap.go:L120](link/internal/bootstrap/bootstrap.go#L120) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
+Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/bootstrap/bootstrap.go#L120) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
 
 ## `db`
 
 `db` configures the relayer's packet store. The store lets the relayer resume unfinished work after a restart.
 
 <!-- GEN:config:db START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
+| `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
+
+<!-- [config.go:L52](link/internal/config/config.go#L52) -->
 
 <!-- GEN:config:db END -->
 
@@ -127,9 +140,18 @@ The port serves gRPC, gRPC-Web, and Connect. Server reflection is enabled. <!-- 
 
 <!-- GEN:config:chains START -->
 
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `chainId` | `string` | **required** | The chain's id, as the chain reports it. |
+| `deployer` | `string` | optional | Optional signer alias used by `ibc deploy` for this chain. |
+| `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
+| `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
+
+<!-- [config.go:L115](link/internal/config/config.go#L115) -->
+
 <!-- GEN:config:chains END -->
 
-`ibc deploy core` deploys the router. You can omit `ics26Router` before deployment, then add the deployed address from the manifest. `ibc deploy render-config` renders the completed chain blocks for both sides of a connection. <!-- [main.go:L74-L79](link/cmd/ibc/main.go#L74-L79) -->
+`ibc deploy core` deploys the router. <!-- [steps.go:L67-L97](link/internal/deploy/steps.go#L67-L97) --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [deploy.go:L544-L600](link/cmd/ibc/deploy.go#L544-L600) -->
 
 The deployer must be a local signer, because deployment requires direct access to the key. <!-- [deploy.go:L123-L155](link/cmd/ibc/deploy.go#L123-L155) -->
 
@@ -140,6 +162,16 @@ The deployer must be a local signer, because deployment requires direct access t
 `relayer.connections` selects the connections this process relays. Each entry identifies one client on each chain, and the relayer handles traffic in both directions.
 
 <!-- GEN:config:relayer:connections START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `connections[].alias` | `string` | **required** | Name for the connection, unique in the file. |
+| `connections[].clientA.chainId, connections[].clientB.chainId` | `string` | **required** | The chain this end's client lives on. |
+| `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
+| `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
+| `connections[].clientA.type, connections[].clientB.type` | `attestation` | **required** | Light client type. |
+
+<!-- [relayer.go:L53](link/internal/config/relayer.go#L53) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -153,9 +185,28 @@ The relayer uses these defaults unless you override them.
 
 <!-- GEN:config:relayer START -->
 
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `dispatchPollInterval` | `duration` | `5s` | How often the dispatcher polls the store for unfinished packets. |
+
+<!-- [relayer.go:L29](link/internal/config/relayer.go#L29) --> <!-- [dispatcher.go:L17](link/internal/relay/dispatch/dispatcher.go#L17) -->
+
 <!-- GEN:config:relayer END -->
 
-{G:config:relayer:chainOverrides}
+<!-- GEN:config:relayer:chainOverrides START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
+| `chainOverrides[].txSubmissionDelay` | `duration` | `2s` | Minimum delay between two transaction submissions on the chain. |
+| `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
+| `chainOverrides[].packetBatchTimeout` | `duration` | `10s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
+| `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
+| `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
+
+<!-- [relayer.go:L36](link/internal/config/relayer.go#L36) --> <!-- [evm.go:L26](link/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](link/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](link/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](link/internal/relay/pipeline/opts.go#L16) -->
+
+<!-- GEN:config:relayer:chainOverrides END -->
 
 Add an override only when a chain needs different behavior:
 
@@ -182,9 +233,19 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 
 <!-- GEN:config:attestors:local START -->
 
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `chainId` | `string` | **required** | The chain this attestor watches. |
+| `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
+| `type` | `local` | **required** | Whether this process runs the attestor or queries it. |
+| `signer` | `string` | **required** | The signer used to sign attestations. |
+| `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
+
+<!-- [config.go:L64](link/internal/config/config.go#L64) -->
+
 <!-- GEN:config:attestors:local END -->
 
-Set `finalityOffset` according to the chain's finality model. Do not copy the example value into a production configuration without confirming that it is safe for the chain.
+Set `finalityOffset` according to the chain's finality model.
 
 ### Remote attestor
 
@@ -196,6 +257,14 @@ attestors:
 ```
 
 <!-- GEN:config:attestors:remote START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
+| `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
+| `grpc` | `string` | **required** | Bare host:port. |
+
+<!-- [config.go:L64](link/internal/config/config.go#L64) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -213,6 +282,14 @@ Local attestor names must be unique. Two local attestors for the same chain must
 
 <!-- GEN:config:signers:local START -->
 
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `alias` | `string` | **required** | Unique name for a signer. |
+| `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
+| `file` | `string` | **required** | Key file path for a local signer. |
+
+<!-- [config.go:L89](link/internal/config/config.go#L89) -->
+
 <!-- GEN:config:signers:local END -->
 
 For `file: relayer`, the CLI checks `relayer`, `relayer.json`, and the `keys` directory under the IBC home directory. The final path is typically `~/.ibc/keys/relayer.json`. <!-- [config.go:L591-L615](link/internal/config/config.go#L591-L615) -->
@@ -228,6 +305,15 @@ signers:
 ```
 
 <!-- GEN:config:signers:remote START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `alias` | `string` | **required** | Unique name for a signer. |
+| `type` | `remote` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
+| `grpc` | `string` | **required** | Address for a remote signer. |
+| `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
+
+<!-- [config.go:L89](link/internal/config/config.go#L89) -->
 
 <!-- GEN:config:signers:remote END -->
 

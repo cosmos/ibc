@@ -14,7 +14,7 @@ The attestor's API serves the attestations a light client verifies. A relayer is
 
 Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`.
 
-Connections are plaintext HTTP/2 with reflection registered, so a client needs no TLS setup and no proto files. <!-- [server.go:L38-L43](link/internal/server/server.go#L38-L43) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
+Connections are plaintext, HTTP/1.1 or HTTP/2 without TLS, and reflection is registered, so a client needs no TLS setup and no proto files. <!-- [server.go:L38-L43](link/internal/server/server.go#L38-L43) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
 
 To list running services:
 
@@ -36,7 +36,7 @@ ibc.v2.relayer.RelayerApiService
 
 Tracks the packets emitted by a source transaction and submits the transactions required to complete them.
 
-<!-- [relayer.proto:L9](proto/link/relayer.proto#L9) -->
+<!-- [relayer.proto:L12](proto/link/relayer.proto#L12) -->
 
 <!-- GEN:api:rpc:Relay END -->
 
@@ -64,7 +64,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 
 | Field | Type | Description |
 |---|---|---|
-| `packets` | `PacketSelector[]` | The packets to relay. One entry each. |
+| `packets` | `PacketSelector[]` | The packets to relay. At least one. |
 
 <!-- [relayer.proto:L38](proto/link/relayer.proto#L38) -->
 
@@ -85,7 +85,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 
 A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [relayer.proto:L35-L37](proto/link/relayer.proto#L35-L37) -->
 
-`RelayResponse` is empty. A successful response means the relayer accepted the work, not that it finished.
+`Relay` returns nothing. A successful call means the relayer recorded the request, and `Status` reports what happens after that.
 
 ```bash
 grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPackets":{}}' \
@@ -98,7 +98,7 @@ grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPack
 
 Returns per-packet relay status for a transaction previously submitted via Relay.
 
-<!-- [relayer.proto:L9](proto/link/relayer.proto#L9) -->
+<!-- [relayer.proto:L16](proto/link/relayer.proto#L16) -->
 
 <!-- GEN:api:rpc:Status END -->
 
@@ -121,7 +121,7 @@ Returns per-packet relay status for a transaction previously submitted via Relay
 
 | Field | Type | Description |
 |---|---|---|
-| `packet_statuses` | `PacketStatus[]` | One entry per packet in the transaction. |
+| `packet_statuses` | `PacketStatus[]` | One entry per packet this relayer recorded for the transaction. |
 
 <!-- [relayer.proto:L54](proto/link/relayer.proto#L54) -->
 
@@ -177,7 +177,7 @@ Returns per-packet relay status for a transaction previously submitted via Relay
 
 <!-- GEN:api:enum:PacketState END -->
 
-`REJECTED` means the packet arrived and the application refused it, which is a completed relay and a failed application call. `RELAY_FAILED` means the relayer could not deliver it at all.
+`REJECTED` means the packet arrived and the application refused it, which is a completed relay and a failed application call. `RELAY_FAILED` means a permanent error stopped the relayer, wherever the packet had got to.
 
 ```bash
 grpcurl -plaintext -d '{"txHash":"0xa3222ab810c72019802aeb1e0c53d1b7cd914318e3f77a24b9c69a2c9810b45f","sourceChainId":"41001"}' \
@@ -208,7 +208,7 @@ grpcurl -plaintext -d '{"txHash":"0xa3222ab810c72019802aeb1e0c53d1b7cd914318e3f7
 }
 ```
 
-A transaction with no entry yet is absent, so a pending packet carries `sendTx` alone.
+A transaction with no entry yet is absent from the response.
 
 ## Attestation service
 
@@ -231,7 +231,7 @@ Both attestation calls return this shape.
 
 <!-- GEN:api:msg:Attestation END -->
 
-`attested_data` is what was signed. A light client accepts the attestation when enough attestors in its set sign the same data, up to its threshold.
+`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [quorum.go:L73-L77](link/internal/relay/proofgen/attestation/quorum.go#L73-L77) -->
 
 ### `StateAttestation`
 
@@ -239,7 +239,7 @@ Both attestation calls return this shape.
 
 Retrieves an attestation for a state at a given height.
 
-<!-- [attestor.proto:L10](proto/link/attestor.proto#L10) -->
+<!-- [attestor.proto:L12](proto/link/attestor.proto#L12) -->
 
 <!-- GEN:api:rpc:StateAttestation END -->
 
@@ -268,7 +268,7 @@ Retrieves an attestation for a state at a given height.
 
 <!-- GEN:api:msg:StateAttestationResponse END -->
 
-A height above what `LatestHeight` reports is refused, so ask for the height first.
+A height above what `LatestHeight` reports is refused, so ask for the height first. <!-- [local.go:L111-L117](link/internal/service/attestor/local.go#L111-L117) -->
 
 ### `PacketAttestation`
 
@@ -276,7 +276,7 @@ A height above what `LatestHeight` reports is refused, so ask for the height fir
 
 Retrieves an attestation for a set of packets.
 
-<!-- [attestor.proto:L10](proto/link/attestor.proto#L10) -->
+<!-- [attestor.proto:L15](proto/link/attestor.proto#L15) -->
 
 <!-- GEN:api:rpc:PacketAttestation END -->
 
@@ -331,7 +331,7 @@ One request carries at most 100 packets, each at most 128 KB, and a request over
 
 Returns the latest height the attestor will generate attestations for.
 
-<!-- [attestor.proto:L10](proto/link/attestor.proto#L10) -->
+<!-- [attestor.proto:L18](proto/link/attestor.proto#L18) -->
 
 <!-- GEN:api:rpc:LatestHeight END -->
 
@@ -359,7 +359,7 @@ Returns the latest height the attestor will generate attestations for.
 
 <!-- GEN:api:msg:LatestHeightResponse END -->
 
-An offset of zero tracks the chain's own finalized tag, and a larger offset holds further back.
+Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts, which sits closer to the head. <!-- [local.go:L77-L104](link/internal/service/attestor/local.go#L77-L104) -->
 
 ### `Info`
 
@@ -367,7 +367,7 @@ An offset of zero tracks the chain's own finalized tag, and a larger offset hold
 
 Returns identity information about a configured attestor.
 
-<!-- [attestor.proto:L10](proto/link/attestor.proto#L10) -->
+<!-- [attestor.proto:L21](proto/link/attestor.proto#L21) -->
 
 <!-- GEN:api:rpc:Info END -->
 

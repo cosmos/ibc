@@ -25,8 +25,6 @@ Commands are grouped here the way the binary groups them, so any of them prints 
 
 `--home` is where the config file, the keystore, the manifests, and the relayer's database live. A command that reads the config changes into that directory first, so a config naming `keys/alice.json` finds `~/.ibc/keys/alice.json`. <!-- [config.go:L142-L160](link/cmd/ibc/config.go#L142-L160) -->
 
-`--db` overrides the `db` block of the config for one invocation. A URL beginning `postgres://` selects postgres, and anything else is treated as a sqlite path. <!-- [config.go:L709-L715](link/internal/config/config.go#L709-L715) -->
-
 ## `config`
 
 The config is a YAML file describing every chain, connection, attestor, and signer the other commands use.
@@ -148,13 +146,13 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 ## `deploy`
 
-Each of these commands deploys one layer onto `--chain`, and records what it deployed in that chain's manifest. Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) walks that through end to end.
+Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) walks that through end to end.
 
 `--dry-run` prints the steps a command would take and submits nothing.
 
-Manifests are machine-generated. Every deploy command reads the manifest, decides from it what is already done, and writes it back. <!-- [steps.go:L73-L95](link/internal/deploy/steps.go#L73-L95) -->
+Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [steps.go:L73-L95](link/internal/deploy/steps.go#L73-L95) -->
 
-> **Warning:** Do not edit a manifest by hand. The next deploy command overwrites it, and until then the deployment decides what to skip from values that no longer match the chain.
+> **Warning:** Do not edit a manifest by hand. A deploy command decides what to skip from it, and an edit that disagrees with the chain either is overwritten or makes the next run fail.
 
 ### `ibc deploy client`
 
@@ -186,7 +184,7 @@ Deploy and register a light client tracking a counterparty chain.
 ibc deploy client --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
 ```
 
-The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [attestors.go:L15-L30](link/cmd/ibc/attestors.go#L15-L30) -->
+The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [attestors.go:L15-L30](link/cmd/ibc/attestors.go#L15-L30) --> Left out entirely, the command fails when the config lists no attestors for the counterparty chain. <!-- [attestors.go:L32-L42](link/cmd/ibc/attestors.go#L32-L42) -->
 
 Rerunning with the same `--client-id` continues that client, which is how a deployment interrupted halfway finishes. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [steps.go:L126-L138](link/internal/deploy/steps.go#L126-L138) -->
 
@@ -398,7 +396,7 @@ Query per-packet relay status for a source transaction.
 ibc relayer status --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-The output carries one entry per packet in the transaction, each with its state and the transactions seen for it so far. [API](/ibc-cli/api) lists the states.
+The output carries one entry per packet the relayer recorded for that transaction, each with its state and the transactions seen so far. [API](/ibc-cli/api) lists the states. A transaction the relayer was never asked to relay returns an error. <!-- [service.go:L317-L322](link/internal/service/relayer/service.go#L317-L322) -->
 
 ## `attestor`
 

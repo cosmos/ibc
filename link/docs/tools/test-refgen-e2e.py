@@ -331,21 +331,21 @@ def _():
                  '\tListenAddress string `yaml:"listenAddr"`\n}')
         page = box.page("config", own=True)
         p = refgen.plan("config", page)
-        new = [m for m in p["missing_marker"] if m["region"] == "config:MetricsConfig"]
+        new = [m for m in p["missing_marker"] if m["region"] == "config:metrics"]
         assert new, p["missing_marker"]
         assert "`listenAddr`" in new[0]["table"]
         assert new[0]["suggested_heading"] == "### `metrics`"
         assert new[0]["insert_after"], "a new section needs somewhere to go"
 
 
-@case("a new proto file is discovered without being named")
+@case("a new proto file is discovered, and its missing section raises")
 def _():
     with Sandbox() as box:
         os.makedirs(os.path.join(box.dir, "proto/link"), exist_ok=True)
         open(os.path.join(box.dir, "proto/link/extra.proto"), "w").write(
             'syntax = "proto3";\n\npackage ibc.v2.extra;\n\n'
             "// Something new.\nmessage NewThing {\n  string name = 1;\n}\n")
-        assert "api:msg:NewThing" in refgen.gen_api()
+        raises(box, "api", "extra")
 
 
 @case("a new group flag reaches every command in that group")
@@ -413,24 +413,21 @@ def _():
         page = box.page("config")
         assert refgen.run("config", page, check=True) == 1
         assert refgen.run("config", page, check=False) == 0
-        assert "`finalityOffset`" not in open(page).read()
+        body = open(page).read()
+        region = body.split("GEN:config:attestors:local START")[1].split("END")[0]
+        assert "`finalityOffset`" not in region, region
 
 
-@case("a removed proto field disappears from its table")
+@case("a removed proto field raises on its hand-written description")
 def _():
     with Sandbox() as box:
         # TransactionInfo's own chain_id, not either message's source_chain_id
         box.edit("proto/link/relayer.proto",
                  "message TransactionInfo {\n  string tx_hash = 1;\n  string chain_id = 2;\n}",
                  "message TransactionInfo {\n  string tx_hash = 1;\n}")
-        page = box.page("api")
-        assert refgen.run("api", page, check=True) == 1
-        assert refgen.run("api", page, check=False) == 0
-        # `chain_id` also names a field of the attestor service's InfoResponse,
-        # so the assertion has to look inside TransactionInfo's own region
-        body = open(page).read()
-        region = body.split("GEN:api:msg:TransactionInfo START")[1].split("END")[0]
-        assert "`chain_id`" not in region, region
+        # the field carried a hand-written description, so removing it leaves a
+        # dead entry rather than quietly shrinking the table
+        raises(box, "api", "TransactionInfo.chain_id")
 
 
 @case("a removed proto message raises, and the message says what to do")
@@ -438,14 +435,7 @@ def _():
     with Sandbox() as box:
         box.edit("proto/link/attestor.proto",
                  "message InfoRequest { string attestor = 1; }", "")
-        page = box.page("api", own=True)
-        try:
-            refgen.run("api", page, check=True)
-        except refgen.MarkerError as e:
-            assert "api:msg:InfoRequest" in str(e), e
-            assert "delete the page section" in str(e), f"the error must name the fix: {e}"
-            return
-        raise AssertionError("expected a MarkerError naming the removed message")
+        raises(box, "api", "InfoRequest")
 
 
 for name in PASS:
