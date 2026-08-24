@@ -345,6 +345,19 @@ def parse_proto(path):
             out["enums"].append({"name": name, "doc": doc, "line": line, "values": values})
     return out
 
+def _proto_type(t):
+    """A field's type as a reader of JSON meets it.
+
+    `repeated` is protobuf's word for a list and means nothing to someone
+    writing a request body, so it renders as an array instead.
+    """
+    if t.startswith("repeated "):
+        return f"`{t[len('repeated '):]}[]`"
+    if t.endswith(", optional"):
+        return f"`{t[:-len(', optional')]}` (optional)"
+    return f"`{t}`"
+
+
 def _lead_strip(name, doc):
     """Drop the identifier a Go or proto comment opens with.
 
@@ -407,7 +420,8 @@ def gen_api():
                 continue
             rows, names = [], {f["name"] for f in msg["fields"]}
             for f in msg["fields"]:
-                t = f"oneof: {' or '.join('`'+o+'`' for o in f['opts'])}" if f["type"] == "oneof" else f"`{f['type']}`"
+                t = (f"oneof: {' or '.join('`'+o+'`' for o in f['opts'])}"
+                     if f["type"] == "oneof" else _proto_type(f["type"]))
                 doc = _fence(_lead_strip(f["name"], f["doc"]), names - {f["name"]})
                 rows.append((f"`{f['name']}`", t, doc))
             blocks[f"api:msg:{msg['name']}"] = (
@@ -948,22 +962,12 @@ CLI_BIN = "link/bin/ibc"
 # the coverage assertion below still accounts for every other command.
 CLI_EXCLUDED = {"completion", "help"}
 
-# The reader's tasks, which are a human's call and not the command tree's.
-# Every leaf command belongs to exactly one group, and gen_cli fails if a new
-# command lands in none of them.
-CLI_TASKS = [
-    ("cli:task:setup", ["config new", "config add-chain", "config validate",
-                        "keys new", "keys import"]),
-    ("cli:task:deploy", ["deploy core", "deploy client", "deploy gmp", "deploy ift",
-                         "deploy ift-bridge", "deploy render-config"]),
-    ("cli:task:run", ["relayer run", "attestor run"]),
-    ("cli:task:move", ["tx ift mint", "tx ift send", "relayer relay"]),
-    ("cli:task:inspect", ["relayer status", "deploy status", "deploy show",
-                          "query ift balance", "attestor info",
-                          "attestor latest-height", "attestor state-attestation"]),
-    ("cli:task:maintain", ["migrate up", "migrate down", "migrate status",
-                           "keys list", "keys show"]),
-]
+# Sections follow the command tree, so nothing is scattered and a reader's
+# muscle memory transfers to `ibc <group> --help`. Membership is discovered;
+# only the order is a human's call, and it is the order a reader meets them in.
+# A group missing from this list raises, so a new one cannot go undocumented.
+CLI_SECTION_ORDER = ["config", "keys", "deploy", "relayer", "attestor",
+                     "tx", "query", "migrate"]
 
 # Commands that get their flags spelled out. A command with three or more of
 # its own flags earns a subsection, and the generator fails if that set moves,
@@ -1211,24 +1215,28 @@ def gen_cli():
               _flag_rows(_parse_flags(tree[""]["help"], "Flags:"), "", source))
         + "\n\n" + tree_citation)
 
-    covered = []
-    for region, commands in CLI_TASKS:
-        rows = []
-        for c in commands:
-            if c not in tree:
-                raise SourceError(f"{region} lists `ibc {c}`, which the binary does not have")
-            rows.append((f"`ibc {c}`", _prose(tree[c]["short"])))
-            covered.append(c)
-        blocks[region] = table(["Command", "What it does"], rows) + "\n\n" + tree_citation
+    groups = {}
+    for path in leaves:
+        groups.setdefault(path.split()[0], []).append(path)
 
-    if sorted(covered) != leaves:
-        unassigned = sorted(set(leaves) - set(covered))
-        twice = sorted({c for c in covered if covered.count(c) > 1})
+    missing_order = sorted(set(groups) - set(CLI_SECTION_ORDER))
+    if missing_order:
         _problem("ungrouped_command",
-                 f"every command needs a task group; unassigned: {unassigned}; "
-                 f"listed twice: {twice}",
-                 unassigned=unassigned, duplicated=twice,
-                 shorts={c: tree[c]["short"] for c in unassigned})
+                 "these command groups are not in CLI_SECTION_ORDER, so they would "
+                 f"have no section: {missing_order}",
+                 groups=missing_order,
+                 commands={g: groups[g] for g in missing_order})
+    gone = [g for g in CLI_SECTION_ORDER if g not in groups]
+    if gone:
+        _problem("dead_section",
+                 f"CLI_SECTION_ORDER names groups the binary does not have: {gone}",
+                 groups=gone)
+
+    for group in [g for g in CLI_SECTION_ORDER if g in groups]:
+        blocks[f"cli:group:{group}"] = (
+            table(["Command", "What it does"],
+                  [(f"`ibc {p}`", _prose(tree[p]["short"])) for p in groups[group]])
+            + "\n\n" + tree_citation)
 
     # a group's own flags are inherited by every command under it, so any
     # group that has them needs a table. Discovered rather than listed: a new

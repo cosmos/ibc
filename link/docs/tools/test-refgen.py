@@ -250,6 +250,14 @@ def _():
     assert r"\\|" not in row, row
 
 
+@case("api: a list renders as an array, not as protobuf's `repeated`")
+def _():
+    b = refgen.gen_api()
+    assert "`PacketSelector[]`" in b["api:msg:SelectedPackets"]
+    assert "repeated" not in b["api:msg:SelectedPackets"]
+    assert "`uint64` (optional)" in b["api:msg:Attestation"]
+
+
 @case("api: a description does not repeat the name of its own row")
 def _():
     b = refgen.gen_api()

@@ -71,7 +71,7 @@ The two selection options differ in what happens to a packet this relayer cannot
 
 | Field | Type | Description |
 |---|---|---|
-| `packets` | `repeated PacketSelector` |  |
+| `packets` | `PacketSelector[]` |  |
 
 <!-- [relayer.proto:L38](proto/link/relayer.proto#L38) -->
 
@@ -108,6 +108,8 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 
 `RelayResponse` is empty. The call returns once the request is recorded, and the delivery happens afterwards. A successful response means the relayer accepted the work, not that it finished.
 
+Field names in these tables are the schema's. The JSON encoding uses lowerCamelCase, so `tx_hash` is sent as `txHash`.
+
 ```bash
 grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPackets":{}}' \
   localhost:3000 ibc.v2.relayer.RelayerApiService/Relay
@@ -132,7 +134,7 @@ Reports what happened to each packet in a transaction the relayer was asked abou
 
 | Field | Type | Description |
 |---|---|---|
-| `packet_statuses` | `repeated PacketStatus` |  |
+| `packet_statuses` | `PacketStatus[]` |  |
 
 <!-- [relayer.proto:L54](proto/link/relayer.proto#L54) -->
 
@@ -329,7 +331,7 @@ Signs over a set of packet commitments at one height.
 | Field | Type | Description |
 |---|---|---|
 | `attestor` | `string` |  |
-| `packets` | `repeated bytes` | The packets to attest to |
+| `packets` | `bytes[]` | The packets to attest to |
 | `height` | `uint64` | The height to attest to the `packets` at |
 | `commitment_type` | `CommitmentType` | The type of commitment to attest (packet or acknowledgment) Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward compatibility) |
 
@@ -372,7 +374,7 @@ Both attestation calls return the same shape.
 | Field | Type | Description |
 |---|---|---|
 | `height` | `uint64` | The height of the attestation |
-| `timestamp` | `uint64, optional` | The timestamp of the block |
+| `timestamp` | `uint64` (optional) | The timestamp of the block |
 | `attested_data` | `bytes` | The attested data |
 | `signature` | `bytes` | The attestation signature |
 

@@ -3,13 +3,13 @@ title: "Configuration"
 description: "Every key in ibc.yml, the one file the relayer, the attestor, and the deployment engine all read."
 ---
 
-The IBC CLI reads one YAML file. By default it is `ibc.yml` inside the IBC home directory, `~/.ibc`, and `--home` and `--config` move both. The relayer, the attestor, and `ibc deploy` all read the same file, so one file describes a whole deployment.
+The IBC CLI is configured with a single YAML file (`ibc.yml`).
 
 Values may contain `${VAR}`, which is expanded from the environment before the file is parsed. That is how a key or a connection string stays out of the file. <!-- [config.go:L169](link/internal/config/config.go#L169) -->
 
-`ibc config new` writes a file with the defaults filled in, and `ibc config validate` checks one. Run `validate` before starting a process: it resolves every cross-reference described below and names the first one that does not resolve. <!-- [config.go:L190-L224](link/internal/config/config.go#L190-L224) -->
+`ibc config new` writes a new file, and `ibc config validate` checks the file.
 
-The file has six top-level blocks, and not every process reads all of them. <!-- [config.go:L37-L44](link/internal/config/config.go#L37-L44) -->
+The file has six top-level blocks:
 
 <!-- GEN:config:Config START -->
 
@@ -28,12 +28,15 @@ The file has six top-level blocks, and not every process reads all of them. <!--
 
 ## How the blocks refer to each other
 
-Four of the blocks name entries in the others, and a name that does not resolve is a startup error rather than a silent fallback.
+A name that does not resolve stops the process at startup rather than falling back to a default. `ibc config validate` checks all of them.
 
-- Each connection names two chain IDs and two client IDs, and both chains must appear in `chains`. <!-- [config.go:L300-L319](link/internal/config/config.go#L300-L319) -->
-- Each client end names a signer alias, which must appear in `signers`. That signer submits the relay transactions on that end's chain. <!-- [config.go:L323-L336](link/internal/config/config.go#L323-L336) -->
-- Each local attestor names a chain ID and a signer alias. <!-- [config.go:L232-L239](link/internal/config/config.go#L232-L239) -->
-- A chain's `deployer` names a signer alias, which `ibc deploy` submits with. <!-- [config.go:L241-L248](link/internal/config/config.go#L241-L248) -->
+| This key | Names an entry in |
+|---|---|
+| `relayer.connections[].clientA.chainId`, `.clientB.chainId` | `chains` <!-- [config.go:L300-L319](link/internal/config/config.go#L300-L319) --> |
+| `relayer.connections[].clientA.signer`, `.clientB.signer` | `signers` <!-- [config.go:L323-L336](link/internal/config/config.go#L323-L336) --> |
+| `attestors[].chainId`, for a `local` attestor | `chains` <!-- [config.go:L232-L239](link/internal/config/config.go#L232-L239) --> |
+| `attestors[].signer`, for a `local` attestor | `signers` <!-- [config.go:L241-L248](link/internal/config/config.go#L241-L248) --> |
+| `chains[].deployer` | `signers` |
 
 A process only needs the blocks it uses. An attestor never opens a database, so an attestor-only file can leave out `db` and inherit its defaults. It needs no `relayer` block either.
 
