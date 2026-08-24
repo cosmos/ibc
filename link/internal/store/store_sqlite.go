@@ -144,36 +144,6 @@ func (db *SqliteDB) Transact(ctx context.Context, call func(repo Repository) err
 	return nil
 }
 
-func (db *SqliteDB) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
-	db.logger.Debug("GetRelayRequest", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return nil, errors.New("chainID and txHash are required")
-	}
-
-	entry, err := db.repo.GetRelayRequest(ctx, chainID, txHash)
-	if err != nil {
-		return nil, errNormalize(err)
-	}
-
-	return &RelayRequest{
-		ID:        entry.ID,
-		ChainID:   entry.SourceChainID,
-		TxHash:    entry.SourceTxHash,
-		CreatedAt: entry.CreatedAt.UTC(),
-	}, nil
-}
-
-func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("CreateRelayRequest", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return errors.New("chainID and txHash are required")
-	}
-
-	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
-}
-
 func (db *SqliteDB) UpsertPacket(ctx context.Context, input UpsertPacket) error {
 	db.logger.Debug(
 		"UpsertPacket",

@@ -30,11 +30,6 @@ type Store interface {
 
 // Repository represents database CRUD operations.
 type Repository interface {
-	GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error)
-
-	// CreateRelayRequest records a relay request; duplicates are a noop.
-	CreateRelayRequest(ctx context.Context, chainID string, txHash string) error
-
 	// UpsertPacket records a packet. A new packet is inserted; an existing
 	// NOT_SELECTED packet is refreshed with the input's metadata and status,
 	// but only when the input status is NOT_SELECTED or PENDING, the latter
@@ -127,14 +122,6 @@ func ValidateConfigLive(cfg config.Config) error {
 	}
 
 	return nil
-}
-
-// RelayRequest a request to relay a transaction's packets.
-type RelayRequest struct {
-	ID        int64
-	ChainID   string
-	TxHash    string
-	CreatedAt time.Time
 }
 
 // RelayStatus the relay state of a packet.
