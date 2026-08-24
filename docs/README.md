@@ -68,3 +68,32 @@ Contract-level reference for the same material.
 
 - [Permissions and upgrades](5-ibc-solidity-contracts/permissions-and-upgrades.md)  
   Which roles gate the IBC-solidity contracts, who holds them on a deployment, which contracts sit behind proxies, and which inputs are fixed at construction.
+## IBC CLI
+
+The `ibc` binary: deploying IBC onto a chain, and running the relayers and attestors that keep packets moving. Listed in reading order, tutorial first, reference last.
+
+- [Overview](6-ibc-cli/1-overview.md)  
+  One tool for deploying IBC and for running the processes that carry packets across it, built from three parts that share one binary and one config file.
+
+- [Deploy IBC and send a token](6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)  
+  Bring up two chains, deploy IBC on both, and move an Interchain Fungible Token from one to the other.
+
+- [Run a standalone attestor](6-ibc-cli/3-run-a-standalone-attestor.md)  
+  Move an attestor into a process of its own, against a deployment that already exists, and point a relayer at it.
+
+- [Run a standalone relayer](6-ibc-cli/4-run-a-standalone-relayer.md)  
+  Run your own relayer against a connection someone else deployed, including one that finishes packets a stopped relayer left behind.
+
+- [Make a cross-chain GMP call](6-ibc-cli/5-make-a-cross-chain-gmp-call.md)  
+  Call a contract on another chain over IBC, and receive the result back as an acknowledgement.
+
+- [Configuration](6-ibc-cli/6-configuration.md)  
+  Every key in `ibc.yml`: chains, connections, attestors, signers, and storage.
+
+- [CLI commands](6-ibc-cli/7-cli-commands.md)  
+  Every command and flag the binary accepts, grouped the way the binary groups them.
+
+- [API](6-ibc-cli/8-api.md)  
+  The relayer and attestor gRPC services, their methods, and their messages.
+
+The tables on the last three pages are generated from this repository. [The tooling README](6-ibc-cli/tools/README.md) says what never to edit by hand.
