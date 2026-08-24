@@ -76,6 +76,39 @@ func (q *Queries) ClearPacketTimeoutTx(ctx context.Context, arg ClearPacketTimeo
 	return err
 }
 
+const createRelayRequest = `-- name: CreateRelayRequest :exec
+INSERT INTO relay_requests (source_chain_id, source_tx_hash)
+VALUES (?1, ?2)
+ON CONFLICT (source_chain_id, source_tx_hash) DO NOTHING
+`
+
+func (q *Queries) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
+	_, err := q.db.ExecContext(ctx, createRelayRequest, chainID, txHash)
+	return err
+}
+
+const getRelayRequest = `-- name: GetRelayRequest :one
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+SELECT id, source_chain_id, source_tx_hash, created_at FROM relay_requests
+WHERE source_chain_id = ?1
+AND source_tx_hash = ?2
+`
+
+func (q *Queries) GetRelayRequest(ctx context.Context, chainID string, txHash string) (RelayRequest, error) {
+	row := q.db.QueryRowContext(ctx, getRelayRequest, chainID, txHash)
+	var i RelayRequest
+	err := row.Scan(
+		&i.ID,
+		&i.SourceChainID,
+		&i.SourceTxHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listDispatchablePackets = `-- name: ListDispatchablePackets :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE status NOT IN (
@@ -139,12 +172,12 @@ func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 const listPackets = `-- name: ListPackets :many
 SELECT id, created_at, updated_at, status, source_chain_id, destination_chain_id, source_tx_hash, source_tx_time, packet_sequence_number, packet_source_client_id, packet_destination_client_id, packet_timeout_timestamp, recv_tx_hash, recv_tx_time, recv_tx_relayer_address, write_ack_tx_hash, write_ack_tx_time, write_ack_status, ack_tx_hash, ack_tx_time, ack_tx_relayer_address, timeout_tx_hash, timeout_tx_time, timeout_tx_relayer_address FROM packets
 WHERE ',' || ?1 || ',' LIKE '%,' || status || ',%'
-AND (source_chain_id = ?2 OR ?2 = '')
-AND (destination_chain_id = ?3 OR ?3 = '')
-AND (packet_source_client_id = ?4 OR ?4 = '')
-AND (packet_destination_client_id = ?5 OR ?5 = '')
-AND (source_tx_hash = ?6 OR ?6 = '')
-AND (packet_sequence_number = ?7 OR ?7 = 0)
+AND source_chain_id = COALESCE(?2, source_chain_id)
+AND destination_chain_id = COALESCE(?3, destination_chain_id)
+AND packet_source_client_id = COALESCE(?4, packet_source_client_id)
+AND packet_destination_client_id = COALESCE(?5, packet_destination_client_id)
+AND source_tx_hash = COALESCE(?6, source_tx_hash)
+AND packet_sequence_number = COALESCE(?7, packet_sequence_number)
 AND id < ?8
 ORDER BY id DESC
 LIMIT ?9
@@ -152,12 +185,12 @@ LIMIT ?9
 
 type ListPacketsParams struct {
 	Statuses            *string
-	SourceChainID       string
-	DestinationChainID  string
-	SourceClientID      string
-	DestinationClientID string
-	SourceTxHash        string
-	SequenceNumber      int64
+	SourceChainID       *string
+	DestinationChainID  *string
+	SourceClientID      *string
+	DestinationClientID *string
+	SourceTxHash        *string
+	SequenceNumber      *int64
 	Before              int64
 	RowLimit            int64
 }
@@ -430,10 +463,6 @@ func (q *Queries) UpdatePacketWriteAck(ctx context.Context, arg UpdatePacketWrit
 }
 
 const upsertPacket = `-- name: UpsertPacket :exec
-/*
- * SPDX-License-Identifier: Apache-2.0
- */
-
 INSERT INTO packets (
     status,
     source_chain_id,

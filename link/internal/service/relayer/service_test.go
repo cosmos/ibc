@@ -133,7 +133,6 @@ func TestRelay(t *testing.T) {
 				return fn(repo)
 			}).
 			Once()
-		repo.EXPECT().CreateRelayRequest(ctx, chainIDEth, txHashLower).Return(nil).Once()
 		repo.EXPECT().UpsertPacket(ctx, store.UpsertPacket{
 			Status:                    store.RelayStatusPending,
 			SourceChainID:             chainIDEth,
@@ -160,13 +159,30 @@ func TestRelay(t *testing.T) {
 		// we do not expect UpsertPacket to be called for "unknown-0"
 
 		// ACT
-		err := service.Relay(ctx, relaySelected(chainIDEth, txHashUpper, PacketSelector{
+		packets, err := service.Relay(ctx, relaySelected(chainIDEth, txHashUpper, PacketSelector{
 			SourceClientID: "base-0",
 			SequenceNumber: 42,
 		}))
 
 		// ASSERT
 		require.NoError(t, err)
+
+		// Every observed packet is reported, including the unconfigured one that
+		// is otherwise only visible in the logs.
+		require.Equal(t, []ObservedPacket{
+			{
+				Selector:  PacketSelector{SourceClientID: "base-0", SequenceNumber: 42},
+				Selection: SelectionStateSelected,
+			},
+			{
+				Selector:  PacketSelector{SourceClientID: "base-0", SequenceNumber: 43},
+				Selection: SelectionStateNotSelected,
+			},
+			{
+				Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 7},
+				Selection: SelectionStateUnconfigured,
+			},
+		}, packets)
 	})
 
 	t.Run("allWithNoRelayablePackets", func(t *testing.T) {
@@ -190,10 +206,22 @@ func TestRelay(t *testing.T) {
 			},
 		}}, nil).Once()
 
-		require.NoError(t, service.Relay(ctx, relayAll(chainIDEth, txHashLower)))
-		statuses, err := service.Status(ctx, chainIDEth, txHashLower)
+		packets, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 		require.NoError(t, err)
-		assert.Empty(t, statuses)
+
+		// The request succeeds having relayed nothing, so the response has to
+		// say so; otherwise the caller cannot tell this from a full relay.
+		require.Equal(t, []ObservedPacket{{
+			Selector:  PacketSelector{SourceClientID: "unknown-0", SequenceNumber: 42},
+			Selection: SelectionStateUnconfigured,
+		}}, packets)
+
+		page, err := service.Packets(ctx, PacketFilter{
+			SourceChainID: chainIDEthVar,
+			SourceTxHash:  txHashLowerVar,
+		}, PacketQuery{})
+		require.NoError(t, err)
+		assert.Empty(t, page.Packets)
 	})
 
 	t.Run("selectionIsIdempotent", func(t *testing.T) {
@@ -248,7 +276,7 @@ func TestRelay(t *testing.T) {
 				if status == store.RelayStatusPending {
 					selectors = append(selectors, selector)
 				}
-				require.NoError(t, service.Relay(ctx, relaySelected(chainIDEth, txHashLower, selectors...)))
+				require.NoError(t, relayErr(service.Relay(ctx, relaySelected(chainIDEth, txHashLower, selectors...))))
 				packets, err := st.ListPacketsBySourceTx(ctx, chainIDEth, txHashLower)
 				require.NoError(t, err)
 				require.Len(t, packets, 1)
@@ -269,7 +297,7 @@ func TestRelay(t *testing.T) {
 			},
 		}
 		for _, request := range requests {
-			require.ErrorIs(t, service.Relay(context.Background(), request), ErrInvalidInput)
+			require.ErrorIs(t, relayErr(service.Relay(context.Background(), request)), ErrInvalidInput)
 		}
 	})
 
@@ -306,7 +334,7 @@ func TestRelay(t *testing.T) {
 				clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 				client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
-				err := service.Relay(ctx, relaySelected(chainIDEth, txHashLower, tt.selector))
+				_, err := service.Relay(ctx, relaySelected(chainIDEth, txHashLower, tt.selector))
 				require.ErrorIs(t, err, tt.want)
 			})
 		}
@@ -330,7 +358,7 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
 		// ACT
-		err := service.Relay(context.Background(), relayAll("999", txHashLower))
+		_, err := service.Relay(context.Background(), relayAll("999", txHashLower))
 
 		// ASSERT
 		require.ErrorIs(t, err, ErrInvalidInput)
@@ -347,7 +375,7 @@ func TestRelay(t *testing.T) {
 		clients.EXPECT().Get(chainIDEth).Return(nil, false).Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		// a missing client is a server-side inconsistency, not a caller error
@@ -367,7 +395,7 @@ func TestRelay(t *testing.T) {
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, ethereum.NotFound).Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		require.ErrorIs(t, err, ErrNotFound)
@@ -386,7 +414,7 @@ func TestRelay(t *testing.T) {
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, errors.New("rpc down")).Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		require.ErrorContains(t, err, "extracting packet events")
@@ -410,7 +438,7 @@ func TestRelay(t *testing.T) {
 				service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
 				// ACT
-				err := service.Relay(context.Background(), relayAll(tt.chainID, tt.txHash))
+				_, err := service.Relay(context.Background(), relayAll(tt.chainID, tt.txHash))
 
 				// ASSERT
 				require.ErrorIs(t, err, ErrInvalidInput)
@@ -434,7 +462,7 @@ func TestRelay(t *testing.T) {
 			Once()
 
 		// ACT
-		err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
+		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))
 
 		// ASSERT
 		require.ErrorContains(t, err, "recording relay request")
@@ -442,117 +470,87 @@ func TestRelay(t *testing.T) {
 	})
 }
 
-func TestStatus(t *testing.T) {
-	t.Run("notSubmitted", func(t *testing.T) {
+func TestPackets(t *testing.T) {
+	t.Run("unknownTransactionIsEmptyNotError", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
-		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, nil).Once()
-		st.EXPECT().GetRelayRequest(ctx, chainIDEth, txHashLower).Return(nil, store.ErrNotFound).Once()
+		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
 
 		// ACT
-		_, err := service.Status(ctx, chainIDEth, txHashLower)
-
-		// ASSERT
-		require.ErrorIs(t, err, ErrNotFound)
-	})
-
-	// an auto-relayed packet is never submitted to /relay, so its rows have to
-	// answer for it on their own
-	t.Run("autoRelayedPacketsNeedNoRelayRequest", func(t *testing.T) {
-		// ARRANGE
-		ctx := context.Background()
-		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
-
-		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return([]store.Packet{{
-			Status:               store.RelayStatusPending,
-			SourceChainID:        chainIDEth,
-			PacketSequenceNumber: 7,
-			PacketSourceClientID: "base-0",
-		}}, nil).Once()
-
-		// ACT
-		statuses, err := service.Status(ctx, chainIDEth, txHashLower)
+		page, err := service.Packets(ctx, PacketFilter{
+			SourceChainID: chainIDEthVar,
+			SourceTxHash:  txHashLowerVar,
+		}, PacketQuery{})
 
 		// ASSERT
 		require.NoError(t, err)
-		require.Len(t, statuses, 1)
-		assert.Equal(t, uint64(7), statuses[0].SequenceNumber)
+		require.Empty(t, page.Packets)
+		require.False(t, page.HasMore)
 	})
 
-	t.Run("storeError", func(t *testing.T) {
-		// ARRANGE
+	t.Run("normalizesTxHashCasing", func(t *testing.T) {
+		// The store holds canonical hashes, so an uppercase filter must be
+		// normalized or it silently matches nothing.
 		ctx := context.Background()
 		st := NewMockStore(t)
 		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
-		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(nil, errors.New("boom")).Once()
+		var seen string
 
-		// ACT
-		_, err := service.Status(ctx, chainIDEth, txHashLower)
+		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
+			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
+				seen = filter.SourceTxHash
+			}).Return(nil, nil).Once()
 
-		// ASSERT
-		require.ErrorContains(t, err, "listing packets")
-		require.NotErrorIs(t, err, ErrNotFound)
-	})
+		_, err := service.Packets(ctx, PacketFilter{
+			SourceChainID: chainIDEthVar,
+			SourceTxHash:  txHashUpperVar,
+		}, PacketQuery{})
 
-	t.Run("mapsPackets", func(t *testing.T) {
-		// ARRANGE
-		ctx := context.Background()
-		st := NewMockStore(t)
-		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
-
-		recvTxHash := "0xrecv"
-		ackTxHash := "0xack"
-		packets := []store.Packet{
-			{
-				Status:               store.RelayStatusDeliverRecvPacket,
-				PacketSequenceNumber: 42,
-				PacketSourceClientID: "base-0",
-				SourceChainID:        chainIDEth,
-				DestinationChainID:   chainIDBase,
-				SourceTxHash:         txHashLower,
-				RecvTxHash:           &recvTxHash,
-			},
-			{
-				Status:               store.RelayStatusCompleteWithAck,
-				PacketSequenceNumber: 43,
-				PacketSourceClientID: "base-0",
-				SourceChainID:        chainIDEth,
-				DestinationChainID:   chainIDBase,
-				SourceTxHash:         txHashLower,
-				RecvTxHash:           &recvTxHash,
-				AckTxHash:            &ackTxHash,
-			},
-		}
-
-		st.EXPECT().ListPacketsBySourceTx(ctx, chainIDEth, txHashLower).Return(packets, nil).Once()
-
-		// ACT
-		statuses, err := service.Status(ctx, chainIDEth, txHashUpper)
-
-		// ASSERT
 		require.NoError(t, err)
-		require.Len(t, statuses, 2)
+		require.Equal(t, txHashLower, seen)
+	})
 
-		first := statuses[0]
-		assert.Equal(t, StatePending, first.State)
-		assert.Equal(t, uint64(42), first.SequenceNumber)
-		assert.Equal(t, "base-0", first.SourceClientID)
-		assert.Equal(t, TxInfo{TxHash: txHashLower, ChainID: chainIDEth}, first.SendTx)
-		require.NotNil(t, first.RecvTx)
-		assert.Equal(t, TxInfo{TxHash: recvTxHash, ChainID: chainIDBase}, *first.RecvTx)
-		assert.Nil(t, first.AckTx)
-		assert.Nil(t, first.TimeoutTx)
+	t.Run("rejectsMalformedTxHash", func(t *testing.T) {
+		ctx := context.Background()
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
-		assert.Equal(t, StateSucceeded, statuses[1].State)
-		require.NotNil(t, statuses[1].RecvTx)
-		require.NotNil(t, statuses[1].AckTx)
+		malformed := "not-a-hash"
+		_, err := service.Packets(ctx, PacketFilter{SourceTxHash: malformed}, PacketQuery{})
+
+		require.ErrorIs(t, err, ErrInvalidInput)
+	})
+
+	t.Run("expandsStateIntoRelayStatuses", func(t *testing.T) {
+		ctx := context.Background()
+		st := NewMockStore(t)
+		service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
+
+		var seen []store.RelayStatus
+
+		st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).
+			Run(func(_ context.Context, filter store.PacketFilter, _ store.Page) {
+				seen = filter.Statuses
+			}).Return(nil, nil).Once()
+
+		pending := StatePending
+		_, err := service.Packets(ctx, PacketFilter{State: pending}, PacketQuery{})
+
+		require.NoError(t, err)
+		require.Contains(t, seen, store.RelayStatusAwaitingSendFinality,
+			"a PENDING filter must cover in-flight statuses, not just literal PENDING")
+		require.NotContains(t, seen, store.RelayStatusCompleteWithAck)
 	})
 }
+
+var (
+	chainIDEthVar  = chainIDEth
+	txHashLowerVar = txHashLower
+	txHashUpperVar = txHashUpper
+)
 
 func TestMapPacketState(t *testing.T) {
 	assert.Equal(t, StateNotSelected, mapPacketState(store.RelayStatusNotSelected))
@@ -583,11 +581,8 @@ func TestMapPacketState(t *testing.T) {
 	assert.Equal(t, StateRelayFailed, mapPacketState(store.RelayStatusFailed))
 }
 
-func TestServiceLifecycle(t *testing.T) {
-	t.Run("noBackgroundLoopsIsANoOp", func(t *testing.T) {
-		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
-
-		require.NoError(t, service.Start())
-		require.NoError(t, service.Stop())
-	})
+// relayErr discards the relay result so tests that only assert the error stay
+// one line.
+func relayErr(_ []ObservedPacket, err error) error {
+	return err
 }

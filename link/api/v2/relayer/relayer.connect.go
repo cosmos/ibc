@@ -36,9 +36,9 @@ const (
 const (
 	// RelayerApiServiceRelayProcedure is the fully-qualified name of the RelayerApiService's Relay RPC.
 	RelayerApiServiceRelayProcedure = "/ibc.v2.relayer.RelayerApiService/Relay"
-	// RelayerApiServiceStatusProcedure is the fully-qualified name of the RelayerApiService's Status
+	// RelayerApiServicePacketsProcedure is the fully-qualified name of the RelayerApiService's Packets
 	// RPC.
-	RelayerApiServiceStatusProcedure = "/ibc.v2.relayer.RelayerApiService/Status"
+	RelayerApiServicePacketsProcedure = "/ibc.v2.relayer.RelayerApiService/Packets"
 )
 
 // RelayerApiServiceClient is a client for the ibc.v2.relayer.RelayerApiService service.
@@ -46,9 +46,8 @@ type RelayerApiServiceClient interface {
 	// Relay tracks the packets emitted by a source transaction and submits the
 	// transactions required to complete them.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
-	// Status returns per-packet relay status for a transaction previously
-	// submitted via Relay.
-	Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)
+	// Packets lists the packets this relayer is aware of, most recent first.
+	Packets(context.Context, *connect.Request[PacketsRequest]) (*connect.Response[PacketsResponse], error)
 }
 
 // NewRelayerApiServiceClient constructs a client for the ibc.v2.relayer.RelayerApiService service.
@@ -68,10 +67,10 @@ func NewRelayerApiServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(relayerApiServiceMethods.ByName("Relay")),
 			connect.WithClientOptions(opts...),
 		),
-		status: connect.NewClient[StatusRequest, StatusResponse](
+		packets: connect.NewClient[PacketsRequest, PacketsResponse](
 			httpClient,
-			baseURL+RelayerApiServiceStatusProcedure,
-			connect.WithSchema(relayerApiServiceMethods.ByName("Status")),
+			baseURL+RelayerApiServicePacketsProcedure,
+			connect.WithSchema(relayerApiServiceMethods.ByName("Packets")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -79,8 +78,8 @@ func NewRelayerApiServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // relayerApiServiceClient implements RelayerApiServiceClient.
 type relayerApiServiceClient struct {
-	relay  *connect.Client[RelayRequest, RelayResponse]
-	status *connect.Client[StatusRequest, StatusResponse]
+	relay   *connect.Client[RelayRequest, RelayResponse]
+	packets *connect.Client[PacketsRequest, PacketsResponse]
 }
 
 // Relay calls ibc.v2.relayer.RelayerApiService.Relay.
@@ -88,9 +87,9 @@ func (c *relayerApiServiceClient) Relay(ctx context.Context, req *connect.Reques
 	return c.relay.CallUnary(ctx, req)
 }
 
-// Status calls ibc.v2.relayer.RelayerApiService.Status.
-func (c *relayerApiServiceClient) Status(ctx context.Context, req *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error) {
-	return c.status.CallUnary(ctx, req)
+// Packets calls ibc.v2.relayer.RelayerApiService.Packets.
+func (c *relayerApiServiceClient) Packets(ctx context.Context, req *connect.Request[PacketsRequest]) (*connect.Response[PacketsResponse], error) {
+	return c.packets.CallUnary(ctx, req)
 }
 
 // RelayerApiServiceHandler is an implementation of the ibc.v2.relayer.RelayerApiService service.
@@ -98,9 +97,8 @@ type RelayerApiServiceHandler interface {
 	// Relay tracks the packets emitted by a source transaction and submits the
 	// transactions required to complete them.
 	Relay(context.Context, *connect.Request[RelayRequest]) (*connect.Response[RelayResponse], error)
-	// Status returns per-packet relay status for a transaction previously
-	// submitted via Relay.
-	Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error)
+	// Packets lists the packets this relayer is aware of, most recent first.
+	Packets(context.Context, *connect.Request[PacketsRequest]) (*connect.Response[PacketsResponse], error)
 }
 
 // NewRelayerApiServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -116,18 +114,18 @@ func NewRelayerApiServiceHandler(svc RelayerApiServiceHandler, opts ...connect.H
 		connect.WithSchema(relayerApiServiceMethods.ByName("Relay")),
 		connect.WithHandlerOptions(opts...),
 	)
-	relayerApiServiceStatusHandler := connect.NewUnaryHandler(
-		RelayerApiServiceStatusProcedure,
-		svc.Status,
-		connect.WithSchema(relayerApiServiceMethods.ByName("Status")),
+	relayerApiServicePacketsHandler := connect.NewUnaryHandler(
+		RelayerApiServicePacketsProcedure,
+		svc.Packets,
+		connect.WithSchema(relayerApiServiceMethods.ByName("Packets")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/ibc.v2.relayer.RelayerApiService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RelayerApiServiceRelayProcedure:
 			relayerApiServiceRelayHandler.ServeHTTP(w, r)
-		case RelayerApiServiceStatusProcedure:
-			relayerApiServiceStatusHandler.ServeHTTP(w, r)
+		case RelayerApiServicePacketsProcedure:
+			relayerApiServicePacketsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -141,6 +139,6 @@ func (UnimplementedRelayerApiServiceHandler) Relay(context.Context, *connect.Req
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.relayer.RelayerApiService.Relay is not implemented"))
 }
 
-func (UnimplementedRelayerApiServiceHandler) Status(context.Context, *connect.Request[StatusRequest]) (*connect.Response[StatusResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.relayer.RelayerApiService.Status is not implemented"))
+func (UnimplementedRelayerApiServiceHandler) Packets(context.Context, *connect.Request[PacketsRequest]) (*connect.Response[PacketsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.relayer.RelayerApiService.Packets is not implemented"))
 }
