@@ -42,8 +42,8 @@ func TestParseReadiness(t *testing.T) {
 	require.ErrorContains(t, res.err, "http")
 }
 
-// fakeRelayerAPI serves the relayer wire contract: Status on an unknown
-// transaction reports CodeNotFound; Relay records the submitted arguments.
+// fakeRelayerAPI serves the relayer wire contract: Packets returns matching
+// statuses; Relay records the submitted arguments.
 type fakeRelayerAPI struct {
 	relayerv2.UnimplementedRelayerApiServiceHandler
 	relayed  []*relayerv2.RelayRequest
