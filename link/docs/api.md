@@ -3,9 +3,20 @@ title: "API"
 description: "The two gRPC services a running relayer and attestor serve, and how to call them."
 ---
 
-A running `ibc` process serves gRPC on one address, `server.listenAddr`, defaulting to `0.0.0.0:3000`. A relayer serves `ibc.v2.relayer.RelayerApiService`, an attestor serves `ibc.v2.attestor.AttestationService`, and a process running both serves both on that one address.
+The IBC CLI exposes two APIs: a relayer API and an attestation API.
 
-The server speaks HTTP/2 without TLS, so a plaintext client connects without extra configuration. <!-- [server.go:L38-L43](link/internal/server/server.go#L38-L43) --> Reflection is registered, so a client works without the proto files. <!-- [server.go:L103-L104](link/internal/server/server.go#L103-L104) -->
+Packets are moved by calling the relayer's API, which has two main parts:
+
+- `Relay` takes the transaction that sent the packets.
+- `Status` reports how far each of them got.
+
+The attestor's API serves the attestations a light client verifies. A relayer is its usual caller, gathering proofs for a packet it is delivering. An operator calls it directly to check which attestor is answering and how far behind the head it will sign.
+
+Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`.
+
+Connections are plaintext HTTP/2 with reflection registered, so a client needs no TLS setup and no proto files. <!-- [server.go:L38-L43](link/internal/server/server.go#L38-L43) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
+
+To list running services:
 
 ```bash
 grpcurl -plaintext localhost:3000 list
@@ -14,8 +25,6 @@ grpcurl -plaintext localhost:3000 list
 ```
 ibc.v2.relayer.RelayerApiService
 ```
-
-An attestor-only process lists the attestation service instead, and a dual process lists both.
 
 ## Relayer service
 
@@ -32,7 +41,7 @@ An attestor-only process lists the attestation service instead, and a dual proce
 
 <!-- GEN:api:relayer:rpcs END -->
 
-Nothing watches the chains, so `Relay` is what starts a delivery. `ibc relayer relay` and `ibc relayer status` are thin wrappers over these two calls.
+Both calls name a transaction rather than a packet, because a transaction is what the relayer reads its packets out of. `ibc relayer relay` and `ibc relayer status` use these two calls.
 
 ### `Relay`
 
@@ -68,6 +77,8 @@ The two selection options differ in what happens to a packet this relayer cannot
 
 <!-- GEN:api:msg:SelectedPackets END -->
 
+Each entry names one packet:
+
 <!-- GEN:api:msg:PacketSelector START -->
 
 | Field | Type | Description |
@@ -78,6 +89,20 @@ The two selection options differ in what happens to a packet this relayer cannot
 <!-- [relayer.proto:L42](proto/link/relayer.proto#L42) -->
 
 <!-- GEN:api:msg:PacketSelector END -->
+
+So a `selected_packets` request body nests three levels:
+
+```json
+{
+  "txHash": "0x...",
+  "sourceChainId": "41001",
+  "selectedPackets": {
+    "packets": [
+      {"sourceClientId": "link-41001-41002", "sequenceNumber": "3"}
+    ]
+  }
+}
+```
 
 A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [relayer.proto:L35-L37](proto/link/relayer.proto#L35-L37) -->
 
