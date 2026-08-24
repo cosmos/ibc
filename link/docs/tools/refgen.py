@@ -404,17 +404,94 @@ def _proto_short(path):
     return m.group(1).split(".")[-1]
 
 
+# The services, in the order a reader meets them, with the names the page uses.
+# The proto files sort alphabetically and the service type is RelayerApiService,
+# so both the order and the display name are a human's call. A service missing
+# from here raises, and an entry naming a service that is gone raises too.
+SERVICES = [("relayer", "Relayer service"), ("attestor", "Attestation service")]
+
+# Descriptions for fields the protos leave undocumented. Nearly all of these
+# were prose on the page already, moved into the cell they belong in. Values
+# never come from here, only wording, and the four checks that keep
+# FALLBACK_DOCS honest apply here too: an entry for a field that is gone
+# raises, a field that gains a proto comment raises, and a fingerprint over the
+# field's type raises when the shape changes under a stable name.
+FIELD_DOCS = {
+    ("RelayRequest", "tx_hash"): ("The transaction that sent the packets, on the source chain.", "e86e1cfa"),
+    ("RelayRequest", "source_chain_id"): ("The chain that transaction was sent on.", "47d6b1f4"),
+    ("SelectedPackets", "packets"): ("The packets to relay. One entry each.", "d196665f"),
+    ("PacketSelector", "source_client_id"): ("The client the packet was sent on.", "947d8614"),
+    ("PacketSelector", "sequence_number"): ("The packet's number on that client.", "71c4fc7e"),
+    ("StatusRequest", "tx_hash"): ("The transaction whose packets to report on.", "e86e1cfa"),
+    ("StatusRequest", "source_chain_id"): ("The chain that transaction was sent on.", "47d6b1f4"),
+    ("StatusResponse", "packet_statuses"): ("One entry per packet in the transaction.", "d1ef2018"),
+    ("PacketStatus", "state"): ("Where the packet got to. See the states below.", "5c7b7988"),
+    ("TransactionInfo", "tx_hash"): ("The transaction's hash.", "e86e1cfa"),
+    ("TransactionInfo", "chain_id"): ("The chain it was submitted to.", "8140443d"),
+    ("StateAttestationRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
+    ("StateAttestationRequest", "height"): ("The height to attest to.", "f4439355"),
+    ("StateAttestationResponse", "attestation"): ("The signed attestation. See below.", "b9fffb17"),
+    ("PacketAttestationRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
+    ("PacketAttestationResponse", "attestation"): ("The signed attestation. See below.", "b9fffb17"),
+    ("LatestHeightRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
+    ("LatestHeightResponse", "height"): ("The highest height this attestor will attest to.", "f4439355"),
+    ("InfoRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
+}
+
+
+def _field_fingerprint(msg, field):
+    """Hash what a hand-written field description depends on: the field's type
+    and its name. Blind to formatting and to the rest of the message."""
+    return hashlib.sha1(f"{field['type']}|{field['name']}".encode()).hexdigest()[:8]
+
+
+def _field_doc(msg, field, seen):
+    """The Description cell, with the same four checks the config page uses."""
+    doc = _lead_strip(field["name"], field["doc"])
+    entry = FIELD_DOCS.get((msg, field["name"]))
+    where = f"{msg}.{field['name']}"
+    if doc and entry:
+        _problem("stale_field_doc",
+                 f"{where} now has a proto comment; drop its FIELD_DOCS entry", field=where)
+        return doc
+    if not entry:
+        return doc
+    text, recorded = entry
+    seen.add((msg, field["name"]))
+    current = _field_fingerprint(msg, field)
+    if recorded and current != recorded:
+        _problem("field_fingerprint_mismatch",
+                 f"{where}: the field changed shape (fingerprint {recorded} -> {current}). "
+                 f"Re-read \"{text}\" against the proto, then record the new fingerprint.",
+                 field=where, description=text, was=recorded, now=current)
+    return text
+
+
 def gen_api():
-    blocks = {}
+    blocks, seen_docs, by_short = {}, set(), {}
     for fname in _proto_files():
-        short = _proto_short(fname)
-        p = parse_proto(fname)
+        by_short[_proto_short(fname)] = (fname, parse_proto(fname))
+
+    missing = [s for s, _n in SERVICES if s not in by_short]
+    if missing:
+        _problem("missing_service",
+                 f"SERVICES names proto packages that are gone: {missing}", services=missing)
+    unlisted = sorted(set(by_short) - {s for s, _n in SERVICES})
+    if unlisted:
+        _problem("unlisted_service",
+                 "these proto packages have no section on the page: " + ", ".join(unlisted),
+                 services=unlisted)
+
+    for short, _display in SERVICES:
+        if short not in by_short:
+            continue
+        fname, p = by_short[short]
         for svc in p["services"]:
-            rows = [(f"`{r['name']}`", f"`{r['req']}`", f"`{r['resp']}`",
-                     _lead_strip(r["name"], r["doc"])) for r in svc["rpcs"]]
-            blocks[f"api:{short}:rpcs"] = (
-                table(["RPC", "Request", "Response", "What it does"], rows)
-                + "\n\n" + cite(fname, svc["line"]))
+            for r in svc["rpcs"]:
+                # one region per RPC, so an RPC that reuses existing messages
+                # still needs a section and cannot arrive unnoticed
+                blocks[f"api:rpc:{r['name']}"] = (
+                    _lead_strip(r["name"], r["doc"]) + "\n\n" + cite(fname, svc["line"]))
         for msg in p["messages"]:
             if not msg["fields"]:
                 continue
@@ -422,15 +499,22 @@ def gen_api():
             for f in msg["fields"]:
                 t = (f"oneof: {' or '.join('`'+o+'`' for o in f['opts'])}"
                      if f["type"] == "oneof" else _proto_type(f["type"]))
-                doc = _fence(_lead_strip(f["name"], f["doc"]), names - {f["name"]})
+                doc = _fence(_field_doc(msg["name"], f, seen_docs), names - {f["name"]})
                 rows.append((f"`{f['name']}`", t, doc))
             blocks[f"api:msg:{msg['name']}"] = (
                 table(["Field", "Type", "Description"], rows)
                 + "\n\n" + cite(fname, msg["line"]))
         for en in p["enums"]:
-            rows = [(f"`{v['name']}`", v["doc"]) for v in en["values"] if not v["name"].endswith("UNSPECIFIED")]
+            rows = [(f"`{v['name']}`", v["doc"]) for v in en["values"]
+                    if not v["name"].endswith("UNSPECIFIED")]
             blocks[f"api:enum:{en['name']}"] = (
                 table(["Value", "Meaning"], rows) + "\n\n" + cite(fname, en["line"]))
+
+    orphans = sorted(f"{m}.{f}" for m, f in set(FIELD_DOCS) - seen_docs)
+    if orphans:
+        _problem("dead_field_doc",
+                 "FIELD_DOCS describes fields that are gone: " + ", ".join(orphans),
+                 fields=orphans)
     return blocks
 
 
@@ -478,34 +562,22 @@ DEFAULT_CONSTS = {
 # The real fix is upstream doc comments. Every one added shrinks this map, and
 # the second rule above turns that into a guided migration rather than a sweep.
 FALLBACK_DOCS = {
-    ("Config", "Server"): ("The address the gRPC server binds.", "cc01fb7e"),
-    ("Config", "DB"): ("Where the relayer stores the packets it is tracking.", "abeaad1c"),
-    ("Config", "Chains"): ("Every chain the rest of the file refers to.", "155b6c86"),
-    ("Config", "Relayer"): ("The connections to relay, and per-chain relay settings.", "f8525dbe"),
-    ("Config", "Attestors"): ("Attestors this process runs, and attestors it queries.", "8bbe3f09"),
-    ("Config", "Signers"): ("The keys, under the aliases the rest of the file uses.", "0762378d"),
     ("ServerConfig", "ListenAddress"): ("Address the gRPC server binds. It serves the relayer and attestor APIs together.", "a05468ed"),
     ("DBConfig", "Type"): ("Database backend.", "70e2ad2c"),
     ("DBConfig", "URL"): ("File path for sqlite, connection string for postgres. `:memory:` is rejected.", "d084b0d4"),
     ("ChainConfig", "ChainID"): ("The chain's id, as the chain reports it.", "69a3e543"),
-    ("ChainConfig", "EVM"): ("EVM connection details for the chain. See the table below.", "76a60026"),
     ("EVMChainConfig", "RPC"): ("JSON-RPC endpoint for the chain.", "cf552b01"),
     ("EVMChainConfig", "ICS26Router"): ("Address of the ICS26 router on the chain.", "1daaecba"),
     ("AttestorConfig", "Type"): ("Whether this process runs the attestor or queries it.", "a58f9a4e"),
     ("SignerConfig", "Type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
     ("RelayerConfig", "DispatchPollInterval"): ("How often the dispatcher polls the store for unfinished packets.", "893f79b1"),
-    ("RelayerConfig", "ChainOverrides"): ("Per-chain relay settings. See the table below.", "aceb0b59"),
-    ("RelayerConfig", "Connections"): ("The connections this relayer relays over. See the table below.", "af170c58"),
     ("RelayerChainOverride", "ChainID"): ("The chain these settings apply to.", "69a3e543"),
-    ("RelayerChainOverride", "EVM"): ("EVM fee settings for the chain. See the table below.", "815e4d78"),
     ("RelayerChainOverride", "TxSubmissionDelay"): ("Minimum delay between two transaction submissions on the chain.", "5691fa23"),
     ("RelayerChainOverride", "PacketBatchSize"): ("How many packets the relayer puts in one transaction.", "b4f4f14c"),
     ("RelayerChainOverride", "PacketBatchTimeout"): ("How long the relayer waits to fill a batch before submitting it.", "84d8816e"),
     ("RelayerEVMConfig", "GasFeeCapMultiplier"): ("Multiplies the fee cap the node suggests.", "b9de0a8d"),
     ("RelayerEVMConfig", "GasTipCapMultiplier"): ("Multiplies the tip cap the node suggests.", "634e0708"),
     ("ConnectionConfig", "Alias"): ("Name for the connection, unique in the file.", "7e352d14"),
-    ("ConnectionConfig", "ClientA"): ("One end of the connection. See the table below.", "564d97f6"),
-    ("ConnectionConfig", "ClientB"): ("The other end, on a different chain. Same keys as `clientA`.", "5b5384b1"),
     ("ClientEnd", "ChainID"): ("The chain this end's client lives on.", "69a3e543"),
     ("ClientEnd", "Signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
     ("ClientEnd", "ClientID"): ("The light client's id on this chain.", "bb596da7"),
@@ -519,19 +591,6 @@ FALLBACK_DOCS = {
 # raises; a deliberate skip cannot. When auto-relay lands, delete the entry,
 # regenerate, and write the prose those two keys need.
 SKIP_FIELDS = {("ClientEnd", "AutoRelay")}
-
-# Which processes read each top-level block. Not derivable: it is a fact about
-# which code paths load which part of the file. Every top-level block needs an
-# entry and an entry for a block that is gone raises, so this cannot drift
-# quietly the way a hand-written table would.
-READ_BY = {
-    "server": "relayer, attestor",
-    "db": "relayer",
-    "chains": "relayer, attestor, deploy",
-    "relayer": "relayer",
-    "attestors": "relayer, attestor",
-    "signers": "relayer, attestor, deploy",
-}
 
 # Pointer fields whose default is not a named constant anywhere: unset means
 # unset, and the prose says what that implies. Listed so that a new pointer
@@ -674,32 +733,120 @@ def _element_type(go_type, model):
     return t if t in model["structs"] else None
 
 
-def discover_config_blocks(model):
-    """Every struct reachable from CONFIG_ROOT, in the order a reader meets it.
+def _is_list(go_type, model):
+    t = go_type.lstrip("*")
+    return t.startswith("[]") or model["aliases"].get(t, "").startswith("") and t in model["aliases"]
 
-    One region per struct rather than per path, so a type used twice (a
-    connection's two client ends) is documented once. Region ids are struct
-    names because a yaml key can be renamed while the shape stays the same.
 
-    Returns [(region_id, struct, parent)] where parent is the (struct, yaml key)
-    that reached it, for required-ness validated one level up as a dotted path.
+def _discriminator(struct, model):
+    """The field whose value decides which other keys apply, and its values.
+
+    A block like `attestors` holds two shapes behind one struct, and a reader
+    of the local shape should never meet a remote-only key. Detected rather
+    than declared: a field with two or more known values is one.
+    """
+    for field in model["structs"][struct]["fields"]:
+        values = sorted(v for c, v in model["consts"].items()
+                        if model["const_type"].get(c) == field["type"].lstrip("*"))
+        if len(values) < 2:
+            for msg, args in model["validations"].get(struct, []):
+                if msg.lstrip(".").split()[0] == field["yaml"] and "must be one of" in msg:
+                    values = sorted(model["consts"][a] for a in args if a in model["consts"])
+        if len(values) >= 2:
+            return field, values
+    return None, []
+
+
+def _applies(struct, field, model, value):
+    """Whether a key belongs in the table for one discriminator value."""
+    key = field["yaml"]
+    for msg, _a in model["validations"].get(struct, []):
+        body = msg.lstrip(".")
+        if not body.startswith(key + " "):
+            continue
+        rest = body[len(key):].strip()
+        m = re.match(r"required for (?:type: )?(\w+)", rest)
+        if m and m.group(1) != value:
+            return False
+        if rest.startswith("must not be set for") and rest.split()[-2] == value:
+            return False
+    return True
+
+
+def discover_config_sections(model):
+    """Every table the page needs, by three rules and no list.
+
+    One table per top-level block. A nested struct flattens into its parent
+    with a dotted key; a list of structs gets its own table. A block with a
+    discriminator splits into one table per value of it.
     """
     if CONFIG_ROOT not in model["structs"]:
         raise SourceError(f"the config package has no {CONFIG_ROOT} struct to start from")
-    out, seen = [], set()
-    queue = [(CONFIG_ROOT, None)]
-    while queue:
-        struct, parent = queue.pop(0)
-        if struct in seen:
-            continue
-        seen.add(struct)
-        out.append((f"config:{struct}", struct, parent))
+    out = []
+
+    def walk(region, struct, parent, prefix=""):
+        rows, nested, siblings = [], [], {}
         for field in model["structs"][struct]["fields"]:
             if (struct, field["go"]) in SKIP_FIELDS:
                 continue
             child = _element_type(field["type"], model)
-            if child and child not in seen:
-                queue.append((child, (struct, field["yaml"])))
+            if child and field["type"].lstrip("*").startswith(("[]",)) or (
+                    child and model["aliases"].get(field["type"].lstrip("*"))):
+                nested.append((f"{region}:{field['yaml']}", child,
+                               (struct, field["yaml"]), f"{field['yaml']}[]."))
+            elif child:
+                siblings.setdefault(child, []).append(field["yaml"])
+            else:
+                rows.append((struct, field, f"{prefix}{field['yaml']}", parent))
+        # clientA and clientB are the same shape, so they are one set of rows
+        for child, names in siblings.items():
+            rows.extend(walk_rows(child, [f"{prefix}{n}." for n in names],
+                                  (struct, names[0])))
+
+        field, values = _discriminator(struct, model)
+        if values:
+            per_value = {v: [r for r in rows if _applies(r[0], r[1], model, v)]
+                         for v in values}
+            # a two-valued key that gates nothing is not a discriminator: db.type
+            # picks a backend, it does not change which keys exist
+            if len({tuple(k for _s, _f, k, _p in rs) for rs in per_value.values()}) == 1:
+                values = []
+        if values:
+            for value in values:
+                out.append({"region": f"{region}:{value}", "struct": struct,
+                            "parent": parent, "rows": per_value[value],
+                            "discriminator": (field, value)})
+        else:
+            out.append({"region": region, "struct": struct, "parent": parent,
+                        "rows": rows, "discriminator": None})
+        for args in nested:
+            walk(*args)
+
+    def walk_rows(struct, prefixes, parent=None):
+        """Rows for a flattened struct. Several prefixes mean several fields
+        share this shape, and one row names them all."""
+        if isinstance(prefixes, str):
+            prefixes = [prefixes]
+        rows = []
+        for field in model["structs"][struct]["fields"]:
+            if (struct, field["go"]) in SKIP_FIELDS:
+                continue
+            child = _element_type(field["type"], model)
+            if child and not model["aliases"].get(field["type"].lstrip("*")) \
+                    and not field["type"].lstrip("*").startswith("[]"):
+                rows.extend(walk_rows(child, [f"{p}{field['yaml']}." for p in prefixes],
+                                      (struct, field["yaml"])))
+            else:
+                rows.append((struct, field,
+                             ", ".join(f"{p}{field['yaml']}" for p in prefixes), parent))
+        return rows
+
+    for field in model["structs"][CONFIG_ROOT]["fields"]:
+        child = _element_type(field["type"], model)
+        if not child:
+            raise SourceError(f"top-level key {field['yaml']} is not a block; "
+                              "the page has no shape for a scalar there")
+        walk(f"config:{field['yaml']}", child, (CONFIG_ROOT, field["yaml"]))
     return out
 
 
@@ -893,53 +1040,49 @@ def _root_table(model, seen):
 
 def gen_config():
     model = parse_go_config()
-    blocks = {}
-    seen_fallbacks = set()
-    for region, struct, parent in discover_config_blocks(model):
-        if struct == CONFIG_ROOT:
-            blocks[region] = _root_table(model, seen_fallbacks)
-            continue
+    blocks, seen_fallbacks = {}, set()
+    for sec in discover_config_sections(model):
         rows, cites = [], []
-        for field in model["structs"][struct]["fields"]:
-            if (struct, field["go"]) in SKIP_FIELDS:
-                continue
+        for struct, field, key, parent in sec["rows"]:
             description = _description(struct, field, model, seen_fallbacks)
+            if sec["discriminator"] and field is sec["discriminator"][0]:
+                # the key that names this table: its value is the heading
+                rows.append((f"`{key}`", f"`{sec['discriminator'][1]}`",
+                             "**required**", description))
+                continue
             req, extra = _requirement(struct, field, model, parent)
             if extra:
                 cites.extend(extra)
-            rows.append((f"`{field['yaml']}`", _type_cell(struct, field, model),
-                         req, description))
+            if sec["discriminator"]:
+                # this table is already about one kind, so the condition that
+                # named that kind says nothing a reader here needs
+                value = sec["discriminator"][1]
+                req = {f"**required** for `{value}`": "**required**",
+                       f"`{value}` only": "optional"}.get(req, req)
+            rows.append((f"`{key}`", _type_cell(struct, field, model), req, description))
         body = table(["Key", "Type", "Default or required", "Description"], rows)
-        info = model["structs"][struct]
+        info = model["structs"][sec["struct"]]
         body += "\n\n" + cite(info["file"], info["line"])
         for path, line in dict.fromkeys(cites):
             body += " " + cite(path, line)
-        blocks[region] = body
+        blocks[sec["region"]] = body
 
-    # an entry describing a field that no longer exists is a dead description,
-    # and the next person to read this map would trust it
+    reachable = {(st, f["go"]) for sec in discover_config_sections(model)
+                 for st, f, _k, _p in sec["rows"]}
     orphans = sorted(f"{s}.{f}" for s, f in set(FALLBACK_DOCS) - seen_fallbacks)
     if orphans:
         _problem("dead_description",
                  "FALLBACK_DOCS describes fields that are gone: " + ", ".join(orphans),
                  fields=orphans)
-    reachable = {(st, f["go"]) for _r, st, _p in discover_config_blocks(model)
-                 for f in model["structs"][st]["fields"]}
     dead_defaults = sorted(f"{s}.{f}" for s, f in set(DEFAULT_CONSTS) - reachable)
     if dead_defaults:
         _problem("dead_default",
                  "DEFAULT_CONSTS names fields that are gone: " + ", ".join(dead_defaults),
                  fields=dead_defaults)
-
-    # a pointer field is optional in the file and may still have an effective
-    # default in the code, so each one is either mapped or explicitly declared
-    # to have none. Silence would read as "optional" and hide a real value.
     unclaimed = sorted(
-        f"{st}.{f['go']}"
-        for _r, st, _p in discover_config_blocks(model)
-        for f in model["structs"][st]["fields"]
-        if f["type"].startswith("*")
-        and not _element_type(f["type"], model)   # a block, not a value
+        f"{st}.{f['go']}" for sec in discover_config_sections(model)
+        for st, f, _k, _p in sec["rows"]
+        if f["type"].startswith("*") and not _element_type(f["type"], model)
         and (st, f["go"]) not in DEFAULT_CONSTS
         and (st, f["go"]) not in NO_NAMED_DEFAULT
         and (st, f["go"]) not in SKIP_FIELDS)
@@ -968,15 +1111,6 @@ CLI_EXCLUDED = {"completion", "help"}
 # A group missing from this list raises, so a new one cannot go undocumented.
 CLI_SECTION_ORDER = ["config", "keys", "deploy", "relayer", "attestor",
                      "tx", "query", "migrate"]
-
-# Commands that get their flags spelled out. A command with three or more of
-# its own flags earns a subsection, and the generator fails if that set moves,
-# because a new subsection needs hand-written prose and an example.
-CLI_FLAG_SECTIONS = ["config add-chain", "deploy client", "deploy ift",
-                     "deploy ift-bridge", "relayer relay", "relayer status",
-                     "tx ift send"]
-CLI_FLAG_THRESHOLD = 3
-
 
 def build_cli():
     """Build the binary, because Cobra computes a flag's default when the flag
@@ -1151,25 +1285,37 @@ def parse_cli_source():
             "lines": lines}
 
 
+def _flag_name(f):
+    """The flag as a reader types it, with its type in the signature.
+
+    A separate Type column spends a column on five characters. Cobra already
+    writes the type after the flag, and a bool takes no value at all.
+    """
+    lead = f"-{f['short']}, --{f['name']}" if f["short"] else f"--{f['name']}"
+    return f"`{lead}`" if f["type"] == "bool" else f"`{lead} <{f['type']}>`"
+
+
 def _flag_rows(flags, path, source):
-    """One row per flag, with required-ness folded into the default column the
-    way the config tables do it."""
+    """Flag, Default, Description. Required-ness shows in the Default column,
+    because a required flag is precisely one with no default."""
     required = source["required"].get(path, set())
     rows = []
     for f in flags:
-        name = f"`--{f['name']}`"
-        if f["short"]:
-            name = f"`-{f['short']}, --{f['name']}`"
         if f["name"] in required:
-            default = "**required**"
+            default = "required"
         elif f["default"] in ("", "false", "[]", "0"):
             default = ""
         elif " " in f["default"]:
             default = _prose(f["default"])   # a phrase, so only its tokens fence
         else:
             default = f"`{f['default']}`"
-        rows.append((name, f"`{f['type']}`", default, _prose(f["doc"])))
+        doc = _prose(f["doc"]).rstrip(".")
+        rows.append((_flag_name(f), default,
+                     (doc[0].upper() + doc[1:] + "." if doc else "")))
     return rows
+
+
+FLAG_COLUMNS = ["Flag", "Default", "Description"]
 
 
 def _prose(text):
@@ -1211,7 +1357,7 @@ def gen_cli():
     tree_citation = where("")
 
     blocks["cli:global-flags"] = (
-        table(["Flag", "Type", "Default", "Description"],
+        table(FLAG_COLUMNS,
               _flag_rows(_parse_flags(tree[""]["help"], "Flags:"), "", source))
         + "\n\n" + tree_citation)
 
@@ -1232,63 +1378,42 @@ def gen_cli():
                  f"CLI_SECTION_ORDER names groups the binary does not have: {gone}",
                  groups=gone)
 
-    for group in [g for g in CLI_SECTION_ORDER if g in groups]:
-        blocks[f"cli:group:{group}"] = (
-            table(["Command", "What it does"],
-                  [(f"`ibc {p}`", _prose(tree[p]["short"])) for p in groups[group]])
-            + "\n\n" + tree_citation)
+    # A command's section lists every flag it accepts, its own first and the
+    # ones inherited from its parents after, so a reader who arrives at one
+    # command sees the whole invocation. Group flags are repeated rather than
+    # tabled once: five rows across eight commands costs about twenty lines and
+    # removes the need for a threshold rule, a fold rule, and a cross-reference.
+    # Root flags are the exception, stated once at the top: they apply to all
+    # 28 commands, and inlining them would add 140 rows.
+    def inherited_by(path):
+        return [(node, f) for node, node_tree in tree.items()
+                if node and node_tree["subs"] and path.startswith(node + " ")
+                for f in node_tree["flags"]]
 
-    # a group's own flags are inherited by every command under it, so any
-    # group that has them needs a table. Discovered rather than listed: a new
-    # group with persistent flags would otherwise be documented nowhere.
-    groups = [p for p, c in tree.items() if p and c["subs"] and c["flags"]]
-    for group in groups:
-        blocks[f"cli:group-flags:{_slug(group)}"] = (
-            table(["Flag", "Type", "Default", "Description"],
-                  _flag_rows(tree[group]["flags"], group, source))
-            + "\n\n" + where(group))
+    for path in leaves:
+        rows = sorted(_flag_rows(tree[path]["flags"], path, source))
+        for node, f in sorted(inherited_by(path), key=lambda e: e[1]["name"]):
+            rows += _flag_rows([f], node, source)
+        body = _prose(tree[path]["short"]).rstrip(".") + "."
+        if rows:
+            body += "\n\n" + table(FLAG_COLUMNS, rows)
+        blocks[f"cli:cmd:{_slug(path)}"] = body + "\n\n" + where(path)
 
-    earned = sorted(p for p in leaves if len(tree[p]["flags"]) >= CLI_FLAG_THRESHOLD)
-    if earned != sorted(CLI_FLAG_SECTIONS):
-        _problem("flag_section_change",
-                 "the commands with their own flag section changed. "
-                 f"expected {sorted(CLI_FLAG_SECTIONS)}, source says {earned}. "
-                 "each one needs hand-written prose and an example, so add or remove "
-                 "the page section and its marker before updating CLI_FLAG_SECTIONS",
-                 now_earning=sorted(set(earned) - set(CLI_FLAG_SECTIONS)),
-                 no_longer=sorted(set(CLI_FLAG_SECTIONS) - set(earned)))
-    for path in CLI_FLAG_SECTIONS:
-        blocks[f"cli:flags:{_slug(path)}"] = (
-            table(["Flag", "Type", "Default", "Description"],
-                  _flag_rows(tree[path]["flags"], path, source))
-            + "\n\n" + where(path))
-
-    # Every flag has to appear somewhere. The commands below the threshold do
-    # not earn a section of their own, so their flags collect in one table,
-    # and the assertion after it means no flag can be silently undocumented.
-    rest = [(p, f) for p in leaves if p not in CLI_FLAG_SECTIONS for f in tree[p]["flags"]]
-    blocks["cli:remaining-flags"] = (
-        table(["Command", "Flag", "Type", "Default", "Description"],
-              [(f"`ibc {p}`",) + tuple(_flag_rows([f], p, source)[0])
-               for p, f in rest])
-        + "\n\n" + tree_citation)
-
-    documented = set()
-    for path in CLI_FLAG_SECTIONS:
-        documented |= {(path, f["name"]) for f in tree[path]["flags"]}
-    documented |= {(p, f["name"]) for p, f in rest}
-    for group in groups:
-        documented |= {(group, f["name"]) for f in tree[group]["flags"]}
-    every = {(p, f["name"]) for p in leaves for f in tree[p]["flags"]}
-    missing = sorted(f"ibc {p} --{n}" for p, n in every - documented)
-    if missing:
-        _problem("undocumented_flag", "flags on the page nowhere: " + ", ".join(missing),
-                 flags=missing)
-
-    blocks["cli:all-commands"] = (
-        table(["Command", "What it does"],
-              [(f"`ibc {p}`", _prose(tree[p]["short"])) for p in leaves])
-        + "\n\n" + tree_citation)
+    # Every flag a command accepts appears in its own table or in an inherited
+    # one. Nothing may be documented nowhere.
+    # Every flag of every node reaches a table: a leaf's own flags in its own
+    # section, a group's flags in each of its commands, the root's at the top.
+    for node, node_tree in tree.items():
+        if not node_tree["flags"]:
+            continue
+        if not node:
+            continue                                   # the global table
+        under = [p for p in leaves if p == node or p.startswith(node + " ")]
+        if not under:
+            _problem("undocumented_flag",
+                     f"`ibc {node}` has flags and no command under it, so they "
+                     "appear in no table",
+                     node=node, flags=[f["name"] for f in node_tree["flags"]])
 
     for region, body in blocks.items():
         if "IBC Link" in body:

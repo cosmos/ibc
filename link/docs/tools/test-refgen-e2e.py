@@ -126,45 +126,76 @@ def _():
         box.edit("link/cmd/ibc/main.go",
                  '"attestation signature threshold"',
                  '"attestation signature threshold, at least 1"')
-        red_then_healed(box, "cli", "attestation signature threshold, at least 1")
+        red_then_healed(box, "cli", "Attestation signature threshold, at least 1")
 
 
-@case("a new flag on a command below the threshold reaches the page")
+@case("a new flag on a flagless command reaches the page")
 def _():
     with Sandbox() as box:
         box.edit("link/cmd/ibc/main.go",
                  "\tdpf := cmdDeploy.PersistentFlags()",
                  '\t_ = cmdDeployCore.Flags().Bool("fake", false, "a flag that was not there before")\n'
                  "\tdpf := cmdDeploy.PersistentFlags()")
-        red_then_healed(box, "cli", "a flag that was not there before")
+        red_then_healed(box, "cli", "A flag that was not there before")
 
 
-@case("a third flag earns a section the page does not have, and that raises")
-def _():
-    with Sandbox() as box:
-        box.edit("link/cmd/ibc/main.go",
-                 "\tdpf := cmdDeploy.PersistentFlags()",
-                 '\t_ = cmdDeployCore.Flags().Bool("fake-one", false, "one")\n'
-                 '\t_ = cmdDeployCore.Flags().Bool("fake-two", false, "two")\n'
-                 '\t_ = cmdDeployCore.Flags().Bool("fake-three", false, "three")\n'
-                 "\tdpf := cmdDeploy.PersistentFlags()")
-        raises(box, "cli", "deploy core")
-
-
-@case("a new command belongs to no task group, and that raises")
+@case("a new command in a group raises: its section does not exist yet")
 def _():
     with Sandbox() as box:
         box.append("link/cmd/ibc/migrate.go", '''
 var cmdMigrateFake = &cobra.Command{
 	Use:   "fake",
-	Short: "A command nobody grouped",
+	Short: "A migrate command nobody documented",
 	RunE:  func(_ *cobra.Command, _ []string) error { return nil },
 }
 ''')
         box.edit("link/cmd/ibc/main.go",
                  "cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)",
                  "cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus, cmdMigrateFake)")
-        raises(box, "cli", "migrate fake")
+        page = box.page("cli", own=True)
+        try:
+            refgen.run("cli", page, check=True)
+        except refgen.MarkerError as e:
+            assert "cli:cmd:migrate-fake" in str(e), e
+            return
+        raise AssertionError("a new command must not pass unnoticed")
+
+
+@case("a new command group has no section, and that raises")
+def _():
+    with Sandbox() as box:
+        box.append("link/cmd/ibc/migrate.go", '''
+var cmdFakeGroup = &cobra.Command{
+	Use:   "fakegroup",
+	Short: "A group nobody ordered",
+}
+
+var cmdFakeGroupThing = &cobra.Command{
+	Use:   "thing",
+	Short: "A command in an ungrouped group",
+	RunE:  func(_ *cobra.Command, _ []string) error { return nil },
+}
+''')
+        box.edit("link/cmd/ibc/main.go",
+                 "cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)",
+                 "cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)\n"
+                 "\tcmdFakeGroup.AddCommand(cmdFakeGroupThing)\n"
+                 "\trootCmd.AddCommand(cmdFakeGroup)")
+        raises(box, "cli", "fakegroup")
+
+
+@case("a new group flag reaches every command under it")
+def _():
+    with Sandbox() as box:
+        box.edit("link/cmd/ibc/main.go",
+                 "\tdpf := cmdDeploy.PersistentFlags()",
+                 "\tdpf := cmdDeploy.PersistentFlags()\n"
+                 '\tdpf.Bool("fake-inherited", false, "a flag every deploy command gains")')
+        blocks = refgen.gen_cli()
+        under = [k for k in blocks if k.startswith("cli:cmd:deploy-")]
+        assert len(under) == 8, under
+        for k in under:
+            assert "`--fake-inherited`" in blocks[k], k
 
 
 # ------------------------------------------------------------------- the config
@@ -317,14 +348,16 @@ def _():
         assert "api:msg:NewThing" in refgen.gen_api()
 
 
-@case("a new command group's own flags are discovered")
+@case("a new group flag reaches every command in that group")
 def _():
     with Sandbox() as box:
         box.edit("link/cmd/ibc/main.go",
                  "\tcmdConfig.AddCommand(",
                  '\t_ = cmdConfig.PersistentFlags().Bool("fake-group-flag", false, "inherited")\n'
                  "\tcmdConfig.AddCommand(")
-        assert "cli:group-flags:config" in refgen.gen_cli()
+        blocks = refgen.gen_cli()
+        for path in ("config-new", "config-validate", "config-add-chain"):
+            assert "`--fake-group-flag`" in blocks[f"cli:cmd:{path}"], path
 
 
 @case("plan mode collects every gap rather than stopping at the first")
@@ -353,16 +386,23 @@ def _():
         page = box.page("cli")
         assert refgen.run("cli", page, check=True) == 1
         assert refgen.run("cli", page, check=False) == 0
-        assert "attestation signature threshold" not in open(page).read()
+        assert "Attestation signature threshold" not in open(page).read()
 
 
-@case("a removed command raises: the page still lists it")
+@case("a removed command orphans its section, and that raises")
 def _():
     with Sandbox() as box:
         box.edit("link/cmd/ibc/main.go",
                  "cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport, cmdKeysList)",
                  "cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport)")
-        raises(box, "cli", "keys list")
+        page = box.page("cli", own=True)
+        try:
+            refgen.run("cli", page, check=True)
+        except refgen.MarkerError as e:
+            assert "cli:cmd:keys-list" in str(e), e
+            assert "delete the page section" in str(e), e
+            return
+        raise AssertionError("a removed command must not pass unnoticed")
 
 
 @case("a removed config key disappears from its table")

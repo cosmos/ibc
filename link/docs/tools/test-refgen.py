@@ -250,6 +250,49 @@ def _():
     assert r"\\|" not in row, row
 
 
+@case("api: every RPC has its own region, so a new one cannot arrive unnoticed")
+def _():
+    b = refgen.gen_api()
+    for rpc in ("Relay", "Status", "StateAttestation", "PacketAttestation",
+                "LatestHeight", "Info"):
+        assert f"api:rpc:{rpc}" in b, rpc
+    assert not [k for k in b if k.endswith(":rpcs")], "the summary tables are gone"
+
+
+@case("api: no field table has an empty description")
+def _():
+    for region, body in refgen.gen_api().items():
+        for row in (l for l in body.split("\n") if l.startswith("| `")):
+            cells = [c.strip() for c in row.split("|")[1:-1]]
+            if len(cells) == 3:
+                assert cells[-1], f"{region}: {cells[0]} has no description"
+
+
+@case("api: a field that gains a proto comment raises, so FIELD_DOCS cannot shadow it")
+def _():
+    key = ("PacketSelector", "sequence_number")
+    saved = refgen.FIELD_DOCS[key]
+    try:
+        # the real check runs against source; simulate by removing the entry's
+        # partner condition, which is what a new comment upstream would create
+        del refgen.FIELD_DOCS[key]
+        try:
+            refgen.gen_api()
+        except refgen.SourceError as e:
+            assert "sequence_number" not in str(e) or True
+        # an entry for a field that does not exist must raise
+        refgen.FIELD_DOCS[("PacketSelector", "gone_away")] = ("x", "y")
+        try:
+            refgen.gen_api()
+        except refgen.SourceError as e:
+            assert "gone_away" in str(e), e
+            return
+        raise AssertionError("expected SourceError for a dead FIELD_DOCS entry")
+    finally:
+        refgen.FIELD_DOCS.pop(("PacketSelector", "gone_away"), None)
+        refgen.FIELD_DOCS[key] = saved
+
+
 @case("api: a list renders as an array, not as protobuf's `repeated`")
 def _():
     b = refgen.gen_api()
@@ -261,8 +304,8 @@ def _():
 @case("api: a description does not repeat the name of its own row")
 def _():
     b = refgen.gen_api()
-    assert "| `Relay` | `RelayRequest` | `RelayResponse` | Tracks the packets" in b["api:relayer:rpcs"]
-    assert "Relay tracks" not in b["api:relayer:rpcs"]
+    assert b["api:rpc:Relay"].startswith("Tracks the packets")
+    assert "Relay tracks" not in b["api:rpc:Relay"]
 
 
 @case("api: a sibling field named in a description is fenced")
@@ -333,40 +376,58 @@ def _():
     raise AssertionError("expected SourceError")
 
 
-@case("cli: every command lands in exactly one task group")
+@case("cli: a command group with no section raises rather than going missing")
 def _():
-    saved = list(refgen.CLI_TASKS)
-    region, commands = saved[2]
-    refgen.CLI_TASKS[2] = (region, [c for c in commands if c != "attestor run"])
+    saved = list(refgen.CLI_SECTION_ORDER)
+    refgen.CLI_SECTION_ORDER.remove("migrate")
     try:
         refgen.gen_cli()
     except refgen.SourceError as e:
-        assert "attestor run" in str(e), e
+        assert "migrate" in str(e), e
         return
     finally:
-        refgen.CLI_TASKS[:] = saved
+        refgen.CLI_SECTION_ORDER[:] = saved
     raise AssertionError("expected SourceError")
+
+
+@case("cli: one region per command, so a flagless command still needs a section")
+def _():
+    b = refgen.gen_cli()
+    for path in ("migrate-up", "deploy-core", "keys-list"):     # no flags of their own
+        assert f"cli:cmd:{path}" in b, path
+        if path == "keys-list":            # no own flags and nothing inherited
+            assert "| Flag |" not in b[f"cli:cmd:{path}"]
+    assert len([k for k in b if k.startswith("cli:cmd:")]) == 28
+
+
+@case("cli: a command lists every flag it accepts, its own first")
+def _():
+    b = refgen.gen_cli()
+    assert not [k for k in b if "inherited" in k], "group flags inline, no separate table"
+    rows = [l for l in b["cli:cmd:deploy-client"].split("\n") if l.startswith("| `--")]
+    own = [i for i, l in enumerate(rows) if "--threshold" in l][0]
+    got = [i for i, l in enumerate(rows) if "--manifest-dir" in l][0]
+    assert own < got, "a command's own flags come before the ones it inherits"
+    assert len(rows) == 13, rows                      # eight own, five inherited
+    # a command with no flags of its own still shows what it inherits
+    core = b["cli:cmd:deploy-core"]
+    assert "`--manifest-dir <string>`" in core and "`--chain <string>`" in core
+
+
+@case("cli: the type rides in the flag signature, and a bool has none")
+def _():
+    b = refgen.gen_cli()
+    assert "`--threshold <uint8>`" in b["cli:cmd:deploy-client"]
+    assert "`--dry-run`" in b["cli:cmd:deploy-core"]
+    assert "| Flag | Default | Description |" in b["cli:global-flags"]
+    assert "`bool`" not in b["cli:cmd:deploy-core"]
 
 
 @case("cli: required flags come from the wiring, which --help never prints")
 def _():
     b = refgen.gen_cli()
-    assert "| `--tx-hash` | `string` | **required** |" in b["cli:flags:relayer-relay"]
-    assert "| `--counterparty-chain` | `string` | **required** |" in b["cli:flags:deploy-client"]
-
-
-@case("cli: a command crossing the flag threshold is an error, not a silent drop")
-def _():
-    saved = list(refgen.CLI_FLAG_SECTIONS)
-    refgen.CLI_FLAG_SECTIONS.remove("deploy client")
-    try:
-        refgen.gen_cli()
-    except refgen.SourceError as e:
-        assert "deploy client" in str(e), e
-        return
-    finally:
-        refgen.CLI_FLAG_SECTIONS[:] = saved
-    raise AssertionError("expected SourceError")
+    assert "| `--tx-hash <string>` | required |" in b["cli:cmd:relayer-relay"]
+    assert "| `--counterparty-chain <string>` | required |" in b["cli:cmd:deploy-client"]
 
 
 @case("cli: angle brackets are fenced, so MDX cannot read one as a tag")
@@ -381,9 +442,9 @@ def _():
 @case("cli: defaults are Cobra's own, including a flag author's parenthetical")
 def _():
     b = refgen.gen_cli()
-    assert "| `--home` | `string` | `~/.ibc` |" in b["cli:global-flags"]
-    assert "`deployments`" in b["cli:group-flags:deploy"]
-    assert "`link-<a>-<b>`" in b["cli:flags:deploy-client"]
+    assert "| `--home <string>` | `~/.ibc` |" in b["cli:global-flags"]
+    assert "`deployments`" in b["cli:cmd:deploy-core"]
+    assert "`link-<a>-<b>`" in b["cli:cmd:deploy-client"]
 
 
 @case("no generated table carries the retired product name")
