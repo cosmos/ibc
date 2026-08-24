@@ -11,14 +11,20 @@ Values may contain `${VAR}`, which is expanded from the environment before the f
 
 The file has six top-level blocks, and not every process reads all of them. <!-- [config.go:L37-L44](link/internal/config/config.go#L37-L44) -->
 
+<!-- GEN:config:Config START -->
+
 | Block | Read by | Purpose |
 |---|---|---|
-| `server` | relayer, attestor | The address the gRPC server binds |
-| `db` | relayer | Where the relayer stores the packets it is tracking |
-| `chains` | relayer, attestor, deploy | Every chain the rest of the file refers to |
-| `relayer` | relayer | The connections to relay, and per-chain relay settings |
-| `attestors` | relayer, attestor | Attestors this process runs, and attestors it queries |
-| `signers` | relayer, attestor, deploy | The keys, under the aliases the rest of the file uses |
+| `server` | relayer, attestor | The address the gRPC server binds. |
+| `db` | relayer | Where the relayer stores the packets it is tracking. |
+| `chains` | relayer, attestor, deploy | Every chain the rest of the file refers to. |
+| `relayer` | relayer | The connections to relay, and per-chain relay settings. |
+| `attestors` | relayer, attestor | Attestors this process runs, and attestors it queries. |
+| `signers` | relayer, attestor, deploy | The keys, under the aliases the rest of the file uses. |
+
+<!-- [config.go:L37](link/internal/config/config.go#L37) -->
+
+<!-- GEN:config:Config END -->
 
 ## How the blocks refer to each other
 
@@ -35,7 +41,7 @@ A process only needs the blocks it uses. An attestor never opens a database, so 
 
 The gRPC server serves the relayer API and the attestor API on one address, so a process running both parts listens once.
 
-<!-- GEN:config:server START -->
+<!-- GEN:config:ServerConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -43,7 +49,7 @@ The gRPC server serves the relayer API and the attestor API on one address, so a
 
 <!-- [config.go:L47](link/internal/config/config.go#L47) -->
 
-<!-- GEN:config:server END -->
+<!-- GEN:config:ServerConfig END -->
 
 ```yaml
 server:
@@ -56,7 +62,7 @@ One port serves gRPC, gRPC-Web, and Connect, and reflection is always registered
 
 The relayer stores every packet it is tracking, which is what lets it restart without losing work. Nothing else in the file affects that store.
 
-<!-- GEN:config:db START -->
+<!-- GEN:config:DBConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -65,7 +71,7 @@ The relayer stores every packet it is tracking, which is what lets it restart wi
 
 <!-- [config.go:L52](link/internal/config/config.go#L52) -->
 
-<!-- GEN:config:db END -->
+<!-- GEN:config:DBConfig END -->
 
 ```yaml
 db:
@@ -79,7 +85,7 @@ db:
 
 A list. Each entry is one chain, named by the ID the chain reports, and every other block refers to a chain by that ID.
 
-<!-- GEN:config:chains START -->
+<!-- GEN:config:ChainConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -89,11 +95,11 @@ A list. Each entry is one chain, named by the ID the chain reports, and every ot
 
 <!-- [config.go:L115](link/internal/config/config.go#L115) -->
 
-<!-- GEN:config:chains END -->
+<!-- GEN:config:ChainConfig END -->
 
 ### `chains[].evm`
 
-<!-- GEN:config:chains:evm START -->
+<!-- GEN:config:EVMChainConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -102,7 +108,7 @@ A list. Each entry is one chain, named by the ID the chain reports, and every ot
 
 <!-- [config.go:L133](link/internal/config/config.go#L133) -->
 
-<!-- GEN:config:chains:evm END -->
+<!-- GEN:config:EVMChainConfig END -->
 
 ```yaml
 chains:
@@ -126,7 +132,7 @@ A `deployer` alias must name a `local` signer, because deployment needs the raw 
 
 The relayer relays over the connections listed here, and over no others. A packet on a client this block does not name is not relayed by this process.
 
-<!-- GEN:config:relayer START -->
+<!-- GEN:config:RelayerConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -136,13 +142,13 @@ The relayer relays over the connections listed here, and over no others. A packe
 
 <!-- [relayer.go:L29](link/internal/config/relayer.go#L29) --> <!-- [dispatcher.go:L17](link/internal/relay/dispatch/dispatcher.go#L17) -->
 
-<!-- GEN:config:relayer END -->
+<!-- GEN:config:RelayerConfig END -->
 
 ### `relayer.chainOverrides`
 
 A list, one entry per chain whose relay behavior differs from the defaults. Every key is optional, so an override may set one and leave the rest.
 
-<!-- GEN:config:relayer:chainOverrides START -->
+<!-- GEN:config:RelayerChainOverride START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -154,13 +160,13 @@ A list, one entry per chain whose relay behavior differs from the defaults. Ever
 
 <!-- [relayer.go:L36](link/internal/config/relayer.go#L36) --> <!-- [evm.go:L26](link/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](link/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](link/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](link/internal/relay/pipeline/opts.go#L16) -->
 
-<!-- GEN:config:relayer:chainOverrides END -->
+<!-- GEN:config:RelayerChainOverride END -->
 
 Batching is per direction, not per chain. Receive batching follows the destination chain, and acknowledgement and timeout batching follow the source chain. So an override on one chain shapes the traffic arriving there and the traffic leaving it differently. <!-- [opts.go:L34-L71](link/internal/relay/pipeline/opts.go#L34-L71) -->
 
 ### `relayer.chainOverrides[].evm`
 
-<!-- GEN:config:relayer:evm START -->
+<!-- GEN:config:RelayerEVMConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -169,7 +175,7 @@ Batching is per direction, not per chain. Receive batching follows the destinati
 
 <!-- [relayer.go:L45](link/internal/config/relayer.go#L45) -->
 
-<!-- GEN:config:relayer:evm END -->
+<!-- GEN:config:RelayerEVMConfig END -->
 
 Both multipliers apply to what the node suggests for the next transaction. Left unset, the relayer submits the node's suggestion unchanged. <!-- [evm.go:L229-L237](link/internal/txsubmitter/evm/evm.go#L229-L237) -->
 
@@ -177,7 +183,7 @@ Both multipliers apply to what the node suggests for the next transaction. Left 
 
 A list. Each entry is one connection, and the relayer relays it in both directions.
 
-<!-- GEN:config:relayer:connections START -->
+<!-- GEN:config:ConnectionConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -187,13 +193,13 @@ A list. Each entry is one connection, and the relayer relays it in both directio
 
 <!-- [relayer.go:L53](link/internal/config/relayer.go#L53) -->
 
-<!-- GEN:config:relayer:connections END -->
+<!-- GEN:config:ConnectionConfig END -->
 
 ### A client end
 
 `clientA` and `clientB` take the same keys. Each describes one side of the connection: a light client on one chain, tracking the other side as its counterparty.
 
-<!-- GEN:config:relayer:clientEnd START -->
+<!-- GEN:config:ClientEnd START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -204,7 +210,7 @@ A list. Each entry is one connection, and the relayer relays it in both directio
 
 <!-- [relayer.go:L61](link/internal/config/relayer.go#L61) -->
 
-<!-- GEN:config:relayer:clientEnd END -->
+<!-- GEN:config:ClientEnd END -->
 
 ```yaml
 relayer:
@@ -234,7 +240,7 @@ A list. Each entry is one attestor, and `type` decides what the entry means.
 
 A `local` attestor is one this process runs and signs with. A `remote` attestor is one this process queries over gRPC. Both kinds appear in the same list, and a relayer reads it to decide who to ask for attestations. <!-- [config.go:L57-L59](link/internal/config/config.go#L57-L59) -->
 
-<!-- GEN:config:attestors START -->
+<!-- GEN:config:AttestorConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -247,7 +253,7 @@ A `local` attestor is one this process runs and signs with. A `remote` attestor 
 
 <!-- [config.go:L64](link/internal/config/config.go#L64) -->
 
-<!-- GEN:config:attestors END -->
+<!-- GEN:config:AttestorConfig END -->
 
 ```yaml
 attestors:
@@ -271,7 +277,7 @@ Two local attestors may not share a name, and two local attestors on one chain m
 
 A list of the keys this process can sign with, each under an alias. Every alias the rest of the file uses, for a relay transaction, an attestation, or a deployment, resolves here.
 
-<!-- GEN:config:signers START -->
+<!-- GEN:config:SignerConfig START -->
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
@@ -283,7 +289,7 @@ A list of the keys this process can sign with, each under an alias. Every alias 
 
 <!-- [config.go:L89](link/internal/config/config.go#L89) -->
 
-<!-- GEN:config:signers END -->
+<!-- GEN:config:SignerConfig END -->
 
 ```yaml
 signers:

@@ -245,7 +245,7 @@ def _():
 
 @case("a two-valued type escapes its pipe exactly once")
 def _():
-    row = [r for r in refgen.gen_config()["config:db"].split("\n") if r.startswith("| `type`")][0]
+    row = [r for r in refgen.gen_config()["config:DBConfig"].split("\n") if r.startswith("| `type`")][0]
     assert r"`sqlite` \| `postgres`" in row, row
     assert r"\\|" not in row, row
 
@@ -265,7 +265,7 @@ def _():
 
 @case("config: required-ness comes out of the Validate methods")
 def _():
-    t = refgen.gen_config()["config:attestors"]
+    t = refgen.gen_config()["config:AttestorConfig"]
     assert "| `chainId` | `string` | **required** for `local` |" in t
     assert "| `grpc` | `string` | **required** for `remote` |" in t
 
@@ -273,15 +273,15 @@ def _():
 @case("config: a must-not-be-set rule names the kind the key belongs to")
 def _():
     # `.finalityOffset must not be set for remote attestors` makes it local only
-    assert "| `finalityOffset` | `uint` | `local` only |" in refgen.gen_config()["config:attestors"]
+    assert "| `finalityOffset` | `uint` | `local` only |" in refgen.gen_config()["config:AttestorConfig"]
 
 
 @case("config: defaults come from DefaultConfig and from named constants")
 def _():
     b = refgen.gen_config()
-    assert "`0.0.0.0:3000`" in b["config:server"]
-    assert "`5s`" in b["config:relayer"]            # dispatch.DefaultPollInterval
-    assert "`50`" in b["config:relayer:chainOverrides"]   # pipeline.DefaultBatchSize
+    assert "`0.0.0.0:3000`" in b["config:ServerConfig"]
+    assert "`5s`" in b["config:RelayerConfig"]            # dispatch.DefaultPollInterval
+    assert "`50`" in b["config:RelayerChainOverride"]   # pipeline.DefaultBatchSize
 
 
 @case("config: a key with no description anywhere is an error, not a blank cell")

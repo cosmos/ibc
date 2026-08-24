@@ -31,12 +31,14 @@ touch, and which only reading can check. See the `reference-drift` skill, run
 after regenerating and triggered by check mode going red.
 
 --------------------------------------------------------------------------
-THIS IS THE MOVED COPY
+THE PAGES LIVE IN cosmos/ibc (Evan, 2026-08-21)
 --------------------------------------------------------------------------
-This file imports nothing from the docs project, so it can live beside the
-code it reads and let the team that changes a flag own the docs that describe
-it. This checklist lives here, rather than in the docs repo's notes, because
-this file is the thing that travels.
+The reference pages are upstream's, at link/docs/, and are edited there. This
+copy of the tool runs against the pinned clone so the docs project can still
+generate and check; `tools/upstreamize.py` syncs the tool upstream and
+deliberately does not copy the pages, which would clobber them.
+
+This checklist stays for the record, and for the next surface that moves.
 
   1. Copy `refgen.py`, `test-refgen.py`, and `test-refgen-e2e.py`.
   2. Set IBC to the repo root. Here it points at a pinned clone in `repos/ibc`;
@@ -63,6 +65,8 @@ what the prose should now say stays with whoever owns the pages.
 """
 import argparse
 import difflib
+import hashlib
+import json
 import os
 import re
 import subprocess
@@ -365,10 +369,32 @@ def _fence(doc, names):
     return doc
 
 
+PROTO_DIR = "proto"
+
+
+def _proto_files():
+    """Every .proto under PROTO_DIR. Naming them would mean a new service is
+    absent from the page with nothing to notice it."""
+    out = []
+    for root, _dirs, files in os.walk(os.path.join(IBC, PROTO_DIR)):
+        for f in sorted(files):
+            if f.endswith(".proto"):
+                out.append(os.path.relpath(os.path.join(root, f), IBC))
+    return sorted(out)
+
+
+def _proto_short(path):
+    """The last segment of the file's proto package, which names its regions."""
+    m = re.search(r"^package\s+([\w.]+);", _read(path), re.M)
+    if not m:
+        raise SourceError(f"{path} declares no proto package")
+    return m.group(1).split(".")[-1]
+
+
 def gen_api():
     blocks = {}
-    for fname, short in (("proto/link/relayer.proto", "relayer"),
-                         ("proto/link/attestor.proto", "attestor")):
+    for fname in _proto_files():
+        short = _proto_short(fname)
         p = parse_proto(fname)
         for svc in p["services"]:
             rows = [(f"`{r['name']}`", f"`{r['req']}`", f"`{r['resp']}`",
@@ -396,7 +422,14 @@ def gen_api():
 
 # ------------------------------------------------------------- go -> config
 
-CONFIG_FILES = ("link/internal/config/config.go", "link/internal/config/relayer.go")
+# The config package, read whole. Naming files here would mean a new file with
+# a new block is silently absent from the page, which is the failure this whole
+# tool exists to prevent.
+CONFIG_PKG = "link/internal/config"
+
+# The one anchor. Every block on the page is a struct reachable from this type,
+# so the page's shape follows the code's rather than a list kept by hand.
+CONFIG_ROOT = "Config"
 
 # Where a pointer field's default lives when the struct itself carries no
 # value: a named constant in the code that consumes the field. The label in
@@ -415,58 +448,84 @@ DEFAULT_CONSTS = {
 }
 
 # Keys the Go source does not document. Values never come from here, only
-# wording. A key that gains a doc comment upstream raises, so this map cannot
-# quietly outlive the gap it fills.
+# wording: every default, type, and required-ness is read from source on every
+# run. Each entry is (description, fingerprint), where the fingerprint covers
+# the field's type, its yaml key, and every validation rule naming it.
+#
+# Four ways this map is stopped from going stale, each with a mutation test:
+#   * a key with no comment and no entry here raises
+#   * a key that gains a doc comment upstream raises, so an entry cannot
+#     outlive the gap it fills
+#   * an entry matching no field raises, so a removed key cannot leave a
+#     dead description behind
+#   * a fingerprint mismatch raises, so a key whose type or validation rules
+#     changed under a stable name forces someone to re-read the sentence
+#
+# The real fix is upstream doc comments. Every one added shrinks this map, and
+# the second rule above turns that into a guided migration rather than a sweep.
 FALLBACK_DOCS = {
-    ("ServerConfig", "ListenAddress"): "Address the gRPC server binds. It serves the relayer and attestor APIs together.",
-    ("DBConfig", "Type"): "Database backend.",
-    ("DBConfig", "URL"): "File path for sqlite, connection string for postgres. `:memory:` is rejected.",
-    ("ChainConfig", "ChainID"): "The chain's id, as the chain reports it.",
-    ("ChainConfig", "EVM"): "EVM connection details for the chain. See the table below.",
-    ("EVMChainConfig", "RPC"): "JSON-RPC endpoint for the chain.",
-    ("EVMChainConfig", "ICS26Router"): "Address of the ICS26 router on the chain.",
-    ("AttestorConfig", "Type"): "Whether this process runs the attestor or queries it.",
-    ("SignerConfig", "Type"): "Whether the key is a file on disk or a key held by a remote signer.",
-    ("RelayerConfig", "DispatchPollInterval"): "How often the dispatcher polls the store for unfinished packets.",
-    ("RelayerConfig", "ChainOverrides"): "Per-chain relay settings. See the table below.",
-    ("RelayerConfig", "Connections"): "The connections this relayer relays over. See the table below.",
-    ("RelayerChainOverride", "ChainID"): "The chain these settings apply to.",
-    ("RelayerChainOverride", "EVM"): "EVM fee settings for the chain. See the table below.",
-    ("RelayerChainOverride", "TxSubmissionDelay"): "Minimum delay between two transaction submissions on the chain.",
-    ("RelayerChainOverride", "PacketBatchSize"): "How many packets the relayer puts in one transaction.",
-    ("RelayerChainOverride", "PacketBatchTimeout"): "How long the relayer waits to fill a batch before submitting it.",
-    ("RelayerEVMConfig", "GasFeeCapMultiplier"): "Multiplies the fee cap the node suggests.",
-    ("RelayerEVMConfig", "GasTipCapMultiplier"): "Multiplies the tip cap the node suggests.",
-    ("ConnectionConfig", "Alias"): "Name for the connection, unique in the file.",
-    ("ConnectionConfig", "ClientA"): "One end of the connection. See the table below.",
-    ("ConnectionConfig", "ClientB"): "The other end, on a different chain. Same keys as `clientA`.",
-    ("ClientEnd", "ChainID"): "The chain this end's client lives on.",
-    ("ClientEnd", "Signer"): "`signers` alias that submits relay transactions on this chain.",
-    ("ClientEnd", "ClientID"): "The light client's id on this chain.",
-    ("ClientEnd", "Type"): "Light client type.",
+    ("Config", "Server"): ("The address the gRPC server binds.", "cc01fb7e"),
+    ("Config", "DB"): ("Where the relayer stores the packets it is tracking.", "abeaad1c"),
+    ("Config", "Chains"): ("Every chain the rest of the file refers to.", "155b6c86"),
+    ("Config", "Relayer"): ("The connections to relay, and per-chain relay settings.", "f8525dbe"),
+    ("Config", "Attestors"): ("Attestors this process runs, and attestors it queries.", "8bbe3f09"),
+    ("Config", "Signers"): ("The keys, under the aliases the rest of the file uses.", "0762378d"),
+    ("ServerConfig", "ListenAddress"): ("Address the gRPC server binds. It serves the relayer and attestor APIs together.", "a05468ed"),
+    ("DBConfig", "Type"): ("Database backend.", "70e2ad2c"),
+    ("DBConfig", "URL"): ("File path for sqlite, connection string for postgres. `:memory:` is rejected.", "d084b0d4"),
+    ("ChainConfig", "ChainID"): ("The chain's id, as the chain reports it.", "69a3e543"),
+    ("ChainConfig", "EVM"): ("EVM connection details for the chain. See the table below.", "76a60026"),
+    ("EVMChainConfig", "RPC"): ("JSON-RPC endpoint for the chain.", "cf552b01"),
+    ("EVMChainConfig", "ICS26Router"): ("Address of the ICS26 router on the chain.", "1daaecba"),
+    ("AttestorConfig", "Type"): ("Whether this process runs the attestor or queries it.", "a58f9a4e"),
+    ("SignerConfig", "Type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
+    ("RelayerConfig", "DispatchPollInterval"): ("How often the dispatcher polls the store for unfinished packets.", "893f79b1"),
+    ("RelayerConfig", "ChainOverrides"): ("Per-chain relay settings. See the table below.", "aceb0b59"),
+    ("RelayerConfig", "Connections"): ("The connections this relayer relays over. See the table below.", "af170c58"),
+    ("RelayerChainOverride", "ChainID"): ("The chain these settings apply to.", "69a3e543"),
+    ("RelayerChainOverride", "EVM"): ("EVM fee settings for the chain. See the table below.", "815e4d78"),
+    ("RelayerChainOverride", "TxSubmissionDelay"): ("Minimum delay between two transaction submissions on the chain.", "5691fa23"),
+    ("RelayerChainOverride", "PacketBatchSize"): ("How many packets the relayer puts in one transaction.", "b4f4f14c"),
+    ("RelayerChainOverride", "PacketBatchTimeout"): ("How long the relayer waits to fill a batch before submitting it.", "84d8816e"),
+    ("RelayerEVMConfig", "GasFeeCapMultiplier"): ("Multiplies the fee cap the node suggests.", "b9de0a8d"),
+    ("RelayerEVMConfig", "GasTipCapMultiplier"): ("Multiplies the tip cap the node suggests.", "634e0708"),
+    ("ConnectionConfig", "Alias"): ("Name for the connection, unique in the file.", "7e352d14"),
+    ("ConnectionConfig", "ClientA"): ("One end of the connection. See the table below.", "564d97f6"),
+    ("ConnectionConfig", "ClientB"): ("The other end, on a different chain. Same keys as `clientA`.", "5b5384b1"),
+    ("ClientEnd", "ChainID"): ("The chain this end's client lives on.", "69a3e543"),
+    ("ClientEnd", "Signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
+    ("ClientEnd", "ClientID"): ("The light client's id on this chain.", "bb596da7"),
+    ("ClientEnd", "Type"): ("Light client type.", "85b1564f"),
 }
 
 # autoRelay parses and has no consumer at this pin, so no reader-facing row
 # describes it. See the TODO(autorelay) comment on the page.
+#
+# FLAG-17: this is the one omission nothing here detects. Every other gap
+# raises; a deliberate skip cannot. When auto-relay lands, delete the entry,
+# regenerate, and write the prose those two keys need.
 SKIP_FIELDS = {("ClientEnd", "AutoRelay")}
 
-# Each config block, and the structs that get their own table rather than
-# being flattened into their parent's. A third element names the parent block
-# and key, for a struct whose required-ness is validated one level up as a
-# dotted path.
-CONFIG_BLOCKS = [
-    ("config:server", "ServerConfig"),
-    ("config:db", "DBConfig"),
-    ("config:chains", "ChainConfig"),
-    ("config:chains:evm", "EVMChainConfig", ("ChainConfig", "evm")),
-    ("config:relayer", "RelayerConfig"),
-    ("config:relayer:chainOverrides", "RelayerChainOverride"),
-    ("config:relayer:evm", "RelayerEVMConfig"),
-    ("config:relayer:connections", "ConnectionConfig"),
-    ("config:relayer:clientEnd", "ClientEnd"),
-    ("config:attestors", "AttestorConfig"),
-    ("config:signers", "SignerConfig"),
-]
+# Which processes read each top-level block. Not derivable: it is a fact about
+# which code paths load which part of the file. Every top-level block needs an
+# entry and an entry for a block that is gone raises, so this cannot drift
+# quietly the way a hand-written table would.
+READ_BY = {
+    "server": "relayer, attestor",
+    "db": "relayer",
+    "chains": "relayer, attestor, deploy",
+    "relayer": "relayer",
+    "attestors": "relayer, attestor",
+    "signers": "relayer, attestor, deploy",
+}
+
+# Pointer fields whose default is not a named constant anywhere: unset means
+# unset, and the prose says what that implies. Listed so that a new pointer
+# field cannot quietly read as "optional" when a default exists for it.
+NO_NAMED_DEFAULT = {
+    ("RelayerEVMConfig", "GasFeeCapMultiplier"),
+    ("RelayerEVMConfig", "GasTipCapMultiplier"),
+}
 
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
             "bool": "bool", "float64": "float64", "time.Duration": "duration"}
@@ -476,15 +535,37 @@ class SourceError(Exception):
     pass
 
 
+# When PLAN is a list, a problem is recorded and generation continues with a
+# placeholder, so one run reports every gap rather than the first. When it is
+# None, the same problem raises and nothing is written. Check mode and a normal
+# regeneration always run with PLAN None: refusing to write stays the default.
+PLAN = None
+
+
+def _problem(kind, message, **fields):
+    """Raise, or record and continue in plan mode."""
+    if PLAN is None:
+        raise SourceError(message)
+    PLAN.append(dict(kind=kind, message=message, **fields))
+
+
 def _read(path):
     return open(os.path.join(IBC, path)).read()
+
+
+def _config_files():
+    """Every non-test Go file in the config package, sorted for stable output."""
+    d = os.path.join(IBC, CONFIG_PKG)
+    return [f"{CONFIG_PKG}/{f}" for f in sorted(os.listdir(d))
+            if f.endswith(".go") and not f.endswith("_test.go")]
 
 
 def parse_go_config():
     """Structs, string constants, literal defaults, and validation rules from
     the config package."""
     structs, aliases, consts, const_type, defaults, validations = {}, {}, {}, {}, {}, {}
-    src = "\n".join(_read(f) for f in CONFIG_FILES)
+    files = _config_files()
+    src = "\n".join(_read(f) for f in files)
 
     for m in re.finditer(r"type\s+(\w+)\s+\[\](\w+)", src):
         aliases[m.group(1)] = m.group(2)
@@ -494,7 +575,7 @@ def parse_go_config():
         if m.group(2):
             const_type[m.group(1)] = m.group(2)
 
-    for path in CONFIG_FILES:
+    for path in files:
         lines = _read(path).split("\n")
         i = 0
         while i < len(lines):
@@ -569,6 +650,58 @@ def _const_value(path, name):
     if d:
         return f"1{d.group(1)[0].lower()}", line
     return raw, line
+
+
+def _element_type(go_type, model):
+    """The struct a field leads to, or None. Strips pointers, slices, and the
+    named list aliases the config package uses (`Attestors` is []AttestorConfig)."""
+    t = go_type.lstrip("*").removeprefix("[]").lstrip("*")
+    t = model["aliases"].get(t, t)
+    return t if t in model["structs"] else None
+
+
+def discover_config_blocks(model):
+    """Every struct reachable from CONFIG_ROOT, in the order a reader meets it.
+
+    One region per struct rather than per path, so a type used twice (a
+    connection's two client ends) is documented once. Region ids are struct
+    names because a yaml key can be renamed while the shape stays the same.
+
+    Returns [(region_id, struct, parent)] where parent is the (struct, yaml key)
+    that reached it, for required-ness validated one level up as a dotted path.
+    """
+    if CONFIG_ROOT not in model["structs"]:
+        raise SourceError(f"the config package has no {CONFIG_ROOT} struct to start from")
+    out, seen = [], set()
+    queue = [(CONFIG_ROOT, None)]
+    while queue:
+        struct, parent = queue.pop(0)
+        if struct in seen:
+            continue
+        seen.add(struct)
+        out.append((f"config:{struct}", struct, parent))
+        for field in model["structs"][struct]["fields"]:
+            if (struct, field["go"]) in SKIP_FIELDS:
+                continue
+            child = _element_type(field["type"], model)
+            if child and child not in seen:
+                queue.append((child, (struct, field["yaml"])))
+    return out
+
+
+def _fingerprint(struct, field, model):
+    """Hash the source a hand-written description depends on.
+
+    A description is only as good as the code it describes, and a key whose
+    meaning changes under a stable name moves no table cell, so nothing else
+    here would notice. This covers the field's type, its yaml key, and every
+    validation rule naming it: enough to catch a real change, and blind to
+    whitespace and to code elsewhere in the struct.
+    """
+    rules = sorted(msg for msg, _a in model["validations"].get(struct, [])
+                   if msg.lstrip(".").split()[0].split("[")[0] == field["yaml"])
+    basis = "|".join([field["type"], field["yaml"], *rules])
+    return hashlib.sha1(basis.encode()).hexdigest()[:8]
 
 
 def _clean_doc(field):
@@ -680,36 +813,128 @@ def _other_kind(go, kind, model):
     raise SourceError(f"{go}: cannot tell what the opposite of {kind!r} is")
 
 
+def _description(struct, field, model, seen):
+    """The Description cell, and the four checks that keep it honest.
+
+    A key documented in the source uses that; a key the source leaves
+    undocumented uses FALLBACK_DOCS, whose entry carries a fingerprint of the
+    code it describes. Both, neither, or a fingerprint that no longer matches
+    all raise, because each of those is a description nobody has re-read.
+    """
+    doc = _clean_doc(field)
+    fallback = FALLBACK_DOCS.get((struct, field["go"]))
+    where = f"{struct}.{field['go']}"
+    if doc and fallback:
+        _problem("stale_fallback",
+                 f"{where} now has a doc comment; drop its FALLBACK_DOCS entry",
+                 field=where)
+        return doc
+    if not doc and not fallback:
+        _problem("missing_description",
+                 f"{where} has no doc comment and no FALLBACK_DOCS entry",
+                 field=where, yaml_key=field["yaml"],
+                 fingerprint=_fingerprint(struct, field, model))
+        return "TODO: describe this key"
+    if not fallback:
+        return doc
+    text, recorded = fallback
+    seen.add((struct, field["go"]))
+    current = _fingerprint(struct, field, model)
+    if current != recorded:
+        _problem("fingerprint_mismatch",
+                 f"{where}: the source behind its hand-written description changed "
+                 f"(fingerprint {recorded} -> {current}). Re-read \"{text}\" against the "
+                 "code, then record the new fingerprint. Nothing is written until you do.",
+                 field=where, description=text, was=recorded, now=current)
+    return text
+
+
+def _root_table(model, seen):
+    """The index of top-level blocks: what each is and which processes read it.
+
+    Type and default mean nothing for a key whose value is a whole block, so
+    this table carries the two things a reader wants instead.
+    """
+    fields = model["structs"][CONFIG_ROOT]["fields"]
+    keys = [f["yaml"] for f in fields]
+    missing = [k for k in keys if k not in READ_BY]
+    read_by = dict(READ_BY)   # never mutate the module's copy: plan mode runs
+    if missing:                # in the same process as everything else
+        _problem("missing_read_by",
+                 "READ_BY has no entry for the top-level block(s): " + ", ".join(missing),
+                 blocks=missing)
+        for k in missing:
+            read_by[k] = "TODO: which processes read this"
+    gone = [k for k in READ_BY if k not in keys]
+    if gone:
+        _problem("dead_read_by",
+                 "READ_BY names top-level blocks that are gone: " + ", ".join(gone),
+                 blocks=gone)
+    rows = [(f"`{f['yaml']}`", read_by[f["yaml"]], _description(CONFIG_ROOT, f, model, seen))
+            for f in fields]
+    info = model["structs"][CONFIG_ROOT]
+    return (table(["Block", "Read by", "Purpose"], rows)
+            + "\n\n" + cite(info["file"], info["line"]))
+
+
 def gen_config():
     model = parse_go_config()
     blocks = {}
-    for region, struct, *rest in CONFIG_BLOCKS:
-        parent = rest[0] if rest else None
-        if struct not in model["structs"]:
-            raise SourceError(f"struct {struct} not found in the config package")
+    seen_fallbacks = set()
+    for region, struct, parent in discover_config_blocks(model):
+        if struct == CONFIG_ROOT:
+            blocks[region] = _root_table(model, seen_fallbacks)
+            continue
         rows, cites = [], []
         for field in model["structs"][struct]["fields"]:
             if (struct, field["go"]) in SKIP_FIELDS:
                 continue
-            doc = _clean_doc(field)
-            fallback = FALLBACK_DOCS.get((struct, field["go"]))
-            if doc and fallback:
-                raise SourceError(
-                    f"{struct}.{field['go']} now has a doc comment; drop its FALLBACK_DOCS entry")
-            if not doc and not fallback:
-                raise SourceError(
-                    f"{struct}.{field['go']} has no doc comment and no FALLBACK_DOCS entry")
+            description = _description(struct, field, model, seen_fallbacks)
             req, extra = _requirement(struct, field, model, parent)
             if extra:
                 cites.extend(extra)
             rows.append((f"`{field['yaml']}`", _type_cell(struct, field, model),
-                         req, doc or fallback))
+                         req, description))
         body = table(["Key", "Type", "Default or required", "Description"], rows)
         info = model["structs"][struct]
         body += "\n\n" + cite(info["file"], info["line"])
         for path, line in dict.fromkeys(cites):
             body += " " + cite(path, line)
         blocks[region] = body
+
+    # an entry describing a field that no longer exists is a dead description,
+    # and the next person to read this map would trust it
+    orphans = sorted(f"{s}.{f}" for s, f in set(FALLBACK_DOCS) - seen_fallbacks)
+    if orphans:
+        _problem("dead_description",
+                 "FALLBACK_DOCS describes fields that are gone: " + ", ".join(orphans),
+                 fields=orphans)
+    reachable = {(st, f["go"]) for _r, st, _p in discover_config_blocks(model)
+                 for f in model["structs"][st]["fields"]}
+    dead_defaults = sorted(f"{s}.{f}" for s, f in set(DEFAULT_CONSTS) - reachable)
+    if dead_defaults:
+        _problem("dead_default",
+                 "DEFAULT_CONSTS names fields that are gone: " + ", ".join(dead_defaults),
+                 fields=dead_defaults)
+
+    # a pointer field is optional in the file and may still have an effective
+    # default in the code, so each one is either mapped or explicitly declared
+    # to have none. Silence would read as "optional" and hide a real value.
+    unclaimed = sorted(
+        f"{st}.{f['go']}"
+        for _r, st, _p in discover_config_blocks(model)
+        for f in model["structs"][st]["fields"]
+        if f["type"].startswith("*")
+        and not _element_type(f["type"], model)   # a block, not a value
+        and (st, f["go"]) not in DEFAULT_CONSTS
+        and (st, f["go"]) not in NO_NAMED_DEFAULT
+        and (st, f["go"]) not in SKIP_FIELDS)
+    if unclaimed:
+        _problem("unclaimed_default",
+                 "these pointer fields have no default mapped and are not listed in "
+                 "NO_NAMED_DEFAULT, so the page would call them optional without "
+                 "saying what unset means: " + ", ".join(unclaimed),
+                 fields=unclaimed)
     return blocks
 
 
@@ -739,11 +964,6 @@ CLI_TASKS = [
     ("cli:task:maintain", ["migrate up", "migrate down", "migrate status",
                            "keys list", "keys show"]),
 ]
-
-# Command groups whose own flags every subcommand inherits.
-CLI_GROUP_FLAGS = [("cli:group-flags:deploy", "deploy"),
-                   ("cli:group-flags:query-ift", "query ift"),
-                   ("cli:group-flags:tx-ift", "tx ift")]
 
 # Commands that get their flags spelled out. A command with three or more of
 # its own flags earns a subsection, and the generator fails if that set moves,
@@ -971,9 +1191,11 @@ def gen_cli():
     leaves = sorted(p for p, c in tree.items() if p and not c["subs"])
     # the tree the wiring describes and the tree the binary reports must agree
     wired = {p for p in source["paths"].values() if p}
-    missing = set(leaves) - wired
-    if missing:
-        raise SourceError(f"commands the binary has and the wiring does not: {sorted(missing)}")
+    absent = sorted(set(leaves) - wired)
+    if absent:
+        _problem("unwired_command",
+                 f"commands the binary has and the wiring does not: {absent}",
+                 commands=absent)
 
     main_go = os.path.join(CLI_SRC, "main.go")
 
@@ -1000,23 +1222,33 @@ def gen_cli():
         blocks[region] = table(["Command", "What it does"], rows) + "\n\n" + tree_citation
 
     if sorted(covered) != leaves:
-        raise SourceError("every command needs a task group; unassigned: "
-                          f"{sorted(set(leaves) - set(covered))}; "
-                          f"listed twice: {sorted(c for c in covered if covered.count(c) > 1)}")
+        unassigned = sorted(set(leaves) - set(covered))
+        twice = sorted({c for c in covered if covered.count(c) > 1})
+        _problem("ungrouped_command",
+                 f"every command needs a task group; unassigned: {unassigned}; "
+                 f"listed twice: {twice}",
+                 unassigned=unassigned, duplicated=twice,
+                 shorts={c: tree[c]["short"] for c in unassigned})
 
-    for region, group in CLI_GROUP_FLAGS:
-        flags = _parse_flags(tree[group]["help"], "Flags:")
-        blocks[region] = (table(["Flag", "Type", "Default", "Description"],
-                                _flag_rows(flags, group, source))
-                          + "\n\n" + where(group))
+    # a group's own flags are inherited by every command under it, so any
+    # group that has them needs a table. Discovered rather than listed: a new
+    # group with persistent flags would otherwise be documented nowhere.
+    groups = [p for p, c in tree.items() if p and c["subs"] and c["flags"]]
+    for group in groups:
+        blocks[f"cli:group-flags:{_slug(group)}"] = (
+            table(["Flag", "Type", "Default", "Description"],
+                  _flag_rows(tree[group]["flags"], group, source))
+            + "\n\n" + where(group))
 
     earned = sorted(p for p in leaves if len(tree[p]["flags"]) >= CLI_FLAG_THRESHOLD)
     if earned != sorted(CLI_FLAG_SECTIONS):
-        raise SourceError(
-            "the commands with their own flag section changed. "
-            f"expected {sorted(CLI_FLAG_SECTIONS)}, source says {earned}. "
-            "each one needs hand-written prose and an example, so add or remove "
-            "the page section and its marker before updating CLI_FLAG_SECTIONS")
+        _problem("flag_section_change",
+                 "the commands with their own flag section changed. "
+                 f"expected {sorted(CLI_FLAG_SECTIONS)}, source says {earned}. "
+                 "each one needs hand-written prose and an example, so add or remove "
+                 "the page section and its marker before updating CLI_FLAG_SECTIONS",
+                 now_earning=sorted(set(earned) - set(CLI_FLAG_SECTIONS)),
+                 no_longer=sorted(set(CLI_FLAG_SECTIONS) - set(earned)))
     for path in CLI_FLAG_SECTIONS:
         blocks[f"cli:flags:{_slug(path)}"] = (
             table(["Flag", "Type", "Default", "Description"],
@@ -1037,12 +1269,13 @@ def gen_cli():
     for path in CLI_FLAG_SECTIONS:
         documented |= {(path, f["name"]) for f in tree[path]["flags"]}
     documented |= {(p, f["name"]) for p, f in rest}
-    for group in (g for _r, g in CLI_GROUP_FLAGS):
-        documented |= {(group, f["name"]) for f in _parse_flags(tree[group]["help"], "Flags:")}
+    for group in groups:
+        documented |= {(group, f["name"]) for f in tree[group]["flags"]}
     every = {(p, f["name"]) for p in leaves for f in tree[p]["flags"]}
     missing = sorted(f"ibc {p} --{n}" for p, n in every - documented)
     if missing:
-        raise SourceError("flags on the page nowhere: " + ", ".join(missing))
+        _problem("undocumented_flag", "flags on the page nowhere: " + ", ".join(missing),
+                 flags=missing)
 
     blocks["cli:all-commands"] = (
         table(["Command", "What it does"],
@@ -1082,6 +1315,86 @@ def stale_regions(kind, path):
     return stale
 
 
+def plan(kind, path):
+    """Everything a human or an agent needs to bring one page back in line.
+
+    Deterministic and side-effect free. It reports four kinds of work:
+
+      stale            a table on the page no longer matches the source
+      missing_marker   a region the source now has and the page has nowhere to
+                       put, with the table already rendered and a suggested
+                       heading and insertion point
+      orphaned_marker  a marker for a region the source no longer has
+      curation         a choice only a person can make: a description the code
+                       does not carry, a command in no task group, a
+                       fingerprint that no longer matches
+
+    The tool stops at proposing. It never writes a heading or a sentence into a
+    page, because every word a reader sees should have been through a review.
+    """
+    global PLAN
+    PLAN = []
+    try:
+        blocks = GENERATORS[kind]()
+    finally:
+        curation, PLAN = PLAN, None
+
+    text = open(path).read()
+    regions = find_regions(text)
+    present = [i for i, *_ in regions]
+    order = list(blocks)
+
+    def after(region):
+        """The last region already on the page that precedes this one in source
+        order, which is where a new section belongs."""
+        i = order.index(region)
+        earlier = [r for r in order[:i] if r in present]
+        return earlier[-1] if earlier else None
+
+    return {
+        "page": os.path.relpath(path, ROOT) if path.startswith(ROOT) else path,
+        "kind": kind,
+        "stale": [i for i in present
+                  if i in blocks and _body(text, regions, i) != blocks[i].strip()],
+        "missing_marker": [{
+            "region": r,
+            "suggested_heading": _suggest_heading(r),
+            "insert_after": after(r),
+            "table": blocks[r],
+        } for r in order if r not in present],
+        "orphaned_marker": [{
+            "region": r,
+            "reason": "the source no longer has what this region described",
+        } for r in present if r not in blocks],
+        "curation": curation,
+    }
+
+
+def _body(text, regions, ident):
+    for i, bs, be, _os_, _oe in regions:
+        if i == ident:
+            return text[bs:be].strip()
+    return None
+
+
+def _suggest_heading(region):
+    """A heading a writer will probably keep, derived from the region id. The
+    words are a suggestion; the writer owns them."""
+    parts = region.split(":")
+    if parts[0] == "config":
+        name = re.sub(r"Config$", "", parts[-1])
+        return "### `" + name[0].lower() + name[1:] + "`"
+    if parts[0] == "api" and parts[1] == "msg":
+        return f"#### `{parts[-1]}`"
+    if parts[0] == "api" and parts[1] == "enum":
+        return f"#### `{parts[-1]}`"
+    if parts[:2] == ["cli", "flags"]:
+        return "### `ibc " + parts[-1].replace("-", " ") + "`"
+    if parts[:2] == ["cli", "group-flags"]:
+        return "### Flags every `" + parts[-1].replace("-", " ") + "` command accepts"
+    return f"## {parts[-1]}"
+
+
 def run(kind, path, check):
     blocks = GENERATORS[kind]()
     text = open(path).read()
@@ -1113,14 +1426,19 @@ def main():
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--list-regions", action="store_true",
                     help="print the stale region ids, one per line, and nothing else")
+    ap.add_argument("--plan", action="store_true",
+                    help="print, as JSON, every gap and the work each one needs")
     a = ap.parse_args()
     jobs = [(k, os.path.join(ROOT, p)) for k, p in sorted(PAGES.items())] \
         if a.kind == "all" else [(a.kind, a.page)]
     if a.kind != "all" and not a.page:
         ap.error("a page is required unless kind is `all`")
-    rc = 0
+    rc, plans = 0, []
     for kind, page in jobs:
         try:
+            if a.plan:
+                plans.append(plan(kind, page))
+                continue
             if a.list_regions:
                 stale = stale_regions(kind, page)
                 for ident in stale:
@@ -1131,6 +1449,11 @@ def main():
         except (MarkerError, SourceError) as e:
             print(f"{page}: {e}", file=sys.stderr)
             rc = max(rc, 2)
+    if a.plan:
+        print(json.dumps(plans, indent=2))
+        work = sum(len(p["stale"]) + len(p["missing_marker"])
+                   + len(p["orphaned_marker"]) + len(p["curation"]) for p in plans)
+        rc = 1 if work else 0
     return rc
 
 

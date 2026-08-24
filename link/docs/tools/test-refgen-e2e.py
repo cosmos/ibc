@@ -233,6 +233,115 @@ message FakeThing {
         raise AssertionError("expected a MarkerError naming the new message")
 
 
+@case("a key whose meaning changes under a stable name raises on its fingerprint")
+def _():
+    with Sandbox() as box:
+        # the name, the yaml tag, and the absence of a doc comment all stay put:
+        # only the type changes, which no table cell of its own would reveal as
+        # a meaning change
+        box.edit("link/internal/config/config.go",
+                 'ListenAddress string `yaml:"listenAddr"`',
+                 'ListenAddress []string `yaml:"listenAddr"`')
+        raises(box, "config", "fingerprint")
+
+
+@case("a validation rule added to a described key raises on its fingerprint")
+def _():
+    with Sandbox() as box:
+        box.edit("link/internal/config/config.go",
+                 '''func (c ServerConfig) Validate() error {
+	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {''',
+                 '''func (c ServerConfig) Validate() error {
+	if c.ListenAddress == "" {
+		return errors.New(".listenAddr required")
+	}
+	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {''')
+        raises(box, "config", "fingerprint")
+
+
+@case("a described key that is removed leaves no dead description")
+def _():
+    with Sandbox() as box:
+        box.edit("link/internal/config/relayer.go",
+                 '\tGasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`\n', "")
+        raises(box, "config", "FALLBACK_DOCS describes fields that are gone")
+
+
+# ----------------------------------------------- discovery, not hardcoded lists
+
+@case("a new config struct reachable from Config is discovered, not listed")
+def _():
+    with Sandbox() as box:
+        box.edit("link/internal/config/config.go",
+                 '\tSigners   Signers       `yaml:"signers"`\n}',
+                 '\tSigners   Signers       `yaml:"signers"`\n'
+                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n}\n\n'
+                 'type MetricsConfig struct {\n'
+                 '\tListenAddress string `yaml:"listenAddr"`\n}')
+        page = box.page("config", own=True)
+        try:
+            refgen.run("config", page, check=True)
+        except (refgen.SourceError, refgen.MarkerError) as e:
+            assert "etrics" in str(e), e
+            return
+        raise AssertionError("a new block must not pass unnoticed")
+
+
+@case("a new config struct's table and heading arrive in the plan")
+def _():
+    with Sandbox() as box:
+        box.edit("link/internal/config/config.go",
+                 '\tSigners   Signers       `yaml:"signers"`\n}',
+                 '\tSigners   Signers       `yaml:"signers"`\n'
+                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n}\n\n'
+                 '// MetricsConfig config for the metrics endpoint.\n'
+                 'type MetricsConfig struct {\n'
+                 '\t// ListenAddress is where metrics are served.\n'
+                 '\tListenAddress string `yaml:"listenAddr"`\n}')
+        page = box.page("config", own=True)
+        p = refgen.plan("config", page)
+        new = [m for m in p["missing_marker"] if m["region"] == "config:MetricsConfig"]
+        assert new, p["missing_marker"]
+        assert "`listenAddr`" in new[0]["table"]
+        assert new[0]["suggested_heading"] == "### `metrics`"
+        assert new[0]["insert_after"], "a new section needs somewhere to go"
+
+
+@case("a new proto file is discovered without being named")
+def _():
+    with Sandbox() as box:
+        os.makedirs(os.path.join(box.dir, "proto/link"), exist_ok=True)
+        open(os.path.join(box.dir, "proto/link/extra.proto"), "w").write(
+            'syntax = "proto3";\n\npackage ibc.v2.extra;\n\n'
+            "// Something new.\nmessage NewThing {\n  string name = 1;\n}\n")
+        assert "api:msg:NewThing" in refgen.gen_api()
+
+
+@case("a new command group's own flags are discovered")
+def _():
+    with Sandbox() as box:
+        box.edit("link/cmd/ibc/main.go",
+                 "\tcmdConfig.AddCommand(",
+                 '\t_ = cmdConfig.PersistentFlags().Bool("fake-group-flag", false, "inherited")\n'
+                 "\tcmdConfig.AddCommand(")
+        assert "cli:group-flags:config" in refgen.gen_cli()
+
+
+@case("plan mode collects every gap rather than stopping at the first")
+def _():
+    with Sandbox() as box:
+        box.edit("link/internal/config/config.go",
+                 'ListenAddress string `yaml:"listenAddr"`',
+                 'ListenAddress string `yaml:"listenAddr"`\n'
+                 '\tFakeOne string `yaml:"fakeOne"`\n'
+                 '\tFakeTwo string `yaml:"fakeTwo"`')
+        page = box.page("config", own=True)
+        gaps = [c for c in refgen.plan("config", page)["curation"]
+                if c["kind"] == "missing_description"]
+        assert len(gaps) == 2, gaps
+        assert all(g["fingerprint"] for g in gaps), "a gap carries what the fix needs"
+
+
 # ------------------------------------------------------- removals, not just adds
 
 @case("a removed flag disappears from the page")
