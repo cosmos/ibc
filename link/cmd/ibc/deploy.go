@@ -524,20 +524,27 @@ func signerAliasForAddress(cfg config.Config, address string) (string, bool) {
 func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	chain, _ := cfg.Chain(m.ChainID)
 	chain.ChainID = m.ChainID
-	evm := config.EVMChainConfig{ICS26Router: m.Core.Router}
+
+	var evm config.EVMChainConfig
 	if chain.EVM != nil {
-		evm.RPC = chain.EVM.RPC
+		evm = *chain.EVM
 	}
+
+	evm.ICS26Router = m.Core.Router
 	chain.EVM = &evm
+
 	return chain
 }
 
 func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) config.ClientEnd {
+	autoRelay := true
+
 	return config.ClientEnd{
-		ChainID:  m.ChainID,
-		Signer:   signer,
-		ClientID: c.ClientID,
-		Type:     config.ClientType(c.Type),
+		ChainID:   m.ChainID,
+		Signer:    signer,
+		ClientID:  c.ClientID,
+		Type:      config.ClientType(c.Type),
+		AutoRelay: config.AutoRelayConfig{Enabled: &autoRelay},
 	}
 }
 

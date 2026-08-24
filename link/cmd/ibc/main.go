@@ -75,6 +75,8 @@ func init() {
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainID, "chain-id", "", "chain ID")
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainRPC, "rpc", "", "chain RPC URL")
 	cmdConfigAddChain.Flags().
+		StringVar(&flagConfigAddChainWS, "ws", "", "chain websocket URL, required for chains sourcing auto-relayed routes")
+	cmdConfigAddChain.Flags().
 		StringVar(&flagConfigAddChainRouter, "router", "", "ics26Router address (default: left blank, fill in via render-config)")
 	cmdConfigAddChain.Flags().
 		StringVar(&flagConfigAddChainDeployer, "deployer", "", "signer alias used by ibc deploy for this chain")

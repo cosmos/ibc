@@ -23,6 +23,10 @@ type Client interface {
 	// TxHeight returns the height txHash was included at.
 	TxHeight(ctx context.Context, txHash []byte) (uint64, error)
 
+	// SubscribeSendPackets streams send packet events for clientIDs to the out
+	// channel as the chain emits them.
+	SubscribeSendPackets(ctx context.Context, clientIDs []string, out chan<- v2.PacketEvent) (v2.Subscription, error)
+
 	// IsPacketReceived reports whether a packet receipt exists on the
 	// destination chain.
 	IsPacketReceived(ctx context.Context, destClientID string, sequence uint64) (bool, error)
@@ -90,7 +94,7 @@ func NewClientSetFromConfig(cfg config.Config) (*ClientSet, error) {
 			return nil, errors.Errorf("unsupported chain type for chain %q", chain.ChainID)
 		}
 
-		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.ICS26Router)
+		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.WS, chain.EVM.ICS26Router)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating evm client for chain %q", chain.ChainID)
 		}

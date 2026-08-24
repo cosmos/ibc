@@ -74,7 +74,7 @@ func TestPacketsProbesForFurtherPages(t *testing.T) {
 
 			ctx := context.Background()
 			st := NewMockStore(t)
-			service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+			service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
 			var asked int64
 
@@ -115,7 +115,7 @@ func TestPacketsCursorBoundsTheQuery(t *testing.T) {
 
 	ctx := context.Background()
 	st := NewMockStore(t)
-	service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+	service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
 	var asked int64
 
@@ -136,7 +136,7 @@ func TestPacketsRejectsMalformedCursors(t *testing.T) {
 	// "MA" decodes to "0", a position no packet can occupy.
 	for _, cursor := range []string{"not-base64!", "abc", "MA"} {
 		ctx := context.Background()
-		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+		service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
 		_, err := service.Packets(ctx, PacketFilter{}, PacketQuery{Cursor: cursor})
 		require.ErrorIs(t, err, ErrInvalidInput, "cursor %q", cursor)
@@ -168,7 +168,7 @@ func TestPacketsRejectsUnconfiguredChains(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil)
+			service := New(relayerConfig(), NewMockStore(t), NewMockChainClients(t), nil, nil)
 
 			_, err := service.Packets(context.Background(), tt.filter, PacketQuery{})
 			require.ErrorIs(t, err, ErrInvalidInput)
@@ -184,7 +184,7 @@ func TestPacketsUnknownDataFiltersReturnEmpty(t *testing.T) {
 
 	ctx := context.Background()
 	st := NewMockStore(t)
-	service := New(relayerConfig(), st, NewMockChainClients(t), nil)
+	service := New(relayerConfig(), st, NewMockChainClients(t), nil, nil)
 
 	st.EXPECT().ListPackets(ctx, mock.Anything, mock.Anything).Return(nil, nil).Once()
 

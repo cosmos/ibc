@@ -397,6 +397,163 @@ func newTestClient(t *testing.T) (*Client, *mocks.MockETHClient) {
 	return client, eth
 }
 
+func newSubscribingTestClient(t *testing.T) (*Client, *mocks.MockETHClient, *mocks.MockETHClient) {
+	t.Helper()
+
+	eth, ws := mocks.NewMockETHClient(t), mocks.NewMockETHClient(t)
+	client, err := NewWithClients(chainIDEth, eth, ws, routerAddress)
+	require.NoError(t, err)
+
+	return client, eth, ws
+}
+
+// stubSubscription stands in for the live log subscription the ws client returns.
+type stubSubscription struct{ errs chan error }
+
+func (s stubSubscription) Err() <-chan error { return s.errs }
+func (s stubSubscription) Unsubscribe()      {}
+
+func TestPacketLogQuery(t *testing.T) {
+	client, _ := newTestClient(t)
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	t.Run("clientsAndSequences", func(t *testing.T) {
+		query, err := client.packetLogQuery(
+			sendPacketEvent,
+			[]any{"base-0", "base-1"},
+			[]any{uint64(7), uint64(9)},
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, []common.Address{common.HexToAddress(routerAddress)}, query.Addresses)
+		require.Len(t, query.Topics, 3)
+		assert.Equal(t, []common.Hash{routerABI.Events[sendPacketEvent].ID}, query.Topics[0])
+		assert.Equal(t, []common.Hash{
+			crypto.Keccak256Hash([]byte("base-0")),
+			crypto.Keccak256Hash([]byte("base-1")),
+		}, query.Topics[1])
+		assert.Equal(t, []common.Hash{
+			common.BigToHash(big.NewInt(7)),
+			common.BigToHash(big.NewInt(9)),
+		}, query.Topics[2])
+	})
+
+	t.Run("emptySequencesAreAWildcard", func(t *testing.T) {
+		query, err := client.packetLogQuery(sendPacketEvent, []any{"base-0"}, nil)
+
+		require.NoError(t, err)
+		require.Len(t, query.Topics, 3)
+		assert.Nil(t, query.Topics[2])
+	})
+}
+
+func TestSubscribeSendPackets(t *testing.T) {
+	ctx := context.Background()
+
+	// subscribe stands up the subscription against a stub ws subscription and
+	// hands back the log sink the client is listening on.
+	subscribe := func(
+		t *testing.T,
+		client *Client,
+		ws *mocks.MockETHClient,
+		out chan v2.PacketEvent,
+	) (v2.Subscription, chan<- types.Log) {
+		t.Helper()
+
+		var sink chan<- types.Log
+
+		ws.EXPECT().
+			SubscribeFilterLogs(ctx, mock.Anything, mock.Anything).
+			RunAndReturn(func(_ context.Context, _ ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+				sink = ch
+				return stubSubscription{errs: make(chan error, 1)}, nil
+			}).
+			Once()
+
+		sub, err := client.SubscribeSendPackets(ctx, []string{"base-0"}, out)
+		require.NoError(t, err)
+
+		return sub, sink
+	}
+
+	t.Run("decodesSendPacket", func(t *testing.T) {
+		client, eth, ws := newSubscribingTestClient(t)
+		out := make(chan v2.PacketEvent, 2)
+		sub, sink := subscribe(t, client, ws, out)
+
+		defer sub.Unsubscribe()
+
+		// once, not twice: both logs are in the same block
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(&types.Header{Time: 1752000000}, nil).Once()
+
+		log := sendPacketLog(t, common.HexToAddress(routerAddress), testPacket())
+		log.BlockNumber = 100
+		log.TxHash = txHash
+
+		sink <- *log
+		sink <- *log
+
+		for range 2 {
+			packetEvent := <-out
+			assert.Equal(t, v2.KindSendPacket, packetEvent.Kind)
+			assert.Equal(t, txHash.String(), packetEvent.TxHash)
+			assert.Equal(t, uint64(100), packetEvent.Height)
+			assert.Equal(t, time.Unix(1752000000, 0).UTC(), packetEvent.BlockTime)
+			assert.False(t, packetEvent.Removed)
+			assert.Equal(t, uint64(42), packetEvent.Packet.Sequence)
+			assert.Equal(t, "base-0", packetEvent.Packet.SourceClient)
+		}
+	})
+
+	t.Run("headerErrorEndsSubscription", func(t *testing.T) {
+		client, eth, ws := newSubscribingTestClient(t)
+		out := make(chan v2.PacketEvent, 1)
+		sub, sink := subscribe(t, client, ws, out)
+
+		defer sub.Unsubscribe()
+
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(100)).Return(nil, errors.New("rpc down")).Once()
+
+		log := sendPacketLog(t, common.HexToAddress(routerAddress), testPacket())
+		log.BlockNumber = 100
+
+		sink <- *log
+
+		require.ErrorContains(t, <-sub.Err(), "rpc down")
+		assert.Empty(t, out)
+	})
+
+	t.Run("subscribeError", func(t *testing.T) {
+		client, _, ws := newSubscribingTestClient(t)
+		ws.EXPECT().
+			SubscribeFilterLogs(ctx, mock.Anything, mock.Anything).
+			Return(nil, errors.New("ws down")).
+			Once()
+
+		_, err := client.SubscribeSendPackets(ctx, []string{"base-0"}, make(chan v2.PacketEvent))
+
+		require.ErrorContains(t, err, "subscribing to SendPacket logs")
+	})
+
+	t.Run("withoutWebsocket", func(t *testing.T) {
+		client, _ := newTestClient(t)
+
+		_, err := client.SubscribeSendPackets(ctx, []string{"base-0"}, make(chan v2.PacketEvent))
+
+		require.ErrorContains(t, err, "no websocket endpoint configured")
+	})
+
+	t.Run("withoutClientIDs", func(t *testing.T) {
+		client, _, _ := newSubscribingTestClient(t)
+
+		_, err := client.SubscribeSendPackets(ctx, nil, make(chan v2.PacketEvent))
+
+		require.ErrorContains(t, err, "no client ids")
+	})
+}
+
 func TestCommitmentQueries(t *testing.T) {
 	ctx := context.Background()
 
