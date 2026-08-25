@@ -77,7 +77,7 @@ func (c *Connection) ID() ConnectionID { return c.id }
 func (c *Connection) A() *IBCClient    { return c.a }
 func (c *Connection) B() *IBCClient    { return c.b }
 
-// Attestor is one running, config-loaded IBC CLI Attestor process.
+// Attestor is one running, config-loaded attestor process.
 // ObservedIBCInstance is derived from the counterparty end of the Client's
 // Connection.
 //
@@ -114,7 +114,7 @@ func (a *Attestor) ObservedIBCInstance() *IBCInstance { return a.observed }
 func (a *Attestor) SignerAddress() EVMAddress         { return a.signer }
 
 // Endpoint is the Attestor's gRPC listen address as a bare host:port, the
-// form IBC CLI relayer configuration requires for remote attestor entries. It is
+// form the relayer configuration requires for remote attestor entries. It is
 // stable across Restart.
 func (a *Attestor) Endpoint() string { return a.endpoint }
 
