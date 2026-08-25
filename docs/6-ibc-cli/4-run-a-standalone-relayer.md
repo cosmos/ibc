@@ -13,7 +13,7 @@ The tutorial's keystore already holds a funded key, so this guide reuses it rath
 
 ## 1. Relayer config
 
-1. Create a second configuration file alongside the tutorial's:
+1. Create a relayer configuration file:
 
 ```bash
 ./bin/ibc config new --config ibc-relayer2.yml
@@ -132,7 +132,3 @@ It reads `PACKET_STATE_PENDING` until the receive and the acknowledgement have b
 ```
 
 The balance should be one token higher, meaning the packet was delivered successfully.
-
-## Next steps
-
-- [Overview](1-overview.md) covers what the three parts are made of and how they fit together.

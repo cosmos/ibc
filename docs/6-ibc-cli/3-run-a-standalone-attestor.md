@@ -185,8 +185,6 @@ attestors:
   grpc: 127.0.0.1:3001
 ```
 
-[Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that uses these two instead of hosting its own.
-
 ## Next steps
 
 - [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries these attestors instead of hosting its own.
