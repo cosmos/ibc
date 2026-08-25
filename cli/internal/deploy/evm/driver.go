@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 	"github.com/cosmos/ibc/cli/internal/deploy"
+	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 // backend is the subset of ethclient the driver needs; narrowed for tests.
