@@ -3,7 +3,9 @@
 package ibclink
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"connectrpc.com/connect"
@@ -20,30 +23,70 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-func TestParseReadiness(t *testing.T) {
-	valid := `{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}` + "\n"
-	res := parseReadiness(valid)
+func TestParseReadinessLog(t *testing.T) {
+	valid := `{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}}` + "\n"
+	res, ok := parseRelayerReadinessLog(valid)
+	require.True(t, ok)
 	require.NoError(t, res.err)
 	require.Equal(t, "127.0.0.1:4242", res.readiness.HTTP)
 	require.Equal(t, []string{"chain-a"}, res.readiness.ChainsConnected)
 
-	res = parseReadiness("plain log line, not json\n")
-	require.Error(t, res.err)
-	require.ErrorContains(t, res.err, "not readiness JSON")
+	_, ok = parseRelayerReadinessLog(`{"level":"INFO","msg":"Starting relayer"}`)
+	require.False(t, ok)
 
-	wrongEvent := `{"event":"started","http":"127.0.0.1:4242"}`
-	res = parseReadiness(wrongEvent)
+	wrongEvent := `{"msg":"Readiness","readiness":{"event":"started","http":"127.0.0.1:4242"}}`
+	res, ok = parseRelayerReadinessLog(wrongEvent)
+	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "invalid readiness")
 
-	notReady := `{"event":"ready"}`
-	res = parseReadiness(notReady)
+	notReady := `{"msg":"Readiness","readiness":{"event":"ready"}}`
+	res, ok = parseRelayerReadinessLog(notReady)
+	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "http")
 }
 
-// fakeRelayerAPI serves the relayer wire contract: Packets returns matching
-// statuses; Relay records the submitted arguments.
+func TestPipeLogs(t *testing.T) {
+	const input = "starting\nready\nafter readiness"
+	var logs bytes.Buffer
+	var observed []string
+
+	err := pipeLogs(strings.NewReader(input), &logs, func(line string) bool {
+		observed = append(observed, line)
+		return line == "ready\n"
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, input, logs.String())
+	require.Equal(t, []string{"starting\n", "ready\n"}, observed)
+}
+
+func TestPipeLogsRequiresReadiness(t *testing.T) {
+	const input = "starting\nstopped"
+	var logs bytes.Buffer
+
+	err := pipeLogs(strings.NewReader(input), &logs, func(string) bool { return false })
+
+	require.ErrorContains(t, err, "no readiness log on stderr")
+	require.Equal(t, input, logs.String())
+}
+
+func TestPipeLogsDrainsAfterLogWriteFailure(t *testing.T) {
+	stderr := iotest.OneByteReader(strings.NewReader("ready\n"))
+	logs := errorWriter{err: errors.New("write failed")}
+
+	err := pipeLogs(stderr, logs, func(line string) bool { return line == "ready\n" })
+
+	require.NoError(t, err)
+}
+
+type errorWriter struct{ err error }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+// fakeRelayerAPI serves the relayer wire contract: Status on an unknown
+// transaction reports CodeNotFound; Relay records the submitted arguments.
 type fakeRelayerAPI struct {
 	relayerv2.UnimplementedRelayerApiServiceHandler
 	relayed  []*relayerv2.RelayRequest
@@ -136,7 +179,7 @@ func TestStartRelayerSurfacesStartupLogs(t *testing.T) {
 	require.NoError(t, err)
 	_, err = driver.StartRelayer(t.Context())
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no readiness line")
+	require.ErrorContains(t, err, "no readiness log")
 	require.ErrorContains(t, err, ".signers[0].grpc required for remote signer")
 }
 
@@ -201,8 +244,11 @@ func TestWaitPoliciesSurviveDriverAndRelayerStartup(t *testing.T) {
 
 	script := filepath.Join(t.TempDir(), "ibc-ready")
 	require.NoError(t, os.WriteFile(script, []byte(fmt.Sprintf(
-		"#!/bin/sh\nprintf '%%s\\n' '%s'\nexec sleep 60\n",
-		fmt.Sprintf(`{"event":"ready","http":%q}`, strings.TrimPrefix(server.URL, "http://")),
+		"#!/bin/sh\nprintf '%%s\\n' '%s' >&2\nexec sleep 60\n",
+		fmt.Sprintf(
+			`{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","http":%q}}`,
+			strings.TrimPrefix(server.URL, "http://"),
+		),
 	)), 0o700))
 	t.Setenv(binEnv, script)
 

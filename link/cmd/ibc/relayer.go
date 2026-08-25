@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -12,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+	"github.com/cosmos/ibc/link/api/v2/relayer"
 	"github.com/cosmos/ibc/link/internal/bootstrap"
 	"github.com/cosmos/ibc/link/internal/config"
 	"github.com/cosmos/ibc/link/internal/pkg/graceful"
@@ -66,20 +65,20 @@ var (
 )
 
 // packetStates maps the --state flag to its wire value.
-var packetStates = map[string]relayerv2.PacketState{
-	"not-selected": relayerv2.PacketState_PACKET_STATE_NOT_SELECTED,
-	"pending":      relayerv2.PacketState_PACKET_STATE_PENDING,
-	"succeeded":    relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
-	"timed-out":    relayerv2.PacketState_PACKET_STATE_TIMED_OUT,
-	"rejected":     relayerv2.PacketState_PACKET_STATE_REJECTED,
-	"relay-failed": relayerv2.PacketState_PACKET_STATE_RELAY_FAILED,
+var packetStates = map[string]relayer.PacketState{
+	"not-selected": relayer.PacketState_PACKET_STATE_NOT_SELECTED,
+	"pending":      relayer.PacketState_PACKET_STATE_PENDING,
+	"succeeded":    relayer.PacketState_PACKET_STATE_SUCCEEDED,
+	"timed-out":    relayer.PacketState_PACKET_STATE_TIMED_OUT,
+	"rejected":     relayer.PacketState_PACKET_STATE_REJECTED,
+	"relay-failed": relayer.PacketState_PACKET_STATE_RELAY_FAILED,
 }
 
 func packetStateNames() []string {
 	return slices.Sorted(maps.Keys(packetStates))
 }
 
-func relayerRun(cmd *cobra.Command, _ []string) error {
+func relayerRun(_ *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -122,15 +121,12 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 	for _, chain := range cfg.Chains {
 		connected = append(connected, chain.ChainID)
 	}
-	if err := json.NewEncoder(cmd.OutOrStdout()).Encode(relayerv2.ProcessReadiness{
-		Event:           relayerv2.ProcessReadinessEvent,
+
+	app.Logger.Info("Readiness", "readiness", relayer.ProcessReadiness{
+		Event:           relayer.ProcessReadinessEvent,
 		ChainsConnected: connected,
 		HTTP:            address.String(),
-	}); err != nil {
-		_ = app.RelayerService.Stop()
-		_ = app.Server.Stop()
-		return err
-	}
+	})
 
 	// executes from last to first
 	graceful.AddCallback(app.Store.Close)
@@ -147,10 +143,10 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	res, err := client.Relay(cmd.Context(), connect.NewRequest(&relayerv2.RelayRequest{
+	res, err := client.Relay(cmd.Context(), connect.NewRequest(&relayer.RelayRequest{
 		TxHash:        flagRelayerTxHash,
 		SourceChainId: flagRelayerSourceChainID,
-		Selection:     &relayerv2.RelayRequest_AllPackets{AllPackets: &relayerv2.AllPackets{}},
+		Selection:     &relayer.RelayRequest_AllPackets{AllPackets: &relayer.AllPackets{}},
 	}))
 	if err != nil {
 		return errors.Wrap(err, cmd.Name())
@@ -160,7 +156,7 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 }
 
 func relayerPackets(cmd *cobra.Command, _ []string) error {
-	filter := &relayerv2.PacketFilter{
+	filter := &relayer.PacketFilter{
 		SourceChainId:       optional(flagRelayerSourceChainID),
 		DestinationChainId:  optional(flagRelayerPacketsDestChainID),
 		SourceClientId:      optional(flagRelayerPacketsSrcClientID),
@@ -181,7 +177,7 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 		filter.State = &state
 	}
 
-	req := &relayerv2.PacketsRequest{
+	req := &relayer.PacketsRequest{
 		Filter: filter,
 		Limit:  flagRelayerPacketsLimit,
 		Cursor: flagRelayerPacketsCursor,
@@ -206,13 +202,13 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 
 // relayerPacketsAll follows next_cursor to completion and prints all packets as
 // one response
-func relayerPacketsAll(cmd *cobra.Command, req *relayerv2.PacketsRequest) error {
+func relayerPacketsAll(cmd *cobra.Command, req *relayer.PacketsRequest) error {
 	client, err := relayerClient()
 	if err != nil {
 		return err
 	}
 
-	all := &relayerv2.PacketsResponse{}
+	all := &relayer.PacketsResponse{}
 
 	for {
 		res, err := client.Packets(cmd.Context(), connect.NewRequest(req))
@@ -231,7 +227,7 @@ func relayerPacketsAll(cmd *cobra.Command, req *relayerv2.PacketsRequest) error 
 }
 
 // relayerClient dials the relayer resolved from this config, or --host.
-func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
+func relayerClient() (relayer.RelayerApiServiceClient, error) {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return nil, err
@@ -245,7 +241,7 @@ func relayerClient() (relayerv2.RelayerApiServiceClient, error) {
 		address = cfg.Server.ListenAddress
 	}
 
-	return relayerv2.NewRelayerApiServiceClient(
+	return relayer.NewRelayerApiServiceClient(
 		newGRPCHTTPClient(), "http://"+dialableAddress(address), connect.WithGRPC(),
 	), nil
 }
