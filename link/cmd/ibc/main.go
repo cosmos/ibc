@@ -31,7 +31,7 @@ const useIFT = "ift"
 
 var rootCmd = &cobra.Command{
 	Use:   "ibc",
-	Short: "IBC Link",
+	Short: "IBC CLI",
 }
 
 func main() {

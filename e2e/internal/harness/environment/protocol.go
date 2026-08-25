@@ -77,7 +77,7 @@ func (c *Connection) ID() ConnectionID { return c.id }
 func (c *Connection) A() *IBCClient    { return c.a }
 func (c *Connection) B() *IBCClient    { return c.b }
 
-// Attestor is one running, config-loaded IBC Link Attestor process.
+// Attestor is one running, config-loaded IBC CLI Attestor process.
 // ObservedIBCInstance is derived from the counterparty end of the Client's
 // Connection.
 //

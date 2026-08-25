@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# IBC Link
+# IBC CLI
 
 `WIP`
 

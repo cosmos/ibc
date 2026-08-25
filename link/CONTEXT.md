@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# IBC Link Environment
+# IBC CLI Environment
 
-The IBC Link environment context describes the on-chain protocol topology and off-chain actors that a test declares and obtains as a ready Environment.
+The IBC CLI environment context describes the on-chain protocol topology and off-chain actors that a test declares and obtains as a ready Environment.
 
 ## Language
 

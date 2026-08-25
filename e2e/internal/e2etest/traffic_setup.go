@@ -147,7 +147,7 @@ func DeployWithRelayerConfig(
 	configPath := filepath.Join(dir, "ibc-link.config.yaml")
 	driver, err := ibclink.NewDriver(configPath)
 	require.NoError(t, err, "e2etest: create driver")
-	require.NoError(t, env.BindIBCLink(driver), "e2etest: bind IBC Link process")
+	require.NoError(t, env.BindIBCLink(driver), "e2etest: bind IBC CLI process")
 
 	deployment := deployApps(t, env, deployer, routes)
 	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))

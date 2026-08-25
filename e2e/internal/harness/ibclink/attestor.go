@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package ibclink manages IBC Link processes as black boxes.
+// Package ibclink manages IBC CLI processes as black boxes.
 package ibclink
 
 import (
@@ -73,7 +73,7 @@ type readinessResult struct {
 	err     error
 }
 
-// AttestorProcess is a running IBC Link attestor whose public height endpoint has been
+// AttestorProcess is a running IBC CLI attestor whose public height endpoint has been
 // successfully probed. It owns the subprocess group, but the caller owns the
 // containing workspace and decides when its files are removed.
 type AttestorProcess struct {
@@ -102,7 +102,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	}
 	binaryPath, err := filepath.Abs(launch.BinaryPath)
 	if err != nil {
-		return nil, fmt.Errorf("start IBC Link attestor: absolute binary path: %w", err)
+		return nil, fmt.Errorf("start IBC CLI attestor: absolute binary path: %w", err)
 	}
 
 	listenAddress := launch.ListenAddress
@@ -116,7 +116,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 
 	out, err := newLogWriter(paths.log)
 	if err != nil {
-		return nil, fmt.Errorf("start IBC Link attestor: create log: %w", err)
+		return nil, fmt.Errorf("start IBC CLI attestor: create log: %w", err)
 	}
 
 	cmd := exec.Command(
@@ -131,12 +131,12 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		out.close()
-		return nil, fmt.Errorf("start IBC Link attestor: capture stderr: %w", err)
+		return nil, fmt.Errorf("start IBC CLI attestor: capture stderr: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		_ = stderr.Close()
 		out.close()
-		return nil, fmt.Errorf("start IBC Link attestor binary %q: %w", binaryPath, err)
+		return nil, fmt.Errorf("start IBC CLI attestor binary %q: %w", binaryPath, err)
 	}
 	readiness := make(chan readinessResult, 1)
 	stderrDone := make(chan struct{})
@@ -158,7 +158,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 
 	if err := p.awaitReady(ctx); err != nil {
 		if cleanupErr := p.killAfterFailedStart(); cleanupErr != nil {
-			return p, errors.Join(err, fmt.Errorf("clean up failed IBC Link attestor start: %w", cleanupErr))
+			return p, errors.Join(err, fmt.Errorf("clean up failed IBC CLI attestor start: %w", cleanupErr))
 		}
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 			return p.readinessExitError()
 		case <-startupCtx.Done():
 			return fmt.Errorf(
-				"IBC Link attestor was not ready at %s: %w (last probe: %s); logs: %s",
+				"IBC CLI attestor was not ready at %s: %w (last probe: %s); logs: %s",
 				p.address,
 				startupCtx.Err(),
 				lastProbeErr.Error(),
@@ -245,13 +245,13 @@ func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
 			}
 			if errors.Is(result.err, io.EOF) {
 				return "", fmt.Errorf(
-					"IBC Link attestor exited before readiness: %w; logs: %s",
+					"IBC CLI attestor exited before readiness: %w; logs: %s",
 					result.err,
 					p.logTail(),
 				)
 			}
 			return "", fmt.Errorf(
-				"IBC Link attestor readiness failed: %w; logs: %s",
+				"IBC CLI attestor readiness failed: %w; logs: %s",
 				result.err,
 				p.logTail(),
 			)
@@ -259,7 +259,7 @@ func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
 		parsed, err := netip.ParseAddrPort(result.address)
 		if err != nil || !parsed.Addr().IsLoopback() || parsed.Port() == 0 {
 			return "", fmt.Errorf(
-				"IBC Link attestor announced invalid readiness address %q",
+				"IBC CLI attestor announced invalid readiness address %q",
 				result.address,
 			)
 		}
@@ -268,7 +268,7 @@ func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
 		return "", p.readinessExitError()
 	case <-ctx.Done():
 		return "", fmt.Errorf(
-			"IBC Link attestor did not announce readiness: %w; logs: %s",
+			"IBC CLI attestor did not announce readiness: %w; logs: %s",
 			ctx.Err(),
 			p.logTail(),
 		)
@@ -281,7 +281,7 @@ func (p *AttestorProcess) readinessExitError() error {
 		processErr = errors.New("process exited successfully")
 	}
 	return fmt.Errorf(
-		"IBC Link attestor exited before readiness: %w; logs: %s",
+		"IBC CLI attestor exited before readiness: %w; logs: %s",
 		processErr,
 		p.logTail(),
 	)
@@ -300,17 +300,17 @@ func (p *AttestorProcess) logTail() string {
 func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, common.Address, error) {
 	switch {
 	case spec.BinaryPath == "":
-		return nil, common.Address{}, errors.New("start IBC Link attestor: binary path is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: binary path is required")
 	case spec.WorkDir == "":
-		return nil, common.Address{}, errors.New("start IBC Link attestor: work dir is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: work dir is required")
 	case spec.Name == "":
-		return nil, common.Address{}, errors.New("start IBC Link attestor: name is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: name is required")
 	case spec.ChainID == "":
-		return nil, common.Address{}, errors.New("start IBC Link attestor: chain id is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: chain id is required")
 	case spec.RPCURL == "":
-		return nil, common.Address{}, errors.New("start IBC Link attestor: chain RPC URL is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: chain RPC URL is required")
 	case spec.ICS26Router == "":
-		return nil, common.Address{}, errors.New("start IBC Link attestor: ICS26 router address is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: ICS26 router address is required")
 	}
 
 	remote := spec.SignerGRPC != "" || spec.SignerRemoteKeyID != ""
@@ -318,25 +318,25 @@ func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, common.Addr
 		switch {
 		case spec.PrivateKeyHex != "":
 			return nil, common.Address{}, errors.New(
-				"start IBC Link attestor: private key is not allowed for remote signer",
+				"start IBC CLI attestor: private key is not allowed for remote signer",
 			)
 		case spec.SignerGRPC == "":
 			return nil, common.Address{}, errors.New(
-				"start IBC Link attestor: gRPC endpoint is required for remote signer",
+				"start IBC CLI attestor: gRPC endpoint is required for remote signer",
 			)
 		case spec.SignerRemoteKeyID == "":
 			return nil, common.Address{}, errors.New(
-				"start IBC Link attestor: key id is required for remote signer",
+				"start IBC CLI attestor: key id is required for remote signer",
 			)
 		}
 		return nil, common.Address{}, nil
 	}
 	if spec.PrivateKeyHex == "" {
-		return nil, common.Address{}, errors.New("start IBC Link attestor: private key is required")
+		return nil, common.Address{}, errors.New("start IBC CLI attestor: private key is required")
 	}
 	key, err := crypto.HexToECDSA(strings.TrimPrefix(spec.PrivateKeyHex, "0x"))
 	if err != nil {
-		return nil, common.Address{}, fmt.Errorf("start IBC Link attestor: parse private key: %w", err)
+		return nil, common.Address{}, fmt.Errorf("start IBC CLI attestor: parse private key: %w", err)
 	}
 	return key, crypto.PubkeyToAddress(key.PublicKey), nil
 }
@@ -344,7 +344,7 @@ func validateAttestorLaunch(spec AttestorLaunch) (*ecdsa.PrivateKey, common.Addr
 func remoteSignerAddress(ctx context.Context, endpoint, keyID string) (common.Address, error) {
 	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return common.Address{}, fmt.Errorf("start IBC Link attestor: connect to remote signer: %w", err)
+		return common.Address{}, fmt.Errorf("start IBC CLI attestor: connect to remote signer: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -355,18 +355,18 @@ func remoteSignerAddress(ctx context.Context, endpoint, keyID string) (common.Ad
 		&signerservice.GetKeyRequest{Id: keyID},
 	)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("start IBC Link attestor: get remote signer key %q: %w", keyID, err)
+		return common.Address{}, fmt.Errorf("start IBC CLI attestor: get remote signer key %q: %w", keyID, err)
 	}
 	if response.GetKey().GetScheme() != signerservice.SignatureScheme_ECDSA_SECP256K1ETH {
 		return common.Address{}, fmt.Errorf(
-			"start IBC Link attestor: remote signer key %q is not ECDSA_SECP256K1ETH",
+			"start IBC CLI attestor: remote signer key %q is not ECDSA_SECP256K1ETH",
 			keyID,
 		)
 	}
 	publicKey, err := crypto.DecompressPubkey(response.GetKey().GetPubkey())
 	if err != nil {
 		return common.Address{}, fmt.Errorf(
-			"start IBC Link attestor: decode remote signer key %q: %w",
+			"start IBC CLI attestor: decode remote signer key %q: %w",
 			keyID,
 			err,
 		)
@@ -386,17 +386,17 @@ func prepareAttestorWorkspace(
 ) (workspacePaths, error) {
 	dir, err := filepath.Abs(spec.WorkDir)
 	if err != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: absolute work dir: %w", err)
+		return workspacePaths{}, fmt.Errorf("start IBC CLI attestor: absolute work dir: %w", err)
 	}
 	if mkdirErr := os.Mkdir(dir, 0o700); mkdirErr != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: create private work dir %q: %w", dir, mkdirErr)
+		return workspacePaths{}, fmt.Errorf("start IBC CLI attestor: create private work dir %q: %w", dir, mkdirErr)
 	}
 
 	signer := signerConfig{Alias: signerAlias, Type: RelayerSignerRemote}
 	if key != nil {
 		keyPath := filepath.Join(dir, "keys", keyFilename)
 		if writeErr := keyfile.Store(keyPath, keyfile.ECDSA, crypto.FromECDSA(key)); writeErr != nil {
-			return workspacePaths{}, fmt.Errorf("start IBC Link attestor: write private key file: %w", writeErr)
+			return workspacePaths{}, fmt.Errorf("start IBC CLI attestor: write private key file: %w", writeErr)
 		}
 		signer.Type = RelayerSignerLocal
 		signer.File = keyPath
@@ -429,10 +429,10 @@ func prepareAttestorWorkspace(
 	}
 	configData, err := yaml.Marshal(config)
 	if err != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: encode config: %w", err)
+		return workspacePaths{}, fmt.Errorf("start IBC CLI attestor: encode config: %w", err)
 	}
 	if err := writePrivateFile(filepath.Join(dir, configFilename), configData); err != nil {
-		return workspacePaths{}, fmt.Errorf("start IBC Link attestor: write config: %w", err)
+		return workspacePaths{}, fmt.Errorf("start IBC CLI attestor: write config: %w", err)
 	}
 	return workspacePaths{dir: dir, log: filepath.Join(dir, logFilename)}, nil
 }

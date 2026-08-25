@@ -21,7 +21,7 @@ import (
 	"github.com/cosmos/ibc/link/internal/txsubmitter"
 )
 
-// Services is an outcome of IBC Link wiring (dep inject)
+// Services is an outcome of IBC CLI wiring (dep inject)
 type Services struct {
 	Context context.Context
 	Logger  *slog.Logger
