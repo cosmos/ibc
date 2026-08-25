@@ -371,7 +371,7 @@ def _():
 def _():
     key = ("RelayerConfig", "DispatchPollInterval")
     saved = refgen.DEFAULT_CONSTS[key]
-    refgen.DEFAULT_CONSTS[key] = [("", "link/internal/relay/dispatch/dispatcher.go", "GoneAway")]
+    refgen.DEFAULT_CONSTS[key] = [("", "cli/internal/relay/dispatch/dispatcher.go", "GoneAway")]
     try:
         refgen.gen_config()
     except refgen.SourceError:

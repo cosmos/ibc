@@ -34,7 +34,7 @@ ibc.v2.relayer.RelayerApiService
 
 Tracks the packets emitted by a source transaction and submits the transactions required to complete them.
 
-<!-- [relayer.proto:L12](proto/link/relayer.proto#L12) -->
+<!-- [relayer.proto:L12](proto/cli/relayer.proto#L12) -->
 
 <!-- GEN:api:rpc:Relay END -->
 
@@ -48,7 +48,7 @@ Tracks the packets emitted by a source transaction and submits the transactions 
 | `source_chain_id` | `string` | The chain that transaction was sent on. |
 | `selection` | oneof: `all_packets` or `selected_packets` | Required and controls only this relayer instance; IBC relaying remains permissionless. |
 
-<!-- [relayer.proto:L18](proto/link/relayer.proto#L18) -->
+<!-- [relayer.proto:L18](proto/cli/relayer.proto#L18) -->
 
 <!-- GEN:api:msg:RelayRequest END -->
 
@@ -64,7 +64,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 |---|---|---|
 | `packets` | `PacketSelector[]` | The packets to relay. At least one. |
 
-<!-- [relayer.proto:L37](proto/link/relayer.proto#L37) -->
+<!-- [relayer.proto:L37](proto/cli/relayer.proto#L37) -->
 
 <!-- GEN:api:msg:SelectedPackets END -->
 
@@ -77,7 +77,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 | `source_client_id` | `string` | The client the packet was sent on. |
 | `sequence_number` | `uint64` | The packet's number on that client. |
 
-<!-- [relayer.proto:L41](proto/link/relayer.proto#L41) -->
+<!-- [relayer.proto:L41](proto/cli/relayer.proto#L41) -->
 
 <!-- GEN:api:msg:PacketSelector END -->
 
@@ -93,7 +93,7 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 |---|---|---|
 | `packets` | `ObservedPacket[]` | Every send packet in the transaction, including those this relayer will not deliver. |
 
-<!-- [relayer.proto:L46](proto/link/relayer.proto#L46) -->
+<!-- [relayer.proto:L46](proto/cli/relayer.proto#L46) -->
 
 <!-- GEN:api:msg:RelayResponse END -->
 
@@ -107,7 +107,7 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 | `sequence_number` | `uint64` | The packet's number on that client. |
 | `selection` | `PacketSelection` | Whether this relayer took the packet. See the values below. |
 
-<!-- [relayer.proto:L52](proto/link/relayer.proto#L52) -->
+<!-- [relayer.proto:L52](proto/cli/relayer.proto#L52) -->
 
 <!-- GEN:api:msg:ObservedPacket END -->
 
@@ -121,7 +121,7 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 | `PACKET_SELECTION_NOT_SELECTED` | Configured and routed, but this request did not select it. |
 | `PACKET_SELECTION_UNCONFIGURED` | No configured client or route, so this relayer skips it. |
 
-<!-- [relayer.proto:L58](proto/link/relayer.proto#L58) -->
+<!-- [relayer.proto:L58](proto/cli/relayer.proto#L58) -->
 
 <!-- GEN:api:enum:PacketSelection END -->
 
@@ -138,7 +138,7 @@ grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPack
 
 Lists the packets this relayer is aware of, most recent first.
 
-<!-- [relayer.proto:L15](proto/link/relayer.proto#L15) -->
+<!-- [relayer.proto:L15](proto/cli/relayer.proto#L15) -->
 
 <!-- GEN:api:rpc:Packets END -->
 
@@ -152,7 +152,7 @@ Lists the packets this relayer is aware of, most recent first.
 | `limit` | `uint32` | Zero applies the default of 100; values above 1000 are capped. |
 | `cursor` | `string` | Opaque next_cursor from a previous response. Empty starts at the newest packet. |
 
-<!-- [relayer.proto:L69](proto/link/relayer.proto#L69) -->
+<!-- [relayer.proto:L69](proto/cli/relayer.proto#L69) -->
 
 <!-- GEN:api:msg:PacketsRequest END -->
 
@@ -172,7 +172,7 @@ Every field is optional, and a request with none returns everything the relayer 
 | `source_tx_hash` | `string` (optional) | Only packets sent by this transaction. |
 | `sequence_number` | `uint64` (optional) | Only packets with this sequence number. |
 
-<!-- [relayer.proto:L78](proto/link/relayer.proto#L78) -->
+<!-- [relayer.proto:L78](proto/cli/relayer.proto#L78) -->
 
 <!-- GEN:api:msg:PacketFilter END -->
 
@@ -186,7 +186,7 @@ Every field is optional, and a request with none returns everything the relayer 
 | `has_more` | `bool` | More `packets` match beyond this page. |
 | `next_cursor` | `string` | Cursor for the next page, set only when `has_more`. |
 
-<!-- [relayer.proto:L88](proto/link/relayer.proto#L88) -->
+<!-- [relayer.proto:L88](proto/cli/relayer.proto#L88) -->
 
 <!-- GEN:api:msg:PacketsResponse END -->
 
@@ -206,7 +206,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `ack_tx` | `TransactionInfo` | The source-chain acknowledgement transaction. Present for succeeded and rejected packets, and may be present while pending. |
 | `timeout_tx` | `TransactionInfo` | The source-chain timeout transaction. Present for timed-out packets, and may be present while pending. |
 
-<!-- [relayer.proto:L119](proto/link/relayer.proto#L119) -->
+<!-- [relayer.proto:L119](proto/cli/relayer.proto#L119) -->
 
 <!-- GEN:api:msg:PacketStatus END -->
 
@@ -219,7 +219,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `tx_hash` | `string` | The transaction's hash. |
 | `chain_id` | `string` | The chain it was submitted to. |
 
-<!-- [relayer.proto:L114](proto/link/relayer.proto#L114) -->
+<!-- [relayer.proto:L114](proto/cli/relayer.proto#L114) -->
 
 <!-- GEN:api:msg:TransactionInfo END -->
 
@@ -238,7 +238,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `PACKET_STATE_REJECTED` | The packet completed with an error acknowledgement on the source chain. |
 | `PACKET_STATE_RELAY_FAILED` | A permanent error prevents the relayer from processing the packet. |
 
-<!-- [relayer.proto:L96](proto/link/relayer.proto#L96) -->
+<!-- [relayer.proto:L96](proto/cli/relayer.proto#L96) -->
 
 <!-- GEN:api:enum:PacketState END -->
 
@@ -266,7 +266,7 @@ Both attestation calls return this shape.
 | `attested_data` | `bytes` | The attested data |
 | `signature` | `bytes` | The attestation signature |
 
-<!-- [attestor.proto:L80](proto/link/attestor.proto#L80) -->
+<!-- [attestor.proto:L80](proto/cli/attestor.proto#L80) -->
 
 <!-- GEN:api:msg:Attestation END -->
 
@@ -278,7 +278,7 @@ Both attestation calls return this shape.
 
 Retrieves an attestation for a state at a given height.
 
-<!-- [attestor.proto:L12](proto/link/attestor.proto#L12) -->
+<!-- [attestor.proto:L12](proto/cli/attestor.proto#L12) -->
 
 <!-- GEN:api:rpc:StateAttestation END -->
 
@@ -291,7 +291,7 @@ Retrieves an attestation for a state at a given height.
 | `attestor` | `string` | Which attestor to ask, by its `name` in the `attestors` block. |
 | `height` | `uint64` | The height to attest to. |
 
-<!-- [attestor.proto:L24](proto/link/attestor.proto#L24) -->
+<!-- [attestor.proto:L24](proto/cli/attestor.proto#L24) -->
 
 <!-- GEN:api:msg:StateAttestationRequest END -->
 
@@ -303,7 +303,7 @@ Retrieves an attestation for a state at a given height.
 |---|---|---|
 | `attestation` | `Attestation` | The signed attestation. See below. |
 
-<!-- [attestor.proto:L29](proto/link/attestor.proto#L29) -->
+<!-- [attestor.proto:L29](proto/cli/attestor.proto#L29) -->
 
 <!-- GEN:api:msg:StateAttestationResponse END -->
 
@@ -315,7 +315,7 @@ A height above what `LatestHeight` reports is refused, so ask for the height fir
 
 Retrieves an attestation for a set of packets.
 
-<!-- [attestor.proto:L15](proto/link/attestor.proto#L15) -->
+<!-- [attestor.proto:L15](proto/cli/attestor.proto#L15) -->
 
 <!-- GEN:api:rpc:PacketAttestation END -->
 
@@ -330,7 +330,7 @@ Retrieves an attestation for a set of packets.
 | `height` | `uint64` | The height to attest to the `packets` at |
 | `commitment_type` | `CommitmentType` | The type of commitment to attest (packet or acknowledgment) Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward compatibility) |
 
-<!-- [attestor.proto:L35](proto/link/attestor.proto#L35) -->
+<!-- [attestor.proto:L35](proto/cli/attestor.proto#L35) -->
 
 <!-- GEN:api:msg:PacketAttestationRequest END -->
 
@@ -346,7 +346,7 @@ Retrieves an attestation for a set of packets.
 | `COMMITMENT_TYPE_ACK` | Acknowledgment commitment (for WriteAcknowledgement events) |
 | `COMMITMENT_TYPE_RECEIPT` | Receipt commitment (for Timeout events - non-membership proof) |
 
-<!-- [attestor.proto:L69](proto/link/attestor.proto#L69) -->
+<!-- [attestor.proto:L69](proto/cli/attestor.proto#L69) -->
 
 <!-- GEN:api:enum:CommitmentType END -->
 
@@ -358,7 +358,7 @@ Retrieves an attestation for a set of packets.
 |---|---|---|
 | `attestation` | `Attestation` | The signed attestation. See below. |
 
-<!-- [attestor.proto:L51](proto/link/attestor.proto#L51) -->
+<!-- [attestor.proto:L51](proto/cli/attestor.proto#L51) -->
 
 <!-- GEN:api:msg:PacketAttestationResponse END -->
 
@@ -370,7 +370,7 @@ One request carries at most 100 packets, each at most 128 KB, and a request over
 
 Returns the latest height the attestor will generate attestations for.
 
-<!-- [attestor.proto:L18](proto/link/attestor.proto#L18) -->
+<!-- [attestor.proto:L18](proto/cli/attestor.proto#L18) -->
 
 <!-- GEN:api:rpc:LatestHeight END -->
 
@@ -382,7 +382,7 @@ Returns the latest height the attestor will generate attestations for.
 |---|---|---|
 | `attestor` | `string` | Which attestor to ask, by its `name` in the `attestors` block. |
 
-<!-- [attestor.proto:L55](proto/link/attestor.proto#L55) -->
+<!-- [attestor.proto:L55](proto/cli/attestor.proto#L55) -->
 
 <!-- GEN:api:msg:LatestHeightRequest END -->
 
@@ -394,7 +394,7 @@ Returns the latest height the attestor will generate attestations for.
 |---|---|---|
 | `height` | `uint64` | The highest height this attestor will attest to. |
 
-<!-- [attestor.proto:L57](proto/link/attestor.proto#L57) -->
+<!-- [attestor.proto:L57](proto/cli/attestor.proto#L57) -->
 
 <!-- GEN:api:msg:LatestHeightResponse END -->
 
@@ -406,7 +406,7 @@ Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor 
 
 Returns identity information about a configured attestor.
 
-<!-- [attestor.proto:L21](proto/link/attestor.proto#L21) -->
+<!-- [attestor.proto:L21](proto/cli/attestor.proto#L21) -->
 
 <!-- GEN:api:rpc:Info END -->
 
@@ -418,7 +418,7 @@ Returns identity information about a configured attestor.
 |---|---|---|
 | `attestor` | `string` | Which attestor to ask, by its `name` in the `attestors` block. |
 
-<!-- [attestor.proto:L59](proto/link/attestor.proto#L59) -->
+<!-- [attestor.proto:L59](proto/cli/attestor.proto#L59) -->
 
 <!-- GEN:api:msg:InfoRequest END -->
 
@@ -431,7 +431,7 @@ Returns identity information about a configured attestor.
 | `chain_id` | `string` | The chain this attestor watches. |
 | `address` | `string` | The attestor's signing address. |
 
-<!-- [attestor.proto:L61](proto/link/attestor.proto#L61) -->
+<!-- [attestor.proto:L61](proto/cli/attestor.proto#L61) -->
 
 <!-- GEN:api:msg:InfoResponse END -->
 

@@ -8,9 +8,9 @@ never writes prose.
 
 | Page | Covers | Generated from |
 |------|--------|----------------|
-| [5-configuration.md](../5-configuration.md) | every key in `ibc.yml` | the config structs in `link/internal/config/` |
-| [6-cli-commands.md](../6-cli-commands.md) | every command and flag | the built binary's `--help` tree, plus `link/cmd/ibc/main.go` |
-| [7-api.md](../7-api.md) | both gRPC services | `proto/link/relayer.proto`, `proto/link/attestor.proto` |
+| [5-configuration.md](../5-configuration.md) | every key in `ibc.yml` | the config structs in `cli/internal/config/` |
+| [6-cli-commands.md](../6-cli-commands.md) | every command and flag | the built binary's `--help` tree, plus `cli/cmd/ibc/main.go` |
+| [7-api.md](../7-api.md) | both gRPC services | `proto/cli/relayer.proto`, `proto/cli/attestor.proto` |
 
 ## Before you run anything
 
@@ -138,7 +138,7 @@ that now exists. It is slower, because four cases rebuild the binary.
 **Nothing runs `--check` for you.** A currency workflow exists on the
 `docs-reference-generation` branch and has not been merged, so today these
 pages go stale silently and only this procedure catches it. Run step 1 as part
-of any change under `link/`, `proto/`, or `gen/`.
+of any change under `cli/`, `proto/`, or `gen/`.
 
 ## Why generated
 
