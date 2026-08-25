@@ -313,6 +313,26 @@ attestors:
 	})
 }
 
+func TestStoreToFilePreservesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.yml")
+	path := filepath.Join(dir, "ibc.yml")
+	require.NoError(t, os.WriteFile(target, nil, 0o600))
+	require.NoError(t, os.Symlink(filepath.Base(target), path))
+
+	cfg := DefaultConfig()
+	cfg.Server.ListenAddress = "127.0.0.1:9090"
+	require.NoError(t, cfg.StoreToFile(path))
+
+	info, err := os.Lstat(path)
+	require.NoError(t, err)
+	require.NotZero(t, info.Mode()&os.ModeSymlink)
+
+	stored, err := LoadFromFile(target, false, false)
+	require.NoError(t, err)
+	require.Equal(t, cfg.Server.ListenAddress, stored.Server.ListenAddress)
+}
+
 func TestAttestorsValidate(t *testing.T) {
 	for _, tt := range []struct {
 		name        string

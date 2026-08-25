@@ -169,7 +169,6 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, err
 	}
 
-	// allow db override
 	if globalFlags.DB != "" {
 		cfg.DB, err = config.DBConfigFromURL(globalFlags.DB)
 		if err != nil {

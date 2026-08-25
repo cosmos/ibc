@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,13 +63,6 @@ var (
 
 //nolint:goconst // cli usage
 func keysNew(_ *cobra.Command, args []string) error {
-	globalFlags.SkipConfigValidation()
-
-	cfg, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-
 	keyType, err := signer.ParseKeyType(args[0])
 	if err != nil {
 		return err
@@ -90,31 +84,10 @@ func keysNew(_ *cobra.Command, args []string) error {
 		return printKey(key, true, nil)
 	}
 
-	keyPath, err := signer.KeyFilePath(globalFlags.Home, args[1])
+	keyName := args[1]
+	keyPath, err := saveNamedKey(key, keyName, flagKeysPopulateConfig)
 	if err != nil {
 		return err
-	}
-
-	if err := key.StoreToFile(keyPath); err != nil {
-		switch {
-		case !os.IsExist(err):
-			return err
-		case !flagKeysPopulateConfig:
-			return fmt.Errorf("key already exists: %s", keyPath)
-		}
-
-		// --populate-config: an already-existing key is fine, load what's
-		// actually on disk instead of erroring
-		key, err = signer.LocalKeyFromFile(keyPath)
-		if err != nil {
-			return err
-		}
-	}
-
-	if flagKeysPopulateConfig {
-		if err := addSignerToConfig(cfg, args[1]); err != nil {
-			return err
-		}
 	}
 
 	// note that we don't print the private key here to avoid leaking it to the user
@@ -124,13 +97,6 @@ func keysNew(_ *cobra.Command, args []string) error {
 }
 
 func keysShow(_ *cobra.Command, args []string) error {
-	globalFlags.SkipConfigValidation()
-
-	_, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-
 	keyPath, err := signer.KeyFilePath(globalFlags.Home, args[0])
 	if err != nil {
 		return err
@@ -147,13 +113,6 @@ func keysShow(_ *cobra.Command, args []string) error {
 }
 
 func keysList(_ *cobra.Command, _ []string) error {
-	globalFlags.SkipConfigValidation()
-
-	_, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-
 	keyPath, err := config.ExpandHome(filepath.Join(globalFlags.Home, "keys"))
 	if err != nil {
 		return err
@@ -178,51 +137,15 @@ func keysList(_ *cobra.Command, _ []string) error {
 }
 
 func keysImport(_ *cobra.Command, args []string) error {
-	globalFlags.SkipConfigValidation()
-
-	cfg, err := setupHomeWithConfig()
-	if err != nil {
-		return err
-	}
-
 	keyType, err := signer.ParseKeyType(args[0])
 	switch {
 	case err != nil:
 		return err
-	case keyType == keyfile.EDDSA:
-		return fmt.Errorf("importing eddsa keys is not supported")
+	case keyType != keyfile.ECDSA:
+		return fmt.Errorf("only ecdsa keys are supported")
 	}
 
-	keyPath, err := signer.KeyFilePath(globalFlags.Home, args[1])
-	if err != nil {
-		return err
-	}
-
-	_, err = os.Stat(keyPath)
-	switch {
-	case err == nil && !flagKeysPopulateConfig:
-		return fmt.Errorf("key already exists: %s", keyPath)
-	case err == nil:
-		// --populate-config: reuse the existing keystore entry instead of
-		// erroring, no need to re-supply --private-key for it
-		key, loadErr := signer.LocalKeyFromFile(keyPath)
-		if loadErr != nil {
-			return loadErr
-		}
-		if configErr := addSignerToConfig(cfg, args[1]); configErr != nil {
-			return configErr
-		}
-		return printKey(key, false, map[string]any{
-			"path": keyPath,
-		})
-	case !os.IsNotExist(err):
-		return err
-	}
-
-	if flagKeysImportPrivateKey == "" {
-		return fmt.Errorf("--private-key is required")
-	}
-
+	keyName := args[1]
 	privateKey, err := signer.DecodeHex(flagKeysImportPrivateKey)
 	if err != nil {
 		return fmt.Errorf("decode private key: %w", err)
@@ -233,17 +156,9 @@ func keysImport(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("create ecdsa key: %w", err)
 	}
 
-	if err := key.StoreToFile(keyPath); err != nil {
-		if os.IsExist(err) {
-			return fmt.Errorf("key already exists: %s", keyPath)
-		}
+	keyPath, err := saveNamedKey(key, keyName, flagKeysPopulateConfig)
+	if err != nil {
 		return err
-	}
-
-	if flagKeysPopulateConfig {
-		if err := addSignerToConfig(cfg, args[1]); err != nil {
-			return err
-		}
 	}
 
 	return printKey(key, false, map[string]any{
@@ -251,26 +166,56 @@ func keysImport(_ *cobra.Command, args []string) error {
 	})
 }
 
-// addSignerToConfig appends a local signer entry for the given key to the
-// config file, so a freshly created/imported key is immediately usable as a
-// `signers:` alias without a manual edit.
-func addSignerToConfig(cfg config.Config, alias string) error {
-	if _, ok := cfg.Signer(alias); ok {
-		return nil
+func saveNamedKey(key signer.LocalKey, name string, populateConfig bool) (string, error) {
+	keyPath, err := signer.KeyFilePath(globalFlags.Home, name)
+	if err != nil {
+		return "", err
+	}
+
+	var (
+		cfg        config.Config
+		configPath string
+	)
+	if populateConfig {
+		configPath, err = globalFlags.ConfigPath()
+		if err != nil {
+			return "", err
+		}
+
+		cfg, err = config.LoadFromFile(configPath, false, false)
+		if os.IsNotExist(err) {
+			cfg = config.DefaultConfig()
+		} else if err != nil {
+			return "", err
+		}
+
+		if _, exists := cfg.Signer(name); exists {
+			return "", fmt.Errorf("signer alias already exists: %q", name)
+		}
+	}
+
+	if err := key.StoreToFile(keyPath); err != nil {
+		if os.IsExist(err) {
+			return "", fmt.Errorf("key already exists: %s", keyPath)
+		}
+		return "", err
+	}
+
+	if !populateConfig {
+		return keyPath, nil
 	}
 
 	cfg.Signers = append(cfg.Signers, config.SignerConfig{
-		Alias: alias,
+		Alias: name,
 		Type:  config.SignerLocal,
-		File:  alias,
+		File:  name,
 	})
 
-	configPath, err := globalFlags.ConfigPath()
-	if err != nil {
-		return err
+	if err := cfg.StoreToFileWithComments(configPath); err != nil {
+		return "", errors.Join(err, os.Remove(keyPath))
 	}
 
-	return cfg.StoreToFileWithComments(configPath)
+	return keyPath, nil
 }
 
 func printKey(key signer.LocalKey, showPrivate bool, extra map[string]any) error {
