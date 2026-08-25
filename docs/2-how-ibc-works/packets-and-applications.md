@@ -26,7 +26,7 @@ The first four fields are the routing information. The last one is the applicati
 - `sequence`: the packet's number on its source client. It comes from a counter that starts at 1 and increments by one with every send, so both chains can refer to the same packet.
 - `sourceClient` and `destClient`: the two ends of the route. `sourceClient` is the source chain's [light client](/how-ibc-works/clients-and-counterparties) of the destination; `destClient` is the destination chain's client of the source.
 - `timeoutTimestamp`: the deadline in unix seconds, after which the packet can no longer be received. The timestamp represents the destination chain's block time, and a relayer times it out on the source chain. On send the router requires it to be in the future and no more than one day out.
-- `payloads`: the application's content. The field is a list, but the protocol currently supports exactly one payload per packet.
+- `payloads`: the application's content.
 
 ## The payload
 
