@@ -2,12 +2,12 @@
 
 # E2E Harness Development Guide for AI Agents
 
-This internal package tree of the e2e module is the black-box e2e harness. Its Link adapter observes the `ibc` binary only through
+This internal package tree of the e2e module is the black-box e2e harness. Its IBC CLI adapter observes the `ibc` binary only through
 its public wire surface — CLI commands with JSON output, config YAML, and the status API — and
 corroborates outcomes by reading chain state with its own clients.
 
 - **The wall:** the harness never imports `link/internal/...` or the stub's guts. It may import
-  public Link command transport types, generated RPC clients, and the signer-keyfile package, while
+  public IBC CLI command transport types, generated RPC clients, and the signer-keyfile package, while
   behavior remains observable only through the executable and HTTP surface.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and

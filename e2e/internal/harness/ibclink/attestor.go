@@ -47,7 +47,7 @@ const (
 	startupLogTailBytes    = 4096
 )
 
-// AttestorLaunch contains all process-local inputs needed to start one Link attestor.
+// AttestorLaunch contains all process-local inputs needed to start one IBC CLI attestor.
 // WorkDir must name a path that does not already exist; StartAttestor creates
 // it with owner-only permissions and keeps local private keys out of process
 // arguments.
@@ -86,7 +86,7 @@ type AttestorProcess struct {
 	handle        *processHandle
 }
 
-// StartAttestor writes a private Link configuration, stores a local ECDSA key
+// StartAttestor writes a private IBC CLI configuration, stores a local ECDSA key
 // when configured, starts `ibc attestor run`, and returns only after
 // LatestHeight succeeds.
 func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess, error) {
@@ -169,7 +169,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
 // Endpoint is the attestor's announced listen address as a bare host:port,
-// the form Link relayer configuration requires for remote attestors.
+// the form IBC CLI relayer configuration requires for remote attestors.
 func (p *AttestorProcess) Endpoint() string { return p.address }
 
 // LatestHeight queries the attestor's LatestHeight RPC for its configured
@@ -541,7 +541,7 @@ func (w *logWriter) close() {
 	}
 }
 
-// Shared config-literal defaults for harness-written Link config files.
+// Shared config-literal defaults for harness-written IBC CLI config files.
 const (
 	loopbackAnyPort = "127.0.0.1:0"
 	dbTypeSQLite    = "sqlite"

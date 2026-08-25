@@ -23,7 +23,7 @@ const deployCommandTimeout = 10 * time.Minute
 // deploy commands read the router from the manifest, never from config.
 const placeholderRouter = "0x0000000000000000000000000000000000000001"
 
-// DeployConfig describes the minimal Link config `ibc deploy` needs: chains
+// DeployConfig describes the minimal IBC CLI config `ibc deploy` needs: chains
 // with an RPC endpoint, all sharing one local ECDSA signer as their deployer.
 type DeployConfig struct {
 	DBPath        string
@@ -39,7 +39,7 @@ type DeployChain struct {
 	RPC     string
 }
 
-// WriteDeployConfig renders a Link config file declaring every Chain with
+// WriteDeployConfig renders an IBC CLI config file declaring every Chain with
 // DeployConfig.SignerAlias as its deployer.
 func WriteDeployConfig(path string, cfg DeployConfig) error {
 	switch {

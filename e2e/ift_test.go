@@ -98,7 +98,7 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
 	ctx := t.Context()
-	// Keep every endpoint in Link's config while starting it with one attestor unavailable.
+	// Keep every endpoint in the IBC CLI's config while starting it with one attestor unavailable.
 	require.NoError(t, destinationAttestorD.Stop(ctx))
 	relayer := e2etest.StartRelayer(t, driver, env)
 

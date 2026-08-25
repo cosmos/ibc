@@ -109,7 +109,7 @@ If moving the entire command tree at once creates excessive churn, first extract
 ### 6. Document downstream builds
 
 - Add a minimal custom-client module example with its `Factory`, `ProofGenerator`, and `main` packages.
-- Document version pinning to the Link module and the compatibility expectations of the public API.
+- Document version pinning to the IBC CLI module and the compatibility expectations of the public API.
 - Show how to build, name, and invoke the resulting binary.
 - Make clear that the official binary cannot load arbitrary custom Go implementations at runtime.
 
@@ -118,13 +118,13 @@ If moving the entire command tree at once creates excessive churn, first extract
 - Unit-test registry injection and collision handling.
 - Exercise command construction through both the standard and custom binaries.
 - Run existing CLI tests to demonstrate command compatibility.
-- Run Link unit tests and linting.
+- Run IBC CLI unit tests and linting.
 - Run the custom-binary end-to-end startup test through `ibc relayer run`.
 - Compare `ibc --help` and `ibc relayer --help` before and after the extraction for unintended changes.
 
 ## Compatibility and release boundary
 
-Treat `link/lightclient` and the minimal constructor surface in `link/cli` as public APIs. Everything below them remains internal and may evolve without supporting downstream imports. Because custom clients are compiled into the binary, downstream implementations must rebuild when upgrading to an incompatible Link release.
+Treat `link/lightclient` and the minimal constructor surface in `link/cli` as public APIs. Everything below them remains internal and may evolve without supporting downstream imports. Because custom clients are compiled into the binary, downstream implementations must rebuild when upgrading to an incompatible IBC CLI release.
 
 ## Deferred work
 

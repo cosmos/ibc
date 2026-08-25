@@ -43,7 +43,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-      - name: Build Link
+      - name: Build the IBC CLI
         if: matrix.language == 'go'
         working-directory: link
         run: go build ./...

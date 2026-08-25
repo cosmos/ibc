@@ -70,7 +70,7 @@ check-stale: ## Run all checks for stale code
 	@status="$$(git -C .. status --porcelain --untracked-files=all -- \
 		':(glob)link/api/v2/**/*.pb.go' \
 		':(glob)link/api/v2/**/*.connect.go')"; \
-		test -z "$$status" || { echo "Link API bindings are stale — run 'make codegen-proto' and commit the result" >&2; echo "$$status" >&2; exit 1; }
+		test -z "$$status" || { echo "IBC CLI API bindings are stale — run 'make codegen-proto' and commit the result" >&2; echo "$$status" >&2; exit 1; }
 	@test ! -e ../api || { echo "the removed standalone API module still exists" >&2; exit 1; }
 	@old_api='github.com/cosmos/ibc/'api; \
 		! git --no-pager -C .. grep -n -F "$$old_api" -- . || { echo "the removed API module is still referenced" >&2; exit 1; }

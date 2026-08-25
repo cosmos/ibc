@@ -114,7 +114,7 @@ func (a *Attestor) ObservedIBCInstance() *IBCInstance { return a.observed }
 func (a *Attestor) SignerAddress() EVMAddress         { return a.signer }
 
 // Endpoint is the Attestor's gRPC listen address as a bare host:port, the
-// form Link relayer configuration requires for remote attestor entries. It is
+// form IBC CLI relayer configuration requires for remote attestor entries. It is
 // stable across Restart.
 func (a *Attestor) Endpoint() string { return a.endpoint }
 
