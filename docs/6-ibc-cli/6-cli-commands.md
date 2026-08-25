@@ -407,7 +407,7 @@ List the packets the relayer is aware of, most recent first.
 ibc relayer packets --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. [API](8-api.md) lists the states `--state` accepts.
+Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. [API](7-api.md) lists the states `--state` accepts.
 
 ## `attestor`
 
@@ -575,5 +575,5 @@ Migrations run against the `db` block, so `--db` picks a different database for 
 
 ## Next steps
 
-- [Configuration](6-configuration.md) for the file these commands read.
-- [API](8-api.md) for the gRPC calls behind `relayer relay`, `relayer packets`, and the attestor queries.
+- [Configuration](5-configuration.md) for the file these commands read.
+- [API](7-api.md) for the gRPC calls behind `relayer relay`, `relayer packets`, and the attestor queries.

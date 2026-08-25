@@ -1451,9 +1451,9 @@ GENERATORS = {"api": gen_api, "cli": gen_cli, "config": gen_config}
 # The page each generator owns. A page named here must carry a marker for
 # every region its generator produces, so a new region cannot land in the
 # generator and go missing from the page.
-PAGES = {"config": "docs/6-ibc-cli/6-configuration.md",
-         "cli": "docs/6-ibc-cli/7-cli-commands.md",
-         "api": "docs/6-ibc-cli/8-api.md"}
+PAGES = {"config": "docs/6-ibc-cli/5-configuration.md",
+         "cli": "docs/6-ibc-cli/6-cli-commands.md",
+         "api": "docs/6-ibc-cli/7-api.md"}
 
 
 def stale_regions(kind, path):

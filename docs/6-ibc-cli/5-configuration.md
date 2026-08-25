@@ -340,4 +340,4 @@ The complete example runs the relayer and both attestors together. In production
 
 - [Run a standalone relayer](4-run-a-standalone-relayer.md)
 - [Run a standalone attestor](3-run-a-standalone-attestor.md)
-- [CLI commands](7-cli-commands.md) for command-line overrides
+- [CLI commands](6-cli-commands.md) for command-line overrides

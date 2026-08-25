@@ -44,7 +44,7 @@ Two chains implement the IBC stack with applications, the IBC core, and a client
 
 An application owns what a message means. It decides what to send, how to encode it, and what to do when one arrives. It initiates a send message, and it receives a callback on every outcome.
 
-Every application on a chain registers with the IBC Core router under a port identifier. Ports are how the router knows which application a packet is for. Applications can be anything, as long as they implement the necessary interface. [GMP](../3-applications/1-gmp.md), short for general message passing, is an IBC application that carries a contract call to the other chain. An [IFT](../3-applications/2-ift.md), an interchain fungible token, is an issuer's token that moves by sending GMP calls. The [Packets and applications](2-packets-and-applications.md) page covers applications in more detail.
+Every application on a chain registers with the IBC Core router under a port identifier. Ports are how the router knows which application a packet is for. Applications can be anything, as long as they implement the necessary interface. [GMP](../3-applications/1-gmp.md), short for general message passing, is an IBC application that carries a contract call to the other chain. An [IFT](../3-applications/3-ift.md), an interchain fungible token, is an issuer's token that moves by sending GMP calls. The [Packets and applications](2-packets-and-applications.md) page covers applications in more detail.
 
 ## Packets
 

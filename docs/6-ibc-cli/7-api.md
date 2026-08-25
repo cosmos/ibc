@@ -453,5 +453,5 @@ grpcurl -plaintext -d '{"attestor":"attestor-41002"}' \
 
 ## Next steps
 
-- [Configuration](6-configuration.md) for `server.listenAddr` and the `attestors` block these calls read.
-- [CLI commands](7-cli-commands.md) for the commands that make these calls.
+- [Configuration](5-configuration.md) for `server.listenAddr` and the `attestors` block these calls read.
+- [CLI commands](6-cli-commands.md) for the commands that make these calls.

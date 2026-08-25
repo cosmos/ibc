@@ -33,7 +33,7 @@ git clone https://github.com/cosmos/ibc.git && cd ibc/link && make build
 
 The binary is located at `bin/ibc`.
 
-2. This tutorial uses two local [Besu](https://docs.besu-eth.org/) chains which are EVM-based. Start both chains:
+2. This tutorial uses two local [Besu](https://docs.besu-eth.org/) chains, which are EVM-based. Start both chains:
 
 ```bash
 ../examples/besu-to-besu/setup.sh
@@ -105,7 +105,7 @@ Passing `--populate-config` adds each key to the config as a named signer. Later
 ./bin/ibc keys new ecdsa attestor-41002 --populate-config
 ```
 
-5. Next, register the first chain's details in the config. This passes the chain id, RPC and websocket endpoints, and deployer key.
+5. Next, register the first chain's details in the config. This passes the chain ID, RPC and websocket endpoints, and deployer key.
 
 ```bash
 ./bin/ibc config add-chain --chain-id 41001 --rpc http://localhost:8545 --ws ws://localhost:8546 --deployer deployer
@@ -164,7 +164,7 @@ The `--threshold` flag is how many of them must sign for the client to accept a 
 
 Note the crossed pairing. A client verifies the state of the chain it tracks, so the client on 41001 tracks 41002 and trusts the attestor watching 41002.
 
-Both sides share one client identifier, derived from the two chain IDs in sorted order, so it reads the same on either chain. Here it is `link-41001-41002` which will be used later to identify the connection.
+Both sides share one client identifier, derived from the two chain IDs in sorted order, so it reads the same on either chain. Here it is `link-41001-41002`, which will be used later to identify the connection.
 
 ## 4. Deploy the application
 
@@ -213,7 +213,7 @@ This command registers both sides. It ties each token to the client pointing at 
 
 ## 5. Configure and start the relayer
 
-Next you'll need to configure the relayer to start sending packets between the two chains.
+Next, you'll need to configure the relayer to start sending packets between the two chains.
 
 1. Generate the relayer's configuration.
 
@@ -250,7 +250,7 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 }
 ```
 
-4. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You come back to it in the next step.
+4. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You'll come back to it in the next step.
 
 ```bash
 # open a new terminal and start the relayer
@@ -295,7 +295,7 @@ The send prints `{"txHash": "0x..."}`. That hash is stored in `$TX`, which the n
 
 Once this transaction is mined, the tokens are burned on the source chain. They are minted on the destination only when the packet is delivered. If delivery fails, or the packet times out, the tokens are minted back to the sender once a relayer carries that outcome home.
 
-3. The relayer will automatically detect the ibc packet was created and relay it.
+3. The relayer will automatically detect that the IBC packet was created and relay it.
 
 4. Now you can check the status of the transfer:
 

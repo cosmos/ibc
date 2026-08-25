@@ -13,9 +13,9 @@ The commands on this page need:
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
-Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to set up a deployment with a GMP app and a client, then [run a standalone relayer](4-run-a-standalone-relayer.md) to carry the packet.
+Follow the [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) to set up a deployment with a GMP app, a client, and a running relayer.
 
-Once you have a live connection and running relayer, you'll need the following values from each chain. Run the commands in this guide from the `ibc/link` directory:
+Once you have a live connection and a running relayer, you'll need the following values from each chain. Run the commands in this guide from the `ibc/link` directory:
 
 ```bash
 ./bin/ibc deploy show 41001 | jq '{router: .core.router, gmp: .gmp.address, clients: [.clients[].clientId]}'
@@ -139,12 +139,12 @@ cast receipt $TX status --rpc-url $RPC_A
 
 ## 3. Relay the packet
 
-The relayer will pick up the packet automatically and relay it to the destination chain.
+The relayer will pick up the packet automatically and relay it to the destination chain. The command below reads the tutorial's relayer; add `--config <file>` if yours runs from a different one, as it does after [Run a standalone relayer](../6-ibc-cli/4-run-a-standalone-relayer.md).
 
 You can watch the transaction settle on the destination. This takes about a minute:
 
 ```bash
-./bin/ibc relayer packets --config ibc-relayer2.yml --chain-id 41001 --tx-hash $TX
+./bin/ibc relayer packets --chain-id 41001 --tx-hash $TX
 ```
 
 Success looks like this:

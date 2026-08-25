@@ -9,7 +9,7 @@ On the destination chain the call executes from a deterministic address unique t
 
 A call ends when the target returns data, when the call fails, or when the packet times out.
 
-[IFT](2-ift.md) is built on GMP, and moves tokens between chains using GMP calls.
+[IFT](3-ift.md) is built on GMP, and moves tokens between chains using GMP calls.
 
 ## The GMP application
 
@@ -139,11 +139,11 @@ The account forwards the destination call through `Address.functionCall`, which 
 
 A packet that is never received ends in a timeout. Once the deadline passes, a relayer proves non-receipt on the source chain, and GMP fires the timeout callback if the sender implements it. A packet cannot be both executed and timed out, because the destination refuses a packet whose deadline has passed.
 
-GMP keeps no per-packet state, so a failure or a timeout leaves it nothing to undo. Reversing anything is the sender's job, which is why [IFT](2-ift.md) keeps a pending record and refunds from it.
+GMP keeps no per-packet state, so a failure or a timeout leaves it nothing to undo. Reversing anything is the sender's job, which is why [IFT](3-ift.md) keeps a pending record and refunds from it.
 
 ## Build on GMP
 
-Any contract can use GMP to act across chains. [IFT](2-ift.md) is an example of a contract built on GMP: one token contract is the sender on its own chain and the target on the other, and it moves tokens with nothing but GMP calls.
+Any contract can use GMP to act across chains. [IFT](3-ift.md) is an example of a contract built on GMP: one token contract is the sender on its own chain and the target on the other, and it moves tokens with nothing but GMP calls.
 
 What GMP gives you is an authenticated caller on the destination chain, execution at most once, and an outcome a relayer can carry back to the source chain. What you write is the target contract, plus the two callback functions and ERC165 interface detection if you want to hear that outcome.
 
@@ -152,5 +152,5 @@ Two things belong to the contract you build:
 - **Authorization**: GMP proves which contract is calling, and your target decides whether to accept it. IFT accepts a mint only from a counterparty it has registered.
 - **State**: It is important to implement logic and state for failures and refunds. For example, IFT keeps a pending record of what it burned, and refunds from that record when a call fails or times out.
 
-[Make a cross-chain GMP call](../6-ibc-cli/5-make-a-cross-chain-gmp-call.md) walks both halves of one against a live deployment.
+[Make a cross-chain GMP call](2-make-a-cross-chain-gmp-call.md) walks both halves of one against a live deployment.
 Visit the [GMP contract reference](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) to learn more about the GMP Solidity implementation.

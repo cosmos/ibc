@@ -9,7 +9,7 @@ That behavior is built on GMP. An IFT defines no packet type, and instead a tran
 
 An issuer deploys one of two Solidity variants, which differ only in who the contract's authority is. The authority registers a bridge and send-call constructor for each counterparty IFT implementation.
 
-Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](../3-applications/2-ift.md).
+Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](../3-applications/3-ift.md).
 
 ## What an IFT contract does
 
@@ -139,7 +139,7 @@ From the dispatch onwards the transfer is out of this contract's hands. Its path
 4. The destination router hands the packet to its own ICS27GMP, by port.
 5. On an EVM destination, ICS27GMP executes the payload through the `ICS27Account` derived from the destination client ID, packet sender, and salt, so `iftMint` arrives from that account rather than from GMP itself. A Cosmos SDK destination instead executes the JSON messages body produced by `CosmosIFTSendCallConstructor`.
 
-The destination contract's checks on that call are next. [IFT: how it works](../3-applications/2-ift.md) explains the same path from the holder's side.
+The destination contract's checks on that call are next. [IFT: how it works](../3-applications/3-ift.md) explains the same path from the holder's side.
 
 ## Receiving a mint on EVM
 

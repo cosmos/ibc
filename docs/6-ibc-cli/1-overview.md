@@ -143,7 +143,7 @@ Most configurations can be generated. `ibc config new` writes a starting file, `
 
 The IBC CLI also validates the file with the `ibc config validate` command. 
 
-The [configuration reference](6-configuration.md) carries every key and its default. [CLI commands](7-cli-commands.md) and the [API reference](8-api.md) cover the rest of the surface.
+The [configuration reference](5-configuration.md) carries every key and its default. [CLI commands](6-cli-commands.md) and the [API reference](7-api.md) cover the rest of the surface.
 
 ## Next steps
 
