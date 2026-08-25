@@ -23,27 +23,13 @@ The commands below continue from the [tutorial](/ibc-cli/tutorial-deploy-ibc-and
 
 ## 1. Attestor config
 
-1. Create a new configuration file for the attestor:
+Create a second configuration file alongside the tutorial's:
 
 ```bash
-./bin/ibc config new --home ~/.ibc-attestor
+./bin/ibc config new --config ibc-attestor-41002.yml
 ```
 
-2. Copy the attestor key the tutorial generated for chain 41002:
-
-```bash
-./bin/ibc keys import ecdsa attestor-41002 --home ~/.ibc-attestor --private-key "$(./bin/ibc keys show attestor-41002 --private | jq -r '.privateKey')"
-```
-
-```json
-{
-  "evmAddress": "0xc7f148Da846781a9a1D9d22F699A7A88c592CCee",
-  "path": "/Users/you/.ibc-attestor/keys/attestor-41002.json",
-  "type": "ecdsa"
-}
-```
-
-This key must match the address in the attestation set.
+It shares the tutorial's keystore, so the attestor key generated there is already available. That key's address matches the one in the client's attestation set.
 
 > **Warning:** An attestor address must never appear in more than one client's attestation set. The signed attestation carries no domain separation, so a signature made for one client can be replayed against another.
 
@@ -52,7 +38,7 @@ This key must match the address in the attestation set.
 Write the attestor's configuration file, reading the router address and your own signing address from the deployment:
 
 ```bash
-cat > ~/.ibc-attestor/ibc.yml <<EOF
+cat > ~/.ibc/ibc-attestor-41002.yml <<EOF
 server:
   listenAddr: 0.0.0.0:3001
 
@@ -63,7 +49,7 @@ chains:
     ics26Router: "$(./bin/ibc deploy show 41002 | jq -r '.core.router')"
 
 attestors:
-- name: attestor-41002-$(./bin/ibc keys show attestor-41002 --home ~/.ibc-attestor | jq -r '.evmAddress')
+- name: attestor-41002
   type: local
   chainId: "41002"
   signer: attestor-41002
@@ -76,7 +62,7 @@ signers:
 EOF
 ```
 
-An attestor's name is `attestor-<chain it watches>-<its address>`.
+An attestor's name is `attestor-<chain it watches>`.
 
 > **Warning:** The attestor's name has to match the name the relayer uses for it. A relayer sends that name in every query, and the process serves its attestors by name, so a mismatch makes every lookup fail.
 
@@ -87,7 +73,7 @@ A finality offset of `1` signs one block behind the chain head. Zero waits for t
 1. Validate the configuration:
 
 ```bash
-./bin/ibc config validate --home ~/.ibc-attestor --strict
+./bin/ibc config validate --config ibc-attestor-41002.yml --strict
 ```
 
 ```json
@@ -99,12 +85,12 @@ A finality offset of `1` signs one block behind the chain head. Zero waits for t
 2. Start the process in a new terminal, and leave it running:
 
 ```bash
-./bin/ibc attestor run --home ~/.ibc-attestor
+./bin/ibc attestor run --config ibc-attestor-41002.yml
 ```
 
 ```
-level=INFO msg="Starting attestor"
-{"event":"ready","http":"[::]:3001"}
+level=INFO msg="Starting attestor" module=bootstrap
+level=INFO msg=Readiness module=bootstrap readiness="{Event:ready HTTP:[::]:3001}"
 ```
 
 That readiness line names the address it bound.
@@ -112,12 +98,12 @@ That readiness line names the address it bound.
 3. Back in your first terminal, ask the process what its address is:
 
 ```bash
-./bin/ibc attestor info attestor-41002-$(./bin/ibc keys show attestor-41002 --home ~/.ibc-attestor | jq -r '.evmAddress') --host 127.0.0.1:3001
+./bin/ibc attestor info attestor-41002 --host 127.0.0.1:3001
 ```
 
 ```json
 {
-  "chain_id": "41002",
+  "chainId": "41002",
   "address": "0xc7f148Da846781a9a1D9d22F699A7A88c592CCee"
 }
 ```
@@ -127,12 +113,12 @@ This should be the address of the attestor.
 4. Ask how far it can attest:
 
 ```bash
-./bin/ibc attestor latest-height attestor-41002-$(./bin/ibc keys show attestor-41002 --home ~/.ibc-attestor | jq -r '.evmAddress') --host 127.0.0.1:3001
+./bin/ibc attestor latest-height attestor-41002 --host 127.0.0.1:3001
 ```
 
 ```json
 {
-  "height": 25509
+  "height": "25509"
 }
 ```
 
@@ -140,18 +126,18 @@ This shows the attestor's latest height.
 
 ## 4. Run the second attestor
 
-The [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) this guide follows generated one attestor per chain. The following steps repeat the process to create an attestor for chain 41001, in its own home on port 3003. Port 3002 is left free for the relayer in the next guide.
+The [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) this guide follows generated one attestor per chain. The following steps repeat the process to create an attestor for chain 41001, in its own configuration file on port 3003. Port 3002 is left free for the relayer in the next guide.
 
-1. Create a new configuration file and copy the key:
+1. Create a third configuration file:
 
 ```bash
-./bin/ibc config new --home ~/.ibc-attestor-41001 && ./bin/ibc keys import ecdsa attestor-41001 --home ~/.ibc-attestor-41001 --private-key "$(./bin/ibc keys show attestor-41001 --private | jq -r '.privateKey')"
+./bin/ibc config new --config ibc-attestor-41001.yml
 ```
 
 2. Write its configuration:
 
 ```bash
-cat > ~/.ibc-attestor-41001/ibc.yml <<EOF
+cat > ~/.ibc/ibc-attestor-41001.yml <<EOF
 server:
   listenAddr: 0.0.0.0:3003
 
@@ -162,7 +148,7 @@ chains:
     ics26Router: "$(./bin/ibc deploy show 41001 | jq -r '.core.router')"
 
 attestors:
-- name: attestor-41001-$(./bin/ibc keys show attestor-41001 --home ~/.ibc-attestor-41001 | jq -r '.evmAddress')
+- name: attestor-41001
   type: local
   chainId: "41001"
   signer: attestor-41001
@@ -178,22 +164,23 @@ EOF
 3. Start it in another terminal:
 
 ```bash
-./bin/ibc attestor run --home ~/.ibc-attestor-41001
+./bin/ibc attestor run --config ibc-attestor-41001.yml
 ```
 
 ```
-{"event":"ready","http":"[::]:3003"}
+level=INFO msg="Starting attestor" module=bootstrap
+level=INFO msg=Readiness module=bootstrap readiness="{Event:ready HTTP:[::]:3003}"
 ```
 
 Both attestors now run in processes of their own, and no relayer is running.
 
-## What a relayer needs from you
+## Connect a relayer
 
 A relayer references your attestor by name and network address:
 
 ```yaml
 attestors:
-- name: attestor-41002-0xc7f148Da846781a9a1D9d22F699A7A88c592CCee
+- name: attestor-41002
   type: remote
   grpc: 127.0.0.1:3001
 ```

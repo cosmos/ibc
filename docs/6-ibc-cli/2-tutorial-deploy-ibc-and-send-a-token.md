@@ -20,6 +20,7 @@ By the end, you'll have the following:
 - [Go](https://go.dev/doc/install) v1.25.5 or later
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
+
 ## 1. Set up your environment
 
 Start by installing IBC CLI and running two local Besu chains.
@@ -69,7 +70,7 @@ IBC CLI uses one config file for all its operations.
 
 The config is stored in `~/.ibc/ibc.yml` by default.
 
-This is the home directory for everything that follows: the config, the keystore, the deployment records, and the relayer's database. 
+This is the home directory for everything that follows: the config, the keystore, the deployment records, and the relayer's database.
 
 2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router and the GMP app. It is also the default owner of any token you deploy. 
 
@@ -257,12 +258,12 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 ```
 
 ```
-level=INFO msg="Attestor config provided, running in dual mode: relayer with attestor"
-level=INFO msg="Migrated database" migrations_applied=3
-{"event":"ready","chainsConnected":["41001","41002"],"http":"[::]:3000"}
+level=INFO msg="Attestor config provided, running in dual mode: relayer with attestor" module=bootstrap
+level=INFO msg="Migrated database" module=bootstrap migrations_applied=3
+level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3000}"
 ```
 
-That last line is how you know it is up. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
+The readiness line is how you know it is up. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
 
 Leave it running, and go back to your first terminal for the rest of the tutorial.
 
@@ -271,6 +272,7 @@ Leave it running, and go back to your first terminal for the rest of the tutoria
 The next steps will mint the token and send it to the other chain.
 
 1. Mint an initial supply of the token into the deployer account.
+
 ```bash
 ./bin/ibc tx ift mint --chain 41001 --ift "$IFT_A" --to deployer --from deployer --amount 100000000000000000000
 ```
@@ -285,7 +287,7 @@ The `--from` key must be the token's owner, which is the deployer. Amounts are i
 TX=$(./bin/ibc tx ift send --chain 41001 --ift "$IFT_A" --client-id link-41001-41002 --to deployer --from deployer --amount 10000000000000000000 | jq -r '.txHash') && echo "$TX"
 ```
 
-The send prints `{"txHash": "0x..."}`. That hash is stored in `$TX`, which the next two commands use:
+The send prints `{"txHash": "0x..."}`. That hash is stored in `$TX`, which the next command uses:
 
 ```
 0xf1fa599e3e4d048113a9ffd1cbe4749ae55492d2911b09d10a98fd6d3567f5f0
@@ -294,29 +296,30 @@ The send prints `{"txHash": "0x..."}`. That hash is stored in `$TX`, which the n
 Once this transaction is mined, the tokens are burned on the source chain. They are minted on the destination only when the packet is delivered. If delivery fails, or the packet times out, the tokens are minted back to the sender once a relayer carries that outcome home.
 
 3. The relayer will automatically detect the ibc packet was created and relay it.
+
 4. Now you can check the status of the transfer:
 
 ```bash
 ./bin/ibc relayer packets --chain-id 41001 --tx-hash "$TX"
 ```
 
-It will read `PACKET_STATE_PENDING` for a few seconds, then it should read `PACKET_STATE_SUCCEEDED`:
+It will read `PACKET_STATE_PENDING` for up to a minute, then it should read `PACKET_STATE_SUCCEEDED`:
 
 ```json
 {
   "packets":  [
     {
       "state":  "PACKET_STATE_SUCCEEDED",
-      "sequence_number":  "1",
-      "source_client_id":  "link-41001-41002",
-      "send_tx":  {"tx_hash":  "0xf1fa599e...", "chain_id":  "41001"},
-      "recv_tx":  {"tx_hash":  "0xf8281f04...", "chain_id":  "41002"},
-      "ack_tx":  {"tx_hash":  "0x0f56d3f0...", "chain_id":  "41001"},
-      "timeout_tx":  null
+      "sequenceNumber":  "1",
+      "sourceClientId":  "link-41001-41002",
+      "sendTx":  {"txHash":  "0xf1fa599e...", "chainId":  "41001"},
+      "recvTx":  {"txHash":  "0xf8281f04...", "chainId":  "41002"},
+      "ackTx":  {"txHash":  "0x0f56d3f0...", "chainId":  "41001"},
+      "timeoutTx":  null
     }
   ],
-  "has_more":  false,
-  "next_cursor":  ""
+  "hasMore":  false,
+  "nextCursor":  ""
 }
 ```
 

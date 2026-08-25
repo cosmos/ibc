@@ -36,12 +36,14 @@ chains:
   - chainId: "41001"
     evm:
       rpc: http://localhost:8545
+      ws: ws://localhost:8546
       ics26Router: "0x64A6714075b7590f8b07D07a5B431409337de29B"
     deployer: deployer
 
   - chainId: "41002"
     evm:
       rpc: http://localhost:8745
+      ws: ws://localhost:8746
       ics26Router: "0x64A6714075b7590f8b07D07a5B431409337de29B"
     deployer: deployer
 
@@ -53,11 +55,15 @@ relayer:
         signer: relayer
         clientId: link-41001-41002
         type: attestation
+        autoRelay:
+          enabled: true
       clientB:
         chainId: "41002"
         signer: relayer
         clientId: link-41001-41002
         type: attestation
+        autoRelay:
+          enabled: true
 
 attestors:
   - name: attestor-41001

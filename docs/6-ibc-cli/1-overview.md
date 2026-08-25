@@ -64,9 +64,10 @@ flowchart TB
 
 ### Starting a relay
 
-A relay begins by calling the relayer's API with the chain a packet was sent from, the transaction that sent it, and which packets in that transaction to relay.
+A relay starts one of two ways:
 
-The relayer reads those packets off the source chain itself, records them, and returns. Then the relayer can start delivering the packets.
+- With `autoRelay` enabled on a client end, the relayer subscribes to that chain over a websocket and carries packets leaving it as they are sent. 
+- Manually: a relay begins by calling the relayer's API, naming the source chain, the transaction, and which of its packets to relay.
 
 Packets heading the same way are batched and delivered together, rather than one at a time.
 
