@@ -9,7 +9,7 @@ It consists of three parts:
 
 - Contract deployment for IBC Solidity contracts on EVM chains
 - A relayer for moving packets between chains
-- An attestor service  for attestation light clients
+- An attestor service for attestation light clients
 
 Each of these services is configurable under a single configuration file. Proof aggregation and transaction-building logic are internalized in the relayer. Relayers and attestors can be run in a single process or standalone using the CLI.  IBC CLI also handles contract deployment and configuration for the operator.
 
@@ -133,7 +133,7 @@ IBC CLI stores the configuration for deployment, the relayer, and attestors in a
 
 It has six blocks:
 
-- `chains`: the chains all three parts talk to, with an RPC endpoint and a router address for each.
+- `chains`: the chains all three parts talk to, with a router address for each, an RPC endpoint, and a websocket endpoint where auto-relay is enabled.
 - `relayer`: the connections to relay, and per-chain relay settings.
 - `attestors`: the attestors this process runs, or queries over the network.
 - `signers`: the keys, each under an alias the other blocks reference by name.
@@ -143,9 +143,7 @@ Most configurations can be generated. `ibc config new` writes a starting file, `
 
 The IBC CLI also validates the file with the `ibc config validate` command. 
 
-The configuration reference carries every key and its default.
-
-Visit the CLI commands and API reference pages for more details.
+The [configuration reference](/ibc-cli/configuration) carries every key and its default. [CLI commands](/ibc-cli/cli-commands) and the [API reference](/ibc-cli/api) cover the rest of the surface.
 
 ## Next steps
 
