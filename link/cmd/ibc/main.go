@@ -82,6 +82,7 @@ func init() {
 	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport, cmdKeysList)
 	cmdKeysShow.Flags().BoolVarP(&flagKeysShowPrivate, "private", "", false, "show private key")
 	cmdKeysImport.Flags().StringVar(&flagKeysImportPrivateKey, "private-key", "", "hex-encoded private key")
+	_ = cmdKeysImport.MarkFlagRequired("private-key")
 	for _, c := range []*cobra.Command{cmdKeysNew, cmdKeysImport} {
 		c.Flags().BoolVarP(&flagKeysPopulateConfig, "populate-config", "p", false, "write key reference to the config")
 	}
