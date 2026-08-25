@@ -6,7 +6,7 @@
 
 ## How IBC works
 
-The protocol, concept by concept, in reading order.
+Learn about the protocol.
 
 - [Overview](2-how-ibc-works/1-overview.md): The components, and the packet they pass.
 - [Packets and applications](2-how-ibc-works/2-packets-and-applications.md): What moves, and what gives it meaning.
@@ -17,7 +17,7 @@ The protocol, concept by concept, in reading order.
 
 ## Applications
 
-IBC applications.
+Learn about IBC applications.
 
 - [GMP: how it works](3-applications/1-gmp.md): Contract calls on another chain.
 - [IFT: how it works](3-applications/2-ift.md): A token that burns here and mints there.
@@ -31,7 +31,7 @@ How a chain decides what to believe.
 
 ## IBC-solidity contracts
 
-Contract-level reference.
+SOlidity contract references.
 
 - [Overview](5-ibc-solidity-contracts/1-overview.md): The contracts, and who deploys each.
 - [ICS26Router](5-ibc-solidity-contracts/2-ics26-router.md): Entry points, storage, events, roles.
@@ -42,21 +42,19 @@ Contract-level reference.
 
 ## IBC CLI
 
-The `ibc` binary: deploying IBC, and running the relayers and attestors that move packets.
+IBC CLI is an all-in-one binary for deploying and running an IBC connection. 
 
-- [Overview](6-ibc-cli/1-overview.md): The three parts, and how they run.
+- [Overview](6-ibc-cli/1-overview.md): CLI architecture and its parts.
 
-**Guides**
+### Guides
 
-- [Deploy IBC and send a token](6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md): Two chains, IBC deployed, one token moved.
+- [Deploy IBC and send a token](6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md): Deploy IBC on two chains and send a token.
 - [Run a standalone attestor](6-ibc-cli/3-run-a-standalone-attestor.md): An attestor in its own process.
-- [Run a standalone relayer](6-ibc-cli/4-run-a-standalone-relayer.md): Your own relayer on an existing connection.
-- [Make a cross-chain GMP call](6-ibc-cli/5-make-a-cross-chain-gmp-call.md): A contract call across chains.
+- [Run a standalone relayer](6-ibc-cli/4-run-a-standalone-relayer.md): Connect a relayer to an existing connection.
+- [Make a cross-chain GMP call](6-ibc-cli/5-make-a-cross-chain-gmp-call.md): Call a contract across chains.
 
-**Reference**
+### Reference
 
 - [Configuration](6-ibc-cli/6-configuration.md): Every key in `ibc.yml`.
 - [CLI commands](6-ibc-cli/7-cli-commands.md): Every command and flag.
 - [API](6-ibc-cli/8-api.md): The gRPC services.
-
-The tables on the last three pages are generated from this repository. [The tooling README](6-ibc-cli/tools/README.md) says what never to edit by hand.

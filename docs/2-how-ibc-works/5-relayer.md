@@ -86,3 +86,5 @@ That bounds what a relayer cannot do:
 The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs. Relay permission is set per deployment.
 
 A relayer is a courier: it can be slow, and it can be replaced, but it cannot alter what it carries.
+
+[Run a standalone relayer](../6-ibc-cli/4-run-a-standalone-relayer.md) brings one up against a connection that already exists.

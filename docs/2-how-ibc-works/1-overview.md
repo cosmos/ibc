@@ -130,3 +130,5 @@ A failure still comes back as an answer. When the destination application fails,
 A packet that never arrives ends the other way. Once its timeout has passed, the relayer proves on the source chain that the destination chain holds no receipt for it, and the router deletes the commitment and calls the sending application's timeout callback. The receiving side rejects a packet whose timeout has passed, so a delivered packet can never time out and a timed-out packet can never be delivered. The [packet lifecycle](6-packet-lifecycle.md) follows both endings step by step.
 
 Every chain trusts only what its own client has verified. Neither side trusts the relayer, and neither takes the other's claims directly.
+
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) brings up every component described here on two local chains.

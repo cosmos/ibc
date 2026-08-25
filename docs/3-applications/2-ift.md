@@ -133,3 +133,4 @@ flowchart TD
     F --> H
 ```
 
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys an IFT and moves it between two chains.

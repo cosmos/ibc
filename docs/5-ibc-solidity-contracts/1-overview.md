@@ -110,3 +110,4 @@ The IBC CLI deploys the contract set. `ibc deploy core` stands up the access man
 - [Zellic, 2025-03-25](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2025-03-25-zellic.pdf)
 - [Sherlock, 2025-04-03](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2025-04-03-sherlock.pdf)
 
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys this whole contract set with one command per chain.

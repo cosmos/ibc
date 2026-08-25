@@ -133,3 +133,5 @@ Anything short of a quorum costs liveness, never safety. Attestation is pull-bas
 Below the threshold, proof generation fails and the packet stays pending. Timeouts stall the same way, because absence needs a signed attestation like any other claim. Nothing is lost while it lasts, since the client does not expire.
 
 Disagreement stalls a connection identically. Only byte-identical attestation data aggregates, so a proof exists once one group of attestors reaches the threshold on its own.
+
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys one of these clients on each of two chains.

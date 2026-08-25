@@ -42,3 +42,5 @@ IBC supports multiple trust models to meet different business and regulatory nee
 ### No vendor lock-in
 
 Because IBC is an open standard rather than a proprietary network, organizations retain control over their infrastructure, contracts, and security mechanisms while remaining interoperable with other IBC-enabled systems. Unlike other interoperability solutions, IBC imposes no protocol-level platform fees and does not require participants to rely on a specific service provider.
+
+To see all of this working, [deploy IBC on two local chains and move a token](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md).

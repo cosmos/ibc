@@ -120,3 +120,4 @@ The receipt is written before the receiving application runs, in the same transa
 
 A packet can also settle never. `recvPacket` wraps the receiving application's callback, so a revert there carrying a reason becomes an error acknowledgement. `ackPacket` and `timeoutPacket` call the sending application with no such wrapper. If that callback always reverts, the call reverts with it, the commitment is never deleted, and neither ending can complete.
 
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) sends a packet through this lifecycle and reports where it got to.
