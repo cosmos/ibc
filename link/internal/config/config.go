@@ -191,18 +191,6 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 	return config, nil
 }
 
-func (c Config) OverrideFromFlags(flags FlagSet) (Config, error) {
-	if flags.DB != "" {
-		db, err := DBConfigFromURL(flags.DB)
-		if err != nil {
-			return Config{}, errors.Wrap(err, "invalid --db")
-		}
-		c.DB = db
-	}
-
-	return c, nil
-}
-
 func (c Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
 		return errors.Wrap(err, ".server")
@@ -408,16 +396,6 @@ func (c Config) Signer(alias string) (SignerConfig, bool) {
 	return SignerConfig{}, false
 }
 
-func (c Config) AddSigner(signer SignerConfig) (Config, bool) {
-	if _, exists := c.Signer(signer.Alias); exists {
-		return c, false
-	}
-
-	c.Signers = append(c.Signers, signer)
-
-	return c, true
-}
-
 // AttestorByName returns the configured attestor with the given name.
 func (c Config) AttestorByName(name string) (AttestorConfig, bool) {
 	for _, attestor := range c.Attestors {
@@ -479,7 +457,36 @@ func (c Config) store(path string, comments map[string]string) error {
 		return err
 	}
 
-	return os.WriteFile(path, bz, 0o644)
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+		path, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(bz); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp.Name(), path)
 }
 
 // toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
