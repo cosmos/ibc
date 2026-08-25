@@ -3,12 +3,15 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestConfig(t *testing.T) {
@@ -685,4 +688,13 @@ func TestCollectComments(t *testing.T) {
 		}},
 		Attestors: Attestors{{ChainID: "1", Name: "a", Type: AttestorTypeLocal, Signer: "watcher"}},
 	}))
+}
+
+func TestPrintJSON(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printJSON(&out, &relayer.RelayRequest{
+		TxHash:        "0xabc",
+		SourceChainId: "chain-1",
+	}))
+	require.JSONEq(t, `{"txHash":"0xabc","sourceChainId":"chain-1"}`, out.String())
 }
