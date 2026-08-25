@@ -53,13 +53,6 @@ The store is part of the router's state. It holds the commitments, receipts, and
 
 In IBC-solidity, the store has two maps: records by hashed path, and a send-sequence counter per client.
 
-```solidity
-struct IBCStoreStorage {
-    mapping(bytes32 hashedPath => bytes32 commitment) commitments;
-    mapping(string clientId => uint64 prevSeqSend) prevSequenceSends;
-}
-```
-
 The counter assigns each packet a sequence number, starting at 1. The sequence becomes part of the path where the packet's records are stored, giving each packet its own place in the store.
 
 ## The three kinds of record

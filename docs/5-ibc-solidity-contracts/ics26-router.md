@@ -157,6 +157,15 @@ To be registrable, a client contract implements five functions: `updateClient`, 
 
 A commitment is a hash of something the chain did, stored so the counterparty can verify it happened without being handed the original. Each one lives in the same mapping, from a hashed path to a fixed-length value, and the path is what says which kind it is.
 
+`IBCStoreUpgradeable` holds that mapping alongside the per-client send counter.
+
+```solidity
+struct IBCStoreStorage {
+    mapping(bytes32 hashedPath => bytes32 commitment) commitments;
+    mapping(string clientId => uint64 prevSeqSend) prevSequenceSends;
+}
+```
+
 | Record | Path | Written by |
 |---|---|---|
 | Packet commitment | `sourceClient` + `0x01` + big-endian sequence | `sendPacket` |
