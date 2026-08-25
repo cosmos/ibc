@@ -76,7 +76,7 @@ A relayer is the off-chain courier. Chains cannot call each other, so every cros
 - Repeats those steps in the other direction, to return the acknowledgement.
 - Proves the timeout on the source chain instead, if the packet timed out. That path waits for the deadline to pass rather than for a transaction to be final.
 
-A relayer is trusted for liveness alone: it can never forge or alter a packet, because changing any of its contents breaks the proof the client checks. Visit the [Relayer](/how-ibc-works/relayer) page for more information.
+A relayer is trusted for liveness alone: it can never forge or alter a packet, because changing any of its contents breaks the proof the client checks. Packets move only when a relayer submits them, so nothing crosses while none is running. Visit the [Relayer](/how-ibc-works/relayer) page for more information.
 
 ## Clients
 

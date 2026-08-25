@@ -83,6 +83,6 @@ That bounds what a relayer cannot do:
 - It cannot forge or alter a proof. Any change to the signed bytes breaks the digest the signatures are checked against.
 - It cannot alter a packet's contents. The packet it submits has to hash to the commitment the source chain stored.
 
-The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs.
+The only thing a relayer can do is withhold: refusing to deliver packets, acknowledgements, or timeouts. However, a withholding relayer is replaceable. Attestations are not tied to one relayer, so another party can query the same attestors and submit the same proofs. Relay permission is set per deployment.
 
 A relayer is a courier: it can be slow, and it can be replaced, but it cannot alter what it carries.
