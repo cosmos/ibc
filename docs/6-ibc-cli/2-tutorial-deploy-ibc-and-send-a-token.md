@@ -11,7 +11,7 @@ By the end, you'll have the following:
 - IBC contracts deployed on two local Besu chains
 - IBC connections established between the chains
 - A relayer running
-- An attestor running
+- Attestors running 
 - An Interchain Fungible Token that can be transferred between the chains
 
 ## Prerequisites
@@ -258,7 +258,7 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 
 ```
 level=INFO msg="Attestor config provided, running in dual mode: relayer with attestor"
-level=INFO msg="Migrated database" migrations_applied=4
+level=INFO msg="Migrated database" migrations_applied=3
 {"event":"ready","chainsConnected":["41001","41002"],"http":"[::]:3000"}
 ```
 
@@ -293,26 +293,7 @@ The send prints `{"txHash": "0x..."}`. That hash is stored in `$TX`, which the n
 
 Once this transaction is mined, the tokens are burned on the source chain. They are minted on the destination only when the packet is delivered. If delivery fails, or the packet times out, the tokens are minted back to the sender once a relayer carries that outcome home.
 
-3. The next command asks the relayer to relay the transaction: 
-
-```bash
-./bin/ibc relayer relay --chain-id 41001 --tx-hash "$TX"
-```
-
-```json
-{
-  "packets":  [
-    {
-      "source_client_id":  "link-41001-41002",
-      "sequence_number":  "1",
-      "selection":  "PACKET_SELECTION_SELECTED"
-    }
-  ]
-}
-```
-
-`PACKET_SELECTION_SELECTED` means the request was accepted. The relayer reads the packets out of that transaction and records them, and its dispatcher picks them up on its next poll.
-
+3. The relayer will automatically detect the ibc packet was created and relay it.
 4. Now you can check the status of the transfer:
 
 ```bash

@@ -90,7 +90,7 @@ signers:
     file: attestor-41002
 ```
 
-The names in this file are references:
+The following fields in this file are references to other fields:
 
 | Reference | Must match |
 | --- | --- |
@@ -126,7 +126,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/boot
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
-| `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
+| `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. |
 
 <!-- [config.go:L52](link/internal/config/config.go#L52) -->
 
