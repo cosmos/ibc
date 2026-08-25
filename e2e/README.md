@@ -19,7 +19,7 @@ make -C e2e doctor
 make -C e2e test
 ```
 
-The test target builds `link/bin/ibc`; `IBC_BIN` overrides that path. The real relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
+The test target builds `cli/bin/ibc`; `IBC_BIN` overrides that path. The real relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
 
 Execution modes choose providers from each test's declared requirements:
 

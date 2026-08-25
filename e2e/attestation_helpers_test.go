@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
+	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 )
 
 type attestationClientState struct {

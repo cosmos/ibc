@@ -18,7 +18,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 type connectionDependencies struct {
@@ -498,8 +498,8 @@ func acquireAttestor(
 		return attestorAcquisition{}, err
 	}
 	binding, _ := runtime.authority(declaration.Authority)
-	launch := ibclink.AttestorLaunch{
-		BinaryPath:        ibclink.ResolvedBin(),
+	launch := ibccli.AttestorLaunch{
+		BinaryPath:        ibccli.ResolvedBin(),
 		WorkDir:           filepath.Join(ws.privateDir, "attestor-"+resourcePathToken(string(declaration.ID))),
 		Name:              string(declaration.ID),
 		ChainID:           strconv.FormatUint(dependencies.observed.chain.evmChainID, 10),
@@ -511,7 +511,7 @@ func acquireAttestor(
 	if binding.SignerGRPC == "" {
 		launch.PrivateKeyHex = binding.PrivateKeyHex
 	}
-	process, err := ibclink.StartAttestor(ctx, launch)
+	process, err := ibccli.StartAttestor(ctx, launch)
 	if err != nil {
 		if process != nil {
 			return attestorAcquisition{

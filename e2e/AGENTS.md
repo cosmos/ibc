@@ -19,7 +19,7 @@ managed attestors.
   route-bound application bindings (ICS20 transfers, ICS27 GMP calls, IFT transfers). This e2e-only setup
   lives in `internal/e2etest`; transport-contract tests may call the concrete driver or Relayer directly.
 - E2e may import the IBC CLI's public command transport types, generated RPC clients, and signer-keyfile
-  package for transport and provisioning, but it must not import `link/internal` or invoke handlers
+  package for transport and provisioning, but it must not import `cli/internal` or invoke handlers
   in process.
 - Each test gets a fresh environment. Managed Anvil uses one-second mixed mining; after mining is
   paused and resumed it is interval-only, so transaction inclusion may take one second.

@@ -21,8 +21,8 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
 
 const (
@@ -160,8 +160,8 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 		env,
 		sender,
 		relayerSigner,
-		func(config *ibclink.RelayerConfig) {
-			config.SignerType = ibclink.RelayerSignerRemote
+		func(config *ibccli.RelayerConfig) {
+			config.SignerType = ibccli.RelayerSignerRemote
 			config.SignerGRPC = remoteSignerEndpoint
 			config.SignerRemoteKeyID = remoteSignerKeyID
 		},

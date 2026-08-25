@@ -16,7 +16,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 const (
@@ -325,7 +325,7 @@ func validateProductionPrerequisites(spec Spec, _ Runtime) error {
 	if !hasAttestors {
 		return nil
 	}
-	path, err := filepath.Abs(ibclink.ResolvedBin())
+	path, err := filepath.Abs(ibccli.ResolvedBin())
 	if err != nil {
 		return fmt.Errorf("environment: resolve IBC CLI binary prerequisite: %w", err)
 	}

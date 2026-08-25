@@ -8,15 +8,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
 
 // AwaitState waits for the packet to reach want. If want is pending and the
 // relayer has not indexed the source transaction, it returns (nil, nil).
 func AwaitState(
 	ctx context.Context,
-	relayer *ibclink.Relayer,
+	relayer *ibccli.Relayer,
 	packet PacketTx,
 	want relayerv2.PacketState,
 ) (*relayerv2.PacketStatus, error) {
@@ -44,7 +44,7 @@ func awaitPacketState(
 	ctx context.Context,
 	packet PacketTx,
 	want relayerv2.PacketState,
-	policy ibclink.WaitPolicy,
+	policy ibccli.WaitPolicy,
 	observe packetStatusObserver,
 ) (*relayerv2.PacketStatus, error) {
 	description := fmt.Sprintf("packet %s to report status %q", packet, want)
@@ -84,7 +84,7 @@ func awaitPacketState(
 // stability window after that state is first observed.
 func AwaitStable(
 	ctx context.Context,
-	relayer *ibclink.Relayer,
+	relayer *ibccli.Relayer,
 	packet PacketTx,
 	want relayerv2.PacketState,
 ) error {
@@ -105,7 +105,7 @@ func awaitStablePacketState(
 	ctx context.Context,
 	packet PacketTx,
 	want relayerv2.PacketState,
-	policy ibclink.WaitPolicy,
+	policy ibccli.WaitPolicy,
 	observe packetStatusObserver,
 ) error {
 	if _, err := awaitPacketState(ctx, packet, want, policy, observe); err != nil {
@@ -118,7 +118,7 @@ func watchPacketState(
 	ctx context.Context,
 	packet PacketTx,
 	want relayerv2.PacketState,
-	policy ibclink.WaitPolicy,
+	policy ibccli.WaitPolicy,
 	observe packetStatusObserver,
 ) error {
 	check := func() error {
@@ -172,13 +172,13 @@ func watchPacketState(
 	}
 }
 
-func packetWaitPolicy(relayer *ibclink.Relayer, packet PacketTx) (ibclink.WaitPolicy, error) {
+func packetWaitPolicy(relayer *ibccli.Relayer, packet PacketTx) (ibccli.WaitPolicy, error) {
 	if packet.RouteID == "" {
-		return ibclink.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
+		return ibccli.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
 	}
 	policy, ok := relayer.WaitPolicy(string(packet.RouteID))
 	if !ok {
-		return ibclink.WaitPolicy{}, fmt.Errorf(
+		return ibccli.WaitPolicy{}, fmt.Errorf(
 			"e2etest: packet %s has no wait policy for route %q",
 			packet,
 			packet.RouteID,
@@ -189,7 +189,7 @@ func packetWaitPolicy(relayer *ibclink.Relayer, packet PacketTx) (ibclink.WaitPo
 
 // RelayAll submits every packet in the packet's source transaction and
 // confirms the relayer enumerated this packet.
-func RelayAll(ctx context.Context, relayer *ibclink.Relayer, packet PacketTx) error {
+func RelayAll(ctx context.Context, relayer *ibccli.Relayer, packet PacketTx) error {
 	if relayer == nil {
 		return errors.New("e2etest: relayer is required")
 	}
@@ -211,7 +211,7 @@ func RelayAll(ctx context.Context, relayer *ibclink.Relayer, packet PacketTx) er
 }
 
 // RelaySelected submits explicit packets from one source transaction.
-func RelaySelected(ctx context.Context, relayer *ibclink.Relayer, packets ...PacketTx) error {
+func RelaySelected(ctx context.Context, relayer *ibccli.Relayer, packets ...PacketTx) error {
 	if relayer == nil {
 		return errors.New("e2etest: relayer is required")
 	}
@@ -240,7 +240,7 @@ func RelaySelected(ctx context.Context, relayer *ibclink.Relayer, packets ...Pac
 // packet discovery until the product grows one.
 func observeStatus(
 	ctx context.Context,
-	relayer *ibclink.Relayer,
+	relayer *ibccli.Relayer,
 	packet PacketTx,
 ) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
 	statuses, err := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)

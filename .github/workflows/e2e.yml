@@ -33,7 +33,7 @@ jobs:
               - ".golangci.yml"
               - ".github/workflows/e2e.yml"
             code:
-              - "link/**"
+              - "cli/**"
               - "e2e/**"
               - "gen/go/solidity-abi/**"
               - "proto/**"
@@ -72,13 +72,13 @@ jobs:
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: |
-            link/go.sum
+            cli/go.sum
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info
       - run: make -C e2e test-harness
         env:
-          IBC_BIN: ${{ github.workspace }}/link/bin/ibc
+          IBC_BIN: ${{ github.workspace }}/cli/bin/ibc
 
   test-apps:
     needs: changes
@@ -109,7 +109,7 @@ jobs:
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: |
-            link/go.sum
+            cli/go.sum
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info

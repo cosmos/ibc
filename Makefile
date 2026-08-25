@@ -22,7 +22,7 @@ test-gen: ## Compile generated Solidity Go binding packages
 	go -C $(GEN_SOLIDITY_ABI_DIR) test ./...
 
 run-all-checks: ## Run "all-in-one" code validation step.
-	$(MAKE) -C link run-all-checks
+	$(MAKE) -C cli run-all-checks
 	$(MAKE) -C e2e run-all-checks
 	$(MAKE) lint-gen
 	$(MAKE) test-gen

@@ -16,38 +16,38 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
-func TestBindIBCLinkFollowsEnvironmentLifetime(t *testing.T) {
+func TestBindCLIFollowsEnvironmentLifetime(t *testing.T) {
 	env := newProcessBindingTestEnvironment(t)
-	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
+	driver, err := ibccli.NewDriver(filepath.Join(t.TempDir(), "ibc-cli.yaml"))
 	require.NoError(t, err)
-	require.NoError(t, env.BindIBCLink(driver))
+	require.NoError(t, env.BindCLI(driver))
 	rpc, err := driver.ChainRPC("managed")
 	require.NoError(t, err)
-	require.Contains(t, rpc, "${IBC_LINK_CHAIN_RPC_")
+	require.Contains(t, rpc, "${IBC_CLI_CHAIN_RPC_")
 
 	require.NoError(t, env.Close(t.Context()))
 	_, err = driver.ChainRPC("managed")
 	require.NoError(t, err, "configuration references remain usable")
-	require.ErrorIs(t, env.BindIBCLink(driver), ErrEnvironmentClosed)
+	require.ErrorIs(t, env.BindCLI(driver), ErrEnvironmentClosed)
 }
 
 func TestBoundOneShotProcessLinearizesWithEnvironmentClose(t *testing.T) {
 	started, release := processBindingMarkers(t)
 	script := writeProcessBindingExecutable(t, `#!/bin/sh
 set -eu
-: > "$IBC_LINK_BINDING_TEST_STARTED"
-while [ ! -f "$IBC_LINK_BINDING_TEST_RELEASE" ]; do sleep 0.01; done
+: > "$IBC_CLI_BINDING_TEST_STARTED"
+while [ ! -f "$IBC_CLI_BINDING_TEST_RELEASE" ]; do sleep 0.01; done
 printf '{"valid":true}\n'
 `)
 	t.Setenv("IBC_BIN", script)
 
 	env := newProcessBindingTestEnvironment(t)
-	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
+	driver, err := ibccli.NewDriver(filepath.Join(t.TempDir(), "ibc-cli.yaml"))
 	require.NoError(t, err)
-	require.NoError(t, env.BindIBCLink(driver))
+	require.NoError(t, env.BindCLI(driver))
 
 	commandDone := make(chan error, 1)
 	go func() {
@@ -71,16 +71,16 @@ func TestEnvironmentCloseHonorsDeadlineWhileBoundProcessRuns(t *testing.T) {
 	started, release := processBindingMarkers(t)
 	script := writeProcessBindingExecutable(t, `#!/bin/sh
 set -eu
-: > "$IBC_LINK_BINDING_TEST_STARTED"
-while [ ! -f "$IBC_LINK_BINDING_TEST_RELEASE" ]; do sleep 0.01; done
+: > "$IBC_CLI_BINDING_TEST_STARTED"
+while [ ! -f "$IBC_CLI_BINDING_TEST_RELEASE" ]; do sleep 0.01; done
 printf '{"valid":true}\n'
 `)
 	t.Setenv("IBC_BIN", script)
 
 	env := newProcessBindingTestEnvironment(t)
-	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
+	driver, err := ibccli.NewDriver(filepath.Join(t.TempDir(), "ibc-cli.yaml"))
 	require.NoError(t, err)
-	require.NoError(t, env.BindIBCLink(driver))
+	require.NoError(t, env.BindCLI(driver))
 
 	commandDone := make(chan error, 1)
 	go func() {
@@ -102,21 +102,21 @@ func TestBoundRelayerStartLinearizesWithEnvironmentClose(t *testing.T) {
 	started, release := processBindingMarkers(t)
 	testBinary, err := os.Executable()
 	require.NoError(t, err)
-	t.Setenv("IBC_LINK_BINDING_TEST_BINARY", testBinary)
+	t.Setenv("IBC_CLI_BINDING_TEST_BINARY", testBinary)
 	script := writeProcessBindingExecutable(t, `#!/bin/sh
 set -eu
-IBC_LINK_BINDING_RELAYER_HELPER=1 exec "$IBC_LINK_BINDING_TEST_BINARY" \
+IBC_CLI_BINDING_RELAYER_HELPER=1 exec "$IBC_CLI_BINDING_TEST_BINARY" \
   -test.run '^TestBoundRelayerHelperProcess$' -- "$@"
 `)
 	t.Setenv("IBC_BIN", script)
 
 	env := newProcessBindingTestEnvironment(t)
-	driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
+	driver, err := ibccli.NewDriver(filepath.Join(t.TempDir(), "ibc-cli.yaml"))
 	require.NoError(t, err)
-	require.NoError(t, env.BindIBCLink(driver))
+	require.NoError(t, env.BindCLI(driver))
 
 	type startResult struct {
-		relayer *ibclink.Relayer
+		relayer *ibccli.Relayer
 		err     error
 	}
 	startDone := make(chan startResult, 1)
@@ -158,9 +158,9 @@ exit 1
 		env := newProcessBindingTestEnvironment(t)
 		env.chains["managed"].rpcURL = endpoint
 		t.Cleanup(func() { require.NoError(t, env.Close(context.Background())) })
-		driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
+		driver, err := ibccli.NewDriver(filepath.Join(t.TempDir(), "ibc-cli.yaml"))
 		require.NoError(t, err)
-		require.NoError(t, env.BindIBCLink(driver))
+		require.NoError(t, env.BindCLI(driver))
 
 		err = driver.MigrateUp(t.Context())
 		require.Error(t, err)
@@ -176,9 +176,9 @@ printf '%s\n' '`+endpoint+`' >&2
 		env := newProcessBindingTestEnvironment(t)
 		env.chains["managed"].rpcURL = endpoint
 		t.Cleanup(func() { require.NoError(t, env.Close(context.Background())) })
-		driver, err := ibclink.NewDriver(filepath.Join(t.TempDir(), "ibc-link.yaml"))
+		driver, err := ibccli.NewDriver(filepath.Join(t.TempDir(), "ibc-cli.yaml"))
 		require.NoError(t, err)
-		require.NoError(t, env.BindIBCLink(driver))
+		require.NoError(t, env.BindCLI(driver))
 
 		_, err = driver.StartRelayer(t.Context())
 		require.Error(t, err)
@@ -187,7 +187,7 @@ printf '%s\n' '`+endpoint+`' >&2
 }
 
 func TestBoundRelayerHelperProcess(_ *testing.T) {
-	if os.Getenv("IBC_LINK_BINDING_RELAYER_HELPER") != "1" {
+	if os.Getenv("IBC_CLI_BINDING_RELAYER_HELPER") != "1" {
 		return
 	}
 	if err := runBoundRelayerHelper(); err != nil {
@@ -217,8 +217,8 @@ func processBindingMarkers(t *testing.T) (string, string) {
 	dir := t.TempDir()
 	started := filepath.Join(dir, "started")
 	release := filepath.Join(dir, "release")
-	t.Setenv("IBC_LINK_BINDING_TEST_STARTED", started)
-	t.Setenv("IBC_LINK_BINDING_TEST_RELEASE", release)
+	t.Setenv("IBC_CLI_BINDING_TEST_STARTED", started)
+	t.Setenv("IBC_CLI_BINDING_TEST_RELEASE", release)
 	return started, release
 }
 
@@ -263,12 +263,12 @@ func runBoundRelayerHelper() error {
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Close() }()
 
-	if err := os.WriteFile(os.Getenv("IBC_LINK_BINDING_TEST_STARTED"), nil, 0o600); err != nil {
+	if err := os.WriteFile(os.Getenv("IBC_CLI_BINDING_TEST_STARTED"), nil, 0o600); err != nil {
 		return err
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		if _, err := os.Stat(os.Getenv("IBC_LINK_BINDING_TEST_RELEASE")); err == nil {
+		if _, err := os.Stat(os.Getenv("IBC_CLI_BINDING_TEST_RELEASE")); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {

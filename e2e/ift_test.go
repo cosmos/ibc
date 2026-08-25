@@ -15,8 +15,8 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
 
 // zeroAddressReceiver is a well-formed but invalid IFT receiver: the
@@ -400,7 +400,7 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	mining, err := destination.Mining()
 	require.NoError(t, err)
 
-	finalityOffset := uint64(ibclink.HarnessFinalityOffset)
+	finalityOffset := uint64(ibccli.HarnessFinalityOffset)
 	var transfer *e2etest.IFTSend
 	require.NoError(t, mining.WithPaused(ctx, func() error {
 		transfer, err = iftApp.Send(ctx, e2etest.IFTRequest{
@@ -710,7 +710,7 @@ func TestRelay_FilteredTimeoutSequences(t *testing.T) {
 
 func requireStablePacketState(
 	t *testing.T,
-	relayer *ibclink.Relayer,
+	relayer *ibccli.Relayer,
 	packets []e2etest.PacketTx,
 	indexes []int,
 	state relayerv2.PacketState,
@@ -740,7 +740,7 @@ func requireTimeoutFinalized(
 	require.NoError(t, err)
 	destinationEVM, err := destination.EVM()
 	require.NoError(t, err)
-	finalityOffset := uint64(ibclink.HarnessFinalityOffset)
+	finalityOffset := uint64(ibccli.HarnessFinalityOffset)
 	timeout := time.Unix(int64(timeoutTimestamp), 0) //nolint:gosec // EVM timestamps fit in int64
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		latestHeader, headerErr := destinationEVM.HeaderByNumber(t.Context(), nil)
@@ -769,7 +769,7 @@ const (
 // withBatchOverride raises PacketBatchSize/PacketBatchTimeout on every chain
 // in the route above the harness's pinned defaults, scoped to this test's
 // isolated environment.
-func withBatchOverride(cfg *ibclink.RelayerConfig) {
+func withBatchOverride(cfg *ibccli.RelayerConfig) {
 	for i := range cfg.Chains {
 		cfg.Chains[i].PacketBatchSize = batchTestPacketBatchSize
 		cfg.Chains[i].PacketBatchTimeout = batchTestPacketBatchTimeout

@@ -18,7 +18,7 @@ import (
 	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 // This deterministic identity is not one of Anvil's provider-default funded accounts.
@@ -26,7 +26,7 @@ const testDeployerPrivateKeyHex = "000000000000000000000000000000000000000000000
 
 func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 	requireDocker(t)
-	requireIBCLinkBinary(t)
+	requireCLIBinary(t)
 
 	const (
 		chainA       environment.ChainID       = "chain-a"
@@ -144,7 +144,7 @@ func TestStartRealizesSolidityIBCAppStackConnectionAndAttestors(t *testing.T) {
 
 func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 	requireDocker(t)
-	requireIBCLinkBinary(t)
+	requireCLIBinary(t)
 
 	const (
 		chainAEndpoint environment.EndpointBindingID = "chain-a-rpc"
@@ -305,7 +305,7 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 
 func TestStartRealizesSolidityIBCConnectionAcrossAnvilAndBesu(t *testing.T) {
 	requireDocker(t)
-	requireIBCLinkBinary(t)
+	requireCLIBinary(t)
 
 	const (
 		deployer environment.AuthorityID = "deployer"
@@ -568,9 +568,9 @@ func requireCodeBearingEOAFundingRejected(
 	require.Equal(t, before, after, "rejected contract funding must not mutate its balance")
 }
 
-func requireIBCLinkBinary(t *testing.T) {
+func requireCLIBinary(t *testing.T) {
 	t.Helper()
-	path := ibclink.ResolvedBin()
+	path := ibccli.ResolvedBin()
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.Getenv("IBC_BIN") != "" {

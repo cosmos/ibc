@@ -21,7 +21,7 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/iftbatchtransfershim"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/iftsendcallconstructor"
@@ -121,7 +121,7 @@ func Deploy(
 	deployer Signer,
 	relayer Signer,
 	routes ...Route,
-) (*ibclink.Driver, *Deployment) {
+) (*ibccli.Driver, *Deployment) {
 	t.Helper()
 	return DeployWithRelayerConfig(t, env, deployer, relayer, nil, routes...)
 }
@@ -133,9 +133,9 @@ func DeployWithRelayerConfig(
 	env *environment.Environment,
 	deployer Signer,
 	relayer Signer,
-	configure func(*ibclink.RelayerConfig),
+	configure func(*ibccli.RelayerConfig),
 	routes ...Route,
-) (*ibclink.Driver, *Deployment) {
+) (*ibccli.Driver, *Deployment) {
 	t.Helper()
 	require.NotNil(t, env, "e2etest: Environment is required")
 	require.NotNil(t, deployer.key, "e2etest: deployer signer is required")
@@ -144,20 +144,20 @@ func DeployWithRelayerConfig(
 
 	dir := t.TempDir()
 	signerKeyPath := filepath.Join(dir, "keys", relayerSignerAlias+".json")
-	configPath := filepath.Join(dir, "ibc-link.config.yaml")
-	driver, err := ibclink.NewDriver(configPath)
+	configPath := filepath.Join(dir, "ibc-cli.config.yaml")
+	driver, err := ibccli.NewDriver(configPath)
 	require.NoError(t, err, "e2etest: create driver")
-	require.NoError(t, env.BindIBCLink(driver), "e2etest: bind IBC CLI process")
+	require.NoError(t, env.BindCLI(driver), "e2etest: bind IBC CLI process")
 
 	deployment := deployApps(t, env, deployer, routes)
 	config, options := buildConfig(t, env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"))
 	if configure != nil {
 		configure(&config)
 	}
-	if config.SignerType == "" || config.SignerType == ibclink.RelayerSignerLocal {
+	if config.SignerType == "" || config.SignerType == ibccli.RelayerSignerLocal {
 		require.NoError(t, relayer.storeKey(config.SignerKeyFile), "e2etest: store relayer signer key")
 	}
-	require.NoError(t, ibclink.WriteRelayerConfig(configPath, config), "e2etest: write config")
+	require.NoError(t, ibccli.WriteRelayerConfig(configPath, config), "e2etest: write config")
 	if err := driver.ConfigureRelayer(options); err != nil {
 		t.Fatalf("e2etest: configure relayer: %v", err)
 	}
@@ -169,9 +169,9 @@ func DeployWithRelayerConfig(
 // StartRelayer starts the test relayer and registers idempotent teardown.
 func StartRelayer(
 	t testing.TB,
-	driver *ibclink.Driver,
+	driver *ibccli.Driver,
 	env *environment.Environment,
-) *ibclink.Relayer {
+) *ibccli.Relayer {
 	t.Helper()
 	require.NotNil(t, driver, "e2etest: driver is required")
 	require.NotNil(t, env, "e2etest: Environment is required")
@@ -346,23 +346,23 @@ func registerIFTBridge(
 func buildConfig(
 	t testing.TB,
 	env *environment.Environment,
-	driver *ibclink.Driver,
+	driver *ibccli.Driver,
 	routes []Route,
 	deployment *Deployment,
 	signerKeyPath string,
 	dbPath string,
-) (ibclink.RelayerConfig, ibclink.RelayerOptions) {
+) (ibccli.RelayerConfig, ibccli.RelayerOptions) {
 	t.Helper()
-	config := ibclink.RelayerConfig{
+	config := ibccli.RelayerConfig{
 		DBPath:         dbPath,
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
-		FinalityOffset: ibclink.HarnessFinalityOffset,
+		FinalityOffset: ibccli.HarnessFinalityOffset,
 	}
-	options := ibclink.RelayerOptions{
+	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
 		ManualRoutes: make(map[string]bool, len(routes)),
-		WaitPolicies: make(map[string]ibclink.WaitPolicy, len(routes)),
+		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
@@ -372,7 +372,7 @@ func buildConfig(
 		apps, ok := deployment.Chain(id)
 		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
 		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
-		relayerChain := ibclink.RelayerChain{
+		relayerChain := ibccli.RelayerChain{
 			ChainID:     options.ChainIDs[string(id)],
 			RPC:         rpc,
 			ICS26Router: apps.ICS26Router.Hex(),
@@ -389,8 +389,8 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
 		}
-		config.Attestors = append(config.Attestors, ibclink.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibclink.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
 		})
 	}
 
@@ -411,7 +411,7 @@ func buildConfig(
 
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
-		connection := ibclink.RelayerConnection{
+		connection := ibccli.RelayerConnection{
 			ChainA:  sourceChain,
 			ClientA: clients.SourceClientID,
 			ChainB:  destinationChain,
@@ -442,8 +442,8 @@ func buildConfig(
 	return config, options
 }
 
-func routeWaitPolicy(source, destination environment.Timing) ibclink.WaitPolicy {
-	return ibclink.WaitPolicy{
+func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
+	return ibccli.WaitPolicy{
 		CompletionBudget: source.CompletionBudget + destination.CompletionBudget,
 		StatusPoll:       max(source.PollInterval, destination.PollInterval),
 		StabilityWindow: max(

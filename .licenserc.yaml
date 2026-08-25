@@ -29,10 +29,10 @@ header:
     - "**/bun.lock"
 
     # Generated Go without configurable file headers.
-    - "link/internal/store/repository/**"
-    - "link/internal/tests/mocks/**"
-    - "link/internal/service/**/*.mock.go"
-    - "link/internal/chains/evm/contracts/**"
+    - "cli/internal/store/repository/**"
+    - "cli/internal/tests/mocks/**"
+    - "cli/internal/service/**/*.mock.go"
+    - "cli/internal/chains/evm/contracts/**"
     - "gen/go/solidity-abi/*/contract.go"
 
     # Third-party and test Solidity sources retain their own SPDX identifiers.

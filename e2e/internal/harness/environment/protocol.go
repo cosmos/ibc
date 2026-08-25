@@ -9,7 +9,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 // EVMAddress is a non-secret, checksummed contract or signer address returned
@@ -93,8 +93,8 @@ type Attestor struct {
 	lease    *environmentLease
 
 	mu       sync.Mutex
-	process  *ibclink.AttestorProcess
-	launch   ibclink.AttestorLaunch
+	process  *ibccli.AttestorProcess
+	launch   ibccli.AttestorLaunch
 	restarts int
 }
 
@@ -172,7 +172,7 @@ func (a *Attestor) restartProcess(ctx context.Context) error {
 	a.restarts++
 	launch.WorkDir = fmt.Sprintf("%s-restart-%d", a.launch.WorkDir, a.restarts)
 	launch.ListenAddress = a.endpoint
-	process, err := ibclink.StartAttestor(ctx, launch)
+	process, err := ibccli.StartAttestor(ctx, launch)
 	// A non-nil process alongside an error still owns a child; keep it so
 	// Close can retry stopping it.
 	a.process = process
