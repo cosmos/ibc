@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/keyfile"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
-	"github.com/cosmos/ibc/cli/keyfile"
 )
 
 const relayerStopTimeout = 15 * time.Second

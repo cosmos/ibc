@@ -19,10 +19,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
 
 const (

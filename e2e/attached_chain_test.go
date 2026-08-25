@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
 
 // externalChainID differs from every managed provider base so live validate exercises a second chain ID.
