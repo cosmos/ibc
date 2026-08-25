@@ -10,7 +10,7 @@ import (
 )
 
 func TestClientIDs(t *testing.T) {
-	require.True(t, ValidClientID("link-31337"))
+	require.True(t, ValidClientID("cli-31337"))
 	require.True(t, ValidClientID("my.client_1"))
 	require.False(t, ValidClientID("abc"))                    // too short
 	require.False(t, ValidClientID("client-0"))               // reserved prefix

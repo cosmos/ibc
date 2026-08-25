@@ -42,7 +42,7 @@ var (
 		Short: "Send IFT across a bridge to a counterparty chain",
 		Long: "Initiate a cross-chain transfer of --amount of the IFT token at --ift, over the bridge " +
 			"registered for --client-id, to --to on the counterparty chain.",
-		Example: "  ibc tx ift send --chain 1 --ift 0xIFTTokenAddress... --client-id link-1-2 \\\n" +
+		Example: "  ibc tx ift send --chain 1 --ift 0xIFTTokenAddress... --client-id cli-1-2 \\\n" +
 			"    --to 0xReceiver... --amount 500000000000000000 --from deployer",
 		RunE: txIFTSend,
 	}

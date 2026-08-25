@@ -33,8 +33,8 @@ Export the values from the outputs above:
 ```bash
 export RPC_A=http://localhost:8545
 export RPC_B=http://localhost:8745
-export CLIENT_A=link-41001-41002
-export CLIENT_B=link-41001-41002
+export CLIENT_A=cli-41001-41002
+export CLIENT_B=cli-41001-41002
 export GMP_A=0xA0408F356956Ae9BECa5Ac57040695012fa3CAAB
 export GMP_B=0xA0408F356956Ae9BECa5Ac57040695012fa3CAAB
 export KEY=0x33fa40f84e854b941c2b0436dd4a256e1df1cb41b9c1c0ccc8446408c19b8bf9
@@ -155,7 +155,7 @@ Success looks like this:
     {
       "state": "PACKET_STATE_SUCCEEDED",
       "sequenceNumber": "2",
-      "sourceClientId": "link-41001-41002",
+      "sourceClientId": "cli-41001-41002",
       "sendTx": {
         "txHash": "0x832cb445e9bba060ed1794deef26258986ea7c5b8719d35f0df3bf00d09b8c95",
         "chainId": "41001"
@@ -217,7 +217,7 @@ cast call $GMP_B "getAccountIdentifier(address)((string,string,bytes))" 0x82589a
 ```
 
 ```
-("link-41001-41002", "0x58A57ed9d8d624cBD12e2C467D34787555bB1b25", 0x)
+("cli-41001-41002", "0x58A57ed9d8d624cBD12e2C467D34787555bB1b25", 0x)
 ```
 
 The account is a contract that is deployed on the first inbound call for that identifier.

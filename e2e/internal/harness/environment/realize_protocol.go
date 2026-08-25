@@ -580,7 +580,7 @@ func clientID(connectionID ConnectionID, end string, declaration ClientSpec) str
 		return existing.ID
 	}
 	hash := sha256.Sum256([]byte("environment-ibc-client-v1\x00" + string(connectionID) + "\x00" + end))
-	return "link-" + hex.EncodeToString(hash[:])
+	return "cli-" + hex.EncodeToString(hash[:])
 }
 
 func requireDeclaredAttestors(

@@ -69,12 +69,12 @@ func TestRenderRelayConfig(t *testing.T) {
 	watcherSigner, watcherAddress := newLocalSignerConfig(t, "attestor-watching-2")
 
 	// client ids follow defaultClientID's real convention: both ends of a
-	// connection share the same sorted "link-<a>-<b>" name.
+	// connection share the same sorted "cli-<a>-<b>" name.
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "link-1-2", Type: "attestation", Address: "0xca",
-		CounterpartyChainID: "2", CounterpartyClientID: "link-1-2",
+		ClientID: "cli-1-2", Type: "attestation", Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{
 			"threshold": float64(2),
 			"attestors": []any{watcherAddress, "0xUnresolvedAddress"},
@@ -82,8 +82,8 @@ func TestRenderRelayConfig(t *testing.T) {
 	})
 	// stray client tracking another chain must not pair
 	a.UpsertClient(manifest.Client{
-		ClientID: "link-1-9", Type: "attestation",
-		CounterpartyChainID: "9", CounterpartyClientID: "link-1-9",
+		ClientID: "cli-1-9", Type: "attestation",
+		CounterpartyChainID: "9", CounterpartyClientID: "cli-1-9",
 	})
 	// a second, custom-named connection between the same chain pair --
 	// exercises the alias seqno suffix, and reuses the same attestor address
@@ -99,8 +99,8 @@ func TestRenderRelayConfig(t *testing.T) {
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "link-1-2", Type: "attestation", Address: "0xcb",
-		CounterpartyChainID: "1", CounterpartyClientID: "link-1-2",
+		ClientID: "cli-1-2", Type: "attestation", Address: "0xcb",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{"threshold": float64(2)},
 	})
 	b.UpsertClient(manifest.Client{
@@ -133,9 +133,9 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Len(t, out.Relayer.Connections, 2)
 	conn := out.Relayer.Connections[0]
 	require.Equal(t, "1-2", conn.Alias)
-	require.Equal(t, "link-1-2", conn.ClientA.ClientID)
+	require.Equal(t, "cli-1-2", conn.ClientA.ClientID)
 	require.Equal(t, "1", conn.ClientA.ChainID)
-	require.Equal(t, "link-1-2", conn.ClientB.ClientID)
+	require.Equal(t, "cli-1-2", conn.ClientB.ClientID)
 	require.Equal(t, "2", conn.ClientB.ChainID)
 	require.Equal(t, "signer-a", conn.ClientA.Signer)
 	require.NotNil(t, conn.ClientA.AutoRelay.Enabled)
@@ -174,8 +174,8 @@ func TestRenderRelayConfig(t *testing.T) {
 	mismatched := manifest.New("2", "evm")
 	mismatched.Core.Router = "0xrouterB"
 	mismatched.UpsertClient(manifest.Client{
-		ClientID: "link-1", Type: "attestation",
-		CounterpartyChainID: "1", CounterpartyClientID: "link-other",
+		ClientID: "cli-1", Type: "attestation",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-other",
 	})
 	_, _, err = renderRelayConfig(cfg, a, mismatched, "signer-a", "signer-b")
 	require.ErrorContains(t, err, "no mutual client pair")
@@ -188,8 +188,8 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "link-1-2", Type: "attestation",
-		CounterpartyChainID: "2", CounterpartyClientID: "link-1-2",
+		ClientID: "cli-1-2", Type: "attestation",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		// unresolvable address: exercises the attestor signer TODO
 		Params: map[string]any{"attestors": []any{"0xUnresolvedAddress"}},
 	})
@@ -197,8 +197,8 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	// chain 2's router is left blank on purpose: exercises the ics26Router
 	// TODO alongside the signer TODOs in the same render
 	b.UpsertClient(manifest.Client{
-		ClientID: "link-1-2", Type: "attestation",
-		CounterpartyChainID: "1", CounterpartyClientID: "link-1-2",
+		ClientID: "cli-1-2", Type: "attestation",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
 	})
 
 	out, comments, err := renderRelayConfig(config.Config{}, a, b, "", "")

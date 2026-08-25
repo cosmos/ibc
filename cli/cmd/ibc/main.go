@@ -161,9 +161,9 @@ func init() {
 			"attestors for the new client: addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
 	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployClientID, "client-id", "", "client id (default: link-<a>-<b>, chain ids sorted)")
+		StringVar(&flagDeployClientID, "client-id", "", "client id (default: cli-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default: link-<a>-<b>, chain ids sorted)")
+		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default: cli-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().
@@ -189,7 +189,7 @@ func init() {
 		_ = cmdDeployIFTBridge.MarkFlagRequired(req)
 	}
 	cmdDeployIFTBridge.Flags().
-		StringVar(&flagDeployBridgeClientID, "client-id", "", "client id the bridge relays over (default: link-<a>-<b>)")
+		StringVar(&flagDeployBridgeClientID, "client-id", "", "client id the bridge relays over (default: cli-<a>-<b>)")
 	cmdDeployIFTBridge.Flags().
 		StringVar(&flagDeployBridgeCtorA, "send-call-constructor-a", "",
 			"send call constructor address on chain A (default: deploy or reuse the EVM constructor)")

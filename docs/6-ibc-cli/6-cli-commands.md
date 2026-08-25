@@ -166,9 +166,9 @@ Deploy and register a light client tracking a counterparty chain.
 | Flag | Default | Description |
 |---|---|---|
 | `--attestors <strings>` | configured attestations for the tracked chain | Attestors for the new client: addresses, attestation names, or signer aliases. |
-| `--client-id <string>` | `link-<a>-<b>`, chain ids sorted | Client id. |
+| `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
-| `--counterparty-client-id <string>` | `link-<a>-<b>`, chain ids sorted | Counterparty's client id. |
+| `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
 | `--height <uint>` | counterparty head | Initial trusted height. |
 | `--threshold <uint8>` | `1` | Attestation signature threshold. |
 | `--timestamp <uint>` | counterparty head | Initial trusted timestamp seconds. |
@@ -262,7 +262,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 |---|---|---|
 | `--chain-a <string>` | required | First chain id. |
 | `--chain-b <string>` | required | Second chain id. |
-| `--client-id <string>` | `link-<a>-<b>` | Client id the bridge relays over. |
+| `--client-id <string>` | `cli-<a>-<b>` | Client id the bridge relays over. |
 | `--ift-a <string>` | required | IFT token address on chain A. |
 | `--ift-b <string>` | required | IFT token address on chain B. |
 | `--send-call-constructor-a <string>` | deploy or reuse the EVM constructor | Send call constructor address on chain A. |
@@ -509,7 +509,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
 ```bash
-ibc tx ift send --chain 41001 --ift 0xTokenOnA --client-id link-41001-41002 \
+ibc tx ift send --chain 41001 --ift 0xTokenOnA --client-id cli-41001-41002 \
   --to 0xReceiver --amount 500000000000000000 --from deployer
 ```
 

@@ -283,7 +283,7 @@ func TestClientIDUsesStableConnectionEnd(t *testing.T) {
 	id := clientID("connection-ab", "A", client)
 	require.Equal(
 		t,
-		"link-8b79fc938a76adf41b710b8f6a70dc97b29bef1e82ce7492840cdb8f4663512f",
+		"cli-8b79fc938a76adf41b710b8f6a70dc97b29bef1e82ce7492840cdb8f4663512f",
 		id,
 	)
 	require.Equal(t, id, clientID("connection-ab", "A", NewClient{

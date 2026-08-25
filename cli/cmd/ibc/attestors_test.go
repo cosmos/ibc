@@ -91,6 +91,6 @@ func TestAttestorsForChain(t *testing.T) {
 }
 
 func TestDefaultClientID(t *testing.T) {
-	require.Equal(t, "link-31337-31338", defaultClientID("31338", "31337"))
-	require.Equal(t, "link-31337-31338", defaultClientID("31337", "31338"))
+	require.Equal(t, "cli-31337-31338", defaultClientID("31338", "31337"))
+	require.Equal(t, "cli-31337-31338", defaultClientID("31337", "31338"))
 }

@@ -235,7 +235,7 @@ pieces tie into the rest of the config:
 
 A connection is two mirrored `deploy client` invocations (one per chain,
 each tracking the other). Both default to the same client id
-(`link-<chainA>-<chainB>`; ids are per-chain namespaces, so the shared name
+(`cli-<chainA>-<chainB>`; ids are per-chain namespaces, so the shared name
 is unambiguous) and so pair up without explicit id flags. Rerunning with
 the same id continues a completed or partially-deployed connection;
 rerunning with different attestors/threshold under the same id fails —

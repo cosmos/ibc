@@ -53,14 +53,14 @@ relayer:
       clientA:
         chainId: "41001"
         signer: relayer
-        clientId: link-41001-41002
+        clientId: cli-41001-41002
         type: attestation
         autoRelay:
           enabled: true
       clientB:
         chainId: "41002"
         signer: relayer
-        clientId: link-41001-41002
+        clientId: cli-41001-41002
         type: attestation
         autoRelay:
           enabled: true

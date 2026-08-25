@@ -118,7 +118,7 @@ func TestDeployConnection(t *testing.T) {
 	// the connection is four separate idempotent commands: core on each
 	// chain, then a client on each chain tracking the other. Both client
 	// invocations derive the same shared client id.
-	sharedClientID := "link-" + chainAID + "-" + chainBID
+	sharedClientID := "cli-" + chainAID + "-" + chainBID
 	deployCommands := [][]string{
 		{"core", "--chain", chainAID, "--yes"},
 		{"core", "--chain", chainBID, "--yes"},

@@ -145,10 +145,10 @@ func TestClientStepsIdempotent(t *testing.T) {
 	require.NoError(t, m.Save(dir))
 
 	spec := ClientSpec{
-		ClientID:             "link-2",
+		ClientID:             "cli-2",
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
-		CounterpartyClientID: "link-1",
+		CounterpartyClientID: "cli-1",
 		Params: AttestationParams{
 			Attestors:        []string{"0xa"},
 			Threshold:        1,
@@ -164,7 +164,7 @@ func TestClientStepsIdempotent(t *testing.T) {
 
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
-	c, ok := m.Client("link-2")
+	c, ok := m.Client("cli-2")
 	require.True(t, ok)
 	require.Equal(t, "0xclient", c.Address)
 	require.Equal(t, "2", c.CounterpartyChainID)
@@ -190,10 +190,10 @@ func TestClientStepsUnrecordedClientError(t *testing.T) {
 	require.NoError(t, m.Save(dir))
 
 	spec := ClientSpec{
-		ClientID:             "link-2",
+		ClientID:             "cli-2",
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
-		CounterpartyClientID: "link-1",
+		CounterpartyClientID: "cli-1",
 		Params: AttestationParams{
 			Attestors:        []string{"0xa"},
 			Threshold:        1,
@@ -212,7 +212,7 @@ func TestClientStepsUnrecordedClientError(t *testing.T) {
 	// the manifest is left untouched
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
-	_, ok := m.Client("link-2")
+	_, ok := m.Client("cli-2")
 	require.False(t, ok)
 }
 
@@ -226,10 +226,10 @@ func TestClientStepsParamsMismatch(t *testing.T) {
 	require.NoError(t, m.Save(dir))
 
 	spec := ClientSpec{
-		ClientID:             "link-2",
+		ClientID:             "cli-2",
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
-		CounterpartyClientID: "link-1",
+		CounterpartyClientID: "cli-1",
 		Params:               "not-attestation-params",
 	}
 	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
@@ -250,10 +250,10 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	require.NoError(t, m.Save(dir))
 
 	spec := ClientSpec{
-		ClientID:             "link-1-2",
+		ClientID:             "cli-1-2",
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
-		CounterpartyClientID: "link-1-2",
+		CounterpartyClientID: "cli-1-2",
 		Params: AttestationParams{
 			Attestors:        []string{"0xa"},
 			Threshold:        1,
@@ -280,7 +280,7 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	// manifest must still describe the deployed contract
 	m, loadErr := manifest.Load(dir, "1")
 	require.NoError(t, loadErr)
-	c, _ := m.Client("link-1-2")
+	c, _ := m.Client("cli-1-2")
 	require.Equal(t, []any{"0xa"}, c.Params["attestors"].([]any))
 }
 
@@ -352,10 +352,10 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	require.NoError(t, m.Save(dir))
 
 	spec := ClientSpec{
-		ClientID:             "link-1-2",
+		ClientID:             "cli-1-2",
 		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
-		CounterpartyClientID: "link-1-2",
+		CounterpartyClientID: "cli-1-2",
 		Params: AttestationParams{
 			Attestors:        []string{"0xa"},
 			Threshold:        1,
@@ -379,7 +379,7 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
-	c, _ := m.Client("link-1-2")
+	c, _ := m.Client("cli-1-2")
 	require.InDelta(t, 5, c.Params["initialHeight"], 0)
 	require.InDelta(t, 500, c.Params["initialTimestamp"], 0)
 }
@@ -449,10 +449,10 @@ func iftBridgeManifest(t *testing.T, dir string) {
 func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
-	target.registered["link-2"] = "0xclient" // client deployed on the router
+	target.registered["cli-2"] = "0xclient" // client deployed on the router
 	iftBridgeManifest(t, dir)
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	res, err := RunSteps(
 		context.Background(),
 		slog.Default(),
@@ -468,7 +468,7 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0xctor", m.EVMSendCallConstructor)
 	tok, _ := m.TokenByAddress("0xift-FOO")
-	b, ok := tok.Bridge("link-2")
+	b, ok := tok.Bridge("cli-2")
 	require.True(t, ok)
 	require.Equal(t, "0xcp", b.CounterpartyIFT)
 	require.Equal(t, "0xctor", b.SendCallConstructor)
@@ -489,10 +489,10 @@ func TestIFTBridgeStepsAutoConstructor(t *testing.T) {
 func TestIFTBridgeStepsOverrideSkipsConstructor(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
-	target.registered["link-2"] = "0xclient"
+	target.registered["cli-2"] = "0xclient"
 	iftBridgeManifest(t, dir)
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	res, err := RunSteps(
 		context.Background(),
 		slog.Default(),
@@ -507,19 +507,19 @@ func TestIFTBridgeStepsOverrideSkipsConstructor(t *testing.T) {
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
 	tok, _ := m.TokenByAddress("0xift-FOO")
-	b, _ := tok.Bridge("link-2")
+	b, _ := tok.Bridge("cli-2")
 	require.Equal(t, "0xoverride", b.SendCallConstructor)
 }
 
 func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
-	target.registered["link-2"] = "0xclient"
+	target.registered["cli-2"] = "0xclient"
 	iftBridgeManifest(t, dir)
 	// on-chain bridge points at a different counterparty
-	target.bridges["0xift-FOO|link-2"] = fakeBridge{cp: "0xother"}
+	target.bridges["0xift-FOO|cli-2"] = fakeBridge{cp: "0xother"}
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
 	require.ErrorContains(t, err, "already registered to counterparty")
@@ -528,10 +528,10 @@ func TestIFTBridgeStepsCounterpartyConflict(t *testing.T) {
 func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
-	target.registered["link-2"] = "0xclient"
+	target.registered["cli-2"] = "0xclient"
 	iftBridgeManifest(t, dir)
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xctorA", spec))
 	require.NoError(t, err)
@@ -545,7 +545,7 @@ func TestIFTBridgeStepsConstructorChange(t *testing.T) {
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
 	tok, _ := m.TokenByAddress("0xift-FOO")
-	b, ok := tok.Bridge("link-2")
+	b, ok := tok.Bridge("cli-2")
 	require.True(t, ok)
 	require.Equal(t, "0xctorB", b.SendCallConstructor)
 
@@ -561,7 +561,7 @@ func TestIFTBridgeStepsRequiresClient(t *testing.T) {
 	target := newFakeTarget()
 	iftBridgeManifest(t, dir) // token present, but no client registered
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
 	require.ErrorContains(t, err, "run `ibc deploy client` first")
@@ -572,7 +572,7 @@ func TestIFTBridgeStepsPlanRejectsMissingClient(t *testing.T) {
 	target := newFakeTarget() // no client registered
 	iftBridgeManifest(t, dir)
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), true, // dry-run
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
 	require.ErrorContains(t, err, "run `ibc deploy client` first")
@@ -582,10 +582,10 @@ func TestIFTBridgeStepsPlanRejectsMissingClient(t *testing.T) {
 func TestIFTBridgeStepsDryRunAfterOverride(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
-	target.registered["link-2"] = "0xclient"
+	target.registered["cli-2"] = "0xclient"
 	iftBridgeManifest(t, dir)
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	_, err := RunSteps(context.Background(), slog.Default(), false,
 		IFTBridgeSteps(target, dir, "1", "0xift-FOO", "0xoverride", spec))
 	require.NoError(t, err)
@@ -603,12 +603,12 @@ func TestIFTBridgeStepsDryRunAfterOverride(t *testing.T) {
 func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
-	target.registered["link-2"] = "0xclient"
+	target.registered["cli-2"] = "0xclient"
 	m := manifest.New("1", "test")
 	m.Core.Router = "0xrouter"
 	require.NoError(t, m.Save(dir))
 
-	spec := BridgeSpec{ClientID: "link-2", CounterpartyIFT: "0xcp"}
+	spec := BridgeSpec{ClientID: "cli-2", CounterpartyIFT: "0xcp"}
 	res, err := RunSteps(context.Background(), slog.Default(), false,
 		IFTBridgeSteps(target, dir, "1", "0xexternal", "0xoverride", spec))
 	require.NoError(t, err)

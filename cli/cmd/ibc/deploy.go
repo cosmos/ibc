@@ -327,7 +327,7 @@ func clientSpec(
 func defaultClientID(a, b string) string {
 	ids := []string{a, b}
 	sort.Strings(ids)
-	return "link-" + ids[0] + "-" + ids[1]
+	return "cli-" + ids[0] + "-" + ids[1]
 }
 
 func deployClient(cmd *cobra.Command, _ []string) error {

@@ -75,15 +75,15 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	require.NotEmpty(t, core.TargetData["ics26RouterImplementation"])
 
 	// not registered yet
-	_, registered, err := d.ClientRegistered(ctx, router, "link-2")
+	_, registered, err := d.ClientRegistered(ctx, router, "cli-2")
 	require.NoError(t, err)
 	require.False(t, registered)
 
 	spec := deploy.ClientSpec{
-		ClientID:             "link-2",
+		ClientID:             "cli-2",
 		Type:                 deploy.ClientTypeAttestation,
 		CounterpartyChainID:  "2",
-		CounterpartyClientID: "link-1",
+		CounterpartyClientID: "cli-1",
 		Params: deploy.AttestationParams{
 			Attestors:        []string{"0x00000000000000000000000000000000000000aa"},
 			Threshold:        1,
@@ -97,9 +97,9 @@ func TestProvisionRegisterVerify(t *testing.T) {
 
 	id, err := d.RegisterClient(ctx, router, spec, ref)
 	require.NoError(t, err)
-	require.Equal(t, "link-2", id)
+	require.Equal(t, "cli-2", id)
 
-	got, registered, err := d.ClientRegistered(ctx, router, "link-2")
+	got, registered, err := d.ClientRegistered(ctx, router, "cli-2")
 	require.NoError(t, err)
 	require.True(t, registered)
 	require.Equal(t, ref.Address, got)
@@ -112,10 +112,10 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	m.Core.Router = router
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
-		ClientID:             "link-2",
+		ClientID:             "cli-2",
 		Type:                 deploy.ClientTypeAttestation,
 		Address:              ref.Address,
-		CounterpartyClientID: "link-1",
+		CounterpartyClientID: "cli-1",
 	})
 	report, err := d.Verify(ctx, m)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	// verification catches drift
 	broken := *m
 	broken.Clients = []manifest.Client{
-		{ClientID: "link-2", Address: "0x0000000000000000000000000000000000000123", CounterpartyClientID: "link-1"},
+		{ClientID: "cli-2", Address: "0x0000000000000000000000000000000000000123", CounterpartyClientID: "cli-1"},
 	}
 	report, err = d.Verify(ctx, &broken)
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestClientRegisteredNonRouter(t *testing.T) {
 	require.NoError(t, err)
 
 	// the AccessManager is a healthy contract that is not a router
-	_, registered, err := d.ClientRegistered(ctx, core.TargetData["accessManager"], "link-x")
+	_, registered, err := d.ClientRegistered(ctx, core.TargetData["accessManager"], "cli-x")
 	require.Error(t, err)
 	require.False(t, registered)
 }
@@ -213,7 +213,7 @@ func TestProvisionIFTAndBridge(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, token.Address)
 
-	_, _, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	_, _, registered, err := d.IFTBridge(ctx, token.Address, "cli-2")
 	require.NoError(t, err)
 	require.False(t, registered)
 
@@ -222,12 +222,12 @@ func TestProvisionIFTAndBridge(t *testing.T) {
 	require.NotEmpty(t, ctor)
 
 	require.NoError(t, d.RegisterIFTBridge(ctx, token.Address, deploy.BridgeSpec{
-		ClientID:            "link-2",
+		ClientID:            "cli-2",
 		CounterpartyIFT:     "0x00000000000000000000000000000000000000cp",
 		SendCallConstructor: ctor,
 	}))
 
-	cp, gotCtor, registered, err := d.IFTBridge(ctx, token.Address, "link-2")
+	cp, gotCtor, registered, err := d.IFTBridge(ctx, token.Address, "cli-2")
 	require.NoError(t, err)
 	require.True(t, registered)
 	require.Equal(t, "0x00000000000000000000000000000000000000cp", cp)
@@ -248,7 +248,7 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 	ctor, err := d.ProvisionSendCallConstructor(ctx)
 	require.NoError(t, err)
 	require.NoError(t, d.RegisterIFTBridge(ctx, token.Address, deploy.BridgeSpec{
-		ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor,
+		ClientID: "cli-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor,
 	}))
 
 	m := manifest.New("1337", "evm")
@@ -260,7 +260,7 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 		t,
 		m.UpsertBridge(
 			token.Address,
-			manifest.Bridge{ClientID: "link-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor},
+			manifest.Bridge{ClientID: "cli-2", CounterpartyIFT: "0xcp", SendCallConstructor: ctor},
 		),
 	)
 
