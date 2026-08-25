@@ -6,7 +6,7 @@
 
 ## I. Creating migrations
 
-To create a migration, run the script from the project's root (./link)
+To create a migration, run the script from the project's root (./cli)
 
 ```bash
 go run scripts/migratenew.go add-packet-index

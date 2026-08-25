@@ -90,5 +90,5 @@ func defaultBinPath(name string) string {
 	for range 4 {
 		repoRoot = filepath.Dir(repoRoot)
 	}
-	return filepath.Join(repoRoot, "link", "bin", name)
+	return filepath.Join(repoRoot, "cli", "bin", name)
 }

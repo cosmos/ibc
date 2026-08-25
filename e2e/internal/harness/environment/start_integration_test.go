@@ -576,13 +576,13 @@ func requireCLIBinary(t *testing.T) {
 		if os.Getenv("IBC_BIN") != "" {
 			require.NoError(t, err, "explicit IBC_BIN is unavailable at %s", path)
 		}
-		t.Skipf("IBC CLI binary is unavailable at %s: %v; run `make -C link build`", path, err)
+		t.Skipf("IBC CLI binary is unavailable at %s: %v; run `make -C cli build`", path, err)
 	}
 	if info.Mode()&0o111 == 0 {
 		if os.Getenv("IBC_BIN") != "" {
 			require.FailNow(t, "explicit IBC_BIN is not executable: "+path)
 		}
-		t.Skipf("IBC CLI binary is not executable: %s; run `make -C link build`", path)
+		t.Skipf("IBC CLI binary is not executable: %s; run `make -C cli build`", path)
 	}
 }
 

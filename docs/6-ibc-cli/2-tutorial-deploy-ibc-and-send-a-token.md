@@ -28,7 +28,7 @@ Start by installing IBC CLI and running two local Besu chains.
 1. Clone the IBC repository and build the binary:
 
 ```bash
-git clone https://github.com/cosmos/ibc.git && cd ibc/link && make build
+git clone https://github.com/cosmos/ibc.git && cd ibc/cli && make build
 ```
 
 The binary is located at `bin/ibc`.

@@ -17,7 +17,7 @@ permissions: read-all
 
 defaults:
   run:
-    working-directory: link
+    working-directory: cli
 
 jobs:
   changes:
@@ -27,7 +27,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      link: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.link }}
+      cli: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.cli }}
       sql: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.sql }}
       proto: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group') && 'true' || steps.filter.outputs.proto }}
     steps:
@@ -36,7 +36,7 @@ jobs:
         id: filter
         with:
           filters: |
-            link:
+            cli:
               - 'cli/**'
               - 'gen/go/solidity-abi/**'
               - '.golangci.yml'
@@ -52,7 +52,7 @@ jobs:
   lint:
     name: Lint
     needs: changes
-    if: needs.changes.outputs.link == 'true'
+    if: needs.changes.outputs.cli == 'true'
     runs-on: depot-ubuntu-24.04-4
     permissions:
       contents: read
@@ -68,12 +68,12 @@ jobs:
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
           version: v2.12.2
-          working-directory: link
+          working-directory: cli
 
   build:
     name: Build
     needs: changes
-    if: needs.changes.outputs.link == 'true'
+    if: needs.changes.outputs.cli == 'true'
     runs-on: depot-ubuntu-24.04-4
     permissions:
       contents: read
@@ -94,7 +94,7 @@ jobs:
   test:
     name: Test
     needs: changes
-    if: needs.changes.outputs.link == 'true'
+    if: needs.changes.outputs.cli == 'true'
     runs-on: depot-ubuntu-24.04-4
     permissions:
       contents: read

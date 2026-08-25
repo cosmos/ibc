@@ -343,7 +343,7 @@ def _():
 @case("a new proto file is discovered, and its missing section raises")
 def _():
     with Sandbox() as box:
-        os.makedirs(os.path.join(box.dir, "proto/link"), exist_ok=True)
+        os.makedirs(os.path.join(box.dir, "proto/cli"), exist_ok=True)
         open(os.path.join(box.dir, "proto/cli/extra.proto"), "w").write(
             'syntax = "proto3";\n\npackage ibc.v2.extra;\n\n'
             "// Something new.\nmessage NewThing {\n  string name = 1;\n}\n")

@@ -15,7 +15,7 @@ The commands on this page need:
 
 Follow the [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) to set up a deployment with a GMP app, a client, and a running relayer.
 
-Once you have a live connection and a running relayer, you'll need the following values from each chain. Run the commands in this guide from the `ibc/link` directory:
+Once you have a live connection and a running relayer, you'll need the following values from each chain. Run the commands in this guide from the `ibc/cli` directory:
 
 ```bash
 ./bin/ibc deploy show 41001 | jq '{router: .core.router, gmp: .gmp.address, clients: [.clients[].clientId]}'
@@ -47,7 +47,7 @@ A GMP call arrives on the destination as a contract call, carrying the packet's 
 
 Every GMP call executes through an account contract that belongs to the sender, so the target reads that account's address as `msg.sender`.
 
-Create a Foundry project in the `ibc/link` directory:
+Create a Foundry project in the `ibc/cli` directory:
 
 ```bash
 forge init gmp-guide
