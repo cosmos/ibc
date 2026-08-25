@@ -692,7 +692,7 @@ func TestCollectComments(t *testing.T) {
 
 func TestPrintJSON(t *testing.T) {
 	var out bytes.Buffer
-	require.NoError(t, printJSON(&out, &relayer.StatusRequest{
+	require.NoError(t, printJSON(&out, &relayer.RelayRequest{
 		TxHash:        "0xabc",
 		SourceChainId: "chain-1",
 	}))

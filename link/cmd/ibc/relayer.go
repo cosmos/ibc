@@ -152,7 +152,7 @@ func relayerRelay(cmd *cobra.Command, _ []string) error {
 		return errors.Wrap(err, cmd.Name())
 	}
 
-	return config.PrintProtoJSON(res.Msg)
+	return config.PrintJSON(res.Msg)
 }
 
 func relayerPackets(cmd *cobra.Command, _ []string) error {
@@ -197,7 +197,7 @@ func relayerPackets(cmd *cobra.Command, _ []string) error {
 		return errors.Wrap(err, cmd.Name())
 	}
 
-	return config.PrintProtoJSON(res.Msg)
+	return config.PrintJSON(res.Msg)
 }
 
 // relayerPacketsAll follows next_cursor to completion and prints all packets as
@@ -219,7 +219,7 @@ func relayerPacketsAll(cmd *cobra.Command, req *relayer.PacketsRequest) error {
 		all.Packets = append(all.Packets, res.Msg.GetPackets()...)
 
 		if !res.Msg.GetHasMore() {
-			return config.PrintProtoJSON(all)
+			return config.PrintJSON(all)
 		}
 
 		req.Cursor = res.Msg.GetNextCursor()
