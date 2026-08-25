@@ -14,22 +14,22 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 
 ## Repository layout
 
-| Path | What it is |
-| ---- | ---------- |
-| [`spec/`](spec/) | The Interchain Standards: the protocol itself. Indexed below. |
-| [`cli/`](cli/README.md) | The `ibc` binary: deploys IBC onto a chain, and runs the relayer and attestor processes that carry packets across it. |
-| [`docs/`](docs/README.md) | How IBC works, the contracts, and the CLI: tutorials and reference. |
-| [`e2e/`](e2e/README.md) | Repository-wide black-box acceptance tests. |
-| [`proto/`](proto/) | Protobuf definitions for the relayer and attestor gRPC services. |
-| [`gen/`](gen/README.md) | Committed code generated from canonical schemas and contract artifacts. |
-| [`examples/`](examples/besu-to-besu/README.md) | Runnable local chain setups to develop against. |
-| [`scripts/`](scripts/) | Repository-level generation scripts. |
+| Path | What it is                                                                                                  |
+| ---- |-------------------------------------------------------------------------------------------------------------|
+| [`spec/`](spec/) | The Interchain Standards: the specifications for the protocol itself.                                       |
+| [`cli/`](cli/README.md) | IBC CLI: deploys IBC onto a chain, and runs the relayer and attestor processes that carry packets across it. |
+| [`docs/`](docs/README.md) | How IBC works, the contracts, and the CLI: tutorials and reference.                                         |
+| [`e2e/`](e2e/README.md) | Repository-wide black-box acceptance tests.                                                                 |
+| [`proto/`](proto/) | Canonical protobuf source files used across the services and implementations.                               |
+| [`gen/`](gen/README.md) | Committed code generated from canonical schemas and contract artifacts.                                     |
+| [`examples/`](examples/besu-to-besu/README.md) | Runnable local chain setups to develop against.                                                             |
+| [`scripts/`](scripts/) | Repository-level scripts.                                                                         |
 
 ## Documentation
 
-- [What is IBC](docs/1-introduction/1-what-is-ibc.md) reads the protocol from the top: what it does and what it is for.
+- [What is IBC](docs/1-introduction/1-what-is-ibc.md) is a high level overview of what IBC does and what it is for.
 - [How IBC works](docs/2-how-ibc-works/1-overview.md) covers the components that carry one packet between two chains.
-- [IBC CLI](docs/6-ibc-cli/1-overview.md) covers deploying IBC and running the processes that operate it, beginning with a [tutorial](docs/6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) that brings up two chains and moves a token between them.
+- [IBC CLI](docs/6-ibc-cli/1-overview.md) covers deploying IBC and running the processes that operate it.
 
 <!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of IBC, you can also read [this blog post](https://medium.com/the-interchain-foundation/eli5-what-is-ibc-def44d7b5b4c).
