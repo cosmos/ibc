@@ -2,7 +2,7 @@
 
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive the `ibc` binary through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
 
 `internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
