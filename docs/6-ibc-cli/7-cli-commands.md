@@ -147,7 +147,7 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 ## `deploy`
 
-Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) walks that through end to end.
+Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
 
 `--chain` is required by the commands that provision something, and the table cannot show it: they check it themselves rather than declaring it required. <!-- [deploy.go:L315-L317](link/cmd/ibc/deploy.go#L315-L317) -->
 
@@ -407,7 +407,7 @@ List the packets the relayer is aware of, most recent first.
 ibc relayer packets --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. [API](/ibc-cli/api) lists the states `--state` accepts.
+Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. [API](8-api.md) lists the states `--state` accepts.
 
 ## `attestor`
 
@@ -575,5 +575,5 @@ Migrations run against the `db` block, so `--db` picks a different database for 
 
 ## Next steps
 
-- [Configuration](/ibc-cli/configuration) for the file these commands read.
-- [API](/ibc-cli/api) for the gRPC calls behind `relayer relay`, `relayer packets`, and the attestor queries.
+- [Configuration](6-configuration.md) for the file these commands read.
+- [API](8-api.md) for the gRPC calls behind `relayer relay`, `relayer packets`, and the attestor queries.

@@ -27,13 +27,13 @@ flowchart LR
   STB -. "proof of what B wrote" .-> CA
 ```
 
-Each client lives under a client identifier in the [router's](/how-ibc-works/core-router-and-store) client registry, which is how the router reaches it. In IBC-solidity each registry entry is two things: the address of the light-client contract that does the verifying, and a record of the counterparty client on the counterparty chain.
+Each client lives under a client identifier in the [router's](3-core-router-and-store.md) client registry, which is how the router reaches it. In IBC-solidity each registry entry is two things: the address of the light-client contract that does the verifying, and a record of the counterparty client on the counterparty chain.
 
 ## Client state and consensus state
 
 A client keeps two kinds of state:
 
-- **Client state** is its configuration and status: how it decides what to trust, the latest height it has verified, and whether it has been frozen. A client reports it on request. For the [attestation light client](/light-clients/attestation-light-client) that is four fields: the fixed attestor list, the quorum threshold, the latest known height, and a frozen flag.
+- **Client state** is its configuration and status: how it decides what to trust, the latest height it has verified, and whether it has been frozen. A client reports it on request. For the [attestation light client](../4-light-clients/1-attestation-light-client.md) that is four fields: the fixed attestor list, the quorum threshold, the latest known height, and a frozen flag.
 - **Consensus state** is what the client has accepted as true about the counterparty at one height, and it keeps one entry per height. What an entry holds depends on the client type. For example, the attestation light client stores a trusted timestamp.
 
 There is one client state, and it changes in place as its latest height advances. Consensus states accumulate. So a client trusts a set of individually verified heights rather than the counterparty as a whole, and a proof can be checked only at a height the client already holds an entry for. That is why an update is part of every relay.
@@ -50,7 +50,7 @@ function misbehaviour(bytes calldata misbehaviourMsg) external;
 function getClientState() external view returns (bytes memory);
 ```
 
-The paths a client is asked about are in the counterparty's [store](/how-ibc-works/core-router-and-store), and the values are the commitments, receipts, and acknowledgements the router writes there.
+The paths a client is asked about are in the counterparty's [store](3-core-router-and-store.md), and the values are the commitments, receipts, and acknowledgements the router writes there.
 
 ```solidity
 struct MsgVerifyMembership {
@@ -71,9 +71,9 @@ Either call returns the counterparty's timestamp at the verified height, which t
 
 ## Client types
 
-IBC supports many client types. What differs between them is only how each one decides what to trust. They all have the same job: verify a claim about a record in the counterparty's [store](/how-ibc-works/core-router-and-store). In addition, they all must implement [the interface above](#what-a-light-client-verifies).
+IBC supports many client types. What differs between them is only how each one decides what to trust. They all have the same job: verify a claim about a record in the counterparty's [store](3-core-router-and-store.md). In addition, they all must implement [the interface above](#what-a-light-client-verifies).
 
-The [attestation light client](/light-clients/attestation-light-client) is one example. It trusts a fixed set of attestors, and accepts a claim signed by a quorum of them at a height it already holds.
+The [attestation light client](../4-light-clients/1-attestation-light-client.md) is one example. It trusts a fixed set of attestors, and accepts a claim signed by a quorum of them at a height it already holds.
 
 Because a proof is opaque bytes to IBC, the router never needs to know how a client decides what to trust. That is what lets IBC connect chains with different security models.
 
@@ -81,7 +81,7 @@ Because a proof is opaque bytes to IBC, the router never needs to know how a cli
 
 An update advances a client's view of the counterparty to a later height, so a packet proven at that height has something to be checked against. It usually travels with the packet it serves, submitted in the same transaction.
 
-[Relayers](/how-ibc-works/relayer) do the updating. In IBC-solidity they call the router's `updateClient`, which is role-gated and forwards the update to the client as opaque bytes. The contracts' role library names a relayer role for that selector, and no deployment path that ships leaves it there. `ibc deploy core` binds that selector to the [public role](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) instead, so any address may relay on a chain the IBC CLI brings up.
+[Relayers](5-relayer.md) do the updating. In IBC-solidity they call the router's `updateClient`, which is role-gated and forwards the update to the client as opaque bytes. The contracts' role library names a relayer role for that selector, and no deployment path that ships leaves it there. `ibc deploy core` binds that selector to the [public role](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) instead, so any address may relay on a chain the IBC CLI brings up.
 
 ```solidity
 enum UpdateResult { Update, Misbehaviour, NoOp }
@@ -91,7 +91,7 @@ An update returns one of three results:
 
 - `Update`: the evidence held, and a new trusted height was added.
 - `NoOp`: the client already knew that height, so nothing changed.
-- `Misbehaviour`: the evidence contradicted something the client already trusted. The [attestation light client](/light-clients/attestation-light-client) freezes when that happens, and a frozen client verifies nothing afterwards.
+- `Misbehaviour`: the evidence contradicted something the client already trusted. The [attestation light client](../4-light-clients/1-attestation-light-client.md) freezes when that happens, and a frozen client verifies nothing afterwards.
 
 Evidence is anything that shows the counterparty violated what its client trusts it on. A client can also be handed it directly, through the `misbehaviour` call. The attestation light client rejects that call, so the `Misbehaviour` result above is the only way it learns of misbehaviour.
 
@@ -118,7 +118,7 @@ What a client checks claims against is fixed when it is deployed. The attestatio
 
 After deploying IBC to two chains, an IBC client connection between them involves the following:
 
-1. Deploy the light client for the counterparty chain, configured with whatever it will check that chain's claims against. The attestation light client also takes a [role manager](/ibc-solidity-contracts/attestation-light-client#roles-and-permissions), the address that may submit proofs to it and that administers its roles afterwards. `ibc deploy client` names the router there, which grants the router that permission at deployment. The zero address opens submission to anyone.
+1. Deploy the light client for the counterparty chain, configured with whatever it will check that chain's claims against. The attestation light client also takes a [role manager](../5-ibc-solidity-contracts/5-attestation-light-client.md#roles-and-permissions), the address that may submit proofs to it and that administers its roles afterwards. `ibc deploy client` names the router there, which grants the router that permission at deployment. The zero address opens submission to anyone.
 2. Register it with `addClient`, naming the counterparty's client identifier and merkle prefix.
-3. Register each application on a port, so the router can deliver payloads to it. See [ports and registration](/how-ibc-works/packets-and-applications#ports-and-registration).
+3. Register each application on a port, so the router can deliver payloads to it. See [ports and registration](2-packets-and-applications.md#ports-and-registration).
 

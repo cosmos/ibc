@@ -1,99 +1,104 @@
-# IBC docs 
+# IBC docs
 
 ## Introduction
 
-- [What is IBC](1-introduction/what-is-ibc.md) 
-  IBC is a protocol for sending packets between independent chains, where each chain verifies the other chain's writes with an on-chain light client.
+- [What is IBC](1-introduction/1-what-is-ibc.md)
+  Packets between chains, verified by on-chain light clients.
 
 ## How IBC works
 
-The protocol, concept by concept. Listed alphabetically after the overview, not in reading order.
+The protocol, concept by concept, in reading order.
 
-- [Overview](2-how-ibc-works/overview.md)  
-  IBC is a handful of components passing one provable packet between two chains.
+- [Overview](2-how-ibc-works/1-overview.md)
+  The components, and the packet they pass.
 
-- [Packets and applications](2-how-ibc-works/packets-and-applications.md)  
-  A packet is what IBC moves between two chains, and an application is what gives its content meaning.
+- [Packets and applications](2-how-ibc-works/2-packets-and-applications.md)
+  What moves, and what gives it meaning.
 
-- [Core: router and store](2-how-ibc-works/core-router-and-store.md)  
-  The router is the single entry point every packet operation goes through, and the store it holds is the provable record the other chain verifies against.
+- [Core: router and store](2-how-ibc-works/3-core-router-and-store.md)
+  The entry point, and the provable record.
 
-- [Clients and counterparties](2-how-ibc-works/clients-and-counterparties.md)  
-  A client is one chain's verifier for one other chain, and a mirrored pair of clients, each recording the other as its counterparty, is what connects two chains.
-  
-- [Relayer](2-how-ibc-works/relayer.md)  
-  The relayer decides when IBC packets move. The attestors and the light client decide what counts as true.
+- [Clients and counterparties](2-how-ibc-works/4-clients-and-counterparties.md)
+  How one chain verifies another.
 
-- [Packet lifecycle](2-how-ibc-works/packet-lifecycle.md)  
-  A packet reaches at most one of two provable endings: delivered and acknowledged, or proven timed out.
+- [Relayer](2-how-ibc-works/5-relayer.md)
+  What decides when packets move.
+
+- [Packet lifecycle](2-how-ibc-works/6-packet-lifecycle.md)
+  Delivered and acknowledged, or timed out.
 
 ## Applications
 
-The two applications in scope.
+IBC applications.
 
-- [GMP: how it works](3-applications/gmp.md)  
-  GMP runs arbitrary contract calls on another chain from a deterministic address unique to the caller, and reports back success, failure, or timeout.
+- [GMP: how it works](3-applications/1-gmp.md)
+  Contract calls on another chain.
 
-- [IFT: how it works](3-applications/ift.md)  
-  A fungible token that moves between chains by burning it on one and minting it on the other, controlled by its issuer on every chain.
+- [IFT: how it works](3-applications/2-ift.md)
+  A token that burns here and mints there.
 
 ## Light clients
 
-How a chain decides what to believe about its counterparty.
+How a chain decides what to believe.
 
-- [The attestation light client](4-light-clients/attestation-light-client.md)  
-  The attestation light client accepts a claim about the counterparty chain once a quorum of a fixed attestor set has signed it.
+- [The attestation light client](4-light-clients/1-attestation-light-client.md)
+  Accepts what a quorum of attestors signs.
 
-- [Attestors](4-light-clients/attestors.md)  
-  An attestor is a stateless off-chain service that signs statements about one chain's state, and an attestation light client trusts exactly the keys that sign.
+- [Attestors](4-light-clients/2-attestors.md)
+  The services that sign, and the keys trusted.
 
 ## IBC-solidity contracts
 
-Contract-level reference for the same material.
+Contract-level reference.
 
-- [Overview](5-ibc-solidity-contracts/overview.md)  
-  The Solidity contracts that make up IBC on a chain, what each one is for, and who deploys it.
+- [Overview](5-ibc-solidity-contracts/1-overview.md)
+  The contracts, and who deploys each.
 
-- [ICS26Router](5-ibc-solidity-contracts/ics26-router.md)  
-  Reference for the packet router: its entry points, registries, commitment store, events, errors, and role gates
+- [ICS26Router](5-ibc-solidity-contracts/2-ics26-router.md)
+  Entry points, storage, events, roles.
 
-- [ICS27GMP and accounts](5-ibc-solidity-contracts/ics27-gmp-and-accounts.md)  
-  The General Message Passing application, the per-sender account contracts it deploys, and the surface a sender calls.
+- [ICS27GMP and accounts](5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md)
+  GMP and its per-sender accounts.
 
-- [IFT contracts](5-ibc-solidity-contracts/ift-contracts.md)  
-  The IFT base contract, its two deployable variants, and the send-call constructors that build a counterparty's mint call.
+- [IFT contracts](5-ibc-solidity-contracts/4-ift-contracts.md)
+  The base contract and its variants.
 
-- [AttestationLightClient](5-ibc-solidity-contracts/attestation-light-client.md)  
-  Contract reference for the attestation light client: what it verifies, what the constructor fixes, its functions, wire formats, roles, and errors.
+- [AttestationLightClient](5-ibc-solidity-contracts/5-attestation-light-client.md)
+  What it verifies, and how.
 
-- [Permissions and upgrades](5-ibc-solidity-contracts/permissions-and-upgrades.md)  
-  Which roles gate the IBC-solidity contracts, who holds them on a deployment, which contracts sit behind proxies, and which inputs are fixed at construction.
+- [Permissions and upgrades](5-ibc-solidity-contracts/6-permissions-and-upgrades.md)
+  Roles, proxies, and what is fixed.
+
 ## IBC CLI
 
-The `ibc` binary: deploying IBC onto a chain, and running the relayers and attestors that keep packets moving. Listed in reading order, tutorial first, reference last.
+The `ibc` binary: deploying IBC, and running the relayers and attestors that move packets.
 
-- [Overview](6-ibc-cli/1-overview.md)  
-  One tool for deploying IBC and for running the processes that carry packets across it, built from three parts that share one binary and one config file.
+- [Overview](6-ibc-cli/1-overview.md)
+  The three parts, and how they run.
 
-- [Deploy IBC and send a token](6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)  
-  Bring up two chains, deploy IBC on both, and move an Interchain Fungible Token from one to the other.
+**Guides**
 
-- [Run a standalone attestor](6-ibc-cli/3-run-a-standalone-attestor.md)  
-  Move an attestor into a process of its own, against a deployment that already exists, and point a relayer at it.
+- [Deploy IBC and send a token](6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)
+  Two chains, IBC deployed, one token moved.
 
-- [Run a standalone relayer](6-ibc-cli/4-run-a-standalone-relayer.md)  
-  Run your own relayer against a connection someone else deployed, including one that finishes packets a stopped relayer left behind.
+- [Run a standalone attestor](6-ibc-cli/3-run-a-standalone-attestor.md)
+  An attestor in its own process.
 
-- [Make a cross-chain GMP call](6-ibc-cli/5-make-a-cross-chain-gmp-call.md)  
-  Call a contract on another chain over IBC, and receive the result back as an acknowledgement.
+- [Run a standalone relayer](6-ibc-cli/4-run-a-standalone-relayer.md)
+  Your own relayer on an existing connection.
 
-- [Configuration](6-ibc-cli/6-configuration.md)  
-  Every key in `ibc.yml`: chains, connections, attestors, signers, and storage.
+- [Make a cross-chain GMP call](6-ibc-cli/5-make-a-cross-chain-gmp-call.md)
+  A contract call across chains.
 
-- [CLI commands](6-ibc-cli/7-cli-commands.md)  
-  Every command and flag the binary accepts, grouped the way the binary groups them.
+**Reference**
 
-- [API](6-ibc-cli/8-api.md)  
-  The relayer and attestor gRPC services, their methods, and their messages.
+- [Configuration](6-ibc-cli/6-configuration.md)
+  Every key in `ibc.yml`.
+
+- [CLI commands](6-ibc-cli/7-cli-commands.md)
+  Every command and flag.
+
+- [API](6-ibc-cli/8-api.md)
+  The gRPC services.
 
 The tables on the last three pages are generated from this repository. [The tooling README](6-ibc-cli/tools/README.md) says what never to edit by hand.

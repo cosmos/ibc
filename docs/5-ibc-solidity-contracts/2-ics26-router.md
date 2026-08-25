@@ -5,13 +5,13 @@ description: "Reference for the packet router: its entry points, registries, com
 
 The `ICS26Router` contract is the core router of IBC-solidity. Every packet in either direction passes through it. It validates each call and records the outcome in its own store. It works with light clients to verify proofs, and it forwards payloads to applications.
 
-Source: [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol). The protocol model behind this surface is on [Core: router and store](/how-ibc-works/core-router-and-store) and [Packet lifecycle](/how-ibc-works/packet-lifecycle).
+Source: [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol). The protocol model behind this surface is on [Core: router and store](../2-how-ibc-works/3-core-router-and-store.md) and [Packet lifecycle](../2-how-ibc-works/6-packet-lifecycle.md).
 
 ## What the router does
 
-The router owns the application registry, the light client registry, and the commitment store. It drives the whole packet lifecycle of send, receive, acknowledge, and timeout. Registered applications call `sendPacket`, and relayers call `recvPacket`, `ackPacket`, `timeoutPacket`, and `updateClient`. Those relayer calls are gated, and one external OpenZeppelin [`AccessManager`](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) decides who passes. The router calls back into applications through `IIBCApp`, and it hands every cross-chain claim to a light client through `ILightClient`.
+The router owns the application registry, the light client registry, and the commitment store. It drives the whole packet lifecycle of send, receive, acknowledge, and timeout. Registered applications call `sendPacket`, and relayers call `recvPacket`, `ackPacket`, `timeoutPacket`, and `updateClient`. Those relayer calls are gated, and one external OpenZeppelin [`AccessManager`](6-permissions-and-upgrades.md#the-access-manager-and-its-roles) decides who passes. The router calls back into applications through `IIBCApp`, and it hands every cross-chain claim to a light client through `ILightClient`.
 
-Interacts with: [AttestationLightClient](/ibc-solidity-contracts/attestation-light-client), [ICS27GMP and accounts](/ibc-solidity-contracts/ics27-gmp-and-accounts), [IFT contracts](/ibc-solidity-contracts/ift-contracts), and [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades).
+Interacts with: [AttestationLightClient](5-attestation-light-client.md), [ICS27GMP and accounts](3-ics27-gmp-and-accounts.md), [IFT contracts](4-ift-contracts.md), and [Permissions and upgrades](6-permissions-and-upgrades.md).
 
 ## Contracts on this page
 
@@ -151,7 +151,7 @@ Two things are stored per client identifier: the address of a light-client contr
 
 Misbehaviour submission is open to any address, and the router forwards the evidence to the client registered under the identifier. What comes of it is the client's decision. A client that has gone wrong is replaced under its own identifier: an admin-gated `migrateClient` swaps in a new client contract and counterparty info.
 
-To be registrable, a client contract implements five functions: `updateClient`, `verifyMembership`, `verifyNonMembership`, `misbehaviour`, and `getClientState`. Both verify functions take an opaque proof, a proof height, and a merkle path. Membership also takes the value it expects to find there. Both return the counterparty's unix timestamp at that height. Clients are interchangeable behind that interface, such as the [AttestationLightClient](/ibc-solidity-contracts/attestation-light-client).
+To be registrable, a client contract implements five functions: `updateClient`, `verifyMembership`, `verifyNonMembership`, `misbehaviour`, and `getClientState`. Both verify functions take an opaque proof, a proof height, and a merkle path. Membership also takes the value it expects to find there. Both return the counterparty's unix timestamp at that height. Clients are interchangeable behind that interface, such as the [AttestationLightClient](5-attestation-light-client.md).
 
 ## Commitment storage and queries
 
@@ -243,11 +243,11 @@ Each gate below is a function selector granted to a role in an external OpenZepp
 Authorization itself happens outside the router. One external `AccessManager` is passed as `authority` at initialization, and a deployment decides which selectors it binds to which role. The router only asks the access manager whether the caller holds the role assigned to the selector, so who may relay is a deployment decision rather than a property of the contract.
 
 <Note>
-On a chain the IBC CLI brings up, any address may relay. `ibc deploy core` binds the router's relaying calls to the public role, and it never grants the relayer role. The selectors it binds are listed under [the access manager and its roles](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles).
+On a chain the IBC CLI brings up, any address may relay. `ibc deploy core` binds the router's relaying calls to the public role, and it never grants the relayer role. The selectors it binds are listed under [the access manager and its roles](6-permissions-and-upgrades.md#the-access-manager-and-its-roles).
 </Note>
 
 ## Deployment and upgrade
 
 The router ships as a logic contract behind an ERC1967 proxy. Its initializer, `initialize(authority)`, takes one argument and binds the `AccessManager` address behind every gate above.
 
-Upgrades are UUPS with a `restricted` `_authorizeUpgrade`. The upgrade selector belongs to the `AccessManager` admin by default. For the full map across every contract, see [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades).
+Upgrades are UUPS with a `restricted` `_authorizeUpgrade`. The upgrade selector belongs to the `AccessManager` admin by default. For the full map across every contract, see [Permissions and upgrades](6-permissions-and-upgrades.md).

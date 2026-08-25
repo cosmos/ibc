@@ -13,7 +13,7 @@ The commands on this page need:
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
-Follow the [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) to set up a deployment with a GMP app and a client, then [run a standalone relayer](/ibc-cli/run-a-standalone-relayer) to carry the packet.
+Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to set up a deployment with a GMP app and a client, then [run a standalone relayer](4-run-a-standalone-relayer.md) to carry the packet.
 
 Once you have a live connection and running relayer, you'll need the following values from each chain. Run the commands in this guide from the `ibc/link` directory:
 

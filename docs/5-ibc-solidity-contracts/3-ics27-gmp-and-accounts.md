@@ -5,11 +5,11 @@ description: The General Message Passing application, the per-sender account con
 
 ICS27GMP is the General Message Passing application. It carries arbitrary call payloads to be executed across chains that implement GMP.
 
-A sender reaches it to dispatch a call. The router reaches it to deliver a packet. A received call runs from an ICS27Account that ICS27GMP deploys, so the contract being called sees an address unique to the remote sender. Senders can build on ICS27GMP: [IFT](/ibc-solidity-contracts/ift-contracts) is built on GMP to fungibly move tokens across chains.
+A sender reaches it to dispatch a call. The router reaches it to deliver a packet. A received call runs from an ICS27Account that ICS27GMP deploys, so the contract being called sees an address unique to the remote sender. Senders can build on ICS27GMP: [IFT](4-ift-contracts.md) is built on GMP to fungibly move tokens across chains.
 
-Source: [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol), with the account contract and the libraries listed below. The model behind this surface is on [GMP: how it works](/applications/gmp).
+Source: [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol), with the account contract and the libraries listed below. The model behind this surface is on [GMP: how it works](../3-applications/1-gmp.md).
 
-Interacts with: [ICS26Router](/ibc-solidity-contracts/ics26-router) for sends and packet callbacks, its own ICS27Account children, the AccessManager that holds its authority, and every sending contract it calls back, including [IFT contracts](/ibc-solidity-contracts/ift-contracts).
+Interacts with: [ICS26Router](2-ics26-router.md) for sends and packet callbacks, its own ICS27Account children, the AccessManager that holds its authority, and every sending contract it calls back, including [IFT contracts](4-ift-contracts.md).
 
 ## Contracts on this page
 
@@ -279,7 +279,7 @@ That call also creates the ICS27Account beacon from `accountLogic`.
 
 The router address and the account beacon are fixed from that point on, each assigned only in `initialize` and with no setter. Both are readable through the `ics26()` and `getAccountBeacon()` views.
 
-ICS27GMP serves every sender on the chain under one port, `gmpport`. Registration goes through the router's restricted `addIBCApp(string, address)`, the overload that takes a custom identifier rather than an address-shaped one. The caller is an external account the access manager permits. On a chain `ibc deploy gmp` brings up, that is the deploy key. [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) covers which role holds that selector.
+ICS27GMP serves every sender on the chain under one port, `gmpport`. Registration goes through the router's restricted `addIBCApp(string, address)`, the overload that takes a custom identifier rather than an address-shaped one. The caller is an external account the access manager permits. On a chain `ibc deploy gmp` brings up, that is the deploy key. [Permissions and upgrades](6-permissions-and-upgrades.md#the-access-manager-and-its-roles) covers which role holds that selector.
 
 A port can be claimed only once, and a second attempt reverts `IBCPortAlreadyExists`.
 
@@ -341,4 +341,4 @@ ICS27GMP itself is UUPS-upgradeable, with a `restricted` `_authorizeUpgrade`.
 
 Accounts upgrade through `upgradeAccountTo`, which replaces the implementation behind the account beacon rather than repointing the stored beacon address. That reaches every account at once, since all account proxies read the same UpgradeableBeacon that ICS27GMP owns.
 
-The [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades) page carries the full proxy map and the role assignments each deployment makes.
+The [Permissions and upgrades](6-permissions-and-upgrades.md) page carries the full proxy map and the role assignments each deployment makes.

@@ -44,7 +44,7 @@ Two chains implement the IBC stack with applications, the IBC core, and a client
 
 An application owns what a message means. It decides what to send, how to encode it, and what to do when one arrives. It initiates a send message, and it receives a callback on every outcome.
 
-Every application on a chain registers with the IBC Core router under a port identifier. Ports are how the router knows which application a packet is for. Applications can be anything, as long as they implement the necessary interface. [GMP](/applications/gmp), short for general message passing, is an IBC application that carries a contract call to the other chain. An [IFT](/applications/ift), an interchain fungible token, is an issuer's token that moves by sending GMP calls. The [Packets and applications](/how-ibc-works/packets-and-applications) page covers applications in more detail.
+Every application on a chain registers with the IBC Core router under a port identifier. Ports are how the router knows which application a packet is for. Applications can be anything, as long as they implement the necessary interface. [GMP](../3-applications/1-gmp.md), short for general message passing, is an IBC application that carries a contract call to the other chain. An [IFT](../3-applications/2-ift.md), an interchain fungible token, is an issuer's token that moves by sending GMP calls. The [Packets and applications](2-packets-and-applications.md) page covers applications in more detail.
 
 ## Packets
 
@@ -62,9 +62,9 @@ The payload carries the message content and names the destination application th
 
 IBC core is the on-chain machinery every packet operation goes through. It has two parts:
 
-- The [router](/how-ibc-works/core-router-and-store) is the single entry point. It accepts a send from an application, routes an arriving packet to the application its payload names, and calls a light client for every claim about the other chain. In IBC-solidity it is the `ICS26Router` contract.
+- The [router](3-core-router-and-store.md) is the single entry point. It accepts a send from an application, routes an arriving packet to the application its payload names, and calls a light client for every claim about the other chain. In IBC-solidity it is the `ICS26Router` contract.
 
-- The [store](/how-ibc-works/core-router-and-store#the-store) is the provable record of what a chain wrote about each packet. A send writes a commitment there, a hash over the destination client, the timeout, and the payload. That hash is the evidence every later step is checked against.
+- The [store](3-core-router-and-store.md#the-store) is the provable record of what a chain wrote about each packet. A send writes a commitment there, a hash over the destination client, the timeout, and the payload. That hash is the evidence every later step is checked against.
 
 ## Relayers
 
@@ -76,7 +76,7 @@ A relayer is the off-chain courier. Chains cannot call each other, so every cros
 - Repeats those steps in the other direction, to return the acknowledgement.
 - Proves the timeout on the source chain instead, if the packet timed out. That path waits for the deadline to pass rather than for a transaction to be final.
 
-A relayer is trusted for liveness alone: it can never forge or alter a packet, because changing any of its contents breaks the proof the client checks. Packets move only when a relayer submits them, so nothing crosses while none is running. Visit the [Relayer](/how-ibc-works/relayer) page for more information.
+A relayer is trusted for liveness alone: it can never forge or alter a packet, because changing any of its contents breaks the proof the client checks. Packets move only when a relayer submits them, so nothing crosses while none is running. Visit the [Relayer](5-relayer.md) page for more information.
 
 ## Clients
 
@@ -86,7 +86,7 @@ A client can also check a proof that no record exists at a path. That is how a t
 
 So when a packet arrives claiming to come from chain A, chain B checks it against its own client of chain A rather than trusting the relayer that delivered it.
 
-Every client answers the same interface, and each one implements verification the way its trust model requires. There can be many different client types. One example is an [attestation light client](/light-clients/attestation-light-client), which accepts a claim a quorum of a fixed [attestor set](/light-clients/attestors) signed at a height it already holds.
+Every client answers the same interface, and each one implements verification the way its trust model requires. There can be many different client types. One example is an [attestation light client](../4-light-clients/1-attestation-light-client.md), which accepts a claim a quorum of a fixed [attestor set](../4-light-clients/2-attestors.md) signed at a height it already holds.
 
 ## The flow
 
@@ -125,8 +125,8 @@ sequenceDiagram
 8. The relayer gathers the matching proof from the destination chain and submits the acknowledgement to the source router, where the source chain's client verifies the destination chain wrote it.
 9. The source router deletes the commitment and calls the sending application back with the acknowledgement bytes.
 
-A failure still comes back as an answer. When the destination application fails, the router substitutes a reserved error acknowledgement for its bytes, and that reaches the sender at step 9. A few failures produce no acknowledgement at all, where the router rejects the whole receive. One of those leaves the packet to be relayed again, and the rest leave a timeout as the only ending. See [acknowledgements and callback failures](/ibc-solidity-contracts/ics26-router#acknowledgements-and-callback-failures) for more information.
+A failure still comes back as an answer. When the destination application fails, the router substitutes a reserved error acknowledgement for its bytes, and that reaches the sender at step 9. A few failures produce no acknowledgement at all, where the router rejects the whole receive. One of those leaves the packet to be relayed again, and the rest leave a timeout as the only ending. See [acknowledgements and callback failures](../5-ibc-solidity-contracts/2-ics26-router.md#acknowledgements-and-callback-failures) for more information.
 
-A packet that never arrives ends the other way. Once its timeout has passed, the relayer proves on the source chain that the destination chain holds no receipt for it, and the router deletes the commitment and calls the sending application's timeout callback. The receiving side rejects a packet whose timeout has passed, so a delivered packet can never time out and a timed-out packet can never be delivered. The [packet lifecycle](/how-ibc-works/packet-lifecycle) follows both endings step by step.
+A packet that never arrives ends the other way. Once its timeout has passed, the relayer proves on the source chain that the destination chain holds no receipt for it, and the router deletes the commitment and calls the sending application's timeout callback. The receiving side rejects a packet whose timeout has passed, so a delivered packet can never time out and a timed-out packet can never be delivered. The [packet lifecycle](6-packet-lifecycle.md) follows both endings step by step.
 
 Every chain trusts only what its own client has verified. Neither side trusts the relayer, and neither takes the other's claims directly.

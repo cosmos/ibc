@@ -9,7 +9,7 @@ A packet is like a piece of mail. The packet is the envelope with routing inform
 
 ## The packet
 
-A packet is one unit of information a [relayer](/how-ibc-works/relayer) carries from one chain to another. It holds what an application wants to send, together with the routing information IBC needs to deliver it and verify it.
+A packet is one unit of information a [relayer](5-relayer.md) carries from one chain to another. It holds what an application wants to send, together with the routing information IBC needs to deliver it and verify it.
 
 ```solidity
 struct Packet {
@@ -24,7 +24,7 @@ struct Packet {
 The first four fields are the routing information. The last one is the application's content. This is similar to the same split TCP makes between a header and a payload.
 
 - `sequence`: the packet's number on its source client. It comes from a counter that starts at 1 and increments by one with every send, so both chains can refer to the same packet.
-- `sourceClient` and `destClient`: the two ends of the route. `sourceClient` is the source chain's [light client](/how-ibc-works/clients-and-counterparties) of the destination; `destClient` is the destination chain's client of the source.
+- `sourceClient` and `destClient`: the two ends of the route. `sourceClient` is the source chain's [light client](4-clients-and-counterparties.md) of the destination; `destClient` is the destination chain's client of the source.
 - `timeoutTimestamp`: the deadline in unix seconds, after which the packet can no longer be received. The timestamp represents the destination chain's block time, and a relayer times it out on the source chain. On send the router requires it to be in the future and no more than one day out.
 - `payloads`: the application's content.
 
@@ -77,7 +77,7 @@ The application is responsible for supplying the source client, the timeout, and
 
 An application is registered with the IBC router on its chain, under a port. Each port identifies one application, and ports are how the router knows which application a packet is for and how to route it.
 
-A port is either the application's own address as a hex string, which anyone may claim, or a readable name like GMP's `gmpport`, which the [access manager](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) gates. Once registered, the port identifier remains with that application permanently.
+A port is either the application's own address as a hex string, which anyone may claim, or a readable name like GMP's `gmpport`, which the [access manager](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) gates. Once registered, the port identifier remains with that application permanently.
 
 Every payload names two ports:
 - `destPort` says which application the payload is for.
@@ -112,4 +112,4 @@ Across these callbacks, an application carries a clear set of responsibilities:
 - On receipt: validate the version and encoding, decode `value`, act, and return an acknowledgement.
 - On the return leg: handle either the acknowledgement or the timeout of the packet.
 
-The router handles routing, recording, and verification. The application handles meaning. For the order these callbacks fire in, and what the router does between them, see the [packet lifecycle](/how-ibc-works/packet-lifecycle).
+The router handles routing, recording, and verification. The application handles meaning. For the order these callbacks fire in, and what the router does between them, see the [packet lifecycle](6-packet-lifecycle.md).

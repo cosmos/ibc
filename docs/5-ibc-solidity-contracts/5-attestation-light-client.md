@@ -11,7 +11,7 @@ Verification is self-contained. The client checks signatures against its own con
 
 Source: [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol)
 
-Interacts with: [ICS26Router](/ibc-solidity-contracts/ics26-router), which drives its updates and proof checks, and the [attestors](/light-clients/attestors) that produce its signatures. The trust model it implements is detailed on [the attestation light client page](/light-clients/attestation-light-client).
+Interacts with: [ICS26Router](2-ics26-router.md), which drives its updates and proof checks, and the [attestors](../4-light-clients/2-attestors.md) that produce its signatures. The trust model it implements is detailed on [the attestation light client page](../4-light-clients/1-attestation-light-client.md).
 
 ## Attestation and proof formats
 
@@ -193,7 +193,7 @@ Holders of `PROOF_SUBMITTER_ROLE` may call the four gated functions. When the ze
 
 The interface says to grant the role to the ICS26Router when the client is used with IBC.
 
-The `roleManager` argument decides between those two cases. A nonzero address receives the AccessControl default admin role along with the submitter role, so whether the submitter role can change later depends on what that address is. `ibc deploy client` passes the [router](/ibc-solidity-contracts/ics26-router), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. A zero address leaves submission open to anyone.
+The `roleManager` argument decides between those two cases. A nonzero address receives the AccessControl default admin role along with the submitter role, so whether the submitter role can change later depends on what that address is. `ibc deploy client` passes the [router](2-ics26-router.md), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. A zero address leaves submission open to anyone.
 
 ## Constructor and configuration
 
@@ -221,7 +221,7 @@ Do not reuse attestor addresses across clients. A signature gathered for one cli
 
 The client is a plain deployment. It sits behind no proxy and has no upgrade function, because the constructor sets everything it needs.
 
-The [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades) page carries the full proxy and upgrade-authority map.
+The [Permissions and upgrades](6-permissions-and-upgrades.md) page carries the full proxy and upgrade-authority map.
 
 A deployed client becomes usable once `addClient` registers it on the router under a client ID. That same call sets its counterparty information.
 

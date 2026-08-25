@@ -9,10 +9,10 @@ A relayer is trusted for liveness alone: it decides when packets move, not what 
 
 ## What a relayer does
 
-Chains cannot interact with each other directly. Each one keeps a [light client](/how-ibc-works/clients-and-counterparties) of the other, but these only contain a snapshot of the counterparty's chain state that must be updated by external input. A relayer delivers everything a chain needs to accept state updates and packets from a counterparty.
+Chains cannot interact with each other directly. Each one keeps a [light client](4-clients-and-counterparties.md) of the other, but these only contain a snapshot of the counterparty's chain state that must be updated by external input. A relayer delivers everything a chain needs to accept state updates and packets from a counterparty.
 
-- **The client update** The relayer calls `updateClient` with a proof of some state on the source chain to advance the destination client's snapshot. Every client type works this way, but the type of state and proof vary by client: for an [attestation light client](/light-clients/attestation-light-client) it is the source chain's height and timestamp proved by a quorum of attestor signatures.
-- **The packet**: This is state committed on the source chain that the relayer delivers to the destination chain's [router](/how-ibc-works/core-router-and-store) along with a proof.
+- **The client update** The relayer calls `updateClient` with a proof of some state on the source chain to advance the destination client's snapshot. Every client type works this way, but the type of state and proof vary by client: for an [attestation light client](../4-light-clients/1-attestation-light-client.md) it is the source chain's height and timestamp proved by a quorum of attestor signatures.
+- **The packet**: This is state committed on the source chain that the relayer delivers to the destination chain's [router](3-core-router-and-store.md) along with a proof.
 - **The answer.** To complete the packet lifecycle, there is a symmetric flow where the relayer relays state from the destination chain back to the source. This is either an acknowledgement created during packet receipt or a proof that packet receipt never occurred.
 
 ## Connections
@@ -44,7 +44,7 @@ A packet past its timeout with no receipt or acknowledgement gets a timeout deli
 
 ## Building a proof
 
-What a proof contains depends on the client type it is built for and the relayer's proof construction logic varies accordingly. For [attestation light clients](/light-clients/attestation-light-client), a proof is the attested data plus the signatures over it. To build an attestation proof it queries the configured attestors for signed attestations. If there is quorum of valid signatures, it aggregates them into a proof that can be submitted on-chain.
+What a proof contains depends on the client type it is built for and the relayer's proof construction logic varies accordingly. For [attestation light clients](../4-light-clients/1-attestation-light-client.md), a proof is the attested data plus the signatures over it. To build an attestation proof it queries the configured attestors for signed attestations. If there is quorum of valid signatures, it aggregates them into a proof that can be submitted on-chain.
 
 ## Submitting the transaction
 
@@ -52,10 +52,10 @@ The relayer attempts to batch multiple packets into the same transaction submitt
 
 The chain a transaction is submitted on depends on the relay commitment type:
 
-- Packet are relayed to the [router](/how-ibc-works/core-router-and-store) on the destination chain.
+- Packet are relayed to the [router](3-core-router-and-store.md) on the destination chain.
 - Acknowledgements and timeouts are relayed to the router on the source chain.
 
-What each call does once it lands is covered in the [packet lifecycle](/how-ibc-works/packet-lifecycle).
+What each call does once it lands is covered in the [packet lifecycle](6-packet-lifecycle.md).
 
 EVM relay transactions are EIP-1559 transactions, so a chain reporting no base fee is refused before one is built.
 

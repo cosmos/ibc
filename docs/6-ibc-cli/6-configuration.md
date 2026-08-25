@@ -338,6 +338,6 @@ The complete example runs the relayer and both attestors together. In production
 
 ## Next steps
 
-- [Run a standalone relayer](/ibc-cli/run-a-standalone-relayer)
-- [Run a standalone attestor](/ibc-cli/run-a-standalone-attestor)
-- [CLI commands](/ibc-cli/cli-commands) for command-line overrides
+- [Run a standalone relayer](4-run-a-standalone-relayer.md)
+- [Run a standalone attestor](3-run-a-standalone-attestor.md)
+- [CLI commands](7-cli-commands.md) for command-line overrides

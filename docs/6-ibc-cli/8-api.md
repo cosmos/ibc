@@ -453,5 +453,5 @@ grpcurl -plaintext -d '{"attestor":"attestor-41002"}' \
 
 ## Next steps
 
-- [Configuration](/ibc-cli/configuration) for `server.listenAddr` and the `attestors` block these calls read.
-- [CLI commands](/ibc-cli/cli-commands) for the commands that make these calls.
+- [Configuration](6-configuration.md) for `server.listenAddr` and the `attestors` block these calls read.
+- [CLI commands](7-cli-commands.md) for the commands that make these calls.

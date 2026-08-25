@@ -31,16 +31,16 @@ You can deploy the IBC Solidity contracts to an EVM chain with an RPC endpoint a
 
 It deploys the following contracts:
 
-- The core routing stack: an access manager and the [ICS26Router](/ibc-solidity-contracts/ics26-router) behind a proxy.
-- An [attestation light client](/ibc-solidity-contracts/attestation-light-client) on each chain tracking the other, registered on the router.
-- The [ICS27GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts) app and its account logic.
-- [IFT](/ibc-solidity-contracts/ift-contracts) token contracts, and the bridges between them.
+- The core routing stack: an access manager and the [ICS26Router](../5-ibc-solidity-contracts/2-ics26-router.md) behind a proxy.
+- An [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md) on each chain tracking the other, registered on the router.
+- The [ICS27GMP](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) app and its account logic.
+- [IFT](../5-ibc-solidity-contracts/4-ift-contracts.md) token contracts, and the bridges between them.
 
 Signer keys, contract addresses, client IDs, and finality settings all have to stay consistent across the on-chain and off-chain pieces, which can be difficult to manage by hand. The CLI handles the deployment and the checks that catch a mismatch, so you do not write your own deployment and query scripts.
 
-Follow the [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) to learn the full process of deploying IBC between two chains and sending a token.
+Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to learn the full process of deploying IBC between two chains and sending a token.
 
-Deployment is done from a single key. It becomes the access manager's admin, which governs the router and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades) for more details.
+Deployment is done from a single key. It becomes the access manager's admin, which governs the router and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
 
 ## The relayer
 
@@ -48,7 +48,7 @@ Relayers are responsible for moving packets between chains. The IBC CLI provides
 
 Its work starts after an application has already sent a packet. The relayer reads that send transaction on the source chain, gathers the proofs the packet needs, and submits them to the destination chain. It then carries the acknowledgement back, or times the packet out if it never arrived.
 
-[The Relayer page](/how-ibc-works/relayer) covers what a relayer is for and what it is trusted with.
+[The Relayer page](../2-how-ibc-works/5-relayer.md) covers what a relayer is for and what it is trusted with.
 
 ```mermaid
 flowchart TB
@@ -99,7 +99,7 @@ The relayer exposes a gRPC API. `Relay` asks it to deliver the packets in a tran
 
 ## The attestor
 
-An attestor signs statements about a chain: its state at a height, and the packets it holds. See [Attestors](/light-clients/attestors) for what it signs and why that is trustworthy.
+An attestor signs statements about a chain: its state at a height, and the packets it holds. See [Attestors](../4-light-clients/2-attestors.md) for what it signs and why that is trustworthy.
 
 An attestor process is a stateless gRPC service with a connection to the chain it watches. It has a signer, and a rule for how far behind the head it will sign.
 
@@ -143,10 +143,10 @@ Most configurations can be generated. `ibc config new` writes a starting file, `
 
 The IBC CLI also validates the file with the `ibc config validate` command. 
 
-The [configuration reference](/ibc-cli/configuration) carries every key and its default. [CLI commands](/ibc-cli/cli-commands) and the [API reference](/ibc-cli/api) cover the rest of the surface.
+The [configuration reference](6-configuration.md) carries every key and its default. [CLI commands](7-cli-commands.md) and the [API reference](8-api.md) cover the rest of the surface.
 
 ## Next steps
 
-- [Deploy IBC and send a token](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) brings up two chains and moves a token between them.
-- [Run a standalone attestor](/ibc-cli/run-a-standalone-attestor) takes an attestor out of the relayer's process and into its own.
-- [Run a standalone relayer](/ibc-cli/run-a-standalone-relayer) brings up a relayer against a connection someone else deployed.
+- [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) brings up two chains and moves a token between them.
+- [Run a standalone attestor](3-run-a-standalone-attestor.md) takes an attestor out of the relayer's process and into its own.
+- [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer against a connection someone else deployed.

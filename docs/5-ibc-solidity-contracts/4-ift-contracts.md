@@ -9,17 +9,17 @@ That behavior is built on GMP. An IFT defines no packet type, and instead a tran
 
 An issuer deploys one of two Solidity variants, which differ only in who the contract's authority is. The authority registers a bridge and send-call constructor for each counterparty IFT implementation.
 
-Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](/applications/ift).
+Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](../3-applications/2-ift.md).
 
 ## What an IFT contract does
 
-An IFT contract contains both the ERC20 logic and the logic for moving the token across chains. Sending burns the amount from the caller, then dispatches an encoded mint call through [ICS27GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts). On receipt, the contract checks that the sender is a registered counterparty, then mints the amount.
+An IFT contract contains both the ERC20 logic and the logic for moving the token across chains. Sending burns the amount from the caller, then dispatches an encoded mint call through [ICS27GMP](3-ics27-gmp-and-accounts.md). On receipt, the contract checks that the sender is a registered counterparty, then mints the amount.
 
 Any holder can send with `iftTransfer`. On the shipped `IFTOwnable` and `IFTAccessManaged` variants, holders can also burn their own balances through `ERC20BurnableUpgradeable`. Minting is the gated side: the authority mints local supply, and a registered counterparty's mint call arrives through GMP. The authority also registers which counterparties this contract accepts those calls from.
 
 GMP carries the call and reports acknowledgement or timeout. Counterparty IFT implementations communicate through GMP, with no escrow or voucher contract between them.
 
-Interacts with: [ICS27GMP and its per-sender accounts](/ibc-solidity-contracts/ics27-gmp-and-accounts), one send-call constructor per registered bridge, and the counterparty IFT implementation.
+Interacts with: [ICS27GMP and its per-sender accounts](3-ics27-gmp-and-accounts.md), one send-call constructor per registered bridge, and the counterparty IFT implementation.
 
 ## Contracts on this page
 
@@ -120,7 +120,7 @@ Registering the same client ID again overwrites the previous entry. Removing a b
 
 ## Sending a transfer
 
-A transfer starts on the source IFT contract, when a holder calls `iftTransfer`. The contract burns the amount first, then dispatches an encoded mint call over GMP and stores the record (later this record can be used to refund a failure or timeout). An IFT has no packet type of its own: the transfer travels as an ordinary GMP call, and [ICS27GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts) owns the wire format.
+A transfer starts on the source IFT contract, when a holder calls `iftTransfer`. The contract burns the amount first, then dispatches an encoded mint call over GMP and stores the record (later this record can be used to refund a failure or timeout). An IFT has no packet type of its own: the transfer travels as an ordinary GMP call, and [ICS27GMP](3-ics27-gmp-and-accounts.md) owns the wire format.
 
 The send is one atomic EVM transaction. If bridge lookup, payload construction, or `ICS27GMP.sendCall` reverts, the earlier burn is rolled back and no pending transfer remains.
 
@@ -134,12 +134,12 @@ Any holder may call either overload, since neither carries an authority check. T
 From the dispatch onwards the transfer is out of this contract's hands. Its path to the counterparty:
 
 1. The source contract calls `ICS27GMP.sendCall` with the encoded mint call, the bridge's counterparty address, empty salt, empty memo, and the timeout. The returned packet sequence keys the pending transfer.
-2. ICS27GMP wraps the payload in a GMP packet whose sender field is the source contract's address as checksummed hex, and sends it through the [router](/ibc-solidity-contracts/ics26-router) with both source and destination ports set to `gmpport`.
+2. ICS27GMP wraps the payload in a GMP packet whose sender field is the source contract's address as checksummed hex, and sends it through the [router](2-ics26-router.md) with both source and destination ports set to `gmpport`.
 3. A relayer carries the packet to the destination chain and submits it with a proof, which the destination chain's light client verifies.
 4. The destination router hands the packet to its own ICS27GMP, by port.
 5. On an EVM destination, ICS27GMP executes the payload through the `ICS27Account` derived from the destination client ID, packet sender, and salt, so `iftMint` arrives from that account rather than from GMP itself. A Cosmos SDK destination instead executes the JSON messages body produced by `CosmosIFTSendCallConstructor`.
 
-The destination contract's checks on that call are next. [IFT: how it works](/applications/ift) explains the same path from the holder's side.
+The destination contract's checks on that call are next. [IFT: how it works](../3-applications/2-ift.md) explains the same path from the holder's side.
 
 ## Receiving a mint on EVM
 
@@ -248,4 +248,4 @@ Holders can burn their own balance because both variants inherit `ERC20BurnableU
 
 The issuer deploys the variant's logic contract behind an ERC1967 proxy. The repo ships a Forge script that deploys an `IFTOwnable` logic contract and its proxy for the end-to-end tests, taking the GMP address, name, and symbol from the environment and making the deployer the owner.
 
-Both variants are UUPS-upgradeable, and the same authority that gates bridge management gates the upgrade: owner-gated on `IFTOwnable`, `restricted` on `IFTAccessManaged`. A `CosmosIFTSendCallConstructor` keeps the configuration it is deployed with. [Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades) carries the full proxy and upgrade map.
+Both variants are UUPS-upgradeable, and the same authority that gates bridge management gates the upgrade: owner-gated on `IFTOwnable`, `restricted` on `IFTAccessManaged`. A `CosmosIFTSendCallConstructor` keeps the configuration it is deployed with. [Permissions and upgrades](6-permissions-and-upgrades.md) carries the full proxy and upgrade map.

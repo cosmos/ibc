@@ -95,7 +95,7 @@ Passing `--populate-config` adds each key to the config as a named signer. Later
 ./bin/ibc keys import ecdsa relayer --private-key 0xd46507376b3a8a4af4f1f934375df25213a09857a3ed1086ba284c82d387904b --populate-config
 ```
 
-4. Generate an attestor key for each chain. These sign attestations and never need funding. Never reuse an attestor key across clients, so each chain gets its own: see [Attestors](/light-clients/attestors#attestor-keys).
+4. Generate an attestor key for each chain. These sign attestations and never need funding. Never reuse an attestor key across clients, so each chain gets its own: see [Attestors](../4-light-clients/2-attestors.md#attestor-keys).
 
 ```bash
 ./bin/ibc keys new ecdsa attestor-41001 --populate-config
@@ -357,6 +357,6 @@ Congratulations! You've deployed IBC and transferred a token between two chains.
 
 ## Next steps
 
-- [Overview](/ibc-cli/overview) explains what the three parts are made of and how they fit together.
-- [Run a standalone attestor](/ibc-cli/run-a-standalone-attestor) moves an attestor out of the relayer's process and into its own.
-- [Run a standalone relayer](/ibc-cli/run-a-standalone-relayer) brings up a relayer against a deployment, including one that replaces a relayer that stopped.
+- [Overview](1-overview.md) explains what the three parts are made of and how they fit together.
+- [Run a standalone attestor](3-run-a-standalone-attestor.md) moves an attestor out of the relayer's process and into its own.
+- [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer against a deployment, including one that replaces a relayer that stopped.

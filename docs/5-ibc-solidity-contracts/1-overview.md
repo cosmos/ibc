@@ -39,7 +39,7 @@ Every contract in the tables below is one of five things: a contract with its ow
 
 ### ICS26Router: the IBC core
 
-Documented in [core](/ibc-solidity-contracts/ics26-router).
+Documented in [core](2-ics26-router.md).
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
@@ -52,7 +52,7 @@ Documented in [core](/ibc-solidity-contracts/ics26-router).
 
 ### Light clients
 
-AttestationLightClient is documented in [attestation light client](/ibc-solidity-contracts/attestation-light-client).
+AttestationLightClient is documented in [attestation light client](5-attestation-light-client.md).
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
@@ -62,7 +62,7 @@ AttestationLightClient is documented in [attestation light client](/ibc-solidity
 
 ### ICS27GMP: the GMP application
 
-Documented in [GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts).
+Documented in [GMP](3-ics27-gmp-and-accounts.md).
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
@@ -73,7 +73,7 @@ Documented in [GMP](/ibc-solidity-contracts/ics27-gmp-and-accounts).
 
 ### IFT: Interchain Fungible Tokens
 
-Documented in [IFT](/ibc-solidity-contracts/ift-contracts).
+Documented in [IFT](4-ift-contracts.md).
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
@@ -86,7 +86,7 @@ Documented in [IFT](/ibc-solidity-contracts/ift-contracts).
 
 ### Access control
 
-Documented in [access control](/ibc-solidity-contracts/permissions-and-upgrades).
+Documented in [access control](6-permissions-and-upgrades.md).
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
@@ -103,7 +103,7 @@ Deployment splits three ways:
 
 The IBC CLI deploys the contract set. `ibc deploy core` stands up the access manager and the router on one chain. `ibc deploy client` deploys a light client tracking one counterparty and registers it. A connection between two chains takes four of those invocations, two per chain.
 
-[Permissions and upgrades](/ibc-solidity-contracts/permissions-and-upgrades) has what each deployment fixes for good and who can change it later.
+[Permissions and upgrades](6-permissions-and-upgrades.md) has what each deployment fixes for good and who can change it later.
 
 ## Audits
 

@@ -7,7 +7,7 @@ This guide shows you how to run a relayer in its own process. It hosts no attest
 
 ## Before you begin
 
-Before proceeding, run the [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) and [standalone attestor](/ibc-cli/run-a-standalone-attestor) guides first, in order. You'll need to have an IBC deployment and standalone attestors on both chains to complete this guide.
+Before proceeding, run the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) and [standalone attestor](3-run-a-standalone-attestor.md) guides first, in order. You'll need to have an IBC deployment and standalone attestors on both chains to complete this guide.
 
 The tutorial's keystore already holds a funded key, so this guide reuses it rather than importing another.
 
@@ -135,4 +135,4 @@ The balance should be one token higher, meaning the packet was delivered success
 
 ## Next steps
 
-- [Overview](/ibc-cli/overview) covers what the three parts are made of and how they fit together.
+- [Overview](1-overview.md) covers what the three parts are made of and how they fit together.

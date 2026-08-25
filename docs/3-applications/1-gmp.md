@@ -9,11 +9,11 @@ On the destination chain the call executes from a deterministic address unique t
 
 A call ends when the target returns data, when the call fails, or when the packet times out.
 
-[IFT](/applications/ift) is built on GMP, and moves tokens between chains using GMP calls.
+[IFT](2-ift.md) is built on GMP, and moves tokens between chains using GMP calls.
 
 ## The GMP application
 
-A GMP call travels as a packet carrying the call data to the other chain. A GMP application is registered on a chain's [router](/how-ibc-works/core-router-and-store) under a single [port](/how-ibc-works/packets-and-applications), and a chain generally runs one GMP contract per IBC deployment.
+A GMP call travels as a packet carrying the call data to the other chain. A GMP application is registered on a chain's [router](../2-how-ibc-works/3-core-router-and-store.md) under a single [port](../2-how-ibc-works/2-packets-and-applications.md), and a chain generally runs one GMP contract per IBC deployment.
 
 In IBC-solidity, GMP is the ICS27GMP contract, which implements the ics-027-gmp specification on the port `gmpport`.
 
@@ -90,7 +90,7 @@ Once the packet reaches the destination chain, the router hands it to that chain
 5. Asks the account to call the target with the payload as call data.
 6. Wraps whatever the target returned as the acknowledgement.
 
-If one of those checks fails, the call never runs, and the acknowledgement carries an error instead. Either way the call runs at most once, because the [receive step](/how-ibc-works/packet-lifecycle) records a receipt for the packet on the destination chain and the same packet cannot be received twice.
+If one of those checks fails, the call never runs, and the acknowledgement carries an error instead. Either way the call runs at most once, because the [receive step](../2-how-ibc-works/6-packet-lifecycle.md) records a receipt for the packet on the destination chain and the same packet cannot be received twice.
 
 A relayer delivers the packet and pays for it. The destination call runs on whatever gas remains in the relayer's transaction, and neither the send message nor the packet carries a gas field, so gas budgeting belongs to the relayer. A delivery that reverts before the destination chain records the packet's receipt leaves the packet in flight, so a relayer can submit it again, with more gas if that was the problem, until the timeout passes. Once the receipt is written the packet is consumed, and the outcome comes back as an acknowledgement whether the call succeeded or not.
 
@@ -106,7 +106,7 @@ function onAckPacket(bool success, IIBCAppCallbacks.OnAcknowledgementPacketCallb
 function onTimeoutPacket(IIBCAppCallbacks.OnTimeoutPacketCallback calldata msg_) external;
 ```
 
-The acknowledgement callback reports success or failure in its `success` argument. Its message carries what an application needs to act on that outcome: the packet's sequence number, the payload it originally sent, and the acknowledgement bytes. It also carries both client identifiers and the relayer's address. The timeout callback takes no success argument, and its message is the same one without the acknowledgement. [ICS27GMP and accounts](/ibc-solidity-contracts/ics27-gmp-and-accounts) describes both callback structs.
+The acknowledgement callback reports success or failure in its `success` argument. Its message carries what an application needs to act on that outcome: the packet's sequence number, the payload it originally sent, and the acknowledgement bytes. It also carries both client identifiers and the relayer's address. The timeout callback takes no success argument, and its message is the same one without the acknowledgement. [ICS27GMP and accounts](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) describes both callback structs.
 
 An application matches a callback to the call it made by client and sequence number together. Sequences are counted per client, so a sender that sends over two clients can hold two packets with the same sequence.
 
@@ -139,11 +139,11 @@ The account forwards the destination call through `Address.functionCall`, which 
 
 A packet that is never received ends in a timeout. Once the deadline passes, a relayer proves non-receipt on the source chain, and GMP fires the timeout callback if the sender implements it. A packet cannot be both executed and timed out, because the destination refuses a packet whose deadline has passed.
 
-GMP keeps no per-packet state, so a failure or a timeout leaves it nothing to undo. Reversing anything is the sender's job, which is why [IFT](/applications/ift) keeps a pending record and refunds from it.
+GMP keeps no per-packet state, so a failure or a timeout leaves it nothing to undo. Reversing anything is the sender's job, which is why [IFT](2-ift.md) keeps a pending record and refunds from it.
 
 ## Build on GMP
 
-Any contract can use GMP to act across chains. [IFT](/applications/ift) is an example of a contract built on GMP: one token contract is the sender on its own chain and the target on the other, and it moves tokens with nothing but GMP calls.
+Any contract can use GMP to act across chains. [IFT](2-ift.md) is an example of a contract built on GMP: one token contract is the sender on its own chain and the target on the other, and it moves tokens with nothing but GMP calls.
 
 What GMP gives you is an authenticated caller on the destination chain, execution at most once, and an outcome a relayer can carry back to the source chain. What you write is the target contract, plus the two callback functions and ERC165 interface detection if you want to hear that outcome.
 

@@ -11,13 +11,13 @@ In order to run a standalone attestor, your signing address must already be in t
 
 You need:
 
-- **A chain with IBC deployed, and a light client tracking it.** This guide continues from the [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token).
+- **A chain with IBC deployed, and a light client tracking it.** This guide continues from the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md).
 - **Your signing address already in that client's attestation set.**
 - **Your signing key.**
 - **The chain's RPC endpoint and its router address.** Configuration validation treats the router address as optional, but the process cannot start without it.
-- [Go](https://go.dev/doc/install) 1.25.5 or later and a [build of the binary](/ibc-cli/tutorial-deploy-ibc-and-send-a-token).
+- [Go](https://go.dev/doc/install) 1.25.5 or later and a [build of the binary](2-tutorial-deploy-ibc-and-send-a-token.md).
 
-The commands below continue from the [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token). They move the attestor keys it generated into processes of their own, reading values from your own deployment rather than asking you to copy one.
+The commands below continue from the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md). They move the attestor keys it generated into processes of their own, reading values from your own deployment rather than asking you to copy one.
 
 > **Warning:** Stop the tutorial's relayer before you start, with `Ctrl+C` in its terminal. It hosts both attestors inside its own process, and this guide gives those same attestors processes of their own.
 
@@ -126,7 +126,7 @@ This shows the attestor's latest height.
 
 ## 4. Run the second attestor
 
-The [tutorial](/ibc-cli/tutorial-deploy-ibc-and-send-a-token) this guide follows generated one attestor per chain. The following steps repeat the process to create an attestor for chain 41001, in its own configuration file on port 3003. Port 3002 is left free for the relayer in the next guide.
+The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) this guide follows generated one attestor per chain. The following steps repeat the process to create an attestor for chain 41001, in its own configuration file on port 3003. Port 3002 is left free for the relayer in the next guide.
 
 1. Create a third configuration file:
 
@@ -185,8 +185,8 @@ attestors:
   grpc: 127.0.0.1:3001
 ```
 
-[Run a standalone relayer](/ibc-cli/run-a-standalone-relayer) brings up a relayer that uses these two instead of hosting its own.
+[Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that uses these two instead of hosting its own.
 
 ## Next steps
 
-- [Run a standalone relayer](/ibc-cli/run-a-standalone-relayer) brings up a relayer that queries these attestors instead of hosting its own.
+- [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries these attestors instead of hosting its own.

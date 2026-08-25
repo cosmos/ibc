@@ -5,7 +5,7 @@ description: "A fungible token that moves between chains by burning it on one an
 
 An Interchain Fungible Token (IFT) is a fungible token that moves between chains by burning it on one and minting it on the other. An issuer deploys an IFT contract on every chain where they want the asset to exist. Each deployment is an ERC20 token in IBC-Solidity. Unlike an escrow bridge, which locks the asset on one chain and issues a wrapped claim on another, an IFT burns on the source and mints the issuer's own token on arrival to the destination. Nothing has to be redeemed, and no wrapper has to be unwound. A holder on any of those chains holds the issuer's real asset, and it is the same asset however many chains it has crossed.
 
-IFT deployments have to be linked before tokens can move between them. Each side's authority registers the other as a bridge. A deployment mints for an arriving transfer only when it has registered that counterparty IFT contract. Registering is a privileged call, reserved to the authority, but sending is open to any holder. IFT is built on top of GMP, so the cross-chain leg travels as a [General Message Passing (GMP)](/applications/gmp) call from one deployment to the other: the source deployment burns the amount, and the counterparty deployment mints it to the receiver. A failed transfer refunds the sender, so a completed transfer leaves the total across the two chains unchanged. While a packet is in flight the amount is already burned and not yet minted, so the combined supply is temporarily lower.
+IFT deployments have to be linked before tokens can move between them. Each side's authority registers the other as a bridge. A deployment mints for an arriving transfer only when it has registered that counterparty IFT contract. Registering is a privileged call, reserved to the authority, but sending is open to any holder. IFT is built on top of GMP, so the cross-chain leg travels as a [General Message Passing (GMP)](1-gmp.md) call from one deployment to the other: the source deployment burns the amount, and the counterparty deployment mints it to the receiver. A failed transfer refunds the sender, so a completed transfer leaves the total across the two chains unchanged. While a packet is in flight the amount is already burned and not yet minted, so the combined supply is temporarily lower.
 
 ## The transfer flow
 
@@ -92,7 +92,7 @@ struct IFTBridge {
 }
 ```
 
-- **The client**: the local [client](/how-ibc-works/clients-and-counterparties) that identifies the counterparty chain.
+- **The client**: the local [client](../2-how-ibc-works/4-clients-and-counterparties.md) that identifies the counterparty chain.
 - **The counterparty address**: the counterparty IFT contract's address on that chain, held as a string.
 - **The encoder**: the component that builds mint calls in the form that chain expects. Registration rejects an encoder that is the zero address or does not advertise the encoder interface. The `abi.encodeCall` above is what the EVM encoder produces; another chain's encoder produces that chain's call format.
 
@@ -102,7 +102,7 @@ Bridges are keyed by client. An IFT contract can therefore reach one counterpart
 
 Removing a bridge stops new sends on that client. Incoming mints on that client fail from then on. Transfers this contract already sent still complete or refund, because neither path reads the bridge.
 
-For the full contract surface and the encoders that ship with it, see [IFT contracts](/ibc-solidity-contracts/ift-contracts).
+For the full contract surface and the encoders that ship with it, see [IFT contracts](../5-ibc-solidity-contracts/4-ift-contracts.md).
 
 ## Failed transfers and refunds
 
@@ -110,7 +110,7 @@ No amount is minted on the destination chain until the light client has verified
 
 A transfer fails in one of two ways, and both end in the same refund:
 
-1. The destination refuses to mint. Its [router](/how-ibc-works/core-router-and-store) catches the revert, keeps the packet receipt, and writes the universal error acknowledgement in place of a result. The source IFT contract refunds once a relayer proves that acknowledgement.
+1. The destination refuses to mint. Its [router](../2-how-ibc-works/3-core-router-and-store.md) catches the revert, keeps the packet receipt, and writes the universal error acknowledgement in place of a result. The source IFT contract refunds once a relayer proves that acknowledgement.
 2. The packet is never received. A relayer proves that the destination has no receipt for the packet, at a height whose verified destination timestamp is past the packet's timeout, and the source contract refunds.
 
 For refunds, the source contract then mints the pending amount back to the original sender, deletes the pending transfer, and emits its refunded event.

@@ -18,9 +18,9 @@ Four calls move a packet in IBC:
 | `ackPacket` | a relayer | the source router | `onAcknowledgementPacket`, on the sending application |
 | `timeoutPacket` | a relayer | the source router | `onTimeoutPacket`, on the sending application |
 
- `sendPacket` is an application's own call, and the [router](/how-ibc-works/core-router-and-store) accepts it only from the application registered on the payload's source port. The other three are role-gated: a [relayer](/how-ibc-works/relayer) submits them, and each chain's [role map](/ibc-solidity-contracts/permissions-and-upgrades#the-access-manager-and-its-roles) decides which addresses it admits to those calls. On a chain the IBC CLI brings up, that map admits any address.
+ `sendPacket` is an application's own call, and the [router](3-core-router-and-store.md) accepts it only from the application registered on the payload's source port. The other three are role-gated: a [relayer](5-relayer.md) submits them, and each chain's [role map](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) decides which addresses it admits to those calls. On a chain the IBC CLI brings up, that map admits any address.
 
-A relayer stands between every pair of steps. Each chain learns what the other wrote only through a proof its own [client](/how-ibc-works/clients-and-counterparties) verifies, and the store keeps only a hash of the packet, so the send event is what carries its fields to a relayer. That client has to be current for the proof to verify. So a relayer packs `updateClient` into the same transaction, ahead of the call it is relaying.
+A relayer stands between every pair of steps. Each chain learns what the other wrote only through a proof its own [client](4-clients-and-counterparties.md) verifies, and the store keeps only a hash of the packet, so the send event is what carries its fields to a relayer. That client has to be current for the proof to verify. So a relayer packs `updateClient` into the same transaction, ahead of the call it is relaying.
 
 ```mermaid
 sequenceDiagram
@@ -59,7 +59,7 @@ sequenceDiagram
 
 ## Sending a packet
 
-Sending a packet begins inside the application. The application runs its own logic first, then calls `sendPacket` on the source [router](/how-ibc-works/core-router-and-store) with a source client, a timeout, and a [payload](/how-ibc-works/packets-and-applications#the-payload) which carries the application's message. The source router then runs the following:
+Sending a packet begins inside the application. The application runs its own logic first, then calls `sendPacket` on the source [router](3-core-router-and-store.md) with a source client, a timeout, and a [payload](2-packets-and-applications.md#the-payload) which carries the application's message. The source router then runs the following:
 
 1. **Check the caller**: it must be the application registered on the payload's source port.
 2. **Look up the counterparty**: it reads the counterparty registered for the source client.
@@ -82,7 +82,7 @@ Then the destination router runs the following steps:
 
 If the application fails, the router commits a single reserved error value in place of its bytes, and emits the reason as `IBCAppRecvPacketCallbackError` on the destination chain. The reserved value is the same for every failure, so the reason never crosses to the source chain.
 
-A few failures produce no acknowledgement at all. One of those leaves the packet to be relayed again, and the rest leave a timeout as the only ending. See [acknowledgements and callback failures](/ibc-solidity-contracts/ics26-router#acknowledgements-and-callback-failures).
+A few failures produce no acknowledgement at all. One of those leaves the packet to be relayed again, and the rest leave a timeout as the only ending. See [acknowledgements and callback failures](../5-ibc-solidity-contracts/2-ics26-router.md#acknowledgements-and-callback-failures).
 
 ## Acknowledging on the source chain
 

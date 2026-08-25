@@ -7,7 +7,7 @@ The attestation light client is a light client that trusts a fixed set of off-ch
 
 Unlike a light client that directly verifies the counterparty chain's consensus, this one checks signatures from a known attestor set. It holds no view of that chain of its own, and instead accepts a claim carrying enough signatures from that set. Trust in a connection using this client rests on the attestor keys.
 
-A connection carries one of these clients on each side, each registered with its own chain's router. The attestation light client implements the standard [light client interface](/how-ibc-works/clients-and-counterparties) for IBC: update the client, verify membership, and verify non-membership. In IBC-solidity, it is the `AttestationLightClient` contract.
+A connection carries one of these clients on each side, each registered with its own chain's router. The attestation light client implements the standard [light client interface](../2-how-ibc-works/4-clients-and-counterparties.md) for IBC: update the client, verify membership, and verify non-membership. In IBC-solidity, it is the `AttestationLightClient` contract.
 
 ## The attestor set and threshold
 
@@ -28,11 +28,11 @@ Anything off chain can read that state through `getClientState`.
 
 The latest height is the highest height the client knows, and the frozen flag records whether the client has stopped verifying for good. Beside that state the client keeps two more records: a lookup of which addresses belong to the set, and one trusted timestamp per height.
 
-That timestamp is this client's [consensus state](/how-ibc-works/clients-and-counterparties), and it is the whole of what the client has accepted as true about the counterparty chain. Nothing else is retained, so the client can answer a question about a commitment only from a claim signed for that question.
+That timestamp is this client's [consensus state](../2-how-ibc-works/4-clients-and-counterparties.md), and it is the whole of what the client has accepted as true about the counterparty chain. Nothing else is retained, so the client can answer a question about a commitment only from a claim signed for that question.
 
 The set and the threshold hold for the life of the client. Deployment fixes them along with an initial height and timestamp, and rejects an empty set, a zero threshold, a threshold larger than the set, and duplicate addresses.
 
-Each attestor adds two assumptions of its own: that its chain RPC endpoint reports accurate state, and that its signing key stays secret. [Attestors](/light-clients/attestors) covers how attestors run and how their keys are held.
+Each attestor adds two assumptions of its own: that its chain RPC endpoint reports accurate state, and that its signing key stays secret. [Attestors](2-attestors.md) covers how attestors run and how their keys are held.
 
 ## What an attestation claims
 
@@ -42,7 +42,7 @@ An attestation is one of two signed statements about the counterparty chain:
 
 2. A **Packet Attestation**: at height `H`, the specified commitment paths held certain values.
 
-Those paths are records in the counterparty chain's [store](/how-ibc-works/core-router-and-store), which its router writes as packets move.
+Those paths are records in the counterparty chain's [store](../2-how-ibc-works/3-core-router-and-store.md), which its router writes as packets move.
 
 An attestor reads the block at the height it is attesting and takes the timestamp from that block's header, so two honest attestors reading the same block report the same number.
 
@@ -102,7 +102,7 @@ A verified quorum feeds three operations, one for each question this client answ
 | **Verify membership** | A quorum over a packet attestation, attesting exactly the height the router asked about | Hashes the requested path, finds the entry whose path hash and commitment both match, and returns that height's timestamp |
 | **Verify non-membership** | The same quorum and height checks | Requires the queried path to appear in the attested list with a zero commitment |
 
-An update stores a height the client did not have, and the two proof checks read a height it already holds. The latest height advances if an incoming update is for a higher height. An update for a lower height is still accepted but does not advance the latest height, so updates can arrive out of order. [AttestationLightClient](/ibc-solidity-contracts/attestation-light-client) carries the function signatures and return values.
+An update stores a height the client did not have, and the two proof checks read a height it already holds. The latest height advances if an incoming update is for a higher height. An update for a lower height is still accepted but does not advance the latest height, so updates can arrive out of order. [AttestationLightClient](../5-ibc-solidity-contracts/5-attestation-light-client.md) carries the function signatures and return values.
 
 To attest non-membership, attestors sign the path with a zero commitment, which attests that no commitment for that path was stored as of that height.
 
@@ -112,10 +112,10 @@ If two conflicting timestamps for the same height are presented, the client free
 
 Two timestamps for one height mean the attestor set has contradicted itself. Either the counterparty chain reorged and that height no longer holds the block they signed for, or a quorum signed a timestamp that was never true. The client cannot tell which happened, and it cannot tell which of the two timestamps was honest, so it freezes permanently.
 
-A frozen client refuses updates and proof checks, while its getters and role administration keep working. There is no way to unfreeze an attestation light client, so recovery means deploying a new client with its own attestor set. The router's admin-gated [client migration](/how-ibc-works/clients-and-counterparties) can swap that new client in under the same identifier.
+A frozen client refuses updates and proof checks, while its getters and role administration keep working. There is no way to unfreeze an attestation light client, so recovery means deploying a new client with its own attestor set. The router's admin-gated [client migration](../2-how-ibc-works/4-clients-and-counterparties.md) can swap that new client in under the same identifier.
 
 <Warning>
-Attest only heights that cannot be reorged. A reorg reaches the client as two quorums signing different timestamps for one height, which freezes it permanently. The [finality offset](/light-clients/attestors) is the setting that holds an attestor back: left unset it signs no further than the chain's own finalized block, and a positive value keeps it that many blocks behind the head.
+Attest only heights that cannot be reorged. A reorg reaches the client as two quorums signing different timestamps for one height, which freezes it permanently. The [finality offset](2-attestors.md) is the setting that holds an attestor back: left unset it signs no further than the chain's own finalized block, and a positive value keeps it that many blocks behind the head.
 </Warning>
 
 ## What the attestor set controls
