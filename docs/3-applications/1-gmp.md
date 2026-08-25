@@ -153,3 +153,4 @@ Two things belong to the contract you build:
 - **State**: It is important to implement logic and state for failures and refunds. For example, IFT keeps a pending record of what it burned, and refunds from that record when a call fails or times out.
 
 [Make a cross-chain GMP call](../6-ibc-cli/5-make-a-cross-chain-gmp-call.md) walks both halves of one against a live deployment.
+Visit the [GMP contract reference](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) to learn more about the GMP Solidity implementation.

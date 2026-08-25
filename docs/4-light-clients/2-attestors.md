@@ -115,4 +115,4 @@ A key's reach is wider than one client. The signed bytes name no chain, no verif
 Never reuse an attestor key across clients. A signature produced for one client verifies on every other client whose set holds that address, so one key counts toward both clients' thresholds and weakens both.
 </Warning>
 
-[Run a standalone attestor](../6-ibc-cli/3-run-a-standalone-attestor.md) puts one in a process of its own.
+Follow the [Run a standalone attestor](../6-ibc-cli/3-run-a-standalone-attestor.md) guide to learn how to run one for yourself.

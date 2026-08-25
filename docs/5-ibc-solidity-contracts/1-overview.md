@@ -7,6 +7,8 @@ IBC-solidity is the Solidity implementation of the IBC protocol. It consists of 
 
 The pages in this section document the main contracts and how they work.
 
+Visit the [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) to learn how to deploy this whole contract set.
+
 ## How the contracts fit together
 
 Each chain in a pair holds a core set of IBC contracts. At its center is the core ICS26Router, which owns the application registry, the light client registry, and the commitment store.
@@ -110,4 +112,3 @@ The IBC CLI deploys the contract set. `ibc deploy core` stands up the access man
 - [Zellic, 2025-03-25](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2025-03-25-zellic.pdf)
 - [Sherlock, 2025-04-03](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2025-04-03-sherlock.pdf)
 
-The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys this whole contract set with one command per chain.

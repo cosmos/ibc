@@ -135,3 +135,4 @@ Below the threshold, proof generation fails and the packet stays pending. Timeou
 Disagreement stalls a connection identically. Only byte-identical attestation data aggregates, so a proof exists once one group of attestors reaches the threshold on its own.
 
 The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys one of these clients on each of two chains.
+Visit the [Attestation light client contract page](../5-ibc-solidity-contracts/5-attestation-light-client.md) for more information on the Solidity implementation.

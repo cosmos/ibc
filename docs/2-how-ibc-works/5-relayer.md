@@ -87,4 +87,4 @@ The only thing a relayer can do is withhold: refusing to deliver packets, acknow
 
 A relayer is a courier: it can be slow, and it can be replaced, but it cannot alter what it carries.
 
-[Run a standalone relayer](../6-ibc-cli/4-run-a-standalone-relayer.md) brings one up against a connection that already exists.
+TO learn how to configure and run a relayer, visit the [standalone relayer guide](../6-ibc-cli/4-run-a-standalone-relayer.md).

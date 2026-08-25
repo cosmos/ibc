@@ -134,3 +134,4 @@ flowchart TD
 ```
 
 The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys an IFT and moves it between two chains.
+Visit the [IFT contract reference](../5-ibc-solidity-contracts/4-ift-contracts.md) to learn more about the Solidity implementation.

@@ -48,6 +48,8 @@ The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment
 
 The manager's constructor takes its first admin as an argument. `ibc deploy core` passes the deployer key and leaves it there, and the driver's own comment calls role hardening a follow-up. The rest of the manager's surface is in [OpenZeppelin's reference](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager).
 
+Visit the [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) for a hands-on guide on deploying these contracts with IBC CLI. 
+
 ## Permissions on a light client
 
 A light client sits outside the access manager, so the client's own constructor decides who may submit proofs to it. For the attestation light client that is the fifth constructor argument, `roleManager`. A nonzero address there receives both the client's admin role and its proof-submitter role. Whether that address can grant or revoke them afterwards depends on what it is. `ibc deploy client` passes the [router](2-ics26-router.md), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. Deploy with a zero role manager and the submitter role goes to the zero address instead, which leaves proof submission open to every caller.

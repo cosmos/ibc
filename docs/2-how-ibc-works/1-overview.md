@@ -131,4 +131,4 @@ A packet that never arrives ends the other way. Once its timeout has passed, the
 
 Every chain trusts only what its own client has verified. Neither side trusts the relayer, and neither takes the other's claims directly.
 
-The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) brings up every component described here on two local chains.
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) brings up every component described above and sends tokens between two chains.
