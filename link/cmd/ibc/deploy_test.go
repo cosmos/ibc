@@ -138,6 +138,10 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "link-1-2", conn.ClientB.ClientID)
 	require.Equal(t, "2", conn.ClientB.ChainID)
 	require.Equal(t, "signer-a", conn.ClientA.Signer)
+	require.NotNil(t, conn.ClientA.AutoRelay.Enabled)
+	require.True(t, *conn.ClientA.AutoRelay.Enabled)
+	require.NotNil(t, conn.ClientB.AutoRelay.Enabled)
+	require.True(t, *conn.ClientB.AutoRelay.Enabled)
 	require.Equal(t, "signer-b", conn.ClientB.Signer)
 
 	// second connection between the same chain pair gets a seqno suffix

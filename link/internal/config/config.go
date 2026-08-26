@@ -6,6 +6,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,7 +132,11 @@ func (c ChainConfig) Type() ChainType {
 
 // EVMChainConfig EVM-specific chain details.
 type EVMChainConfig struct {
-	RPC         string `yaml:"rpc"`
+	RPC string `yaml:"rpc"`
+
+	// WS is a websocket endpoint, required for chains sourcing auto-relayed routes.
+	WS string `yaml:"ws,omitempty"`
+
 	ICS26Router string `yaml:"ics26Router"`
 }
 
@@ -220,7 +225,43 @@ func (c Config) Validate() error {
 		return errors.Wrap(err, ".signers")
 	}
 
-	return c.crossValidate()
+	if err := c.crossValidate(); err != nil {
+		return err
+	}
+
+	return c.validateAutoRelay()
+}
+
+// validateAutoRelay ensures every auto-relayed client end can be subscribed to.
+// It lives here rather than on ChainConfig because a chain cannot see the
+// connections that source from it.
+func (c Config) validateAutoRelay() error {
+	for i, conn := range c.Relayer.Connections {
+		for _, side := range []struct {
+			name string
+			end  ClientEnd
+		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}} {
+			end := side.end
+
+			if end.AutoRelay.Enabled == nil || !*end.AutoRelay.Enabled {
+				continue
+			}
+
+			chain, ok := c.Chain(end.ChainID)
+			if !ok {
+				continue
+			}
+
+			if chain.EVM == nil || chain.EVM.WS == "" {
+				return errors.Errorf(
+					".relayer.connections[%d].%s autoRelay requires .chains[%s].evm.ws",
+					i, side.name, end.ChainID,
+				)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (c Config) crossValidate() error {
@@ -384,8 +425,13 @@ func (c ChainConfig) Validate() error {
 		return errors.New(".chainId required")
 	}
 
-	if c.Type() == ChainTypeEVM && c.EVM.RPC == "" {
-		return errors.New(".evm.rpc required")
+	if c.Type() == ChainTypeEVM {
+		switch {
+		case c.EVM.RPC == "":
+			return errors.New(".evm.rpc required")
+		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
+			return errors.Errorf(".evm.ws must be a ws:// or wss:// URL, got %q", c.EVM.WS)
+		}
 	}
 
 	return nil
@@ -412,7 +458,36 @@ func (c Config) store(path string, comments map[string]string) error {
 		return err
 	}
 
-	return os.WriteFile(path, bz, 0o644)
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+		path, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(bz); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp.Name(), path)
 }
 
 // toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
@@ -616,27 +691,39 @@ func KeyFileFallbacks(keyPath string) []string {
 
 // PrintJSON prints anything as JSON to stdout.
 func PrintJSON(v any) error {
+	return printJSON(os.Stdout, v)
+}
+
+func printJSON(out io.Writer, v any) error {
+	if msg, ok := v.(proto.Message); ok {
+		return printProtoJSON(out, msg)
+	}
+
 	bz, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(string(bz))
+	_, err = fmt.Fprintln(out, string(bz))
 
-	return nil
+	return err
 }
 
-// PrintProtoJSON prints a protobuf message as JSON to stdout, rendering enum
-// fields by name
-func PrintProtoJSON(msg proto.Message) error {
-	bz, err := protojson.MarshalOptions{Indent: "  ", UseProtoNames: true, EmitUnpopulated: true}.Marshal(msg)
+func printProtoJSON(out io.Writer, msg proto.Message) error {
+	opts := protojson.MarshalOptions{
+		Indent:          "  ",
+		UseProtoNames:   false,
+		EmitUnpopulated: true,
+	}
+
+	bz, err := opts.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(string(bz))
+	_, err = fmt.Fprintln(out, string(bz))
 
-	return nil
+	return err
 }
 
 // PrintYAML prints anything as YAML to stdout.

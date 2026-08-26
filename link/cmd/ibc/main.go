@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,16 +35,10 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
-	os.Exit(runMain())
-}
-
-func runMain() int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
-		return 1
+		os.Exit(1)
 	}
-	return 0
 }
 
 // single init() for binding all commands to rootCmd
@@ -74,6 +69,8 @@ func init() {
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainID, "chain-id", "", "chain ID")
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainRPC, "rpc", "", "chain RPC URL")
 	cmdConfigAddChain.Flags().
+		StringVar(&flagConfigAddChainWS, "ws", "", "chain websocket URL, required for chains sourcing auto-relayed routes")
+	cmdConfigAddChain.Flags().
 		StringVar(&flagConfigAddChainRouter, "router", "", "ics26Router address (default: left blank, fill in via render-config)")
 	cmdConfigAddChain.Flags().
 		StringVar(&flagConfigAddChainDeployer, "deployer", "", "signer alias used by ibc deploy for this chain")
@@ -85,21 +82,39 @@ func init() {
 	cmdKeys.AddCommand(cmdKeysNew, cmdKeysShow, cmdKeysImport, cmdKeysList)
 	cmdKeysShow.Flags().BoolVarP(&flagKeysShowPrivate, "private", "", false, "show private key")
 	cmdKeysImport.Flags().StringVar(&flagKeysImportPrivateKey, "private-key", "", "hex-encoded private key")
+	_ = cmdKeysImport.MarkFlagRequired("private-key")
 	for _, c := range []*cobra.Command{cmdKeysNew, cmdKeysImport} {
-		c.Flags().
-			BoolVar(&flagKeysPopulateConfig, "populate-config", false, "append the resulting key as a signers entry in the config file")
+		c.Flags().BoolVarP(&flagKeysPopulateConfig, "populate-config", "p", false, "write key reference to the config")
 	}
 
 	// Relayer commands
-	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerStatus)
+	cmdRelayer.AddCommand(cmdRelayerRun, cmdRelayerRelay, cmdRelayerPackets)
 	cmdRelayerRun.Flags().BoolVarP(&flagRelayerNoMigrate, "no-migrate", "", false, "skip database migrations")
-	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerStatus} {
+	for _, c := range []*cobra.Command{cmdRelayerRelay, cmdRelayerPackets} {
 		c.Flags().StringVar(&flagRelayerHost, "host", "", "dial this address instead of resolving from config")
 		c.Flags().StringVar(&flagRelayerTxHash, "tx-hash", "", "source transaction hash")
 		c.Flags().StringVar(&flagRelayerSourceChainID, "chain-id", "", "source chain id")
-		_ = c.MarkFlagRequired("tx-hash")
-		_ = c.MarkFlagRequired("chain-id")
 	}
+
+	_ = cmdRelayerRelay.MarkFlagRequired("tx-hash")
+	_ = cmdRelayerRelay.MarkFlagRequired("chain-id")
+
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsDestChainID, "destination-chain-id", "", "destination chain id")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsSrcClientID, "source-client-id", "", "source client id")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsDestClientID, "destination-client-id", "", "destination client id")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsState, "state", "", "relay state ("+strings.Join(packetStateNames(), ", ")+")")
+	cmdRelayerPackets.Flags().
+		Uint64Var(&flagRelayerPacketsSequence, "sequence", 0, "packet sequence number")
+	cmdRelayerPackets.Flags().
+		Uint32Var(&flagRelayerPacketsLimit, "limit", 0, "maximum packets to return (default 100, max 1000)")
+	cmdRelayerPackets.Flags().
+		StringVar(&flagRelayerPacketsCursor, "cursor", "", "next_cursor from a previous response, to resume paging")
+	cmdRelayerPackets.Flags().
+		BoolVar(&flagRelayerPacketsAll, "all", false, "follow every page and print the combined result")
 
 	// Attestor commands
 	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)

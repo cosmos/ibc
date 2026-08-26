@@ -84,21 +84,15 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 		}
 	}()
 
-	args := append([]string{"relayer", "run"}, r.configArgs()...)
+	args := append([]string{"relayer", "run", "--log-json"}, r.configArgs()...)
 	bin := r.bin
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.Env = processEnv
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	// First stdout line is the readiness JSON; stderr carries human logs and
-	// lands in relayer.log next to the config for post-mortems. A bounded tail
-	// is kept in memory because startup failures (config rejections above all)
-	// only explain themselves on stderr, and the log file dies with TempDir.
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("ibc relayer run: stdout pipe: %w", err)
-	}
+	// Structured stderr logs carry readiness and land in relayer.log for post-mortems.
+	// A bounded tail is kept in memory because the log file dies with TempDir.
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: stderr pipe: %w", err)
@@ -126,12 +120,12 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 
 	readyCh := make(chan readyResult, 1)
 	var drained sync.WaitGroup
-	drained.Add(2)
-	go func() { defer drained.Done(); drainStdout(stdout, readyCh) }()
+	drained.Add(1)
 	go func() {
 		defer drained.Done()
-		_, _ = io.Copy(logs, stderr)
-		logs.close()
+		defer logs.close()
+
+		watchRelayerLogs(stderr, logs, readyCh)
 	}()
 	d.h = reapProcess(cmd, processHooks{BeforeWait: drained.Wait, AfterWait: releaseBinding})
 	releaseBinding = nil
@@ -151,48 +145,70 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 		"http://"+readiness.HTTP,
 		connect.WithGRPC(),
 	)
-	if err := d.probeStatusEndpoint(ctx); err != nil {
+	if err := d.probePacketsEndpoint(ctx); err != nil {
 		return nil, errors.Join(err, d.kill())
 	}
 	return d, nil
 }
 
-func drainStdout(rc io.Reader, readyCh chan<- readyResult) {
-	br := bufio.NewReader(rc)
-	first := true
+func watchRelayerLogs(stderr io.Reader, logsSink io.Writer, readyCh chan<- readyResult) {
+	readinessMatcher := func(line string) bool {
+		result, ok := parseRelayerReadinessLog(line)
+		if ok {
+			readyCh <- result
+		}
+
+		return ok
+	}
+
+	if err := pipeLogs(stderr, logsSink, readinessMatcher); err != nil {
+		readyCh <- readyResult{err: err}
+	}
+}
+
+func pipeLogs(stderr io.Reader, logs io.Writer, readinessMatcher func(line string) bool) error {
+	reader := bufio.NewReader(stderr)
+
+	var matched bool
 	for {
-		line, err := br.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
-			if first {
-				first = false
-				readyCh <- parseReadiness(line)
+			_, _ = io.WriteString(logs, line)
+			if !matched {
+				matched = readinessMatcher(line)
 			}
 		}
 		if err != nil {
-			if first {
-				readyCh <- readyResult{err: fmt.Errorf("no readiness line on stdout: %w", err)}
+			if !matched {
+				return fmt.Errorf("no readiness log on stderr: %w", err)
 			}
-			return
+			return nil
 		}
 	}
 }
 
-func parseReadiness(line string) readyResult {
-	var r relayerv2.ProcessReadiness
-	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &r); err != nil {
-		return readyResult{
-			err: fmt.Errorf("first stdout line is not readiness JSON (%q): %w", strings.TrimSpace(line), err),
-		}
+func parseRelayerReadinessLog(line string) (result readyResult, matched bool) {
+	var entry struct {
+		Readiness relayerv2.ProcessReadiness `json:"readiness"`
 	}
-	if r.Event != relayerv2.ProcessReadinessEvent {
-		return readyResult{
-			err: fmt.Errorf("invalid readiness: event = %q, want %q", r.Event, relayerv2.ProcessReadinessEvent),
-		}
+
+	var (
+		input     = []byte(strings.TrimSpace(line))
+		err       = json.Unmarshal(input, &entry)
+		readiness = entry.Readiness
+	)
+
+	switch {
+	case err != nil || readiness.Event == "":
+		return readyResult{}, false
+	case readiness.Event != relayerv2.ProcessReadinessEvent:
+		err := fmt.Errorf("invalid readiness: event = %q, want %q", readiness.Event, relayerv2.ProcessReadinessEvent)
+		return readyResult{err: err}, true
+	case readiness.HTTP == "":
+		return readyResult{err: errors.New("invalid readiness: http is empty")}, true
+	default:
+		return readyResult{readiness: readiness}, true
 	}
-	if r.HTTP == "" {
-		return readyResult{err: errors.New("invalid readiness: http is empty")}
-	}
-	return readyResult{readiness: r}
 }
 
 func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayerv2.ProcessReadiness, error) {
@@ -263,7 +279,7 @@ func (d *Relayer) relay(ctx context.Context, sourceChainID string, request *rela
 }
 
 // PacketStatuses returns the relayer's per-packet status for one source
-// transaction. IsStatusNotFound distinguishes "never submitted" errors.
+// transaction.
 func (d *Relayer) PacketStatuses(
 	ctx context.Context,
 	sourceChainID string,
@@ -271,22 +287,34 @@ func (d *Relayer) PacketStatuses(
 ) ([]*relayerv2.PacketStatus, error) {
 	chainID, err := d.wireChainID(sourceChainID)
 	if err != nil {
-		return nil, fmt.Errorf("ibc status: %w", err)
+		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	response, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
-		SourceChainId: chainID,
-		TxHash:        sourceTxHash,
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("ibc status: %w", err)
+	request := &relayerv2.PacketsRequest{
+		Filter: &relayerv2.PacketFilter{
+			SourceChainId: &chainID,
+			SourceTxHash:  &sourceTxHash,
+		},
 	}
-	return response.Msg.PacketStatuses, nil
-}
 
-// IsStatusNotFound reports whether the error says the source transaction was
-// never submitted to the relayer.
-func IsStatusNotFound(err error) bool {
-	return connect.CodeOf(err) == connect.CodeNotFound
+	// A transaction can emit more packets than one page holds. Stopping at the
+	// first page would report the rest as absent, which callers read as "not
+	// indexed yet" and poll on until their budget expires.
+	var statuses []*relayerv2.PacketStatus
+
+	for {
+		response, err := d.client.Packets(ctx, connect.NewRequest(request))
+		if err != nil {
+			return nil, fmt.Errorf("ibc packets: %w", err)
+		}
+
+		statuses = append(statuses, response.Msg.GetPackets()...)
+
+		if !response.Msg.GetHasMore() {
+			return statuses, nil
+		}
+
+		request.Cursor = response.Msg.GetNextCursor()
+	}
 }
 
 func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
@@ -297,19 +325,26 @@ func (d *Relayer) wireChainID(harnessChainID string) (string, error) {
 	return chainID, nil
 }
 
-// probeStatusEndpoint pins the RPC wire contract at startup (not a liveness
-// wait): an unknown transaction must report CodeNotFound. Drivers without a
-// chain mapping have nothing to probe.
-func (d *Relayer) probeStatusEndpoint(ctx context.Context) error {
+// probePacketsEndpoint pins the RPC wire contract at startup (not a liveness
+// wait): an unknown transaction must succeed and return nothing. Drivers
+// without a chain mapping have nothing to probe.
+func (d *Relayer) probePacketsEndpoint(ctx context.Context) error {
+	probeTxHash := zeroTxHash
+
 	for _, chainID := range d.chainIDs {
-		_, err := d.client.Status(ctx, connect.NewRequest(&relayerv2.StatusRequest{
-			SourceChainId: chainID,
-			TxHash:        zeroTxHash,
+		response, err := d.client.Packets(ctx, connect.NewRequest(&relayerv2.PacketsRequest{
+			Filter: &relayerv2.PacketFilter{
+				SourceChainId: &chainID,
+				SourceTxHash:  &probeTxHash,
+			},
 		}))
-		if err == nil || IsStatusNotFound(err) {
-			return nil
+		if err != nil {
+			return fmt.Errorf("ibc relayer run: packets probe: %w", err)
 		}
-		return fmt.Errorf("ibc relayer run: status probe: %w", err)
+		if len(response.Msg.GetPackets()) != 0 {
+			return fmt.Errorf("ibc relayer run: packets probe: unknown transaction returned packets")
+		}
+		return nil
 	}
 	return nil
 }

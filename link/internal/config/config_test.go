@@ -3,12 +3,15 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
 func TestConfig(t *testing.T) {
@@ -311,6 +314,26 @@ attestors:
 			})
 		}
 	})
+}
+
+func TestStoreToFilePreservesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.yml")
+	path := filepath.Join(dir, "ibc.yml")
+	require.NoError(t, os.WriteFile(target, nil, 0o600))
+	require.NoError(t, os.Symlink(filepath.Base(target), path))
+
+	cfg := DefaultConfig()
+	cfg.Server.ListenAddress = "127.0.0.1:9090"
+	require.NoError(t, cfg.StoreToFile(path))
+
+	info, err := os.Lstat(path)
+	require.NoError(t, err)
+	require.NotZero(t, info.Mode()&os.ModeSymlink)
+
+	stored, err := LoadFromFile(target, false, false)
+	require.NoError(t, err)
+	require.Equal(t, cfg.Server.ListenAddress, stored.Server.ListenAddress)
 }
 
 func TestAttestorsValidate(t *testing.T) {
@@ -665,4 +688,13 @@ func TestCollectComments(t *testing.T) {
 		}},
 		Attestors: Attestors{{ChainID: "1", Name: "a", Type: AttestorTypeLocal, Signer: "watcher"}},
 	}))
+}
+
+func TestPrintJSON(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, printJSON(&out, &relayer.RelayRequest{
+		TxHash:        "0xabc",
+		SourceChainId: "chain-1",
+	}))
+	require.JSONEq(t, `{"txHash":"0xabc","sourceChainId":"chain-1"}`, out.String())
 }

@@ -11,9 +11,8 @@ service RelayerApiService {
   // transactions required to complete them.
   rpc Relay(RelayRequest) returns (RelayResponse) {}
 
-  // Status returns per-packet relay status for a transaction previously
-  // submitted via Relay.
-  rpc Status(StatusRequest) returns (StatusResponse) {}
+  // Packets lists the packets this relayer is aware of, most recent first.
+  rpc Packets(PacketsRequest) returns (PacketsResponse) {}
 }
 
 message RelayRequest {
@@ -44,15 +43,54 @@ message PacketSelector {
   uint64 sequence_number = 2;
 }
 
-message RelayResponse {}
-
-message StatusRequest {
-  string tx_hash = 1;
-  string source_chain_id = 2;
+message RelayResponse {
+  // Every send packet in the transaction, including those this relayer will
+  // not deliver.
+  repeated ObservedPacket packets = 1;
 }
 
-message StatusResponse {
-  repeated PacketStatus packet_statuses = 1;
+message ObservedPacket {
+  string source_client_id = 1;
+  uint64 sequence_number = 2;
+  PacketSelection selection = 3;
+}
+
+enum PacketSelection {
+  PACKET_SELECTION_UNSPECIFIED = 0;
+  // Recorded for delivery by this relayer. Delivery happens afterwards and
+  // can still fail; query the packet's state to follow it.
+  PACKET_SELECTION_SELECTED = 1;
+  // Configured and routed, but this request did not select it.
+  PACKET_SELECTION_NOT_SELECTED = 2;
+  // No configured client or route, so this relayer skips it.
+  PACKET_SELECTION_UNCONFIGURED = 3;
+}
+
+message PacketsRequest {
+  PacketFilter filter = 1;
+  // Zero applies the default of 100; values above 1000 are capped.
+  uint32 limit = 2;
+  // Opaque next_cursor from a previous response. Empty starts at the newest
+  // packet.
+  string cursor = 3;
+}
+
+message PacketFilter {
+  optional string source_chain_id = 1;
+  optional string destination_chain_id = 2;
+  optional string source_client_id = 3;
+  optional string destination_client_id = 4;
+  optional PacketState state = 5;
+  optional string source_tx_hash = 6;
+  optional uint64 sequence_number = 7;
+}
+
+message PacketsResponse {
+  repeated PacketStatus packets = 1;
+  // More packets match beyond this page.
+  bool has_more = 2;
+  // Cursor for the next page, set only when has_more.
+  string next_cursor = 3;
 }
 
 enum PacketState {

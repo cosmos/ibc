@@ -3,14 +3,18 @@
 package ibclink
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"connectrpc.com/connect"
@@ -19,27 +23,67 @@ import (
 	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
 )
 
-func TestParseReadiness(t *testing.T) {
-	valid := `{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}` + "\n"
-	res := parseReadiness(valid)
+func TestParseReadinessLog(t *testing.T) {
+	valid := `{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:4242"}}` + "\n"
+	res, ok := parseRelayerReadinessLog(valid)
+	require.True(t, ok)
 	require.NoError(t, res.err)
 	require.Equal(t, "127.0.0.1:4242", res.readiness.HTTP)
 	require.Equal(t, []string{"chain-a"}, res.readiness.ChainsConnected)
 
-	res = parseReadiness("plain log line, not json\n")
-	require.Error(t, res.err)
-	require.ErrorContains(t, res.err, "not readiness JSON")
+	_, ok = parseRelayerReadinessLog(`{"level":"INFO","msg":"Starting relayer"}`)
+	require.False(t, ok)
 
-	wrongEvent := `{"event":"started","http":"127.0.0.1:4242"}`
-	res = parseReadiness(wrongEvent)
+	wrongEvent := `{"msg":"Readiness","readiness":{"event":"started","http":"127.0.0.1:4242"}}`
+	res, ok = parseRelayerReadinessLog(wrongEvent)
+	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "invalid readiness")
 
-	notReady := `{"event":"ready"}`
-	res = parseReadiness(notReady)
+	notReady := `{"msg":"Readiness","readiness":{"event":"ready"}}`
+	res, ok = parseRelayerReadinessLog(notReady)
+	require.True(t, ok)
 	require.Error(t, res.err)
 	require.ErrorContains(t, res.err, "http")
 }
+
+func TestPipeLogs(t *testing.T) {
+	const input = "starting\nready\nafter readiness"
+	var logs bytes.Buffer
+	var observed []string
+
+	err := pipeLogs(strings.NewReader(input), &logs, func(line string) bool {
+		observed = append(observed, line)
+		return line == "ready\n"
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, input, logs.String())
+	require.Equal(t, []string{"starting\n", "ready\n"}, observed)
+}
+
+func TestPipeLogsRequiresReadiness(t *testing.T) {
+	const input = "starting\nstopped"
+	var logs bytes.Buffer
+
+	err := pipeLogs(strings.NewReader(input), &logs, func(string) bool { return false })
+
+	require.ErrorContains(t, err, "no readiness log on stderr")
+	require.Equal(t, input, logs.String())
+}
+
+func TestPipeLogsDrainsAfterLogWriteFailure(t *testing.T) {
+	stderr := iotest.OneByteReader(strings.NewReader("ready\n"))
+	logs := errorWriter{err: errors.New("write failed")}
+
+	err := pipeLogs(stderr, logs, func(line string) bool { return line == "ready\n" })
+
+	require.NoError(t, err)
+}
+
+type errorWriter struct{ err error }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
 
 // fakeRelayerAPI serves the relayer wire contract: Status on an unknown
 // transaction reports CodeNotFound; Relay records the submitted arguments.
@@ -47,6 +91,9 @@ type fakeRelayerAPI struct {
 	relayerv2.UnimplementedRelayerApiServiceHandler
 	relayed  []*relayerv2.RelayRequest
 	statuses map[string][]*relayerv2.PacketStatus
+	// pageSize serves results a page at a time; zero returns them all at once.
+	pageSize     int
+	pageRequests int
 }
 
 func (f *fakeRelayerAPI) Relay(
@@ -57,15 +104,43 @@ func (f *fakeRelayerAPI) Relay(
 	return connect.NewResponse(&relayerv2.RelayResponse{}), nil
 }
 
-func (f *fakeRelayerAPI) Status(
+func (f *fakeRelayerAPI) Packets(
 	_ context.Context,
-	req *connect.Request[relayerv2.StatusRequest],
-) (*connect.Response[relayerv2.StatusResponse], error) {
-	statuses, ok := f.statuses[req.Msg.SourceChainId+"/"+req.Msg.TxHash]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("transaction not submitted to relayer"))
+	req *connect.Request[relayerv2.PacketsRequest],
+) (*connect.Response[relayerv2.PacketsResponse], error) {
+	filter := req.Msg.GetFilter()
+	// An unknown transaction lists nothing
+	packets := f.statuses[filter.GetSourceChainId()+"/"+filter.GetSourceTxHash()]
+
+	f.pageRequests++
+
+	if f.pageSize <= 0 {
+		return connect.NewResponse(&relayerv2.PacketsResponse{Packets: packets}), nil
 	}
-	return connect.NewResponse(&relayerv2.StatusResponse{PacketStatuses: statuses}), nil
+
+	start := 0
+
+	if cursor := req.Msg.GetCursor(); cursor != "" {
+		parsed, err := strconv.Atoi(cursor)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+
+		start = parsed
+	}
+
+	end := start + f.pageSize
+	if end > len(packets) {
+		end = len(packets)
+	}
+
+	response := &relayerv2.PacketsResponse{Packets: packets[start:end]}
+	if end < len(packets) {
+		response.HasMore = true
+		response.NextCursor = strconv.Itoa(end)
+	}
+
+	return connect.NewResponse(response), nil
 }
 
 func testRelayer(t *testing.T, api *fakeRelayerAPI) *Relayer {
@@ -104,13 +179,13 @@ func TestStartRelayerSurfacesStartupLogs(t *testing.T) {
 	require.NoError(t, err)
 	_, err = driver.StartRelayer(t.Context())
 	require.Error(t, err)
-	require.ErrorContains(t, err, "no readiness line")
+	require.ErrorContains(t, err, "no readiness log")
 	require.ErrorContains(t, err, ".signers[0].grpc required for remote signer")
 }
 
-func TestRelayerProbeAcceptsNotFoundStatus(t *testing.T) {
+func TestRelayerProbeAcceptsEmptyPacketListing(t *testing.T) {
 	relayer := testRelayer(t, &fakeRelayerAPI{})
-	require.NoError(t, relayer.probeStatusEndpoint(context.Background()))
+	require.NoError(t, relayer.probePacketsEndpoint(context.Background()))
 }
 
 func TestRelayerTranslatesChainIDs(t *testing.T) {
@@ -125,13 +200,13 @@ func TestRelayerTranslatesChainIDs(t *testing.T) {
 	require.Len(t, statuses, 1)
 	require.Equal(t, uint64(7), statuses[0].SequenceNumber)
 
-	_, err = relayer.PacketStatuses(ctx, "chain-a", "0xother")
-	require.Error(t, err)
-	require.True(t, IsStatusNotFound(err))
+	// An unindexed transaction lists nothing; it is not an error.
+	unknown, err := relayer.PacketStatuses(ctx, "chain-a", "0xother")
+	require.NoError(t, err)
+	require.Empty(t, unknown)
 
 	_, err = relayer.PacketStatuses(ctx, "chain-c", "0xabc")
 	require.Error(t, err)
-	require.False(t, IsStatusNotFound(err))
 	require.ErrorContains(t, err, "no configured chain id")
 
 	require.NoError(t, relayer.RelayAll(ctx, "chain-b", "0xdef"))
@@ -169,8 +244,11 @@ func TestWaitPoliciesSurviveDriverAndRelayerStartup(t *testing.T) {
 
 	script := filepath.Join(t.TempDir(), "ibc-ready")
 	require.NoError(t, os.WriteFile(script, []byte(fmt.Sprintf(
-		"#!/bin/sh\nprintf '%%s\\n' '%s'\nexec sleep 60\n",
-		fmt.Sprintf(`{"event":"ready","http":%q}`, strings.TrimPrefix(server.URL, "http://")),
+		"#!/bin/sh\nprintf '%%s\\n' '%s' >&2\nexec sleep 60\n",
+		fmt.Sprintf(
+			`{"level":"INFO","msg":"Readiness","readiness":{"event":"ready","http":%q}}`,
+			strings.TrimPrefix(server.URL, "http://"),
+		),
 	)), 0o700))
 	t.Setenv(binEnv, script)
 
@@ -200,4 +278,32 @@ func TestConfigureRelayerRejectsInvalidWaitPolicy(t *testing.T) {
 		WaitPolicies: map[string]WaitPolicy{"route-a": {}},
 	})
 	require.ErrorContains(t, err, `route "route-a" has invalid wait policy`)
+}
+
+// A transaction can emit more packets than one page holds; stopping at the
+// first page reports the rest as absent, which callers poll on until their
+// budget expires.
+func TestPacketStatusesFollowsEveryPage(t *testing.T) {
+	packets := make([]*relayerv2.PacketStatus, 0, 5)
+	for i := 1; i <= 5; i++ {
+		packets = append(packets, &relayerv2.PacketStatus{SequenceNumber: uint64(i)})
+	}
+
+	api := &fakeRelayerAPI{
+		statuses: map[string][]*relayerv2.PacketStatus{"31337/0xabc": packets},
+		pageSize: 2,
+	}
+	relayer := testRelayer(t, api)
+
+	got, err := relayer.PacketStatuses(context.Background(), "chain-a", "0xabc")
+	require.NoError(t, err)
+	require.Len(t, got, 5, "every page must be collected")
+
+	sequences := make([]uint64, len(got))
+	for i, packet := range got {
+		sequences[i] = packet.GetSequenceNumber()
+	}
+
+	require.Equal(t, []uint64{1, 2, 3, 4, 5}, sequences)
+	require.Equal(t, 3, api.pageRequests, "5 packets at 2 per page needs 3 requests")
 }

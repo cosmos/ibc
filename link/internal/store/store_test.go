@@ -18,6 +18,9 @@ const (
 	chainIDEth  = "1"
 	chainIDBase = "8453"
 	txHashEth   = "0xdeadbeef"
+	// txHashAtomic is written by the transact subtest and read back after a
+	// reopen, so it lives beside the other fixtures.
+	txHashAtomic = "0xa70m1c"
 )
 
 func TestStore(t *testing.T) {
@@ -41,6 +44,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testListPackets(t, db)
 
 		// Close DB for a subsequent test
 		require.NoError(t, db.Close())
@@ -57,14 +61,14 @@ func TestStore(t *testing.T) {
 			ensureMigrated(t, db)
 
 			// ACT
-			// Get the previously inserted relay request
-			entry, err := db.GetRelayRequest(ctx, chainIDEth, txHashEth)
+			// Read back packets committed before the file was closed
+			packets, err := db.ListPacketsBySourceTx(ctx, chainIDEth, txHashAtomic)
 
 			// ASSERT
 			require.NoError(t, err)
-			assert.Equal(t, chainIDEth, entry.ChainID)
-			assert.Equal(t, txHashEth, entry.TxHash)
-			assert.NotZero(t, entry.ID)
+			require.Len(t, packets, 2)
+			assert.Equal(t, chainIDEth, packets[0].SourceChainID)
+			assert.NotZero(t, packets[0].ID)
 		})
 	})
 
@@ -79,6 +83,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testListPackets(t, db)
 	})
 
 	t.Run("postgres", func(t *testing.T) {
@@ -104,6 +109,7 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
+		testListPackets(t, db)
 	})
 }
 
@@ -138,35 +144,7 @@ func ensureMigrated(t *testing.T, m Migrator) {
 func testRepoReadWrite(t *testing.T, s Store) {
 	ctx := context.Background()
 
-	t.Run("relayRequests", func(t *testing.T) {
-		// Get a non-existent relay request
-		_, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)
-		require.ErrorIs(t, err, ErrNotFound)
-
-		// Insert a relay request
-		err = s.CreateRelayRequest(ctx, chainIDEth, txHashEth)
-		require.NoError(t, err)
-
-		// Get the inserted relay request
-		request, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)
-		require.NoError(t, err)
-		assert.Equal(t, chainIDEth, request.ChainID)
-		assert.Equal(t, txHashEth, request.TxHash)
-		assert.Equal(t, int64(1), request.ID)
-		assert.NotEmpty(t, request.CreatedAt)
-
-		// Create the same relay request again (noop)
-		err = s.CreateRelayRequest(ctx, chainIDEth, txHashEth)
-		require.NoError(t, err)
-
-		requestAgain, err := s.GetRelayRequest(ctx, chainIDEth, txHashEth)
-		require.NoError(t, err)
-		assert.Equal(t, request.CreatedAt, requestAgain.CreatedAt)
-	})
-
 	t.Run("transact", func(t *testing.T) {
-		const txHashAtomic = "0xa70m1c"
-
 		packet := UpsertPacket{
 			Status:                    RelayStatusPending,
 			SourceChainID:             chainIDEth,
@@ -179,12 +157,16 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			PacketTimeoutTimestamp:    time.Date(2026, 7, 8, 13, 0, 0, 0, time.UTC),
 		}
 
+		// Two writes, so a rollback has to undo more than the last one.
+		second := packet
+		second.PacketSequenceNumber = 8
+
 		// A failing fn rolls back every write
 		err := s.Transact(ctx, func(repo Repository) error {
-			if err := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); err != nil {
+			if err := repo.UpsertPacket(ctx, packet); err != nil {
 				return err
 			}
-			if err := repo.UpsertPacket(ctx, packet); err != nil {
+			if err := repo.UpsertPacket(ctx, second); err != nil {
 				return err
 			}
 
@@ -192,29 +174,23 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		})
 		require.ErrorIs(t, err, assert.AnError)
 
-		_, err = s.GetRelayRequest(ctx, chainIDEth, txHashAtomic)
-		require.ErrorIs(t, err, ErrNotFound)
-
 		packets, err := s.ListPacketsBySourceTx(ctx, chainIDEth, txHashAtomic)
 		require.NoError(t, err)
 		assert.Empty(t, packets)
 
 		// A successful fn commits every write
 		err = s.Transact(ctx, func(repo Repository) error {
-			if createErr := repo.CreateRelayRequest(ctx, chainIDEth, txHashAtomic); createErr != nil {
-				return createErr
+			if upsertErr := repo.UpsertPacket(ctx, packet); upsertErr != nil {
+				return upsertErr
 			}
 
-			return repo.UpsertPacket(ctx, packet)
+			return repo.UpsertPacket(ctx, second)
 		})
-		require.NoError(t, err)
-
-		_, err = s.GetRelayRequest(ctx, chainIDEth, txHashAtomic)
 		require.NoError(t, err)
 
 		packets, err = s.ListPacketsBySourceTx(ctx, chainIDEth, txHashAtomic)
 		require.NoError(t, err)
-		require.Len(t, packets, 1)
+		require.Len(t, packets, 2)
 		assert.Equal(t, uint64(7), packets[0].PacketSequenceNumber)
 	})
 

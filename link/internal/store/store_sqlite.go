@@ -144,36 +144,6 @@ func (db *SqliteDB) Transact(ctx context.Context, call func(repo Repository) err
 	return nil
 }
 
-func (db *SqliteDB) GetRelayRequest(ctx context.Context, chainID string, txHash string) (*RelayRequest, error) {
-	db.logger.Debug("GetRelayRequest", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return nil, errors.New("chainID and txHash are required")
-	}
-
-	entry, err := db.repo.GetRelayRequest(ctx, chainID, txHash)
-	if err != nil {
-		return nil, errNormalize(err)
-	}
-
-	return &RelayRequest{
-		ID:        entry.ID,
-		ChainID:   entry.SourceChainID,
-		TxHash:    entry.SourceTxHash,
-		CreatedAt: entry.CreatedAt.UTC(),
-	}, nil
-}
-
-func (db *SqliteDB) CreateRelayRequest(ctx context.Context, chainID string, txHash string) error {
-	db.logger.Debug("CreateRelayRequest", "chainID", chainID, "txHash", txHash)
-
-	if chainID == "" || txHash == "" {
-		return errors.New("chainID and txHash are required")
-	}
-
-	return db.repo.CreateRelayRequest(ctx, chainID, txHash)
-}
-
 func (db *SqliteDB) UpsertPacket(ctx context.Context, input UpsertPacket) error {
 	db.logger.Debug(
 		"UpsertPacket",
@@ -447,4 +417,38 @@ func (db *SqliteDB) ClearPacketTimeoutTx(ctx context.Context, key PacketKey) err
 		PacketSourceClientID: key.SourceClientID,
 		PacketSequenceNumber: int64(key.Sequence),
 	})
+}
+
+func (db *SqliteDB) ListPackets(
+	ctx context.Context,
+	filter PacketFilter,
+	page Page,
+) ([]Packet, error) {
+	db.logger.Debug("ListPackets", "statuses", len(filter.Statuses), "limit", page.Limit)
+
+	if err := page.validate(); err != nil {
+		return nil, err
+	}
+
+	rows, err := db.repo.ListPackets(ctx, reposqlite.ListPacketsParams{
+		Statuses:            filter.statusList(),
+		SourceChainID:       filter.SourceChainID,
+		DestinationChainID:  filter.DestinationChainID,
+		SourceClientID:      filter.SourceClientID,
+		DestinationClientID: filter.DestinationClientID,
+		SourceTxHash:        filter.SourceTxHash,
+		SequenceNumber:      filter.sequenceFilter(),
+		Before:              page.before(),
+		RowLimit:            page.Limit,
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	packets := make([]Packet, len(rows))
+	for i, row := range rows {
+		packets[i] = packetFromSqlite(row)
+	}
+
+	return packets, nil
 }

@@ -56,6 +56,7 @@ var (
 var (
 	flagConfigAddChainID       string
 	flagConfigAddChainRPC      string
+	flagConfigAddChainWS       string
 	flagConfigAddChainRouter   string
 	flagConfigAddChainDeployer string
 )
@@ -73,8 +74,12 @@ func configAddChain(_ *cobra.Command, _ []string) error {
 	}
 
 	cfg.Chains = append(cfg.Chains, config.ChainConfig{
-		ChainID:  flagConfigAddChainID,
-		EVM:      &config.EVMChainConfig{RPC: flagConfigAddChainRPC, ICS26Router: flagConfigAddChainRouter},
+		ChainID: flagConfigAddChainID,
+		EVM: &config.EVMChainConfig{
+			RPC:         flagConfigAddChainRPC,
+			WS:          flagConfigAddChainWS,
+			ICS26Router: flagConfigAddChainRouter,
+		},
 		Deployer: flagConfigAddChainDeployer,
 	})
 
@@ -164,7 +169,6 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, err
 	}
 
-	// allow db override
 	if globalFlags.DB != "" {
 		cfg.DB, err = config.DBConfigFromURL(globalFlags.DB)
 		if err != nil {

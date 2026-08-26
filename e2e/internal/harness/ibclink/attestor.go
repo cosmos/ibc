@@ -4,7 +4,6 @@
 package ibclink
 
 import (
-	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -123,27 +122,27 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	cmd := exec.Command(
 		binaryPath,
 		"attestor", "run",
+		"--log-json",
 		"--home", paths.dir,
 		"--config", configFilename,
 	)
 	cmd.Dir = paths.dir
-	cmd.Stderr = out
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	stdout, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		out.close()
-		return nil, fmt.Errorf("start IBC Link attestor: capture stdout: %w", err)
+		return nil, fmt.Errorf("start IBC Link attestor: capture stderr: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		_ = stdout.Close()
+		_ = stderr.Close()
 		out.close()
 		return nil, fmt.Errorf("start IBC Link attestor binary %q: %w", binaryPath, err)
 	}
 	readiness := make(chan readinessResult, 1)
-	stdoutDone := make(chan struct{})
+	stderrDone := make(chan struct{})
 	go func() {
-		defer close(stdoutDone)
-		observeReadiness(stdout, out, readiness)
+		defer close(stderrDone)
+		watchAttestorLogs(stderr, out, readiness)
 	}()
 
 	p := &AttestorProcess{
@@ -153,7 +152,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 		readiness:     readiness,
 	}
 	p.handle = reapProcess(cmd, processHooks{
-		BeforeWait: func() { <-stdoutDone },
+		BeforeWait: func() { <-stderrDone },
 		AfterWait:  out.close,
 	})
 
@@ -237,9 +236,8 @@ func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
 	select {
 	case result := <-p.readiness:
 		if result.err != nil {
-			// The child's stderr reaches the log only once cmd.Wait drains the
-			// exec pipe; wait for the reaper so the tail shows why a dying
-			// child failed. Bounded because stdout EOF does not prove exit.
+			// Wait briefly for the reaper so the tail includes the complete
+			// stderr from a dying child.
 			select {
 			case <-p.handle.doneCh():
 			case <-ctx.Done():
@@ -475,29 +473,45 @@ func (w *logWriter) Write(data []byte) (int, error) {
 	return w.file.Write(data)
 }
 
-func observeReadiness(stdout io.Reader, logs io.Writer, ready chan<- readinessResult) {
-	reader := bufio.NewReaderSize(stdout, startupLogTailBytes)
-	line, tooLong, err := reader.ReadLine()
-	_, _ = logs.Write(line)
-	if !tooLong {
-		_, _ = logs.Write([]byte{'\n'})
-	}
-	switch {
-	case err != nil:
-		ready <- readinessResult{err: fmt.Errorf("read readiness line: %w", err)}
-	case tooLong:
-		ready <- readinessResult{err: fmt.Errorf("readiness line exceeds %d bytes", startupLogTailBytes)}
-	default:
-		var readiness attestorv2.ProcessReadiness
-		if err := json.Unmarshal(line, &readiness); err != nil {
-			ready <- readinessResult{err: fmt.Errorf("decode readiness: %w", err)}
-		} else if readiness.Event != attestorv2.ProcessReadinessEvent {
-			ready <- readinessResult{err: fmt.Errorf("unexpected readiness event %q", readiness.Event)}
-		} else {
-			ready <- readinessResult{address: readiness.HTTP}
+func watchAttestorLogs(stderr io.Reader, logsSink io.Writer, ready chan<- readinessResult) {
+	readinessMatcher := func(line string) bool {
+		result, ok := parseAttestorReadinessLog(line)
+		if ok {
+			ready <- result
 		}
+		return ok
 	}
-	_, _ = io.Copy(logs, reader)
+	if err := pipeLogs(stderr, logsSink, readinessMatcher); err != nil {
+		ready <- readinessResult{err: err}
+	}
+}
+
+func parseAttestorReadinessLog(line string) (result readinessResult, matched bool) {
+	var entry struct {
+		Readiness attestorv2.ProcessReadiness `json:"readiness"`
+	}
+
+	var (
+		input     = []byte(strings.TrimSpace(line))
+		err       = json.Unmarshal(input, &entry)
+		readiness = entry.Readiness
+	)
+
+	switch {
+	case err != nil || readiness.Event == "":
+		return readinessResult{}, false
+	case readiness.Event != attestorv2.ProcessReadinessEvent:
+		err := fmt.Errorf(
+			"invalid readiness: event = %q, want %q",
+			readiness.Event,
+			attestorv2.ProcessReadinessEvent,
+		)
+		return readinessResult{err: err}, true
+	case readiness.HTTP == "":
+		return readinessResult{err: errors.New("invalid readiness: http is empty")}, true
+	default:
+		return readinessResult{address: readiness.HTTP}, true
+	}
 }
 
 func (w *logWriter) appendTail(data []byte) {
@@ -550,6 +564,7 @@ type chainConfig struct {
 
 type evmChainConfig struct {
 	RPC         string `yaml:"rpc"`
+	WS          string `yaml:"ws,omitempty"`
 	ICS26Router string `yaml:"ics26Router"`
 }
 
