@@ -3,8 +3,6 @@ title: "CLI commands"
 description: "IBC CLI command reference"
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 The IBC CLI contains commands for configuring, deploying, running, and monitoring IBC deployments, relayers, and attestors.
 
 Commands are grouped here the way the binary groups them, so any of them prints its own flags with `--help`. The sections run in the order a reader meets them: `config` and `keys`, then `deploy`, then `relayer` and `attestor`, then `tx` and `query`, then `migrate`.

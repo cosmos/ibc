@@ -3,8 +3,6 @@ title: The attestation light client
 description: The attestation light client accepts a claim about the counterparty chain once a quorum of a fixed attestor set has signed it.
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 The attestation light client is a light client that trusts a fixed set of off-chain signers, called attestors. It accepts a claim about the counterparty chain once a threshold of them has signed that claim.
 
 Unlike a light client that directly verifies the counterparty chain's consensus, this one checks signatures from a known attestor set. It holds no view of that chain of its own, and instead accepts a claim carrying enough signatures from that set. Trust in a connection using this client rests on the attestor keys.

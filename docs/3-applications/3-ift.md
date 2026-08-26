@@ -3,8 +3,6 @@ title: "IFT: how it works"
 description: "A fungible token that moves between chains by burning it on one and minting it on the other, controlled by its issuer on every chain."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 An Interchain Fungible Token (IFT) is a fungible token that moves between chains by burning it on one and minting it on the other. An issuer deploys an IFT contract on every chain where they want the asset to exist. Each deployment is an ERC20 token in IBC-Solidity. Unlike an escrow bridge, which locks the asset on one chain and issues a wrapped claim on another, an IFT burns on the source and mints the issuer's own token on arrival to the destination. Nothing has to be redeemed, and no wrapper has to be unwound. A holder on any of those chains holds the issuer's real asset, and it is the same asset however many chains it has crossed.
 
 IFT deployments have to be linked before tokens can move between them. Each side's authority registers the other as a bridge. A deployment mints for an arriving transfer only when it has registered that counterparty IFT contract. Registering is a privileged call, reserved to the authority, but sending is open to any holder. IFT is built on top of GMP, so the cross-chain leg travels as a [General Message Passing (GMP)](1-gmp.md) call from one deployment to the other: the source deployment burns the amount, and the counterparty deployment mints it to the receiver. A failed transfer refunds the sender, so a completed transfer leaves the total across the two chains unchanged. While a packet is in flight the amount is already burned and not yet minted, so the combined supply is temporarily lower.

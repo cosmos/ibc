@@ -3,8 +3,6 @@ title: "Run a standalone attestor"
 description: "Run an attestor in its own process, separate from any relayer, so a relayer can query it and count its signatures toward a light client's quorum."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 This guide runs an attestor as its own process, serving one chain. A relayer can then query it and count its signatures toward a light client's quorum.
 
 In order to run a standalone attestor, your signing address must already be in the light client's attestation set, which is fixed when the client is deployed and read from the chain.

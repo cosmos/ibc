@@ -3,8 +3,6 @@ title: "Attestors"
 description: "An attestor is a stateless off-chain service that signs statements about one chain's state, and an attestation light client trusts exactly the keys that sign."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 An attestor is an off-chain service that answers questions about one chain's state with a signature. The [attestation light client](1-attestation-light-client.md) accepts a claim only when enough of its attestors have signed it, which makes a connection's security exactly the keys that sign.
 
 This page covers what an attestor reads and signs, the finality offset that bounds its answers, how a set of attestors binds to a client, and the keys an attestor signs with.

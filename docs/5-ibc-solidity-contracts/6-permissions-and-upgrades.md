@@ -3,8 +3,6 @@ title: "Permissions and upgrades"
 description: "Which roles gate the IBC-solidity contracts, who holds them on a deployment, which contracts sit behind proxies, and which inputs are fixed at construction."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 On a deployment of the [IBC-solidity contracts](1-overview.md), who may call the gated functions and who may replace the code depends on the contract.
 
 - **The [router](2-ics26-router.md) and [ICS27GMP](3-ics27-gmp-and-accounts.md)** share a single OpenZeppelin access manager, which holds the roles and decides which addresses may call the functions those roles gate. Its admin may also replace the code behind them.

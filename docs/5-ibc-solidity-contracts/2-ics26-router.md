@@ -3,8 +3,6 @@ title: "ICS26Router"
 description: "Reference for the packet router: its entry points, registries, commitment store, events, errors, and role gates"
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 The `ICS26Router` contract is the core router of IBC-solidity. Every packet in either direction passes through it. It validates each call and records the outcome in its own store. It works with light clients to verify proofs, and it forwards payloads to applications.
 
 Source: [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol). The protocol model behind this surface is on [Core: router and store](../2-how-ibc-works/3-core-router-and-store.md) and [Packet lifecycle](../2-how-ibc-works/6-packet-lifecycle.md).

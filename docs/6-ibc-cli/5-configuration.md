@@ -3,8 +3,6 @@ title: "Configuration"
 description: "Configure chains, connections, attestors, signers, and storage in ibc.yml."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 The IBC CLI reads its configuration from `ibc.yml`. The file tells the CLI:
 
 - which chains to connect to

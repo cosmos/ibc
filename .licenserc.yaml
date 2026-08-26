@@ -15,6 +15,10 @@ header:
     # Specs move to Community-Spec-1.0 separately; remove this when that conversion lands.
     - "spec/**"
 
+    # Prose documentation carries no per-file header; the repository LICENSE
+    # governs it. Source under docs/ (the reference generator) still does.
+    - "docs/**/*.md"
+
     # Files and generated formats that cannot carry a source header.
     - "LICENSE"
     - "NOTICE"
@@ -37,4 +41,4 @@ header:
     - "e2e/internal/harness/environment/solidityibc/contracts/src/**"
 
   comment: never
-  license-location-threshold: 400
+  license-location-threshold: 80

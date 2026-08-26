@@ -3,8 +3,6 @@ title: ICS27GMP and accounts
 description: The General Message Passing application, the per-sender account contracts it deploys, and the surface a sender calls.
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 ICS27GMP is the General Message Passing application. It carries arbitrary call payloads to be executed across chains that implement GMP.
 
 A sender reaches it to dispatch a call. The router reaches it to deliver a packet. A received call runs from an ICS27Account that ICS27GMP deploys, so the contract being called sees an address unique to the remote sender. Senders can build on ICS27GMP: [IFT](4-ift-contracts.md) is built on GMP to fungibly move tokens across chains.

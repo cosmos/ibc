@@ -3,8 +3,6 @@ title: "IFT contracts"
 description: "The IFT base contract, its two deployable variants, and the send-call constructors that build a counterparty's mint call."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 An Interchain Fungible Token (IFT) is a fungible token that moves between chains by burning it on one and minting it on the other. Each deployment is an ERC20 with the cross-chain behavior built into the token itself.
 
 That behavior is built on GMP. An IFT defines no packet type, and instead a transfer travels as an ordinary GMP call, addressed to the counterparty IFT implementation registered for that client.

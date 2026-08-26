@@ -3,8 +3,6 @@ title: "What is IBC"
 description: "IBC is a protocol for sending packets between independent chains, where each chain verifies the other chain's writes with an on-chain light client."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 The Inter-Blockchain Communication (IBC) Protocol is the open standard for secure interoperability between independent systems. It is a battle-tested, extensible, trust-minimized interoperability protocol that connects 115+ public blockchain networks, plus private networks and consortia. In over five years of production, it has processed $50B+ in transaction volume without an exploit of the supported version. IBC is an open standard that lets digital ledgers exchange assets and data directly with other ledgers, including Ethereum and EVM-based frameworks such as Hyperledger Besu, non-Ethereum ledgers, and other systems that meet a small set of requirements.
 
 Like TCP/IP standardized communication across the internet, IBC standardizes communication across blockchains and other distributed ledgers. It enables two systems to exchange data, assets, and arbitrary messages directly, without relying on a centralized or third-party intermediary.

@@ -3,8 +3,6 @@ title: "Core: router and store"
 description: "The router is the single entry point for packet operations, and its store holds the provable records the other chain verifies."
 ---
 
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 IBC core is the on-chain machinery the rest of the protocol runs on. Every IBC-connected chain runs its own router and store.
 
 ## The router
