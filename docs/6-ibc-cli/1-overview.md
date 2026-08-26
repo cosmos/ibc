@@ -91,7 +91,7 @@ A connection relayed in both directions submits to both chains, so it needs a fu
 
 ### Database
 
-The relayer keeps a database to store the status of each packet and the transactions that carried it. It runs on SQLite by default, and a Postgres database is available for larger deployments, configured in the configuration file.
+The relayer keeps a database to store the status of each packet and the transactions that carried it. It runs on SQLite by default, and Postgres support is available for production deployments, configured in the configuration file.
 
 ### Relayer API
 
@@ -124,6 +124,8 @@ flowchart LR
     A2 --> C2["chain B RPC"]
     A3 --> C3["chain C RPC"]
 ```
+
+> **Warning:** Run one attestor per process in security-critical deployments. A process that hosts several attestors holds every one of their signing keys, so compromising it reaches every client whose attestation set trusts any of them.
 
 IBC CLI allows you to run an attestor as its own standalone process, or in-process with the relayer. 
 
