@@ -15,8 +15,6 @@ header:
     # Specs move to Community-Spec-1.0 separately; remove this when that conversion lands.
     - "spec/**"
 
-    # Prose documentation carries no per-file header; the repository LICENSE
-    # governs it. Source under docs/ (the reference generator) still does.
     - "docs/**/*.md"
 
     # Files and generated formats that cannot carry a source header.
