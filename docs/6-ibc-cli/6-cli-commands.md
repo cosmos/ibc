@@ -23,7 +23,7 @@ Commands are grouped here the way the binary groups them, so any of them prints 
 
 <!-- GEN:cli:global-flags END -->
 
-`--home` is where the config file, the keystore, the manifests, and the relayer's database live. A command that reads the config changes into that directory first, so a config naming `keys/alice.json` finds `~/.ibc/keys/alice.json`. <!-- [config.go:L142-L160](link/cmd/ibc/config.go#L142-L160) -->
+`--home` is where the config file, the keystore, the manifests, and the relayer's database live. A command that reads the config changes into that directory first, so a config naming `keys/alice.json` finds `~/.ibc/keys/alice.json`. <!-- [config.go:L142-L160](cli/cmd/ibc/config.go#L142-L160) -->
 
 ## `config`
 
@@ -67,7 +67,7 @@ Create new config file.
 
 <!-- GEN:cli:cmd:config-new END -->
 
-The command refuses to overwrite an existing file, so it is safe to run twice. <!-- [config.go:L95-L112](link/cmd/ibc/config.go#L95-L112) -->
+The command refuses to overwrite an existing file, so it is safe to run twice. <!-- [config.go:L95-L112](cli/cmd/ibc/config.go#L95-L112) -->
 
 ### `ibc config validate`
 
@@ -88,7 +88,7 @@ Validate the config.
 
 ## `keys`
 
-Keys live in `<ibc-home>/keys/`, one file each. These can be named by signers in the config file. <!-- [keys.go:L157-L162](link/cmd/ibc/keys.go#L157-L162) -->
+Keys live in `<ibc-home>/keys/`, one file each. These can be named by signers in the config file. <!-- [keys.go:L157-L162](cli/cmd/ibc/keys.go#L157-L162) -->
 
 ### `ibc keys import`
 
@@ -149,11 +149,11 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
 
-`--chain` is required by the commands that provision something, and the table cannot show it: they check it themselves rather than declaring it required. <!-- [deploy.go:L315-L317](link/cmd/ibc/deploy.go#L315-L317) -->
+`--chain` is required by the commands that provision something, and the table cannot show it: they check it themselves rather than declaring it required. <!-- [deploy.go:L315-L317](cli/cmd/ibc/deploy.go#L315-L317) -->
 
 `--dry-run` prints the steps a command would take and submits nothing.
 
-Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [steps.go:L73-L95](link/internal/deploy/steps.go#L73-L95) -->
+Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [steps.go:L73-L95](cli/internal/deploy/steps.go#L73-L95) -->
 
 > **Warning:** Do not edit a manifest by hand. A deploy command decides what to skip from it, and an edit that disagrees with the chain either is overwritten or makes the next run fail.
 
@@ -187,9 +187,9 @@ Deploy and register a light client tracking a counterparty chain.
 ibc deploy client --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
 ```
 
-The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [attestors.go:L15-L30](link/cmd/ibc/attestors.go#L15-L30) --> Left out entirely, the command fails when the config lists no attestors for the counterparty chain. <!-- [attestors.go:L32-L42](link/cmd/ibc/attestors.go#L32-L42) -->
+The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [attestors.go:L15-L30](cli/cmd/ibc/attestors.go#L15-L30) --> Left out entirely, the command fails when the config lists no attestors for the counterparty chain. <!-- [attestors.go:L32-L42](cli/cmd/ibc/attestors.go#L32-L42) -->
 
-Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [steps.go:L126-L138](link/internal/deploy/steps.go#L126-L138) -->
+Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [steps.go:L126-L138](cli/internal/deploy/steps.go#L126-L138) -->
 
 ### `ibc deploy core`
 
@@ -377,7 +377,7 @@ Run the relayer.
 
 <!-- GEN:cli:cmd:relayer-run END -->
 
-One process can be both. `relayer run` serves the relayer API and also runs every attestor the config marks `local`. <!-- [bootstrap.go:L59-L79](link/internal/bootstrap/bootstrap.go#L59-L79) --> It applies pending database migrations at startup, and `--no-migrate` skips that.
+One process can be both. `relayer run` serves the relayer API and also runs every attestor the config marks `local`. <!-- [bootstrap.go:L59-L79](cli/internal/bootstrap/bootstrap.go#L59-L79) --> It applies pending database migrations at startup, and `--no-migrate` skips that.
 
 ### `ibc relayer packets`
 
@@ -549,7 +549,7 @@ Migrate DB down.
 
 <!-- GEN:cli:cmd:migrate-down END -->
 
-`migrate down` reverses one migration, the most recent. <!-- [store_postgres.go:L110-L114](link/internal/store/store_postgres.go#L110-L114) -->
+`migrate down` reverses one migration, the most recent. <!-- [store_postgres.go:L110-L114](cli/internal/store/store_postgres.go#L110-L114) -->
 
 ### `ibc migrate status`
 

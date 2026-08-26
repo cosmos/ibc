@@ -54,7 +54,7 @@ Tracks the packets emitted by a source transaction and submits the transactions 
 
 Field names in these tables are the schema's. The JSON encoding uses lowerCamelCase, so `tx_hash` is sent as `txHash`.
 
-`all_packets` takes every packet for which this relayer has a configured client and route. Packets without one are skipped, and the request succeeds even when that leaves nothing to relay. <!-- [relayer.proto:L30-L33](proto/link/relayer.proto#L30-L33) -->
+`all_packets` takes every packet for which this relayer has a configured client and route. Packets without one are skipped, and the request succeeds even when that leaves nothing to relay. <!-- [relayer.proto:L30-L33](proto/cli/relayer.proto#L30-L33) -->
 
 #### `SelectedPackets`
 
@@ -81,7 +81,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 
 <!-- GEN:api:msg:PacketSelector END -->
 
-A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [relayer.proto:L35-L37](proto/link/relayer.proto#L35-L37) -->
+A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [relayer.proto:L35-L37](proto/cli/relayer.proto#L35-L37) -->
 
 `Relay` answers with every send packet in the transaction, including the ones it will not carry.
 
@@ -270,7 +270,7 @@ Both attestation calls return this shape.
 
 <!-- GEN:api:msg:Attestation END -->
 
-`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [resolve.go:L37-L60](link/internal/relay/proofgen/attestation/resolve.go#L37-L60) -->
+`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [resolve.go:L37-L60](cli/internal/relay/proofgen/attestation/resolve.go#L37-L60) -->
 
 ### `StateAttestation`
 
@@ -307,7 +307,7 @@ Retrieves an attestation for a state at a given height.
 
 <!-- GEN:api:msg:StateAttestationResponse END -->
 
-A height above what `LatestHeight` reports is refused, so ask for the height first. <!-- [local.go:L111-L117](link/internal/service/attestor/local.go#L111-L117) -->
+A height above what `LatestHeight` reports is refused, so ask for the height first. <!-- [local.go:L111-L117](cli/internal/service/attestor/local.go#L111-L117) -->
 
 ### `PacketAttestation`
 
@@ -362,7 +362,7 @@ Retrieves an attestation for a set of packets.
 
 <!-- GEN:api:msg:PacketAttestationResponse END -->
 
-One request carries at most 100 packets, each at most 128 KB, and a request over either limit is refused. <!-- [service.go:L72-L76](link/internal/service/attestor/service.go#L72-L76) --> <!-- [service.go:L169-L180](link/internal/service/attestor/service.go#L169-L180) -->
+One request carries at most 100 packets, each at most 128 KB, and a request over either limit is refused. <!-- [service.go:L72-L76](cli/internal/service/attestor/service.go#L72-L76) --> <!-- [service.go:L169-L180](cli/internal/service/attestor/service.go#L169-L180) -->
 
 ### `LatestHeight`
 
@@ -398,7 +398,7 @@ Returns the latest height the attestor will generate attestations for.
 
 <!-- GEN:api:msg:LatestHeightResponse END -->
 
-Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts, which sits closer to the head. <!-- [local.go:L77-L104](link/internal/service/attestor/local.go#L77-L104) -->
+Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts, which sits closer to the head. <!-- [local.go:L77-L104](cli/internal/service/attestor/local.go#L77-L104) -->
 
 ### `Info`
 

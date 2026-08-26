@@ -18,7 +18,7 @@ ibc config new
 ibc config validate
 ```
 
-Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [config.go:L169](link/internal/config/config.go#L169) -->
+Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [config.go:L169](cli/internal/config/config.go#L169) -->
 
 ## Example config.yml
 
@@ -100,12 +100,12 @@ The following fields in this file are references to other fields:
 
 | Reference | Must match |
 | --- | --- |
-| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](link/internal/config/config.go#L300-L319) --> |
-| `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L323-L336](link/internal/config/config.go#L323-L336) --> |
-| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L232-L239](link/internal/config/config.go#L232-L239) --> |
-| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L241-L248](link/internal/config/config.go#L241-L248) --> |
+| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](cli/internal/config/config.go#L300-L319) --> |
+| `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L323-L336](cli/internal/config/config.go#L323-L336) --> |
+| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L232-L239](cli/internal/config/config.go#L232-L239) --> |
+| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L241-L248](cli/internal/config/config.go#L241-L248) --> |
 
-For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference. A local attestor's `chainId` is checked when the process starts rather than by validation. <!-- [resolve.go:L55-L57](link/internal/service/attestor/resolve.go#L55-L57) -->
+For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference. A local attestor's `chainId` is checked when the process starts rather than by validation. <!-- [resolve.go:L55-L57](cli/internal/service/attestor/resolve.go#L55-L57) -->
 
 ## `server`
 
@@ -121,7 +121,7 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 
 <!-- GEN:config:server END -->
 
-Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/bootstrap/bootstrap.go#L120) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
+Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/bootstrap/bootstrap.go#L120) --> <!-- [server.go:L103-L113](cli/internal/server/server.go#L103-L113) -->
 
 ## `db`
 
@@ -158,9 +158,9 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/boot
 
 <!-- GEN:config:chains END -->
 
-`ibc deploy core` deploys the router. <!-- [steps.go:L67-L97](link/internal/deploy/steps.go#L67-L97) --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [deploy.go:L544-L600](link/cmd/ibc/deploy.go#L544-L600) -->
+`ibc deploy core` deploys the router. <!-- [steps.go:L67-L97](cli/internal/deploy/steps.go#L67-L97) --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [deploy.go:L544-L600](cli/cmd/ibc/deploy.go#L544-L600) -->
 
-The deployer must be a local signer, because deployment requires direct access to the key. <!-- [deploy.go:L123-L155](link/cmd/ibc/deploy.go#L123-L155) -->
+The deployer must be a local signer, because deployment requires direct access to the key. <!-- [deploy.go:L123-L155](cli/cmd/ibc/deploy.go#L123-L155) -->
 
 ## `relayer`
 
@@ -183,11 +183,11 @@ The deployer must be a local signer, because deployment requires direct access t
 
 <!-- GEN:config:relayer:connections END -->
 
-Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](link/cmd/ibc/deploy.go#L256-L262) -->
+Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](cli/cmd/ibc/deploy.go#L256-L262) -->
 
-The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](link/internal/config/relayer.go#L149-L176) -->
+The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](cli/internal/config/relayer.go#L149-L176) -->
 
-With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](link/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L237-L264](link/internal/config/config.go#L237-L264) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](link/internal/config/relayer.go#L118-L135) -->
+With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](cli/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L237-L264](cli/internal/config/config.go#L237-L264) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](cli/internal/config/relayer.go#L118-L135) -->
 
 ### Relay settings
 
@@ -233,7 +233,7 @@ relayer:
         gasTipCapMultiplier: 1.1
 ```
 
-Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [opts.go:L34-L71](link/internal/relay/pipeline/opts.go#L34-L71) -->
+Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [opts.go:L34-L71](cli/internal/relay/pipeline/opts.go#L34-L71) -->
 
 ## `attestors`
 
@@ -278,11 +278,11 @@ attestors:
 
 <!-- GEN:config:attestors:remote END -->
 
-A remote entry does not set `chainId` or `signer`. The process obtains the attestor's chain and signing address from its `Info` RPC. <!-- [remote.go:L31-L51](link/internal/service/attestor/remote.go#L31-L51) -->
+A remote entry does not set `chainId` or `signer`. The process obtains the attestor's chain and signing address from its `Info` RPC. <!-- [remote.go:L31-L51](cli/internal/service/attestor/remote.go#L31-L51) -->
 
-Fields from the other attestor type are rejected. A remote attestor cannot set `chainId`, and a local attestor cannot set `grpc`. <!-- [config.go:L513-L536](link/internal/config/config.go#L513-L536) -->
+Fields from the other attestor type are rejected. A remote attestor cannot set `chainId`, and a local attestor cannot set `grpc`. <!-- [config.go:L513-L536](cli/internal/config/config.go#L513-L536) -->
 
-Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [config.go:L474-L503](link/internal/config/config.go#L474-L503) -->
+Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [config.go:L474-L503](cli/internal/config/config.go#L474-L503) -->
 
 ## `signers`
 
@@ -302,7 +302,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 
 <!-- GEN:config:signers:local END -->
 
-For `file: relayer`, the CLI checks `relayer`, `relayer.json`, and the `keys` directory under the IBC home directory. The final path is typically `~/.ibc/keys/relayer.json`. <!-- [config.go:L591-L615](link/internal/config/config.go#L591-L615) -->
+For `file: relayer`, the CLI checks `relayer`, `relayer.json`, and the `keys` directory under the IBC home directory. The final path is typically `~/.ibc/keys/relayer.json`. <!-- [config.go:L591-L615](cli/internal/config/config.go#L591-L615) -->
 
 ### Remote signer
 
