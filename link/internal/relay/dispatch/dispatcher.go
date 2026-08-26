@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultPollInterval how often the dispatcher polls for dispatchable packets.
-const DefaultPollInterval = 5 * time.Second
+const DefaultPollInterval = 1 * time.Second
 
 // ErrTransferAlreadyInPipeline the transfer is already being relayed.
 var ErrTransferAlreadyInPipeline = errors.New("transfer already in pipeline")
