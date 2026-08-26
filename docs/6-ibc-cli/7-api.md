@@ -14,8 +14,6 @@ The attestor's API serves the attestations a light client verifies. A relayer is
 
 Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`.
 
-Connections are plaintext, HTTP/1.1 or HTTP/2 without TLS, and reflection is registered, so a client needs no TLS setup and no proto files. <!-- [server.go:L38-L43](link/internal/server/server.go#L38-L43) --> <!-- [server.go:L103-L113](link/internal/server/server.go#L103-L113) -->
-
 To list running services:
 
 ```bash

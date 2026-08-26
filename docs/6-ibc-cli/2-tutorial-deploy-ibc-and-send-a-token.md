@@ -227,7 +227,7 @@ The two signer flags name the key that submits relay transactions on each chain.
 
 The attestors section declares both of your attestor keys as `type: local`. This means the relayer will run the attestors in the same process.
 
-2. Use the following command to merge the generated sections into your config:
+2. Add the `render-config` output to your config manually or use the following command to merge the generated sections into your config:
 
 ```bash
 { sed -n '1,/^chains:/p' ~/.ibc/ibc.yml | sed '$d'

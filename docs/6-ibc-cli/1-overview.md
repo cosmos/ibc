@@ -124,10 +124,8 @@ flowchart LR
     A2 --> C2["chain B RPC"]
     A3 --> C3["chain C RPC"]
 ```
-
-> **Warning:** Run one attestor per process in security-critical deployments. A process that hosts several attestors holds every one of their signing keys, so compromising it reaches every client whose attestation set trusts any of them.
-
 IBC CLI allows you to run an attestor as its own standalone process, or in-process with the relayer. 
+> **Warning:** Run one attestor per process in security-critical deployments.
 
 ## Configuration
 
