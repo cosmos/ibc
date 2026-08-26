@@ -3,6 +3,8 @@ title: Overview
 description: The Solidity contracts that make up IBC on a chain, what each one is for, and who deploys it.
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 IBC-solidity is the Solidity implementation of the IBC protocol. It consists of a core set of contracts that run on each chain: a router that holds the registries and the commitment store, light clients for each counterparty, and the applications that send and receive packets.
 
 The pages in this section document the main contracts and how they work.

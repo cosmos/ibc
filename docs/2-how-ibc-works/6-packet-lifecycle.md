@@ -3,6 +3,8 @@ title: "Packet lifecycle"
 description: "A packet reaches at most one of two provable endings: delivered and acknowledged, or proven timed out."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 IBC is a protocol for moving data verifiably between two chains. That data travels in packets, which a relayer carries between the chains.
 
 The packet lifecycle is the set of steps that carries a packet from an application on a source chain to a destination chain, and then back to the source chain with a settled outcome.

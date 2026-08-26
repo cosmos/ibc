@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate reference-page tables from source, in place, between markers.
 
 A reference page is part prose and part table. The prose is written by a human

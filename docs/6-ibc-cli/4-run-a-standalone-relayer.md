@@ -3,6 +3,8 @@ title: "Run a standalone relayer"
 description: "Run a relayer in its own process, querying attestors it does not host."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 This guide shows you how to run a relayer in its own process. It hosts no attestors and queries them over the network instead.
 
 ## Before you begin

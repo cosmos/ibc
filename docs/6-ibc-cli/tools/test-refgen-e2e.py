@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """End-to-end tests for the self-healing loop: break the source, watch it fail.
 
 tools/test-refgen.py tests the generator against the real pinned clone, which

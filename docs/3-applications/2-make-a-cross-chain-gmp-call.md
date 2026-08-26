@@ -3,6 +3,8 @@ title: "Make a cross-chain GMP call"
 description: "Call a contract on another chain over IBC, and receive the result back as an acknowledgement."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 This guide uses the General Message Passing (GMP) app to call a contract on another chain. You'll send the call from a source chain and execute it on the destination chain from an account derived from the sender.
 
 ## Before you begin

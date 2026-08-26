@@ -3,6 +3,8 @@ title: "Packets and applications"
 description: "A packet is what IBC moves between two chains, and an application is what interprets the contents."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 An application is the actor on one chain that wants to talk to another chain over IBC. They communicate by sending and receiving packets across an IBC connection. This page covers a packet's fields, the payload inside it, what an application is, ports, and the callbacks applications can implement.
 
 A packet is like a piece of mail. The packet is the envelope with routing information, and the payload inside is the letter. The application that is the recipient of the packet opens it and decides what to do with the information.

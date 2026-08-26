@@ -3,6 +3,8 @@ title: AttestationLightClient
 description: Contract reference for the attestation light client: what it verifies, what the constructor fixes, its functions, wire formats, roles, and errors.
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 AttestationLightClient is an IBC light client that trusts a fixed set of attestor addresses, and it accepts a claim once a quorum of that set has signed it. Attestors claim two things about the counterparty chain: the timestamp of a block at a given height, and the values held at commitment paths at that height.
 
 One instance is deployed per client and registered on the ICS26Router under a client ID. The router calls it to advance the client and to check the proof behind every packet operation.

@@ -3,6 +3,8 @@ title: Overview
 description: IBC is a handful of components passing one provable packet between two chains.
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 IBC lets two independent chains exchange messages; each side verifies for itself what the counterparty wrote before acting on it. Applications decide what a message means, and IBC delivers it and proves the counterparty sent it.
 
 A single cross-chain message relies on a set of on-chain and off-chain components working together:

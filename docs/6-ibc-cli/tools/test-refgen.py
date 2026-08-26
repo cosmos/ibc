@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for tools/refgen.py.
 
 The generator writes into pages that mix hand-written prose with generated

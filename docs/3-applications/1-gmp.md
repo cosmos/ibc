@@ -3,6 +3,8 @@ title: "GMP: how it works"
 description: "GMP runs arbitrary contract calls on another chain from a deterministic address unique to the caller, and reports back success, failure, or timeout."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 General Message Passing (GMP) is an IBC application that enables arbitrary contract calls between chains. A sender supplies the target contract's address and the call data to run against it.
 
 On the destination chain the call executes from a deterministic address unique to the caller.

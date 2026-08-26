@@ -3,6 +3,8 @@ title: "API"
 description: "The two gRPC services a running relayer and attestor serve, and how to call them."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 The IBC CLI exposes two APIs: a relayer API and an attestation API.
 
 The relayer's API has two main parts:

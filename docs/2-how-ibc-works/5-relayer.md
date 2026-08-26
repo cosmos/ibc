@@ -3,6 +3,8 @@ title: "Relayer"
 description: "The relayer decides when IBC packets move. The attestors and the light client decide what counts as true."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 A relayer is the off-chain service that moves IBC packets between chains. It takes a packet already sent on a source chain, assembles the proof to update the destination chain's light client, and submits it to the destination router. It also delivers acknowledgements and timeouts back to the source chain.
 
 A relayer is trusted for liveness alone: it decides when packets move, not what counts as true. Everything it carries is verified by the light client on the chain it delivers to, so an altered packet or proof would be rejected during verification.

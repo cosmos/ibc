@@ -3,6 +3,8 @@ title: "Deploy IBC and send a token"
 description: "Bring up two chains, deploy IBC on both, and move an Interchain Fungible Token from one to the other."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 This tutorial walks you through all the steps to deploy and run IBC on two EVM chains using IBC CLI.
 
 By the end, you'll have the following:

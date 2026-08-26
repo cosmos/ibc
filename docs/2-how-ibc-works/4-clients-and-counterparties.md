@@ -3,6 +3,8 @@ title: "Clients and counterparties"
 description: "A client is one chain's verifier for one other chain, and a mirrored pair of clients, each recording the other as its counterparty, is what connects two chains."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 A client is how one chain verifies another. It is the verification layer of IBC: an on-chain snapshot of a counterparty chain that lets a chain check claims about that counterparty's state for itself. This page covers what a client holds, what it can be asked to verify, how it stays current, and how two chains connect before any packet moves.
 
 ## What a client is

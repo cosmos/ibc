@@ -37,4 +37,4 @@ header:
     - "e2e/internal/harness/environment/solidityibc/contracts/src/**"
 
   comment: never
-  license-location-threshold: 80
+  license-location-threshold: 400

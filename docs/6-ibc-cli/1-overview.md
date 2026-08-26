@@ -3,6 +3,8 @@ title: "Overview"
 description: "One binary that deploys IBC onto a chain, then runs the relayer and attestors that carry packets across it."
 ---
 
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 The IBC CLI is an all-in-one tool for deploying, configuring, and running an IBC connection between chains, simplifying the process of setting up and managing IBC connections.
 
 It consists of three parts:
