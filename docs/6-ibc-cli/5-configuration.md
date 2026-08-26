@@ -117,7 +117,7 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 |---|---|---|---|
 | `listenAddr` | `string` | `0.0.0.0:3000` | Address the gRPC server binds. It serves the relayer and attestor APIs together. |
 
-<!-- [config.go:L47](link/internal/config/config.go#L47) -->
+<!-- [config.go:L48](link/internal/config/config.go#L48) -->
 
 <!-- GEN:config:server END -->
 
@@ -132,9 +132,9 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/boot
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
-| `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. |
+| `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
 
-<!-- [config.go:L52](link/internal/config/config.go#L52) -->
+<!-- [config.go:L53](link/internal/config/config.go#L53) -->
 
 <!-- GEN:config:db END -->
 
@@ -154,7 +154,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](link/internal/boot
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
 
-<!-- [config.go:L115](link/internal/config/config.go#L115) -->
+<!-- [config.go:L116](link/internal/config/config.go#L116) -->
 
 <!-- GEN:config:chains END -->
 
@@ -251,7 +251,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L64](link/internal/config/config.go#L64) -->
+<!-- [config.go:L65](link/internal/config/config.go#L65) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -274,7 +274,7 @@ attestors:
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port. |
 
-<!-- [config.go:L64](link/internal/config/config.go#L64) -->
+<!-- [config.go:L65](link/internal/config/config.go#L65) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -298,7 +298,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L89](link/internal/config/config.go#L89) -->
+<!-- [config.go:L90](link/internal/config/config.go#L90) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -323,7 +323,7 @@ signers:
 | `grpc` | `string` | **required** | Address for a remote signer. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
 
-<!-- [config.go:L89](link/internal/config/config.go#L89) -->
+<!-- [config.go:L90](link/internal/config/config.go#L90) -->
 
 <!-- GEN:config:signers:remote END -->
 
