@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/proofgen"
+	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
@@ -24,7 +24,7 @@ type BatchRecvPacket struct {
 	sourceChainClient      chains.Client
 	destinationChainClient chains.Client
 	route                  Route
-	proofGen               proofgen.ProofGenerator
+	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
 	storage                TxStorage
@@ -32,7 +32,7 @@ type BatchRecvPacket struct {
 
 func NewBatchRecvPacket(
 	chainClients ChainClients,
-	proofGenerators ProofGenerators,
+	provers Provers,
 	txBuilders TxBuilders,
 	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
@@ -48,10 +48,10 @@ func NewBatchRecvPacket(
 		return BatchRecvPacket{}, errors.Errorf("no configured chain client for chain %s", route.DestinationChainID)
 	}
 
-	proofGen, ok := proofGenerators.Get(route.DestinationChainID, route.DestinationClientID)
+	prover, ok := provers.Get(route.DestinationChainID, route.DestinationClientID)
 	if !ok {
 		return BatchRecvPacket{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q",
+			"no prover configured for client %q on chain %q",
 			route.DestinationClientID,
 			route.DestinationChainID,
 		)
@@ -66,7 +66,7 @@ func NewBatchRecvPacket(
 		sourceChainClient:      sourceChainClient,
 		destinationChainClient: destinationChainClient,
 		route:                  route,
-		proofGen:               proofGen,
+		prover:                 prover,
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
 		storage:                storage,
@@ -74,7 +74,7 @@ func NewBatchRecvPacket(
 }
 
 func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	proofHeight, _, err := p.proofGen.LatestProvableHeight(ctx)
+	proofHeight, _, err := p.prover.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
@@ -116,7 +116,7 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 	}
 
 	submission, err := relayPackets(
-		ctx, p.destinationChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
+		ctx, p.destinationChainClient, p.prover, p.txBuilder, p.txSubmitter,
 		p.route.DestinationClientID, v2.RelayKindRecv,
 		proofHeight, events,
 	)

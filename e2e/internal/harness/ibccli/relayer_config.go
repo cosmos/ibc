@@ -56,6 +56,10 @@ type RelayerConnection struct {
 	ClientB    string
 	AutoRelayA bool
 	AutoRelayB bool
+
+	// ProverURL points both client ends at a ProverService. Empty keeps
+	// attestation.
+	ProverURL string
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -160,20 +164,31 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
+		clientType := relayerClientAttestation
+
+		var params map[string]any
+
+		if connection.ProverURL != "" {
+			clientType = relayerClientRemote
+			params = map[string]any{"url": connection.ProverURL}
+		}
+
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
 			Alias: connection.ClientA + "-" + connection.ClientB,
 			ClientA: clientEndFileConfig{
 				ChainID:   connection.ChainA,
 				Signer:    cfg.SignerAlias,
 				ClientID:  connection.ClientA,
-				Type:      "attestation",
+				Type:      clientType,
+				Params:    params,
 				AutoRelay: autoRelay(connection.AutoRelayA),
 			},
 			ClientB: clientEndFileConfig{
 				ChainID:   connection.ChainB,
 				Signer:    cfg.SignerAlias,
 				ClientID:  connection.ClientB,
-				Type:      "attestation",
+				Type:      clientType,
+				Params:    params,
 				AutoRelay: autoRelay(connection.AutoRelayB),
 			},
 		})
@@ -234,7 +249,10 @@ func localAttestorName(chainID string) string {
 }
 
 const (
-	RelayerSignerLocal    = "local"
+	RelayerSignerLocal       = "local"
+	relayerClientAttestation = "attestation"
+	relayerClientRemote      = "remote"
+
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"
 	RelayerAttestorRemote = "remote"
@@ -264,6 +282,7 @@ type clientEndFileConfig struct {
 	Signer    string               `yaml:"signer"`
 	ClientID  string               `yaml:"clientId"`
 	Type      string               `yaml:"type"`
+	Params    map[string]any       `yaml:"params,omitempty"`
 	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
 }
 

@@ -22,6 +22,10 @@ build: ## Build the binary
 	mkdir -p bin
 	go build -o bin/ibc ./cmd/ibc/...
 
+build-test-bin: ## Build the binary used only by tests
+	mkdir -p bin
+	go build -o bin/testprover ./internal/testutil/proverservice/cmd/...
+
 install: ## Install the binary
 	go install ./cmd/ibc/...
 
@@ -88,6 +92,8 @@ run-all-checks: ## Run "all-in-one" code validation step.
 	@echo "==== 4. Testing ===="
 	$(MAKE) test
 
+
+.PHONY: build-test-bin
 .PHONY: help build install docker-build lint lint-fix test
 .PHONY: codegen codegen-sql codegen-proto codegen-abi codegen-mocks
 .PHONY: check-stale run-all-checks
