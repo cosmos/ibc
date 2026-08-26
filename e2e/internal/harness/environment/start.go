@@ -16,7 +16,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 const (
@@ -325,16 +325,16 @@ func validateProductionPrerequisites(spec Spec, _ Runtime) error {
 	if !hasAttestors {
 		return nil
 	}
-	path, err := filepath.Abs(ibclink.ResolvedBin())
+	path, err := filepath.Abs(ibccli.ResolvedBin())
 	if err != nil {
-		return fmt.Errorf("environment: resolve IBC Link binary prerequisite: %w", err)
+		return fmt.Errorf("environment: resolve IBC CLI binary prerequisite: %w", err)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("environment: IBC Link binary prerequisite %q: %w", path, err)
+		return fmt.Errorf("environment: IBC CLI binary prerequisite %q: %w", path, err)
 	}
 	if !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
-		return fmt.Errorf("environment: IBC Link binary prerequisite %q is not an executable file", path)
+		return fmt.Errorf("environment: IBC CLI binary prerequisite %q is not an executable file", path)
 	}
 	return nil
 }

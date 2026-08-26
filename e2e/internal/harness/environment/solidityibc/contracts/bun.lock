@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@ibc-link/solidity-ibc-contract-artifacts",
+      "name": "@ibc-cli/solidity-ibc-contract-artifacts",
       "dependencies": {
         "@cosmos/solidity-ibc-eureka": "github:cosmos/ibc-contracts#39904319467b5fbdec8c34c43b66af6f1d256dba",
         "@openzeppelin/contracts": "5.6.1",

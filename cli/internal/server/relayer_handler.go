@@ -1,0 +1,234 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package server
+
+import (
+	"context"
+	"log/slog"
+	"net/http"
+
+	"connectrpc.com/connect"
+	"github.com/pkg/errors"
+
+	proto "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/cli/internal/service/relayer"
+)
+
+// RelayerHandler handles relayer RPC requests.
+type RelayerHandler struct {
+	logger *slog.Logger
+	srv    RelayerService
+}
+
+// RelayerService defines relayer business logic.
+type RelayerService interface {
+	Relay(ctx context.Context, request relayer.RelayRequest) ([]relayer.ObservedPacket, error)
+	Packets(
+		ctx context.Context,
+		filter relayer.PacketFilter,
+		query relayer.PacketQuery,
+	) (relayer.PacketPage, error)
+}
+
+var (
+	_ proto.RelayerApiServiceHandler = (*RelayerHandler)(nil)
+	_ Handler                        = (*RelayerHandler)(nil)
+)
+
+func NewRelayerHandler(srv RelayerService) *RelayerHandler {
+	return &RelayerHandler{
+		logger: slog.With("handler", "relayer"),
+		srv:    srv,
+	}
+}
+
+func (h *RelayerHandler) Register(opts ...connect.HandlerOption) (string, http.Handler) {
+	return proto.NewRelayerApiServiceHandler(h, opts...)
+}
+
+func (h *RelayerHandler) Name() string {
+	return proto.RelayerApiServiceName
+}
+
+func (h *RelayerHandler) Relay(
+	ctx context.Context,
+	req *connect.Request[proto.RelayRequest],
+) (*connect.Response[proto.RelayResponse], error) {
+	h.logger.Info("Relay", "sourceChainID", req.Msg.SourceChainId, "txHash", req.Msg.TxHash)
+
+	request := relayer.RelayRequest{ChainID: req.Msg.SourceChainId, TxHash: req.Msg.TxHash}
+	switch selection := req.Msg.Selection.(type) {
+	case *proto.RelayRequest_AllPackets:
+		request.Selection = relayer.SelectionAll
+	case *proto.RelayRequest_SelectedPackets:
+		request.Selection = relayer.SelectionExplicit
+		for _, packet := range selection.SelectedPackets.GetPackets() {
+			request.Packets = append(request.Packets, relayer.PacketSelector{
+				SourceClientID: packet.GetSourceClientId(),
+				SequenceNumber: packet.GetSequenceNumber(),
+			})
+		}
+	}
+
+	packets, err := h.srv.Relay(ctx, request)
+	switch {
+	case errors.Is(err, relayer.ErrInvalidInput):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case errors.Is(err, relayer.ErrFailedPrecondition):
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	case errors.Is(err, relayer.ErrNotFound):
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	case err != nil:
+		// todo: move to interceptor
+		h.logger.Error("Relay", "err", err)
+		return nil, errInternal
+	}
+
+	return connect.NewResponse(&proto.RelayResponse{
+		Packets: observedPacketsToProto(packets),
+	}), nil
+}
+
+func observedPacketsToProto(packets []relayer.ObservedPacket) []*proto.ObservedPacket {
+	out := make([]*proto.ObservedPacket, len(packets))
+	for i, packet := range packets {
+		out[i] = &proto.ObservedPacket{
+			SourceClientId: packet.Selector.SourceClientID,
+			SequenceNumber: packet.Selector.SequenceNumber,
+			Selection:      packetSelectionToProto(packet.Selection),
+		}
+	}
+
+	return out
+}
+
+func packetSelectionToProto(selection relayer.PacketSelection) proto.PacketSelection {
+	switch selection {
+	case relayer.SelectionStateSelected:
+		return proto.PacketSelection_PACKET_SELECTION_SELECTED
+	case relayer.SelectionStateNotSelected:
+		return proto.PacketSelection_PACKET_SELECTION_NOT_SELECTED
+	case relayer.SelectionStateUnconfigured:
+		return proto.PacketSelection_PACKET_SELECTION_UNCONFIGURED
+	default:
+		return proto.PacketSelection_PACKET_SELECTION_UNSPECIFIED
+	}
+}
+
+func (h *RelayerHandler) Packets(
+	ctx context.Context,
+	req *connect.Request[proto.PacketsRequest],
+) (*connect.Response[proto.PacketsResponse], error) {
+	filter, err := packetFilterFromProto(req.Msg.GetFilter())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	h.logger.Info("Packets", "limit", req.Msg.GetLimit(), "cursor", req.Msg.GetCursor())
+
+	page, err := h.srv.Packets(ctx, filter, relayer.PacketQuery{
+		Limit:  int64(req.Msg.GetLimit()),
+		Cursor: req.Msg.GetCursor(),
+	})
+
+	switch {
+	case errors.Is(err, relayer.ErrInvalidInput):
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	case err != nil:
+		// todo: move to interceptor
+		h.logger.Error("Packets", "err", err)
+		return nil, errInternal
+	}
+
+	return connect.NewResponse(&proto.PacketsResponse{
+		Packets:    packetStatusesToProto(page.Packets),
+		HasMore:    page.HasMore,
+		NextCursor: page.NextCursor,
+	}), nil
+}
+
+func packetFilterFromProto(filter *proto.PacketFilter) (relayer.PacketFilter, error) {
+	if filter == nil {
+		return relayer.PacketFilter{}, nil
+	}
+
+	state, err := packetStateFromProto(filter.GetState())
+	if err != nil {
+		return relayer.PacketFilter{}, err
+	}
+
+	return relayer.PacketFilter{
+		SourceChainID:       filter.GetSourceChainId(),
+		DestinationChainID:  filter.GetDestinationChainId(),
+		SourceClientID:      filter.GetSourceClientId(),
+		DestinationClientID: filter.GetDestinationClientId(),
+		SourceTxHash:        filter.GetSourceTxHash(),
+		SequenceNumber:      filter.GetSequenceNumber(),
+		State:               state,
+	}, nil
+}
+
+func packetStatusesToProto(statuses []relayer.PacketStatus) []*proto.PacketStatus {
+	out := make([]*proto.PacketStatus, len(statuses))
+	for i, status := range statuses {
+		out[i] = &proto.PacketStatus{
+			State:          packetStateToProto(status.State),
+			SequenceNumber: status.SequenceNumber,
+			SourceClientId: status.SourceClientID,
+			SendTx:         txInfoToProto(&status.SendTx),
+			RecvTx:         txInfoToProto(status.RecvTx),
+			AckTx:          txInfoToProto(status.AckTx),
+			TimeoutTx:      txInfoToProto(status.TimeoutTx),
+		}
+	}
+
+	return out
+}
+
+func packetStateFromProto(state proto.PacketState) (relayer.PacketState, error) {
+	switch state {
+	case proto.PacketState_PACKET_STATE_UNSPECIFIED:
+		return relayer.StateUnspecified, nil
+	case proto.PacketState_PACKET_STATE_NOT_SELECTED:
+		return relayer.StateNotSelected, nil
+	case proto.PacketState_PACKET_STATE_PENDING:
+		return relayer.StatePending, nil
+	case proto.PacketState_PACKET_STATE_SUCCEEDED:
+		return relayer.StateSucceeded, nil
+	case proto.PacketState_PACKET_STATE_TIMED_OUT:
+		return relayer.StateTimedOut, nil
+	case proto.PacketState_PACKET_STATE_REJECTED:
+		return relayer.StateRejected, nil
+	case proto.PacketState_PACKET_STATE_RELAY_FAILED:
+		return relayer.StateRelayFailed, nil
+	default:
+		return relayer.StateUnspecified, errors.Wrapf(relayer.ErrInvalidInput, "unknown packet state %d", state)
+	}
+}
+
+func packetStateToProto(state relayer.PacketState) proto.PacketState {
+	switch state {
+	case relayer.StateNotSelected:
+		return proto.PacketState_PACKET_STATE_NOT_SELECTED
+	case relayer.StatePending:
+		return proto.PacketState_PACKET_STATE_PENDING
+	case relayer.StateSucceeded:
+		return proto.PacketState_PACKET_STATE_SUCCEEDED
+	case relayer.StateTimedOut:
+		return proto.PacketState_PACKET_STATE_TIMED_OUT
+	case relayer.StateRejected:
+		return proto.PacketState_PACKET_STATE_REJECTED
+	case relayer.StateRelayFailed:
+		return proto.PacketState_PACKET_STATE_RELAY_FAILED
+	default:
+		return proto.PacketState_PACKET_STATE_UNSPECIFIED
+	}
+}
+
+func txInfoToProto(info *relayer.TxInfo) *proto.TransactionInfo {
+	if info == nil {
+		return nil
+	}
+
+	return &proto.TransactionInfo{TxHash: info.TxHash, ChainId: info.ChainID}
+}

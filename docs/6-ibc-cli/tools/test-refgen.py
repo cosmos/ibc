@@ -371,7 +371,7 @@ def _():
 def _():
     key = ("RelayerConfig", "DispatchPollInterval")
     saved = refgen.DEFAULT_CONSTS[key]
-    refgen.DEFAULT_CONSTS[key] = [("", "link/internal/relay/dispatch/dispatcher.go", "GoneAway")]
+    refgen.DEFAULT_CONSTS[key] = [("", "cli/internal/relay/dispatch/dispatcher.go", "GoneAway")]
     try:
         refgen.gen_config()
     except refgen.SourceError:
@@ -449,7 +449,7 @@ def _():
     b = refgen.gen_cli()
     assert "| `--home <string>` | `~/.ibc` |" in b["cli:global-flags"]
     assert "`deployments`" in b["cli:cmd:deploy-core"]
-    assert "`link-<a>-<b>`" in b["cli:cmd:deploy-client"]
+    assert "`cli-<a>-<b>`" in b["cli:cmd:deploy-client"]
 
 
 @case("no generated table carries the retired product name")

@@ -35,7 +35,7 @@ after regenerating and triggered by check mode going red.
 --------------------------------------------------------------------------
 THE PAGES LIVE IN cosmos/ibc (Evan, 2026-08-21)
 --------------------------------------------------------------------------
-The reference pages are upstream's, at link/docs/, and are edited there. This
+The reference pages are upstream's, at cli/docs/, and are edited there. This
 copy of the tool runs against the pinned clone so the docs project can still
 generate and check; `tools/upstreamize.py` syncs the tool upstream and
 deliberately does not copy the pages, which would clobber them.
@@ -50,7 +50,7 @@ This checklist stays for the record, and for the next surface that moves.
      the coverage contract: a region with no marker on its owning page is an
      error, which is what stops a new key from landing in the generator and
      never reaching a reader.
-  4. Copy the workflow. Switch its `paths` to `link/**` and `proto/**`, which
+  4. Copy the workflow. Switch its `paths` to `cli/**` and `proto/**`, which
      is the whole point of moving: the pull request that adds a flag is the
      one that goes red. The workflow header carries that block.
   5. Drop the clone step from the workflow. Upstream the source is already
@@ -538,7 +538,7 @@ def gen_api():
 # The config package, read whole. Naming files here would mean a new file with
 # a new block is silently absent from the page, which is the failure this whole
 # tool exists to prevent.
-CONFIG_PKG = "link/internal/config"
+CONFIG_PKG = "cli/internal/config"
 
 # The one anchor. Every block on the page is a struct reachable from this type,
 # so the page's shape follows the code's rather than a list kept by hand.
@@ -550,14 +550,14 @@ CONFIG_ROOT = "Config"
 # constant is an error rather than a stale number.
 DEFAULT_CONSTS = {
     ("RelayerConfig", "DispatchPollInterval"): [
-        ("", "link/internal/relay/dispatch/dispatcher.go", "DefaultPollInterval")],
+        ("", "cli/internal/relay/dispatch/dispatcher.go", "DefaultPollInterval")],
     ("RelayerChainOverride", "TxSubmissionDelay"): [
-        ("", "link/internal/txsubmitter/evm/evm.go", "DefaultTxSubmissionDelay")],
+        ("", "cli/internal/txsubmitter/evm/evm.go", "DefaultTxSubmissionDelay")],
     ("RelayerChainOverride", "PacketBatchSize"): [
-        ("", "link/internal/relay/pipeline/opts.go", "DefaultBatchSize")],
+        ("", "cli/internal/relay/pipeline/opts.go", "DefaultBatchSize")],
     ("RelayerChainOverride", "PacketBatchTimeout"): [
-        ("receive and acknowledge", "link/internal/relay/pipeline/opts.go", "DefaultBatchTimeout"),
-        ("timeout", "link/internal/relay/pipeline/opts.go", "DefaultTimeoutBatchTimeout")],
+        ("receive and acknowledge", "cli/internal/relay/pipeline/opts.go", "DefaultBatchTimeout"),
+        ("timeout", "cli/internal/relay/pipeline/opts.go", "DefaultTimeoutBatchTimeout")],
 }
 
 # Keys the Go source does not document. Values never come from here, only
@@ -1113,12 +1113,12 @@ def gen_config():
 
 # ----------------------------------------------------------------- cli -> page
 
-CLI_DIR = "link"
-CLI_SRC = "link/cmd/ibc"
+CLI_DIR = "cli"
+CLI_SRC = "cli/cmd/ibc"
 
 # The root command's own flags are declared here rather than in main.go.
-GLOBAL_FLAGS_FILE = "link/internal/config/flags.go"
-CLI_BIN = "link/bin/ibc"
+GLOBAL_FLAGS_FILE = "cli/internal/config/flags.go"
+CLI_BIN = "cli/bin/ibc"
 
 # Cobra generates these and nobody reads a page about them. Excluded here so
 # the coverage assertion below still accounts for every other command.

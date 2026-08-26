@@ -1,0 +1,135 @@
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ibc.v2.relayer;
+
+option go_package = "github.com/cosmos/ibc/cli/api/v2/relayer";
+
+service RelayerApiService {
+  // Relay tracks the packets emitted by a source transaction and submits the
+  // transactions required to complete them.
+  rpc Relay(RelayRequest) returns (RelayResponse) {}
+
+  // Packets lists the packets this relayer is aware of, most recent first.
+  rpc Packets(PacketsRequest) returns (PacketsResponse) {}
+}
+
+message RelayRequest {
+  string tx_hash = 1;
+  string source_chain_id = 2;
+  // Selection is required and controls only this relayer instance; IBC
+  // relaying remains permissionless.
+  oneof selection {
+    AllPackets all_packets = 3;
+    SelectedPackets selected_packets = 4;
+  }
+}
+
+// AllPackets selects every packet in the transaction for which this relayer
+// has a configured client and route; packets without one are skipped, and the
+// request succeeds even if that leaves nothing to relay.
+message AllPackets {}
+
+// SelectedPackets selects exactly the listed packets. The request fails if any
+// packet is absent or not configured and routed. Packets already selected,
+// in flight, or terminal are successful no-ops.
+message SelectedPackets {
+  repeated PacketSelector packets = 1;
+}
+
+message PacketSelector {
+  string source_client_id = 1;
+  uint64 sequence_number = 2;
+}
+
+message RelayResponse {
+  // Every send packet in the transaction, including those this relayer will
+  // not deliver.
+  repeated ObservedPacket packets = 1;
+}
+
+message ObservedPacket {
+  string source_client_id = 1;
+  uint64 sequence_number = 2;
+  PacketSelection selection = 3;
+}
+
+enum PacketSelection {
+  PACKET_SELECTION_UNSPECIFIED = 0;
+  // Recorded for delivery by this relayer. Delivery happens afterwards and
+  // can still fail; query the packet's state to follow it.
+  PACKET_SELECTION_SELECTED = 1;
+  // Configured and routed, but this request did not select it.
+  PACKET_SELECTION_NOT_SELECTED = 2;
+  // No configured client or route, so this relayer skips it.
+  PACKET_SELECTION_UNCONFIGURED = 3;
+}
+
+message PacketsRequest {
+  PacketFilter filter = 1;
+  // Zero applies the default of 100; values above 1000 are capped.
+  uint32 limit = 2;
+  // Opaque next_cursor from a previous response. Empty starts at the newest
+  // packet.
+  string cursor = 3;
+}
+
+message PacketFilter {
+  optional string source_chain_id = 1;
+  optional string destination_chain_id = 2;
+  optional string source_client_id = 3;
+  optional string destination_client_id = 4;
+  optional PacketState state = 5;
+  optional string source_tx_hash = 6;
+  optional uint64 sequence_number = 7;
+}
+
+message PacketsResponse {
+  repeated PacketStatus packets = 1;
+  // More packets match beyond this page.
+  bool has_more = 2;
+  // Cursor for the next page, set only when has_more.
+  string next_cursor = 3;
+}
+
+enum PacketState {
+  PACKET_STATE_UNSPECIFIED = 0;
+  // The packet was discovered but has not been selected by this relayer
+  // instance. Another relayer may still deliver it.
+  PACKET_STATE_NOT_SELECTED = 1;
+  // The relayer is still processing the packet.
+  PACKET_STATE_PENDING = 2;
+  // The packet completed with a successful acknowledgement on the source
+  // chain.
+  PACKET_STATE_SUCCEEDED = 3;
+  // The packet completed with a timeout refund on the source chain.
+  PACKET_STATE_TIMED_OUT = 4;
+  // The packet completed with an error acknowledgement on the source chain.
+  PACKET_STATE_REJECTED = 5;
+  // A permanent error prevents the relayer from processing the packet.
+  PACKET_STATE_RELAY_FAILED = 6;
+}
+
+message TransactionInfo {
+  string tx_hash = 1;
+  string chain_id = 2;
+}
+
+message PacketStatus {
+  PacketState state = 1;
+  // Together with source_client_id, identifies the packet.
+  uint64 sequence_number = 2;
+  // Together with sequence_number, identifies the packet.
+  string source_client_id = 3;
+  // The source-chain SendPacket transaction. Always present.
+  TransactionInfo send_tx = 4;
+  // The destination-chain receive transaction, once submitted or discovered.
+  TransactionInfo recv_tx = 5;
+  // The source-chain acknowledgement transaction. Present for succeeded and
+  // rejected packets, and may be present while pending.
+  TransactionInfo ack_tx = 6;
+  // The source-chain timeout transaction. Present for timed-out packets, and
+  // may be present while pending.
+  TransactionInfo timeout_tx = 7;
+}

@@ -12,8 +12,8 @@ import (
 )
 
 func TestNamePrefixSanitizesDockerNames(t *testing.T) {
-	require.Equal(t, "ibc-link-e2e-run-id-chain-a", NamePrefix("Run ID", "Chain/A"))
-	require.Equal(t, "ibc-link-e2e-run-run", NamePrefix("!!!", ""))
+	require.Equal(t, "ibc-cli-e2e-run-id-chain-a", NamePrefix("Run ID", "Chain/A"))
+	require.Equal(t, "ibc-cli-e2e-run-run", NamePrefix("!!!", ""))
 }
 
 func TestBindExposedPortsToLoopbackPreservesDynamicPorts(t *testing.T) {

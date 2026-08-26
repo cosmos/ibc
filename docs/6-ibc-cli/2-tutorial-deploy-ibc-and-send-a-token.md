@@ -28,7 +28,7 @@ Start by installing IBC CLI and running two local Besu chains.
 1. Clone the IBC repository and build the binary:
 
 ```bash
-git clone https://github.com/cosmos/ibc.git && cd ibc/link && make build
+git clone https://github.com/cosmos/ibc.git && cd ibc/cli && make build
 ```
 
 The binary is located at `bin/ibc`.
@@ -164,7 +164,7 @@ The `--threshold` flag is how many of them must sign for the client to accept a 
 
 Note the crossed pairing. A client verifies the state of the chain it tracks, so the client on 41001 tracks 41002 and trusts the attestor watching 41002.
 
-Both sides share one client identifier, derived from the two chain IDs in sorted order, so it reads the same on either chain. Here it is `link-41001-41002`, which will be used later to identify the connection.
+Both sides share one client identifier, derived from the two chain IDs in sorted order, so it reads the same on either chain. Here it is `cli-41001-41002`, which will be used later to identify the connection.
 
 ## 4. Deploy the application
 
@@ -284,7 +284,7 @@ The `--from` key must be the token's owner, which is the deployer. Amounts are i
 > **Note:** The `--timeout` flag sets how long the packet has to be delivered, counted from when you send. It defaults to 15 minutes and cannot exceed one day. A packet that misses that window can only be timed out and refunded, and the deadline cannot be changed after the send.
 
 ```bash
-TX=$(./bin/ibc tx ift send --chain 41001 --ift "$IFT_A" --client-id link-41001-41002 --to deployer --from deployer --amount 10000000000000000000 | jq -r '.txHash') && echo "$TX"
+TX=$(./bin/ibc tx ift send --chain 41001 --ift "$IFT_A" --client-id cli-41001-41002 --to deployer --from deployer --amount 10000000000000000000 | jq -r '.txHash') && echo "$TX"
 ```
 
 The send prints `{"txHash": "0x..."}`. That hash is stored in `$TX`, which the next command uses:
@@ -311,7 +311,7 @@ It will read `PACKET_STATE_PENDING` for up to a minute, then it should read `PAC
     {
       "state":  "PACKET_STATE_SUCCEEDED",
       "sequenceNumber":  "1",
-      "sourceClientId":  "link-41001-41002",
+      "sourceClientId":  "cli-41001-41002",
       "sendTx":  {"txHash":  "0xf1fa599e...", "chainId":  "41001"},
       "recvTx":  {"txHash":  "0xf8281f04...", "chainId":  "41002"},
       "ackTx":  {"txHash":  "0x0f56d3f0...", "chainId":  "41001"},

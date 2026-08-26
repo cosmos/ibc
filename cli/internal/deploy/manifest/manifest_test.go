@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package manifest
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+
+	m, err := Load(dir, "1")
+	require.NoError(t, err)
+	require.Nil(t, m)
+
+	m = New("1", "evm")
+	m.Core.Router = "0xabc"
+	m.TargetData = map[string]string{"accessManager": "0xdef"}
+	m.UpsertClient(
+		Client{
+			ClientID:             "cli-2",
+			Type:                 "attestation",
+			Address:              "0x1",
+			CounterpartyChainID:  "2",
+			CounterpartyClientID: "cli-1",
+		},
+	)
+	require.NoError(t, m.Save(dir))
+
+	got, err := Load(dir, "1")
+	require.NoError(t, err)
+	require.Equal(t, "0xabc", got.Core.Router)
+	require.Equal(t, 1, got.SchemaVersion)
+
+	c, ok := got.Client("cli-2")
+	require.True(t, ok)
+	require.Equal(t, "0x1", c.Address)
+
+	// upsert replaces, not duplicates
+	got.UpsertClient(Client{ClientID: "cli-2", Type: "attestation", Address: "0x2"})
+	require.Len(t, got.Clients, 1)
+	c, _ = got.Client("cli-2")
+	require.Equal(t, "0x2", c.Address)
+}
+
+func TestTokenAndBridgeHelpers(t *testing.T) {
+	dir := t.TempDir()
+	m := New("1", "evm")
+	m.GMP = &GMP{Address: "0xgmp", AccountLogic: "0xlogic", Port: "gmpport"}
+	m.EVMSendCallConstructor = "0xctor"
+	m.UpsertToken(Token{Symbol: "FOO", Name: "Foo", Address: "0xfoo", Owner: "0xowner"})
+
+	// same identity (symbol+name+owner) updates in place, not append
+	m.UpsertToken(Token{Symbol: "FOO", Name: "Foo", Address: "0xfoo2", Owner: "0xowner"})
+	require.Len(t, m.Tokens, 1)
+	tok, ok := m.TokenByIdentity("FOO", "Foo", "0xowner")
+	require.True(t, ok)
+	require.Equal(t, "0xfoo2", tok.Address)
+
+	// same symbol, different name is a distinct token (symbol is not unique)
+	m.UpsertToken(Token{Symbol: "FOO", Name: "Bar", Address: "0xbar", Owner: "0xowner"})
+	require.Len(t, m.Tokens, 2)
+	byID, ok := m.TokenByIdentity("FOO", "Bar", "0xOWNER")
+	require.True(t, ok)
+	require.Equal(t, "0xbar", byID.Address)
+
+	// bridge upsert keyed by token address; unknown address returns false
+	require.True(
+		t,
+		m.UpsertBridge("0xfoo2", Bridge{ClientID: "cli-2", CounterpartyIFT: "0xcp", SendCallConstructor: "0xctor"}),
+	)
+	require.False(t, m.UpsertBridge("0xmissing", Bridge{ClientID: "cli-2"}))
+	tok, _ = m.TokenByAddress("0xfoo2")
+	b, ok := tok.Bridge("cli-2")
+	require.True(t, ok)
+	require.Equal(t, "0xcp", b.CounterpartyIFT)
+
+	// round-trips through disk
+	require.NoError(t, m.Save(dir))
+	loaded, err := Load(dir, "1")
+	require.NoError(t, err)
+	require.Equal(t, "0xgmp", loaded.GMP.Address)
+	require.Equal(t, "0xctor", loaded.EVMSendCallConstructor)
+	lt, ok := loaded.TokenByAddress("0xfoo2")
+	require.True(t, ok)
+	require.Len(t, lt.Bridges, 1)
+}

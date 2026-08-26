@@ -46,14 +46,14 @@ relayer:
   - alias: 41001-41002
     clientA:
       chainId: "41001"
-      clientId: link-41001-41002
+      clientId: cli-41001-41002
       signer: relayer
       type: attestation
       autoRelay:
         enabled: true
     clientB:
       chainId: "41002"
-      clientId: link-41001-41002
+      clientId: cli-41001-41002
       signer: relayer
       type: attestation
       autoRelay:
@@ -102,9 +102,9 @@ EOF
 ```
 level=INFO msg="Migrated database" module=bootstrap migrations_applied=3
 level=INFO msg="Starting relayer" module=bootstrap
-level=INFO msg="Subscribed to send packets" module=bootstrap module=watcher chainID=41001 clientIDs=[link-41001-41002]
+level=INFO msg="Subscribed to send packets" module=bootstrap module=watcher chainID=41001 clientIDs=[cli-41001-41002]
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3002}"
-level=INFO msg="Subscribed to send packets" module=bootstrap module=watcher chainID=41002 clientIDs=[link-41001-41002]
+level=INFO msg="Subscribed to send packets" module=bootstrap module=watcher chainID=41002 clientIDs=[cli-41001-41002]
 ```
 
 The relayer is running and waiting for packets.
@@ -112,7 +112,7 @@ The relayer is running and waiting for packets.
 2. Back in your first terminal, send a transfer and keep the hash:
 
 ```bash
-TX=$(./bin/ibc tx ift send --chain 41001 --ift "$(./bin/ibc deploy show 41001 | jq -r '.tokens[0].address')" --client-id link-41001-41002 --to deployer --from deployer --amount 1000000000000000000 | jq -r '.txHash') && echo "$TX"
+TX=$(./bin/ibc tx ift send --chain 41001 --ift "$(./bin/ibc deploy show 41001 | jq -r '.tokens[0].address')" --client-id cli-41001-41002 --to deployer --from deployer --amount 1000000000000000000 | jq -r '.txHash') && echo "$TX"
 ```
 
 The relayer will pick up the packet automatically and relay it to the destination.

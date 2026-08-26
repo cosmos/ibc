@@ -47,10 +47,10 @@ sweep() {
 	kill -9 $pids 2>/dev/null || true
 }
 
-# Match Link running `relayer run`, scoped to the
-# harness's compiled config (ibc-link.config.yaml, always in --config of a harness-spawned daemon) so a
+# Match the IBC CLI running `relayer run`, scoped to the
+# harness's compiled config (ibc-cli.config.yaml, always in --config of a harness-spawned daemon) so a
 # developer's own unrelated `ibc relayer run` is never signaled.
-sweep "e2e relayer daemons" '(^|[[:space:]])relayer[[:space:]]+run[[:space:]].*ibc-link\.config\.yaml'
+sweep "e2e relayer daemons" '(^|[[:space:]])relayer[[:space:]]+run[[:space:]].*ibc-cli\.config\.yaml'
 
 # Match harness-spawned attestors by their --home path, which is always nested
 # under the harness-private ibc-environment-private-* workspace.
@@ -67,7 +67,7 @@ docker_sweep() {
 	fi
 
 	local containers
-	containers="$(docker ps -aq --filter label=ibc-link-e2e=true 2>/dev/null)"
+	containers="$(docker ps -aq --filter label=ibc-cli-e2e=true 2>/dev/null)"
 	if [ -z "$containers" ]; then
 		note "no e2e Docker containers found"
 	else

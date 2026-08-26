@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/keyfile"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	"github.com/cosmos/ibc/link/keyfile"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 const relayerStopTimeout = 15 * time.Second
@@ -24,7 +24,7 @@ const relayerStopTimeout = 15 * time.Second
 // relayer rather than starting up degraded.
 func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T) {
 	requireDocker(t)
-	requireIBCLinkBinary(t)
+	requireCLIBinary(t)
 
 	const (
 		chainA       environment.ChainID       = "quorum-chain-a"
@@ -110,7 +110,7 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 
 	// includeSecondAttestorA controls whether the config knows about both of
 	// clientA's attestors or just one.
-	buildRelayerDriver := func(t *testing.T, includeSecondAttestorA bool) *ibclink.Driver {
+	buildRelayerDriver := func(t *testing.T, includeSecondAttestorA bool) *ibccli.Driver {
 		t.Helper()
 
 		dir := t.TempDir()
@@ -119,42 +119,42 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 		require.NoError(t, err)
 		require.NoError(t, keyfile.Store(signerKeyPath, keyfile.ECDSA, crypto.FromECDSA(key)))
 
-		configPath := filepath.Join(dir, "ibc-link.config.yaml")
-		driver, err := ibclink.NewDriver(configPath)
+		configPath := filepath.Join(dir, "ibc-cli.config.yaml")
+		driver, err := ibccli.NewDriver(configPath)
 		require.NoError(t, err)
-		require.NoError(t, env.BindIBCLink(driver))
+		require.NoError(t, env.BindCLI(driver))
 
 		chainARPC, err := driver.ChainRPC(string(chainA))
 		require.NoError(t, err)
 		chainBRPC, err := driver.ChainRPC(string(chainB))
 		require.NoError(t, err)
 
-		attestors := []ibclink.RelayerAttestor{
-			{Name: string(attestorA1), Type: ibclink.RelayerAttestorRemote, GRPC: resolvedA1.Endpoint()},
-			{Name: string(attestorB), Type: ibclink.RelayerAttestorRemote, GRPC: resolvedB.Endpoint()},
+		attestors := []ibccli.RelayerAttestor{
+			{Name: string(attestorA1), Type: ibccli.RelayerAttestorRemote, GRPC: resolvedA1.Endpoint()},
+			{Name: string(attestorB), Type: ibccli.RelayerAttestorRemote, GRPC: resolvedB.Endpoint()},
 		}
 		if includeSecondAttestorA {
-			attestors = append(attestors, ibclink.RelayerAttestor{
-				Name: string(attestorA2), Type: ibclink.RelayerAttestorRemote, GRPC: resolvedA2.Endpoint(),
+			attestors = append(attestors, ibccli.RelayerAttestor{
+				Name: string(attestorA2), Type: ibccli.RelayerAttestorRemote, GRPC: resolvedA2.Endpoint(),
 			})
 		}
 
-		cfg := ibclink.RelayerConfig{
+		cfg := ibccli.RelayerConfig{
 			DBPath:        filepath.Join(dir, "relayer.db"),
 			SignerAlias:   "relayer-key",
 			SignerKeyFile: signerKeyPath,
-			Chains: []ibclink.RelayerChain{
+			Chains: []ibccli.RelayerChain{
 				{ChainID: chainAID, RPC: chainARPC, ICS26Router: string(resolvedInstanceA.Locator())},
 				{ChainID: chainBID, RPC: chainBRPC, ICS26Router: string(resolvedInstanceB.Locator())},
 			},
-			Connections: []ibclink.RelayerConnection{{
+			Connections: []ibccli.RelayerConnection{{
 				ChainA: chainAID, ClientA: connection.A().ID(),
 				ChainB: chainBID, ClientB: connection.B().ID(),
 			}},
 			Attestors: attestors,
 		}
 
-		require.NoError(t, ibclink.WriteRelayerConfig(configPath, cfg))
+		require.NoError(t, ibccli.WriteRelayerConfig(configPath, cfg))
 		require.NoError(t, driver.MigrateUp(t.Context()))
 		return driver
 	}
