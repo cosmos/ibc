@@ -95,7 +95,7 @@ The relayer keeps a database to store the status of each packet and the transact
 
 ### Relayer API
 
-The relayer exposes a gRPC API. `Relay` asks it to deliver the packets in a transaction, and `Status` reports where each of those packets got to.
+The relayer exposes a gRPC API. `Relay` asks it to deliver the packets in a transaction, and `Packets` lists the packets it knows about and the state each one reached.
 
 ## The attestor
 

@@ -17,7 +17,7 @@ By the end, you'll have the following:
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.25.5 or later
+- [Go](https://go.dev/doc/install) v1.26.4 or later
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 

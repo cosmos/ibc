@@ -32,7 +32,7 @@ How a chain decides what to believe.
 
 ## IBC-solidity contracts
 
-SOlidity contract references.
+Solidity contract references.
 
 - [Overview](5-ibc-solidity-contracts/1-overview.md): The contracts, and who deploys each.
 - [ICS26Router](5-ibc-solidity-contracts/2-ics26-router.md): Entry points, storage, events, roles.
