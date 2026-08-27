@@ -11,21 +11,21 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/proofgen"
+	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/store"
 )
 
 // CheckWriteAckFinality gates ack relaying on the write ack tx's height
-// being at or before the height the source client's proof generator can
+// being at or before the height the source client's prover can
 // currently prove.
 type CheckWriteAckFinality struct {
 	destinationChainClient chains.Client
-	proofGen               proofgen.ProofGenerator
+	prover                 prover.Prover
 }
 
 func NewCheckWriteAckFinality(
 	chainClients ChainClients,
-	proofGenerators ProofGenerators,
+	provers Provers,
 	route Route,
 ) (CheckWriteAckFinality, error) {
 	destinationChainClient, ok := chainClients.Get(route.DestinationChainID)
@@ -35,14 +35,14 @@ func NewCheckWriteAckFinality(
 		)
 	}
 
-	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return CheckWriteAckFinality{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
+			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
 		)
 	}
 
-	return CheckWriteAckFinality{destinationChainClient: destinationChainClient, proofGen: proofGen}, nil
+	return CheckWriteAckFinality{destinationChainClient: destinationChainClient, prover: prover}, nil
 }
 
 func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -50,7 +50,7 @@ func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Tran
 		return nil, errors.New("transfer has no write ack tx hash, violates ShouldProcess")
 	}
 
-	proofHeight, _, err := p.proofGen.LatestProvableHeight(ctx)
+	proofHeight, _, err := p.prover.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}

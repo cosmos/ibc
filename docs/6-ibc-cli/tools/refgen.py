@@ -414,7 +414,8 @@ def _proto_short(path):
 # The proto files sort alphabetically and the service type is RelayerApiService,
 # so both the order and the display name are a human's call. A service missing
 # from here raises, and an entry naming a service that is gone raises too.
-SERVICES = [("relayer", "Relayer service"), ("attestor", "Attestation service")]
+SERVICES = [("relayer", "Relayer service"), ("attestor", "Attestation service"),
+            ("prover", "Prover service")]
 
 # Descriptions for fields the protos leave undocumented. Nearly all of these
 # were prose on the page already, moved into the cell they belong in. Values

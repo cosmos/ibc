@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package proofgen generates packet membership/non-membership proofs and
+// Package prover generates packet membership/non-membership proofs and
 // light-client state proofs. There is one implementation per light-client
 // type.
-package proofgen
+package prover
 
 import (
 	"context"
@@ -14,14 +14,15 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/relay/proofgen/attestation"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// ProofGenerator generates packet membership/non-membership proofs and state
+// Prover generates packet membership/non-membership proofs and state
 // proofs for one configured light client.
-type ProofGenerator interface {
+type Prover interface {
 	// LatestProvableHeight resolves the highest height a subsequent StateProof
 	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp
@@ -41,33 +42,33 @@ type ProofGenerator interface {
 	) ([][]byte, error)
 }
 
-var _ ProofGenerator = (*attestation.Generator)(nil)
+var _ Prover = (*attestation.Generator)(nil)
 
 // Key identifies one configured light client by the chain it lives on and
-// its client id, the composite key ProofGenerator instances are scoped by.
+// its client id, the composite key Prover instances are scoped by.
 func Key(chainID, clientID string) string {
 	return chainID + "/" + clientID
 }
 
-// Set resolves a ProofGenerator by (chainID, clientID).
+// Set resolves a Prover by (chainID, clientID).
 type Set struct {
-	generators map[string]ProofGenerator
+	generators map[string]Prover
 }
 
-func NewSet(generators map[string]ProofGenerator) *Set {
+func NewSet(generators map[string]Prover) *Set {
 	if generators == nil {
-		generators = make(map[string]ProofGenerator)
+		generators = make(map[string]Prover)
 	}
 
 	return &Set{generators: generators}
 }
 
-func (s *Set) Get(chainID, clientID string) (ProofGenerator, bool) {
+func (s *Set) Get(chainID, clientID string) (Prover, bool) {
 	generator, ok := s.generators[Key(chainID, clientID)]
 	return generator, ok
 }
 
-// NewSetFromConfig resolves a ProofGenerator for every client end of every
+// NewSetFromConfig resolves a Prover for every client end of every
 // configured connection, matching against attestors (this process's own
 // local attestors plus every resolved remote one).
 func NewSetFromConfig(
@@ -76,7 +77,7 @@ func NewSetFromConfig(
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
 ) (*Set, error) {
-	generators := make(map[string]ProofGenerator, len(cfg.Relayer.Connections)*2)
+	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
 		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors)
@@ -109,7 +110,7 @@ func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counter
 
 func addGenerator(
 	ctx context.Context,
-	generators map[string]ProofGenerator,
+	generators map[string]Prover,
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
@@ -123,6 +124,22 @@ func addGenerator(
 		}
 
 		generators[Key(client.ChainID, client.ClientID)] = gen
+
+		return nil
+	case config.ClientTypeRemote:
+		params, err := client.ClientParams()
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
+		remoteParams, ok := params.(*config.RemoteParams)
+		if !ok {
+			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
+		}
+
+		generators[Key(client.ChainID, client.ClientID)] = remote.NewFromURL(
+			remoteParams.URL, client.ChainID, client.ClientID,
+		)
 
 		return nil
 	default:

@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/proofgen"
+	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
@@ -22,7 +22,7 @@ import (
 type BatchTimeoutPacket struct {
 	sourceChainClient chains.Client
 	route             Route
-	proofGen          proofgen.ProofGenerator
+	prover            prover.Prover
 	txBuilder         txbuilder.TxBuilder
 	txSubmitter       txsubmitter.TxSubmitter
 	storage           TxStorage
@@ -30,7 +30,7 @@ type BatchTimeoutPacket struct {
 
 func NewBatchTimeoutPacket(
 	chainClients ChainClients,
-	proofGenerators ProofGenerators,
+	provers Provers,
 	txBuilders TxBuilders,
 	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
@@ -41,10 +41,10 @@ func NewBatchTimeoutPacket(
 		return BatchTimeoutPacket{}, errors.Errorf("no configured chain client for chain %s", route.SourceChainID)
 	}
 
-	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return BatchTimeoutPacket{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
+			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
 		)
 	}
 
@@ -56,7 +56,7 @@ func NewBatchTimeoutPacket(
 	return BatchTimeoutPacket{
 		sourceChainClient: sourceChainClient,
 		route:             route,
-		proofGen:          proofGen,
+		prover:            prover,
 		txBuilder:         txBuilder,
 		txSubmitter:       txSubmitter,
 		storage:           storage,
@@ -64,7 +64,7 @@ func NewBatchTimeoutPacket(
 }
 
 func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	proofHeight, timestamp, err := p.proofGen.LatestProvableHeight(ctx)
+	proofHeight, timestamp, err := p.prover.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
@@ -111,7 +111,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	}
 
 	submission, err := relayPackets(
-		ctx, p.sourceChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
+		ctx, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
 		p.route.SourceClientID, v2.RelayKindTimeout,
 		proofHeight, events,
 	)

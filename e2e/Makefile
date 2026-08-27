@@ -82,7 +82,7 @@ run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 
 # Hidden commands
 _build-cli:
-	$(MAKE) -C ../cli build
+	$(MAKE) -C ../cli build build-test-bin
 
 .PHONY: help doctor doctor-tools lint lint-fix
 .PHONY: test-harness test-apps test

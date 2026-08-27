@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package ibc.v2.prover;
+
+option go_package = "github.com/cosmos/ibc/cli/api/v2/prover";
+
+// ProverService generates the proofs a relayer submits for one light client.
+// It mirrors the relayer's internal prover interface so a custom light client
+// can be supported by implementing this service.
+//
+// Every request names the light client it is scoped to, so one service can
+// serve many clients across many chains.
+service ProverService {
+  // LatestProvableHeight returns the highest height a subsequent StateProof
+  // and PacketProofs call sharing that height can currently succeed at, with
+  // that height's counterparty-chain timestamp.
+  rpc LatestProvableHeight(LatestProvableHeightRequest) returns (LatestProvableHeightResponse) {}
+
+  // StateProof proves the light client's counterparty state at a height.
+  rpc StateProof(StateProofRequest) returns (StateProofResponse) {}
+
+  // PacketProofs proves each packet's membership or non-membership at a
+  // height, one proof per packet with indices aligned to the request.
+  rpc PacketProofs(PacketProofsRequest) returns (PacketProofsResponse) {}
+}
+
+// Client identifies one configured light client: the chain it lives on and its
+// client id.
+message Client {
+  // The chain the light client lives on.
+  string chain_id = 1;
+  // The light client's id on that chain.
+  string client_id = 2;
+}
+
+message LatestProvableHeightRequest {
+  // The light client this call is scoped to.
+  Client client = 1;
+}
+
+message LatestProvableHeightResponse {
+  // The highest counterparty height currently provable.
+  uint64 height = 1;
+  // counterparty-chain timestamp of height, in seconds.
+  uint64 timestamp = 2;
+}
+
+message StateProofRequest {
+  // The light client this call is scoped to.
+  Client client = 1;
+  // The counterparty height to prove at.
+  uint64 height = 2;
+}
+
+message StateProofResponse {
+  // The proof, opaque to the relayer and passed to the light client unchanged.
+  bytes proof = 1;
+}
+
+message PacketProofsRequest {
+  // The light client this call is scoped to.
+  Client client = 1;
+  // The counterparty height to prove at.
+  uint64 height = 2;
+  // Which commitment to prove for every packet in this request.
+  ProofKind kind = 3;
+  // The packets to prove, all under the same kind and height.
+  repeated Packet packets = 4;
+}
+
+message PacketProofsResponse {
+  // One proof per requested packet, in request order.
+  repeated bytes proofs = 1;
+}
+
+enum ProofKind {
+  PROOF_KIND_UNSPECIFIED = 0;
+  // The packet was sent. Proven to receive it.
+  PROOF_KIND_PACKET_COMMITMENT = 1;
+  // The packet was received and acknowledged. Proven to acknowledge it.
+  PROOF_KIND_ACKNOWLEDGEMENT = 2;
+  // The packet was never received. Proven to time it out.
+  PROOF_KIND_RECEIPT_ABSENCE = 3;
+}
+
+message Packet {
+  // The packet's sequence on the source client.
+  uint64 sequence = 1;
+  // The client the packet was sent from.
+  string source_client = 2;
+  // The client the packet was sent to.
+  string destination_client = 3;
+  // When the packet stops being receivable, in seconds.
+  uint64 timeout_timestamp = 4;
+  // The packet's application payloads.
+  repeated Payload payloads = 5;
+}
+
+message Payload {
+  // The application that sent the payload.
+  string source_port = 1;
+  // The application that receives the payload.
+  string destination_port = 2;
+  // The application version the payload is encoded for.
+  string version = 3;
+  // How value is encoded.
+  string encoding = 4;
+  // The application data.
+  bytes value = 5;
+}

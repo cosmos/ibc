@@ -270,7 +270,7 @@ Both attestation calls return this shape.
 
 <!-- GEN:api:msg:Attestation END -->
 
-`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [resolve.go:L37-L60](cli/internal/relay/proofgen/attestation/resolve.go#L37-L60) -->
+`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [resolve.go:L37-L60](cli/internal/relay/prover/attestation/resolve.go#L37-L60) -->
 
 ### `StateAttestation`
 
@@ -448,6 +448,176 @@ grpcurl -plaintext -d '{"attestor":"attestor-41002"}' \
   "address": "0xc7f148Da846781a9a1D9d22F699A7A88c592CCee"
 }
 ```
+
+## Prover service
+
+`ibc.v2.prover.ProverService`. A relayer runs one prover per light client it
+submits to. Pointing a client end at this service replaces the built-in prover
+with a remote one, so a light client the CLI does not implement can be supported
+by serving these three calls. Every request names the client it is scoped to, so
+one service can serve many clients across many chains.
+
+### `Client`
+
+Every request carries one, identifying the light client the call is scoped to.
+
+<!-- GEN:api:msg:Client START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `chain_id` | `string` | The chain the light client lives on. |
+| `client_id` | `string` | The light client's id on that chain. |
+
+<!-- [prover.proto:L31](proto/cli/prover.proto#L31) -->
+
+<!-- GEN:api:msg:Client END -->
+
+### `LatestProvableHeight`
+
+<!-- GEN:api:rpc:LatestProvableHeight START -->
+
+Returns the highest height a subsequent StateProof and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
+
+<!-- [prover.proto:L19](proto/cli/prover.proto#L19) -->
+
+<!-- GEN:api:rpc:LatestProvableHeight END -->
+
+<!-- GEN:api:msg:LatestProvableHeightRequest START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `client` | `Client` | The light client this call is scoped to. |
+
+<!-- [prover.proto:L38](proto/cli/prover.proto#L38) -->
+
+<!-- GEN:api:msg:LatestProvableHeightRequest END -->
+
+<!-- GEN:api:msg:LatestProvableHeightResponse START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `height` | `uint64` | The highest counterparty height currently provable. |
+| `timestamp` | `uint64` | Counterparty-chain timestamp of `height`, in seconds. |
+
+<!-- [prover.proto:L43](proto/cli/prover.proto#L43) -->
+
+<!-- GEN:api:msg:LatestProvableHeightResponse END -->
+
+The relayer calls this first and proves at the height it returns, so a prover
+paces the relayer by holding the height back until it can prove at it.
+
+### `StateProof`
+
+<!-- GEN:api:rpc:StateProof START -->
+
+Proves the light client's counterparty state at a height.
+
+<!-- [prover.proto:L22](proto/cli/prover.proto#L22) -->
+
+<!-- GEN:api:rpc:StateProof END -->
+
+<!-- GEN:api:msg:StateProofRequest START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `client` | `Client` | The light client this call is scoped to. |
+| `height` | `uint64` | The counterparty height to prove at. |
+
+<!-- [prover.proto:L50](proto/cli/prover.proto#L50) -->
+
+<!-- GEN:api:msg:StateProofRequest END -->
+
+<!-- GEN:api:msg:StateProofResponse START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `proof` | `bytes` | The proof, opaque to the relayer and passed to the light client unchanged. |
+
+<!-- [prover.proto:L57](proto/cli/prover.proto#L57) -->
+
+<!-- GEN:api:msg:StateProofResponse END -->
+
+`proof` is opaque to the relayer, which passes it to the light client unchanged.
+
+### `PacketProofs`
+
+<!-- GEN:api:rpc:PacketProofs START -->
+
+Proves each packet's membership or non-membership at a height, one proof per packet with indices aligned to the request.
+
+<!-- [prover.proto:L26](proto/cli/prover.proto#L26) -->
+
+<!-- GEN:api:rpc:PacketProofs END -->
+
+<!-- GEN:api:msg:PacketProofsRequest START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `client` | `Client` | The light client this call is scoped to. |
+| `height` | `uint64` | The counterparty height to prove at. |
+| `kind` | `ProofKind` | Which commitment to prove for every packet in this request. |
+| `packets` | `Packet[]` | The packets to prove, all under the same `kind` and `height`. |
+
+<!-- [prover.proto:L62](proto/cli/prover.proto#L62) -->
+
+<!-- GEN:api:msg:PacketProofsRequest END -->
+
+<!-- GEN:api:msg:PacketProofsResponse START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `proofs` | `bytes[]` | One proof per requested packet, in request order. |
+
+<!-- [prover.proto:L73](proto/cli/prover.proto#L73) -->
+
+<!-- GEN:api:msg:PacketProofsResponse END -->
+
+`proofs` is one proof per requested packet, in request order, so a response of a
+different length than the request is an error.
+
+<!-- GEN:api:enum:ProofKind START -->
+
+| Value | Meaning |
+|---|---|
+| `PROOF_KIND_PACKET_COMMITMENT` | The packet was sent. Proven to receive it. |
+| `PROOF_KIND_ACKNOWLEDGEMENT` | The packet was received and acknowledged. Proven to acknowledge it. |
+| `PROOF_KIND_RECEIPT_ABSENCE` | The packet was never received. Proven to time it out. |
+
+<!-- [prover.proto:L78](proto/cli/prover.proto#L78) -->
+
+<!-- GEN:api:enum:ProofKind END -->
+
+### `Packet`
+
+The packet a proof is requested for.
+
+<!-- GEN:api:msg:Packet START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `sequence` | `uint64` | The packet's sequence on the source client. |
+| `source_client` | `string` | The client the packet was sent from. |
+| `destination_client` | `string` | The client the packet was sent to. |
+| `timeout_timestamp` | `uint64` | When the packet stops being receivable, in seconds. |
+| `payloads` | `Payload[]` | The packet's application payloads. |
+
+<!-- [prover.proto:L88](proto/cli/prover.proto#L88) -->
+
+<!-- GEN:api:msg:Packet END -->
+
+<!-- GEN:api:msg:Payload START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `source_port` | `string` | The application that sent the payload. |
+| `destination_port` | `string` | The application that receives the payload. |
+| `version` | `string` | The application version the payload is encoded for. |
+| `encoding` | `string` | How `value` is encoded. |
+| `value` | `bytes` | The application data. |
+
+<!-- [prover.proto:L101](proto/cli/prover.proto#L101) -->
+
+<!-- GEN:api:msg:Payload END -->
 
 ## Next steps
 

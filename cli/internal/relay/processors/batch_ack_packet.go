@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/proofgen"
+	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
@@ -24,7 +24,7 @@ type BatchAckPacket struct {
 	destinationChainClient chains.Client
 	sourceChainClient      chains.Client
 	route                  Route
-	proofGen               proofgen.ProofGenerator
+	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
 	storage                TxStorage
@@ -32,7 +32,7 @@ type BatchAckPacket struct {
 
 func NewBatchAckPacket(
 	chainClients ChainClients,
-	proofGenerators ProofGenerators,
+	provers Provers,
 	txBuilders TxBuilders,
 	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
@@ -48,10 +48,10 @@ func NewBatchAckPacket(
 		return BatchAckPacket{}, errors.Errorf("no configured chain client for chain %s", route.SourceChainID)
 	}
 
-	proofGen, ok := proofGenerators.Get(route.SourceChainID, route.SourceClientID)
+	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
 	if !ok {
 		return BatchAckPacket{}, errors.Errorf(
-			"no proof generator configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
+			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
 		)
 	}
 
@@ -64,7 +64,7 @@ func NewBatchAckPacket(
 		destinationChainClient: destinationChainClient,
 		sourceChainClient:      sourceChainClient,
 		route:                  route,
-		proofGen:               proofGen,
+		prover:                 prover,
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
 		storage:                storage,
@@ -72,7 +72,7 @@ func NewBatchAckPacket(
 }
 
 func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
-	proofHeight, _, err := p.proofGen.LatestProvableHeight(ctx)
+	proofHeight, _, err := p.prover.LatestProvableHeight(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving latest provable height")
 	}
@@ -122,7 +122,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 	}
 
 	submission, err := relayPackets(
-		ctx, p.sourceChainClient, p.proofGen, p.txBuilder, p.txSubmitter,
+		ctx, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
 		p.route.SourceClientID, v2.RelayKindAck,
 		proofHeight, events,
 	)
