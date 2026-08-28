@@ -1,6 +1,6 @@
 ---
-title: AttestationLightClient
-description: Contract reference for the attestation light client: what it verifies, what the constructor fixes, its functions, wire formats, roles, and errors.
+title: "AttestationLightClient"
+description: "Contract reference for the attestation light client: what it verifies, what the constructor fixes, its functions, wire formats, roles, and errors."
 ---
 
 AttestationLightClient is an IBC light client that trusts a fixed set of attestor addresses, and it accepts a claim once a quorum of that set has signed it. Attestors claim two things about the counterparty chain: the timestamp of a block at a given height, and the values held at commitment paths at that height.
