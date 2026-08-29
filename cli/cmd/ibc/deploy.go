@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,8 +41,9 @@ var (
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
 
-	flagDeployRenderSignerA string
-	flagDeployRenderSignerB string
+	flagDeployRenderSignerA  string
+	flagDeployRenderSignerB  string
+	flagDeployRenderPopulate bool
 
 	flagDeployIFTName        string
 	flagDeployIFTSymbol      string
@@ -88,7 +90,7 @@ var (
 
 	cmdDeployRenderConfig = &cobra.Command{
 		Use:   "render-config [chainA] [chainB]",
-		Short: "Project two deployment manifests into config sections for relaying between them (stdout)",
+		Short: "Print the existing config plus the settings to relay between two chains",
 		Args:  cobra.ExactArgs(2),
 		RunE:  deployRenderConfig,
 	}
@@ -199,14 +201,22 @@ func confirmOrAbort(results []deploy.StepResult) error {
 	if pending == 0 {
 		return nil
 	}
-	fmt.Printf("About to execute %d step(s) that submit transactions. Proceed? [y/N]: ", pending)
+	return confirmPrompt(os.Stdout,
+		fmt.Sprintf("About to execute %d step(s) that submit transactions.", pending))
+}
+
+func confirmPrompt(w io.Writer, action string) error {
+	_, _ = fmt.Fprintf(w, "%s Proceed? [y/N]: ", action)
+
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil {
 		return errors.Wrap(err, "confirmation required; rerun with --yes for non-interactive use")
 	}
+
 	if answer := strings.ToLower(strings.TrimSpace(line)); answer != "y" && answer != "yes" {
 		return errors.New("aborted")
 	}
+
 	return nil
 }
 
@@ -564,7 +574,7 @@ func renderRelayConfig(
 	cfg config.Config,
 	a, b *manifest.Manifest,
 	signerA, signerB string,
-) (renderedDeployment, map[string]string, error) {
+) (renderedDeployment, error) {
 	full := cfg
 	full.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
 	full.Relayer.Connections = nil
@@ -593,7 +603,7 @@ func renderRelayConfig(
 		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
 	}
 	if len(full.Relayer.Connections) == 0 {
-		return renderedDeployment{}, nil, errors.Errorf(
+		return renderedDeployment{}, errors.Errorf(
 			"no mutual client pair between chains %s and %s: run `ibc deploy client` on each chain first (chains %s and %s)",
 			a.ChainID,
 			b.ChainID,
@@ -605,7 +615,7 @@ func renderRelayConfig(
 	out := renderedDeployment{Chains: full.Chains, Attestors: full.Attestors}
 	out.Relayer.Connections = full.Relayer.Connections
 
-	return out, config.CollectComments(full), nil
+	return out, nil
 }
 
 func deployRenderConfig(_ *cobra.Command, args []string) error {
@@ -637,11 +647,76 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		}
 		manifests[i] = m
 	}
-	out, comments, err := renderRelayConfig(cfg, manifests[0], manifests[1], signers[0], signers[1])
+	out, err := renderRelayConfig(cfg, manifests[0], manifests[1], signers[0], signers[1])
 	if err != nil {
 		return err
 	}
-	return config.PrintYAMLWithComments(out, comments)
+
+	patch := config.Patch{
+		Chains:      out.Chains,
+		Connections: out.Relayer.Connections,
+		Attestors:   out.Attestors,
+	}
+
+	merged, conflicts := cfg.WithPatch(patch)
+
+	if err := config.PrintYAMLWithComments(merged, config.CollectComments(merged)); err != nil {
+		return err
+	}
+
+	if !flagDeployRenderPopulate {
+		return nil
+	}
+
+	if !flagDeployYes {
+		reportConflicts(conflicts)
+
+		configPath, pathErr := globalFlags.ConfigPath()
+		if pathErr != nil {
+			return pathErr
+		}
+
+		if confirmErr := confirmPrompt(os.Stderr, "About to write "+configPath+"."); confirmErr != nil {
+			return confirmErr
+		}
+	}
+
+	return populateRenderedConfig(merged)
+}
+
+// reportConflicts lists the entries writing would alter, on stderr so the config
+// above stays pipeable.
+func reportConflicts(conflicts []config.Conflict) {
+	if len(conflicts) == 0 {
+		return
+	}
+
+	fmt.Fprintln(os.Stderr, "\nThis operation overwrites values for the following:")
+
+	for _, c := range conflicts {
+		fmt.Fprintln(os.Stderr, "  "+c.String())
+	}
+
+	fmt.Fprintln(os.Stderr)
+}
+
+func populateRenderedConfig(merged config.Config) error {
+	configPath, err := globalFlags.ConfigPath()
+	if err != nil {
+		return err
+	}
+
+	if storeErr := merged.StoreToFileWithComments(configPath); storeErr != nil {
+		return storeErr
+	}
+
+	if globalFlags.Quiet {
+		return nil
+	}
+
+	fmt.Printf("Wrote %s\n", configPath)
+
+	return nil
 }
 
 // deployerAddress derives the deployer's EVM address, for use as the default
