@@ -714,7 +714,11 @@ func populateRenderedConfig(merged config.Config) error {
 		return nil
 	}
 
-	fmt.Printf("Wrote %s\n", configPath)
+	_, _ = fmt.Fprintf(os.Stderr, "Wrote %s\n", configPath)
+
+	if validateErr := merged.Validate(); validateErr != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Config is not runnable yet: %v\n", validateErr)
+	}
 
 	return nil
 }

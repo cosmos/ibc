@@ -174,7 +174,7 @@ func init() {
 	cmdDeployRenderConfig.Flags().
 		StringVar(&flagDeployRenderSignerB, "signer-b", "", "signers[] alias submitting relay txs on chainB")
 	cmdDeployRenderConfig.Flags().
-		BoolVarP(&flagDeployRenderPopulate, "populate-config", "p", false, "write the result to the config file instead of printing it")
+		BoolVarP(&flagDeployRenderPopulate, "populate-config", "p", false, "write the printed config to the config file")
 
 	// IFT commands
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTName, "name", "", "ERC20 token name")

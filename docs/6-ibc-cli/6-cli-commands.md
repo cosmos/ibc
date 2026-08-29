@@ -291,7 +291,7 @@ Print the existing config plus the settings to relay between two chains.
 |---|---|---|
 | `--signer-a <string>` |  | Signers[] alias submitting relay txs on chainA. |
 | `--signer-b <string>` |  | Signers[] alias submitting relay txs on chainB. |
-| `-p, --populate-config` |  | Write the result to the config file instead of printing it. |
+| `-p, --populate-config` |  | Write the printed config to the config file. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
