@@ -16,7 +16,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/proofgen"
+	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
@@ -30,10 +30,10 @@ func (s staticChains) Get(chainID string) (chains.Client, bool) {
 	return client, ok
 }
 
-type staticProofGenerators map[string]proofgen.ProofGenerator
+type staticProvers map[string]prover.Prover
 
-func (s staticProofGenerators) Get(chainID, clientID string) (proofgen.ProofGenerator, bool) {
-	gen, ok := s[proofgen.Key(chainID, clientID)]
+func (s staticProvers) Get(chainID, clientID string) (prover.Prover, bool) {
+	gen, ok := s[prover.Key(chainID, clientID)]
 	return gen, ok
 }
 
@@ -101,10 +101,10 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 			}, nil
 		}).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	mockProver := mocks.NewMockProver(t)
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -120,7 +120,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
 		txSubmitter,
@@ -198,10 +198,10 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 	}, nil).Once()
 	sourceChainClient.EXPECT().TxPacketEvents(mock.Anything, failingTxID).Return(nil, assert.AnError).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	mockProver := mocks.NewMockProver(t)
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -217,7 +217,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
 		txSubmitter,
@@ -303,10 +303,10 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		},
 	}, nil).Once()
 
-	proofGen := mocks.NewMockProofGenerator(t)
-	proofGen.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	proofGen.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
-	proofGen.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
+	mockProver := mocks.NewMockProver(t)
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
@@ -322,7 +322,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProofGenerators{proofgen.Key(route.DestinationChainID, route.DestinationClientID): proofGen},
+		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
 		db,
 		txSubmitter,

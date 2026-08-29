@@ -17,10 +17,13 @@ chains:
   - chainId: "1"
     evm:
       rpc: https://ethereum-rpc.example.com
+      # ws is required by any client end that enables autoRelay
+      ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000000"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
+      ws: wss://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000000"
 
 relayer:
@@ -50,6 +53,24 @@ relayer:
         autoRelay:
           enabled: true
           lookback: 100
+
+    # a client end of type: remote delegates proof generation to a
+    # ProverService over gRPC instead of building proofs from attestations, so
+    # a light client IBC CLI does not implement can be relayed by serving that
+    # API
+    - alias: "eth-custom"
+      clientA:
+        chainId: "1"
+        signer: "eth-relayer-key"
+        clientId: "custom-0"
+        type: "remote"
+        params:
+          url: prover.example.com:9090
+      clientB:
+        chainId: "8453"
+        signer: "base-relayer-key"
+        clientId: "ethereum-1"
+        type: "attestation"
 
 # attestors -- both the ones this process runs itself (type: local)
 #  and the ones it queries over gRPC (type: remote).

@@ -56,7 +56,7 @@ flowchart TB
     API -->|"records each packet"| STORE[("store")]
     STORE -.->|"picked up for delivery"| DELIV["delivery"]
     DELIV -->|"re-reads the send transaction"| SRC["source chain"]
-    DELIV --> PG["proof generator"]
+    DELIV --> PG["prover"]
     PG -->|"in process or over gRPC"| ATT["attestors"]
     DELIV -->|"one transaction per batch"| DST["destination chain"]
     DELIV -.->|"records progress"| STORE
@@ -73,7 +73,7 @@ Packets heading the same way are batched and delivered together, rather than one
 
 ### Proof generation and transaction building
 
-Before it can deliver anything, the relayer needs proof of the packets for the light client. It runs one proof generator for each light client it submits to. Currently the only supported light client type is the attestation light client, with more light client types planned.
+Before it can deliver anything, the relayer needs proof of the packets for the light client. It runs one prover for each light client it submits to. Currently the only supported light client type is the attestation light client, with more light client types planned.
 
 The generator asks the client's attestors to attest to the chain's state at a height. It checks the signatures, and once enough attestors have signed the same attestation to meet the client's threshold, it packages that attestation and its signatures together. That package is the proof.
 

@@ -336,7 +336,7 @@ def _():
 def _():
     b = refgen.gen_config()
     assert "`0.0.0.0:3000`" in b["config:server"]
-    assert "`5s`" in b["config:relayer"]            # dispatch.DefaultPollInterval
+    assert "`1s`" in b["config:relayer"]            # dispatch.DefaultPollInterval
     assert "`50`" in b["config:relayer:chainOverrides"]   # pipeline.DefaultBatchSize
 
 

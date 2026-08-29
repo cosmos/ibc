@@ -233,7 +233,7 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/relay/dispatch/dispatcher.go",
-                 "const DefaultPollInterval = 5 * time.Second",
+                 "const DefaultPollInterval = 1 * time.Second",
                  "const DefaultPollInterval = 9 * time.Second")
         red_then_healed(box, "config", "`9s`")
 
