@@ -117,7 +117,7 @@ func TestRenderRelayConfig(t *testing.T) {
 		},
 		Signers: config.Signers{watcherSigner, unreferencedSigner},
 	}
-	out, _, err := renderRelayConfig(cfg, a, b, "signer-a", "signer-b")
+	out, err := renderRelayConfig(cfg, a, b, "signer-a", "signer-b")
 	require.NoError(t, err)
 
 	// chain 1 is declared: its config is copied, router updated, rpc kept
@@ -167,7 +167,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	// no mutual pair: B has no client tracking A back
 	empty := manifest.New("2", "evm")
 	empty.Core.Router = "0xrouterB"
-	_, _, err = renderRelayConfig(cfg, a, empty, "signer-a", "signer-b")
+	_, err = renderRelayConfig(cfg, a, empty, "signer-a", "signer-b")
 	require.ErrorContains(t, err, "no mutual client pair")
 
 	// mismatched back-reference: B's client points at a different A client
@@ -177,7 +177,7 @@ func TestRenderRelayConfig(t *testing.T) {
 		ClientID: "cli-1", Type: "attestation",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-other",
 	})
-	_, _, err = renderRelayConfig(cfg, a, mismatched, "signer-a", "signer-b")
+	_, err = renderRelayConfig(cfg, a, mismatched, "signer-a", "signer-b")
 	require.ErrorContains(t, err, "no mutual client pair")
 }
 
@@ -201,11 +201,17 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
 	})
 
-	out, comments, err := renderRelayConfig(config.Config{}, a, b, "", "")
+	out, err := renderRelayConfig(config.Config{}, a, b, "", "")
 	require.NoError(t, err)
 
+	merged, _ := config.Config{}.WithPatch(config.Patch{
+		Chains:      out.Chains,
+		Connections: out.Relayer.Connections,
+		Attestors:   out.Attestors,
+	})
+
 	rendered := captureStdout(t, func() {
-		require.NoError(t, config.PrintYAMLWithComments(out, comments))
+		require.NoError(t, config.PrintYAMLWithComments(merged, config.CollectComments(merged)))
 	})
 
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)
