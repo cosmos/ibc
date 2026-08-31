@@ -684,8 +684,6 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 	return populateRenderedConfig(merged)
 }
 
-// reportConflicts lists the entries writing would alter, on stderr so the config
-// above stays pipeable.
 func reportConflicts(conflicts []config.Conflict) {
 	if len(conflicts) == 0 {
 		return
