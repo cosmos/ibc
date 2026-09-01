@@ -19,14 +19,7 @@ const (
 	ClientTypeRemote ClientType = "remote"
 )
 
-// AttestorType how an attestor is reached.
-type AttestorType string
 
-// Attestor types
-const (
-	AttestorTypeRemote AttestorType = "remote"
-	AttestorTypeLocal  AttestorType = "local"
-)
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {

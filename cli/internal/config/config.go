@@ -15,6 +15,54 @@ import (
 	"github.com/cosmos/ibc/cli/internal/network"
 )
 
+// Chain types
+const (
+	ChainTypeEVM ChainType = "evm"
+)
+
+// Attestor types
+const (
+	AttestorTypeRemote AttestorType = "remote"
+	AttestorTypeLocal  AttestorType = "local"
+)
+
+// Database type
+const (
+	DBTypeSQLite   = "sqlite"
+	DBTypePostgres = "postgres"
+)
+
+// Signer type. Local represents a private key file. Remote connects to cosmos/KMS.
+const (
+	SignerLocal  = "local"
+	SignerRemote = "remote"
+)
+
+const (
+	// ValidationNone disables config validation
+	ValidationNone ValidationType = iota
+
+	// ValidationStrict validates all config fields
+	ValidationStrict
+
+	// ValidationAttestorOnly validates only attestor fields,
+	// assuming that the process will run attestor-only
+	ValidationAttestorOnly
+)
+
+const sqliteInMemory = ":memory:"
+
+const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
+
+// ChainType the execution environment of a chain.
+type ChainType string
+
+// AttestorType how an attestor is reached.
+type AttestorType string
+
+// ValidationType the type of config validation to perform.
+type ValidationType uint8
+
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
@@ -37,9 +85,27 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
+// ChainConfig chain information shared by the attestor and relayer.
+type ChainConfig struct {
+	ChainID string          `yaml:"chainId"`
+	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+
+	// Deployer optional signer alias used by `ibc deploy` for this chain.
+	Deployer string `yaml:"deployer,omitempty"`
+}
+
+// EVMChainConfig EVM-specific chain details.
+type EVMChainConfig struct {
+	RPC string `yaml:"rpc"`
+
+	// WS is a websocket endpoint, required for chains sourcing auto-relayed routes.
+	WS string `yaml:"ws,omitempty"`
+
+	ICS26Router string `yaml:"ics26Router"`
+}
+
 // Attestors is the list of attestors, used both by the relayer
-// (to resolve who to query) and the attestor binary (to know what it
-// serves locally).
+// (to resolve who to query) and the attestor binary (to know what it serves locally).
 type Attestors []AttestorConfig
 
 // AttestorConfig describes one attestor, either run by this process
@@ -86,51 +152,6 @@ type SignerConfig struct {
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }
 
-// ChainType the execution environment of a chain.
-type ChainType string
-
-// Chain types
-const (
-	ChainTypeEVM ChainType = "evm"
-)
-
-type ValidationType uint8
-
-const (
-	// ValidationNone disables config validation
-	ValidationNone ValidationType = iota
-
-	// ValidationStrict validates all config fields
-	ValidationStrict
-
-	// ValidationAttestorOnly validates only attestor fields,
-	// assuming that the process will run attestor-only
-	ValidationAttestorOnly
-)
-
-// Database type
-const (
-	DBTypeSQLite   = "sqlite"
-	DBTypePostgres = "postgres"
-)
-
-// Signer type. Local represents a private key file. Remote connects to cosmos/KMS.
-const (
-	SignerLocal  = "local"
-	SignerRemote = "remote"
-)
-
-const sqliteInMemory = ":memory:"
-
-// ChainConfig chain information shared by the attestor and relayer.
-type ChainConfig struct {
-	ChainID string          `yaml:"chainId"`
-	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
-
-	// Deployer optional signer alias used by `ibc deploy` for this chain.
-	Deployer string `yaml:"deployer,omitempty"`
-}
-
 // Type returns the chain type implied by the configured settings.
 func (c ChainConfig) Type() ChainType {
 	if c.EVM != nil {
@@ -138,16 +159,6 @@ func (c ChainConfig) Type() ChainType {
 	}
 
 	return ""
-}
-
-// EVMChainConfig EVM-specific chain details.
-type EVMChainConfig struct {
-	RPC string `yaml:"rpc"`
-
-	// WS is a websocket endpoint, required for chains sourcing auto-relayed routes.
-	WS string `yaml:"ws,omitempty"`
-
-	ICS26Router string `yaml:"ics26Router"`
 }
 
 // DefaultConfig sample config using default values and Sqlite.
@@ -650,8 +661,6 @@ func (c SignerConfig) Validate() error {
 
 	return nil
 }
-
-const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
 
 // CollectComments builds TODO comments for every field in cfg that's left
 // for the operator to fill in by hand, keyed by YAML path for
