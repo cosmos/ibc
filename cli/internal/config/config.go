@@ -4,17 +4,13 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/goccy/go-yaml"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
@@ -200,34 +196,6 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 
 	if validate {
 		if err := config.Validate(); err != nil {
-			return Config{}, errors.Wrap(err, "validation failed")
-		}
-	}
-
-	return config, nil
-}
-
-func FromFile(path string, validationType ValidationType) (Config, error) {
-	config := DefaultConfig()
-
-	bz, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
-	}
-
-	// substitute ENV variables
-	expanded := os.ExpandEnv(string(bz))
-
-	opts := []yaml.DecodeOption{
-		yaml.DisallowUnknownField(),
-	}
-
-	if err := yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...); err != nil {
-		return Config{}, err
-	}
-
-	if validationType != ValidationNone {
-		if err := config.Validate2(validationType); err != nil {
 			return Config{}, errors.Wrap(err, "validation failed")
 		}
 	}
@@ -500,56 +468,14 @@ func (c ChainConfig) Validate() error {
 }
 
 func (c Config) StoreToFile(path string) error {
-	return c.store(path, nil)
+	return storeConfig(c, path, nil)
 }
 
 // StoreToFileWithComments writes c to path as YAML, with a TODO comment
 // attached to every field CollectComments flags as left for the operator to
 // fill in.
 func (c Config) StoreToFileWithComments(path string) error {
-	return c.store(path, CollectComments(c))
-}
-
-func (c Config) store(path string, comments map[string]string) error {
-	if err := EnsureDirectory(path); err != nil {
-		return err
-	}
-
-	bz, err := yaml.MarshalWithOptions(c, yaml.WithComment(toCommentMap(comments)))
-	if err != nil {
-		return err
-	}
-
-	mode := os.FileMode(0o644)
-	if info, statErr := os.Stat(path); statErr == nil {
-		mode = info.Mode().Perm()
-		path, err = filepath.EvalSymlinks(path)
-		if err != nil {
-			return err
-		}
-	} else if !os.IsNotExist(statErr) {
-		return statErr
-	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(bz); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), path)
+	return storeConfig(c, path, CollectComments(c))
 }
 
 // toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
@@ -725,95 +651,6 @@ func (c SignerConfig) Validate() error {
 	return nil
 }
 
-// KeyFileFallbacks returns the paths tried for a local signer key file.
-func KeyFileFallbacks(keyPath string) []string {
-	fallbacks := []string{keyPath}
-
-	// absolute path, no fallbacks needed
-	if filepath.IsAbs(keyPath) {
-		return fallbacks
-	}
-
-	// forgot to add .json extension
-	if !strings.HasSuffix(keyPath, ".json") {
-		keyPath = fmt.Sprintf("%s.json", keyPath)
-
-		fallbacks = append(fallbacks, keyPath)
-	}
-
-	// forgot to add keys/ directory
-	if !strings.Contains(keyPath, "keys/") {
-		keyPath = filepath.Join("keys", keyPath)
-
-		fallbacks = append(fallbacks, keyPath)
-	}
-
-	return fallbacks
-}
-
-// PrintJSON prints anything as JSON to stdout.
-func PrintJSON(v any) error {
-	return printJSON(os.Stdout, v)
-}
-
-func printJSON(out io.Writer, v any) error {
-	if msg, ok := v.(proto.Message); ok {
-		return printProtoJSON(out, msg)
-	}
-
-	bz, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintln(out, string(bz))
-
-	return err
-}
-
-func printProtoJSON(out io.Writer, msg proto.Message) error {
-	opts := protojson.MarshalOptions{
-		Indent:          "  ",
-		UseProtoNames:   false,
-		EmitUnpopulated: true,
-	}
-
-	bz, err := opts.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintln(out, string(bz))
-
-	return err
-}
-
-// PrintYAML prints anything as YAML to stdout.
-func PrintYAML(v any) error {
-	bz, err := yaml.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(string(bz))
-
-	return nil
-}
-
-// PrintYAMLWithComments prints v as YAML to stdout, attaching a line comment
-// to every field addressed by a YAML path in comments, keyed as
-// "$.relayer.connections[0].clientA.signer".
-func PrintYAMLWithComments(v any, comments map[string]string) error {
-	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(toCommentMap(comments)))
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(string(bz))
-
-	return nil
-}
-
 const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
 
 // CollectComments builds TODO comments for every field in cfg that's left
@@ -861,27 +698,4 @@ func dbTypeFromURL(raw string) string {
 	}
 
 	return DBTypeSQLite
-}
-
-func fileExistsInAny(path ...string) error {
-	for _, p := range path {
-		if err := fileExists(p); err == nil {
-			return nil
-		}
-	}
-
-	return errors.New("file not found")
-}
-
-func fileExists(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		return errors.Errorf("path is a directory")
-	}
-
-	return nil
 }
