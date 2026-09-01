@@ -19,20 +19,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/network"
 )
 
-// Database type
-const (
-	DBTypeSQLite   = "sqlite"
-	DBTypePostgres = "postgres"
-)
-
-// Signer type. Local represents a private key file. Remote connects to cosmos/KMS.
-const (
-	SignerLocal  = "local"
-	SignerRemote = "remote"
-)
-
-const sqliteInMemory = ":memory:"
-
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
@@ -112,6 +98,34 @@ const (
 	ChainTypeEVM ChainType = "evm"
 )
 
+type ValidationType uint8
+
+const (
+	// ValidationNone disables config validation
+	ValidationNone ValidationType = iota
+
+	// ValidationStrict validates all config fields
+	ValidationStrict
+
+	// ValidationAttestorOnly validates only attestor fields,
+	// assuming that the process will run attestor-only
+	ValidationAttestorOnly
+)
+
+// Database type
+const (
+	DBTypeSQLite   = "sqlite"
+	DBTypePostgres = "postgres"
+)
+
+// Signer type. Local represents a private key file. Remote connects to cosmos/KMS.
+const (
+	SignerLocal  = "local"
+	SignerRemote = "remote"
+)
+
+const sqliteInMemory = ":memory:"
+
 // ChainConfig chain information shared by the attestor and relayer.
 type ChainConfig struct {
 	ChainID string          `yaml:"chainId"`
@@ -160,6 +174,7 @@ func DefaultConfig() Config {
 	}
 }
 
+// Deprecated: use FromFile2 instead
 // LoadFromFile loads Config from file with optional validation.
 // Note: supports ENV variables expansion!
 func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, error) {
@@ -190,6 +205,48 @@ func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, er
 	}
 
 	return config, nil
+}
+
+func FromFile(path string, validationType ValidationType) (Config, error) {
+	config := DefaultConfig()
+
+	bz, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+
+	// substitute ENV variables
+	expanded := os.ExpandEnv(string(bz))
+
+	opts := []yaml.DecodeOption{
+		yaml.DisallowUnknownField(),
+	}
+
+	if err := yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...); err != nil {
+		return Config{}, err
+	}
+
+	if validationType != ValidationNone {
+		if err := config.Validate2(validationType); err != nil {
+			return Config{}, errors.Wrap(err, "validation failed")
+		}
+	}
+
+	return config, nil
+}
+
+// todo
+func (c Config) Validate2(validationType ValidationType) error {
+	// todo validate common
+	// - server
+	// - db
+	// - signers
+	// - attestors
+	// - crossValidate attestors
+	// todo if type != ValidationAttestorOnly, validate relayer
+	// - ....
+
+	return nil
 }
 
 func (c Config) Validate() error {
