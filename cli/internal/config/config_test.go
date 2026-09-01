@@ -660,11 +660,11 @@ func TestConfigAccessors(t *testing.T) {
 	_, ok = cfg.AttestorByName("nope")
 	require.False(t, ok)
 
-	forChain := cfg.AttestorsForChain("1")
+	forChain := cfg.AttestorsByChain("1")
 	require.Len(t, forChain, 2)
 	require.Equal(t, "a1", forChain[0].Name)
 	require.Equal(t, "a3", forChain[1].Name)
-	require.Empty(t, cfg.AttestorsForChain("9"))
+	require.Empty(t, cfg.AttestorsByChain("9"))
 }
 
 func TestCollectComments(t *testing.T) {
