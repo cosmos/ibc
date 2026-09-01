@@ -274,6 +274,28 @@ func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 	return attestors
 }
 
+func (c ChainConfig) Validate() error {
+	chainType := c.Type()
+
+	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case chainType == "":
+		return errors.New("unknown chain type")
+	case chainType != ChainTypeEVM:
+		return errors.Errorf("unsupported chain type %s", chainType)
+	case chainType == ChainTypeEVM:
+		switch {
+		case c.EVM.RPC == "":
+			return errors.New(".evm.rpc required")
+		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
+			return errors.Errorf(".evm.ws must be a ws:// or wss:// URL, got %q", c.EVM.WS)
+		}
+	}
+
+	return nil
+}
+
 func (c Config) StoreToFile(path string) error {
 	return storeConfig(c, path, nil)
 }
