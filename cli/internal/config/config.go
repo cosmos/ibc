@@ -421,11 +421,16 @@ func (c Config) AttestorsForChain(chainID string) []AttestorConfig {
 }
 
 func (c ChainConfig) Validate() error {
-	if c.ChainID == "" {
-		return errors.New(".chainId required")
-	}
+	chainType := c.Type()
 
-	if c.Type() == ChainTypeEVM {
+	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case chainType == "":
+		return errors.New("unknown chain type")
+	case chainType != ChainTypeEVM:
+		return errors.Errorf("unsupported chain type %s", chainType)
+	case chainType == ChainTypeEVM:
 		switch {
 		case c.EVM.RPC == "":
 			return errors.New(".evm.rpc required")

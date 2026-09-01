@@ -591,6 +591,19 @@ func TestSignerConfigValidateRequiresExactLocalFilePath(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestChainConfigValidate(t *testing.T) {
+	t.Run("emptyChainType", func(t *testing.T) {
+		// ARRANGE
+		chain := ChainConfig{ChainID: "1"}
+
+		// ACT
+		err := chain.Validate()
+
+		// ASSERT
+		require.ErrorContains(t, err, "unknown chain type")
+	})
+}
+
 func TestChainDeployerCrossValidation(t *testing.T) {
 	base := DefaultConfig()
 	base.Chains = []ChainConfig{
