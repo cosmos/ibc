@@ -16,9 +16,7 @@ import (
 )
 
 // Chain types
-const (
-	ChainTypeEVM ChainType = "evm"
-)
+const ChainTypeEVM ChainType = "evm"
 
 // Attestor types
 const (
@@ -54,14 +52,16 @@ const sqliteInMemory = ":memory:"
 
 const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
 
-// ChainType the execution environment of a chain.
-type ChainType string
+type (
+	// ChainType the execution environment of a chain.
+	ChainType string
 
-// AttestorType how an attestor is reached.
-type AttestorType string
+	// AttestorType how an attestor is reached.
+	AttestorType string
 
-// ValidationType the type of config validation to perform.
-type ValidationType uint8
+	// ValidationType the type of config validation to perform.
+	ValidationType uint8
+)
 
 // Config represents a config file
 // Should only contain `camelCase` keywords
@@ -152,13 +152,15 @@ type SignerConfig struct {
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }
 
-// Type returns the chain type implied by the configured settings.
-func (c ChainConfig) Type() ChainType {
-	if c.EVM != nil {
-		return ChainTypeEVM
-	}
+// ChainSignerPair one (chain, signer alias) pair a client end submits with.
+type ChainSignerPair struct {
+	ChainID     string
+	SignerAlias string
+}
 
-	return ""
+type namedClientEnd struct {
+	label string
+	cfg   ClientEnd
 }
 
 // DefaultConfig sample config using default values and Sqlite.
@@ -268,150 +270,6 @@ func (c Config) Validate() error {
 	return c.validateAutoRelay()
 }
 
-// validateAutoRelay ensures every auto-relayed client end can be subscribed to.
-// It lives here rather than on ChainConfig because a chain cannot see the
-// connections that source from it.
-func (c Config) validateAutoRelay() error {
-	for i, conn := range c.Relayer.Connections {
-		for _, side := range []struct {
-			name string
-			end  ClientEnd
-		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}} {
-			end := side.end
-
-			if end.AutoRelay.Enabled == nil || !*end.AutoRelay.Enabled {
-				continue
-			}
-
-			chain, ok := c.Chain(end.ChainID)
-			if !ok {
-				continue
-			}
-
-			if chain.EVM == nil || chain.EVM.WS == "" {
-				return errors.Errorf(
-					".relayer.connections[%d].%s autoRelay requires .chains[%s].evm.ws",
-					i, side.name, end.ChainID,
-				)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (c Config) crossValidate() error {
-	signerSet := make(map[string]struct{}, len(c.Signers))
-	for _, signer := range c.Signers {
-		signerSet[signer.Alias] = struct{}{}
-	}
-
-	for i, a := range c.Attestors {
-		if a.Type != AttestorTypeLocal {
-			continue
-		}
-		if _, exists := signerSet[a.Signer]; !exists {
-			return errors.Errorf(".attestors[%d].signer references unknown signer: %q", i, a.Signer)
-		}
-	}
-
-	for _, chain := range c.Chains {
-		if chain.Deployer == "" {
-			continue
-		}
-		if _, exists := signerSet[chain.Deployer]; !exists {
-			return errors.Errorf(".chains[%s].deployer references unknown signer: %q", chain.ChainID, chain.Deployer)
-		}
-	}
-
-	if err := c.validateChainReferences(); err != nil {
-		return err
-	}
-
-	if err := c.validateConnectionSigners(signerSet); err != nil {
-		return errors.Wrap(err, ".relayer.connections")
-	}
-
-	return nil
-}
-
-type namedClientEnd struct {
-	label string
-	cfg   ClientEnd
-}
-
-func connectionEnds(conn ConnectionConfig) []namedClientEnd {
-	return []namedClientEnd{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
-}
-
-// ChainSignerPair one (chain, signer alias) pair a client end submits with.
-type ChainSignerPair struct {
-	ChainID     string
-	SignerAlias string
-}
-
-// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across
-// every configured connection's two client ends.
-func RelayerChainSignerPairs(c Config) []ChainSignerPair {
-	seen := make(map[ChainSignerPair]struct{})
-
-	var pairs []ChainSignerPair
-
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
-			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
-			if _, dup := seen[pair]; dup {
-				continue
-			}
-
-			seen[pair] = struct{}{}
-			pairs = append(pairs, pair)
-		}
-	}
-
-	return pairs
-}
-
-// validateChainReferences ensures chains referenced by the relayer config are
-// declared in the top-level chains block.
-func (c Config) validateChainReferences() error {
-	for _, chain := range c.Relayer.ChainOverrides {
-		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
-			return errors.Errorf(".chainOverrides[%s] chainId not declared in top-level chains", chain.ChainID)
-		}
-	}
-
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range connectionEnds(conn) {
-			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
-				return errors.Errorf(
-					".connections[%s].%s chainId %q not declared in top-level chains",
-					conn.Alias, end.label, end.cfg.ChainID,
-				)
-			}
-		}
-	}
-
-	return nil
-}
-
-// validateConnectionSigners ensures every client end's signer resolves to a
-// configured signer.
-func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range connectionEnds(conn) {
-			if _, exists := signerSet[end.cfg.Signer]; !exists {
-				return errors.Errorf(
-					"connection %q %s references unknown signer %q",
-					conn.Alias, end.label, end.cfg.Signer,
-				)
-			}
-		}
-	}
-
-	return nil
-}
-
 func (c Config) Chain(chainID string) (ChainConfig, bool) {
 	for _, chain := range c.Chains {
 		if chain.ChainID == chainID {
@@ -444,8 +302,8 @@ func (c Config) AttestorByName(name string) (AttestorConfig, bool) {
 	return AttestorConfig{}, false
 }
 
-// AttestorsForChain returns every configured attestor watching chainID.
-func (c Config) AttestorsForChain(chainID string) []AttestorConfig {
+// AttestorsByChain returns every configured attestor watching chainID.
+func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 	var attestors []AttestorConfig
 	for _, attestor := range c.Attestors {
 		if attestor.ChainID == chainID {
@@ -454,28 +312,6 @@ func (c Config) AttestorsForChain(chainID string) []AttestorConfig {
 	}
 
 	return attestors
-}
-
-func (c ChainConfig) Validate() error {
-	chainType := c.Type()
-
-	switch {
-	case c.ChainID == "":
-		return errors.New(".chainId required")
-	case chainType == "":
-		return errors.New("unknown chain type")
-	case chainType != ChainTypeEVM:
-		return errors.Errorf("unsupported chain type %s", chainType)
-	case chainType == ChainTypeEVM:
-		switch {
-		case c.EVM.RPC == "":
-			return errors.New(".evm.rpc required")
-		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
-			return errors.Errorf(".evm.ws must be a ws:// or wss:// URL, got %q", c.EVM.WS)
-		}
-	}
-
-	return nil
 }
 
 func (c Config) StoreToFile(path string) error {
@@ -487,16 +323,6 @@ func (c Config) StoreToFile(path string) error {
 // fill in.
 func (c Config) StoreToFileWithComments(path string) error {
 	return storeConfig(c, path, CollectComments(c))
-}
-
-// toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
-// of line comments, as PrintYAMLWithComments/store both need.
-func toCommentMap(comments map[string]string) yaml.CommentMap {
-	cm := make(yaml.CommentMap, len(comments))
-	for path, text := range comments {
-		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
-	}
-	return cm
 }
 
 func (c ServerConfig) Validate() error {
@@ -535,14 +361,35 @@ func (c DBConfig) Label() string {
 	return path
 }
 
-// DBConfigFromURL infers DB type from a CLI database URL override.
-func DBConfigFromURL(url string) (DBConfig, error) {
-	db := DBConfig{
-		URL:  url,
-		Type: dbTypeFromURL(url),
+func (c ChainConfig) Validate() error {
+	chainType := c.Type()
+
+	switch {
+	case c.ChainID == "":
+		return errors.New(".chainId required")
+	case chainType == "":
+		return errors.New("unknown chain type")
+	case chainType != ChainTypeEVM:
+		return errors.Errorf("unsupported chain type %s", chainType)
+	case chainType == ChainTypeEVM:
+		switch {
+		case c.EVM.RPC == "":
+			return errors.New(".evm.rpc required")
+		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
+			return errors.Errorf(".evm.ws must be a ws:// or wss:// URL, got %q", c.EVM.WS)
+		}
 	}
 
-	return db, db.Validate()
+	return nil
+}
+
+// Type returns the chain type implied by the configured settings.
+func (c ChainConfig) Type() ChainType {
+	if c.EVM != nil {
+		return ChainTypeEVM
+	}
+
+	return ""
 }
 
 // Validate validates the attestors list. Allows empty.
@@ -662,6 +509,113 @@ func (c SignerConfig) Validate() error {
 	return nil
 }
 
+// validateAutoRelay ensures every auto-relayed client end can be subscribed to.
+// It lives here rather than on ChainConfig because a chain cannot see the
+// connections that source from it.
+func (c Config) validateAutoRelay() error {
+	for i, conn := range c.Relayer.Connections {
+		for _, side := range []struct {
+			name string
+			end  ClientEnd
+		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}} {
+			end := side.end
+
+			if end.AutoRelay.Enabled == nil || !*end.AutoRelay.Enabled {
+				continue
+			}
+
+			chain, ok := c.Chain(end.ChainID)
+			if !ok {
+				continue
+			}
+
+			if chain.EVM == nil || chain.EVM.WS == "" {
+				return errors.Errorf(
+					".relayer.connections[%d].%s autoRelay requires .chains[%s].evm.ws",
+					i, side.name, end.ChainID,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c Config) crossValidate() error {
+	signerSet := make(map[string]struct{}, len(c.Signers))
+	for _, signer := range c.Signers {
+		signerSet[signer.Alias] = struct{}{}
+	}
+
+	for i, a := range c.Attestors {
+		if a.Type != AttestorTypeLocal {
+			continue
+		}
+		if _, exists := signerSet[a.Signer]; !exists {
+			return errors.Errorf(".attestors[%d].signer references unknown signer: %q", i, a.Signer)
+		}
+	}
+
+	for _, chain := range c.Chains {
+		if chain.Deployer == "" {
+			continue
+		}
+		if _, exists := signerSet[chain.Deployer]; !exists {
+			return errors.Errorf(".chains[%s].deployer references unknown signer: %q", chain.ChainID, chain.Deployer)
+		}
+	}
+
+	if err := c.validateChainReferences(); err != nil {
+		return err
+	}
+
+	if err := c.validateConnectionSigners(signerSet); err != nil {
+		return errors.Wrap(err, ".relayer.connections")
+	}
+
+	return nil
+}
+
+// validateChainReferences ensures chains referenced by the relayer config are
+// declared in the top-level chains block.
+func (c Config) validateChainReferences() error {
+	for _, chain := range c.Relayer.ChainOverrides {
+		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
+			return errors.Errorf(".chainOverrides[%s] chainId not declared in top-level chains", chain.ChainID)
+		}
+	}
+
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
+				return errors.Errorf(
+					".connections[%s].%s chainId %q not declared in top-level chains",
+					conn.Alias, end.label, end.cfg.ChainID,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateConnectionSigners ensures every client end's signer resolves to a
+// configured signer.
+func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, exists := signerSet[end.cfg.Signer]; !exists {
+				return errors.Errorf(
+					"connection %q %s references unknown signer %q",
+					conn.Alias, end.label, end.cfg.Signer,
+				)
+			}
+		}
+	}
+
+	return nil
+}
+
 // CollectComments builds TODO comments for every field in cfg that's left
 // for the operator to fill in by hand, keyed by YAML path for
 // PrintYAMLWithComments/StoreToFileWithComments.
@@ -701,10 +655,56 @@ func CollectComments(cfg Config) map[string]string {
 	return comments
 }
 
+// DBConfigFromURL infers DB type from a CLI database URL override.
+func DBConfigFromURL(url string) (DBConfig, error) {
+	db := DBConfig{
+		URL:  url,
+		Type: dbTypeFromURL(url),
+	}
+
+	return db, db.Validate()
+}
+
+// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across
+// every configured connection's two client ends.
+func RelayerChainSignerPairs(c Config) []ChainSignerPair {
+	seen := make(map[ChainSignerPair]struct{})
+
+	var pairs []ChainSignerPair
+
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
+			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
+			if _, dup := seen[pair]; dup {
+				continue
+			}
+
+			seen[pair] = struct{}{}
+			pairs = append(pairs, pair)
+		}
+	}
+
+	return pairs
+}
+
 func dbTypeFromURL(raw string) string {
 	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
 		return DBTypePostgres
 	}
 
 	return DBTypeSQLite
+}
+
+// toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
+// of line comments, as PrintYAMLWithComments/store both need.
+func toCommentMap(comments map[string]string) yaml.CommentMap {
+	cm := make(yaml.CommentMap, len(comments))
+	for path, text := range comments {
+		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
+	}
+	return cm
+}
+
+func connectionEnds(conn ConnectionConfig) []namedClientEnd {
+	return []namedClientEnd{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
 }
