@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
@@ -277,11 +276,11 @@ func (c ServerConfig) Validate() error {
 func (c DBConfig) Validate() error {
 	switch {
 	case c.Type != DBTypeSQLite && c.Type != DBTypePostgres:
-		return errors.Errorf(".type must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
+		return errPathf("type", "must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
 	case c.Type == DBTypeSQLite && c.URL == sqliteInMemory:
-		return errors.New(".url must not be :memory: for sqlite")
+		return errPathf("url", "must not be :memory: for sqlite")
 	case c.URL == "":
-		return errors.New(".url must not be empty")
+		return errPathf("url", "must not be empty")
 	}
 
 	return nil
@@ -326,9 +325,9 @@ func (c ChainConfig) Validate() error {
 	case c.ChainID == "":
 		return errPathf("chainId", "required")
 	case chainType == "":
-		return errors.New("unknown chain type")
+		return fmt.Errorf("unknown chain type")
 	case chainType != ChainTypeEVM:
-		return errors.Errorf("unsupported chain type %s", chainType)
+		return fmt.Errorf("unsupported chain type %s", chainType)
 	case chainType == ChainTypeEVM:
 		switch {
 		case c.EVM.RPC == "":
@@ -359,7 +358,7 @@ func (a Attestors) Validate() error {
 	localChainSigners := make(map[string]struct{})
 	for i, attestor := range a {
 		if err := attestor.Validate(); err != nil {
-			return errors.Wrapf(err, "[%d]", i)
+			return errPathIndex(i, err)
 		}
 
 		if attestor.Type != AttestorTypeLocal {
@@ -367,13 +366,13 @@ func (a Attestors) Validate() error {
 		}
 
 		if _, exists := localNames[attestor.Name]; exists {
-			return errors.Errorf("duplicate local attestor name: %q", attestor.Name)
+			return errPathIndexf(i, "duplicate local attestor name: %q", attestor.Name)
 		}
 		localNames[attestor.Name] = struct{}{}
 
 		chainSigner := attestor.ChainID + "/" + attestor.Signer
 		if _, exists := localChainSigners[chainSigner]; exists {
-			return errors.Errorf("duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
+			return errPathIndexf(i, "duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
 		}
 		localChainSigners[chainSigner] = struct{}{}
 	}
@@ -384,33 +383,33 @@ func (a Attestors) Validate() error {
 func (c AttestorConfig) Validate() error {
 	switch {
 	case c.Name == "":
-		return errors.New(".name required")
+		return errPathf("name", "required")
 	case c.Type != AttestorTypeLocal && c.Type != AttestorTypeRemote:
-		return errors.Errorf(".type unknown attestor type: %q", c.Type)
+		return errPathf("type", "unknown attestor type: %q", c.Type)
 	}
 
 	switch c.Type {
 	case AttestorTypeLocal:
 		switch {
 		case c.ChainID == "":
-			return errors.New(".chainId required for local attestors")
+			return errPathf("chainId", "required for local attestors")
 		case c.Signer == "":
-			return errors.New(".signer required for local attestors")
+			return errPathf("signer", "required for local attestors")
 		case c.GRPC != "":
-			return errors.New(".grpc must not be set for local attestors")
+			return errPathf("grpc", "must not be set for local attestors")
 		}
 	case AttestorTypeRemote:
 		switch {
 		case c.GRPC == "":
-			return errors.New(".grpc required for remote attestors")
+			return errPathf("grpc", "required for remote attestors")
 		case strings.Contains(c.GRPC, "://"):
-			return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
+			return errPathf("grpc", "must be a bare host:port, not a URL: %q", c.GRPC)
 		case c.ChainID != "":
-			return errors.New(".chainId must not be set for remote attestors")
+			return errPathf("chainId", "must not be set for remote attestors")
 		case c.Signer != "":
-			return errors.New(".signer must not be set for remote attestors")
+			return errPathf("signer", "must not be set for remote attestors")
 		case c.FinalityOffset != 0:
-			return errors.New(".finalityOffset must not be set for remote attestors")
+			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
 	}
 
@@ -422,11 +421,11 @@ func (c Signers) Validate() error {
 
 	for i, signer := range c {
 		if err := signer.Validate(); err != nil {
-			return errors.Wrapf(err, ".signers[%d]", i)
+			return errPathIndex(i, err)
 		}
 
 		if _, exists := set[signer.Alias]; exists {
-			return errors.Errorf(".signers duplicate alias: %q", signer.Alias)
+			return errPathIndexf(i, "duplicate alias: %q", signer.Alias)
 		}
 
 		set[signer.Alias] = struct{}{}
@@ -438,29 +437,29 @@ func (c Signers) Validate() error {
 func (c SignerConfig) Validate() error {
 	switch {
 	case c.Alias == "":
-		return errors.New(".alias required")
+		return errPathf("alias", "required")
 	case c.Type == "":
-		return errors.New(".type required")
+		return errPathf("type", "required")
 	case c.Type != SignerLocal && c.Type != SignerRemote:
-		return errors.Errorf(".type must be one of [%q, %q], got %q", SignerLocal, SignerRemote, c.Type)
+		return errPathf("type", "must be one of [%q, %q], got %q", SignerLocal, SignerRemote, c.Type)
 	case c.Type == SignerLocal && c.File == "":
-		return errors.New(".file required for local signer")
+		return errPathf("file", "required for local signer")
 	case c.Type == SignerRemote && c.GRPC == "":
-		return errors.New(".grpc required for remote signer")
+		return errPathf("grpc", "required for remote signer")
 	case c.Type == SignerRemote && c.RemoteKeyID == "":
-		return errors.New(".remoteKeyId required for remote signer")
+		return errPathf("remoteKeyId", "required for remote signer")
 	}
 
 	if c.Type == SignerLocal {
 		path, err := ExpandHome(c.File)
 		if err != nil {
-			return errors.Wrap(err, ".file")
+			return errPath("file", err)
 		}
 
 		fallbacks := KeyFileFallbacks(path)
 
 		if err := fileExistsInAny(fallbacks...); err != nil {
-			return errors.Wrapf(err, ".file %s", path)
+			return errPath("file", err)
 		}
 	}
 
@@ -488,9 +487,9 @@ func (c Config) validateAutoRelay() error {
 			}
 
 			if chain.EVM == nil || chain.EVM.WS == "" {
-				return errors.Errorf(
-					".relayer.connections[%d].%s autoRelay requires .chains[%s].evm.ws",
-					i, side.name, end.ChainID,
+				return errPathf(
+					fmt.Sprintf("connections[%d].%s.autoRelay", i, side.name),
+					"requires chains[%s].evm.ws", end.ChainID,
 				)
 			}
 		}
@@ -510,7 +509,7 @@ func (c Config) crossValidate() error {
 			continue
 		}
 		if _, exists := signerSet[a.Signer]; !exists {
-			return errors.Errorf(".attestors[%d].signer references unknown signer: %q", i, a.Signer)
+			return errPathf(fmt.Sprintf("attestors[%d].signer", i), "references unknown signer: %q", a.Signer)
 		}
 	}
 
@@ -519,7 +518,7 @@ func (c Config) crossValidate() error {
 			continue
 		}
 		if _, exists := signerSet[chain.Deployer]; !exists {
-			return errors.Errorf(".chains[%s].deployer references unknown signer: %q", chain.ChainID, chain.Deployer)
+			return errPathf(fmt.Sprintf("chains.%s.deployer", chain.ChainID), "references unknown signer: %q", chain.Deployer)
 		}
 	}
 
@@ -527,11 +526,7 @@ func (c Config) crossValidate() error {
 		return err
 	}
 
-	if err := c.validateConnectionSigners(signerSet); err != nil {
-		return errors.Wrap(err, ".relayer.connections")
-	}
-
-	return nil
+	return c.validateConnectionSigners(signerSet)
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are
@@ -539,16 +534,16 @@ func (c Config) crossValidate() error {
 func (c Config) validateChainReferences() error {
 	for _, chain := range c.Relayer.ChainOverrides {
 		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
-			return errors.Errorf(".chainOverrides[%s] chainId not declared in top-level chains", chain.ChainID)
+			return errPathf(fmt.Sprintf("relayer.chainOverrides.%s.chainId", chain.ChainID), "not declared in top-level chains")
 		}
 	}
 
 	for _, conn := range c.Relayer.Connections {
 		for _, end := range connectionEnds(conn) {
 			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
-				return errors.Errorf(
-					".connections[%s].%s chainId %q not declared in top-level chains",
-					conn.Alias, end.label, end.cfg.ChainID,
+				return errPathf(
+					fmt.Sprintf("relayer.connections.%s.%s.chainId", conn.Alias, end.label),
+					"%q not declared in top-level chains", end.cfg.ChainID,
 				)
 			}
 		}
@@ -563,9 +558,9 @@ func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
 	for _, conn := range c.Relayer.Connections {
 		for _, end := range connectionEnds(conn) {
 			if _, exists := signerSet[end.cfg.Signer]; !exists {
-				return errors.Errorf(
-					"connection %q %s references unknown signer %q",
-					conn.Alias, end.label, end.cfg.Signer,
+				return errPathf(
+					fmt.Sprintf("relayer.connections.%s.%s.signer", conn.Alias, end.label),
+					"references unknown signer %q", end.cfg.Signer,
 				)
 			}
 		}
