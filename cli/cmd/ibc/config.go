@@ -38,9 +38,12 @@ var (
 	}
 
 	cmdConfigValidate = &cobra.Command{
-		Use:   "validate",
-		Short: "Validate the config",
-		RunE:  configValidate,
+		Use:       "validate [target: relayer|attestor]",
+		Short:     "Validate the config",
+		Long:      configValidateLong,
+		ValidArgs: []string{configTargetRelayer, configTargetAttestor},
+		Args:      cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
+		RunE:      configValidate,
 	}
 
 	cmdConfigAddChain = &cobra.Command{
@@ -49,6 +52,17 @@ var (
 		RunE:  configAddChain,
 	}
 )
+
+const (
+	configTargetRelayer  = "relayer"
+	configTargetAttestor = "attestor"
+)
+
+const configValidateLong = `Validates config's correctness.
+Optionally, if [target] is provided ["relayer", "attestor"], it performs additional checks
+to ensure the config is sufficient to run:
+- ibc relayer run
+- ibc attestor run`
 
 var (
 	flagConfigAddChainID       string
@@ -113,10 +127,35 @@ func configNew(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func configValidate(cmd *cobra.Command, _ []string) error {
+func configValidate(cmd *cobra.Command, args []string) error {
+	// also calls cfg.Validate()
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
+	}
+
+	state := map[string]any{
+		keyStatus: "valid",
+		keyPath:   cfg.OriginalFilePath(),
+	}
+
+	// extra validation for the target
+	if len(args) > 0 {
+		target := args[0]
+		switch target {
+		case configTargetRelayer:
+			err = cfg.RelayerSufficiency()
+		case configTargetAttestor:
+			err = cfg.AttestorSufficiency()
+		default:
+			err = errors.New("invalid target")
+		}
+
+		if err != nil {
+			return errors.Wrap(err, target)
+		}
+
+		state[target] = "valid"
 	}
 
 	// todo replace with `ibc config probe`
@@ -126,14 +165,11 @@ func configValidate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if !globalFlags.Quiet {
-		return config.PrintJSON(map[string]any{
-			keyStatus: "valid",
-			keyPath:   cfg.OriginalFilePath(),
-		})
+	if globalFlags.Quiet {
+		return nil
 	}
 
-	return nil
+	return config.PrintJSON(state)
 }
 
 // setupHomeWithConfig changes process directory to `--home` and parses the config

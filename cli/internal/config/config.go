@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-yaml"
 
 	"github.com/cosmos/ibc/cli/internal/network"
@@ -202,16 +203,30 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// validate all relayer invariants. ensure relayer has connections, etc...
-func (c Config) ValidateRelayer() error {
-	// todo
-	return nil
+// RelayerSufficiency validates the relayer server is runnable
+func (c Config) RelayerSufficiency() error {
+	if len(c.Relayer.Connections) == 0 {
+		return errPathf("connections", "no connections configured")
+	}
+
+	return c.validateRunnable()
 }
 
-// validate all attestors invariants. ensure attestors have signers, etc...
-func (c Config) ValidateAttestors() error {
-	// todo
-	return nil
+// AttestorSufficiency validates the attestor server is runnable
+func (c Config) AttestorSufficiency() error {
+	var hasLocal bool
+	for _, a := range c.Attestors {
+		if a.Type == AttestorTypeLocal {
+			hasLocal = true
+			break
+		}
+	}
+
+	if !hasLocal {
+		return errPathf("attestors", "no local attestors configured")
+	}
+
+	return c.validateRunnable()
 }
 
 func (c Config) OriginalFilePath() string {
@@ -337,12 +352,8 @@ func (c ChainConfig) Validate() error {
 	case chainType != ChainTypeEVM:
 		return fmt.Errorf("unsupported chain type %s", chainType)
 	case chainType == ChainTypeEVM:
-		switch {
-		case c.EVM.RPC == "":
-			return errPathf("evm.rpc", "required")
-		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
-			return errPathf("evm.ws", "must be a ws:// or wss:// URL, got %q", c.EVM.WS)
-		}
+		// allow empty / zero ics26 router for general Validate()
+		return errPath("evm", c.EVM.Validate(false))
 	}
 
 	return nil
@@ -355,6 +366,32 @@ func (c ChainConfig) Type() ChainType {
 	}
 
 	return ""
+}
+
+func (c EVMChainConfig) Validate(validateICS26Router bool) error {
+	switch {
+	case c.RPC == "":
+		return errPathf("rpc", "required")
+	case c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://"):
+		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
+	case validateICS26Router:
+		return errPath("ics26Router", c.validateICS26Router())
+	default:
+		return nil
+	}
+}
+
+func (c EVMChainConfig) validateICS26Router() error {
+	switch {
+	case c.ICS26Router == "":
+		return fmt.Errorf("required")
+	case !common.IsHexAddress(c.ICS26Router):
+		return fmt.Errorf("invalid EVM address %q", c.ICS26Router)
+	case common.HexToAddress(c.ICS26Router) == (common.Address{}):
+		return fmt.Errorf("must not be the zero address")
+	default:
+		return nil
+	}
 }
 
 // Validate validates the attestors list. Allows empty.
@@ -520,6 +557,11 @@ func (c Config) crossValidate() error {
 			seg := fmt.Sprintf("attestors[%d].signer", i)
 			return errPathf(seg, "attestor %q references unknown signer %q", a.Name, a.Signer)
 		}
+
+		if _, exists := c.Chain(a.ChainID); !exists {
+			seg := fmt.Sprintf("attestors[%d].chainId", i)
+			return errPathf(seg, "attestor %q references unknown chain %q", a.Name, a.ChainID)
+		}
 	}
 
 	for i, chain := range c.Chains {
@@ -570,6 +612,29 @@ func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
 				seg := fmt.Sprintf("relayer.connections[%d].%s.signer", i, end.label)
 				return errPathf(seg, "references unknown signer %q", end.cfg.Signer)
 			}
+		}
+	}
+
+	return nil
+}
+
+func (c Config) validateRunnable() error {
+	switch {
+	case len(c.Chains) == 0:
+		return errPathf("chains", "no chains configured")
+	case len(c.Signers) == 0:
+		return errPathf("signers", "no signers configured")
+	}
+
+	// we allow empty / zero ics26 router for general Validate()
+	// but require it for runnable validation
+	for i, chain := range c.Chains {
+		if chain.EVM == nil {
+			continue
+		}
+
+		if err := chain.EVM.Validate(true); err != nil {
+			return errPath(fmt.Sprintf("chains[%d].evm", i), err)
 		}
 	}
 
