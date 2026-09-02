@@ -21,13 +21,12 @@ import (
 // global globalFlags, loaded in config.DeclarePersistentFlags()
 var globalFlags = config.DefaultFlagSet()
 
-// useStatus is the shared "status" subcommand name and status-field key,
-// factored out to satisfy goconst across cmd/ibc.
-const useStatus = "status"
-
-// useIFT is the shared "ift" subcommand name, factored out to satisfy
-// goconst across cmd/ibc.
-const useIFT = "ift"
+// shared cli output keys for consistency
+const (
+	keyStatus = "status"
+	keyPath   = "path"
+	keyIFT    = "ift"
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "ibc",
@@ -64,8 +63,6 @@ func init() {
 	cmdConfig.AddCommand(cmdConfigNew, cmdConfigValidate, cmdConfigAddChain)
 	cmdConfigNew.Flags().BoolVar(&flagConfigNewOut, "out", false, "output the config to stdout")
 	cmdConfigValidate.Flags().BoolVar(&flagConfigValidateLive, "live", false, "extra validation checks")
-	cmdConfigValidate.Flags().
-		BoolVar(&flagConfigValidateStrict, "strict", false, "fail on unknown fields in the config file")
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainID, "chain-id", "", "chain ID")
 	cmdConfigAddChain.Flags().StringVar(&flagConfigAddChainRPC, "rpc", "", "chain RPC URL")
 	cmdConfigAddChain.Flags().
@@ -129,7 +126,7 @@ func init() {
 	qpf := cmdQueryIFT.PersistentFlags()
 	qpf.StringVar(&flagQueryIFTChain, "chain", "", "chain ID the IFT token is deployed on")
 	qpf.StringVar(&flagQueryIFTAddress, "ift", "", "IFT token address")
-	for _, req := range []string{"chain", useIFT} {
+	for _, req := range []string{"chain", keyIFT} {
 		_ = cmdQueryIFT.MarkPersistentFlagRequired(req)
 	}
 	cmdQueryIFTBalance.Flags().
@@ -204,7 +201,7 @@ func init() {
 	tpf.StringVar(&flagTxIFTChain, "chain", "", "chain ID the IFT token is deployed on")
 	tpf.StringVar(&flagTxIFTAddress, "ift", "", "IFT token address")
 	tpf.StringVar(&flagTxIFTFrom, "from", "", "signer alias to submit the transaction with")
-	for _, req := range []string{"chain", useIFT, "from"} {
+	for _, req := range []string{"chain", keyIFT, "from"} {
 		_ = cmdTxIFT.MarkPersistentFlagRequired(req)
 	}
 	cmdTxIFTMint.Flags().StringVar(&flagTxIFTTo, "to", "", "recipient address, or a configured signer alias")

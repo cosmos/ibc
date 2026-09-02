@@ -14,7 +14,9 @@ import (
 )
 
 // Chain types
-const ChainTypeEVM ChainType = "evm"
+const (
+	ChainTypeEVM ChainType = "evm"
+)
 
 // Attestor types
 const (
@@ -58,6 +60,8 @@ type Config struct {
 	Relayer   RelayerConfig `yaml:"relayer"`
 	Attestors Attestors     `yaml:"attestors"`
 	Signers   Signers       `yaml:"signers"`
+
+	originalFilePath string
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -208,6 +212,10 @@ func (c Config) ValidateRelayer() error {
 func (c Config) ValidateAttestors() error {
 	// todo
 	return nil
+}
+
+func (c Config) OriginalFilePath() string {
+	return c.originalFilePath
 }
 
 func (c Config) Chain(chainID string) (ChainConfig, bool) {
@@ -518,7 +526,11 @@ func (c Config) crossValidate() error {
 			continue
 		}
 		if _, exists := signerSet[chain.Deployer]; !exists {
-			return errPathf(fmt.Sprintf("chains.%s.deployer", chain.ChainID), "references unknown signer: %q", chain.Deployer)
+			return errPathf(
+				fmt.Sprintf("chains.%s.deployer", chain.ChainID),
+				"references unknown signer: %q",
+				chain.Deployer,
+			)
 		}
 	}
 
@@ -534,7 +546,10 @@ func (c Config) crossValidate() error {
 func (c Config) validateChainReferences() error {
 	for _, chain := range c.Relayer.ChainOverrides {
 		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
-			return errPathf(fmt.Sprintf("relayer.chainOverrides.%s.chainId", chain.ChainID), "not declared in top-level chains")
+			return errPathf(
+				fmt.Sprintf("relayer.chainOverrides.%s.chainId", chain.ChainID),
+				"not declared in top-level chains",
+			)
 		}
 	}
 

@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/pkg/errors"
@@ -19,18 +20,14 @@ var (
 	// checking EVM addresses, etc.
 	flagConfigValidateLive bool
 
-	// if true, fail on unknown fields in the config file
-	flagConfigValidateStrict bool
-
 	// if true, output the config file to stdout
 	flagConfigNewOut bool
 )
 
 var (
 	cmdConfig = &cobra.Command{
-		Use:              "config",
-		Short:            "Config commands",
-		PersistentPreRun: printConfigHome,
+		Use:   "config",
+		Short: "Config commands",
 	}
 
 	cmdConfigNew = &cobra.Command{
@@ -122,25 +119,21 @@ func configValidate(cmd *cobra.Command, _ []string) error {
 		return errors.Wrap(err, "setup home with config")
 	}
 
+	// todo replace with `ibc config probe`
 	if flagConfigValidateLive {
 		if err := livevalidate.Validate(cmd.Context(), cfg); err != nil {
 			return err
 		}
 	}
 
-	// todo: it still logs store's log, we need to add config.logging{} params
-	// to truly suppress logging (in followup PRs)
 	if !globalFlags.Quiet {
-		return config.PrintJSON(map[string]any{useStatus: "valid"})
+		return config.PrintJSON(map[string]any{
+			keyStatus: "valid",
+			keyPath:   cfg.OriginalFilePath(),
+		})
 	}
 
 	return nil
-}
-
-func printConfigHome(_ *cobra.Command, _ []string) {
-	if !globalFlags.Quiet {
-		fmt.Printf("Using home: %s\n", globalFlags.Home)
-	}
 }
 
 // setupHomeWithConfig changes process directory to `--home` and parses the config
@@ -149,6 +142,8 @@ func setupHomeWithConfig() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, errors.Wrap(err, "home")
 	}
+
+	slog.Debug("Using home", "home", home)
 
 	configPath, err := globalFlags.ConfigPath()
 	if err != nil {
