@@ -24,7 +24,7 @@ func TestSaveNamedKeyPopulatesConfig(t *testing.T) {
 
 	configPath, err := globalFlags.ConfigPath()
 	require.NoError(t, err)
-	cfg, err := config.LoadFromFile(configPath, false, false)
+	cfg, err := config.LoadFromFile(configPath, false)
 	require.NoError(t, err)
 	require.Equal(t, config.Signers{{
 		Alias: "alice",

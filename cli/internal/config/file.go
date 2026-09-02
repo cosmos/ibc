@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func FromFile(path string, validationType ValidationType) (Config, error) {
+func LoadFromFile(path string, validate bool) (Config, error) {
 	config := DefaultConfig()
 
 	bz, err := os.ReadFile(path)
@@ -29,8 +29,8 @@ func FromFile(path string, validationType ValidationType) (Config, error) {
 		return Config{}, err
 	}
 
-	if validationType != ValidationNone {
-		if err := config.Validate2(validationType); err != nil {
+	if validate {
+		if err := config.Validate(); err != nil {
 			return Config{}, errors.Wrap(err, "validation failed")
 		}
 	}
