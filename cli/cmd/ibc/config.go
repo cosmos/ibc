@@ -116,7 +116,7 @@ func configNew(_ *cobra.Command, _ []string) error {
 func configValidate(cmd *cobra.Command, _ []string) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
-		return errors.Wrap(err, "setup home with config")
+		return err
 	}
 
 	// todo replace with `ibc config probe`
@@ -161,7 +161,7 @@ func setupHomeWithConfig() (config.Config, error) {
 
 	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig())
 	if err != nil {
-		return config.Config{}, err
+		return config.Config{}, errors.Wrap(err, "unable to load the config")
 	}
 
 	if globalFlags.DB != "" {

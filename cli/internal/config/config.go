@@ -517,20 +517,18 @@ func (c Config) crossValidate() error {
 			continue
 		}
 		if _, exists := signerSet[a.Signer]; !exists {
-			return errPathf(fmt.Sprintf("attestors[%d].signer", i), "references unknown signer: %q", a.Signer)
+			seg := fmt.Sprintf("attestors[%d].signer", i)
+			return errPathf(seg, "attestor %q references unknown signer %q", a.Name, a.Signer)
 		}
 	}
 
-	for _, chain := range c.Chains {
+	for i, chain := range c.Chains {
 		if chain.Deployer == "" {
 			continue
 		}
 		if _, exists := signerSet[chain.Deployer]; !exists {
-			return errPathf(
-				fmt.Sprintf("chains.%s.deployer", chain.ChainID),
-				"references unknown signer: %q",
-				chain.Deployer,
-			)
+			seg := fmt.Sprintf("chains[%d].deployer", i)
+			return errPathf(seg, "chain %q references unknown signer %q", chain.ChainID, chain.Deployer)
 		}
 	}
 
@@ -544,22 +542,18 @@ func (c Config) crossValidate() error {
 // validateChainReferences ensures chains referenced by the relayer config are
 // declared in the top-level chains block.
 func (c Config) validateChainReferences() error {
-	for _, chain := range c.Relayer.ChainOverrides {
+	for i, chain := range c.Relayer.ChainOverrides {
 		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
-			return errPathf(
-				fmt.Sprintf("relayer.chainOverrides.%s.chainId", chain.ChainID),
-				"not declared in top-level chains",
-			)
+			seg := fmt.Sprintf("relayer.chainOverrides[%d].chainId", i)
+			return errPathf(seg, "%q not declared in top-level chains", chain.ChainID)
 		}
 	}
 
-	for _, conn := range c.Relayer.Connections {
+	for i, conn := range c.Relayer.Connections {
 		for _, end := range connectionEnds(conn) {
 			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
-				return errPathf(
-					fmt.Sprintf("relayer.connections.%s.%s.chainId", conn.Alias, end.label),
-					"%q not declared in top-level chains", end.cfg.ChainID,
-				)
+				seg := fmt.Sprintf("relayer.connections[%d].%s.chainId", i, end.label)
+				return errPathf(seg, "%q not declared in top-level chains", end.cfg.ChainID)
 			}
 		}
 	}
@@ -570,13 +564,11 @@ func (c Config) validateChainReferences() error {
 // validateConnectionSigners ensures every client end's signer resolves to a
 // configured signer.
 func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
-	for _, conn := range c.Relayer.Connections {
+	for i, conn := range c.Relayer.Connections {
 		for _, end := range connectionEnds(conn) {
 			if _, exists := signerSet[end.cfg.Signer]; !exists {
-				return errPathf(
-					fmt.Sprintf("relayer.connections.%s.%s.signer", conn.Alias, end.label),
-					"references unknown signer %q", end.cfg.Signer,
-				)
+				seg := fmt.Sprintf("relayer.connections[%d].%s.signer", i, end.label)
+				return errPathf(seg, "references unknown signer %q", end.cfg.Signer)
 			}
 		}
 	}
