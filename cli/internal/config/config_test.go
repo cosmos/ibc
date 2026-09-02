@@ -32,21 +32,21 @@ func TestConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Server.ListenAddress = "invalid"
 				},
-				errContains: "expected address in host:port",
+				errContains: `server.listenAddr: invalid listen address: "invalid"`,
 			},
 			{
 				name: "invalid db type",
 				patch: func(c *Config) {
 					c.DB.Type = "mysql"
 				},
-				errContains: ".type must be one of",
+				errContains: "db.type: must be one of",
 			},
 			{
 				name: "empty db url",
 				patch: func(c *Config) {
 					c.DB.URL = ""
 				},
-				errContains: ".url must not be empty",
+				errContains: "db.url: must not be empty",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -128,8 +128,8 @@ server:
 			_, err := LoadFromFile(path, true)
 
 			// ASSERT
-			require.ErrorContains(t, err, "validation failed")
-			require.ErrorContains(t, err, "expected address in host:port")
+			require.ErrorContains(t, err, "server.listenAddr")
+			require.ErrorContains(t, err, "invalid listen address")
 		})
 
 		t.Run("fileNotFound", func(t *testing.T) {
@@ -184,19 +184,15 @@ server:
 			}
 		})
 
-		t.Run("unknownFieldsAllowedWhenDisabled", func(t *testing.T) {
+		t.Run("unknownFieldsAreRejected", func(t *testing.T) {
 			// ARRANGE
-			path := writeTestConfig(t, `
-server:
-  listenAddress: 127.0.0.1:9090
-`)
+			path := writeTestConfig(t, `foobar: 123`)
 
 			// ACT
-			config, err := LoadFromFile(path, false)
+			_, err := LoadFromFile(path, true)
 
 			// ASSERT
-			require.NoError(t, err)
-			assert.Equal(t, "0.0.0.0:3000", config.Server.ListenAddress)
+			require.ErrorContains(t, err, `unknown field "foobar"`)
 		})
 
 		t.Run("attestationSigner", func(t *testing.T) {
@@ -242,7 +238,7 @@ attestors:
 			_, err := LoadFromFile(path, true)
 
 			// ASSERT
-			require.ErrorContains(t, err, `references unknown signer: "missing-signer"`)
+			require.ErrorContains(t, err, `references unknown signer "missing-signer"`)
 		})
 	})
 
@@ -296,7 +292,7 @@ attestors:
 			{
 				name:        "empty",
 				raw:         "",
-				errContains: ".url must not be empty",
+				errContains: "url: must not be empty",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -363,12 +359,12 @@ func TestAttestorsValidate(t *testing.T) {
 		{
 			name:        "name required",
 			attestors:   Attestors{{ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
-			errContains: "[0]: .name required",
+			errContains: "[0].name: required",
 		},
 		{
 			name:        "local chain id required",
 			attestors:   Attestors{{Name: "attestor-a", Type: AttestorTypeLocal, Signer: "signer-a"}},
-			errContains: "[0]: .chainId required for local attestors",
+			errContains: "[0].chainId: required for local attestors",
 		},
 		{
 			name:        "invalid type",
@@ -378,7 +374,7 @@ func TestAttestorsValidate(t *testing.T) {
 		{
 			name:        "local missing signer",
 			attestors:   Attestors{{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal}},
-			errContains: ".signer required for local attestors",
+			errContains: ".signer: required for local attestors",
 		},
 		{
 			name: "local with grpc set",
@@ -386,12 +382,12 @@ func TestAttestorsValidate(t *testing.T) {
 				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal,
 				Signer: "signer-a", GRPC: "attestor-a.example.com:3000",
 			}},
-			errContains: ".grpc must not be set for local attestors",
+			errContains: ".grpc: must not be set for local attestors",
 		},
 		{
 			name:        "remote missing grpc",
 			attestors:   Attestors{{Name: "attestor-a", Type: AttestorTypeRemote}},
-			errContains: ".grpc required for remote attestors",
+			errContains: ".grpc: required for remote attestors",
 		},
 		{
 			name: "remote grpc includes a scheme",
@@ -399,7 +395,7 @@ func TestAttestorsValidate(t *testing.T) {
 				Name: "attestor-a", Type: AttestorTypeRemote,
 				GRPC: "https://attestor-a.example.com:443",
 			}},
-			errContains: ".grpc must be a bare host:port, not a URL",
+			errContains: ".grpc: must be a bare host:port, not a URL",
 		},
 		{
 			name: "remote with chainId set",
@@ -407,7 +403,7 @@ func TestAttestorsValidate(t *testing.T) {
 				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
 				GRPC: "attestor-a.example.com:3000",
 			}},
-			errContains: ".chainId must not be set for remote attestors",
+			errContains: ".chainId: must not be set for remote attestors",
 		},
 		{
 			name: "remote with signer set",
@@ -415,7 +411,7 @@ func TestAttestorsValidate(t *testing.T) {
 				Name: "attestor-a", Type: AttestorTypeRemote,
 				GRPC: "attestor-a.example.com:3000", Signer: "signer-a",
 			}},
-			errContains: ".signer must not be set for remote attestors",
+			errContains: ".signer: must not be set for remote attestors",
 		},
 		{
 			name: "remote with nonzero finalityOffset",
@@ -423,7 +419,7 @@ func TestAttestorsValidate(t *testing.T) {
 				Name: "attestor-a", Type: AttestorTypeRemote,
 				GRPC: "attestor-a.example.com:3000", FinalityOffset: 1,
 			}},
-			errContains: ".finalityOffset must not be set for remote attestors",
+			errContains: ".finalityOffset: must not be set for remote attestors",
 		},
 		{
 			name: "duplicate local name",
@@ -496,7 +492,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Type: SignerLocal,
 				File: keyFile,
 			}},
-			errContains: ".alias required",
+			errContains: ".alias: required",
 		},
 		{
 			name: "type required",
@@ -504,7 +500,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Alias: "local",
 				File:  keyFile,
 			}},
-			errContains: ".type required",
+			errContains: ".type: required",
 		},
 		{
 			name: "invalid type",
@@ -512,7 +508,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Alias: "local",
 				Type:  "kms",
 			}},
-			errContains: ".type must be one of",
+			errContains: ".type: must be one of",
 		},
 		{
 			name: "local file required",
@@ -520,7 +516,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Alias: "local",
 				Type:  SignerLocal,
 			}},
-			errContains: ".file required",
+			errContains: ".file: required",
 		},
 		{
 			name: "local file must exist",
@@ -538,7 +534,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Type:        SignerRemote,
 				RemoteKeyID: "key-1",
 			}},
-			errContains: ".grpc required",
+			errContains: ".grpc: required",
 		},
 		{
 			name: "remote key id required",
@@ -547,7 +543,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Type:  SignerRemote,
 				GRPC:  "https://kms.example.com",
 			}},
-			errContains: ".remoteKeyId required",
+			errContains: ".remoteKeyId: required",
 		},
 		{
 			name: "duplicate alias",
@@ -564,7 +560,7 @@ func TestSignerConfigValidate(t *testing.T) {
 					RemoteKeyID: "key-1",
 				},
 			},
-			errContains: ".signers duplicate alias",
+			errContains: `duplicate alias: "same"`,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -618,7 +614,7 @@ func TestChainDeployerCrossValidation(t *testing.T) {
 	}
 
 	err := base.Validate()
-	require.ErrorContains(t, err, "deployer references unknown signer")
+	require.ErrorContains(t, err, `chain "1" references unknown signer "missing"`)
 
 	base.Signers = Signers{{
 		Alias:       "missing",
