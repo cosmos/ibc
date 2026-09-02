@@ -18,7 +18,7 @@ func TestRelayerConfig(t *testing.T) {
 		path := filepath.Join("testdata", "sample.yml")
 
 		// ACT
-		config, err := LoadFromFile(path, true, true)
+		config, err := LoadFromFile(path, true)
 
 		// ASSERT
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestRelayerConfig(t *testing.T) {
 	t.Run("Helpers", func(t *testing.T) {
 		// ARRANGE
 		path := filepath.Join("testdata", "sample.yml")
-		config, err := LoadFromFile(path, true, true)
+		config, err := LoadFromFile(path, true)
 		require.NoError(t, err)
 
 		// ACT / ASSERT
@@ -291,7 +291,7 @@ func TestRelayerConfig(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
 				path := filepath.Join("testdata", "sample.yml")
-				config, err := LoadFromFile(path, true, true)
+				config, err := LoadFromFile(path, true)
 				require.NoError(t, err)
 
 				tt.patch(&config)
@@ -330,7 +330,7 @@ func TestRelayerConfigAutoRelayConnections(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			// ARRANGE
-			config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true, true)
+			config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
 			require.NoError(t, err)
 
 			if tt.clientA {

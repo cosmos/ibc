@@ -5,7 +5,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -36,18 +35,6 @@ const (
 	SignerRemote = "remote"
 )
 
-const (
-	// ValidationNone disables config validation
-	ValidationNone ValidationType = iota
-
-	// ValidationStrict validates all config fields
-	ValidationStrict
-
-	// ValidationAttestorOnly validates only attestor fields,
-	// assuming that the process will run attestor-only
-	ValidationAttestorOnly
-)
-
 const sqliteInMemory = ":memory:"
 
 const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
@@ -68,7 +55,7 @@ type (
 type Config struct {
 	Server    ServerConfig  `yaml:"server"`
 	DB        DBConfig      `yaml:"db"`
-	Chains    []ChainConfig `yaml:"chains"`
+	Chains    Chains        `yaml:"chains"`
 	Relayer   RelayerConfig `yaml:"relayer"`
 	Attestors Attestors     `yaml:"attestors"`
 	Signers   Signers       `yaml:"signers"`
@@ -84,6 +71,9 @@ type DBConfig struct {
 	Type string `yaml:"type"`
 	URL  string `yaml:"url"`
 }
+
+// Chains is the list of configured chains.
+type Chains []ChainConfig
 
 // ChainConfig chain information shared by the attestor and relayer.
 type ChainConfig struct {
@@ -183,91 +173,42 @@ func DefaultConfig() Config {
 	}
 }
 
-// Deprecated: use FromFile2 instead
-// LoadFromFile loads Config from file with optional validation.
-// Note: supports ENV variables expansion!
-func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, error) {
-	config := DefaultConfig()
-
-	bz, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
+// Validate perform basic correctness checks
+func (c Config) Validate() error {
+	// .path.of.the.config ==> validation function
+	type validationStep struct {
+		path     string
+		validate func() error
 	}
 
-	// substitute ENV variables
-	expanded := os.ExpandEnv(string(bz))
-
-	opts := []yaml.DecodeOption{}
-	if restrictUnknownFields {
-		opts = append(opts, yaml.DisallowUnknownField())
-	}
-
-	err = yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...)
-	if err != nil {
-		return Config{}, err
-	}
-
-	if validate {
-		if err := config.Validate(); err != nil {
-			return Config{}, errors.Wrap(err, "validation failed")
+	for _, step := range []validationStep{
+		{"server", c.Server.Validate},
+		{"db", c.DB.Validate},
+		{"signers", c.Signers.Validate},
+		{"chains", c.Chains.Validate},
+		{"attestors", c.Attestors.Validate},
+		{"relayer", c.Relayer.Validate},
+		{"relayer", c.validateAutoRelay},
+		{"", c.crossValidate},
+	} {
+		if err := step.validate(); err != nil {
+			return errPath(step.path, err)
 		}
 	}
-
-	return config, nil
-}
-
-// todo
-func (c Config) Validate2(validationType ValidationType) error {
-	// todo validate common
-	// - server
-	// - db
-	// - signers
-	// - attestors
-	// - crossValidate attestors
-	// todo if type != ValidationAttestorOnly, validate relayer
-	// - ....
 
 	return nil
 }
 
-func (c Config) Validate() error {
-	if err := c.Server.Validate(); err != nil {
-		return errors.Wrap(err, ".server")
-	}
+// validate all relayer invariants. ensure relayer has connections, etc...
+func (c Config) ValidateRelayer() error {
+	// todo
+	return nil
+}
 
-	if err := c.DB.Validate(); err != nil {
-		return errors.Wrap(err, ".db")
-	}
-
-	chainIDs := make(map[string]struct{})
-	for _, chain := range c.Chains {
-		if err := chain.Validate(); err != nil {
-			return errors.Wrapf(err, ".chains[%s]", chain.ChainID)
-		}
-
-		if _, ok := chainIDs[chain.ChainID]; ok {
-			return errors.Wrapf(errors.Errorf("duplicate chainId: %q", chain.ChainID), ".chains")
-		}
-		chainIDs[chain.ChainID] = struct{}{}
-	}
-
-	if err := c.Relayer.Validate(); err != nil {
-		return errors.Wrap(err, ".relayer")
-	}
-
-	if err := c.Attestors.Validate(); err != nil {
-		return errors.Wrap(err, ".attestors")
-	}
-
-	if err := c.Signers.Validate(); err != nil {
-		return errors.Wrap(err, ".signers")
-	}
-
-	if err := c.crossValidate(); err != nil {
-		return err
-	}
-
-	return c.validateAutoRelay()
+// validate all attestors invariants. ensure attestors have signers, etc...
+func (c Config) ValidateAttestors() error {
+	// todo
+	return nil
 }
 
 func (c Config) Chain(chainID string) (ChainConfig, bool) {
@@ -327,7 +268,7 @@ func (c Config) StoreToFileWithComments(path string) error {
 
 func (c ServerConfig) Validate() error {
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
-		return errors.Wrapf(err, ".listenAddr %q", c.ListenAddress)
+		return errPathf("listenAddr", "invalid listen address: %q", c.ListenAddress)
 	}
 
 	return nil
@@ -361,12 +302,29 @@ func (c DBConfig) Label() string {
 	return path
 }
 
+func (c Chains) Validate() error {
+	chainIDs := make(map[string]struct{})
+
+	for i, chain := range c {
+		if err := chain.Validate(); err != nil {
+			return errPathIndex(i, err)
+		}
+
+		if _, ok := chainIDs[chain.ChainID]; ok {
+			return errPathIndexf(i, "duplicate %q", chain.ChainID)
+		}
+		chainIDs[chain.ChainID] = struct{}{}
+	}
+
+	return nil
+}
+
 func (c ChainConfig) Validate() error {
 	chainType := c.Type()
 
 	switch {
 	case c.ChainID == "":
-		return errors.New(".chainId required")
+		return errPathf("chainId", "required")
 	case chainType == "":
 		return errors.New("unknown chain type")
 	case chainType != ChainTypeEVM:
@@ -374,9 +332,9 @@ func (c ChainConfig) Validate() error {
 	case chainType == ChainTypeEVM:
 		switch {
 		case c.EVM.RPC == "":
-			return errors.New(".evm.rpc required")
+			return errPathf("evm.rpc", "required")
 		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
-			return errors.Errorf(".evm.ws must be a ws:// or wss:// URL, got %q", c.EVM.WS)
+			return errPathf("evm.ws", "must be a ws:// or wss:// URL, got %q", c.EVM.WS)
 		}
 	}
 

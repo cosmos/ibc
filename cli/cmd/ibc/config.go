@@ -164,7 +164,7 @@ func setupHomeWithConfig() (config.Config, error) {
 		return config.Config{}, errors.Wrapf(err, "unable to change working directory to %s", home)
 	}
 
-	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig(), flagConfigValidateStrict)
+	cfg, err := config.LoadFromFile(configPath, globalFlags.ValidateConfig())
 	if err != nil {
 		return config.Config{}, err
 	}

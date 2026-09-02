@@ -78,7 +78,7 @@ db:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.NoError(t, err)
@@ -96,7 +96,7 @@ server:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.NoError(t, err)
@@ -111,7 +111,7 @@ server:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.Error(t, err)
@@ -125,7 +125,7 @@ server:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.ErrorContains(t, err, "validation failed")
@@ -137,7 +137,7 @@ server:
 			path := filepath.Join(t.TempDir(), "missing.yml")
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.Error(t, err)
@@ -176,7 +176,7 @@ server:
 					path := writeTestConfig(t, tt.body)
 
 					// ACT
-					_, err := LoadFromFile(path, true, true)
+					_, err := LoadFromFile(path, true)
 
 					// ASSERT
 					require.ErrorContains(t, err, "unknown field")
@@ -192,7 +192,7 @@ server:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, false)
+			config, err := LoadFromFile(path, false)
 
 			// ASSERT
 			require.NoError(t, err)
@@ -215,7 +215,7 @@ attestors:
 `)
 
 			// ACT
-			config, err := LoadFromFile(path, true, true)
+			config, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.NoError(t, err)
@@ -239,7 +239,7 @@ attestors:
 `)
 
 			// ACT
-			_, err := LoadFromFile(path, true, true)
+			_, err := LoadFromFile(path, true)
 
 			// ASSERT
 			require.ErrorContains(t, err, `references unknown signer: "missing-signer"`)
@@ -331,7 +331,7 @@ func TestStoreToFilePreservesSymlink(t *testing.T) {
 	require.NoError(t, err)
 	require.NotZero(t, info.Mode()&os.ModeSymlink)
 
-	stored, err := LoadFromFile(target, false, false)
+	stored, err := LoadFromFile(target, false)
 	require.NoError(t, err)
 	require.Equal(t, cfg.Server.ListenAddress, stored.Server.ListenAddress)
 }
