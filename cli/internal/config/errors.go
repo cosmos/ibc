@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// PathError is an error that wraps an error with a config path. supports nested paths.
 type PathError struct {
 	path string
 	err  error
@@ -60,11 +61,11 @@ func errPathIndex(idx int, err error) error {
 }
 
 // errPath + errorf
-func errPathf(segment string, format string, args ...interface{}) error {
+func errPathf(segment string, format string, args ...any) error {
 	return errPath(segment, fmt.Errorf(format, args...))
 }
 
 // errPathIndex + errorf
-func errPathIndexf(idx int, format string, args ...interface{}) error {
+func errPathIndexf(idx int, format string, args ...any) error {
 	return errPathIndex(idx, fmt.Errorf(format, args...))
 }

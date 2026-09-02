@@ -31,9 +31,11 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 
 	if validate {
 		if err := config.Validate(); err != nil {
-			return Config{}, errors.Wrap(err, "validation failed")
+			return Config{}, errors.Wrap(err, "invalid config")
 		}
 	}
+
+	config.originalFilePath = path
 
 	return config, nil
 }
