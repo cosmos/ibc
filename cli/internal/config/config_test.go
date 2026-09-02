@@ -66,6 +66,164 @@ func TestConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("RelayerSufficiency", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			config      func(t *testing.T) Config
+			errContains string
+		}{
+			{
+				name:   "valid",
+				config: loadSampleConfig,
+			},
+			{
+				name: "defaultConfig",
+				config: func(_ *testing.T) Config {
+					return DefaultConfig()
+				},
+				errContains: "connections: no connections configured",
+			},
+			{
+				name: "noConnections",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Relayer.Connections = nil
+
+					return cfg
+				},
+				errContains: "connections: no connections configured",
+			},
+			{
+				name: "noChains",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Chains = nil
+
+					return cfg
+				},
+				errContains: "chains: no chains configured",
+			},
+			{
+				name: "noSigners",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Signers = nil
+
+					return cfg
+				},
+				errContains: "signers: no signers configured",
+			},
+			{
+				name: "missingICS26Router",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Chains[0].EVM.ICS26Router = ""
+
+					return cfg
+				},
+				errContains: "chains[0].evm.ics26Router: required",
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ARRANGE
+				cfg := tt.config(t)
+
+				// ACT
+				err := cfg.RelayerSufficiency()
+
+				// ASSERT
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+					return
+				}
+
+				require.NoError(t, err)
+			})
+		}
+	})
+
+	t.Run("AttestorSufficiency", func(t *testing.T) {
+		for _, tt := range []struct {
+			name        string
+			config      func(t *testing.T) Config
+			errContains string
+		}{
+			{
+				name:   "valid",
+				config: loadSampleConfig,
+			},
+			{
+				name: "defaultConfig",
+				config: func(_ *testing.T) Config {
+					return DefaultConfig()
+				},
+				errContains: "attestors: no local attestors configured",
+			},
+			{
+				name: "remoteAttestorsOnly",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					var remote Attestors
+					for _, a := range cfg.Attestors {
+						if a.Type == AttestorTypeRemote {
+							remote = append(remote, a)
+						}
+					}
+					cfg.Attestors = remote
+
+					return cfg
+				},
+				errContains: "attestors: no local attestors configured",
+			},
+			{
+				name: "noChains",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Chains = nil
+
+					return cfg
+				},
+				errContains: "chains: no chains configured",
+			},
+			{
+				name: "noSigners",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Signers = nil
+
+					return cfg
+				},
+				errContains: "signers: no signers configured",
+			},
+			{
+				name: "missingICS26Router",
+				config: func(t *testing.T) Config {
+					cfg := loadSampleConfig(t)
+					cfg.Chains[0].EVM.ICS26Router = ""
+
+					return cfg
+				},
+				errContains: "chains[0].evm.ics26Router: required",
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ARRANGE
+				cfg := tt.config(t)
+
+				// ACT
+				err := cfg.AttestorSufficiency()
+
+				// ASSERT
+				if tt.errContains != "" {
+					require.ErrorContains(t, err, tt.errContains)
+					return
+				}
+
+				require.NoError(t, err)
+			})
+		}
+	})
+
 	t.Run("LoadFromFile", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
 			// ARRANGE
@@ -198,6 +356,10 @@ server:
 		t.Run("attestationSigner", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
+chains:
+  - chainId: chain-a
+    evm:
+      rpc: https://chain-a.example.com
 signers:
   - alias: signer-a
     type: remote
@@ -623,6 +785,15 @@ func TestChainDeployerCrossValidation(t *testing.T) {
 		RemoteKeyID: "k1",
 	}}
 	require.NoError(t, base.Validate())
+}
+
+func loadSampleConfig(t *testing.T) Config {
+	t.Helper()
+
+	cfg, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
+	require.NoError(t, err)
+
+	return cfg
 }
 
 func writeTestConfig(t *testing.T, content string) string {
