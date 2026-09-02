@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Config package development rules
 
 1. Follow the following code blocks ordering (excluding test cases):

@@ -12,6 +12,10 @@ lint-license: ## Check SPDX license headers
 	go run github.com/apache/skywalking-eyes/cmd/license-eye@v$(LICENSE_EYE_VERSION) \
 		--config .licenserc.yaml header check
 
+lint-fix-license: ## Add missing SPDX license headers
+	go run github.com/apache/skywalking-eyes/cmd/license-eye@v$(LICENSE_EYE_VERSION) \
+		--config .licenserc.yaml header fix
+
 lint-gen: ## Lint generated Solidity Go binding packages
 	cd $(GEN_SOLIDITY_ABI_DIR) && golangci-lint run
 
@@ -28,4 +32,4 @@ run-all-checks: ## Run "all-in-one" code validation step.
 	$(MAKE) test-gen
 	$(MAKE) lint-license
 
-.PHONY: help lint-license lint-gen lint-fix-gen test-gen run-all-checks
+.PHONY: help lint-license lint-fix-license lint-gen lint-fix-gen test-gen run-all-checks
