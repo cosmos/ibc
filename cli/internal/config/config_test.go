@@ -32,7 +32,7 @@ func TestConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Server.ListenAddress = "invalid"
 				},
-				errContains: `server.listenAddr: invalid listen address: "invalid"`,
+				errContains: "expected address in host:port",
 			},
 			{
 				name: "invalid db type",
@@ -287,7 +287,7 @@ server:
 
 			// ASSERT
 			require.ErrorContains(t, err, "server.listenAddr")
-			require.ErrorContains(t, err, "invalid listen address")
+			require.ErrorContains(t, err, "expected address in host:port")
 		})
 
 		t.Run("fileNotFound", func(t *testing.T) {
@@ -687,7 +687,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				Type:  SignerLocal,
 				File:  filepath.Join(t.TempDir(), "missing.json"),
 			}},
-			errContains: ".file",
+			errContains: "file not found",
 		},
 		{
 			name: "remote grpc required",

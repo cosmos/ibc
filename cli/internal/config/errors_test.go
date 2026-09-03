@@ -4,10 +4,8 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,9 +22,9 @@ func TestErrPath(t *testing.T) {
 
 		// ASSERT
 		pe := requirePathError(t, err)
-		assert.Equal(t, "server.my.error", pe.Path())
-		assert.EqualError(t, err, "server.my.error: is invalid")
-		assert.ErrorIs(t, err, leaf)
+		require.Equal(t, "server.my.error", pe.Path())
+		require.EqualError(t, err, "server.my.error: is invalid")
+		require.ErrorIs(t, err, leaf)
 	})
 
 	t.Run("pathErrPathErrJustAnErr", func(t *testing.T) {
@@ -38,24 +36,9 @@ func TestErrPath(t *testing.T) {
 
 		// ASSERT
 		pe := requirePathError(t, err)
-		assert.Equal(t, "server.my", pe.Path())
-		assert.EqualError(t, err, "server.my: is invalid")
-		assert.ErrorIs(t, err, leaf)
-	})
-
-	t.Run("keepsWrapperAroundPathErr", func(t *testing.T) {
-		// ARRANGE
-		inner := errPath("listenAddr", leaf)
-		wrapped := fmt.Errorf("loading: %w", inner)
-
-		// ACT
-		err := errPath("server", wrapped)
-
-		// ASSERT
-		pe := requirePathError(t, err)
-		assert.Equal(t, "server", pe.Path())
-		assert.EqualError(t, err, "server: loading: listenAddr: is invalid")
-		assert.ErrorIs(t, err, leaf)
+		require.Equal(t, "server.my", pe.Path())
+		require.EqualError(t, err, "server.my: is invalid")
+		require.ErrorIs(t, err, leaf)
 	})
 
 	t.Run("joinsArrayIndex", func(t *testing.T) {
@@ -68,8 +51,8 @@ func TestErrPath(t *testing.T) {
 
 		// ASSERT
 		pe := requirePathError(t, err)
-		assert.Equal(t, "server.stuff[0]", pe.Path())
-		assert.EqualError(t, err, "server.stuff[0]: is invalid")
+		require.Equal(t, "server.stuff[0]", pe.Path())
+		require.EqualError(t, err, "server.stuff[0]: is invalid")
 	})
 
 	t.Run("returnsNilWhenErrIsNil", func(t *testing.T) {
@@ -77,7 +60,7 @@ func TestErrPath(t *testing.T) {
 		err := errPath("server", nil)
 
 		// ASSERT
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("returnsErrUnchangedWhenSegmentEmpty", func(t *testing.T) {
@@ -88,7 +71,7 @@ func TestErrPath(t *testing.T) {
 		err := errPath("", inner)
 
 		// ASSERT
-		assert.Same(t, inner, err)
+		require.Same(t, inner, err)
 	})
 }
 

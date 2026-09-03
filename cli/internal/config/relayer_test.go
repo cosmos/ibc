@@ -248,7 +248,7 @@ func TestRelayerConfig(t *testing.T) {
 					duplicate.ClientB.ClientID = "ethereum-1"
 					c.Relayer.Connections = append(c.Relayer.Connections, duplicate)
 				},
-				errContains: `.connections: duplicate client "base-0" on chain "1"`,
+				errContains: `connections[1]: duplicate client "base-0" on chain "1"`,
 			},
 			{
 				name: "connection missing alias",
@@ -265,7 +265,7 @@ func TestRelayerConfig(t *testing.T) {
 					duplicate.ClientB.ClientID = "ethereum-1"
 					c.Relayer.Connections = append(c.Relayer.Connections, duplicate)
 				},
-				errContains: `.connections: duplicate alias: "eth-base"`,
+				errContains: `connections[1]: duplicate alias: "eth-base"`,
 			},
 			{
 				name: "clientA signer unknown",

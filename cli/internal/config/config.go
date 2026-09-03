@@ -47,9 +47,6 @@ type (
 
 	// AttestorType how an attestor is reached.
 	AttestorType string
-
-	// ValidationType the type of config validation to perform.
-	ValidationType uint8
 )
 
 // Config represents a config file
@@ -290,7 +287,7 @@ func (c Config) StoreToFileWithComments(path string) error {
 
 func (c ServerConfig) Validate() error {
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
-		return errPathf("listenAddr", "invalid listen address: %q", c.ListenAddress)
+		return errPath("listenAddr", err)
 	}
 
 	return nil
@@ -491,7 +488,7 @@ func (c SignerConfig) Validate() error {
 		fallbacks := KeyFileFallbacks(path)
 
 		if err := fileExistsInAny(fallbacks...); err != nil {
-			return errPath("file", err)
+			return errPath("file", fmt.Errorf("%s: %w", path, err))
 		}
 	}
 
@@ -516,26 +513,19 @@ func (c EVMChainConfig) validateICS26Router() error {
 // connections that source from it.
 func (c Config) validateAutoRelay() error {
 	for i, conn := range c.Relayer.Connections {
-		for _, side := range []struct {
-			name string
-			end  ClientEnd
-		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}} {
-			end := side.end
-
-			if end.AutoRelay.Enabled == nil || !*end.AutoRelay.Enabled {
+		for _, end := range connectionEnds(conn) {
+			if end.cfg.AutoRelay.Enabled == nil || !*end.cfg.AutoRelay.Enabled {
 				continue
 			}
 
-			chain, ok := c.Chain(end.ChainID)
+			chain, ok := c.Chain(end.cfg.ChainID)
 			if !ok {
 				continue
 			}
 
 			if chain.EVM == nil || chain.EVM.WS == "" {
-				return errPathf(
-					fmt.Sprintf("connections[%d].%s.autoRelay", i, side.name),
-					"requires chains[%s].evm.ws", end.ChainID,
-				)
+				seg := fmt.Sprintf("connections[%d].%s.autoRelay", i, end.label)
+				return errPathf(seg, "requires chains[%s].evm.ws", end.cfg.ChainID)
 			}
 		}
 	}
@@ -634,7 +624,8 @@ func (c Config) validateRunnable() error {
 		}
 
 		if err := chain.EVM.Validate(true); err != nil {
-			return errPath(fmt.Sprintf("chains[%d].evm", i), err)
+			seg := fmt.Sprintf("chains[%d].evm", i)
+			return errPath(seg, err)
 		}
 	}
 
