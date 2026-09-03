@@ -206,7 +206,7 @@ func (c Config) Validate() error {
 // RelayerSufficiency validates the relayer server is runnable
 func (c Config) RelayerSufficiency() error {
 	if len(c.Relayer.Connections) == 0 {
-		return errPathf("connections", "no connections configured")
+		return errPathf("relayer.connections", "no connections configured")
 	}
 
 	return c.validateRunnable()
@@ -381,19 +381,6 @@ func (c EVMChainConfig) Validate(validateICS26Router bool) error {
 	}
 }
 
-func (c EVMChainConfig) validateICS26Router() error {
-	switch {
-	case c.ICS26Router == "":
-		return fmt.Errorf("required")
-	case !common.IsHexAddress(c.ICS26Router):
-		return fmt.Errorf("invalid EVM address %q", c.ICS26Router)
-	case common.HexToAddress(c.ICS26Router) == (common.Address{}):
-		return fmt.Errorf("must not be the zero address")
-	default:
-		return nil
-	}
-}
-
 // Validate validates the attestors list. Allows empty.
 func (a Attestors) Validate() error {
 	localNames := make(map[string]struct{})
@@ -509,6 +496,19 @@ func (c SignerConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (c EVMChainConfig) validateICS26Router() error {
+	switch {
+	case c.ICS26Router == "":
+		return fmt.Errorf("required")
+	case !common.IsHexAddress(c.ICS26Router):
+		return fmt.Errorf("invalid EVM address %q", c.ICS26Router)
+	case common.HexToAddress(c.ICS26Router) == (common.Address{}):
+		return fmt.Errorf("must not be the zero address")
+	default:
+		return nil
+	}
 }
 
 // validateAutoRelay ensures every auto-relayed client end can be subscribed to.
