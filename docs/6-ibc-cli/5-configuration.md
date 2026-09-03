@@ -15,7 +15,9 @@ Run the following commands to create and validate the file:
 
 ```sh
 ibc config new
-ibc config validate
+ibc config validate # basic config correctness
+ibc config validate relayer # extra relayer config validation
+ibc config validate attestor # if you want to run attestor only
 ```
 
 Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [config.go:L169](cli/internal/config/config.go#L169) -->
@@ -102,10 +104,11 @@ The following fields in this file are references to other fields:
 | --- | --- |
 | `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](cli/internal/config/config.go#L300-L319) --> |
 | `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L323-L336](cli/internal/config/config.go#L323-L336) --> |
-| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L232-L239](cli/internal/config/config.go#L232-L239) --> |
+| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L556-L559](cli/internal/config/config.go#L556-L559) --> |
+| A local attestor's `chainId` | A `chains[].chainId` value <!-- [config.go:L561-L564](cli/internal/config/config.go#L561-L564) --> |
 | `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L241-L248](cli/internal/config/config.go#L241-L248) --> |
 
-For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference. A local attestor's `chainId` is checked when the process starts rather than by validation. <!-- [resolve.go:L55-L57](cli/internal/service/attestor/resolve.go#L55-L57) -->
+For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference, including a local attestor whose `chainId` is not in `chains`. <!-- [config.go:L561-L564](cli/internal/config/config.go#L561-L564) --> `ibc config validate relayer` and `ibc config validate attestor` add the checks needed to run those processes.
 
 ## `server`
 
