@@ -94,9 +94,7 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "empty blocks are valid",
 				patch: func(c *Config) {
-					c.Chains = nil
 					c.Relayer = RelayerConfig{}
-					c.Attestors = nil
 				},
 			},
 			{
