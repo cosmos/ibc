@@ -477,8 +477,11 @@ def _field_doc(msg, field, seen):
     current = _field_fingerprint(msg, field)
     if recorded and current != recorded:
         _problem("field_fingerprint_mismatch",
-                 f"{where}: the field changed shape (fingerprint {recorded} -> {current}). "
-                 f"Re-read \"{text}\" against the proto, then record the new fingerprint.",
+                 f"{where}: \"{text}\" is hand-written, and the proto field has "
+                 f"changed shape. Is it still accurate? If not, rewrite it. Either way, "
+                 f"update FIELD_DOCS[(\"{msg}\", \"{field['name']}\")] in this file to "
+                 f"(<description>, \"{current}\"). Re-recording the fingerprint without "
+                 f"reading the proto defeats the point of this check.",
                  field=where, description=text, was=recorded, now=current)
     return text
 
@@ -681,7 +684,14 @@ def parse_go_config():
                     doc.append(ln[2:].strip())
                 elif ln:
                     f = re.match(r"(\w+)\s+([^\s`]+)(?:\s+`([^`]*)`)?", ln)
-                    if f:
+                    if f and not f.group(1)[:1].isupper():
+                        if re.search(r'yaml:"', f.group(3) or ""):
+                            raise SourceError(
+                                f"{name}.{f.group(1)} is unexported but carries a "
+                                "yaml tag. Go's yaml marshallers cannot read it, so "
+                                "either it is not config and the tag is wrong, or it "
+                                "is config and must be exported.")
+                    elif f:
                         tag = re.search(r'yaml:"([^",]+)', f.group(3) or "")
                         fields.append({"go": f.group(1), "type": f.group(2),
                                        "yaml": tag.group(1) if tag else f.group(1),
@@ -712,17 +722,64 @@ def parse_go_config():
             defaults[(current, m.group(1))] = value
 
     # validation rules: every error string a struct's Validate can return
-    for m in re.finditer(r"func \(c (\w+)\) Validate\(\) error \{", src):
+    # Any receiver name, and any parameter list: #1440 added a bool parameter to
+    # EVMChainConfig.Validate and the struct went invisible, so every rule it
+    # owned vanished and evm.rpc silently became optional.
+    for m in re.finditer(r"func \((?:\w+ )?(\w+)\) Validate\([^)]*\) error \{", src):
         recv = m.group(1)
         tail = src[m.end():]
         tail = tail[:tail.index("\n}\n")]
         msgs = []
         for e in re.finditer(r'errors\.(?:New|Errorf)\("(\.[^"]+)"((?:,\s*\w+)*)', tail):
             msgs.append((e.group(1), [a.strip() for a in e.group(2).split(",") if a.strip()]))
+        # errPathf(segment, format, args...) is the same rule split in two: the
+        # segment carries the path the old idiom wrote inline, so ".", segment and
+        # format reassemble the original string and the fingerprints stay stable.
+        for e in re.finditer(
+                r'errPathf\(\s*"(\w+)"\s*,\s*"([^"]+)"((?:,\s*[\w.\[\]]+)*)', tail):
+            msgs.append(("." + e.group(1) + " " + e.group(2),
+                         [a.strip() for a in e.group(3).split(",") if a.strip()]))
+        # A Validate() body that builds errors in a way this scraper does not know
+        # harvests nothing, and nothing is exactly what a green check looks like.
+        # #1440 moved the package to errPathf and every rule vanished silently, so
+        # an unknown constructor is a refusal rather than a shrug.
+        unknown = {c for c in re.findall(r'\b((?:errors|fmt)\.\w+|errPath\w*)\(', tail)
+                   if c not in KNOWN_ERR_CTORS}
+        if unknown:
+            raise SourceError(
+                f"{recv}.Validate() builds errors with {', '.join(sorted(unknown))}, "
+                "which this scraper does not read. Validation rules drive the "
+                "required column, enum values, and the discriminators, so an "
+                "unread constructor silently empties all three. Teach "
+                "go_config_model() to read it, or add it to KNOWN_ERR_CTORS if it "
+                "carries no field rule.")
         validations[recv] = msgs
 
     return {"structs": structs, "aliases": aliases, "consts": consts,
             "const_type": const_type, "defaults": defaults, "validations": validations}
+
+
+# Error constructors this scraper understands, or knows carry no field rule.
+# Anything else in a Validate() body is a refusal: see go_config_model().
+# Structs whose Validate() legitimately harvests no field rule: they validate
+# cross-references and delegate to nested Validate() calls rather than rejecting
+# a field's own value. Everything else with a Validate() must yield at least one
+# rule, and RULELESS_VALIDATORS is asserted in test-refgen.py.
+#
+# The point of the assertion: #1440 moved the package to errPathf and every rule
+# in it vanished at once. The pages still rendered, check mode still said "up to
+# date", and ten keys had quietly become optional. A rule count that can silently
+# reach zero is the failure this list exists to make loud.
+RULELESS_VALIDATORS = {"Attestors", "Config", "ServerConfig"}
+
+
+KNOWN_ERR_CTORS = {
+    "errors.New", "errors.Errorf",          # read as field rules
+    "errors.Wrap", "errors.Wrapf",          # wrap a nested Validate(), no rule
+    "errPath", "errPathIndex",              # wrap a nested error, no rule
+    "errPathf", "errPathIndexf",            # errPathf is read; Index carries no field
+    "fmt.Errorf", "fmt.Sprintf",            # message construction, no path segment
+}
 
 
 def _const_value(path, name):
@@ -1020,9 +1077,12 @@ def _description(struct, field, model, seen):
     current = _fingerprint(struct, field, model)
     if current != recorded:
         _problem("fingerprint_mismatch",
-                 f"{where}: the source behind its hand-written description changed "
-                 f"(fingerprint {recorded} -> {current}). Re-read \"{text}\" against the "
-                 "code, then record the new fingerprint. Nothing is written until you do.",
+                 f"{where}: \"{text}\" is hand-written, and the code behind it has "
+                 f"changed. Is it still accurate? If not, rewrite it. Either way, "
+                 f"update FALLBACK_DOCS[(\"{struct}\", \"{field['go']}\")] in this file "
+                 f"to (<description>, \"{current}\"). Re-recording the fingerprint "
+                 f"without reading the code defeats the point of this check. "
+                 f"Nothing is written until you do.",
                  field=where, description=text, was=recorded, now=current)
     return text
 

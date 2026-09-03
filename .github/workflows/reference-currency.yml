@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# The three reference pages under docs/6-ibc-cli/ carry tables generated from
+# this repository: the config structs, the proto files, and the CLI's own --help
+# output. This job regenerates them in memory and reports when what is on disk
+# differs, so a stale table surfaces on the pull request that made it stale
+# rather than in a reader's browser.
+#
+# Check mode only, on purpose. A job that regenerates and commits is a separate
+# question, and a bot rewriting documentation nobody reviews is worse than a
+# stale table.
+#
+# ADVISORY FOR NOW. `continue-on-error` on the job means a failure is visible
+# without blocking a merge, so this cannot hold up unrelated work while people
+# get used to it. To make it blocking, delete that line and add the job to the
+# branch protection rules.
+#
+# Exit codes, if you are reading a failure: 1 means a page is stale and needs
+# `refgen.py all`; 2 means the generator refused to build a page at all, and the
+# message says why. See docs/6-ibc-cli/tools/README.md.
+name: reference currency
+
+on:
+  pull_request:
+    paths:
+      - "cli/**"
+      - "proto/**"
+      - "gen/**"
+      - "docs/6-ibc-cli/**"
+      - ".github/workflows/reference-currency.yml"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The CLI generator builds the binary, because Cobra computes a flag's
+      # default when the flag is registered, so --help is the honest source.
+      - uses: actions/setup-go@v5
+        with:
+          # read from the module rather than pinned here, so a Go bump in
+          # cli/go.mod does not silently break this job
+          go-version-file: cli/go.mod
+
+      - name: Generator tests
+        run: python3 docs/6-ibc-cli/tools/test-refgen.py
+
+      # Mutates a temp copy of the source and asserts that a stale page goes
+      # red and that each loud failure fires. Slower, because several cases
+      # rebuild the binary.
+      - name: The loop still fails when the source moves
+        run: python3 docs/6-ibc-cli/tools/test-refgen-e2e.py
+
+      - name: Reference pages are current
+        run: python3 docs/6-ibc-cli/tools/refgen.py all --check
+
+      # When the step above fails, the prose around those tables is suspect
+      # too. --list-regions names what moved.
+      - name: Name the stale regions
+        if: failure()
+        run: python3 docs/6-ibc-cli/tools/refgen.py all --list-regions || true
