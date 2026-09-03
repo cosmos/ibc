@@ -83,7 +83,7 @@ Validates config's correctness.
 
 <!-- GEN:cli:cmd:config-validate END -->
 
-`--live` adds the checks that need the chains. Pass `relayer` or `attestor` to also check the file is sufficient to run that process. Unknown fields always fail.
+`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. Unknown fields and unresolved cross-references always fail at load.
 
 ```bash
 ibc config validate
@@ -95,6 +95,8 @@ ibc config validate
   "status": "valid"
 }
 ```
+
+With a target, the response also includes `"relayer": "valid"` or `"attestor": "valid"`.
 
 ## `keys`
 
