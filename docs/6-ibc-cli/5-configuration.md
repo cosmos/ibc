@@ -122,7 +122,7 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 |---|---|---|---|
 | `listenAddr` | `string` | `0.0.0.0:3000` | Address the gRPC server binds. It serves the relayer and attestor APIs together. |
 
-<!-- [config.go:L48](cli/internal/config/config.go#L48) -->
+<!-- [config.go:L66](cli/internal/config/config.go#L66) -->
 
 <!-- GEN:config:server END -->
 
@@ -139,7 +139,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
 | `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
 
-<!-- [config.go:L53](cli/internal/config/config.go#L53) -->
+<!-- [config.go:L71](cli/internal/config/config.go#L71) -->
 
 <!-- GEN:config:db END -->
 
@@ -159,7 +159,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
 
-<!-- [config.go:L116](cli/internal/config/config.go#L116) -->
+<!-- [config.go:L80](cli/internal/config/config.go#L80) -->
 
 <!-- GEN:config:chains END -->
 
@@ -185,15 +185,15 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.params, connections[].clientB.params` | `yaml.RawMessage` | optional | This client type's settings. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L56](cli/internal/config/relayer.go#L56) -->
+<!-- [relayer.go:L51](cli/internal/config/relayer.go#L51) -->
 
 <!-- GEN:config:relayer:connections END -->
 
 Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](cli/cmd/ibc/deploy.go#L256-L262) -->
 
-The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](cli/internal/config/relayer.go#L149-L176) -->
+The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L185-L192](cli/internal/config/relayer.go#L185-L192) -->
 
-With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](cli/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L237-L264](cli/internal/config/config.go#L237-L264) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](cli/internal/config/relayer.go#L118-L135) -->
+With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](cli/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L511-L528](cli/internal/config/config.go#L511-L528) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](cli/internal/config/relayer.go#L118-L135) -->
 
 ### Relay settings
 
@@ -205,7 +205,7 @@ The relayer uses these defaults unless you override them.
 |---|---|---|---|
 | `dispatchPollInterval` | `duration` | `1s` | How often the dispatcher polls the store for unfinished packets. |
 
-<!-- [relayer.go:L32](cli/internal/config/relayer.go#L32) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
+<!-- [relayer.go:L28](cli/internal/config/relayer.go#L28) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -220,7 +220,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L39](cli/internal/config/relayer.go#L39) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 
@@ -257,7 +257,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L65](cli/internal/config/config.go#L65) -->
+<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -280,7 +280,7 @@ attestors:
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port. |
 
-<!-- [config.go:L65](cli/internal/config/config.go#L65) -->
+<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -288,7 +288,7 @@ A remote entry does not set `chainId` or `signer`. The process obtains the attes
 
 Fields from the other attestor type are rejected. A remote attestor cannot set `chainId`, and a local attestor cannot set `grpc`. <!-- [config.go:L513-L536](cli/internal/config/config.go#L513-L536) -->
 
-Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [config.go:L474-L503](cli/internal/config/config.go#L474-L503) -->
+Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [config.go:L381-L396](cli/internal/config/config.go#L381-L396) -->
 
 ## `signers`
 
@@ -304,7 +304,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L90](cli/internal/config/config.go#L90) -->
+<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -329,7 +329,7 @@ signers:
 | `grpc` | `string` | **required** | Address for a remote signer. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
 
-<!-- [config.go:L90](cli/internal/config/config.go#L90) -->
+<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
 
 <!-- GEN:config:signers:remote END -->
 
