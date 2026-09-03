@@ -15,12 +15,14 @@ Run the following commands to create and validate the file:
 
 ```sh
 ibc config new
-ibc config validate # basic config correctness
-ibc config validate relayer # extra relayer config validation
-ibc config validate attestor # if you want to run attestor only
+ibc config validate              # structural checks and cross-references
+ibc config validate relayer      # also check the file can run a relayer
+ibc config validate attestor     # also check the file can run a local attestor
 ```
 
-Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [config.go:L169](cli/internal/config/config.go#L169) -->
+Every command loads the config file and runs the same structural checks: unknown fields are rejected, and cross-references (including a local attestor's `chainId` and `signer`) must resolve. `ibc config validate` reports those without starting a process. Pass `relayer` or `attestor` to add the sufficiency checks needed to run that process.
+
+Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [file.go:L24](cli/internal/config/file.go#L24) -->
 
 ## Example config.yml
 
@@ -100,15 +102,15 @@ signers:
 
 The following fields in this file are references to other fields:
 
-| Reference | Must match |
-| --- | --- |
-| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](cli/internal/config/config.go#L300-L319) --> |
-| `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L323-L336](cli/internal/config/config.go#L323-L336) --> |
-| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L556-L559](cli/internal/config/config.go#L556-L559) --> |
-| A local attestor's `chainId` | A `chains[].chainId` value <!-- [config.go:L561-L564](cli/internal/config/config.go#L561-L564) --> |
-| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L241-L248](cli/internal/config/config.go#L241-L248) --> |
+| Reference | Must match | Checked at |
+| --- | --- | --- |
+| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L584-L590](cli/internal/config/config.go#L584-L590) --> | Config load |
+| `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L598-L606](cli/internal/config/config.go#L598-L606) --> | Config load |
+| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L546-L549](cli/internal/config/config.go#L546-L549) --> | Config load |
+| A local attestor's `chainId` | A `chains[].chainId` value <!-- [config.go:L551-L554](cli/internal/config/config.go#L551-L554) --> | Config load; `evm.rpc` required to run |
+| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L557-L564](cli/internal/config/config.go#L557-L564) --> | Config load |
 
-For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference, including a local attestor whose `chainId` is not in `chains`. <!-- [config.go:L561-L564](cli/internal/config/config.go#L561-L564) --> `ibc config validate relayer` and `ibc config validate attestor` add the checks needed to run those processes.
+For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. Any unresolved reference fails at load — including on `ibc config validate` — before a relayer or attestor process starts.
 
 ## `server`
 
