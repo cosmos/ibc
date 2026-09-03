@@ -256,13 +256,15 @@ func (AttestationParams) Validate() error { return nil }
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
 
-	for _, chain := range c.ChainOverrides {
+	for i, chain := range c.ChainOverrides {
+		seg := fmt.Sprintf("chainOverrides[%d]", i)
+
 		if err := chain.Validate(); err != nil {
-			return errPath("chainOverrides", errPath(chain.ChainID, err))
+			return errPath(seg, err)
 		}
 
 		if _, ok := chainIDs[chain.ChainID]; ok {
-			return errPath("chainOverrides", fmt.Errorf("duplicate chainId: %q", chain.ChainID))
+			return errPathf(seg, "duplicate chainId: %q", chain.ChainID)
 		}
 		chainIDs[chain.ChainID] = struct{}{}
 	}
@@ -274,20 +276,22 @@ func (c RelayerConfig) validateConnections() error {
 	aliases := make(map[string]struct{})
 	clientEnds := make(map[string]struct{})
 
-	for _, conn := range c.Connections {
+	for i, conn := range c.Connections {
+		seg := fmt.Sprintf("connections[%d]", i)
+
 		if err := conn.Validate(); err != nil {
-			return errPath("connections", errPath(conn.Alias, err))
+			return errPath(seg, err)
 		}
 
 		if _, ok := aliases[conn.Alias]; ok {
-			return errPath("connections", fmt.Errorf("duplicate alias: %q", conn.Alias))
+			return errPathf(seg, "duplicate alias: %q", conn.Alias)
 		}
 		aliases[conn.Alias] = struct{}{}
 
 		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
 			key := end.ChainID + "/" + end.ClientID
 			if _, ok := clientEnds[key]; ok {
-				return errPath("connections", fmt.Errorf("duplicate client %q on chain %q", end.ClientID, end.ChainID))
+				return errPathf(seg, "duplicate client %q on chain %q", end.ClientID, end.ChainID)
 			}
 			clientEnds[key] = struct{}{}
 		}
