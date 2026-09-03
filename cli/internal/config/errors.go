@@ -3,7 +3,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -35,8 +34,8 @@ func errPath(segment string, err error) error {
 		return err
 	}
 
-	var pe *PathError
-	if errors.As(err, &pe) {
+	// errors.As() would walk past fmt.Errorf wrappers and drop their messages.
+	if pe, ok := err.(*PathError); ok {
 		// parent.child vs parent[123]
 		var path string
 		if strings.HasPrefix(pe.path, "[") {
