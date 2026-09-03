@@ -241,11 +241,12 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 3. Use the validate command to check the result against both chains before starting anything:
 
 ```bash
-./bin/ibc config validate --live --strict
+./bin/ibc config validate --live
 ```
 
 ```json
 {
+  "path": "/home/you/.ibc/ibc.yml",
   "status": "valid"
 }
 ```
