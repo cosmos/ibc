@@ -353,6 +353,12 @@ server:
 			require.ErrorContains(t, err, `unknown field "foobar"`)
 		})
 
+		t.Run("shippedSample", func(t *testing.T) {
+			cfg, err := LoadFromFile("ibc.yml", true)
+			require.NoError(t, err)
+			require.NoError(t, cfg.RelayerSufficiency())
+		})
+
 		t.Run("attestationSigner", func(t *testing.T) {
 			// ARRANGE
 			path := writeTestConfig(t, `
