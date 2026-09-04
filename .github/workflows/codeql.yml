@@ -51,6 +51,6 @@ jobs:
         if: matrix.language == 'go'
         working-directory: e2e
         run: go build ./...
-      - uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           category: /language:${{ matrix.language }}
