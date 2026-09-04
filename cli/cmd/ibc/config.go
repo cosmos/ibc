@@ -58,11 +58,13 @@ const (
 	configTargetAttestor = "attestor"
 )
 
-const configValidateLong = `Validates config's correctness.
-Optionally, if [target] is provided ["relayer", "attestor"], it performs additional checks
-to ensure the config is sufficient to run:
-- ibc relayer run
-- ibc attestor run`
+const configValidateLong = `Validate config structure and cross-references.
+
+Optional [target]:
+  "relayer"   check fields required by "ibc relayer run"
+  "attestor"  check fields required by "ibc attestor run"
+
+Use --live for live components probe (database, RPC endpoints, etc...)`
 
 var (
 	flagConfigAddChainID       string
