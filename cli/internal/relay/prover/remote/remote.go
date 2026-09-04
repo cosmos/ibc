@@ -6,6 +6,7 @@ package remote
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -25,20 +26,22 @@ type Prover struct {
 	client   proverv2.ProverServiceClient
 	chainID  string
 	clientID string
+	logger   *slog.Logger
 }
 
-func New(httpClient connect.HTTPClient, url, chainID, clientID string) *Prover {
+func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *slog.Logger) *Prover {
 	return &Prover{
 		client:   proverv2.NewProverServiceClient(httpClient, url, connect.WithGRPC()),
 		chainID:  chainID,
 		clientID: clientID,
+		logger:   logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
 	}
 }
 
 // NewFromURL dials url with a client that can negotiate h2c, which gRPC
 // requires over plaintext.
-func NewFromURL(url, chainID, clientID string) *Prover {
-	return New(newHTTPClient(), url, chainID, clientID)
+func NewFromURL(url, chainID, clientID string, logger *slog.Logger) *Prover {
+	return New(newHTTPClient(), url, chainID, clientID, logger)
 }
 
 func newHTTPClient() *http.Client {
@@ -67,6 +70,8 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 	//nolint:gosec // seconds since the epoch, matching the ibc packet timestamp
 	seconds := int64(res.Msg.GetTimestamp())
 
+	p.logger.Debug("Resolved latest provable height", "height", res.Msg.GetHeight())
+
 	return res.Msg.GetHeight(), time.Unix(seconds, 0).UTC(), nil
 }
 
@@ -81,6 +86,8 @@ func (p *Prover) StateProof(ctx context.Context, height uint64) ([]byte, error) 
 	if err != nil {
 		return nil, errors.Wrap(err, "remote prover: state proof")
 	}
+
+	p.logger.Debug("Fetched state proof", "height", height)
 
 	return res.Msg.GetProof(), nil
 }
@@ -115,6 +122,8 @@ func (p *Prover) PacketProofs(
 			"remote prover returned %d proofs for %d packets", len(proofs), len(packets),
 		)
 	}
+
+	p.logger.Debug("Fetched packet proofs", "height", height, "kind", kind, "packets", len(packets))
 
 	return proofs, nil
 }

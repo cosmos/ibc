@@ -5,6 +5,7 @@ package processors
 import (
 	"context"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -26,6 +27,7 @@ type BatchTimeoutPacket struct {
 	txBuilder         txbuilder.TxBuilder
 	txSubmitter       txsubmitter.TxSubmitter
 	storage           TxStorage
+	logger            *slog.Logger
 }
 
 func NewBatchTimeoutPacket(
@@ -35,6 +37,7 @@ func NewBatchTimeoutPacket(
 	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
+	logger *slog.Logger,
 ) (BatchTimeoutPacket, error) {
 	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
 	if !ok {
@@ -60,6 +63,7 @@ func NewBatchTimeoutPacket(
 		txBuilder:         txBuilder,
 		txSubmitter:       txSubmitter,
 		storage:           storage,
+		logger:            logger,
 	}, nil
 }
 
@@ -111,7 +115,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	}
 
 	submission, err := relayPackets(
-		ctx, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
+		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
 		p.route.SourceClientID, v2.RelayKindTimeout,
 		proofHeight, events,
 	)

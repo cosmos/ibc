@@ -4,6 +4,7 @@ package attestation
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/pkg/errors"
@@ -23,18 +24,29 @@ type Generator struct {
 	attestors         []attestor.Attestor
 	threshold         int
 	counterpartyChain chains.Client
+	logger            *slog.Logger
 }
 
-func New(attestors []attestor.Attestor, threshold int, counterpartyChain chains.Client) *Generator {
-	return &Generator{attestors: attestors, threshold: threshold, counterpartyChain: counterpartyChain}
+func New(
+	attestors []attestor.Attestor,
+	threshold int,
+	counterpartyChain chains.Client,
+	logger *slog.Logger,
+) *Generator {
+	return &Generator{
+		attestors:         attestors,
+		threshold:         threshold,
+		counterpartyChain: counterpartyChain,
+		logger:            logger,
+	}
 }
 
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	return latestProvableHeight(ctx, g.attestors, g.threshold, g.counterpartyChain)
+	return latestProvableHeight(ctx, g.logger, g.attestors, g.threshold, g.counterpartyChain)
 }
 
 func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, error) {
-	result, err := queryStateQuorum(ctx, g.attestors, g.threshold, height)
+	result, err := queryStateQuorum(ctx, g.logger, g.attestors, g.threshold, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying state attestation quorum")
 	}
@@ -82,7 +94,7 @@ func (g *Generator) PacketProofs(
 		encodedPackets[i] = encoded
 	}
 
-	result, err := queryPacketQuorum(ctx, g.attestors, g.threshold, encodedPackets, height, commitmentType)
+	result, err := queryPacketQuorum(ctx, g.logger, g.attestors, g.threshold, encodedPackets, height, commitmentType)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying packet attestation quorum")
 	}
