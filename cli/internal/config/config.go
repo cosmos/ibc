@@ -12,6 +12,7 @@ import (
 	"github.com/goccy/go-yaml"
 
 	"github.com/cosmos/ibc/cli/internal/network"
+	"github.com/cosmos/ibc/cli/internal/pkg/logging"
 )
 
 // Chain types
@@ -53,6 +54,7 @@ type (
 // Should only contain `camelCase` keywords
 type Config struct {
 	Server    ServerConfig  `yaml:"server"`
+	Logging   LoggingConfig `yaml:"logging"`
 	DB        DBConfig      `yaml:"db"`
 	Chains    Chains        `yaml:"chains"`
 	Relayer   RelayerConfig `yaml:"relayer"`
@@ -65,6 +67,15 @@ type Config struct {
 // ServerConfig config for RPC server for both relayer and attestor
 type ServerConfig struct {
 	ListenAddress string `yaml:"listenAddr"`
+}
+
+// LoggingConfig config for process logging. Each field is overridden by its
+// corresponding flag.
+type LoggingConfig struct {
+	// Level is a slog level name (debug, info, warn, error). Empty defaults to info.
+	Level string `yaml:"level,omitempty"`
+	// JSON emits logs as JSON instead of text.
+	JSON bool `yaml:"json"`
 }
 
 // DBConfig config for database storage.
@@ -160,6 +171,9 @@ func DefaultConfig() Config {
 		Server: ServerConfig{
 			ListenAddress: "0.0.0.0:3000",
 		},
+		Logging: LoggingConfig{
+			Level: "info",
+		},
 		DB: DBConfig{
 			Type: DBTypeSQLite,
 			URL:  "ibc.db",
@@ -184,6 +198,7 @@ func (c Config) Validate() error {
 
 	for _, step := range []validationStep{
 		{"server", c.Server.Validate},
+		{"logging", c.Logging.Validate},
 		{"db", c.DB.Validate},
 		{"signers", c.Signers.Validate},
 		{"chains", c.Chains.Validate},
@@ -288,6 +303,14 @@ func (c Config) StoreToFileWithComments(path string) error {
 func (c ServerConfig) Validate() error {
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
 		return errPath("listenAddr", err)
+	}
+
+	return nil
+}
+
+func (c LoggingConfig) Validate() error {
+	if _, err := logging.ParseLevel(c.Level); err != nil {
+		return errPathf("level", "must be one of [debug, info, warn, error], got %q", c.Level)
 	}
 
 	return nil
