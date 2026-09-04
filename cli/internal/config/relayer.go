@@ -221,7 +221,7 @@ func (c ClientEnd) Validate() error {
 
 	params, err := c.ClientParams()
 	if err != nil {
-		return err
+		return errPath("params", err)
 	}
 
 	if err := params.Validate(); err != nil {
@@ -311,7 +311,7 @@ func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	}
 
 	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
-		return nil, fmt.Errorf("decoding params: %w", err)
+		return nil, err
 	}
 
 	return &params, nil

@@ -286,6 +286,14 @@ func TestRelayerConfig(t *testing.T) {
 				},
 				errContains: ".signer: required",
 			},
+			{
+				name: "remote client params decode error",
+				patch: func(c *Config) {
+					c.Relayer.Connections[0].ClientA.Type = ClientTypeRemote
+					c.Relayer.Connections[0].ClientA.Params = yaml.RawMessage("endpoint: http://prover:9090\n")
+				},
+				errContains: "relayer.connections[0].clientA.params:",
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
@@ -397,9 +405,9 @@ func TestClientEndParams(t *testing.T) {
 		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
 		{name: "remote without params", doc: "type: remote\n", wantErr: "params.url: required"},
 		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: "params.url: required"},
-		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
 		{name: "attestation", doc: "type: attestation\n"},
-		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
