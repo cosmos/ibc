@@ -8,9 +8,22 @@ import (
 	"time"
 )
 
-func Default(json bool, level string) *slog.Logger {
+// ParseLevel parses a slog level name (debug, info, warn, error;
+// case-insensitive). Empty defaults to info.
+func ParseLevel(level string) (slog.Level, error) {
+	if level == "" {
+		return slog.LevelInfo, nil
+	}
+
 	var lvl slog.Level
-	if err := lvl.UnmarshalText([]byte(level)); err != nil {
+	err := lvl.UnmarshalText([]byte(level))
+
+	return lvl, err
+}
+
+func Default(json bool, level string) *slog.Logger {
+	lvl, err := ParseLevel(level)
+	if err != nil {
 		lvl = slog.LevelInfo // unrecognized level falls back to info
 	}
 
