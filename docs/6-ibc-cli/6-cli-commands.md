@@ -73,7 +73,7 @@ The command refuses to overwrite an existing file, so it is safe to run twice. <
 
 <!-- GEN:cli:cmd:config-validate START -->
 
-Validates config's correctness.
+Validate config structure and cross-references.
 
 | Flag | Default | Description |
 |---|---|---|
