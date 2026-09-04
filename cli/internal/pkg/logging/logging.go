@@ -8,8 +8,13 @@ import (
 	"time"
 )
 
-func Default(json bool) *slog.Logger {
-	opts := &slog.HandlerOptions{ReplaceAttr: ReplaceAttrs}
+func Default(json bool, level string) *slog.Logger {
+	var lvl slog.Level
+	if err := lvl.UnmarshalText([]byte(level)); err != nil {
+		lvl = slog.LevelInfo // unrecognized level falls back to info
+	}
+
+	opts := &slog.HandlerOptions{Level: lvl, ReplaceAttr: ReplaceAttrs}
 
 	var handler slog.Handler
 	if json {

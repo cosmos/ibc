@@ -3,6 +3,7 @@
 package logging
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"testing"
@@ -11,6 +12,25 @@ import (
 	pkgerrors "github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestDefaultLevel(t *testing.T) {
+	for _, tt := range []struct {
+		name            string
+		inputLevel      string
+		configuredLevel slog.Level
+	}{
+		{"debug", "debug", slog.LevelDebug},
+		{"info", "info", slog.LevelInfo},
+		{"Capital warn", "WARN", slog.LevelWarn},
+		{"empty input defaults to info", "", slog.LevelInfo},     // empty falls back to info
+		{"invalid defaults to info", "nonsense", slog.LevelInfo}, // unrecognized falls back to info
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := Default(false, tt.inputLevel)
+			assert.True(t, logger.Enabled(context.Background(), tt.configuredLevel))
+		})
+	}
+}
 
 func TestReplaceAttrs(t *testing.T) {
 	t.Run("arbitraryAttr", func(t *testing.T) {
