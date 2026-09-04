@@ -14,6 +14,7 @@ import (
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
 	"github.com/cosmos/ibc/cli/internal/bootstrap"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
 )
 
@@ -56,7 +57,9 @@ var (
 	}
 )
 
-func attestorRun(_ *cobra.Command, _ []string) error {
+func attestorRun(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
@@ -74,6 +77,8 @@ func attestorRun(_ *cobra.Command, _ []string) error {
 		app.Logger.Error("Failed to start attestor server", "err", err)
 		return err
 	}
+
+	otel.GlobalSetup(ctx, cfg.Observability, app.Logger)
 
 	app.Logger.Info("Readiness", "readiness", attestorv2.ProcessReadiness{
 		Event: attestorv2.ProcessReadinessEvent,
