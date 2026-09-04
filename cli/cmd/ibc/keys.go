@@ -182,7 +182,7 @@ func saveNamedKey(key signer.LocalKey, name string, populateConfig bool) (string
 			return "", err
 		}
 
-		cfg, err = config.LoadFromFile(configPath, false, false)
+		cfg, err = config.LoadFromFile(configPath, false)
 		if os.IsNotExist(err) {
 			cfg = config.DefaultConfig()
 		} else if err != nil {

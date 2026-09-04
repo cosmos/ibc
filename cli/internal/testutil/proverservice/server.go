@@ -64,7 +64,7 @@ func newServer(set *prover.Set) *http.Server {
 // NewAttestationServer serves an attestation prover per client end in the
 // config.
 func NewAttestationServer(ctx context.Context, configPath string) (*http.Server, error) {
-	cfg, err := config.LoadFromFile(configPath, true, true)
+	cfg, err := config.LoadFromFile(configPath, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "load config")
 	}

@@ -15,10 +15,14 @@ Run the following commands to create and validate the file:
 
 ```sh
 ibc config new
-ibc config validate
+ibc config validate              # structural checks and cross-references
+ibc config validate relayer      # also check the file can run a relayer
+ibc config validate attestor     # also check the file can run a local attestor
 ```
 
-Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [config.go:L169](cli/internal/config/config.go#L169) -->
+Every command loads the config file and runs the same structural checks: unknown fields are rejected, and cross-references (including a local attestor's `chainId` and `signer`) must resolve. `ibc config validate` reports those without starting a process. Pass `relayer` or `attestor` to add the sufficiency checks needed to run that process.
+
+Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [file.go:L24](cli/internal/config/file.go#L24) -->
 
 ## Example config.yml
 
@@ -98,14 +102,15 @@ signers:
 
 The following fields in this file are references to other fields:
 
-| Reference | Must match |
-| --- | --- |
-| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L300-L319](cli/internal/config/config.go#L300-L319) --> |
-| `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L323-L336](cli/internal/config/config.go#L323-L336) --> |
-| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L232-L239](cli/internal/config/config.go#L232-L239) --> |
-| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L241-L248](cli/internal/config/config.go#L241-L248) --> |
+| Reference | Must match | Checked at |
+| --- | --- | --- |
+| `clientA.chainId` and `clientB.chainId` | A `chains[].chainId` value <!-- [config.go:L584-L590](cli/internal/config/config.go#L584-L590) --> | Config load |
+| `clientA.signer` and `clientB.signer` | A `signers[].alias` value <!-- [config.go:L598-L606](cli/internal/config/config.go#L598-L606) --> | Config load |
+| A local attestor's `signer` | A `signers[].alias` value <!-- [config.go:L546-L549](cli/internal/config/config.go#L546-L549) --> | Config load |
+| A local attestor's `chainId` | A `chains[].chainId` value <!-- [config.go:L551-L554](cli/internal/config/config.go#L551-L554) --> | Config load; `evm.rpc` required to run |
+| `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L557-L564](cli/internal/config/config.go#L557-L564) --> | Config load |
 
-For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. `ibc config validate` reports an unresolved reference. A local attestor's `chainId` is checked when the process starts rather than by validation. <!-- [resolve.go:L55-L57](cli/internal/service/attestor/resolve.go#L55-L57) -->
+For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. Any unresolved reference fails at load — including on `ibc config validate` — before a relayer or attestor process starts.
 
 ## `server`
 
@@ -117,7 +122,7 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 |---|---|---|---|
 | `listenAddr` | `string` | `0.0.0.0:3000` | Address the gRPC server binds. It serves the relayer and attestor APIs together. |
 
-<!-- [config.go:L48](cli/internal/config/config.go#L48) -->
+<!-- [config.go:L66](cli/internal/config/config.go#L66) -->
 
 <!-- GEN:config:server END -->
 
@@ -134,7 +139,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
 | `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
 
-<!-- [config.go:L53](cli/internal/config/config.go#L53) -->
+<!-- [config.go:L71](cli/internal/config/config.go#L71) -->
 
 <!-- GEN:config:db END -->
 
@@ -154,7 +159,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
 
-<!-- [config.go:L116](cli/internal/config/config.go#L116) -->
+<!-- [config.go:L80](cli/internal/config/config.go#L80) -->
 
 <!-- GEN:config:chains END -->
 
@@ -180,7 +185,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.params, connections[].clientB.params` | `yaml.RawMessage` | optional | This client type's settings. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L56](cli/internal/config/relayer.go#L56) -->
+<!-- [relayer.go:L51](cli/internal/config/relayer.go#L51) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -200,7 +205,7 @@ The relayer uses these defaults unless you override them.
 |---|---|---|---|
 | `dispatchPollInterval` | `duration` | `1s` | How often the dispatcher polls the store for unfinished packets. |
 
-<!-- [relayer.go:L32](cli/internal/config/relayer.go#L32) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
+<!-- [relayer.go:L28](cli/internal/config/relayer.go#L28) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -215,7 +220,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L39](cli/internal/config/relayer.go#L39) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 
@@ -252,7 +257,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L65](cli/internal/config/config.go#L65) -->
+<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -275,7 +280,7 @@ attestors:
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port. |
 
-<!-- [config.go:L65](cli/internal/config/config.go#L65) -->
+<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -299,7 +304,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L90](cli/internal/config/config.go#L90) -->
+<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -324,7 +329,7 @@ signers:
 | `grpc` | `string` | **required** | Address for a remote signer. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
 
-<!-- [config.go:L90](cli/internal/config/config.go#L90) -->
+<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
 
 <!-- GEN:config:signers:remote END -->
 
