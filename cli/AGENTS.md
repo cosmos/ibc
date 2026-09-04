@@ -15,21 +15,23 @@
 ## Documentation generated from this code
 
 Three reference pages under `docs/6-ibc-cli/` are generated from this repository:
-the configuration reference from the config structs, the CLI reference from the
-command tree and the built binary's `--help`, and the API reference from the
-protos. The prose around the tables is hand-written; the tables are not.
 
-If you change a config struct, a command, a flag, or a proto, run:
+* `5-configuration.md` — from the config structs
+* `6-cli-commands.md` — from the command tree and the built binary's `--help`
+* `7-api.md` — from the protos
+
+The tables are generated, the prose around them is not. Never hand-edit between a
+`<!-- GEN:... START -->` marker and its `END`.
+
+If you change a config struct, a command, a flag, or a proto:
 
 ```sh
 python3 docs/6-ibc-cli/tools/refgen.py all --check   # is anything stale?
-python3 docs/6-ibc-cli/tools/refgen.py all           # bring the tables up to date
+python3 docs/6-ibc-cli/tools/refgen.py all           # update the tables
 ```
 
-Exit 1 means a page is stale and regenerating fixes it. Exit 2 means the generator
-refused to build a page, and the message says what it could not read. Never
-hand-edit between a `<!-- GEN:... START -->` marker and its `END`: those regions are
-rewritten on the next run.
+* Exit 1 — a page is stale, and regenerating fixes it
+* Exit 2 — the generator refused, and the message says what it could not read
 
-`docs/6-ibc-cli/tools/README.md` is the full guide, including what to do when a key
-has no doc comment and when a hand-written description's fingerprint moves.
+`docs/6-ibc-cli/tools/README.md` covers the rest, including keys with no doc
+comment and descriptions whose fingerprint has moved.
