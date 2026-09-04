@@ -721,7 +721,7 @@ def parse_go_config():
             defaults[(current, m.group(1))] = value
 
     # validation rules: every error string a struct's Validate can return
-    for m in re.finditer(r"func \((?:\w+ )?(\w+)\) Validate\([^)]*\) error \{", src):
+    for m in re.finditer(r"func \((?:\w+ )?\*?(\w+)\) Validate\([^)]*\) error \{", src):
         recv = m.group(1)
         tail = src[m.end():]
         tail = tail[:tail.index("\n}\n")]
@@ -743,6 +743,17 @@ def parse_go_config():
                 "required column, enum values, and the discriminators, so an unread "
                 "constructor silently empties all three. Teach parse_go_config() to "
                 "read it, or add it to KNOWN_ERR_CTORS if it carries no field rule.")
+
+        helpers = {h for h in re.findall(r'\.(validate\w+)', tail)
+                   if h not in KNOWN_VALIDATE_HELPERS}
+        if helpers:
+            raise SourceError(
+                f"{recv}.Validate() delegates to {', '.join(sorted(helpers))}, whose "
+                "body this scraper does not follow: the path segment is at the call "
+                "site and the message is inside the helper, so the rule cannot be "
+                "reassembled. Its checks would go unread while the page still "
+                "renders. Add it to KNOWN_VALIDATE_HELPERS once you have confirmed "
+                "what the page should say about the fields it guards.")
         validations[recv] = msgs
 
     return {"structs": structs, "aliases": aliases, "consts": consts,
@@ -765,6 +776,21 @@ KNOWN_ERR_CTORS = {
 # Structs whose Validate() legitimately yields no field rule: they check
 # cross-references and delegate to nested Validate() calls rather than rejecting a
 # field's own value. Asserted in test-refgen.py, so a struct cannot go silent.
+# Validate() bodies delegate some checks to helpers on the same receiver, and the
+# scraper does not follow them: the path segment lives at the call site and the
+# message inside the helper, so the rule cannot be reassembled reliably. These are
+# the helpers that exist today. A new one is a refusal, because its rules would go
+# unread and required-ness, constraints, and fingerprints would silently drift.
+#
+# evm.ics26Router is the live example: validateICS26Router requires it, but only
+# when the caller passes the flag, so the page's "optional" is deliberate rather
+# than a miss. Do not "fix" it by asserting required.
+KNOWN_VALIDATE_HELPERS = {
+    "validateAutoRelay", "validateChainOverrides", "validateChainReferences",
+    "validateConnectionSigners", "validateConnections", "validateICS26Router",
+    "validateRunnable",
+}
+
 RULELESS_VALIDATORS = {
     "Attestors", "Config", "ServerConfig",   # check cross-references, delegate the rest
     "AttestationParams",                     # `return nil`, satisfies an interface
