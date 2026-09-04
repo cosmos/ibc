@@ -515,6 +515,30 @@ def _():
         assert open(p).read() == "just prose\n"
 
 
+@case("every struct that validates yields a rule, or is listed as ruleless")
+def _():
+    """A rule count that can silently reach zero is the failure this guards.
+
+    Validation rules drive required-ness, enum values, and the discriminators.
+    When the config package moved to errPathf helpers, the scraper harvested
+    nothing from any struct, the pages still rendered, and check mode still
+    reported them up to date. So any struct declaring Validate() must yield at
+    least one rule unless it is named in RULELESS_VALIDATORS.
+    """
+    validations = refgen.parse_go_config()["validations"]
+    assert validations, "no struct with a Validate() was found at all"
+    empty = {s for s, rules in validations.items() if not rules}
+    unexpected = empty - refgen.RULELESS_VALIDATORS
+    assert not unexpected, (
+        f"{sorted(unexpected)} declare Validate() but yield no field rule. Either "
+        "the scraper cannot read how they build errors, or they belong in "
+        "RULELESS_VALIDATORS.")
+    stale = refgen.RULELESS_VALIDATORS - set(validations)
+    assert not stale, (
+        f"{sorted(stale)} are in RULELESS_VALIDATORS but have no Validate() any "
+        "more. Drop them from the list.")
+
+
 for name in PASS:
     print(f"  ok    {name}")
 for name, e, tb in FAIL:
