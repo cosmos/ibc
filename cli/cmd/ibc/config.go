@@ -12,6 +12,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/livevalidate"
+	"github.com/cosmos/ibc/cli/internal/pkg/logging"
 )
 
 // set in init()
@@ -208,6 +209,19 @@ func setupHomeWithConfig() (config.Config, error) {
 			return config.Config{}, errors.Wrap(err, "invalid --db")
 		}
 	}
+
+	// config logging applies per-field unless the flag set it explicitly
+	json := globalFlags.LogJSON
+	if !rootCmd.PersistentFlags().Changed("log-json") {
+		json = cfg.Logging.JSON
+	}
+
+	level := globalFlags.LogLevel
+	if !rootCmd.PersistentFlags().Changed("log-level") && cfg.Logging.Level != "" {
+		level = cfg.Logging.Level
+	}
+
+	slog.SetDefault(logging.Default(json, level))
 
 	return cfg, nil
 }
