@@ -6,6 +6,7 @@ package processors
 import (
 	"context"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,7 @@ type BatchAckPacket struct {
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
 	storage                TxStorage
+	logger                 *slog.Logger
 }
 
 func NewBatchAckPacket(
@@ -37,6 +39,7 @@ func NewBatchAckPacket(
 	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
+	logger *slog.Logger,
 ) (BatchAckPacket, error) {
 	destinationChainClient, ok := chainClients.Get(route.DestinationChainID)
 	if !ok {
@@ -68,6 +71,7 @@ func NewBatchAckPacket(
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
 		storage:                storage,
+		logger:                 logger,
 	}, nil
 }
 
@@ -122,7 +126,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 	}
 
 	submission, err := relayPackets(
-		ctx, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
+		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
 		p.route.SourceClientID, v2.RelayKindAck,
 		proofHeight, events,
 	)

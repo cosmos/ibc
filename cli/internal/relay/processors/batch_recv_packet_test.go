@@ -125,6 +125,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		db,
 		txSubmitter,
 		route,
+		slog.Default(),
 	)
 	require.NoError(t, err)
 
@@ -222,6 +223,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		db,
 		txSubmitter,
 		route,
+		slog.Default(),
 	)
 	require.NoError(t, err)
 
@@ -327,6 +329,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		db,
 		txSubmitter,
 		route,
+		slog.Default(),
 	)
 	require.NoError(t, err)
 
