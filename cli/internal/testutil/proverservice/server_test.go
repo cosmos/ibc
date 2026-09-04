@@ -4,6 +4,7 @@ package proverservice
 
 import (
 	"context"
+	"log/slog"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func newClient(t *testing.T, set *prover.Set, chainID, clientID string) *remote.
 	server.StartTLS()
 	t.Cleanup(server.Close)
 
-	return remote.New(server.Client(), server.URL, chainID, clientID)
+	return remote.New(server.Client(), server.URL, chainID, clientID, slog.Default())
 }
 
 // A custom light client is reached only through this contract, so the round trip

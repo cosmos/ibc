@@ -4,6 +4,7 @@ package remote
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 
 func TestProverRequestTimeout(t *testing.T) {
 	client := timeoutProverClient{t: t}
-	prover := &Prover{client: client, chainID: "chain-a", clientID: "client-0"}
+	prover := &Prover{client: client, chainID: "chain-a", clientID: "client-0", logger: slog.Default()}
 	ctx := context.Background()
 
 	_, _, err := prover.LatestProvableHeight(ctx)

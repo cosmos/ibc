@@ -5,6 +5,7 @@ package attestation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -22,6 +23,7 @@ func ResolveGenerator(
 	self, counterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
+	logger *slog.Logger,
 ) (*Generator, error) {
 	matched, minRequiredSigs, err := MatchAttestors(ctx, self, counterparty, clientSet, attestors)
 	if err != nil {
@@ -33,7 +35,7 @@ func ResolveGenerator(
 		return nil, errors.Errorf("no configured chain client for counterparty chain %q", counterparty.ChainID)
 	}
 
-	return New(matched, int(minRequiredSigs), counterpartyChain), nil
+	return New(matched, int(minRequiredSigs), counterpartyChain, logger), nil
 }
 
 // MatchAttestors resolves self's on-chain attestation set and returns the

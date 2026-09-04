@@ -4,6 +4,7 @@ package attestation
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -81,7 +82,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil)
+		gen := New(attestors, 2, nil, slog.Default())
 
 		proof, err := gen.StateProof(ctx, 10)
 		require.NoError(t, err)
@@ -94,7 +95,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil)
+		gen := New(attestors, 2, nil, slog.Default())
 
 		_, err := gen.StateProof(ctx, 11)
 		require.Error(t, err)
@@ -120,7 +121,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 			signedPacketAttestor(t, "a2", 20, compact),
 		}
 
-		gen := New(attestors, 2, nil)
+		gen := New(attestors, 2, nil, slog.Default())
 
 		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
 		require.NoError(t, err)
@@ -131,7 +132,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 	t.Run("unsupportedKindErrors", func(t *testing.T) {
 		// an unsupported kind must be rejected before ever querying an
 		// attestor, so the generator here is given no attestors at all.
-		gen := New(nil, 2, nil)
+		gen := New(nil, 2, nil, slog.Default())
 
 		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
 		require.Error(t, err)
@@ -151,7 +152,7 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 		GetBlockHeader(mock.Anything, uint64(90)).
 		Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
-	gen := New(attestors, 2, counterpartyChain)
+	gen := New(attestors, 2, counterpartyChain, slog.Default())
 
 	height, timestamp, err := gen.LatestProvableHeight(ctx)
 	require.NoError(t, err)

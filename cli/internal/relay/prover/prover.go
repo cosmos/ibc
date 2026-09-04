@@ -7,6 +7,7 @@ package prover
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/pkg/errors"
@@ -76,11 +77,12 @@ func NewSetFromConfig(
 	cfg config.Config,
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
+	logger *slog.Logger,
 ) (*Set, error) {
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors)
+		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
 	})
 	if err != nil {
 		return nil, err
@@ -115,10 +117,13 @@ func addGenerator(
 	client, clientCounterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
+	logger *slog.Logger,
 ) error {
+	logger = logger.With("module", "prover", "chainID", client.ChainID, "clientID", client.ClientID)
+
 	switch client.Type {
 	case config.ClientTypeAttestation:
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, attestors)
+		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, attestors, logger)
 		if err != nil {
 			return err
 		}
@@ -138,7 +143,7 @@ func addGenerator(
 		}
 
 		generators[Key(client.ChainID, client.ClientID)] = remote.NewFromURL(
-			remoteParams.URL, client.ChainID, client.ClientID,
+			remoteParams.URL, client.ChainID, client.ClientID, logger,
 		)
 
 		return nil

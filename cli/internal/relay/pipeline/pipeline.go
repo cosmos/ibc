@@ -135,7 +135,7 @@ func NewPipeline(
 
 	// deliver timeouts in batches on the source chain
 	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route, logger,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
@@ -157,7 +157,7 @@ func NewPipeline(
 
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, dstTxSubmitter, route,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, dstTxSubmitter, route, logger,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch recv packet processor")
@@ -197,7 +197,7 @@ func NewPipeline(
 
 	// deliver acks in batches on the source chain
 	batchAckPacket, err := processors.NewBatchAckPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route, logger,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch ack packet processor")
