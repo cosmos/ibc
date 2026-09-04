@@ -48,6 +48,47 @@ func TestConfig(t *testing.T) {
 				},
 				errContains: "db.url: must not be empty",
 			},
+			{
+				name: "metrics disabled",
+				patch: func(c *Config) {
+					c.Observability.Metrics = false
+					c.Observability.Type = "invalid"
+					c.Observability.ListenAddress = "invalid"
+				},
+			},
+			{
+				name: "metrics enabled simple",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.Type = ObservabilitySimple
+					c.Observability.ListenAddress = "127.0.0.1:9090"
+				},
+			},
+			{
+				name: "invalid observability type",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.Type = "prometheus"
+				},
+				errContains: "observability.type",
+			},
+			{
+				name: "invalid observability listen address",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.ListenAddress = "invalid"
+				},
+				errContains: "observability.listenAddr",
+			},
+			{
+				name: "otel observability not supported",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.Type = ObservabilityOTEL
+					c.Observability.ListenAddress = "127.0.0.1:9090"
+				},
+				errContains: "otel.yml is not yet supported",
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				config := DefaultConfig()

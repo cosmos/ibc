@@ -37,6 +37,13 @@ const (
 	SignerRemote = "remote"
 )
 
+// Observability type. "simple" represents http server for Prometheus metrics.
+// "otel" requires otel.yml and enabled OTEL collection.
+const (
+	ObservabilitySimple = "simple"
+	ObservabilityOTEL   = "otel"
+)
+
 const sqliteInMemory = ":memory:"
 
 const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
@@ -52,12 +59,13 @@ type (
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
-	Server    ServerConfig  `yaml:"server"`
-	DB        DBConfig      `yaml:"db"`
-	Chains    Chains        `yaml:"chains"`
-	Relayer   RelayerConfig `yaml:"relayer"`
-	Attestors Attestors     `yaml:"attestors"`
-	Signers   Signers       `yaml:"signers"`
+	Server        ServerConfig  `yaml:"server"`
+	DB            DBConfig      `yaml:"db"`
+	Observability Observability `yaml:"observability"`
+	Chains        Chains        `yaml:"chains"`
+	Relayer       RelayerConfig `yaml:"relayer"`
+	Attestors     Attestors     `yaml:"attestors"`
+	Signers       Signers       `yaml:"signers"`
 
 	originalFilePath string
 }
@@ -71,6 +79,14 @@ type ServerConfig struct {
 type DBConfig struct {
 	Type string `yaml:"type"`
 	URL  string `yaml:"url"`
+}
+
+// Observability config for metrics and tracing.
+// note: in future we'll add `tracing: true` if needed.
+type Observability struct {
+	Metrics       bool   `yaml:"metrics"`
+	Type          string `yaml:"type"`
+	ListenAddress string `yaml:"listenAddr"`
 }
 
 // Chains is the list of configured chains.
@@ -164,6 +180,11 @@ func DefaultConfig() Config {
 			Type: DBTypeSQLite,
 			URL:  "ibc.db",
 		},
+		Observability: Observability{
+			Metrics:       false,
+			Type:          ObservabilitySimple,
+			ListenAddress: "0.0.0.0:9090",
+		},
 		Chains: []ChainConfig{},
 		Relayer: RelayerConfig{
 			ChainOverrides: []RelayerChainOverride{},
@@ -185,6 +206,7 @@ func (c Config) Validate() error {
 	for _, step := range []validationStep{
 		{"server", c.Server.Validate},
 		{"db", c.DB.Validate},
+		{"observability", c.Observability.Validate},
 		{"signers", c.Signers.Validate},
 		{"chains", c.Chains.Validate},
 		{"attestors", c.Attestors.Validate},
@@ -341,6 +363,25 @@ func (c DBConfig) Label() string {
 	}
 
 	return path
+}
+
+func (c Observability) Validate() error {
+	switch {
+	case !c.Metrics:
+		// don't validate disabled metrics
+		return nil
+	case c.Type != ObservabilitySimple && c.Type != ObservabilityOTEL:
+		return errPathf("type", "expected [%q, %q], got %q", ObservabilitySimple, ObservabilityOTEL, c.Type)
+	case c.Type == ObservabilitySimple:
+		if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
+			return errPath("listenAddr", err)
+		}
+	case c.Type == ObservabilityOTEL:
+		// todo: implement :)
+		return errPathf("type", "otel.yml is not yet supported")
+	}
+
+	return nil
 }
 
 func (c Chains) Validate() error {

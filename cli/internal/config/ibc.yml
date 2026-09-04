@@ -11,6 +11,11 @@ db:
   # type: postgres
   # url: postgres://user:password@host:port/dbname
 
+observability:
+  metrics: true
+  type: simple
+  listenAddr: 0.0.0.0:9090
+
 # chains declares chain information shared by the attestor and relayer;
 # referenced by other blocks via chainId
 chains:
