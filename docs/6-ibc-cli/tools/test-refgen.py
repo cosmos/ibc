@@ -533,6 +533,19 @@ def _():
         f"{sorted(unexpected)} declare Validate() but yield no field rule. Either "
         "the scraper cannot read how they build errors, or they belong in "
         "RULELESS_VALIDATORS.")
+    # Absence, not just emptiness: a receiver shape the regex cannot match drops
+    # the struct from validations entirely, and an emptiness check cannot see that.
+    import re as _re, os as _os
+    declared = set()
+    for rel in refgen._config_files():
+        src = open(_os.path.join(refgen.IBC, rel)).read()
+        declared |= set(_re.findall(
+            r"func \((?:\w+ )?\*?(\w+)\) Validate\([^)]*\) error \{", src))
+    missing = declared - set(validations)
+    assert not missing, (
+        f"{sorted(missing)} declare Validate() in the source but never reached the "
+        "parser. The receiver pattern in parse_go_config() cannot match their shape.")
+
     stale = refgen.RULELESS_VALIDATORS - set(validations)
     assert not stale, (
         f"{sorted(stale)} are in RULELESS_VALIDATORS but have no Validate() any "
