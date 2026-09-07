@@ -168,6 +168,8 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 		tr.AckTxRelayerAddress = &tx.RelayerAddress
 	}
 
+	metrics.relayCompleted(ctx, transfers, relayTypeRecvToAck)
+
 	return transfers, nil
 }
 

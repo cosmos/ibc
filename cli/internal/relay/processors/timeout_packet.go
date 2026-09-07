@@ -157,6 +157,8 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 		tr.TimeoutTxRelayerAddress = &tx.RelayerAddress
 	}
 
+	metrics.relayCompleted(ctx, transfers, relayTypeSendToTimeout)
+
 	return transfers, nil
 }
 

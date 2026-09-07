@@ -48,6 +48,8 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 		return nil, errors.Wrapf(err, "clearing ack tx %s", *tr.AckTxHash)
 	}
 
+	metrics.transactionRetry(ctx, tr, relayTypeRecvToAck)
+
 	return nil, ErrRetryingAckPacket
 }
 

@@ -27,6 +27,7 @@ const (
 	AttrDestClientID attribute.Key = "dest_client_id"
 	AttrProcessor    attribute.Key = "processor"
 	AttrProofKind    attribute.Key = "proof_kind"
+	AttrRelayType    attribute.Key = "relay_type"
 	AttrState        attribute.Key = "state"
 )
 

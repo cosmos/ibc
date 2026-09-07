@@ -11,6 +11,7 @@ import (
 
 	"github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -18,6 +19,7 @@ type instrumentation struct {
 	Operation            metric.Float64Histogram
 	LatestProvableHeight metric.Int64Gauge
 	PacketBatchSize      metric.Int64Histogram
+	AttestorOperation    metric.Float64Histogram
 }
 
 var metrics instrumentation
@@ -42,11 +44,31 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
+	attestorOperation, err := m.Float64Histogram("attestor_operation", otel.UnitMilliseconds())
+	if err != nil {
+		return nil, err
+	}
+
 	return &instrumentation{
 		Operation:            operation,
 		LatestProvableHeight: latestProvableHeight,
 		PacketBatchSize:      packetBatchSize,
+		AttestorOperation:    attestorOperation,
 	}, nil
+}
+
+func (m *instrumentation) recordAttestorOperation(
+	ctx context.Context,
+	operation string,
+	a attestor.Attestor,
+	err error,
+	started time.Time,
+) {
+	otel.RecordOperation(ctx, m.AttestorOperation, operation, started,
+		otel.AttrAttestor.String(a.Name()),
+		otel.AttrChainID.String(a.ChainID()),
+		otel.AttrResultError(err),
+	)
 }
 
 func (m *instrumentation) record(
@@ -154,4 +176,39 @@ func proofKindAttribute(kind v2.ProofKind) attribute.KeyValue {
 	}
 
 	return otel.AttrProofKind.String(value)
+}
+
+type instrumentedAttestor struct {
+	attestor.Attestor
+}
+
+func metricsAttestorWrapper(a attestor.Attestor) attestor.Attestor {
+	return &instrumentedAttestor{Attestor: a}
+}
+
+func (a *instrumentedAttestor) LatestHeight(ctx context.Context) (uint64, error) {
+	started := time.Now()
+	height, err := a.Attestor.LatestHeight(ctx)
+	metrics.recordAttestorOperation(ctx, "latest_height", a.Attestor, err, started)
+
+	return height, err
+}
+
+func (a *instrumentedAttestor) StateAttestation(ctx context.Context, height uint64) (attestor.Attestation, error) {
+	started := time.Now()
+	result, err := a.Attestor.StateAttestation(ctx, height)
+	metrics.recordAttestorOperation(ctx, "state_attestation", a.Attestor, err, started)
+
+	return result, err
+}
+
+func (a *instrumentedAttestor) PacketAttestation(
+	ctx context.Context,
+	req attestor.PacketAttestationRequest,
+) (attestor.Attestation, error) {
+	started := time.Now()
+	result, err := a.Attestor.PacketAttestation(ctx, req)
+	metrics.recordAttestorOperation(ctx, "packet_attestation", a.Attestor, err, started)
+
+	return result, err
 }

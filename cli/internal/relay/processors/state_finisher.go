@@ -58,6 +58,8 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 		return tr, nil
 	}
 
+	metrics.relayFinished(ctx, tr)
+
 	tr.GetLogger().Info("Transfer complete", "status", tr.Status)
 
 	return tr, nil

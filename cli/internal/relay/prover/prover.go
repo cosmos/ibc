@@ -118,7 +118,12 @@ func addGenerator(
 ) error {
 	switch client.Type {
 	case config.ClientTypeAttestation:
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, attestors)
+		meteredAttestors := make([]attestor.Attestor, len(attestors))
+		for i, a := range attestors {
+			meteredAttestors[i] = metricsAttestorWrapper(a)
+		}
+
+		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors)
 		if err != nil {
 			return err
 		}
