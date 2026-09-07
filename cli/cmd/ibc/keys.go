@@ -151,7 +151,7 @@ func keysImport(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("decode private key: %w", err)
 	}
 
-	key, err := signer.NewLocalSecp256k1Signer(privateKey)
+	key, err := signer.NewLocalSecp256k1Signer("", privateKey)
 	if err != nil {
 		return fmt.Errorf("create ecdsa key: %w", err)
 	}

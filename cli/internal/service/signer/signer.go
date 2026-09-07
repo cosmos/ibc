@@ -72,11 +72,11 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", errors.Wrap(err, "expand local signer file")
 		}
 
-		s, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+		s, err := LocalKeyFromFile(cfg.Alias, config.KeyFileFallbacks(path)...)
 
 		return s, cfg.Alias, err
 	case config.SignerRemote:
-		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
+		s, err := NewRemoteFromURL(ctx, cfg.Alias, cfg.GRPC, cfg.RemoteKeyID)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}
@@ -117,7 +117,7 @@ func EVMAddressOf(cfg config.SignerConfig) (string, error) {
 		return "", err
 	}
 
-	key, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+	key, err := LocalKeyFromFile(cfg.Alias, config.KeyFileFallbacks(path)...)
 	if err != nil {
 		return "", errors.Wrapf(err, "signer %q", cfg.Alias)
 	}

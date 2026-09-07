@@ -44,14 +44,14 @@ func GenerateLocalKey(keyType keyfile.Type) (LocalKey, error) {
 }
 
 // LocalKeyFromFile loads a local key from the first path that resolves.
-func LocalKeyFromFile(path ...string) (LocalKey, error) {
+func LocalKeyFromFile(alias string, path ...string) (LocalKey, error) {
 	var (
 		err error
 		key LocalKey
 	)
 
 	for _, tryPath := range path {
-		key, err = localKeyFromFile(tryPath)
+		key, err = localKeyFromFile(alias, tryPath)
 		if err == nil {
 			return key, nil
 		}
@@ -91,7 +91,7 @@ func LocalKeysFromDirectory(keysDirectory string) ([]PersistedLocalKey, error) {
 	return keys, nil
 }
 
-func localKeyFromFile(path string) (LocalKey, error) {
+func localKeyFromFile(alias string, path string) (LocalKey, error) {
 	keyType, privateKey, err := keyfile.Load(path)
 	if err != nil {
 		return nil, err
@@ -99,9 +99,9 @@ func localKeyFromFile(path string) (LocalKey, error) {
 
 	switch keyType {
 	case EDDSA:
-		return NewLocalEd25519Signer(privateKey)
+		return NewLocalEd25519Signer(alias, privateKey)
 	case ECDSA:
-		return NewLocalSecp256k1Signer(privateKey)
+		return NewLocalSecp256k1Signer(alias, privateKey)
 	default:
 		return nil, errors.Errorf("invalid key type: %s", keyType)
 	}

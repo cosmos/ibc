@@ -16,6 +16,7 @@ const (
 	AttrResult attribute.Key = "result"
 
 	AttrAttestor attribute.Key = "attestor"
+	AttrSigner   attribute.Key = "signer"
 
 	AttrChainID     attribute.Key = "chain_id"
 	AttrDestChainID attribute.Key = "dest_chain_id"
@@ -23,7 +24,7 @@ const (
 
 // https://github.com/connectrpc/otelconnect-go/blob/462c595e1f85b0797f3990003b79dd39e930919b/instruments.go#L23
 const (
-	unitMilliseconds  = "ms"
+	unitMilliseconds = "ms"
 )
 
 const serviceName = "ibc"
@@ -38,10 +39,6 @@ func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *
 	fullName := fmt.Sprintf("%s.%s", serviceName, name)
 
 	meter := otel.Meter(fullName)
-	if _, ok := meter.(noop.Meter); ok {
-		slog.Debug("Noop meter provider, skipping metrics registration", "name", name)
-		return
-	}
 
 	constructed, err := constructor(meter)
 	if err != nil {
@@ -49,6 +46,11 @@ func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *
 	}
 
 	*out = *constructed
+
+	// note we can't exit early otherwise T.MetricFoo.Record(ctx, ...) will panic with `nil`
+	if _, ok := meter.(noop.Meter); ok {
+		slog.Debug("Noop meter provider", "name", fullName)
+	}
 }
 
 func Must[T any](value T, err error) T {

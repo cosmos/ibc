@@ -144,7 +144,7 @@ func deployerKeyHex(cfg config.Config, alias string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	key, err := signer.LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+	key, err := signer.LocalKeyFromFile(alias, config.KeyFileFallbacks(path)...)
 	if err != nil {
 		return "", err
 	}

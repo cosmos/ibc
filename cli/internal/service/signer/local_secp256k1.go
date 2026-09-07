@@ -5,6 +5,7 @@ package signer
 import (
 	"context"
 	"crypto/rand"
+	"time"
 
 	kms "github.com/cosmos/kms/signing/file"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -14,13 +15,14 @@ import (
 
 // LocalSecp256k1Signer signs with a local secp256k1 key.
 type LocalSecp256k1Signer struct {
+	alias  string
 	pk     *secp256k1.PrivateKey
 	signer *kms.Secp256k1EthSigner
 }
 
 var _ LocalKey = (*LocalSecp256k1Signer)(nil)
 
-func NewLocalSecp256k1Signer(privateKey []byte) (*LocalSecp256k1Signer, error) {
+func NewLocalSecp256k1Signer(alias string, privateKey []byte) (*LocalSecp256k1Signer, error) {
 	pk := secp256k1.PrivKeyFromBytes(privateKey)
 
 	signer, err := kms.NewSecp256k1Eth(privateKey)
@@ -28,7 +30,7 @@ func NewLocalSecp256k1Signer(privateKey []byte) (*LocalSecp256k1Signer, error) {
 		return nil, err
 	}
 
-	return &LocalSecp256k1Signer{pk: pk, signer: signer}, nil
+	return &LocalSecp256k1Signer{alias: alias, pk: pk, signer: signer}, nil
 }
 
 func GenerateLocalSecp256k1Signer() (*LocalSecp256k1Signer, error) {
@@ -37,7 +39,7 @@ func GenerateLocalSecp256k1Signer() (*LocalSecp256k1Signer, error) {
 		return nil, err
 	}
 
-	return NewLocalSecp256k1Signer(pk.Serialize())
+	return NewLocalSecp256k1Signer("", pk.Serialize())
 }
 
 func (s *LocalSecp256k1Signer) Type() keyfile.Type { return ECDSA }
@@ -53,7 +55,10 @@ func (s *LocalSecp256k1Signer) PrivateKey() []byte {
 
 // Sign signs ECDSA *digest* (not message)
 func (s *LocalSecp256k1Signer) Sign(ctx context.Context, digest []byte) ([]byte, error) {
-	return s.signer.Sign(ctx, digest)
+	started := time.Now()
+	sig, err := s.signer.Sign(ctx, digest)
+	metrics.sign(ctx, s.alias, typeLocalECDSA, err, started)
+	return sig, err
 }
 
 func (s *LocalSecp256k1Signer) StoreToFile(path string) error {
