@@ -26,6 +26,12 @@ type instrumentation struct {
 	TransactionRetries metric.Int64Counter
 }
 
+type completedRelayLeg struct {
+	kind       relayType
+	startedAt  *time.Time
+	finishedAt *time.Time
+}
+
 var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
@@ -52,24 +58,44 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 }
 
 func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
-	switch tr.Status {
-	case store.RelayStatusCompleteWithTimeout:
-		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, relayTypeSendToTimeout, true))
-	case store.RelayStatusCompleteWithAck:
-		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, relayTypeSendToRecv, true))
-		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, relayTypeRecvToAck, true))
+	for _, leg := range completedRelayLegs(tr) {
+		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, leg.kind, true))
 	}
 }
 
 func (m *instrumentation) relayFinished(ctx context.Context, tr *Transfer) {
-	switch {
-	case tr.TimeoutTxTime != nil:
-		m.relayDuration(ctx, tr, relayTypeSendToTimeout, tr.SourceTxTime, *tr.TimeoutTxTime)
-	case tr.AckTxTime != nil:
-		if tr.RecvTxTime != nil {
-			m.relayDuration(ctx, tr, relayTypeSendToRecv, tr.SourceTxTime, *tr.RecvTxTime)
-			m.relayDuration(ctx, tr, relayTypeRecvToAck, *tr.RecvTxTime, *tr.AckTxTime)
+	for _, leg := range completedRelayLegs(tr) {
+		if leg.startedAt != nil && leg.finishedAt != nil {
+			m.relayDuration(ctx, tr, leg.kind, *leg.startedAt, *leg.finishedAt)
 		}
+	}
+}
+
+func completedRelayLegs(tr *Transfer) []completedRelayLeg {
+	switch tr.Status {
+	case store.RelayStatusCompleteWithAck:
+		return []completedRelayLeg{
+			{
+				kind:       relayTypeSendToRecv,
+				startedAt:  &tr.SourceTxTime,
+				finishedAt: tr.RecvTxTime,
+			},
+			{
+				kind:       relayTypeRecvToAck,
+				startedAt:  tr.RecvTxTime,
+				finishedAt: tr.AckTxTime,
+			},
+		}
+	case store.RelayStatusCompleteWithTimeout:
+		return []completedRelayLeg{
+			{
+				kind:       relayTypeSendToTimeout,
+				startedAt:  &tr.SourceTxTime,
+				finishedAt: tr.TimeoutTxTime,
+			},
+		}
+	default:
+		return nil
 	}
 }
 
