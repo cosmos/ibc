@@ -25,7 +25,9 @@ const (
 	AttrClientID     attribute.Key = "client_id"
 	AttrDestChainID  attribute.Key = "dest_chain_id"
 	AttrDestClientID attribute.Key = "dest_client_id"
+	AttrProcessor    attribute.Key = "processor"
 	AttrProofKind    attribute.Key = "proof_kind"
+	AttrState        attribute.Key = "state"
 )
 
 // https://github.com/connectrpc/otelconnect-go/blob/462c595e1f85b0797f3990003b79dd39e930919b/instruments.go#L23
