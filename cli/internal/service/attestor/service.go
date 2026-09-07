@@ -134,9 +134,13 @@ func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, er
 		return 0, ErrNotFound
 	}
 
+	started := time.Now()
 	res, err := a.LatestHeight(ctx)
 
-	metrics.latestHeight(ctx, attestor, a.ChainID(), res, err)
+	metrics.record(ctx, "latest_height", a.ChainID(), attestor, err, started)
+	if err == nil {
+		metrics.latestHeight(ctx, attestor, a.ChainID(), res)
+	}
 
 	return res, err
 }
@@ -150,7 +154,7 @@ func (s *Service) StateAttestation(ctx context.Context, attestor string, height 
 	started := time.Now()
 	res, err := a.StateAttestation(ctx, height)
 
-	metrics.attestation(ctx, "state", attestor, a.ChainID(), err, started)
+	metrics.record(ctx, "state_attestation", a.ChainID(), attestor, err, started)
 
 	return res, err
 }
@@ -168,7 +172,7 @@ func (s *Service) PacketAttestation(
 	started := time.Now()
 	res, err := a.PacketAttestation(ctx, req)
 
-	metrics.attestation(ctx, "packet", attestor, a.ChainID(), err, started)
+	metrics.record(ctx, "packet_attestation", a.ChainID(), attestor, err, started)
 
 	return res, err
 }

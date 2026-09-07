@@ -1,8 +1,10 @@
 package otel
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -12,6 +14,7 @@ import (
 
 // Metric attribute keys. Keep in sync with .cursor/metrics.html CARDINALITIES.
 const (
+	AttrOp     attribute.Key = "operation"
 	AttrType   attribute.Key = "type"
 	AttrResult attribute.Key = "result"
 
@@ -75,4 +78,16 @@ func AttrResultError(err error) attribute.KeyValue {
 	}
 
 	return AttrResult.String("error")
+}
+
+func RecordOperation(
+	ctx context.Context,
+	histogram metric.Float64Histogram,
+	operation string,
+	ts time.Time,
+	attrs ...attribute.KeyValue,
+) {
+	elapsed := float64(time.Since(ts).Milliseconds())
+	attrs = append(attrs, AttrOp.String(operation))
+	histogram.Record(ctx, elapsed, metric.WithAttributes(attrs...))
 }
