@@ -42,9 +42,6 @@ const serviceName = "ibc"
 // MetricConstructor is a function that constructs a metric instance
 type MetricConstructor[T any] func(meter metric.Meter) (*T, error)
 
-// MeasurementOption alias to the metric.MeasurementOption type
-type MeasurementOption = metric.MeasurementOption
-
 func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *T) {
 	fullName := fmt.Sprintf("%s.%s", serviceName, name)
 
@@ -61,14 +58,6 @@ func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *
 	if _, ok := meter.(noop.Meter); ok {
 		slog.Debug("Noop meter provider", "name", fullName)
 	}
-}
-
-func Must[T any](value T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-
-	return value
 }
 
 func UnitMilliseconds() metric.InstrumentOption {
