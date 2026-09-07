@@ -21,10 +21,11 @@ const (
 	AttrAttestor attribute.Key = "attestor"
 	AttrSigner   attribute.Key = "signer"
 
-	AttrChainID     attribute.Key = "chain_id"
-	AttrClientID    attribute.Key = "client_id"
-	AttrDestChainID attribute.Key = "dest_chain_id"
-	AttrProofKind   attribute.Key = "proof_kind"
+	AttrChainID      attribute.Key = "chain_id"
+	AttrClientID     attribute.Key = "client_id"
+	AttrDestChainID  attribute.Key = "dest_chain_id"
+	AttrDestClientID attribute.Key = "dest_client_id"
+	AttrProofKind    attribute.Key = "proof_kind"
 )
 
 // https://github.com/connectrpc/otelconnect-go/blob/462c595e1f85b0797f3990003b79dd39e930919b/instruments.go#L23

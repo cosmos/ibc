@@ -108,6 +108,8 @@ func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) 
 		return errors.Wrap(err, "listing dispatchable packets")
 	}
 
+	metrics.packetsPending(ctx, packets)
+
 	for _, packet := range packets {
 		tr := processors.NewTransfer(packet, d.logger)
 
