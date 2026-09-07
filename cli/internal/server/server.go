@@ -11,8 +11,9 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
-	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/pkg/errors"
+
+	"github.com/cosmos/ibc/cli/internal/otel"
 )
 
 // Server wraps the HTTP server and registered RPC handlers.

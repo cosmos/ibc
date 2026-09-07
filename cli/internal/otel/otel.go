@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"time"
 
+	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
@@ -20,8 +22,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
-	"connectrpc.com/connect"
-	"connectrpc.com/otelconnect"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
 )
@@ -68,7 +68,7 @@ func New(_ context.Context, cfg config.Observability, logger *slog.Logger) (prov
 	}
 
 	if err := runtime.Start(runtime.WithMeterProvider(meterProvider)); err != nil {
-		meterStop()
+		_ = meterStop()
 		return nil, fmt.Errorf("failed to start runtime metrics: %w", err)
 	}
 
