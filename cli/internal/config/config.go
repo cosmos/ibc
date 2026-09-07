@@ -384,6 +384,11 @@ func (c Observability) Validate() error {
 	return nil
 }
 
+func (c Observability) Enabled() bool {
+	// might become more complex in the future
+	return c.Metrics
+}
+
 func (c Chains) Validate() error {
 	chainIDs := make(map[string]struct{})
 

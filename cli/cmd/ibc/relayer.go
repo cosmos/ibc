@@ -3,6 +3,7 @@
 package main
 
 import (
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -87,6 +88,8 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	otel.GlobalSetup(ctx, cfg.Observability, slog.Default())
+
 	app, err := bootstrap.BuildRelayer(cfg)
 	if err != nil {
 		return err
@@ -119,8 +122,6 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		_ = app.Server.Stop()
 		return err
 	}
-
-	otel.GlobalSetup(ctx, cfg.Observability, app.Logger)
 
 	connected := make([]string, 0, len(cfg.Chains))
 	for _, chain := range cfg.Chains {

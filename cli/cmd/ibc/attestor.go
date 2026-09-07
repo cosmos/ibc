@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 
@@ -65,6 +66,8 @@ func attestorRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	otel.GlobalSetup(ctx, cfg.Observability, slog.Default())
+
 	app, err := bootstrap.BuildAttestor(cfg)
 	if err != nil {
 		return err
@@ -77,8 +80,6 @@ func attestorRun(cmd *cobra.Command, _ []string) error {
 		app.Logger.Error("Failed to start attestor server", "err", err)
 		return err
 	}
-
-	otel.GlobalSetup(ctx, cfg.Observability, app.Logger)
 
 	app.Logger.Info("Readiness", "readiness", attestorv2.ProcessReadiness{
 		Event: attestorv2.ProcessReadinessEvent,

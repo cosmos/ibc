@@ -11,6 +11,7 @@ import (
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
+	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/pkg/errors"
 )
 
@@ -23,6 +24,8 @@ type Server struct {
 	useReflection        bool
 	serviceNames         []string
 	reflectionRegistered bool
+
+	enableObservability bool
 }
 
 // Handler represents GRPC handler
@@ -34,7 +37,7 @@ type Handler interface {
 var errInternal = connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 
 // New Server constructor.
-func New(addr string, useReflection bool) *Server {
+func New(addr string, useReflection, enableObservability bool) *Server {
 	// Use h2c so we can serve HTTP/2 without TLS.
 	// https://connectrpc.com/docs/go/deployment/#h2c
 	// todo: revisit in future
@@ -52,7 +55,8 @@ func New(addr string, useReflection bool) *Server {
 			Handler:   mux,
 			Protocols: protocols,
 		},
-		logger: slog.With("module", "server"),
+		enableObservability: enableObservability,
+		logger:              slog.With("module", "server"),
 	}
 }
 
@@ -82,8 +86,13 @@ func (s *Server) Stop() error {
 }
 
 func (s *Server) Register(h Handler) {
+	var handlerOptions []connect.HandlerOption
+	if s.enableObservability {
+		handlerOptions = append(handlerOptions, otel.WrapConnectHandler())
+	}
+
 	// we might want to pass some global options here later
-	prefix, handler := h.Register()
+	prefix, handler := h.Register(handlerOptions...)
 	s.logger.Debug("Registered handler", "prefix", prefix)
 
 	s.mux.Handle(prefix, handler)

@@ -13,10 +13,15 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
+	"connectrpc.com/connect"
+	"connectrpc.com/otelconnect"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
 )
@@ -62,6 +67,11 @@ func New(_ context.Context, cfg config.Observability, logger *slog.Logger) (prov
 		return nil, err
 	}
 
+	if err := runtime.Start(runtime.WithMeterProvider(meterProvider)); err != nil {
+		meterStop()
+		return nil, fmt.Errorf("failed to start runtime metrics: %w", err)
+	}
+
 	p := &Provider{
 		logger:    logger,
 		meter:     meterProvider,
@@ -79,6 +89,20 @@ func (p *Provider) Stop() error {
 	defer cancel()
 
 	return errors.Join(serverErr, p.meter.Shutdown(ctx))
+}
+
+func WrapConnectHandler() connect.Option {
+	// https://connectrpc.com/docs/go/observability
+	otelInterceptor, err := otelconnect.NewInterceptor(
+		otelconnect.WithoutTracing(),
+		otelconnect.WithoutServerPeerAttributes(),
+	)
+	if err != nil {
+		// should not happen
+		panic(err)
+	}
+
+	return connect.WithInterceptors(otelInterceptor)
 }
 
 func newMeterProvider(
@@ -104,7 +128,10 @@ func newSimpleMeterProvider(
 		return nil, nil, err
 	}
 
-	meterProvider := metric.NewMeterProvider(metric.WithReader(metricExporter))
+	meterProvider := metric.NewMeterProvider(
+		metric.WithResource(resource.NewSchemaless(semconv.ServiceName("ibc"))),
+		metric.WithReader(metricExporter),
+	)
 
 	// create new mux + server
 	mux := http.NewServeMux()
@@ -122,7 +149,7 @@ func newSimpleMeterProvider(
 		return nil, nil, fmt.Errorf("listenAddress: %w", err)
 	}
 
-	logger.Info("Starting metrics server", "address", server.Addr, "path", simpleMetricsPath)
+	logger.Info("Starting prometheus metrics server", "url", server.Addr+simpleMetricsPath)
 
 	go func() {
 		err := server.Serve(ln)
