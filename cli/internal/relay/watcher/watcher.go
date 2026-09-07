@@ -172,6 +172,8 @@ func (w *Watcher) run(ctx context.Context, stream stream) {
 // HandleEvent records the packet a send event carries. Events of another kind
 // and reorged-out logs write nothing.
 func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
+	metrics.event(ctx, w.chainID, event.Kind)
+
 	switch {
 	case event.Kind != v2.KindSendPacket:
 		return nil

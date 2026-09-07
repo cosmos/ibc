@@ -25,6 +25,7 @@ const (
 	AttrClientID     attribute.Key = "client_id"
 	AttrDestChainID  attribute.Key = "dest_chain_id"
 	AttrDestClientID attribute.Key = "dest_client_id"
+	AttrEventType    attribute.Key = "event_type"
 	AttrProcessor    attribute.Key = "processor"
 	AttrProofKind    attribute.Key = "proof_kind"
 	AttrRelayType    attribute.Key = "relay_type"
