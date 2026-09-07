@@ -123,7 +123,8 @@ func addGenerator(
 			return err
 		}
 
-		generators[Key(client.ChainID, client.ClientID)] = gen
+		meteredGen := metricsWrapper(client.ChainID, client.ClientID, string(client.Type), gen)
+		generators[Key(client.ChainID, client.ClientID)] = meteredGen
 
 		return nil
 	case config.ClientTypeRemote:
@@ -137,9 +138,9 @@ func addGenerator(
 			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
 		}
 
-		generators[Key(client.ChainID, client.ClientID)] = remote.NewFromURL(
-			remoteParams.URL, client.ChainID, client.ClientID,
-		)
+		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID)
+		meteredProver := metricsWrapper(client.ChainID, client.ClientID, string(client.Type), prover)
+		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
 	default:
