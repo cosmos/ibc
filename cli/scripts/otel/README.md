@@ -1,3 +1,7 @@
+<!--
+  ~ SPDX-License-Identifier: Apache-2.0
+-->
+
 # Local metrics stack
 
 Single-container [grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm) for local

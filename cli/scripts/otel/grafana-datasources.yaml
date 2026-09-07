@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # observability.type: simple — Prometheus listens on :9091 (IBC keeps :9090 for /metrics).
 apiVersion: 1
 datasources:

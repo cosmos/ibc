@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # observability.type: simple — IBC exposes /metrics on :9090; collector scrapes it below.
 # With type: otel, IBC pushes OTLP to :4318 instead — drop the prometheus/collector job then.
 receivers:
