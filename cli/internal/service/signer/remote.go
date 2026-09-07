@@ -18,7 +18,6 @@ import (
 // RemoteSigner wraps KMS remote signer.
 type RemoteSigner struct {
 	client signerservice.SignerServiceClient
-	alias  string
 	keyID  string
 
 	key     *signerservice.Key
@@ -31,13 +30,11 @@ var _ Signer = &RemoteSigner{}
 
 func NewRemote(
 	ctx context.Context,
-	alias string,
 	client signerservice.SignerServiceClient,
 	keyID string,
 ) (*RemoteSigner, error) {
 	s := &RemoteSigner{
 		client:  client,
-		alias:   alias,
 		keyID:   keyID,
 		key:     nil,
 		keyType: "",
@@ -51,7 +48,7 @@ func NewRemote(
 	return s, nil
 }
 
-func NewRemoteFromURL(ctx context.Context, alias string, grpcURL, keyID string) (*RemoteSigner, error) {
+func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string) (*RemoteSigner, error) {
 	grpcClient, err := newGRPCClientFromURL(grpcURL)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create grpc client")
@@ -59,7 +56,7 @@ func NewRemoteFromURL(ctx context.Context, alias string, grpcURL, keyID string) 
 
 	signerClient := signerservice.NewSignerServiceClient(grpcClient)
 
-	s, err := NewRemote(ctx, alias, signerClient, keyID)
+	s, err := NewRemote(ctx, signerClient, keyID)
 	if err != nil {
 		if errClose := grpcClient.Close(); errClose != nil {
 			slog.Error("failed to close grpc client", "err", errClose)
@@ -81,14 +78,10 @@ func (r *RemoteSigner) PublicKey() []byte {
 func (r *RemoteSigner) Sign(ctx context.Context, message []byte) ([]byte, error) {
 	r.logger.Debug("Sending sign request", "message", message)
 
-	started := time.Now()
 	resp, err := r.client.Sign(ctx, &signerservice.SignRequest{
 		KeyId:   r.keyID,
 		Payload: bytesToPayload(message),
 	})
-
-	metrics.record(ctx, "sign", r.alias, typeRemote, err, started)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "sign request failed")
 	}

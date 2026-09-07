@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -83,12 +84,7 @@ func New(_ context.Context, cfg config.Observability, logger *slog.Logger) (prov
 
 func (p *Provider) Stop() error {
 	p.logger.Info("Shutting down observability pipeline")
-	serverErr := p.meterStop()
-
-	ctx, cancel := timeoutCtx()
-	defer cancel()
-
-	return errors.Join(serverErr, p.meter.Shutdown(ctx))
+	return p.meterStop()
 }
 
 func WrapConnectHandler() connect.Option {
@@ -161,10 +157,23 @@ func newSimpleMeterProvider(
 		}
 	}()
 
+	var (
+		stopOnce sync.Once
+		stopErr  error
+	)
 	stopFunc := func() error {
-		ctx, cancel := timeoutCtx()
-		defer cancel()
-		return server.Shutdown(ctx)
+		stopOnce.Do(func() {
+			serverCtx, cancelServer := timeoutCtx()
+			serverErr := server.Shutdown(serverCtx)
+			cancelServer()
+
+			meterCtx, cancelMeter := timeoutCtx()
+			meterErr := meterProvider.Shutdown(meterCtx)
+			cancelMeter()
+
+			stopErr = errors.Join(serverErr, meterErr)
+		})
+		return stopErr
 	}
 
 	return meterProvider, stopFunc, nil

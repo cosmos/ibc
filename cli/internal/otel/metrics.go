@@ -85,7 +85,11 @@ func RecordOperation(
 	ts time.Time,
 	attrs ...attribute.KeyValue,
 ) {
-	elapsed := float64(time.Since(ts).Milliseconds())
+	elapsed := durationMilliseconds(time.Since(ts))
 	attrs = append(attrs, AttrOp.String(operation))
 	histogram.Record(ctx, elapsed, metric.WithAttributes(attrs...))
+}
+
+func durationMilliseconds(duration time.Duration) float64 {
+	return duration.Seconds() * 1000
 }

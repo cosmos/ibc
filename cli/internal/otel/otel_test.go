@@ -87,6 +87,23 @@ func TestProvider(t *testing.T) {
 	})
 }
 
+func TestSimpleMeterProviderStop(t *testing.T) {
+	cfg := config.Observability{
+		Type:          config.ObservabilitySimple,
+		ListenAddress: availableListenAddress(t),
+	}
+	meterProvider, stop, err := newSimpleMeterProvider(cfg, testLogger())
+	require.NoError(t, err)
+
+	require.NoError(t, stop())
+	require.Error(t, meterProvider.Shutdown(t.Context()))
+	require.NoError(t, stop())
+}
+
+func TestDurationMillisecondsPreservesFractionalMilliseconds(t *testing.T) {
+	assert.InDelta(t, 1.5, durationMilliseconds(1500*time.Microsecond), 0.0001)
+}
+
 func availableListenAddress(t *testing.T) string {
 	t.Helper()
 

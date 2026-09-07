@@ -5,7 +5,6 @@ package signer
 import (
 	"context"
 	"crypto/rand"
-	"time"
 
 	"github.com/cometbft/cometbft/crypto"
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -16,14 +15,13 @@ import (
 
 // LocalEd25519Signer signs with a local Ed25519 key.
 type LocalEd25519Signer struct {
-	alias  string
 	pk     crypto.PrivKey
 	signer *kms.Ed25519Signer
 }
 
 var _ LocalKey = (*LocalEd25519Signer)(nil)
 
-func NewLocalEd25519Signer(alias string, privateKey []byte) (*LocalEd25519Signer, error) {
+func NewLocalEd25519Signer(privateKey []byte) (*LocalEd25519Signer, error) {
 	signer, err := kms.NewEd25519(privateKey)
 	if err != nil {
 		return nil, err
@@ -31,7 +29,7 @@ func NewLocalEd25519Signer(alias string, privateKey []byte) (*LocalEd25519Signer
 
 	pk := ed25519.PrivKey(privateKey)
 
-	return &LocalEd25519Signer{alias: alias, pk: pk, signer: signer}, nil
+	return &LocalEd25519Signer{pk: pk, signer: signer}, nil
 }
 
 func GenerateLocalEd25519Signer() (*LocalEd25519Signer, error) {
@@ -63,10 +61,7 @@ func (s *LocalEd25519Signer) PrivateKey() []byte {
 
 // Sign signs the provided message with Ed25519
 func (s *LocalEd25519Signer) Sign(ctx context.Context, message []byte) ([]byte, error) {
-	started := time.Now()
-	sig, err := s.signer.Sign(ctx, message)
-	metrics.record(ctx, "sign", s.alias, typeLocalEDDSA, err, started)
-	return sig, err
+	return s.signer.Sign(ctx, message)
 }
 
 func (s *LocalEd25519Signer) StoreToFile(path string) error {

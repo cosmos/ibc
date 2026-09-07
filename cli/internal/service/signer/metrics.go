@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/keyfile"
 )
 
 const (
@@ -49,4 +50,32 @@ func (m *instrumentation) record(
 		otel.AttrType.String(typ),
 		otel.AttrResultError(err),
 	)
+}
+
+type instrumentedSigner struct {
+	Signer
+	alias string
+	typ   string
+}
+
+func metricsWrapper(alias, typ string, signer Signer) Signer {
+	return &instrumentedSigner{
+		Signer: signer,
+		alias:  alias,
+		typ:    typ,
+	}
+}
+
+func localSignerType(keyType keyfile.Type) string {
+	if keyType == ECDSA {
+		return typeLocalECDSA
+	}
+	return typeLocalEDDSA
+}
+
+func (s *instrumentedSigner) Sign(ctx context.Context, message []byte) ([]byte, error) {
+	started := time.Now()
+	signature, err := s.Signer.Sign(ctx, message)
+	metrics.record(ctx, "sign", s.alias, s.typ, err, started)
+	return signature, err
 }

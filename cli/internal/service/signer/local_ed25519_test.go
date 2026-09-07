@@ -37,7 +37,7 @@ func TestLocalEd25519Signer(t *testing.T) {
 
 		// ACT
 		// Re-use the same PK and check PubKeys are the same
-		importedSigner, err := NewLocalEd25519Signer("", privateKey)
+		importedSigner, err := NewLocalEd25519Signer(privateKey)
 
 		// ASSERT
 		require.NoError(t, err)

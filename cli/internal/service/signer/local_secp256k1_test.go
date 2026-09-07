@@ -36,7 +36,7 @@ func TestLocalSecp256k1Signer(t *testing.T) {
 
 		// ACT
 		// Re-use the same PK and check PubKeys are the same
-		importedSigner, err := NewLocalSecp256k1Signer("", privateKey)
+		importedSigner, err := NewLocalSecp256k1Signer(privateKey)
 
 		// ASSERT
 		require.NoError(t, err)

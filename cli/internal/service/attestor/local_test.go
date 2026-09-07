@@ -604,7 +604,7 @@ func generateECDSASigner(t *testing.T) *signer.LocalSecp256k1Signer {
 	require.NoError(t, err)
 	privateKey, err := kms.PrivateKeyFromSigner(kmsSigner)
 	require.NoError(t, err)
-	localSigner, err := signer.NewLocalSecp256k1Signer("", privateKey)
+	localSigner, err := signer.NewLocalSecp256k1Signer(privateKey)
 	require.NoError(t, err)
 
 	return localSigner

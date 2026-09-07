@@ -38,7 +38,7 @@ func TestRemote(t *testing.T) {
 			Signature: signature,
 		}, nil)
 
-		signer, err := NewRemote(ctx, "test-alias", ts.Client, keyID)
+		signer, err := NewRemote(ctx, ts.Client, keyID)
 		require.NoError(t, err)
 
 		// ACT
@@ -59,7 +59,7 @@ func TestRemote(t *testing.T) {
 		ts.OnKeyRequest(keyID, nil, errors.New("key not found"))
 
 		// ACT
-		signer, err := NewRemote(ctx, "test-alias", ts.Client, keyID)
+		signer, err := NewRemote(ctx, ts.Client, keyID)
 
 		// ASSERT
 		require.ErrorContains(t, err, "get key request failed")
@@ -80,7 +80,7 @@ func TestRemote(t *testing.T) {
 		}, nil)
 
 		// ACT
-		signer, err := NewRemote(ctx, "test-alias", ts.Client, keyID)
+		signer, err := NewRemote(ctx, ts.Client, keyID)
 
 		// ASSERT
 		require.ErrorContains(t, err, "unsupported remote key scheme")

@@ -72,16 +72,19 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", errors.Wrap(err, "expand local signer file")
 		}
 
-		s, err := LocalKeyFromFile(cfg.Alias, config.KeyFileFallbacks(path)...)
+		s, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+		if err != nil {
+			return nil, "", err
+		}
 
-		return s, cfg.Alias, err
+		return metricsWrapper(cfg.Alias, localSignerType(s.Type()), s), cfg.Alias, nil
 	case config.SignerRemote:
-		s, err := NewRemoteFromURL(ctx, cfg.Alias, cfg.GRPC, cfg.RemoteKeyID)
+		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}
 
-		return s, cfg.Alias, err
+		return metricsWrapper(cfg.Alias, typeRemote, s), cfg.Alias, nil
 	default:
 		return nil, "", errors.Errorf("invalid signer type: %s", cfg.Type)
 	}
@@ -117,7 +120,7 @@ func EVMAddressOf(cfg config.SignerConfig) (string, error) {
 		return "", err
 	}
 
-	key, err := LocalKeyFromFile(cfg.Alias, config.KeyFileFallbacks(path)...)
+	key, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
 	if err != nil {
 		return "", errors.Wrapf(err, "signer %q", cfg.Alias)
 	}
