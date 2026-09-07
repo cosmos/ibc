@@ -18,8 +18,7 @@ const (
 )
 
 type instrumentation struct {
-	SignsTotal   metric.Int64Counter
-	SignDuration metric.Float64Histogram
+	Operation metric.Float64Histogram
 }
 
 var metrics instrumentation
@@ -29,29 +28,25 @@ func init() {
 }
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
-	signsTotal, err := m.Int64Counter("signs_total")
-	if err != nil {
-		return nil, err
-	}
-
-	signDur, err := m.Float64Histogram("sign_dur", otel.UnitMilliseconds())
+	operation, err := m.Float64Histogram("operation", otel.UnitMilliseconds())
 	if err != nil {
 		return nil, err
 	}
 
 	return &instrumentation{
-		SignsTotal:   signsTotal,
-		SignDuration: signDur,
+		Operation: operation,
 	}, nil
 }
 
-func (m *instrumentation) sign(ctx context.Context, alias, typ string, err error, ts time.Time) {
-	labels := otel.WithAttributes(
+func (m *instrumentation) record(
+	ctx context.Context,
+	operation, alias, typ string,
+	err error,
+	ts time.Time,
+) {
+	otel.RecordOperation(ctx, m.Operation, operation, ts,
 		otel.AttrSigner.String(alias),
 		otel.AttrType.String(typ),
 		otel.AttrResultError(err),
 	)
-
-	m.SignsTotal.Add(ctx, 1, labels)
-	m.SignDuration.Record(ctx, float64(time.Since(ts).Milliseconds()), labels)
 }

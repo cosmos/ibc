@@ -87,7 +87,7 @@ func (r *RemoteSigner) Sign(ctx context.Context, message []byte) ([]byte, error)
 		Payload: bytesToPayload(message),
 	})
 
-	metrics.sign(ctx, r.alias, typeRemote, err, started)
+	metrics.record(ctx, "sign", r.alias, typeRemote, err, started)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "sign request failed")

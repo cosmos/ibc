@@ -65,7 +65,7 @@ func (s *LocalEd25519Signer) PrivateKey() []byte {
 func (s *LocalEd25519Signer) Sign(ctx context.Context, message []byte) ([]byte, error) {
 	started := time.Now()
 	sig, err := s.signer.Sign(ctx, message)
-	metrics.sign(ctx, s.alias, typeLocalEDDSA, err, started)
+	metrics.record(ctx, "sign", s.alias, typeLocalEDDSA, err, started)
 	return sig, err
 }
 

@@ -57,7 +57,7 @@ func (s *LocalSecp256k1Signer) PrivateKey() []byte {
 func (s *LocalSecp256k1Signer) Sign(ctx context.Context, digest []byte) ([]byte, error) {
 	started := time.Now()
 	sig, err := s.signer.Sign(ctx, digest)
-	metrics.sign(ctx, s.alias, typeLocalECDSA, err, started)
+	metrics.record(ctx, "sign", s.alias, typeLocalECDSA, err, started)
 	return sig, err
 }
 
