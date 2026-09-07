@@ -26,11 +26,7 @@ type instrumentation struct {
 	lastRoutes map[routeKey]struct{}
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("relayer", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	packetsPending, err := m.Int64Gauge("packets_pending")

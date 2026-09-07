@@ -15,11 +15,7 @@ type instrumentation struct {
 	EventsTotal metric.Int64Counter
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("relayer", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	eventsTotal, err := m.Int64Counter("watcher_events_total")

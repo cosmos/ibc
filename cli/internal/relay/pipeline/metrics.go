@@ -18,11 +18,7 @@ type instrumentation struct {
 	BatchSize    metric.Int64Histogram
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("relayer", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	packetsTotal, err := m.Int64Counter("packets_total")

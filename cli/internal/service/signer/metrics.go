@@ -22,11 +22,7 @@ type instrumentation struct {
 	Operation metric.Float64Histogram
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("signer", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("signer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	operation, err := m.Float64Histogram("signer_operation", otel.UnitMilliseconds())

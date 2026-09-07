@@ -137,7 +137,7 @@ func TestStateFinisherCompletionMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	originalMetrics := metrics
-	metrics = *instruments
+	metrics = instruments
 	t.Cleanup(func() {
 		metrics = originalMetrics
 	})

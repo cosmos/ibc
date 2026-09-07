@@ -42,7 +42,7 @@ const serviceName = "ibc"
 // MetricConstructor is a function that constructs a metric instance
 type MetricConstructor[T any] func(meter metric.Meter) (*T, error)
 
-func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *T) {
+func RegisterMetrics[T any](name string, constructor MetricConstructor[T]) *T {
 	fullName := fmt.Sprintf("%s.%s", serviceName, name)
 
 	meter := otel.Meter(fullName)
@@ -52,7 +52,11 @@ func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *
 		panic(fmt.Errorf("failed to construct metrics for %s: %w", name, err))
 	}
 
-	*out = *constructed
+	if constructed == nil {
+		panic(fmt.Errorf("failed to construct metrics for %s: constructor returned nil", name))
+	}
+
+	return constructed
 }
 
 func UnitMilliseconds() metric.InstrumentOption {

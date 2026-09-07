@@ -29,11 +29,7 @@ type instrumentation struct {
 	LatestHeight metric.Int64Gauge
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("attestor", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("attestor", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	operation, err := m.Float64Histogram("attestor_operation", otel.UnitMilliseconds())

@@ -20,11 +20,7 @@ type instrumentation struct {
 	PacketBatchSize      metric.Int64Histogram
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("prover", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("prover", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	operation, err := m.Float64Histogram("prover_operation", otel.UnitMilliseconds())

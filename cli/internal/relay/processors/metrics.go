@@ -26,11 +26,7 @@ type instrumentation struct {
 	TransactionRetries metric.Int64Counter
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("relayer", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	relaysCompleted, err := m.Int64Counter("relays_completed_total")

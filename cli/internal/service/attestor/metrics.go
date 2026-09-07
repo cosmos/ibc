@@ -16,11 +16,7 @@ type instrumentation struct {
 	LatestHeight metric.Int64Gauge
 }
 
-var metrics instrumentation
-
-func init() {
-	otel.RegisterMetrics("attestor", newInstrumentation, &metrics)
-}
+var metrics = otel.RegisterMetrics("attestor", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	// also exposes _count for total count
@@ -68,7 +64,7 @@ type instrumentedAttestor struct {
 
 // Instrument decorates an Attestor with operation instrumentation.
 func Instrument(attestor Attestor, name string) Attestor {
-	return instrument(attestor, name, &metrics)
+	return instrument(attestor, name, metrics)
 }
 
 func instrument(attestor Attestor, name string, metrics *instrumentation) Attestor {

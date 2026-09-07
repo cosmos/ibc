@@ -105,7 +105,7 @@ func TestInstrumentedSigner(t *testing.T) {
 	instruments, err := newInstrumentation(provider.Meter("test"))
 	require.NoError(t, err)
 	previousMetrics := metrics
-	metrics = *instruments
+	metrics = instruments
 	t.Cleanup(func() {
 		metrics = previousMetrics
 	})

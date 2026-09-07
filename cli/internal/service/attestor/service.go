@@ -134,9 +134,7 @@ func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, er
 		return 0, ErrNotFound
 	}
 
-	res, err := a.LatestHeight(ctx)
-
-	return res, err
+	return a.LatestHeight(ctx)
 }
 
 func (s *Service) StateAttestation(ctx context.Context, attestor string, height uint64) (Attestation, error) {
@@ -145,9 +143,7 @@ func (s *Service) StateAttestation(ctx context.Context, attestor string, height 
 		return Attestation{}, ErrNotFound
 	}
 
-	res, err := a.StateAttestation(ctx, height)
-
-	return res, err
+	return a.StateAttestation(ctx, height)
 }
 
 func (s *Service) PacketAttestation(
@@ -160,9 +156,7 @@ func (s *Service) PacketAttestation(
 		return Attestation{}, ErrNotFound
 	}
 
-	res, err := a.PacketAttestation(ctx, req)
-
-	return res, err
+	return a.PacketAttestation(ctx, req)
 }
 
 func (req PacketAttestationRequest) Validate() error {
