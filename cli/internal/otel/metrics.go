@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-// Metric attribute keys. Keep in sync with .cursor/metrics.html CARDINALITIES.
+// Metric attribute keys.
 const (
 	AttrOp     attribute.Key = "operation"
 	AttrType   attribute.Key = "type"

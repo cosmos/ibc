@@ -162,8 +162,6 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		tr.RecvTxRelayerAddress = &tx.RelayerAddress
 	}
 
-	metrics.relayCompleted(ctx, transfers, relayTypeSendToRecv)
-
 	return transfers, nil
 }
 

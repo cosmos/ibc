@@ -30,19 +30,24 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 		return tr, nil
 	}
 
+	if isTerminalStatus(tr.Status) {
+		return tr, nil
+	}
+
 	if !tr.IsComplete() {
 		tr.GetLogger().Warn("State finisher received a transfer that is neither errored nor complete")
 
 		return tr, nil
 	}
 
+	var terminalStatus store.RelayStatus
 	switch {
 	case tr.TimeoutTxHash != nil:
-		tr.Status = store.RelayStatusCompleteWithTimeout
+		terminalStatus = store.RelayStatusCompleteWithTimeout
 	case tr.AckTxHash != nil:
-		tr.Status = store.RelayStatusCompleteWithAck
+		terminalStatus = store.RelayStatusCompleteWithAck
 		if tr.WriteAckStatus != nil && *tr.WriteAckStatus == store.WriteAckStatusError {
-			tr.Status = store.RelayStatusCompleteWithWriteAckError
+			terminalStatus = store.RelayStatusCompleteWithWriteAckError
 		}
 	default:
 		tr.GetLogger().
@@ -51,18 +56,32 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 		return tr, nil
 	}
 
-	if err := p.storage.UpdatePacketStatus(ctx, tr.Key(), tr.Status); err != nil {
-		tr.GetLogger().Error("Updating transfer to terminal status", "status", tr.Status, "err", err)
-		tr.ProcessingError = errors.Wrapf(err, "updating transfer status to %s", tr.Status)
+	if err := p.storage.UpdatePacketStatus(ctx, tr.Key(), terminalStatus); err != nil {
+		tr.GetLogger().Error("Updating transfer to terminal status", "status", terminalStatus, "err", err)
+		tr.ProcessingError = errors.Wrapf(err, "updating transfer status to %s", terminalStatus)
 
 		return tr, nil
 	}
 
+	tr.Status = terminalStatus
 	metrics.relayFinished(ctx, tr)
+	metrics.relayCompleted(ctx, tr)
 
 	tr.GetLogger().Info("Transfer complete", "status", tr.Status)
 
 	return tr, nil
+}
+
+func isTerminalStatus(status store.RelayStatus) bool {
+	switch status {
+	case store.RelayStatusCompleteWithAck,
+		store.RelayStatusCompleteWithWriteAckError,
+		store.RelayStatusCompleteWithTimeout,
+		store.RelayStatusFailed:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p StateFinisher) Cancel(tr *Transfer, err error) {

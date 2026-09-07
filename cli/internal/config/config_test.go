@@ -398,6 +398,7 @@ server:
 			cfg, err := LoadFromFile("ibc.yml", true)
 			require.NoError(t, err)
 			require.NoError(t, cfg.RelayerSufficiency())
+			require.Equal(t, "127.0.0.1:9090", cfg.Observability.ListenAddress)
 		})
 
 		t.Run("attestationSigner", func(t *testing.T) {

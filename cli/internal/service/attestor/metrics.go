@@ -24,7 +24,7 @@ func init() {
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	// also exposes _count for total count
-	operation, err := m.Float64Histogram("operation", otel.UnitMilliseconds())
+	operation, err := m.Float64Histogram("attestor_operation", otel.UnitMilliseconds())
 	if err != nil {
 		return nil, err
 	}

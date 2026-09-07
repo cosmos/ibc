@@ -27,7 +27,7 @@ func init() {
 }
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
-	operation, err := m.Float64Histogram("operation", otel.UnitMilliseconds())
+	operation, err := m.Float64Histogram("prover_operation", otel.UnitMilliseconds())
 	if err != nil {
 		return nil, err
 	}

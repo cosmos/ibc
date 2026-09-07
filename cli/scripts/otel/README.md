@@ -15,7 +15,7 @@ IBC metrics testing. Uses `network_mode: host` so the embedded collector can rea
 observability:
   metrics: true
   type: simple
-  listenAddr: 0.0.0.0:9090
+  listenAddr: 127.0.0.1:9090
 ```
 
 2. Start the stack:

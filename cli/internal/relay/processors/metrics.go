@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/internal/store"
 )
 
 type relayType string
@@ -54,13 +55,13 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	}, nil
 }
 
-func (m *instrumentation) relayCompleted(ctx context.Context, transfers []*Transfer, kind relayType) {
-	for _, tr := range transfers {
-		if tr.ProcessingError != nil {
-			continue
-		}
-
-		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, kind, true))
+func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
+	switch tr.Status {
+	case store.RelayStatusCompleteWithTimeout:
+		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, relayTypeSendToTimeout, true))
+	case store.RelayStatusCompleteWithAck:
+		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, relayTypeSendToRecv, true))
+		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, relayTypeRecvToAck, true))
 	}
 }
 
