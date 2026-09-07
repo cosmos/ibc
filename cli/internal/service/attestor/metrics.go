@@ -59,3 +59,52 @@ func (m *instrumentation) latestHeight(ctx context.Context, attestor, chainID st
 		otel.AttrAttestor.String(attestor),
 	))
 }
+
+type instrumentedAttestor struct {
+	Attestor
+	metrics *instrumentation
+	name    string
+}
+
+// Instrument decorates an Attestor with operation instrumentation.
+func Instrument(attestor Attestor, name string) Attestor {
+	return instrument(attestor, name, &metrics)
+}
+
+func instrument(attestor Attestor, name string, metrics *instrumentation) Attestor {
+	return &instrumentedAttestor{
+		Attestor: attestor,
+		metrics:  metrics,
+		name:     name,
+	}
+}
+
+func (a *instrumentedAttestor) LatestHeight(ctx context.Context) (uint64, error) {
+	started := time.Now()
+	height, err := a.Attestor.LatestHeight(ctx)
+	a.metrics.record(ctx, "latest_height", a.ChainID(), a.name, err, started)
+	if err == nil {
+		a.metrics.latestHeight(ctx, a.name, a.ChainID(), height)
+	}
+
+	return height, err
+}
+
+func (a *instrumentedAttestor) StateAttestation(ctx context.Context, height uint64) (Attestation, error) {
+	started := time.Now()
+	result, err := a.Attestor.StateAttestation(ctx, height)
+	a.metrics.record(ctx, "state_attestation", a.ChainID(), a.name, err, started)
+
+	return result, err
+}
+
+func (a *instrumentedAttestor) PacketAttestation(
+	ctx context.Context,
+	req PacketAttestationRequest,
+) (Attestation, error) {
+	started := time.Now()
+	result, err := a.Attestor.PacketAttestation(ctx, req)
+	a.metrics.record(ctx, "packet_attestation", a.ChainID(), a.name, err, started)
+
+	return result, err
+}

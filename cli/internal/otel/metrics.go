@@ -5,13 +5,11 @@ package otel
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/noop"
 )
 
 // Metric attribute keys. Keep in sync with .cursor/metrics.html CARDINALITIES.
@@ -55,11 +53,6 @@ func RegisterMetrics[T any](name string, constructor MetricConstructor[T], out *
 	}
 
 	*out = *constructed
-
-	// note we can't exit early otherwise T.MetricFoo.Record(ctx, ...) will panic with `nil`
-	if _, ok := meter.(noop.Meter); ok {
-		slog.Debug("Noop meter provider", "name", fullName)
-	}
 }
 
 func UnitMilliseconds() metric.InstrumentOption {

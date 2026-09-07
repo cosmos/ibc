@@ -95,7 +95,7 @@ func New(attestors []Attestor) (*Service, error) {
 			return nil, fmt.Errorf("attestor with alias %s already exists", name)
 		}
 
-		set[name] = attestor
+		set[name] = Instrument(attestor, name)
 	}
 
 	return &Service{
@@ -106,7 +106,7 @@ func New(attestors []Attestor) (*Service, error) {
 
 // Add adds an attestor to the service. Not thread-safe.
 func (s *Service) Add(id string, attestor Attestor) {
-	s.attestors[id] = attestor
+	s.attestors[id] = Instrument(attestor, id)
 }
 
 // Get returns the attestor registered under alias
@@ -134,13 +134,7 @@ func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, er
 		return 0, ErrNotFound
 	}
 
-	started := time.Now()
 	res, err := a.LatestHeight(ctx)
-
-	metrics.record(ctx, "latest_height", a.ChainID(), attestor, err, started)
-	if err == nil {
-		metrics.latestHeight(ctx, attestor, a.ChainID(), res)
-	}
 
 	return res, err
 }
@@ -151,10 +145,7 @@ func (s *Service) StateAttestation(ctx context.Context, attestor string, height 
 		return Attestation{}, ErrNotFound
 	}
 
-	started := time.Now()
 	res, err := a.StateAttestation(ctx, height)
-
-	metrics.record(ctx, "state_attestation", a.ChainID(), attestor, err, started)
 
 	return res, err
 }
@@ -169,10 +160,7 @@ func (s *Service) PacketAttestation(
 		return Attestation{}, ErrNotFound
 	}
 
-	started := time.Now()
 	res, err := a.PacketAttestation(ctx, req)
-
-	metrics.record(ctx, "packet_attestation", a.ChainID(), attestor, err, started)
 
 	return res, err
 }

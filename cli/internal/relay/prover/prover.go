@@ -120,7 +120,7 @@ func addGenerator(
 	case config.ClientTypeAttestation:
 		meteredAttestors := make([]attestor.Attestor, len(attestors))
 		for i, a := range attestors {
-			meteredAttestors[i] = metricsAttestorWrapper(a)
+			meteredAttestors[i] = attestor.Instrument(a, a.Name())
 		}
 
 		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors)
