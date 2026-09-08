@@ -150,7 +150,7 @@ func TestMetrics(t *testing.T) {
 				expectedAttributes := attribute.NewSet(
 					otel.AttrChainID.String("source"),
 					otel.AttrDestChainID.String("destination"),
-					otel.AttrRelayType.String(string(relayTypeRecvToAck)),
+					otel.AttrType.String(string(relayTypeRecvToAck)),
 				)
 				assert.Equal(t, expectedAttributes.ToSlice(), sum.DataPoints[0].Attributes.ToSlice())
 
@@ -321,14 +321,14 @@ func (s *metricsTestSuite) collectCompletionMetrics(t *testing.T) (
 					continue
 				}
 				for _, point := range points.DataPoints {
-					completed[relayType(attributeString(t, point.Attributes, otel.AttrRelayType))] = point
+					completed[relayType(attributeString(t, point.Attributes, otel.AttrType))] = point
 				}
 			case metricdata.Histogram[float64]:
 				if metric.Name != "relay_duration_seconds" {
 					continue
 				}
 				for _, point := range points.DataPoints {
-					durations[relayType(attributeString(t, point.Attributes, otel.AttrRelayType))] = point
+					durations[relayType(attributeString(t, point.Attributes, otel.AttrType))] = point
 				}
 			}
 		}
@@ -343,7 +343,7 @@ func completionAttributes(tr *Transfer, kind relayType) attribute.Set {
 		otel.AttrDestChainID.String(tr.DestinationChainID),
 		otel.AttrClientID.String(tr.PacketSourceClientID),
 		otel.AttrDestClientID.String(tr.PacketDestinationClientID),
-		otel.AttrRelayType.String(string(kind)),
+		otel.AttrType.String(string(kind)),
 	)
 }
 

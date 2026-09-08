@@ -34,7 +34,7 @@ func (m *instrumentation) event(ctx context.Context, chainID string, kind v2.Eve
 
 	m.EventsTotal.Add(ctx, 1, otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
-		otel.AttrEventType.String(eventType),
+		otel.AttrType.String(eventType),
 	))
 }
 

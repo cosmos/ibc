@@ -124,7 +124,7 @@ func watcherEventCount(t *testing.T, reader *sdkmetric.ManualReader) int64 {
 			require.True(t, ok)
 			assert.Equal(t, sourceChainID, chainID.AsString())
 
-			eventType, ok := point.Attributes.Value(otel.AttrEventType)
+			eventType, ok := point.Attributes.Value(otel.AttrType)
 			require.True(t, ok)
 			assert.Equal(t, "send_packet", eventType.AsString())
 

@@ -119,7 +119,7 @@ func relayAttributes(tr *Transfer, kind relayType, clients bool) metric.Measurem
 		return otel.WithAttributes(
 			otel.AttrChainID.String(tr.SourceChainID),
 			otel.AttrDestChainID.String(tr.DestinationChainID),
-			otel.AttrRelayType.String(string(kind)),
+			otel.AttrType.String(string(kind)),
 		)
 	}
 
@@ -128,6 +128,6 @@ func relayAttributes(tr *Transfer, kind relayType, clients bool) metric.Measurem
 		otel.AttrDestChainID.String(tr.DestinationChainID),
 		otel.AttrClientID.String(tr.PacketSourceClientID),
 		otel.AttrDestClientID.String(tr.PacketDestinationClientID),
-		otel.AttrRelayType.String(string(kind)),
+		otel.AttrType.String(string(kind)),
 	)
 }
