@@ -32,7 +32,7 @@ observability:
 ### OTEL mode
 
 IBC pushes metrics to the collector using
-[`otel-sdk-config.yaml`](./otel-sdk-config.yaml):
+[`ibc-otel.yaml`](./ibc-otel.yaml):
 
 ```yaml
 observability:
@@ -46,7 +46,7 @@ set an absolute path with `OTEL_CONFIG_FILE`; the environment variable overrides
 `otelFile`:
 
 ```bash
-OTEL_CONFIG_FILE="$(pwd)/scripts/otel/otel-sdk-config.yaml" ibc relayer run
+OTEL_CONFIG_FILE="$(pwd)/scripts/otel/ibc-otel.yaml" ibc relayer run
 ```
 
 3. Run IBC, then open Grafana at http://localhost:3001 (`admin` / `admin`).
