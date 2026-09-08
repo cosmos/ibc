@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -41,7 +40,7 @@ const simpleMetricsPath = "/metrics"
 func GlobalSetup(ctx context.Context, cfg config.Observability, logger *slog.Logger) {
 	logger = logger.With("module", "otel")
 
-	if !cfg.Metrics {
+	if !cfg.Enabled() {
 		logger.Info("Observability is disabled")
 		return
 	}
@@ -87,6 +86,7 @@ func (p *Provider) Stop() error {
 	return p.meterStop()
 }
 
+// WrapConnectHandler wraps connectRPC handlers with OTEL
 func WrapConnectHandler() connect.Option {
 	// https://connectrpc.com/docs/go/observability
 	otelInterceptor, err := otelconnect.NewInterceptor(
@@ -125,7 +125,7 @@ func newSimpleMeterProvider(
 	}
 
 	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(resource.NewSchemaless(semconv.ServiceName("ibc"))),
+		metric.WithResource(resource.NewSchemaless(semconv.ServiceName(serviceName))),
 		metric.WithReader(metricExporter),
 	)
 
@@ -157,23 +157,15 @@ func newSimpleMeterProvider(
 		}
 	}()
 
-	var (
-		stopOnce sync.Once
-		stopErr  error
-	)
 	stopFunc := func() error {
-		stopOnce.Do(func() {
-			serverCtx, cancelServer := timeoutCtx()
-			serverErr := server.Shutdown(serverCtx)
-			cancelServer()
+		ctx, cancel := timeoutCtx()
+		defer cancel()
 
-			meterCtx, cancelMeter := timeoutCtx()
-			meterErr := meterProvider.Shutdown(meterCtx)
-			cancelMeter()
+		// safe to call multiple times
+		serverErr := server.Shutdown(ctx)
+		meterErr := meterProvider.Shutdown(ctx)
 
-			stopErr = errors.Join(serverErr, meterErr)
-		})
-		return stopErr
+		return errors.Join(serverErr, meterErr)
 	}
 
 	return meterProvider, stopFunc, nil
