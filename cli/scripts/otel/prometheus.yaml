@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+
+global:
+  scrape_native_histograms: true
+
+otlp:
+  keep_identifying_resource_attributes: true
+  # for {otel_scope_name="ibc.<meter>"}
+  promote_scope_metadata: true
+  promote_resource_attributes:
+    - service.instance.id
+    - service.name
+    - service.namespace
+    - service.version
+
+storage:
+  tsdb:
+    out_of_order_time_window: 10m
