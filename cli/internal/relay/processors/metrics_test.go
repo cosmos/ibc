@@ -124,8 +124,10 @@ func TestMetrics(t *testing.T) {
 		// ARRANGE
 		suite := newMetricsTestSuite(t)
 		tr := NewTransfer(store.Packet{
-			SourceChainID:      "source",
-			DestinationChainID: "destination",
+			SourceChainID:             "source",
+			DestinationChainID:        "destination",
+			PacketSourceClientID:      "source-client",
+			PacketDestinationClientID: "destination-client",
 		}, slog.Default())
 
 		// ACT
@@ -149,6 +151,8 @@ func TestMetrics(t *testing.T) {
 				expectedAttributes := attribute.NewSet(
 					otel.AttrChainID.String("source"),
 					otel.AttrDestChainID.String("destination"),
+					otel.AttrClientID.String("source-client"),
+					otel.AttrDestClientID.String("destination-client"),
 					otel.AttrType.String(string(relayTypeRecvToAck)),
 				)
 				assert.Equal(t, expectedAttributes.ToSlice(), sum.DataPoints[0].Attributes.ToSlice())

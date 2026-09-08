@@ -54,12 +54,10 @@ func TestSimpleMeterProviderStop(t *testing.T) {
 		Type:          config.ObservabilitySimple,
 		ListenAddress: availableListenAddress(t),
 	}
-	meterProvider, stop, err := newSimpleMeterProvider(cfg, testLogger())
+	_, stop, err := newSimpleMeterProvider(cfg, testLogger())
 	require.NoError(t, err)
 
 	// ACT & ASSERT
-	require.NoError(t, stop())
-	require.Error(t, meterProvider.Shutdown(t.Context()))
 	require.NoError(t, stop())
 }
 

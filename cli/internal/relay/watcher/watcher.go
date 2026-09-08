@@ -172,8 +172,7 @@ func (w *Watcher) run(ctx context.Context, stream stream) {
 // HandleEvent records the packet a send event carries. Events of another kind
 // and reorged-out logs write nothing.
 func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
-	switch {
-	case event.Removed:
+	if event.Removed {
 		// deleting the row would destroy the record of a relay we may already
 		// have submitted, so the row stands and the pipeline keeps retrying it
 		// or performs its own reorg check, we do not handle this case
@@ -185,12 +184,11 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 			"txHash", event.TxHash,
 		)
 		return nil
-	case !event.Removed:
-		// record even if the next switch case exists
-		metrics.event(ctx, w.chainID, event.Kind)
-		fallthrough
-	case event.Kind != v2.KindSendPacket:
-		// irrelevant here
+	}
+
+	metrics.event(ctx, w.chainID, event.Kind)
+
+	if event.Kind != v2.KindSendPacket {
 		return nil
 	}
 
