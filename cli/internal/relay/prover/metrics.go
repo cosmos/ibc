@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/otel"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -48,7 +49,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 func (m *instrumentation) record(
 	ctx context.Context,
 	operation, chainID, clientID string,
-	typ string,
+	proverType string,
 	err error,
 	ts time.Time,
 	attrs ...attribute.KeyValue,
@@ -56,7 +57,7 @@ func (m *instrumentation) record(
 	attrs = append(attrs,
 		otel.AttrChainID.String(chainID),
 		otel.AttrClientID.String(clientID),
-		otel.AttrType.String(typ),
+		otel.AttrType.String(proverType),
 		otel.AttrResultError(err),
 	)
 	otel.RecordOperation(ctx, m.Operation, operation, ts, attrs...)
@@ -85,17 +86,17 @@ func (m *instrumentation) packetBatchSize(
 
 type instrumentedProver struct {
 	Prover
-	chainID  string
-	clientID string
-	typ      string
+	chainID    string
+	clientID   string
+	proverType string
 }
 
-func metricsWrapper(chainID, clientID, typ string, prover Prover) Prover {
+func metricsWrapper(prover Prover, chainID, clientID string, proverType config.ClientType) Prover {
 	return &instrumentedProver{
-		Prover:   prover,
-		chainID:  chainID,
-		clientID: clientID,
-		typ:      typ,
+		Prover:     prover,
+		chainID:    chainID,
+		clientID:   clientID,
+		proverType: string(proverType),
 	}
 }
 
@@ -103,7 +104,7 @@ func (p *instrumentedProver) LatestProvableHeight(ctx context.Context) (uint64, 
 	started := time.Now()
 	height, timestamp, err := p.Prover.LatestProvableHeight(ctx)
 
-	metrics.record(ctx, "latest_provable_height", p.chainID, p.clientID, p.typ, err, started)
+	metrics.record(ctx, "latest_provable_height", p.chainID, p.clientID, p.proverType, err, started)
 	if err == nil {
 		metrics.latestProvableHeight(ctx, p.chainID, p.clientID, height)
 	}
@@ -115,7 +116,7 @@ func (p *instrumentedProver) StateProof(ctx context.Context, height uint64) ([]b
 	started := time.Now()
 	proof, err := p.Prover.StateProof(ctx, height)
 
-	metrics.record(ctx, "state_proof", p.chainID, p.clientID, p.typ, err, started)
+	metrics.record(ctx, "state_proof", p.chainID, p.clientID, p.proverType, err, started)
 
 	return proof, err
 }
@@ -129,8 +130,8 @@ func (p *instrumentedProver) PacketProofs(
 	started := time.Now()
 	proofs, err := p.Prover.PacketProofs(ctx, height, kind, packets)
 
-	metrics.record(ctx, "packet_proofs", p.chainID, p.clientID, p.typ, err, started, proofKindAttribute(kind))
-	metrics.packetBatchSize(ctx, p.chainID, p.clientID, p.typ, kind, len(packets))
+	metrics.record(ctx, "packet_proofs", p.chainID, p.clientID, p.proverType, err, started, proofKindAttribute(kind))
+	metrics.packetBatchSize(ctx, p.chainID, p.clientID, p.proverType, kind, len(packets))
 
 	return proofs, err
 }

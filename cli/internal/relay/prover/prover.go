@@ -120,7 +120,7 @@ func addGenerator(
 	case config.ClientTypeAttestation:
 		meteredAttestors := make([]attestor.Attestor, len(attestors))
 		for i, a := range attestors {
-			meteredAttestors[i] = attestor.Instrument(a, a.Name())
+			meteredAttestors[i] = attestor.MetricsWrapper(a)
 		}
 
 		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors)
@@ -128,8 +128,8 @@ func addGenerator(
 			return err
 		}
 
-		meteredGen := metricsWrapper(client.ChainID, client.ClientID, string(client.Type), gen)
-		generators[Key(client.ChainID, client.ClientID)] = meteredGen
+		meteredProver := metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
+		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
 	case config.ClientTypeRemote:
@@ -144,7 +144,7 @@ func addGenerator(
 		}
 
 		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID)
-		meteredProver := metricsWrapper(client.ChainID, client.ClientID, string(client.Type), prover)
+		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil

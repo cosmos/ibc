@@ -62,16 +62,16 @@ type instrumentedAttestor struct {
 	name    string
 }
 
-// Instrument decorates an Attestor with operation instrumentation.
-func Instrument(attestor Attestor, name string) Attestor {
-	return instrument(attestor, name, metrics)
-}
+// MetricsWrapper wraps an Attestor with operation instrumentation.
+func MetricsWrapper(attestor Attestor) Attestor {
+	if _, ok := attestor.(*instrumentedAttestor); ok {
+		return attestor
+	}
 
-func instrument(attestor Attestor, name string, metrics *instrumentation) Attestor {
 	return &instrumentedAttestor{
 		Attestor: attestor,
+		name:     attestor.Name(),
 		metrics:  metrics,
-		name:     name,
 	}
 }
 

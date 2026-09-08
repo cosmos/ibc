@@ -55,6 +55,10 @@ type instrumentedSigner struct {
 }
 
 func metricsWrapper(signer Signer, alias string) Signer {
+	if _, ok := signer.(*instrumentedSigner); ok {
+		return signer
+	}
+
 	var keyType string
 	if signer.IsLocal() {
 		keyType = fmt.Sprintf("local_%s", signer.Type())

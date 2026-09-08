@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -28,7 +29,7 @@ func TestInstrumentation(t *testing.T) {
 		prover := mocks.NewMockProver(t)
 		timestamp := time.Unix(1_000, 0)
 		prover.EXPECT().LatestProvableHeight(ctx).Return(uint64(42), timestamp, nil).Once()
-		instrumented := metricsWrapper("chain-a", "client-0", "attestation", prover)
+		instrumented := metricsWrapper(prover, "chain-a", "client-0", "attestation")
 
 		// ACT
 		height, actualTimestamp, err := instrumented.LatestProvableHeight(ctx)
@@ -59,7 +60,7 @@ func TestInstrumentation(t *testing.T) {
 		reader := setTestMetrics(t)
 		prover := mocks.NewMockProver(t)
 		prover.EXPECT().StateProof(ctx, uint64(7)).Return(nil, errors.New("proof unavailable")).Once()
-		instrumented := metricsWrapper("chain-a", "client-0", "attestation", prover)
+		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
 		proof, err := instrumented.StateProof(ctx, 7)
@@ -87,7 +88,7 @@ func TestInstrumentation(t *testing.T) {
 			PacketProofs(ctx, uint64(9), v2.ProofKindPacketCommitment, packets).
 			Return(expectedProofs, nil).
 			Once()
-		instrumented := metricsWrapper("chain-a", "client-0", "attestation", prover)
+		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
 		proofs, err := instrumented.PacketProofs(ctx, 9, v2.ProofKindPacketCommitment, packets)
