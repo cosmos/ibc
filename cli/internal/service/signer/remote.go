@@ -28,11 +28,7 @@ type RemoteSigner struct {
 
 var _ Signer = &RemoteSigner{}
 
-func NewRemote(
-	ctx context.Context,
-	client signerservice.SignerServiceClient,
-	keyID string,
-) (*RemoteSigner, error) {
+func NewRemote(ctx context.Context, client signerservice.SignerServiceClient, keyID string) (*RemoteSigner, error) {
 	s := &RemoteSigner{
 		client:  client,
 		keyID:   keyID,

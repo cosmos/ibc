@@ -77,14 +77,14 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", err
 		}
 
-		return metricsWrapper(cfg.Alias, localSignerType(s.Type()), s), cfg.Alias, nil
+		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
 	case config.SignerRemote:
 		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}
 
-		return metricsWrapper(cfg.Alias, typeRemote, s), cfg.Alias, nil
+		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
 	default:
 		return nil, "", errors.Errorf("invalid signer type: %s", cfg.Type)
 	}

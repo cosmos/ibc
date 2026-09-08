@@ -4,12 +4,12 @@ package signer
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
-	"github.com/cosmos/ibc/cli/keyfile"
 )
 
 const (
@@ -37,41 +37,41 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 
 func (m *instrumentation) record(
 	ctx context.Context,
-	operation, alias, typ string,
+	operation, signerAlias, signerType string,
 	err error,
 	ts time.Time,
 ) {
 	otel.RecordOperation(ctx, m.Operation, operation, ts,
-		otel.AttrSigner.String(alias),
-		otel.AttrType.String(typ),
+		otel.AttrSigner.String(signerAlias),
+		otel.AttrType.String(signerType),
 		otel.AttrResultError(err),
 	)
 }
 
 type instrumentedSigner struct {
 	Signer
-	alias string
-	typ   string
+	alias   string
+	keyType string
 }
 
-func metricsWrapper(alias, typ string, signer Signer) Signer {
+func metricsWrapper(signer Signer, alias string) Signer {
+	var keyType string
+	if signer.IsLocal() {
+		keyType = fmt.Sprintf("local_%s", signer.Type())
+	} else {
+		keyType = "remote"
+	}
+
 	return &instrumentedSigner{
-		Signer: signer,
-		alias:  alias,
-		typ:    typ,
+		Signer:  signer,
+		alias:   alias,
+		keyType: keyType,
 	}
-}
-
-func localSignerType(keyType keyfile.Type) string {
-	if keyType == ECDSA {
-		return typeLocalECDSA
-	}
-	return typeLocalEDDSA
 }
 
 func (s *instrumentedSigner) Sign(ctx context.Context, message []byte) ([]byte, error) {
 	started := time.Now()
 	signature, err := s.Signer.Sign(ctx, message)
-	metrics.record(ctx, "sign", s.alias, s.typ, err, started)
+	metrics.record(ctx, "sign", s.alias, s.keyType, err, started)
 	return signature, err
 }
