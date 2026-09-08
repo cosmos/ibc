@@ -112,7 +112,7 @@ func TestInstrumentation(t *testing.T) {
 			total += value
 		}
 		assert.Equal(t, int64(1), total)
-		assert.Len(t, instruments.lastRoutes, 1)
+		assert.Len(t, instruments.routesFromPrevCall, 1)
 	})
 }
 

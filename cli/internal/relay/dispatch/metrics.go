@@ -22,8 +22,8 @@ type routeKey struct {
 type instrumentation struct {
 	PacketsPending metric.Int64Gauge
 
-	mu         sync.Mutex
-	lastRoutes map[routeKey]struct{}
+	routesFromPrevCall map[routeKey]struct{}
+	mu                 sync.Mutex
 }
 
 var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
@@ -35,12 +35,13 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	}
 
 	return &instrumentation{
-		PacketsPending: packetsPending,
-		lastRoutes:     make(map[routeKey]struct{}),
+		PacketsPending:     packetsPending,
+		routesFromPrevCall: make(map[routeKey]struct{}),
 	}, nil
 }
 
 func (m *instrumentation) packetsPending(ctx context.Context, packets []store.Packet) {
+	// map route => count
 	counts := make(map[routeKey]int64, len(packets))
 	for _, packet := range packets {
 		key := routeKey{
@@ -59,15 +60,17 @@ func (m *instrumentation) packetsPending(ctx context.Context, packets []store.Pa
 		m.recordPending(ctx, key, count)
 	}
 
-	for key := range m.lastRoutes {
+	// drop to zero metrics for routes from prev. call that are no longer present
+	for key := range m.routesFromPrevCall {
 		if _, ok := counts[key]; !ok {
 			m.recordPending(ctx, key, 0)
 		}
 	}
 
-	m.lastRoutes = make(map[routeKey]struct{}, len(counts))
+	// update the map for the next call
+	m.routesFromPrevCall = make(map[routeKey]struct{}, len(counts))
 	for key := range counts {
-		m.lastRoutes[key] = struct{}{}
+		m.routesFromPrevCall[key] = struct{}{}
 	}
 }
 
