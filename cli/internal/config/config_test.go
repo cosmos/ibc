@@ -15,6 +15,8 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+	t.Setenv(envOtelConfigFile, "")
+
 	t.Run("Validate", func(t *testing.T) {
 		for _, tt := range []struct {
 			name        string
@@ -81,13 +83,12 @@ func TestConfig(t *testing.T) {
 				errContains: "observability.listenAddr",
 			},
 			{
-				name: "otel observability not supported",
+				name: "otel observability config required",
 				patch: func(c *Config) {
 					c.Observability.Metrics = true
 					c.Observability.Type = ObservabilityOTEL
-					c.Observability.ListenAddress = "127.0.0.1:9090"
 				},
-				errContains: "otel.yml is not yet supported",
+				errContains: "observability.otelFile: required",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -519,6 +520,92 @@ attestors:
 				assert.Equal(t, tt.wantType, db.Type)
 			})
 		}
+	})
+}
+
+func TestObservabilityConfigFile(t *testing.T) {
+	t.Setenv(envOtelConfigFile, "")
+
+	for _, tt := range []struct {
+		name        string
+		cfg         Observability
+		errContains string
+	}{
+		{
+			name:        "rejectsSimpleMode",
+			cfg:         Observability{Type: ObservabilitySimple},
+			errContains: "only available",
+		},
+		{
+			name: "rejectsMissingFile",
+			cfg: Observability{
+				Type:     ObservabilityOTEL,
+				OtelFile: filepath.Join(t.TempDir(), "missing.yml"),
+			},
+			errContains: "no such file or directory",
+		},
+		{
+			name:        "requiresConfiguredOrEnvironmentFile",
+			cfg:         Observability{Type: ObservabilityOTEL},
+			errContains: "otelFile: required",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ACT
+			_, err := tt.cfg.ConfigFile()
+
+			// ASSERT
+			require.ErrorContains(t, err, tt.errContains)
+		})
+	}
+
+	t.Run("resolvesRelativePathFromCurrentDirectory", func(t *testing.T) {
+		// ARRANGE
+		dir := t.TempDir()
+		otelPath := filepath.Join(dir, "telemetry", "otel.yml")
+		require.NoError(t, os.Mkdir(filepath.Dir(otelPath), 0o755))
+		require.NoError(t, os.WriteFile(otelPath, []byte("disabled: true\n"), 0o600))
+		t.Chdir(dir)
+		cfg := Observability{Type: ObservabilityOTEL, OtelFile: "telemetry/otel.yml"}
+
+		// ACT
+		path, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, otelPath, path)
+	})
+
+	t.Run("environmentTakesPrecedence", func(t *testing.T) {
+		// ARRANGE
+		configuredPath := filepath.Join(t.TempDir(), "configured.yml")
+		envPath := filepath.Join(t.TempDir(), "environment.yml")
+		require.NoError(t, os.WriteFile(configuredPath, []byte("disabled: true\n"), 0o600))
+		require.NoError(t, os.WriteFile(envPath, []byte("disabled: true\n"), 0o600))
+		t.Setenv(envOtelConfigFile, envPath)
+		cfg := Observability{Type: ObservabilityOTEL, OtelFile: configuredPath}
+
+		// ACT
+		path, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, envPath, path)
+	})
+
+	t.Run("usesEnvironmentWithoutConfiguredFile", func(t *testing.T) {
+		// ARRANGE
+		envPath := filepath.Join(t.TempDir(), "environment.yml")
+		require.NoError(t, os.WriteFile(envPath, []byte("disabled: true\n"), 0o600))
+		t.Setenv(envOtelConfigFile, envPath)
+		cfg := Observability{Type: ObservabilityOTEL}
+
+		// ACT
+		path, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, envPath, path)
 	})
 }
 

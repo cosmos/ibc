@@ -3,12 +3,14 @@
 package otel
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"connectrpc.com/connect"
@@ -16,9 +18,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
+	"go.opentelemetry.io/contrib/otelconf"
 	"go.opentelemetry.io/otel"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
-	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/metric"
+	sdk "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
@@ -29,7 +33,7 @@ import (
 // Provider owns the metrics pipeline and Prometheus HTTP server.
 type Provider struct {
 	logger    *slog.Logger
-	meter     *metric.MeterProvider
+	meter     metric.MeterProvider
 	meterStop graceful.ShutdownFunc
 }
 
@@ -63,7 +67,6 @@ func GlobalSetup(ctx context.Context, cfg config.Observability, logger *slog.Log
 func New(_ context.Context, cfg config.Observability, logger *slog.Logger) (provider *Provider, err error) {
 	meterProvider, meterStop, err := newMeterProvider(cfg, logger)
 	if err != nil {
-		// todo should we have some kind of NopProvider?
 		return nil, err
 	}
 
@@ -104,29 +107,31 @@ func WrapConnectHandler() connect.Option {
 func newMeterProvider(
 	cfg config.Observability,
 	logger *slog.Logger,
-) (*metric.MeterProvider, graceful.ShutdownFunc, error) {
-	if cfg.Type == config.ObservabilitySimple {
+) (metric.MeterProvider, graceful.ShutdownFunc, error) {
+	switch cfg.Type {
+	case config.ObservabilitySimple:
 		return newSimpleMeterProvider(cfg, logger.With("type", config.ObservabilitySimple))
+	case config.ObservabilityOTEL:
+		return newOtelFileMeterProvider(cfg, logger.With("type", config.ObservabilityOTEL))
+	default:
+		return nil, nil, fmt.Errorf("unsupported observability type: %s", cfg.Type)
 	}
-
-	// todo: implement OTEL
-	return nil, nil, fmt.Errorf("unsupported observability type: %s", cfg.Type)
 }
 
 // in "simple" type, prometheus adapter endpoint is exposed instead of OTEL collector
 func newSimpleMeterProvider(
 	cfg config.Observability,
 	logger *slog.Logger,
-) (*metric.MeterProvider, graceful.ShutdownFunc, error) {
+) (metric.MeterProvider, graceful.ShutdownFunc, error) {
 	registry := prometheus.NewRegistry()
 	metricExporter, err := otelprometheus.New(otelprometheus.WithRegisterer(registry))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(resource.NewSchemaless(semconv.ServiceName(serviceName))),
-		metric.WithReader(metricExporter),
+	meterProvider := sdk.NewMeterProvider(
+		sdk.WithResource(resource.NewSchemaless(semconv.ServiceName(serviceName))),
+		sdk.WithReader(metricExporter),
 	)
 
 	// create new mux + server
@@ -169,6 +174,45 @@ func newSimpleMeterProvider(
 	}
 
 	return meterProvider, stopFunc, nil
+}
+
+// in "otel" type, OTEL config file is used to configure the OpenTelemetry pipeline
+func newOtelFileMeterProvider(
+	cfg config.Observability,
+	logger *slog.Logger,
+) (metric.MeterProvider, graceful.ShutdownFunc, error) {
+	path, err := cfg.ConfigFile()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bz, err := os.ReadFile(path)
+	switch {
+	case err != nil:
+		return nil, nil, fmt.Errorf("read OTEL config file %q: %w", path, err)
+	case len(bytes.TrimSpace(bz)) == 0:
+		return nil, nil, fmt.Errorf("OTEL config file %q is empty", path)
+	}
+
+	otelConfig, err := otelconf.ParseYAML(bz)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse OTEL config file %q: %w", path, err)
+	}
+
+	sdk, err := otelconf.NewSDK(otelconf.WithOpenTelemetryConfiguration(*otelConfig))
+	if err != nil {
+		return nil, nil, fmt.Errorf("initialize OTEL SDK from %q: %w", path, err)
+	}
+
+	logger.Info("Initialized OTEL from config file", "path", path)
+
+	stop := func() error {
+		ctx, cancel := timeoutCtx()
+		defer cancel()
+		return sdk.Shutdown(ctx)
+	}
+
+	return sdk.MeterProvider(), stop, nil
 }
 
 func timeoutCtx() (context.Context, context.CancelFunc) {

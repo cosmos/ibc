@@ -5,6 +5,8 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,6 +45,10 @@ const (
 	ObservabilitySimple = "simple"
 	ObservabilityOTEL   = "otel"
 )
+
+// env variable to override OTEL config file path.
+// Internally, OTEL SDK uses it as well.
+const envOtelConfigFile = "OTEL_CONFIG_FILE"
 
 const sqliteInMemory = ":memory:"
 
@@ -87,6 +93,7 @@ type Observability struct {
 	Metrics       bool   `yaml:"metrics"`
 	Type          string `yaml:"type"`
 	ListenAddress string `yaml:"listenAddr"`
+	OtelFile      string `yaml:"otelFile"`
 }
 
 // Chains is the list of configured chains.
@@ -377,8 +384,10 @@ func (c Observability) Validate() error {
 			return errPath("listenAddr", err)
 		}
 	case c.Type == ObservabilityOTEL:
-		// todo: implement :)
-		return errPathf("type", "otel.yml is not yet supported")
+		_, err := c.ConfigFile()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -387,6 +396,32 @@ func (c Observability) Validate() error {
 func (c Observability) Enabled() bool {
 	// might become more complex in the future
 	return c.Metrics
+}
+
+// ConfigFile resolves the OTEL configuration file. Supports loading from OTEL_CONFIG_FILE env.
+func (c Observability) ConfigFile() (string, error) {
+	if c.Type != ObservabilityOTEL {
+		return "", fmt.Errorf("only available for observability type %q", ObservabilityOTEL)
+	}
+
+	// override file with env
+	if envPath := os.Getenv(envOtelConfigFile); envPath != "" {
+		slog.Info("Overriding OTEL config with env", "env", envOtelConfigFile, "path", envPath)
+		c.OtelFile = envPath
+	} else if c.OtelFile == "" {
+		return "", errPathf("otelFile", "required (or %s env)", envOtelConfigFile)
+	}
+
+	absPath, err := filepath.Abs(c.OtelFile)
+	if err != nil {
+		return "", errPath("otelFile", err)
+	}
+
+	if err := fileExists(absPath); err != nil {
+		return "", errPath("otelFile", err)
+	}
+
+	return absPath, nil
 }
 
 func (c Chains) Validate() error {

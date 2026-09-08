@@ -35,11 +35,13 @@ make -C cli/scripts/otel up
 | IBC API                | `:3000`           |
 | Grafana                | `:3001`           |
 | Prometheus             | `:9091`           |
-| OTLP (future)          | `:4317` / `:4318` |
+| OTLP                   | `:4317` / `:4318` |
 
 Prometheus/Grafana ports are shifted to avoid clashing with IBC defaults.
 
-## TODO: `observability.type: otel`
+## OTEL configuration
 
-Today only `simple` works — the CLI exposes a Prometheus `/metrics` endpoint and this
-stack scrapes it via `otelcol-config.yaml`.
+To use an OTEL YAML file instead of the `simple` Prometheus endpoint, set
+`observability.type: otel` and `observability.otelFile`. Relative paths are
+resolved from the IBC config directory. `OTEL_CONFIG_FILE` is used only when
+`otelFile` is unset or missing.
