@@ -33,6 +33,7 @@ const (
 // https://github.com/connectrpc/otelconnect-go/blob/462c595e1f85b0797f3990003b79dd39e930919b/instruments.go#L23
 const (
 	unitMilliseconds = "ms"
+	unitSeconds      = "s"
 )
 
 const serviceName = "ibc"
@@ -59,6 +60,10 @@ func RegisterMetrics[T any](name string, constructor MetricConstructor[T]) *T {
 
 func UnitMilliseconds() metric.InstrumentOption {
 	return metric.WithUnit(unitMilliseconds)
+}
+
+func UnitSeconds() metric.InstrumentOption {
+	return metric.WithUnit(unitSeconds)
 }
 
 func WithAttributes(attrs ...attribute.KeyValue) metric.MeasurementOption {

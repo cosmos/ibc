@@ -40,7 +40,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	relayDuration, err := m.Float64Histogram("relay_duration_seconds", metric.WithUnit("s"))
+	relayDuration, err := m.Float64Histogram("relay_duration_seconds", otel.UnitSeconds())
 	if err != nil {
 		return nil, err
 	}
@@ -59,16 +59,33 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 
 func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
 	for _, leg := range completedRelayLegs(tr) {
-		m.RelaysCompleted.Add(ctx, 1, relayAttributes(tr, leg.kind, true))
+		var (
+			kind  = leg.kind
+			attrs = relayAttributes(tr, kind)
+		)
+
+		m.RelaysCompleted.Add(ctx, 1, attrs)
+		if leg.startedAt == nil || leg.finishedAt == nil {
+			continue
+		}
+
+		duration := leg.finishedAt.Sub(*leg.startedAt)
+		m.RelayDuration.Record(ctx, duration.Seconds(), attrs)
 	}
 }
 
-func (m *instrumentation) relayFinished(ctx context.Context, tr *Transfer) {
-	for _, leg := range completedRelayLegs(tr) {
-		if leg.startedAt != nil && leg.finishedAt != nil {
-			m.relayDuration(ctx, tr, leg.kind, *leg.startedAt, *leg.finishedAt)
-		}
-	}
+func (m *instrumentation) transactionRetry(ctx context.Context, tr *Transfer, kind relayType) {
+	m.TransactionRetries.Add(ctx, 1, relayAttributes(tr, kind))
+}
+
+func relayAttributes(tr *Transfer, kind relayType) metric.MeasurementOption {
+	return otel.WithAttributes(
+		otel.AttrChainID.String(tr.SourceChainID),
+		otel.AttrDestChainID.String(tr.DestinationChainID),
+		otel.AttrClientID.String(tr.PacketSourceClientID),
+		otel.AttrDestClientID.String(tr.PacketDestinationClientID),
+		otel.AttrType.String(string(kind)),
+	)
 }
 
 func completedRelayLegs(tr *Transfer) []completedRelayLeg {
@@ -97,37 +114,4 @@ func completedRelayLegs(tr *Transfer) []completedRelayLeg {
 	default:
 		return nil
 	}
-}
-
-func (m *instrumentation) relayDuration(
-	ctx context.Context,
-	tr *Transfer,
-	kind relayType,
-	from time.Time,
-	to time.Time,
-) {
-	duration := to.Sub(from)
-	m.RelayDuration.Record(ctx, duration.Seconds(), relayAttributes(tr, kind, true))
-}
-
-func (m *instrumentation) transactionRetry(ctx context.Context, tr *Transfer, kind relayType) {
-	m.TransactionRetries.Add(ctx, 1, relayAttributes(tr, kind, false))
-}
-
-func relayAttributes(tr *Transfer, kind relayType, clients bool) metric.MeasurementOption {
-	if !clients {
-		return otel.WithAttributes(
-			otel.AttrChainID.String(tr.SourceChainID),
-			otel.AttrDestChainID.String(tr.DestinationChainID),
-			otel.AttrType.String(string(kind)),
-		)
-	}
-
-	return otel.WithAttributes(
-		otel.AttrChainID.String(tr.SourceChainID),
-		otel.AttrDestChainID.String(tr.DestinationChainID),
-		otel.AttrClientID.String(tr.PacketSourceClientID),
-		otel.AttrDestClientID.String(tr.PacketDestinationClientID),
-		otel.AttrType.String(string(kind)),
-	)
 }

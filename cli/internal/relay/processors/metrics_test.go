@@ -113,7 +113,6 @@ func TestMetrics(t *testing.T) {
 
 				// ACT
 				suite.instruments.relayCompleted(suite.ctx, tr)
-				suite.instruments.relayFinished(suite.ctx, tr)
 
 				// ASSERT
 				assertCompletionMetrics(t, suite, tr, tt.expected)
