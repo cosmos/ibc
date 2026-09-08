@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/contrib/otelconf"
 
 	"github.com/cosmos/ibc/cli/internal/config"
 )
@@ -78,6 +79,18 @@ func TestOtelFileMeterProvider(t *testing.T) {
 		require.NotNil(t, meterProvider)
 		require.NotNil(t, stop)
 		require.NoError(t, stop())
+	})
+
+	t.Run("acceptsLocalStackConfig", func(t *testing.T) {
+		// ARRANGE
+		bz, err := os.ReadFile("../../scripts/otel/ibc-otel.yaml")
+		require.NoError(t, err)
+
+		// ACT
+		_, err = otelconf.ParseYAML(bz)
+
+		// ASSERT
+		require.NoError(t, err)
 	})
 }
 

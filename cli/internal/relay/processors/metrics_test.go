@@ -327,7 +327,7 @@ func (s *metricsTestSuite) collectCompletionMetrics(t *testing.T) (
 					completed[relayType(attributeString(t, point.Attributes, otel.AttrType))] = point
 				}
 			case metricdata.Histogram[float64]:
-				if metric.Name != "relay_duration_seconds" {
+				if metric.Name != "relay_duration" {
 					continue
 				}
 				for _, point := range points.DataPoints {

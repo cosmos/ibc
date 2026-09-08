@@ -5,43 +5,59 @@
 # Local metrics stack
 
 Single-container [grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm) for local
-IBC metrics testing. Uses `network_mode: host` so the embedded collector can reach the binary on the host.
+IBC metrics testing. The collector supports both `simple` Prometheus scraping and
+OTEL push mode. It uses host networking so it can reach the IBC process.
 
 ## Usage
 
-1. Enable metrics in IBC config (`type: simple`):
+1. Start the stack:
+
+```bash
+make -C cli/scripts/otel up
+```
+
+2. Select one observability mode in the IBC config.
+
+### Simple mode
+
+IBC exposes `/metrics`; the collector scrapes it:
 
 ```yaml
 observability:
   metrics: true
   type: simple
-  listenAddr: 127.0.0.1:9090
+  listenAddr: 127.0.0.1:9090 # so localhost:9090/metrics dumps prometheus metrics
 ```
 
-2. Start the stack:
+### OTEL mode
+
+IBC pushes metrics to the collector using
+[`otel-sdk-config.yaml`](./otel-sdk-config.yaml):
+
+```yaml
+observability:
+  metrics: true
+  type: otel
+  otelFile: scripts/otel/ibc-otel.yaml
+```
+
+Relative `otelFile` paths resolve from the process working directory. Alternatively,
+set an absolute path with `OTEL_CONFIG_FILE`; the environment variable overrides
+`otelFile`:
 
 ```bash
-make -C cli/scripts/otel up
-# or: make otel-up   (from cli/)
+OTEL_CONFIG_FILE="$(pwd)/scripts/otel/otel-sdk-config.yaml" ibc relayer run
 ```
 
-3. Run IBC, then open Grafana at http://localhost:3001 (admin / admin).
+3. Run IBC, then open Grafana at http://localhost:3001 (`admin` / `admin`).
+The stack does not need to be restarted when switching modes.
 
 ## Ports
 
-| What                   | Port              |
-| ---------------------- | ----------------- |
-| IBC metrics (`simple`) | `:9090`           |
-| IBC API                | `:3000`           |
-| Grafana                | `:3001`           |
-| Prometheus             | `:9091`           |
-| OTLP                   | `:4317` / `:4318` |
-
-Prometheus/Grafana ports are shifted to avoid clashing with IBC defaults.
-
-## OTEL configuration
-
-To use an OTEL YAML file instead of the `simple` Prometheus endpoint, set
-`observability.type: otel` and `observability.otelFile`. Relative paths are
-resolved from the IBC config directory. `OTEL_CONFIG_FILE` is used only when
-`otelFile` is unset or missing.
+| Label                                         | Port              | Note                  |
+| --------------------------------------------- | ----------------- | --------------------- |
+| IBC metrics (for `simple` mode)               | `:9090/metrics`   | `ibc` process metrics |
+| IBC API                                       | `:3000`           | `ibc` ConnectRPC API  |
+| Grafana                                       | `:3001`           | Dashboards            |
+| Prometheus                                    | `:9091`           | Metrics storage       |
+| OTLP (OpenTelemetry Protocol for `otel` mode) | `:4317` / `:4318` | Collector ingestion   |

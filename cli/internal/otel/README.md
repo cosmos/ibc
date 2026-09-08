@@ -2,7 +2,16 @@
 
 ## Metric Modes
 
-`TODO`
+IBC supports two metric modes:
+
+- `simple` exposes a Prometheus-compatible `/metrics` endpoint for direct scraping. It is
+  intended for local development and straightforward Prometheus deployments.
+- `otel` configures the OpenTelemetry SDK from a YAML file and exports metrics to an OTEL
+  collector. It is intended for deployments that need configurable metric pipelines and
+  observability backends.
+
+Metrics are best-effort: failures while setting up the metrics pipeline are logged and
+tolerated, so they do not prevent IBC from running.
 
 ## Available Metrics
 
