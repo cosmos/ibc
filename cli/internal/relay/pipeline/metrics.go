@@ -31,7 +31,11 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	batchSize, err := m.Int64Histogram("batch_size")
+	// override default latency-based bucket boundaries
+	batchSize, err := m.Int64Histogram(
+		"batch_size",
+		metric.WithExplicitBucketBoundaries(1, 2, 4, 8, 12, 16, 32, 48, 64, 96, 128),
+	)
 	if err != nil {
 		return nil, err
 	}
