@@ -133,7 +133,7 @@ func TestPipelineMetrics(t *testing.T) {
 				var processErr error
 
 				// ACT
-				err := batchResultError(processErr, tt.output)
+				err := joinBatchError(processErr, tt.output)
 
 				// ASSERT
 				assert.NoError(t, err)

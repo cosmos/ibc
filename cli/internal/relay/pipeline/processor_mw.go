@@ -161,28 +161,14 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 			input.ProcessingError = err
 		}
 
-		metrics.batch(ctx, mw.internal.Status(), toProcess[0], len(toProcess), batchResultError(err, toProcess))
+		metrics.batch(ctx, mw.internal.Status(), toProcess, joinBatchError(err, toProcess))
 
 		return append(toProcess, notProcessing...), nil
 	}
 
-	metrics.batch(ctx, mw.internal.Status(), toProcess[0], len(toProcess), batchResultError(nil, output))
+	metrics.batch(ctx, mw.internal.Status(), toProcess, joinBatchError(nil, output))
 
 	return append(output, notProcessing...), nil
-}
-
-func batchResultError(err error, output []*processors.Transfer) error {
-	if err != nil {
-		return err
-	}
-
-	for _, tr := range output {
-		if tr != nil && tr.ProcessingError != nil {
-			return tr.ProcessingError
-		}
-	}
-
-	return nil
 }
 
 func (mw BatchProcessorMW) Cancel(batch []*processors.Transfer, err error) {
@@ -195,4 +181,18 @@ func (mw BatchProcessorMW) ShouldProcess(input *processors.Transfer) bool {
 
 func (mw BatchProcessorMW) Status() store.RelayStatus {
 	return mw.internal.Status()
+}
+
+func joinBatchError(err error, output []*processors.Transfer) error {
+	if err != nil {
+		return err
+	}
+
+	for _, tr := range output {
+		if tr != nil && tr.ProcessingError != nil {
+			return tr.ProcessingError
+		}
+	}
+
+	return nil
 }

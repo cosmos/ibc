@@ -56,24 +56,20 @@ func (m *instrumentation) packetTransition(ctx context.Context, tr *processors.T
 func (m *instrumentation) batch(
 	ctx context.Context,
 	status store.RelayStatus,
-	tr *processors.Transfer,
-	size int,
+	batch []*processors.Transfer,
 	err error,
 ) {
 	processor := batchProcessorName(status)
-	chainID := batchChainID(tr, processor)
+	attrProcessor := otel.AttrProcessor.String(processor)
+	attrChain := otel.AttrChainID.String(batchChainID(batch[0], processor))
 
-	m.BatchSize.Record(ctx, int64(size), otel.WithAttributes(
-		otel.AttrChainID.String(chainID),
-		otel.AttrProcessor.String(processor),
-	))
-	m.BatchesTotal.Add(ctx, 1, otel.WithAttributes(
-		otel.AttrChainID.String(chainID),
-		otel.AttrProcessor.String(processor),
-		otel.AttrResultError(err),
-	))
+	m.BatchSize.Record(ctx, int64(len(batch)), otel.WithAttributes(attrChain, attrProcessor))
+	m.BatchesTotal.Add(ctx, 1, otel.WithAttributes(attrChain, attrProcessor, otel.AttrResultError(err)))
 }
 
+// processors/batch_ack.go
+// processors/batch_recv.go
+// processors/batch_relay.go
 func batchProcessorName(status store.RelayStatus) string {
 	switch status {
 	case store.RelayStatusDeliverRecvPacket:
