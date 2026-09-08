@@ -40,7 +40,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	relayDuration, err := m.Float64Histogram("relay_duration_seconds", otel.UnitSeconds())
+	relayDuration, err := m.Float64Histogram("relay_duration", otel.UnitSeconds())
 	if err != nil {
 		return nil, err
 	}
