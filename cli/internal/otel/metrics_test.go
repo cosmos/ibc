@@ -7,12 +7,16 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/cosmos/ibc/cli/internal/config"
 )
@@ -122,5 +126,54 @@ func TestDurationMilliseconds(t *testing.T) {
 
 		// ASSERT
 		assert.InDelta(t, 1.5, actual, 0.0001)
+	})
+}
+
+func TestAttrCallerFromCaller(t *testing.T) {
+	t.Run("returnsDefaultOutsideRPC", func(t *testing.T) {
+		for _, tt := range []struct {
+			name         string
+			defaultValue string
+		}{
+			{name: "appDefault", defaultValue: "app"},
+			{name: "customDefault", defaultValue: "relayer"},
+			{name: "emptyDefault", defaultValue: ""},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ARRANGE
+				ctx := context.Background()
+
+				// ACT
+				got := AttrCallerFromCaller(ctx, tt.defaultValue)
+
+				// ASSERT
+				assert.Equal(t, AttrCaller.String(tt.defaultValue), got)
+			})
+		}
+	})
+
+	t.Run("returnsRPCFromHandlerContext", func(t *testing.T) {
+		// ARRANGE
+		const procedure = "/test.v1.Service/Ping"
+		var got attribute.KeyValue
+
+		handler := connect.NewUnaryHandler(
+			procedure,
+			func(ctx context.Context, _ *connect.Request[emptypb.Empty]) (*connect.Response[emptypb.Empty], error) {
+				got = AttrCallerFromCaller(ctx, "app")
+				return connect.NewResponse(&emptypb.Empty{}), nil
+			},
+		)
+		srv := httptest.NewServer(handler)
+		t.Cleanup(srv.Close)
+
+		client := connect.NewClient[emptypb.Empty, emptypb.Empty](srv.Client(), srv.URL+procedure)
+
+		// ACT
+		_, err := client.CallUnary(t.Context(), connect.NewRequest(&emptypb.Empty{}))
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, AttrCaller.String("rpc"), got)
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"connectrpc.com/connect"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -17,6 +18,7 @@ const (
 	AttrOp     attribute.Key = "operation"
 	AttrType   attribute.Key = "type"
 	AttrResult attribute.Key = "result"
+	AttrCaller attribute.Key = "caller"
 
 	AttrAttestor attribute.Key = "attestor"
 	AttrSigner   attribute.Key = "signer"
@@ -79,6 +81,18 @@ func AttrResultError(err error) attribute.KeyValue {
 	}
 
 	return AttrResult.String("error")
+}
+
+// AttrCallerFromCaller returns the caller attribute value based on the context.
+func AttrCallerFromCaller(ctx context.Context, defaultValue string) attribute.KeyValue {
+	var value string
+	if _, isFromRPC := connect.CallInfoForHandlerContext(ctx); isFromRPC {
+		value = "rpc"
+	} else {
+		value = defaultValue
+	}
+
+	return AttrCaller.String(value)
 }
 
 func RecordOperation(
