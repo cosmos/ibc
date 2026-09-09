@@ -77,10 +77,10 @@ Collections inside that threshold omit the sample. A failed query is logged and 
 | processors  | `relay_duration_*`             | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
 | processors  | `transactions_submitted_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
 | processors  | `transactions_confirmed_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
-| processors  | `transaction_retries_total`    | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per transfer retry decision                                 |
+| processors  | `transaction_retries_total`    | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
 | txsubmitter | `evm_gas_spent`                | observable counter | `chain_id`, `wallet`                                                | Cumulative successful owned EVM tx cost in native-token units  |
 | txsubmitter | `evm_gas_balance`              | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
-| watcher     | `watcher_events_total`         | counter            | `chain_id`, `type` (`send_packet`, `write_ack`)                     | Observed events                                                |
+| watcher     | `watcher_events_total`         | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |
 | dispatch    | `packets_pending`              | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
 
 ## Guide on creating new metrics

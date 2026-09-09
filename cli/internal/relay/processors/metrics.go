@@ -105,7 +105,18 @@ func (m *instrumentation) txConfirmed(ctx context.Context, chainID, clientID, tx
 	m.TransactionsConfirmed.Add(ctx, 1, txMetricAttributes(chainID, clientID))
 }
 
-func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType) {
+// one txHash might carry multiple transfers
+func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType, txHash string) {
+	chainID := tr.SourceChainID
+	if kind == relayTypeSendToRecv {
+		chainID = tr.DestinationChainID
+	}
+
+	key := txKey(chainID, txHash)
+	if _, submitted := m.submittedTransactions.LoadAndDelete(key); !submitted {
+		return
+	}
+
 	m.TransactionRetries.Add(ctx, 1, txAttributes(tr, otel.AttrType.String(string(kind))))
 }
 

@@ -15,7 +15,7 @@ import (
 )
 
 func TestConfig(t *testing.T) {
-	t.Setenv(envOtelConfigFile, "")
+	unsetEnv(t, envOtelConfigFile)
 
 	t.Run("Validate", func(t *testing.T) {
 		for _, tt := range []struct {
@@ -524,7 +524,7 @@ attestors:
 }
 
 func TestObservabilityConfigFile(t *testing.T) {
-	t.Setenv(envOtelConfigFile, "")
+	unsetEnv(t, envOtelConfigFile)
 
 	for _, tt := range []struct {
 		name        string
@@ -606,6 +606,34 @@ func TestObservabilityConfigFile(t *testing.T) {
 		// ASSERT
 		require.NoError(t, err)
 		assert.Equal(t, envPath, path)
+	})
+
+	t.Run("rejectsEmptyEnvironmentOverride", func(t *testing.T) {
+		// ARRANGE
+		configuredPath := filepath.Join(t.TempDir(), "configured.yml")
+		require.NoError(t, os.WriteFile(configuredPath, []byte("disabled: true\n"), 0o600))
+		t.Setenv(envOtelConfigFile, "")
+		cfg := Observability{Type: ObservabilityOTEL, OtelFile: configuredPath}
+
+		// ACT
+		_, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.ErrorContains(t, err, "empty env OTEL_CONFIG_FILE=''")
+	})
+}
+
+func unsetEnv(t *testing.T, key string) {
+	t.Helper()
+
+	value, set := os.LookupEnv(key)
+	require.NoError(t, os.Unsetenv(key))
+	t.Cleanup(func() {
+		if set {
+			require.NoError(t, os.Setenv(key, value))
+			return
+		}
+		require.NoError(t, os.Unsetenv(key))
 	})
 }
 

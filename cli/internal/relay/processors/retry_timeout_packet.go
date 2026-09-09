@@ -53,7 +53,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 		return nil, errors.Wrapf(err, "clearing timeout tx %s", *tr.TimeoutTxHash)
 	}
 
-	metrics.txRetry(ctx, tr, relayTypeSendToTimeout)
+	metrics.txRetry(ctx, tr, relayTypeSendToTimeout, *tr.TimeoutTxHash)
 
 	return nil, ErrRetryingTimeoutPacket
 }

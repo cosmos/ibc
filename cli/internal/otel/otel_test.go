@@ -81,6 +81,21 @@ func TestOtelFileMeterProvider(t *testing.T) {
 		require.NoError(t, stop())
 	})
 
+	t.Run("rejectsEmptyEnvironmentOverride", func(t *testing.T) {
+		// ARRANGE
+		t.Setenv("OTEL_CONFIG_FILE", "")
+		path := writeOtelConfig(t, "file_format: \"1.0-rc.2\"\nmeter_provider: {}\n")
+		cfg := config.Observability{Type: config.ObservabilityOTEL, OtelFile: path}
+
+		// ACT
+		meterProvider, stop, err := newOtelFileMeterProvider(cfg, testLogger())
+
+		// ASSERT
+		require.ErrorContains(t, err, "empty env OTEL_CONFIG_FILE=''")
+		assert.Nil(t, meterProvider)
+		assert.Nil(t, stop)
+	})
+
 	t.Run("acceptsLocalStackConfig", func(t *testing.T) {
 		// ARRANGE
 		bz, err := os.ReadFile("../../scripts/otel/ibc-otel.yaml")

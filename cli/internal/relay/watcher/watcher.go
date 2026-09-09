@@ -172,6 +172,10 @@ func (w *Watcher) run(ctx context.Context, stream stream) {
 // HandleEvent records the packet a send event carries. Events of another kind
 // and reorged-out logs write nothing.
 func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
+	if event.Kind != v2.KindSendPacket {
+		return nil
+	}
+
 	if event.Removed {
 		// deleting the row would destroy the record of a relay we may already
 		// have submitted, so the row stands and the pipeline keeps retrying it
@@ -186,11 +190,7 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 		return nil
 	}
 
-	metrics.event(ctx, w.chainID, event.Kind)
-
-	if event.Kind != v2.KindSendPacket {
-		return nil
-	}
+	metrics.sendPacket(ctx, w.chainID)
 
 	// the subscription filters on the source client alone, so the counterparty
 	// the packet actually names is checked here, as the explicit relay path does

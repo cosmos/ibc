@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
+	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 func TestWatcherHandleEventMetrics(t *testing.T) {
@@ -37,6 +38,22 @@ func TestWatcherHandleEventMetrics(t *testing.T) {
 		w := newTestWatcher(newChain(), newPacketStore(nil))
 		event := sendPacketEvent(7)
 		event.Removed = true
+
+		// ACT
+		err := w.HandleEvent(ctx, event)
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), watcherEventCount(t, reader))
+	})
+
+	t.Run("nonSendEvent", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		reader := setupWatcherMetrics(t)
+		w := newTestWatcher(newChain(), newPacketStore(nil))
+		event := sendPacketEvent(7)
+		event.Kind = v2.KindWriteAck
 
 		// ACT
 		err := w.HandleEvent(ctx, event)

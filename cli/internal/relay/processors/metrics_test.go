@@ -131,7 +131,9 @@ func TestMetrics(t *testing.T) {
 		}, slog.Default())
 
 		// ACT
-		suite.instruments.txRetry(suite.ctx, tr, relayTypeRecvToAck)
+		suite.instruments.txSubmitted(suite.ctx, "destination", "destination-client", "0xrecv")
+		suite.instruments.txRetry(suite.ctx, tr, relayTypeSendToRecv, "0xrecv")
+		suite.instruments.txRetry(suite.ctx, tr, relayTypeSendToRecv, "0xrecv")
 
 		// ASSERT
 		var data metricdata.ResourceMetrics
@@ -153,7 +155,7 @@ func TestMetrics(t *testing.T) {
 					otel.AttrDestChainID.String("destination"),
 					otel.AttrClientID.String("source-client"),
 					otel.AttrDestClientID.String("destination-client"),
-					otel.AttrType.String(string(relayTypeRecvToAck)),
+					otel.AttrType.String(string(relayTypeSendToRecv)),
 				)
 				assert.Equal(t, expectedAttributes.ToSlice(), sum.DataPoints[0].Attributes.ToSlice())
 

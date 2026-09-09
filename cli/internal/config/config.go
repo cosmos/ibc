@@ -405,9 +405,14 @@ func (c Observability) ConfigFile() (string, error) {
 	}
 
 	// override file with env
-	if envPath := os.Getenv(envOtelConfigFile); envPath != "" {
-		slog.Info("Overriding OTEL config with env", "env", envOtelConfigFile, "path", envPath)
-		c.OtelFile = envPath
+	fromEnv, envSet := os.LookupEnv(envOtelConfigFile)
+	if envSet {
+		if fromEnv == "" {
+			return "", fmt.Errorf("empty env %s=''", envOtelConfigFile)
+		}
+
+		slog.Info("Overriding OTEL config with env", "env", envOtelConfigFile, "path", fromEnv)
+		c.OtelFile = fromEnv
 	} else if c.OtelFile == "" {
 		return "", errPathf("otelFile", "required (or %s env)", envOtelConfigFile)
 	}

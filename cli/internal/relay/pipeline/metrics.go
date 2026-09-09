@@ -48,6 +48,10 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 }
 
 func (m *instrumentation) packetTransition(ctx context.Context, tr *processors.Transfer, state store.RelayStatus) {
+	if tr.Status == state {
+		return
+	}
+
 	m.PacketsTotal.Add(ctx, 1, otel.WithAttributes(
 		otel.AttrChainID.String(tr.SourceChainID),
 		otel.AttrDestChainID.String(tr.DestinationChainID),

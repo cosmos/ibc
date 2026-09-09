@@ -43,6 +43,37 @@ type batchMetricData struct {
 }
 
 func TestPipelineMetrics(t *testing.T) {
+	t.Run("packetTransition", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		reader := newTestMetrics(t)
+		tr := testTransfer(t)
+
+		// ACT
+		metrics.packetTransition(ctx, tr, tr.Status)
+		metrics.packetTransition(ctx, tr, store.RelayStatusDeliverRecvPacket)
+
+		// ASSERT
+		var resources metricdata.ResourceMetrics
+		require.NoError(t, reader.Collect(ctx, &resources))
+
+		for _, scope := range resources.ScopeMetrics {
+			for _, metric := range scope.Metrics {
+				if metric.Name != "packets_total" {
+					continue
+				}
+
+				sum, ok := metric.Data.(metricdata.Sum[int64])
+				require.True(t, ok)
+				require.Len(t, sum.DataPoints, 1)
+				assert.Equal(t, int64(1), sum.DataPoints[0].Value)
+				return
+			}
+		}
+
+		require.Fail(t, "packets_total metric not found")
+	})
+
 	t.Run("batchProcessorMW", func(t *testing.T) {
 		for _, tt := range []struct {
 			name    string

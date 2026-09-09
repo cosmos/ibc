@@ -8,7 +8,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 type instrumentation struct {
@@ -26,25 +25,9 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	return &instrumentation{EventsTotal: eventsTotal}, nil
 }
 
-func (m *instrumentation) event(ctx context.Context, chainID string, kind v2.EventKind) {
-	eventType, ok := eventType(kind)
-	if !ok {
-		return
-	}
-
+func (m *instrumentation) sendPacket(ctx context.Context, chainID string) {
 	m.EventsTotal.Add(ctx, 1, otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
-		otel.AttrType.String(eventType),
+		otel.AttrType.String("send_packet"),
 	))
-}
-
-func eventType(kind v2.EventKind) (string, bool) {
-	switch kind {
-	case v2.KindSendPacket:
-		return "send_packet", true
-	case v2.KindWriteAck:
-		return "write_ack", true
-	default:
-		return "", false
-	}
 }
