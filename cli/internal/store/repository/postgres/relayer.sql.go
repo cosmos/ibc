@@ -81,25 +81,35 @@ const createUnresolvedSequence = `-- name: CreateUnresolvedSequence :exec
 INSERT INTO packet_clearing_unresolved (
     source_chain_id,
     packet_source_client_id,
-    packet_sequence_number
+    packet_sequence_number,
+    last_seen_height
 ) VALUES (
     $1,
     $2,
-    $3
+    $3,
+    $4
 )
 ON CONFLICT (source_chain_id, packet_source_client_id, packet_sequence_number) DO NOTHING
 `
 
 type CreateUnresolvedSequenceParams struct {
-	ChainID  string
-	ClientID string
-	Sequence int64
+	ChainID        string
+	ClientID       string
+	Sequence       int64
+	LastSeenHeight int64
 }
 
 // a sequence that is still unresolved keeps the first_seen_at it was first recorded with,
-// since how long it has been stuck is the only signal an operator gets about it
+// since how long it has been stuck is the only signal an operator gets about it. It keeps
+// the first last_seen_height for the same reason the watermark only moves forward: that is
+// the lowest height the commitment is known live at, and so the loosest guard still correct
 func (q *Queries) CreateUnresolvedSequence(ctx context.Context, arg CreateUnresolvedSequenceParams) error {
-	_, err := q.db.Exec(ctx, createUnresolvedSequence, arg.ChainID, arg.ClientID, arg.Sequence)
+	_, err := q.db.Exec(ctx, createUnresolvedSequence,
+		arg.ChainID,
+		arg.ClientID,
+		arg.Sequence,
+		arg.LastSeenHeight,
+	)
 	return err
 }
 
@@ -108,16 +118,26 @@ DELETE FROM packet_clearing_unresolved
 WHERE source_chain_id = $1
   AND packet_source_client_id = $2
   AND packet_sequence_number = $3
+  AND last_seen_height <= $4
 `
 
 type DeleteUnresolvedSequenceParams struct {
-	ChainID  string
-	ClientID string
-	Sequence int64
+	ChainID     string
+	ClientID    string
+	Sequence    int64
+	ProbeHeight int64
 }
 
+// a commitment read as absent below the height it was last seen live at is a
+// node that has not caught up, not a settled packet, so the row stands until a
+// probe reads it at or above that height
 func (q *Queries) DeleteUnresolvedSequence(ctx context.Context, arg DeleteUnresolvedSequenceParams) error {
-	_, err := q.db.Exec(ctx, deleteUnresolvedSequence, arg.ChainID, arg.ClientID, arg.Sequence)
+	_, err := q.db.Exec(ctx, deleteUnresolvedSequence,
+		arg.ChainID,
+		arg.ClientID,
+		arg.Sequence,
+		arg.ProbeHeight,
+	)
 	return err
 }
 

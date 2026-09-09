@@ -578,6 +578,40 @@ func TestClearerClear(t *testing.T) {
 		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 	})
 
+	t.Run("aLaggingHeadCannotResolveAnUnresolvedSend", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.mine(10)
+		chain.send(1, 2)
+		chain.prune(1)
+
+		db := watcherStore(t)
+		clearer := newTestClearer(chain, db)
+
+		_, err := clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
+
+		// the next pass opens on a node four blocks behind the send, which reads
+		// the live commitment as absent. Resolving on that would drop the only
+		// record of a packet sitting below the watermark
+		chain.serveHeads(6, 6)
+
+		_, err = clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
+
+		// a pass that reads at or above the height the commitment was last seen
+		// live at still resolves it
+		chain.settle(1)
+
+		_, err = clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
+	})
+
 	t.Run("aFailedRowWriteLeavesNoWatermark", func(t *testing.T) {
 		chain := newFakeChain()
 		chain.send(1, 2)
@@ -613,7 +647,7 @@ func TestClearerClear(t *testing.T) {
 
 		// a cold pass outlives the state a non-archive node keeps, so the
 		// second chunk reads at wherever the chain has got to by then
-		chain.serveHeads(10, 12)
+		chain.serveHeads(10, 10, 12)
 
 		_, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -675,9 +709,10 @@ func TestUnresolvedDelta(t *testing.T) {
 		"bothEmpty":   {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			delta := unresolvedDelta(tt.probed, tt.unresolved)
+			delta := unresolvedDelta(tt.probed, tt.unresolved, 42)
 			assert.Equal(t, tt.add, delta.Add)
 			assert.Equal(t, tt.resolve, delta.Resolve)
+			assert.Equal(t, uint64(42), delta.Height)
 		})
 	}
 }

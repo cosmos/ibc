@@ -15,6 +15,7 @@ create table if not exists packet_clearing_unresolved (
     source_chain_id         text      not null,
     packet_source_client_id text      not null,
     packet_sequence_number  integer   not null,
+    last_seen_height        integer   not null,
     first_seen_at           timestamp not null default current_timestamp,
 
     primary key (source_chain_id, packet_source_client_id, packet_sequence_number)

@@ -110,6 +110,9 @@ type UnresolvedDelta struct {
 	Add []uint64
 	// Resolve sequences the pass probed that no longer need remembering.
 	Resolve []uint64
+	// Height the pass probed at. Adds are recorded with it, and a resolve below
+	// the height a sequence was last seen live at is refused.
+	Height uint64
 }
 
 // WriteAck the write acknowledgement observed for a packet.

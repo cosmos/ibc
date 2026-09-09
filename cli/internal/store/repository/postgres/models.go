@@ -46,6 +46,7 @@ type PacketClearingUnresolved struct {
 	SourceChainID        string
 	PacketSourceClientID string
 	PacketSequenceNumber int64
+	LastSeenHeight       int64
 	FirstSeenAt          pgtype.Timestamptz
 }
 

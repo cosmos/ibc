@@ -184,21 +184,29 @@ WHERE source_chain_id = sqlc.arg(chain_id) AND packet_source_client_id = sqlc.ar
 ORDER BY packet_sequence_number;
 
 -- a sequence that is still unresolved keeps the first_seen_at it was first recorded with,
--- since how long it has been stuck is the only signal an operator gets about it
+-- since how long it has been stuck is the only signal an operator gets about it. It keeps
+-- the first last_seen_height for the same reason the watermark only moves forward: that is
+-- the lowest height the commitment is known live at, and so the loosest guard still correct
 -- name: CreateUnresolvedSequence :exec
 INSERT INTO packet_clearing_unresolved (
     source_chain_id,
     packet_source_client_id,
-    packet_sequence_number
+    packet_sequence_number,
+    last_seen_height
 ) VALUES (
     sqlc.arg(chain_id),
     sqlc.arg(client_id),
-    sqlc.arg(sequence)
+    sqlc.arg(sequence),
+    sqlc.arg(last_seen_height)
 )
 ON CONFLICT (source_chain_id, packet_source_client_id, packet_sequence_number) DO NOTHING;
 
+-- a commitment read as absent below the height it was last seen live at is a
+-- node that has not caught up, not a settled packet, so the row stands until a
+-- probe reads it at or above that height
 -- name: DeleteUnresolvedSequence :exec
 DELETE FROM packet_clearing_unresolved
 WHERE source_chain_id = sqlc.arg(chain_id)
   AND packet_source_client_id = sqlc.arg(client_id)
-  AND packet_sequence_number = sqlc.arg(sequence);
+  AND packet_sequence_number = sqlc.arg(sequence)
+  AND last_seen_height <= sqlc.arg(probe_height);

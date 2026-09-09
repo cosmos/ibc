@@ -530,7 +530,8 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Equal(t, ClearingState{}, state)
 
 		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 4_999_900, UnresolvedDelta{
-			Add: []uint64{12, 4_200_000},
+			Add:    []uint64{12, 4_200_000},
+			Height: 10,
 		}))
 
 		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
@@ -546,6 +547,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_000, UnresolvedDelta{
 			Add:     []uint64{4_300_000},
 			Resolve: []uint64{4_200_000},
+			Height:  20,
 		}))
 
 		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
@@ -555,7 +557,8 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		// re-adding a sequence already held is a noop rather than a conflict,
 		// which is what leaves its first_seen_at alone
 		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_010, UnresolvedDelta{
-			Add: []uint64{12},
+			Add:    []uint64{12},
+			Height: 30,
 		}))
 
 		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
@@ -573,6 +576,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		// and resolving the rest empties it
 		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_060, UnresolvedDelta{
 			Resolve: []uint64{12, 4_300_000},
+			Height:  50,
 		}))
 
 		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
@@ -582,12 +586,34 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		// a slow pass finishing behind a faster one cannot drag the watermark back
 		// over sequences that pass already probed. Its delta still applies
 		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 4_000_000, UnresolvedDelta{
-			Add: []uint64{77},
+			Add:    []uint64{77},
+			Height: 100,
 		}))
 
 		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(5_000_060), state.LastProbed)
 		assert.Equal(t, []uint64{77}, state.Unresolved)
+
+		// a pass reading below the height the commitment was last seen live at is
+		// a lagging node, not a settled packet, so its resolve is refused
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_070, UnresolvedDelta{
+			Resolve: []uint64{77},
+			Height:  90,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{77}, state.Unresolved)
+
+		// a pass reading at or above it resolves
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_080, UnresolvedDelta{
+			Resolve: []uint64{77},
+			Height:  100,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Empty(t, state.Unresolved)
 	})
 }

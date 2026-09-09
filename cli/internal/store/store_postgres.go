@@ -364,9 +364,10 @@ func (db *PostgresDB) SetClearingState(
 	// never probed
 	for _, sequence := range delta.Add {
 		err := db.repo.CreateUnresolvedSequence(ctx, postgres.CreateUnresolvedSequenceParams{
-			ChainID:  chainID,
-			ClientID: clientID,
-			Sequence: int64(sequence), //nolint:gosec // sequences fit in int64
+			ChainID:        chainID,
+			ClientID:       clientID,
+			Sequence:       int64(sequence),     //nolint:gosec // sequences fit in int64
+			LastSeenHeight: int64(delta.Height), //nolint:gosec // heights fit in int64
 		})
 		if err != nil {
 			return errors.Wrapf(err, "recording unresolved sequence %d", sequence)
@@ -375,9 +376,10 @@ func (db *PostgresDB) SetClearingState(
 
 	for _, sequence := range delta.Resolve {
 		err := db.repo.DeleteUnresolvedSequence(ctx, postgres.DeleteUnresolvedSequenceParams{
-			ChainID:  chainID,
-			ClientID: clientID,
-			Sequence: int64(sequence), //nolint:gosec // sequences fit in int64
+			ChainID:     chainID,
+			ClientID:    clientID,
+			Sequence:    int64(sequence),     //nolint:gosec // sequences fit in int64
+			ProbeHeight: int64(delta.Height), //nolint:gosec // heights fit in int64
 		})
 		if err != nil {
 			return errors.Wrapf(err, "clearing unresolved sequence %d", sequence)

@@ -139,7 +139,7 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 
 	reprobe := state.Unresolved
 
-	outstanding, probed, err := c.outstanding(ctx, clientID, reprobe, from, latest, head.Height)
+	outstanding, probed, probeHeight, err := c.outstanding(ctx, clientID, reprobe, from, latest, head.Height)
 	if err != nil {
 		return result, err
 	}
@@ -166,7 +166,7 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 
 	// measured against what the pass actually probed: a sequence it carried
 	// rather than probed had nothing learned about it, so it stays untouched
-	delta := unresolvedDelta(reprobe, unresolved)
+	delta := unresolvedDelta(reprobe, unresolved, probeHeight)
 
 	result.Unresolved = len(unresolved)
 
@@ -176,8 +176,8 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 // unresolvedDelta is the change a pass makes to the unresolved set: what it
 // found outstanding with no send log, and what it probed and no longer needs to
 // remember. Sequences absent from both are left alone.
-func unresolvedDelta(probed, unresolved []uint64) store.UnresolvedDelta {
-	var delta store.UnresolvedDelta
+func unresolvedDelta(probed, unresolved []uint64, height uint64) store.UnresolvedDelta {
+	delta := store.UnresolvedDelta{Height: height}
 
 	held := make(map[uint64]struct{}, len(probed))
 	for _, sequence := range probed {
@@ -216,15 +216,15 @@ func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
 }
 
 // outstanding probes the sequences the watermark has not settled and returns
-// those whose commitment is still live, with the number probed. The reads stay
-// at the head: a commitment written above the finalized head reads absent
-// there, and absent means settled.
+// those whose commitment is still live, with the number probed and the height
+// the pass ended at. The reads stay at the head: a commitment written above the
+// finalized head reads absent there, and absent means settled.
 func (c *Clearer) outstanding(
 	ctx context.Context,
 	clientID string,
 	unresolved []uint64,
 	from, latest, height uint64,
-) ([]uint64, int, error) {
+) ([]uint64, int, uint64, error) {
 	var (
 		live   []uint64
 		probed int
@@ -235,14 +235,12 @@ func (c *Clearer) outstanding(
 		// node keeps, so the height moves up with the chain rather than aging
 		// out from under the later chunks. max, because a head read served by a
 		// lagging node must not drag it back below where the sequence was read
-		if probed > 0 {
-			head, err := c.chain.GetBlockHeader(ctx, v2.LatestBlock)
-			if err != nil {
-				return errors.Wrapf(err, "refreshing the probe height for client %s", clientID)
-			}
-
-			height = max(height, head.Height)
+		head, err := c.chain.GetBlockHeader(ctx, v2.LatestBlock)
+		if err != nil {
+			return errors.Wrapf(err, "refreshing the probe height for client %s", clientID)
 		}
+
+		height = max(height, head.Height)
 
 		found, err := c.chain.PacketCommitments(ctx, clientID, chunk, height)
 		if err != nil {
@@ -257,17 +255,17 @@ func (c *Clearer) outstanding(
 
 	if len(unresolved) > 0 {
 		if err := probe(unresolved); err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 	}
 
 	for lo := from; lo <= latest; lo += probeChunk {
 		if err := probe(sequenceRange(lo, min(lo+probeChunk-1, latest))); err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 	}
 
-	return live, probed, nil
+	return live, probed, height, nil
 }
 
 // unrecorded drops the sequences we already hold a row for. The query is bounded
