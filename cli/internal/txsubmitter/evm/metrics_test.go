@@ -104,7 +104,7 @@ func TestEVMGasSpent(t *testing.T) {
 
 		// ASSERT #2
 		expectedValue, _ := new(big.Rat).SetFrac(expectedWalletA, weiPerNativeToken).Float64()
-		expected := map[gasCostKey]float64{
+		expected := map[chainWallet]float64{
 			{chainID: "chain-a", wallet: "wallet-a"}: expectedValue,
 			{chainID: "chain-a", wallet: "wallet-b"}: 10,
 			{chainID: "chain-b", wallet: "wallet-a"}: 20,
@@ -231,6 +231,39 @@ func TestEVMGasSpent(t *testing.T) {
 	})
 }
 
+func TestGasBalance(t *testing.T) {
+	ctx := context.Background()
+	instruments, reader := installTestMetrics(t)
+	clientA := mocks.NewMockTxSubmitterETHClient(t)
+	clientB := mocks.NewMockTxSubmitterETHClient(t)
+	replacement := mocks.NewMockTxSubmitterETHClient(t)
+	walletA := common.HexToAddress("0x01").String()
+	walletB := common.HexToAddress("0x02").String()
+	clientA.EXPECT().BalanceAt(mock.Anything, common.HexToAddress(walletA), (*big.Int)(nil)).
+		Return(new(big.Int).Mul(big.NewInt(15), weiPerNativeToken), nil).Once()
+	clientB.EXPECT().BalanceAt(mock.Anything, common.HexToAddress(walletB), (*big.Int)(nil)).
+		Return(new(big.Int).Div(weiPerNativeToken, big.NewInt(2)), nil).Once()
+	instruments.setClient("chain-a", walletA, clientA)
+	instruments.setClient("chain-b", walletB, clientB)
+	instruments.setClient("chain-a", walletA, replacement)
+	require.Len(t, instruments.clients, 2)
+
+	gauge := collectGasBalance(ctx, t, reader)
+
+	values := make(map[chainWallet]float64, len(gauge.DataPoints))
+	for _, point := range gauge.DataPoints {
+		chainID, _ := point.Attributes.Value(attribute.Key("chain_id"))
+		wallet, _ := point.Attributes.Value(attribute.Key("wallet"))
+		values[chainWallet{chainID: chainID.AsString(), wallet: wallet.AsString()}] = point.Value
+	}
+	assert.Equal(t, map[chainWallet]float64{
+		{chainID: "chain-a", wallet: walletA}: 15,
+		{chainID: "chain-b", wallet: walletB}: 0.5,
+	}, values)
+
+	assert.Empty(t, collectGasBalance(ctx, t, reader).DataPoints)
+}
+
 func installTestMetrics(t *testing.T) (*instrumentation, *sdkmetric.ManualReader) {
 	t.Helper()
 
@@ -293,6 +326,29 @@ func collectEVMGasSpent(
 	return metricdata.Sum[float64]{}
 }
 
+func collectGasBalance(
+	ctx context.Context,
+	t *testing.T,
+	reader *sdkmetric.ManualReader,
+) metricdata.Gauge[float64] {
+	t.Helper()
+
+	var data metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(ctx, &data))
+
+	for _, scope := range data.ScopeMetrics {
+		for _, candidate := range scope.Metrics {
+			if candidate.Name == "evm_gas_balance" {
+				gauge, ok := candidate.Data.(metricdata.Gauge[float64])
+				require.True(t, ok)
+				return gauge
+			}
+		}
+	}
+
+	return metricdata.Gauge[float64]{}
+}
+
 func successfulReceipt(t *testing.T, txHash string, gasUsed uint64, gasPrice *big.Int) *types.Receipt {
 	t.Helper()
 
@@ -310,7 +366,7 @@ func gasTotalWei(t *testing.T, instruments *instrumentation, chainID, wallet str
 	instruments.mu.Lock()
 	defer instruments.mu.Unlock()
 
-	total := instruments.cumulativeGasCostWei[gasCostKey{chainID: chainID, wallet: wallet}]
+	total := instruments.cumulativeGasCostWei[chainWallet{chainID: chainID, wallet: wallet}]
 	if total == nil {
 		return nil
 	}
@@ -318,14 +374,14 @@ func gasTotalWei(t *testing.T, instruments *instrumentation, chainID, wallet str
 	return new(big.Int).Set(total)
 }
 
-func evmGasSpentValues(t *testing.T, sum metricdata.Sum[float64]) map[gasCostKey]float64 {
+func evmGasSpentValues(t *testing.T, sum metricdata.Sum[float64]) map[chainWallet]float64 {
 	t.Helper()
 
-	values := make(map[gasCostKey]float64, len(sum.DataPoints))
+	values := make(map[chainWallet]float64, len(sum.DataPoints))
 	for _, point := range sum.DataPoints {
 		chainID, _ := point.Attributes.Value(attribute.Key("chain_id"))
 		wallet, _ := point.Attributes.Value(attribute.Key("wallet"))
-		values[gasCostKey{chainID: chainID.AsString(), wallet: wallet.AsString()}] = point.Value
+		values[chainWallet{chainID: chainID.AsString(), wallet: wallet.AsString()}] = point.Value
 	}
 
 	return values

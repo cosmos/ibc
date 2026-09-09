@@ -31,6 +31,7 @@ const retryExpiry = 2 * time.Minute
 
 // ETHClient go-ethereum methods used by the EVM tx submitter.
 type ETHClient interface {
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)
@@ -96,7 +97,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		delay = DefaultTxSubmissionDelay
 	}
 
-	return &TxSubmitter{
+	submitter := &TxSubmitter{
 		chainID:    chainID,
 		eth:        eth,
 		signer:     chainSigner,
@@ -106,7 +107,11 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		feeCapMult: opts.GasFeeCapMultiplier,
 		tipCapMult: opts.GasTipCapMultiplier,
 		logger:     slog.With("module", "txsubmitter", "chainID", chainID),
-	}, nil
+	}
+
+	metrics.setClient(chainID, submitter.address.String(), eth)
+
+	return submitter, nil
 }
 
 func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {

@@ -65,20 +65,23 @@ Shared label: `{otel_scope_name="ibc.relayer"}`
 
 Confirmations count only successful receipts for transactions broadcast by this process and are deduplicated in memory by chain and tx hash.
 Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
+EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
+Collections inside that threshold omit the sample. A failed query is logged and reported as `-1`.
 
-| package     | metric                         | type               | labels                                                              | notes                                                         |
-| ----------- | ------------------------------ | ------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------- |
-| pipeline    | `packets_total`                | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition                               |
-| pipeline    | `batches_total`                | counter            | `chain_id`, `processor`, `result`                                   | +1 per batch submit attempt                                   |
-| pipeline    | `batch_size_*`                 | histogram          | `chain_id`, `processor`                                             | Packet count in the batch                                     |
-| processors  | `relays_completed_total`       | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                          |
-| processors  | `relay_duration_*`             | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                         |
-| processors  | `transactions_submitted_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                   |
-| processors  | `transactions_confirmed_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                     |
-| processors  | `transaction_retries_total`    | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per transfer retry decision                                |
-| txsubmitter | `evm_gas_spent`                | observable counter | `chain_id`, `wallet`                                                | Cumulative successful owned EVM tx cost in native-token units |
-| watcher     | `watcher_events_total`         | counter            | `chain_id`, `type` (`send_packet`, `write_ack`)                     | Observed events                                               |
-| dispatch    | `packets_pending`              | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                     |
+| package     | metric                         | type               | labels                                                              | notes                                                          |
+| ----------- | ------------------------------ | ------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| pipeline    | `packets_total`                | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition                                |
+| pipeline    | `batches_total`                | counter            | `chain_id`, `processor`, `result`                                   | +1 per batch submit attempt                                    |
+| pipeline    | `batch_size_*`                 | histogram          | `chain_id`, `processor`                                             | Packet count in the batch                                      |
+| processors  | `relays_completed_total`       | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                           |
+| processors  | `relay_duration_*`             | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
+| processors  | `transactions_submitted_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
+| processors  | `transactions_confirmed_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
+| processors  | `transaction_retries_total`    | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per transfer retry decision                                 |
+| txsubmitter | `evm_gas_spent`                | observable counter | `chain_id`, `wallet`                                                | Cumulative successful owned EVM tx cost in native-token units  |
+| txsubmitter | `evm_gas_balance`              | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
+| watcher     | `watcher_events_total`         | counter            | `chain_id`, `type` (`send_packet`, `write_ack`)                     | Observed events                                                |
+| dispatch    | `packets_pending`              | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
 
 ## Guide on creating new metrics
 
