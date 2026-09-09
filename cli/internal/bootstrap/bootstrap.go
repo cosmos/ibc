@@ -39,6 +39,10 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
 
+	if err := cfg.RelayerSufficiency(); err != nil {
+		return nil, err
+	}
+
 	// Storage
 	db, err := store.NewStore(ctx, cfg)
 	if err != nil {
@@ -146,6 +150,10 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 func BuildAttestor(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
 	logger := slog.With("module", "bootstrap")
+
+	if err := cfg.AttestorSufficiency(); err != nil {
+		return nil, err
+	}
 
 	// Chain clients
 	clientSet, err := chains.NewClientSetFromConfig(cfg)

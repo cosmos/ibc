@@ -3,30 +3,26 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/pkg/errors"
 )
 
-// ClientType the light client type.
-type ClientType string
+// ClientParams is a client type's decoded params
+type ClientParams interface {
+	isClientParams()
+	Validate() error
+}
 
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
-	// ClientTypeRemote delegates proof generation to a remote service
-	ClientTypeRemote ClientType = "remote"
+	ClientTypeRemote      ClientType = "remote"
 )
 
-// AttestorType how an attestor is reached.
-type AttestorType string
-
-// Attestor types
-const (
-	AttestorTypeRemote AttestorType = "remote"
-	AttestorTypeLocal  AttestorType = "local"
-)
+// ClientType the light client type.
+type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -51,8 +47,7 @@ type RelayerEVMConfig struct {
 }
 
 // ConnectionConfig one bidirectional IBC connection the relayer actively
-// relays, in both directions. ClientA's counterparty is simply ClientB (and
-// vice versa).
+// relays, in both directions. ClientA's counterparty is simply ClientB (and vice versa).
 type ConnectionConfig struct {
 	Alias   string    `yaml:"alias"`
 	ClientA ClientEnd `yaml:"clientA"`
@@ -75,18 +70,10 @@ type ClientEnd struct {
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
-// ClientParams is a client type's decoded params
-type ClientParams interface {
-	isClientParams()
-	Validate() error
+// AutoRelayConfig automatic relaying settings.
+type AutoRelayConfig struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
 }
-
-// AttestationParams is empty
-type AttestationParams struct{}
-
-func (*AttestationParams) isClientParams() {}
-
-func (*AttestationParams) Validate() error { return nil }
 
 // RemoteParams is the params block a remote client declares.
 type RemoteParams struct {
@@ -94,46 +81,20 @@ type RemoteParams struct {
 	URL string `yaml:"url"`
 }
 
-func (*RemoteParams) isClientParams() {}
+// AttestationParams is empty
+type AttestationParams struct{}
 
-func (p *RemoteParams) Validate() error {
-	if p.URL == "" {
-		return errors.New(".params.url required")
+// Validate validates the relayer config. Allows empty blocks.
+func (c RelayerConfig) Validate() error {
+	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
+		return errPathf("dispatchPollInterval", "must be positive")
 	}
 
-	return nil
-}
-
-// ClientParams decodes this client's params
-func (c ClientEnd) ClientParams() (ClientParams, error) {
-	switch c.Type {
-	case ClientTypeAttestation:
-		return decode[AttestationParams](c.Params)
-	case ClientTypeRemote:
-		return decode[RemoteParams](c.Params)
-	default:
-		return nil, errors.Errorf(".type unknown client type: %q", c.Type)
-	}
-}
-
-// decode reads a params block into T
-func decode[T any](raw yaml.RawMessage) (*T, error) {
-	var params T
-
-	if len(raw) == 0 {
-		return &params, nil
+	if err := c.validateChainOverrides(); err != nil {
+		return err
 	}
 
-	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
-		return nil, errors.Wrap(err, "decoding params")
-	}
-
-	return &params, nil
-}
-
-// AutoRelayConfig automatic relaying settings.
-type AutoRelayConfig struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	return c.validateConnections()
 }
 
 // ChainOverride returns the relay settings override for a chain.
@@ -162,19 +123,6 @@ func (c RelayerConfig) ClientEnd(chainID, clientID string) (end, counterparty Cl
 	return ClientEnd{}, ClientEnd{}, false
 }
 
-// SourceEnd returns this connection's end on chainID, with the end its packets
-// flow toward.
-func (c ConnectionConfig) SourceEnd(chainID string) (source, destination ClientEnd, ok bool) {
-	switch chainID {
-	case c.ClientA.ChainID:
-		return c.ClientA, c.ClientB, true
-	case c.ClientB.ChainID:
-		return c.ClientB, c.ClientA, true
-	}
-
-	return ClientEnd{}, ClientEnd{}, false
-}
-
 // AutoRelayConnections returns the connections whose end on chainID has
 // auto-relay enabled.
 func (c RelayerConfig) AutoRelayConnections(chainID string) []ConnectionConfig {
@@ -196,29 +144,127 @@ func (c RelayerConfig) AutoRelayConnections(chainID string) []ConnectionConfig {
 	return connections
 }
 
-// Validate validates the relayer config. Allows empty blocks.
-func (c RelayerConfig) Validate() error {
-	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
-		return errors.New(".dispatchPollInterval must be positive")
+func (c RelayerChainOverride) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errPathf("chainId", "required")
+	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
+		return errPathf("txSubmissionDelay", "must not be negative")
+	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
+		return errPathf("packetBatchSize", "must be positive")
+	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
+		return errPathf("packetBatchTimeout", "must be positive")
 	}
 
-	if err := c.validateChainOverrides(); err != nil {
-		return err
+	if c.EVM != nil {
+		if err := c.EVM.Validate(); err != nil {
+			return errPath("evm", err)
+		}
 	}
 
-	return c.validateConnections()
+	return nil
 }
+
+func (c RelayerEVMConfig) Validate() error {
+	switch {
+	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
+		return errPathf("gasFeeCapMultiplier", "must be positive")
+	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
+		return errPathf("gasTipCapMultiplier", "must be positive")
+	}
+
+	return nil
+}
+
+func (c ConnectionConfig) Validate() error {
+	if c.Alias == "" {
+		return errPathf("alias", "required")
+	}
+
+	if err := c.ClientA.Validate(); err != nil {
+		return errPath("clientA", err)
+	}
+	if err := c.ClientB.Validate(); err != nil {
+		return errPath("clientB", err)
+	}
+
+	if c.ClientA.ChainID != "" && c.ClientA.ChainID == c.ClientB.ChainID {
+		return fmt.Errorf("clientA and clientB must be on different chains")
+	}
+
+	return nil
+}
+
+// SourceEnd returns this connection's end on chainID, with the end its packets flow toward.
+func (c ConnectionConfig) SourceEnd(chainID string) (source, destination ClientEnd, ok bool) {
+	switch chainID {
+	case c.ClientA.ChainID:
+		return c.ClientA, c.ClientB, true
+	case c.ClientB.ChainID:
+		return c.ClientB, c.ClientA, true
+	}
+
+	return ClientEnd{}, ClientEnd{}, false
+}
+
+func (c ClientEnd) Validate() error {
+	switch {
+	case c.ChainID == "":
+		return errPathf("chainId", "required")
+	case c.ClientID == "":
+		return errPathf("clientId", "required")
+	case c.Signer == "":
+		return errPathf("signer", "required")
+	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
+		return errPathf("type", "unknown client type: %q", c.Type)
+	}
+
+	params, err := c.ClientParams()
+	if err != nil {
+		return errPath("params", err)
+	}
+
+	if err := params.Validate(); err != nil {
+		return errPath("params", err)
+	}
+
+	return nil
+}
+
+// ClientParams decodes this client's params
+func (c ClientEnd) ClientParams() (ClientParams, error) {
+	switch c.Type {
+	case ClientTypeAttestation:
+		return decodeYAML[AttestationParams](c.Params)
+	case ClientTypeRemote:
+		return decodeYAML[RemoteParams](c.Params)
+	default:
+		return nil, errPathf("type", "unknown client type: %q", c.Type)
+	}
+}
+
+func (p RemoteParams) Validate() error {
+	if p.URL == "" {
+		return errPathf("url", "required")
+	}
+
+	return nil
+}
+
+func (AttestationParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
 
-	for _, chain := range c.ChainOverrides {
+	for i, chain := range c.ChainOverrides {
+		seg := fmt.Sprintf("chainOverrides[%d]", i)
+
 		if err := chain.Validate(); err != nil {
-			return errors.Wrapf(err, ".chainOverrides[%s]", chain.ChainID)
+			return errPath(seg, err)
 		}
 
 		if _, ok := chainIDs[chain.ChainID]; ok {
-			return errors.Errorf(".chainOverrides duplicate chainId: %q", chain.ChainID)
+			return errPathf(seg, "duplicate chainId: %q", chain.ChainID)
 		}
 		chainIDs[chain.ChainID] = struct{}{}
 	}
@@ -230,20 +276,22 @@ func (c RelayerConfig) validateConnections() error {
 	aliases := make(map[string]struct{})
 	clientEnds := make(map[string]struct{})
 
-	for _, conn := range c.Connections {
+	for i, conn := range c.Connections {
+		seg := fmt.Sprintf("connections[%d]", i)
+
 		if err := conn.Validate(); err != nil {
-			return errors.Wrapf(err, ".connections[%s]", conn.Alias)
+			return errPath(seg, err)
 		}
 
 		if _, ok := aliases[conn.Alias]; ok {
-			return errors.Errorf(".connections duplicate alias: %q", conn.Alias)
+			return errPathf(seg, "duplicate alias: %q", conn.Alias)
 		}
 		aliases[conn.Alias] = struct{}{}
 
 		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
 			key := end.ChainID + "/" + end.ClientID
 			if _, ok := clientEnds[key]; ok {
-				return errors.Errorf(".connections duplicate client %q on chain %q", end.ClientID, end.ChainID)
+				return errPathf(seg, "duplicate client %q on chain %q", end.ClientID, end.ChainID)
 			}
 			clientEnds[key] = struct{}{}
 		}
@@ -252,73 +300,19 @@ func (c RelayerConfig) validateConnections() error {
 	return nil
 }
 
-func (c ConnectionConfig) Validate() error {
-	if c.Alias == "" {
-		return errors.New(".alias required")
+func (RemoteParams) isClientParams()      {}
+func (AttestationParams) isClientParams() {}
+
+func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
+	var params T
+
+	if len(raw) == 0 {
+		return &params, nil
 	}
 
-	if err := c.ClientA.Validate(); err != nil {
-		return errors.Wrap(err, ".clientA")
-	}
-	if err := c.ClientB.Validate(); err != nil {
-		return errors.Wrap(err, ".clientB")
+	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
+		return nil, err
 	}
 
-	if c.ClientA.ChainID != "" && c.ClientA.ChainID == c.ClientB.ChainID {
-		return errors.New(".clientA and .clientB must be on different chains")
-	}
-
-	return nil
-}
-
-func (c ClientEnd) Validate() error {
-	switch {
-	case c.ChainID == "":
-		return errors.New(".chainId required")
-	case c.ClientID == "":
-		return errors.New(".clientId required")
-	case c.Signer == "":
-		return errors.New(".signer required")
-	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
-		return errors.Errorf(".type unknown client type: %q", c.Type)
-	}
-
-	params, err := c.ClientParams()
-	if err != nil {
-		return err
-	}
-
-	return params.Validate()
-}
-
-func (c RelayerChainOverride) Validate() error {
-	switch {
-	case c.ChainID == "":
-		return errors.New(".chainId required")
-	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
-		return errors.New(".txSubmissionDelay must not be negative")
-	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
-		return errors.New(".packetBatchSize must be positive")
-	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
-		return errors.New(".packetBatchTimeout must be positive")
-	}
-
-	if c.EVM != nil {
-		if err := c.EVM.Validate(); err != nil {
-			return errors.Wrap(err, ".evm")
-		}
-	}
-
-	return nil
-}
-
-func (c RelayerEVMConfig) Validate() error {
-	switch {
-	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
-		return errors.New(".gasFeeCapMultiplier must be positive")
-	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
-		return errors.New(".gasTipCapMultiplier must be positive")
-	}
-
-	return nil
+	return &params, nil
 }

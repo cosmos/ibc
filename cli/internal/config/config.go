@@ -4,19 +4,25 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-yaml"
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/cosmos/ibc/cli/internal/network"
+)
+
+// Chain types
+const (
+	ChainTypeEVM ChainType = "evm"
+)
+
+// Attestor types
+const (
+	AttestorTypeRemote AttestorType = "remote"
+	AttestorTypeLocal  AttestorType = "local"
 )
 
 // Database type
@@ -33,15 +39,27 @@ const (
 
 const sqliteInMemory = ":memory:"
 
+const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
+
+type (
+	// ChainType the execution environment of a chain.
+	ChainType string
+
+	// AttestorType how an attestor is reached.
+	AttestorType string
+)
+
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
 	Server    ServerConfig  `yaml:"server"`
 	DB        DBConfig      `yaml:"db"`
-	Chains    []ChainConfig `yaml:"chains"`
+	Chains    Chains        `yaml:"chains"`
 	Relayer   RelayerConfig `yaml:"relayer"`
 	Attestors Attestors     `yaml:"attestors"`
 	Signers   Signers       `yaml:"signers"`
+
+	originalFilePath string
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -55,9 +73,30 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
+// Chains is the list of configured chains.
+type Chains []ChainConfig
+
+// ChainConfig chain information shared by the attestor and relayer.
+type ChainConfig struct {
+	ChainID string          `yaml:"chainId"`
+	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
+
+	// Deployer optional signer alias used by `ibc deploy` for this chain.
+	Deployer string `yaml:"deployer,omitempty"`
+}
+
+// EVMChainConfig EVM-specific chain details.
+type EVMChainConfig struct {
+	RPC string `yaml:"rpc"`
+
+	// WS is a websocket endpoint, required for chains sourcing auto-relayed routes.
+	WS string `yaml:"ws,omitempty"`
+
+	ICS26Router string `yaml:"ics26Router"`
+}
+
 // Attestors is the list of attestors, used both by the relayer
-// (to resolve who to query) and the attestor binary (to know what it
-// serves locally).
+// (to resolve who to query) and the attestor binary (to know what it serves locally).
 type Attestors []AttestorConfig
 
 // AttestorConfig describes one attestor, either run by this process
@@ -104,40 +143,15 @@ type SignerConfig struct {
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 }
 
-// ChainType the execution environment of a chain.
-type ChainType string
-
-// Chain types
-const (
-	ChainTypeEVM ChainType = "evm"
-)
-
-// ChainConfig chain information shared by the attestor and relayer.
-type ChainConfig struct {
-	ChainID string          `yaml:"chainId"`
-	EVM     *EVMChainConfig `yaml:"evm,omitempty"`
-
-	// Deployer optional signer alias used by `ibc deploy` for this chain.
-	Deployer string `yaml:"deployer,omitempty"`
+// ChainSignerPair one (chain, signer alias) pair a client end submits with.
+type ChainSignerPair struct {
+	ChainID     string
+	SignerAlias string
 }
 
-// Type returns the chain type implied by the configured settings.
-func (c ChainConfig) Type() ChainType {
-	if c.EVM != nil {
-		return ChainTypeEVM
-	}
-
-	return ""
-}
-
-// EVMChainConfig EVM-specific chain details.
-type EVMChainConfig struct {
-	RPC string `yaml:"rpc"`
-
-	// WS is a websocket endpoint, required for chains sourcing auto-relayed routes.
-	WS string `yaml:"ws,omitempty"`
-
-	ICS26Router string `yaml:"ics26Router"`
+type namedClientEnd struct {
+	label string
+	cfg   ClientEnd
 }
 
 // DefaultConfig sample config using default values and Sqlite.
@@ -160,220 +174,60 @@ func DefaultConfig() Config {
 	}
 }
 
-// LoadFromFile loads Config from file with optional validation.
-// Note: supports ENV variables expansion!
-func LoadFromFile(path string, validate, restrictUnknownFields bool) (Config, error) {
-	config := DefaultConfig()
-
-	bz, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
-	}
-
-	// substitute ENV variables
-	expanded := os.ExpandEnv(string(bz))
-
-	opts := []yaml.DecodeOption{}
-	if restrictUnknownFields {
-		opts = append(opts, yaml.DisallowUnknownField())
-	}
-
-	err = yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...)
-	if err != nil {
-		return Config{}, err
-	}
-
-	if validate {
-		if err := config.Validate(); err != nil {
-			return Config{}, errors.Wrap(err, "validation failed")
-		}
-	}
-
-	return config, nil
-}
-
+// Validate perform basic correctness checks
 func (c Config) Validate() error {
-	if err := c.Server.Validate(); err != nil {
-		return errors.Wrap(err, ".server")
+	// .path.of.the.config ==> validation function
+	type validationStep struct {
+		path     string
+		validate func() error
 	}
 
-	if err := c.DB.Validate(); err != nil {
-		return errors.Wrap(err, ".db")
-	}
-
-	chainIDs := make(map[string]struct{})
-	for _, chain := range c.Chains {
-		if err := chain.Validate(); err != nil {
-			return errors.Wrapf(err, ".chains[%s]", chain.ChainID)
-		}
-
-		if _, ok := chainIDs[chain.ChainID]; ok {
-			return errors.Wrapf(errors.Errorf("duplicate chainId: %q", chain.ChainID), ".chains")
-		}
-		chainIDs[chain.ChainID] = struct{}{}
-	}
-
-	if err := c.Relayer.Validate(); err != nil {
-		return errors.Wrap(err, ".relayer")
-	}
-
-	if err := c.Attestors.Validate(); err != nil {
-		return errors.Wrap(err, ".attestors")
-	}
-
-	if err := c.Signers.Validate(); err != nil {
-		return errors.Wrap(err, ".signers")
-	}
-
-	if err := c.crossValidate(); err != nil {
-		return err
-	}
-
-	return c.validateAutoRelay()
-}
-
-// validateAutoRelay ensures every auto-relayed client end can be subscribed to.
-// It lives here rather than on ChainConfig because a chain cannot see the
-// connections that source from it.
-func (c Config) validateAutoRelay() error {
-	for i, conn := range c.Relayer.Connections {
-		for _, side := range []struct {
-			name string
-			end  ClientEnd
-		}{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}} {
-			end := side.end
-
-			if end.AutoRelay.Enabled == nil || !*end.AutoRelay.Enabled {
-				continue
-			}
-
-			chain, ok := c.Chain(end.ChainID)
-			if !ok {
-				continue
-			}
-
-			if chain.EVM == nil || chain.EVM.WS == "" {
-				return errors.Errorf(
-					".relayer.connections[%d].%s autoRelay requires .chains[%s].evm.ws",
-					i, side.name, end.ChainID,
-				)
-			}
+	for _, step := range []validationStep{
+		{"server", c.Server.Validate},
+		{"db", c.DB.Validate},
+		{"signers", c.Signers.Validate},
+		{"chains", c.Chains.Validate},
+		{"attestors", c.Attestors.Validate},
+		{"relayer", c.Relayer.Validate},
+		{"relayer", c.validateAutoRelay},
+		{"", c.crossValidate},
+	} {
+		if err := step.validate(); err != nil {
+			return errPath(step.path, err)
 		}
 	}
 
 	return nil
 }
 
-func (c Config) crossValidate() error {
-	signerSet := make(map[string]struct{}, len(c.Signers))
-	for _, signer := range c.Signers {
-		signerSet[signer.Alias] = struct{}{}
+// RelayerSufficiency validates the relayer server is runnable
+func (c Config) RelayerSufficiency() error {
+	if len(c.Relayer.Connections) == 0 {
+		return errPathf("relayer.connections", "no connections configured")
 	}
 
-	for i, a := range c.Attestors {
-		if a.Type != AttestorTypeLocal {
-			continue
-		}
-		if _, exists := signerSet[a.Signer]; !exists {
-			return errors.Errorf(".attestors[%d].signer references unknown signer: %q", i, a.Signer)
-		}
-	}
-
-	for _, chain := range c.Chains {
-		if chain.Deployer == "" {
-			continue
-		}
-		if _, exists := signerSet[chain.Deployer]; !exists {
-			return errors.Errorf(".chains[%s].deployer references unknown signer: %q", chain.ChainID, chain.Deployer)
-		}
-	}
-
-	if err := c.validateChainReferences(); err != nil {
-		return err
-	}
-
-	if err := c.validateConnectionSigners(signerSet); err != nil {
-		return errors.Wrap(err, ".relayer.connections")
-	}
-
-	return nil
+	return c.validateRunnable()
 }
 
-type namedClientEnd struct {
-	label string
-	cfg   ClientEnd
-}
-
-func connectionEnds(conn ConnectionConfig) []namedClientEnd {
-	return []namedClientEnd{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
-}
-
-// ChainSignerPair one (chain, signer alias) pair a client end submits with.
-type ChainSignerPair struct {
-	ChainID     string
-	SignerAlias string
-}
-
-// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across
-// every configured connection's two client ends.
-func RelayerChainSignerPairs(c Config) []ChainSignerPair {
-	seen := make(map[ChainSignerPair]struct{})
-
-	var pairs []ChainSignerPair
-
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
-			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
-			if _, dup := seen[pair]; dup {
-				continue
-			}
-
-			seen[pair] = struct{}{}
-			pairs = append(pairs, pair)
+// AttestorSufficiency validates the attestor server is runnable
+func (c Config) AttestorSufficiency() error {
+	var hasLocal bool
+	for _, a := range c.Attestors {
+		if a.Type == AttestorTypeLocal {
+			hasLocal = true
+			break
 		}
 	}
 
-	return pairs
+	if !hasLocal {
+		return errPathf("attestors", "no local attestors configured")
+	}
+
+	return c.validateRunnable()
 }
 
-// validateChainReferences ensures chains referenced by the relayer config are
-// declared in the top-level chains block.
-func (c Config) validateChainReferences() error {
-	for _, chain := range c.Relayer.ChainOverrides {
-		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
-			return errors.Errorf(".chainOverrides[%s] chainId not declared in top-level chains", chain.ChainID)
-		}
-	}
-
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range connectionEnds(conn) {
-			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
-				return errors.Errorf(
-					".connections[%s].%s chainId %q not declared in top-level chains",
-					conn.Alias, end.label, end.cfg.ChainID,
-				)
-			}
-		}
-	}
-
-	return nil
-}
-
-// validateConnectionSigners ensures every client end's signer resolves to a
-// configured signer.
-func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
-	for _, conn := range c.Relayer.Connections {
-		for _, end := range connectionEnds(conn) {
-			if _, exists := signerSet[end.cfg.Signer]; !exists {
-				return errors.Errorf(
-					"connection %q %s references unknown signer %q",
-					conn.Alias, end.label, end.cfg.Signer,
-				)
-			}
-		}
-	}
-
-	return nil
+func (c Config) OriginalFilePath() string {
+	return c.originalFilePath
 }
 
 func (c Config) Chain(chainID string) (ChainConfig, bool) {
@@ -408,8 +262,8 @@ func (c Config) AttestorByName(name string) (AttestorConfig, bool) {
 	return AttestorConfig{}, false
 }
 
-// AttestorsForChain returns every configured attestor watching chainID.
-func (c Config) AttestorsForChain(chainID string) []AttestorConfig {
+// AttestorsByChain returns every configured attestor watching chainID.
+func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 	var attestors []AttestorConfig
 	for _, attestor := range c.Attestors {
 		if attestor.ChainID == chainID {
@@ -420,89 +274,20 @@ func (c Config) AttestorsForChain(chainID string) []AttestorConfig {
 	return attestors
 }
 
-func (c ChainConfig) Validate() error {
-	if c.ChainID == "" {
-		return errors.New(".chainId required")
-	}
-
-	if c.Type() == ChainTypeEVM {
-		switch {
-		case c.EVM.RPC == "":
-			return errors.New(".evm.rpc required")
-		case c.EVM.WS != "" && !strings.HasPrefix(c.EVM.WS, "ws://") && !strings.HasPrefix(c.EVM.WS, "wss://"):
-			return errors.Errorf(".evm.ws must be a ws:// or wss:// URL, got %q", c.EVM.WS)
-		}
-	}
-
-	return nil
-}
-
 func (c Config) StoreToFile(path string) error {
-	return c.store(path, nil)
+	return storeConfig(c, path, nil)
 }
 
 // StoreToFileWithComments writes c to path as YAML, with a TODO comment
 // attached to every field CollectComments flags as left for the operator to
 // fill in.
 func (c Config) StoreToFileWithComments(path string) error {
-	return c.store(path, CollectComments(c))
-}
-
-func (c Config) store(path string, comments map[string]string) error {
-	if err := EnsureDirectory(path); err != nil {
-		return err
-	}
-
-	bz, err := yaml.MarshalWithOptions(c, yaml.WithComment(toCommentMap(comments)))
-	if err != nil {
-		return err
-	}
-
-	mode := os.FileMode(0o644)
-	if info, statErr := os.Stat(path); statErr == nil {
-		mode = info.Mode().Perm()
-		path, err = filepath.EvalSymlinks(path)
-		if err != nil {
-			return err
-		}
-	} else if !os.IsNotExist(statErr) {
-		return statErr
-	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(bz); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), path)
-}
-
-// toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
-// of line comments, as PrintYAMLWithComments/store both need.
-func toCommentMap(comments map[string]string) yaml.CommentMap {
-	cm := make(yaml.CommentMap, len(comments))
-	for path, text := range comments {
-		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
-	}
-	return cm
+	return storeConfig(c, path, CollectComments(c))
 }
 
 func (c ServerConfig) Validate() error {
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
-		return errors.Wrapf(err, ".listenAddr %q", c.ListenAddress)
+		return errPath("listenAddr", err)
 	}
 
 	return nil
@@ -511,11 +296,11 @@ func (c ServerConfig) Validate() error {
 func (c DBConfig) Validate() error {
 	switch {
 	case c.Type != DBTypeSQLite && c.Type != DBTypePostgres:
-		return errors.Errorf(".type must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
+		return errPathf("type", "must be one of [%q, %q], got %q", DBTypeSQLite, DBTypePostgres, c.Type)
 	case c.Type == DBTypeSQLite && c.URL == sqliteInMemory:
-		return errors.New(".url must not be :memory: for sqlite")
+		return errPathf("url", "must not be :memory: for sqlite")
 	case c.URL == "":
-		return errors.New(".url must not be empty")
+		return errPathf("url", "must not be empty")
 	}
 
 	return nil
@@ -536,14 +321,61 @@ func (c DBConfig) Label() string {
 	return path
 }
 
-// DBConfigFromURL infers DB type from a CLI database URL override.
-func DBConfigFromURL(url string) (DBConfig, error) {
-	db := DBConfig{
-		URL:  url,
-		Type: dbTypeFromURL(url),
+func (c Chains) Validate() error {
+	chainIDs := make(map[string]struct{})
+
+	for i, chain := range c {
+		if err := chain.Validate(); err != nil {
+			return errPathIndex(i, err)
+		}
+
+		if _, ok := chainIDs[chain.ChainID]; ok {
+			return errPathIndexf(i, "duplicate %q", chain.ChainID)
+		}
+		chainIDs[chain.ChainID] = struct{}{}
 	}
 
-	return db, db.Validate()
+	return nil
+}
+
+func (c ChainConfig) Validate() error {
+	chainType := c.Type()
+
+	switch {
+	case c.ChainID == "":
+		return errPathf("chainId", "required")
+	case chainType == "":
+		return fmt.Errorf("unknown chain type")
+	case chainType != ChainTypeEVM:
+		return fmt.Errorf("unsupported chain type %s", chainType)
+	case chainType == ChainTypeEVM:
+		// allow empty / zero ics26 router for general Validate()
+		return errPath("evm", c.EVM.Validate(false))
+	}
+
+	return nil
+}
+
+// Type returns the chain type implied by the configured settings.
+func (c ChainConfig) Type() ChainType {
+	if c.EVM != nil {
+		return ChainTypeEVM
+	}
+
+	return ""
+}
+
+func (c EVMChainConfig) Validate(validateICS26Router bool) error {
+	switch {
+	case c.RPC == "":
+		return errPathf("rpc", "required")
+	case c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://"):
+		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
+	case validateICS26Router:
+		return errPath("ics26Router", c.validateICS26Router())
+	default:
+		return nil
+	}
 }
 
 // Validate validates the attestors list. Allows empty.
@@ -555,7 +387,7 @@ func (a Attestors) Validate() error {
 	localChainSigners := make(map[string]struct{})
 	for i, attestor := range a {
 		if err := attestor.Validate(); err != nil {
-			return errors.Wrapf(err, "[%d]", i)
+			return errPathIndex(i, err)
 		}
 
 		if attestor.Type != AttestorTypeLocal {
@@ -563,13 +395,13 @@ func (a Attestors) Validate() error {
 		}
 
 		if _, exists := localNames[attestor.Name]; exists {
-			return errors.Errorf("duplicate local attestor name: %q", attestor.Name)
+			return errPathIndexf(i, "duplicate local attestor name: %q", attestor.Name)
 		}
 		localNames[attestor.Name] = struct{}{}
 
 		chainSigner := attestor.ChainID + "/" + attestor.Signer
 		if _, exists := localChainSigners[chainSigner]; exists {
-			return errors.Errorf("duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
+			return errPathIndexf(i, "duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
 		}
 		localChainSigners[chainSigner] = struct{}{}
 	}
@@ -580,33 +412,33 @@ func (a Attestors) Validate() error {
 func (c AttestorConfig) Validate() error {
 	switch {
 	case c.Name == "":
-		return errors.New(".name required")
+		return errPathf("name", "required")
 	case c.Type != AttestorTypeLocal && c.Type != AttestorTypeRemote:
-		return errors.Errorf(".type unknown attestor type: %q", c.Type)
+		return errPathf("type", "unknown attestor type: %q", c.Type)
 	}
 
 	switch c.Type {
 	case AttestorTypeLocal:
 		switch {
 		case c.ChainID == "":
-			return errors.New(".chainId required for local attestors")
+			return errPathf("chainId", "required for local attestors")
 		case c.Signer == "":
-			return errors.New(".signer required for local attestors")
+			return errPathf("signer", "required for local attestors")
 		case c.GRPC != "":
-			return errors.New(".grpc must not be set for local attestors")
+			return errPathf("grpc", "must not be set for local attestors")
 		}
 	case AttestorTypeRemote:
 		switch {
 		case c.GRPC == "":
-			return errors.New(".grpc required for remote attestors")
+			return errPathf("grpc", "required for remote attestors")
 		case strings.Contains(c.GRPC, "://"):
-			return errors.Errorf(".grpc must be a bare host:port, not a URL: %q", c.GRPC)
+			return errPathf("grpc", "must be a bare host:port, not a URL: %q", c.GRPC)
 		case c.ChainID != "":
-			return errors.New(".chainId must not be set for remote attestors")
+			return errPathf("chainId", "must not be set for remote attestors")
 		case c.Signer != "":
-			return errors.New(".signer must not be set for remote attestors")
+			return errPathf("signer", "must not be set for remote attestors")
 		case c.FinalityOffset != 0:
-			return errors.New(".finalityOffset must not be set for remote attestors")
+			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
 	}
 
@@ -618,11 +450,11 @@ func (c Signers) Validate() error {
 
 	for i, signer := range c {
 		if err := signer.Validate(); err != nil {
-			return errors.Wrapf(err, ".signers[%d]", i)
+			return errPathIndex(i, err)
 		}
 
 		if _, exists := set[signer.Alias]; exists {
-			return errors.Errorf(".signers duplicate alias: %q", signer.Alias)
+			return errPathIndexf(i, "duplicate alias: %q", signer.Alias)
 		}
 
 		set[signer.Alias] = struct{}{}
@@ -634,125 +466,171 @@ func (c Signers) Validate() error {
 func (c SignerConfig) Validate() error {
 	switch {
 	case c.Alias == "":
-		return errors.New(".alias required")
+		return errPathf("alias", "required")
 	case c.Type == "":
-		return errors.New(".type required")
+		return errPathf("type", "required")
 	case c.Type != SignerLocal && c.Type != SignerRemote:
-		return errors.Errorf(".type must be one of [%q, %q], got %q", SignerLocal, SignerRemote, c.Type)
+		return errPathf("type", "must be one of [%q, %q], got %q", SignerLocal, SignerRemote, c.Type)
 	case c.Type == SignerLocal && c.File == "":
-		return errors.New(".file required for local signer")
+		return errPathf("file", "required for local signer")
 	case c.Type == SignerRemote && c.GRPC == "":
-		return errors.New(".grpc required for remote signer")
+		return errPathf("grpc", "required for remote signer")
 	case c.Type == SignerRemote && c.RemoteKeyID == "":
-		return errors.New(".remoteKeyId required for remote signer")
+		return errPathf("remoteKeyId", "required for remote signer")
 	}
 
 	if c.Type == SignerLocal {
 		path, err := ExpandHome(c.File)
 		if err != nil {
-			return errors.Wrap(err, ".file")
+			return errPath("file", err)
 		}
 
 		fallbacks := KeyFileFallbacks(path)
 
 		if err := fileExistsInAny(fallbacks...); err != nil {
-			return errors.Wrapf(err, ".file %s", path)
+			return errPath("file", fmt.Errorf("%s: %w", path, err))
 		}
 	}
 
 	return nil
 }
 
-// KeyFileFallbacks returns the paths tried for a local signer key file.
-func KeyFileFallbacks(keyPath string) []string {
-	fallbacks := []string{keyPath}
-
-	// absolute path, no fallbacks needed
-	if filepath.IsAbs(keyPath) {
-		return fallbacks
+func (c EVMChainConfig) validateICS26Router() error {
+	switch {
+	case c.ICS26Router == "":
+		return fmt.Errorf("required")
+	case !common.IsHexAddress(c.ICS26Router):
+		return fmt.Errorf("invalid EVM address %q", c.ICS26Router)
+	case common.HexToAddress(c.ICS26Router) == (common.Address{}):
+		return fmt.Errorf("must not be the zero address")
+	default:
+		return nil
 	}
-
-	// forgot to add .json extension
-	if !strings.HasSuffix(keyPath, ".json") {
-		keyPath = fmt.Sprintf("%s.json", keyPath)
-
-		fallbacks = append(fallbacks, keyPath)
-	}
-
-	// forgot to add keys/ directory
-	if !strings.Contains(keyPath, "keys/") {
-		keyPath = filepath.Join("keys", keyPath)
-
-		fallbacks = append(fallbacks, keyPath)
-	}
-
-	return fallbacks
 }
 
-// PrintJSON prints anything as JSON to stdout.
-func PrintJSON(v any) error {
-	return printJSON(os.Stdout, v)
-}
+// validateAutoRelay ensures every auto-relayed client end can be subscribed to.
+// It lives here rather than on ChainConfig because a chain cannot see the
+// connections that source from it.
+func (c Config) validateAutoRelay() error {
+	for i, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if end.cfg.AutoRelay.Enabled == nil || !*end.cfg.AutoRelay.Enabled {
+				continue
+			}
 
-func printJSON(out io.Writer, v any) error {
-	if msg, ok := v.(proto.Message); ok {
-		return printProtoJSON(out, msg)
+			chain, ok := c.Chain(end.cfg.ChainID)
+			if !ok {
+				continue
+			}
+
+			if chain.EVM == nil || chain.EVM.WS == "" {
+				seg := fmt.Sprintf("connections[%d].%s.autoRelay", i, end.label)
+				return errPathf(seg, "requires chains[%s].evm.ws", end.cfg.ChainID)
+			}
+		}
 	}
-
-	bz, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintln(out, string(bz))
-
-	return err
-}
-
-func printProtoJSON(out io.Writer, msg proto.Message) error {
-	opts := protojson.MarshalOptions{
-		Indent:          "  ",
-		UseProtoNames:   false,
-		EmitUnpopulated: true,
-	}
-
-	bz, err := opts.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintln(out, string(bz))
-
-	return err
-}
-
-// PrintYAML prints anything as YAML to stdout.
-func PrintYAML(v any) error {
-	bz, err := yaml.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(string(bz))
 
 	return nil
 }
 
-// PrintYAMLWithComments prints v as YAML to stdout, attaching a line comment
-// to every field addressed by a YAML path in comments, keyed as
-// "$.relayer.connections[0].clientA.signer".
-func PrintYAMLWithComments(v any, comments map[string]string) error {
-	bz, err := yaml.MarshalWithOptions(v, yaml.WithComment(toCommentMap(comments)))
-	if err != nil {
+func (c Config) crossValidate() error {
+	signerSet := make(map[string]struct{}, len(c.Signers))
+	for _, signer := range c.Signers {
+		signerSet[signer.Alias] = struct{}{}
+	}
+
+	for i, a := range c.Attestors {
+		if a.Type != AttestorTypeLocal {
+			continue
+		}
+		if _, exists := signerSet[a.Signer]; !exists {
+			seg := fmt.Sprintf("attestors[%d].signer", i)
+			return errPathf(seg, "attestor %q references unknown signer %q", a.Name, a.Signer)
+		}
+
+		if _, exists := c.Chain(a.ChainID); !exists {
+			seg := fmt.Sprintf("attestors[%d].chainId", i)
+			return errPathf(seg, "attestor %q references unknown chain %q", a.Name, a.ChainID)
+		}
+	}
+
+	for i, chain := range c.Chains {
+		if chain.Deployer == "" {
+			continue
+		}
+		if _, exists := signerSet[chain.Deployer]; !exists {
+			seg := fmt.Sprintf("chains[%d].deployer", i)
+			return errPathf(seg, "chain %q references unknown signer %q", chain.ChainID, chain.Deployer)
+		}
+	}
+
+	if err := c.validateChainReferences(); err != nil {
 		return err
 	}
 
-	fmt.Println(string(bz))
+	return c.validateConnectionSigners(signerSet)
+}
+
+// validateChainReferences ensures chains referenced by the relayer config are
+// declared in the top-level chains block.
+func (c Config) validateChainReferences() error {
+	for i, chain := range c.Relayer.ChainOverrides {
+		if _, ok := c.Chain(chain.ChainID); chain.ChainID != "" && !ok {
+			seg := fmt.Sprintf("relayer.chainOverrides[%d].chainId", i)
+			return errPathf(seg, "%q not declared in top-level chains", chain.ChainID)
+		}
+	}
+
+	for i, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
+				seg := fmt.Sprintf("relayer.connections[%d].%s.chainId", i, end.label)
+				return errPathf(seg, "%q not declared in top-level chains", end.cfg.ChainID)
+			}
+		}
+	}
 
 	return nil
 }
 
-const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
+// validateConnectionSigners ensures every client end's signer resolves to a
+// configured signer.
+func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
+	for i, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, exists := signerSet[end.cfg.Signer]; !exists {
+				seg := fmt.Sprintf("relayer.connections[%d].%s.signer", i, end.label)
+				return errPathf(seg, "references unknown signer %q", end.cfg.Signer)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c Config) validateRunnable() error {
+	switch {
+	case len(c.Chains) == 0:
+		return errPathf("chains", "no chains configured")
+	case len(c.Signers) == 0:
+		return errPathf("signers", "no signers configured")
+	}
+
+	// we allow empty / zero ics26 router for general Validate()
+	// but require it for runnable validation
+	for i, chain := range c.Chains {
+		if chain.EVM == nil {
+			continue
+		}
+
+		if err := chain.EVM.Validate(true); err != nil {
+			seg := fmt.Sprintf("chains[%d].evm", i)
+			return errPath(seg, err)
+		}
+	}
+
+	return nil
+}
 
 // CollectComments builds TODO comments for every field in cfg that's left
 // for the operator to fill in by hand, keyed by YAML path for
@@ -793,6 +671,38 @@ func CollectComments(cfg Config) map[string]string {
 	return comments
 }
 
+// DBConfigFromURL infers DB type from a CLI database URL override.
+func DBConfigFromURL(url string) (DBConfig, error) {
+	db := DBConfig{
+		URL:  url,
+		Type: dbTypeFromURL(url),
+	}
+
+	return db, db.Validate()
+}
+
+// RelayerChainSignerPairs resolves the unique (chain, signer) pairs across
+// every configured connection's two client ends.
+func RelayerChainSignerPairs(c Config) []ChainSignerPair {
+	seen := make(map[ChainSignerPair]struct{})
+
+	var pairs []ChainSignerPair
+
+	for _, conn := range c.Relayer.Connections {
+		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
+			pair := ChainSignerPair{ChainID: end.ChainID, SignerAlias: end.Signer}
+			if _, dup := seen[pair]; dup {
+				continue
+			}
+
+			seen[pair] = struct{}{}
+			pairs = append(pairs, pair)
+		}
+	}
+
+	return pairs
+}
+
 func dbTypeFromURL(raw string) string {
 	if strings.HasPrefix(raw, "postgres://") || strings.HasPrefix(raw, "postgresql://") {
 		return DBTypePostgres
@@ -801,25 +711,16 @@ func dbTypeFromURL(raw string) string {
 	return DBTypeSQLite
 }
 
-func fileExistsInAny(path ...string) error {
-	for _, p := range path {
-		if err := fileExists(p); err == nil {
-			return nil
-		}
+// toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
+// of line comments, as PrintYAMLWithComments/store both need.
+func toCommentMap(comments map[string]string) yaml.CommentMap {
+	cm := make(yaml.CommentMap, len(comments))
+	for path, text := range comments {
+		cm[path] = []*yaml.Comment{yaml.LineComment(" " + text)}
 	}
-
-	return errors.New("file not found")
+	return cm
 }
 
-func fileExists(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		return errors.Errorf("path is a directory")
-	}
-
-	return nil
+func connectionEnds(conn ConnectionConfig) []namedClientEnd {
+	return []namedClientEnd{{"clientA", conn.ClientA}, {"clientB", conn.ClientB}}
 }

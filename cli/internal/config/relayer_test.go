@@ -18,7 +18,7 @@ func TestRelayerConfig(t *testing.T) {
 		path := filepath.Join("testdata", "sample.yml")
 
 		// ACT
-		config, err := LoadFromFile(path, true, true)
+		config, err := LoadFromFile(path, true)
 
 		// ASSERT
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestRelayerConfig(t *testing.T) {
 	t.Run("Helpers", func(t *testing.T) {
 		// ARRANGE
 		path := filepath.Join("testdata", "sample.yml")
-		config, err := LoadFromFile(path, true, true)
+		config, err := LoadFromFile(path, true)
 		require.NoError(t, err)
 
 		// ACT / ASSERT
@@ -94,7 +94,6 @@ func TestRelayerConfig(t *testing.T) {
 			{
 				name: "empty blocks are valid",
 				patch: func(c *Config) {
-					c.Chains = nil
 					c.Relayer = RelayerConfig{}
 				},
 			},
@@ -103,21 +102,21 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Chains[0].ChainID = ""
 				},
-				errContains: ".chainId required",
+				errContains: ".chainId: required",
 			},
 			{
 				name: "chain missing rpc",
 				patch: func(c *Config) {
 					c.Chains[0].EVM.RPC = ""
 				},
-				errContains: ".evm.rpc required",
+				errContains: ".evm.rpc: required",
 			},
 			{
 				name: "websocket endpoint with an http scheme",
 				patch: func(c *Config) {
 					c.Chains[0].EVM.WS = "http://ethereum-rpc.example.com"
 				},
-				errContains: ".evm.ws must be a ws:// or wss:// URL",
+				errContains: ".evm.ws: must be a ws:// or wss:// URL",
 			},
 			{
 				name: "unencrypted websocket endpoint",
@@ -132,7 +131,7 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Connections[0].ClientA.AutoRelay.Enabled = &enabled
 					c.Chains[0].EVM.WS = ""
 				},
-				errContains: ".relayer.connections[0].clientA autoRelay requires .chains[1].evm.ws",
+				errContains: "relayer.connections[0].clientA.autoRelay: requires chains[1].evm.ws",
 			},
 			{
 				name: "auto-relayed client end on a chain with a websocket endpoint",
@@ -146,7 +145,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Chains[1].ChainID = "1"
 				},
-				errContains: "duplicate chainId",
+				errContains: `chains[1]: duplicate "1"`,
 			},
 			{
 				name: "duplicate relayer chainId",
@@ -167,14 +166,14 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.ChainID = "999"
 				},
-				errContains: `.connections[eth-base].clientA chainId "999" not declared`,
+				errContains: `relayer.connections[0].clientA.chainId: "999" not declared`,
 			},
 			{
 				name: "clientA and clientB on same chain",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientB.ChainID = c.Relayer.Connections[0].ClientA.ChainID
 				},
-				errContains: ".clientA and .clientB must be on different chains",
+				errContains: "clientA and clientB must be on different chains",
 			},
 			{
 				name: "non-positive batch size",
@@ -182,7 +181,7 @@ func TestRelayerConfig(t *testing.T) {
 					size := 0
 					c.Relayer.ChainOverrides[0].PacketBatchSize = &size
 				},
-				errContains: ".packetBatchSize must be positive",
+				errContains: ".packetBatchSize: must be positive",
 			},
 			{
 				name: "non-positive dispatch poll interval",
@@ -190,7 +189,7 @@ func TestRelayerConfig(t *testing.T) {
 					interval := time.Duration(0)
 					c.Relayer.DispatchPollInterval = &interval
 				},
-				errContains: ".dispatchPollInterval must be positive",
+				errContains: ".dispatchPollInterval: must be positive",
 			},
 			{
 				name: "negative tx submission delay",
@@ -198,7 +197,7 @@ func TestRelayerConfig(t *testing.T) {
 					delay := -time.Second
 					c.Relayer.ChainOverrides[0].TxSubmissionDelay = &delay
 				},
-				errContains: ".txSubmissionDelay must not be negative",
+				errContains: ".txSubmissionDelay: must not be negative",
 			},
 			{
 				name: "missing router contract is allowed -- it's a deploy output, not operator input",
@@ -212,21 +211,21 @@ func TestRelayerConfig(t *testing.T) {
 					zero := 0.0
 					c.Relayer.ChainOverrides[0].EVM.GasFeeCapMultiplier = &zero
 				},
-				errContains: ".gasFeeCapMultiplier must be positive",
+				errContains: ".gasFeeCapMultiplier: must be positive",
 			},
 			{
 				name: "client missing clientId",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.ClientID = ""
 				},
-				errContains: ".clientId required",
+				errContains: ".clientId: required",
 			},
 			{
 				name: "client missing chainId",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.ChainID = ""
 				},
-				errContains: ".chainId required",
+				errContains: ".chainId: required",
 			},
 			{
 				name: "unsupported client type",
@@ -247,14 +246,14 @@ func TestRelayerConfig(t *testing.T) {
 					duplicate.ClientB.ClientID = "ethereum-1"
 					c.Relayer.Connections = append(c.Relayer.Connections, duplicate)
 				},
-				errContains: `.connections duplicate client "base-0" on chain "1"`,
+				errContains: `connections[1]: duplicate client "base-0" on chain "1"`,
 			},
 			{
 				name: "connection missing alias",
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].Alias = ""
 				},
-				errContains: ".alias required",
+				errContains: ".alias: required",
 			},
 			{
 				name: "duplicate connection alias",
@@ -264,7 +263,7 @@ func TestRelayerConfig(t *testing.T) {
 					duplicate.ClientB.ClientID = "ethereum-1"
 					c.Relayer.Connections = append(c.Relayer.Connections, duplicate)
 				},
-				errContains: `.connections duplicate alias: "eth-base"`,
+				errContains: `connections[1]: duplicate alias: "eth-base"`,
 			},
 			{
 				name: "clientA signer unknown",
@@ -285,13 +284,21 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.Signer = ""
 				},
-				errContains: ".signer required",
+				errContains: ".signer: required",
+			},
+			{
+				name: "remote client params decode error",
+				patch: func(c *Config) {
+					c.Relayer.Connections[0].ClientA.Type = ClientTypeRemote
+					c.Relayer.Connections[0].ClientA.Params = yaml.RawMessage("endpoint: http://prover:9090\n")
+				},
+				errContains: "relayer.connections[0].clientA.params:",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
 				path := filepath.Join("testdata", "sample.yml")
-				config, err := LoadFromFile(path, true, true)
+				config, err := LoadFromFile(path, true)
 				require.NoError(t, err)
 
 				tt.patch(&config)
@@ -330,7 +337,7 @@ func TestRelayerConfigAutoRelayConnections(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			// ARRANGE
-			config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true, true)
+			config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
 			require.NoError(t, err)
 
 			if tt.clientA {
@@ -396,11 +403,11 @@ func TestClientEndParams(t *testing.T) {
 		wantErr string
 	}{
 		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
-		{name: "remote without params", doc: "type: remote\n", wantErr: ".params.url required"},
-		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: ".params.url required"},
-		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "remote without params", doc: "type: remote\n", wantErr: "params.url: required"},
+		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: "params.url: required"},
+		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
 		{name: "attestation", doc: "type: attestation\n"},
-		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "unknown field"},
+		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -73,11 +73,13 @@ A finality offset of `1` signs one block behind the chain head. Zero waits for t
 1. Validate the configuration:
 
 ```bash
-./bin/ibc config validate --config ibc-attestor-41002.yml --strict
+./bin/ibc config validate attestor --config ibc-attestor-41002.yml
 ```
 
 ```json
 {
+  "attestor": "valid",
+  "path": "/home/you/.ibc/ibc-attestor-41002.yml",
   "status": "valid"
 }
 ```

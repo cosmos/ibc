@@ -76,7 +76,7 @@ var (
 	}
 
 	cmdDeployStatus = &cobra.Command{
-		Use:   useStatus,
+		Use:   keyStatus,
 		Short: "Verify recorded deployments against live chain state",
 		RunE:  deployStatus,
 	}
@@ -102,7 +102,7 @@ var (
 	}
 
 	cmdDeployIFT = &cobra.Command{
-		Use:   useIFT,
+		Use:   keyIFT,
 		Short: "Deploy an IFT token on one chain",
 		RunE:  deployIFT,
 	}
@@ -395,7 +395,7 @@ func statusChains(cfg config.Config, manifestDir, explicit string) ([]string, er
 
 // statusError shapes a per-chain failure entry for the status report.
 func statusError(err error) map[string]string {
-	return map[string]string{useStatus: "error", "error": err.Error()}
+	return map[string]string{keyStatus: "error", "error": err.Error()}
 }
 
 func deployStatus(cmd *cobra.Command, _ []string) error {
@@ -421,7 +421,7 @@ func deployStatus(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 		if m == nil {
-			out[chainID] = map[string]string{useStatus: "no manifest"}
+			out[chainID] = map[string]string{keyStatus: "no manifest"}
 			continue
 		}
 		// record per-chain failures (undeclared chain, unreachable RPC)
