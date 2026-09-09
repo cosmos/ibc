@@ -92,6 +92,14 @@ event counter, not a failure gauge: a packet that remains stuck increments on ev
 so alerts should be built on `rate()`. The threshold is hard-coded for now (60m pending; timeouts 5m
 past the packet timeout, with a 15m source-finality guard) and can move to config in the future.
 
+### EVM client metrics
+
+Shared label: `{otel_scope_name="ibc.evm_client"}`
+
+| metric                | type           | labels                  | notes                                                           |
+| --------------------- | -------------- | ----------------------- | --------------------------------------------------------------- |
+| `evm_operation_dur_*` | histogram (ms) | `chain_id`, `operation` | HTTP JSON-RPC latency. `operation` (e.g. `eth_getBlockByNumber) |
+
 ## Guide on creating new metrics
 
 1. Ensure unique attribute keys are present in `otel/metrics.go` (eg `AttrChainID`, `AttrAttestor`). Add new if needed.

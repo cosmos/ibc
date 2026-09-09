@@ -61,7 +61,7 @@ type Client struct {
 }
 
 func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
-	eth, err := ethclient.Dial(rpcURL)
+	eth, err := meteredEthClient(context.Background(), chainID, rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
@@ -69,6 +69,7 @@ func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 	var ws ETHClient
 
 	if wsURL != "" {
+		// ws is not metered
 		dialed, errDial := ethclient.Dial(wsURL)
 		if errDial != nil {
 			return nil, errors.Wrapf(errDial, "dialing websocket for chain %s", chainID)
