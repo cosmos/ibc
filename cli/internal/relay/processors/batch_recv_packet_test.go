@@ -84,6 +84,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	destinationChainClient := mocks.NewMockClient(t)
 	destinationChainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationChainClient.EXPECT().ChainID().Return(route.DestinationChainID).Once()
 
 	sourceChainClient := mocks.NewMockClient(t)
 
@@ -182,6 +183,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	destinationChainClient := mocks.NewMockClient(t)
 	destinationChainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationChainClient.EXPECT().ChainID().Return(route.DestinationChainID).Once()
 
 	healthyTxID, err := hex.DecodeString(healthyHash[2:])
 	require.NoError(t, err)
@@ -281,6 +283,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	destinationChainClient := mocks.NewMockClient(t)
 	destinationChainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationChainClient.EXPECT().ChainID().Return(route.DestinationChainID).Once()
 
 	provableTxID, err := hex.DecodeString(provableHash[2:])
 	require.NoError(t, err)

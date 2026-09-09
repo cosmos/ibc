@@ -45,6 +45,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 	}
 
 	if !retry {
+		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.TimeoutTxHash)
 		return tr, nil
 	}
 
@@ -52,7 +53,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 		return nil, errors.Wrapf(err, "clearing timeout tx %s", *tr.TimeoutTxHash)
 	}
 
-	metrics.transactionRetry(ctx, tr, relayTypeSendToTimeout)
+	metrics.txRetry(ctx, tr, relayTypeSendToTimeout)
 
 	return nil, ErrRetryingTimeoutPacket
 }

@@ -57,18 +57,27 @@ Shared label: `{otel_scope_name="ibc.prover"}`
 
 Shared label: `{otel_scope_name="ibc.relayer"}`
 
-`processor` is `recv` / `ack` / `timeout`. Batch `chain_id` is dest for `recv`, source for `ack`/`timeout`. Completions and durations only on success (`CompleteWithAck`, `CompleteWithTimeout`). Processor `type`: `send_to_recv`, `send_to_timeout`, `recv_to_ack`. Removed/reorg watcher events are not counted. Routes absent from the latest snapshot reset to 0.
+- `processor`: `recv`, `ack`, or `timeout`.
+- Batch `chain_id`: destination for `recv`; source for `ack` and `timeout`.
+- Transaction `chain_id`: chain receiving the transaction.
+- Transaction `client_id`: client updated by the transaction; destination for `recv`, source for `ack` and `timeout`.
+- Processor `type`: `send_to_recv`, `send_to_timeout`, or `recv_to_ack`.
 
-| package    | metric                      | type          | labels                                                              | notes                           |
-| ---------- | --------------------------- | ------------- | ------------------------------------------------------------------- | ------------------------------- |
-| pipeline   | `packets_total`             | counter       | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition |
-| pipeline   | `batches_total`             | counter       | `chain_id`, `processor`, `result`                                   | +1 per batch submit attempt     |
-| pipeline   | `batch_size_*`              | histogram     | `chain_id`, `processor`                                             | Packet count in the batch       |
-| processors | `relays_completed_total`    | counter       | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg            |
-| processors | `relay_duration_*`          | histogram (s) | same                                                                | Wall time of that leg           |
-| processors | `transaction_retries_total` | counter       | same                                                                | +1 per tx retry                 |
-| watcher    | `watcher_events_total`      | counter       | `chain_id`, `type` (`send_packet`, `write_ack`)                     | Observed events                 |
-| dispatch   | `packets_pending`           | gauge         | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route       |
+Confirmations count only successful receipts for transactions broadcast by this process and are deduplicated in memory by chain and tx hash.
+Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
+
+| package    | metric                         | type          | labels                                                              | notes                           |
+| ---------- | ------------------------------ | ------------- | ------------------------------------------------------------------- | ------------------------------- |
+| pipeline   | `packets_total`                | counter       | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition |
+| pipeline   | `batches_total`                | counter       | `chain_id`, `processor`, `result`                                   | +1 per batch submit attempt     |
+| pipeline   | `batch_size_*`                 | histogram     | `chain_id`, `processor`                                             | Packet count in the batch       |
+| processors | `relays_completed_total`       | counter       | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg            |
+| processors | `relay_duration_*`             | histogram (s) | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg           |
+| processors | `transactions_submitted_total` | counter       | `chain_id`, `client_id`                                             | +1 per successful broadcast     |
+| processors | `transactions_confirmed_total` | counter       | `chain_id`, `client_id`                                             | +1 per successful receipt       |
+| processors | `transaction_retries_total`    | counter       | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per transfer retry decision  |
+| watcher    | `watcher_events_total`         | counter       | `chain_id`, `type` (`send_packet`, `write_ack`)                     | Observed events                 |
+| dispatch   | `packets_pending`              | gauge         | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route       |
 
 ## Guide on creating new metrics
 

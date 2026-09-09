@@ -40,6 +40,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	}
 
 	if !retry {
+		metrics.txConfirmed(ctx, p.route.DestinationChainID, p.route.DestinationClientID, *tr.RecvTxHash)
 		return tr, nil
 	}
 
@@ -47,7 +48,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		return nil, errors.Wrapf(err, "clearing recv tx %s", *tr.RecvTxHash)
 	}
 
-	metrics.transactionRetry(ctx, tr, relayTypeSendToRecv)
+	metrics.txRetry(ctx, tr, relayTypeSendToRecv)
 
 	// error so the transfer stops processing this run; it is picked up
 	// without the recv tx and redelivered on the next run

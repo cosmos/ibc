@@ -4,8 +4,10 @@ package processors
 
 import (
 	"context"
+	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
@@ -21,9 +23,13 @@ const (
 )
 
 type instrumentation struct {
-	RelaysCompleted    metric.Int64Counter
-	RelayDuration      metric.Float64Histogram
-	TransactionRetries metric.Int64Counter
+	RelaysCompleted       metric.Int64Counter
+	RelayDuration         metric.Float64Histogram
+	TransactionRetries    metric.Int64Counter
+	TransactionsSubmitted metric.Int64Counter
+	TransactionsConfirmed metric.Int64Counter
+
+	submittedTransactions sync.Map
 }
 
 type completedRelayLeg struct {
@@ -50,19 +56,29 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
+	transactionsSubmitted, err := m.Int64Counter("transactions_submitted_total")
+	if err != nil {
+		return nil, err
+	}
+
+	transactionsConfirmed, err := m.Int64Counter("transactions_confirmed_total")
+	if err != nil {
+		return nil, err
+	}
+
 	return &instrumentation{
-		RelaysCompleted:    relaysCompleted,
-		RelayDuration:      relayDuration,
-		TransactionRetries: transactionRetries,
+		RelaysCompleted:       relaysCompleted,
+		RelayDuration:         relayDuration,
+		TransactionRetries:    transactionRetries,
+		TransactionsSubmitted: transactionsSubmitted,
+		TransactionsConfirmed: transactionsConfirmed,
 	}, nil
 }
 
 func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
 	for _, leg := range completedRelayLegs(tr) {
-		var (
-			kind  = leg.kind
-			attrs = relayAttributes(tr, kind)
-		)
+		kind := leg.kind
+		attrs := txAttributes(tr, otel.AttrType.String(string(kind)))
 
 		m.RelaysCompleted.Add(ctx, 1, attrs)
 		if leg.startedAt == nil || leg.finishedAt == nil {
@@ -74,18 +90,48 @@ func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
 	}
 }
 
-func (m *instrumentation) transactionRetry(ctx context.Context, tr *Transfer, kind relayType) {
-	m.TransactionRetries.Add(ctx, 1, relayAttributes(tr, kind))
+func (m *instrumentation) txSubmitted(ctx context.Context, chainID, clientID, txHash string) {
+	key := txKey(chainID, txHash)
+	m.submittedTransactions.Store(key, struct{}{})
+	m.TransactionsSubmitted.Add(ctx, 1, txMetricAttributes(chainID, clientID))
 }
 
-func relayAttributes(tr *Transfer, kind relayType) metric.MeasurementOption {
+func (m *instrumentation) txConfirmed(ctx context.Context, chainID, clientID, txHash string) {
+	key := txKey(chainID, txHash)
+	if _, submitted := m.submittedTransactions.LoadAndDelete(key); !submitted {
+		return
+	}
+
+	m.TransactionsConfirmed.Add(ctx, 1, txMetricAttributes(chainID, clientID))
+}
+
+func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType) {
+	m.TransactionRetries.Add(ctx, 1, txAttributes(tr, otel.AttrType.String(string(kind))))
+}
+
+func txKey(chainID, txHash string) string {
+	return chainID + ":" + txHash
+}
+
+// chain receiving the transaction, client updated by that transaction
+func txMetricAttributes(chainID, clientID string) metric.MeasurementOption {
 	return otel.WithAttributes(
+		otel.AttrChainID.String(chainID),
+		otel.AttrClientID.String(clientID),
+	)
+}
+
+func txAttributes(tr *Transfer, extra ...attribute.KeyValue) metric.MeasurementOption {
+	attrs := []attribute.KeyValue{
 		otel.AttrChainID.String(tr.SourceChainID),
 		otel.AttrDestChainID.String(tr.DestinationChainID),
 		otel.AttrClientID.String(tr.PacketSourceClientID),
 		otel.AttrDestClientID.String(tr.PacketDestinationClientID),
-		otel.AttrType.String(string(kind)),
-	)
+	}
+
+	attrs = append(attrs, extra...)
+
+	return otel.WithAttributes(attrs...)
 }
 
 func completedRelayLegs(tr *Transfer) []completedRelayLeg {

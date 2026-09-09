@@ -134,5 +134,7 @@ func relayPackets(
 		return nil, errors.Wrap(err, "submitting relay tx")
 	}
 
+	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
+
 	return submission, nil
 }
