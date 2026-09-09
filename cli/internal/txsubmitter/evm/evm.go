@@ -140,6 +140,7 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		return nil, errors.Wrapf(err, "sending tx %s", signedTx.Hash())
 	}
 
+	metrics.startTx(c.chainID, c.address.String(), signedTx.Hash().String())
 	c.lastSubmission = time.Now()
 	c.logger.Info("Submitted tx", "txHash", signedTx.Hash(), "to", intent.To)
 
@@ -213,6 +214,7 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 
 		expiresAt := sentAt.UTC().Add(retryExpiry)
 		if expiresAt.Before(time.Unix(int64(latest.Time), 0)) {
+			metrics.forgetTx(c.chainID, txHash)
 			return true, nil
 		}
 
@@ -220,8 +222,10 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 	case err != nil:
 		return false, errors.Wrapf(err, "getting receipt for tx %s", txHash)
 	case receipt.Status != types.ReceiptStatusSuccessful:
+		metrics.endTx(c.chainID, receipt)
 		return true, nil
 	default:
+		metrics.endTx(c.chainID, receipt)
 		return false, nil
 	}
 }

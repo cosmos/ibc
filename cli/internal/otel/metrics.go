@@ -20,6 +20,7 @@ const (
 
 	AttrAttestor attribute.Key = "attestor"
 	AttrSigner   attribute.Key = "signer"
+	AttrWallet   attribute.Key = "wallet"
 
 	AttrChainID      attribute.Key = "chain_id"
 	AttrClientID     attribute.Key = "client_id"
