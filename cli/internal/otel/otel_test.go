@@ -38,15 +38,15 @@ func TestProvider(t *testing.T) {
 			require.NoError(t, ln.Close())
 		})
 		cfg := config.Observability{
-			Type:          config.ObservabilitySimple,
-			ListenAddress: ln.Addr().String(),
+			Type:                    config.ObservabilitySimple,
+			SimpleMetricsListenAddr: ln.Addr().String(),
 		}
 
 		// ACT
 		provider, err := New(t.Context(), cfg, testLogger())
 
 		// ASSERT
-		require.ErrorContains(t, err, "listenAddress")
+		require.ErrorContains(t, err, "simpleMetricsListenAddr")
 		assert.Nil(t, provider)
 	})
 }
@@ -112,8 +112,8 @@ func TestOtelFileMeterProvider(t *testing.T) {
 func TestSimpleMeterProviderStop(t *testing.T) {
 	// ARRANGE
 	cfg := config.Observability{
-		Type:          config.ObservabilitySimple,
-		ListenAddress: availableListenAddress(t),
+		Type:                    config.ObservabilitySimple,
+		SimpleMetricsListenAddr: availableListenAddress(t),
 	}
 	_, stop, err := newSimpleMeterProvider(cfg, testLogger())
 	require.NoError(t, err)

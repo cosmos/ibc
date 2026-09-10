@@ -14,7 +14,7 @@ db:
 observability:
   metrics: true
   type: simple
-  listenAddr: 127.0.0.1:9090
+  simpleMetricsListenAddr: 127.0.0.1:9090
 
 # chains declares chain information shared by the attestor and relayer;
 # referenced by other blocks via chainId

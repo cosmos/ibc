@@ -26,7 +26,7 @@ IBC exposes `/metrics`; the collector scrapes it:
 observability:
   metrics: true
   type: simple
-  listenAddr: 127.0.0.1:9090 # so localhost:9090/metrics dumps prometheus metrics
+  simpleMetricsListenAddr: 127.0.0.1:9090 # so localhost:9090/metrics dumps prometheus metrics
 ```
 
 ### OTEL mode

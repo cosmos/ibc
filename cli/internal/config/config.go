@@ -90,10 +90,10 @@ type DBConfig struct {
 // Observability config for metrics and tracing.
 // note: in future we'll add `tracing: true` if needed.
 type Observability struct {
-	Metrics       bool   `yaml:"metrics"`
-	Type          string `yaml:"type"`
-	ListenAddress string `yaml:"listenAddr"`
-	OtelFile      string `yaml:"otelFile"`
+	Metrics                 bool   `yaml:"metrics"`
+	Type                    string `yaml:"type"`
+	SimpleMetricsListenAddr string `yaml:"simpleMetricsListenAddr"`
+	OtelFile                string `yaml:"otelFile"`
 }
 
 // Chains is the list of configured chains.
@@ -188,9 +188,9 @@ func DefaultConfig() Config {
 			URL:  "ibc.db",
 		},
 		Observability: Observability{
-			Metrics:       false,
-			Type:          ObservabilitySimple,
-			ListenAddress: "0.0.0.0:9090",
+			Metrics:                 false,
+			Type:                    ObservabilitySimple,
+			SimpleMetricsListenAddr: "0.0.0.0:9090",
 		},
 		Chains: []ChainConfig{},
 		Relayer: RelayerConfig{
@@ -380,8 +380,8 @@ func (c Observability) Validate() error {
 	case c.Type != ObservabilitySimple && c.Type != ObservabilityOTEL:
 		return errPathf("type", "expected [%q, %q], got %q", ObservabilitySimple, ObservabilityOTEL, c.Type)
 	case c.Type == ObservabilitySimple:
-		if err := network.ValidateListenAddr(c.ListenAddress); err != nil {
-			return errPath("listenAddr", err)
+		if err := network.ValidateListenAddr(c.SimpleMetricsListenAddr); err != nil {
+			return errPath("simpleMetricsListenAddr", err)
 		}
 	case c.Type == ObservabilityOTEL:
 		_, err := c.ConfigFile()

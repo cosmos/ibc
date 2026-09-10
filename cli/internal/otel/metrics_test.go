@@ -80,8 +80,8 @@ func TestPrometheusMetrics(t *testing.T) {
 		// ARRANGE
 		listenAddress := availableListenAddress(t)
 		cfg := config.Observability{
-			Type:          config.ObservabilitySimple,
-			ListenAddress: listenAddress,
+			Type:                    config.ObservabilitySimple,
+			SimpleMetricsListenAddr: listenAddress,
 		}
 		provider, err := New(t.Context(), cfg, testLogger())
 		require.NoError(t, err)

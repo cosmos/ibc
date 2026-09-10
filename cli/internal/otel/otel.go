@@ -139,7 +139,7 @@ func newSimpleMeterProvider(
 	mux.Handle(simpleMetricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	server := &http.Server{
 		Handler:           mux,
-		Addr:              cfg.ListenAddress,
+		Addr:              cfg.SimpleMetricsListenAddr,
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 
@@ -147,7 +147,7 @@ func newSimpleMeterProvider(
 	ln, err := net.Listen("tcp", server.Addr)
 	if err != nil {
 		_ = meterProvider.Shutdown(context.Background())
-		return nil, nil, fmt.Errorf("listenAddress: %w", err)
+		return nil, nil, fmt.Errorf("simpleMetricsListenAddr: %w", err)
 	}
 
 	logger.Info("Starting prometheus metrics server", "url", server.Addr+simpleMetricsPath)

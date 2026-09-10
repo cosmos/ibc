@@ -55,7 +55,7 @@ func TestConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Observability.Metrics = false
 					c.Observability.Type = "invalid"
-					c.Observability.ListenAddress = "invalid"
+					c.Observability.SimpleMetricsListenAddr = "invalid"
 				},
 			},
 			{
@@ -63,7 +63,7 @@ func TestConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Observability.Metrics = true
 					c.Observability.Type = ObservabilitySimple
-					c.Observability.ListenAddress = "127.0.0.1:9090"
+					c.Observability.SimpleMetricsListenAddr = "127.0.0.1:9090"
 				},
 			},
 			{
@@ -78,9 +78,9 @@ func TestConfig(t *testing.T) {
 				name: "invalid observability listen address",
 				patch: func(c *Config) {
 					c.Observability.Metrics = true
-					c.Observability.ListenAddress = "invalid"
+					c.Observability.SimpleMetricsListenAddr = "invalid"
 				},
-				errContains: "observability.listenAddr",
+				errContains: "observability.simpleMetricsListenAddr",
 			},
 			{
 				name: "otel observability config required",
@@ -399,7 +399,7 @@ server:
 			cfg, err := LoadFromFile("ibc.yml", true)
 			require.NoError(t, err)
 			require.NoError(t, cfg.RelayerSufficiency())
-			require.Equal(t, "127.0.0.1:9090", cfg.Observability.ListenAddress)
+			require.Equal(t, "127.0.0.1:9090", cfg.Observability.SimpleMetricsListenAddr)
 		})
 
 		t.Run("attestationSigner", func(t *testing.T) {

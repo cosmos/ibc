@@ -14,7 +14,6 @@ import (
 
 type instrumentation struct {
 	PacketsTotal metric.Int64Counter
-	BatchesTotal metric.Int64Counter
 	BatchSize    metric.Int64Histogram
 }
 
@@ -22,11 +21,6 @@ var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
 
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	packetsTotal, err := m.Int64Counter("packets_total")
-	if err != nil {
-		return nil, err
-	}
-
-	batchesTotal, err := m.Int64Counter("batches_total")
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +36,6 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 
 	return &instrumentation{
 		PacketsTotal: packetsTotal,
-		BatchesTotal: batchesTotal,
 		BatchSize:    batchSize,
 	}, nil
 }
@@ -68,11 +61,13 @@ func (m *instrumentation) batch(
 	err error,
 ) {
 	processor := batchProcessorName(status)
-	attrProcessor := otel.AttrProcessor.String(processor)
-	attrChain := otel.AttrChainID.String(batchChainID(batch[0], processor))
+	chainID := batchChainID(batch[0], processor)
 
-	m.BatchSize.Record(ctx, int64(len(batch)), otel.WithAttributes(attrChain, attrProcessor))
-	m.BatchesTotal.Add(ctx, 1, otel.WithAttributes(attrChain, attrProcessor, otel.AttrResultError(err)))
+	m.BatchSize.Record(ctx, int64(len(batch)), otel.WithAttributes(
+		otel.AttrChainID.String(chainID),
+		otel.AttrProcessor.String(processor),
+		otel.AttrResultError(err),
+	))
 }
 
 // processors/batch_ack.go

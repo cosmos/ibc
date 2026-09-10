@@ -38,8 +38,7 @@ func (p *metricBatchProcessor) Process(
 func (*metricBatchProcessor) Cancel([]*processors.Transfer, error) {}
 
 type batchMetricData struct {
-	total metricdata.DataPoint[int64]
-	size  metricdata.HistogramDataPoint[int64]
+	size metricdata.HistogramDataPoint[int64]
 }
 
 func TestPipelineMetrics(t *testing.T) {
@@ -134,18 +133,11 @@ func TestPipelineMetrics(t *testing.T) {
 				expectedSizeAttributes := attribute.NewSet(
 					otel.AttrChainID.String("8453"),
 					otel.AttrProcessor.String("recv"),
+					otel.AttrResult.String(tt.result),
 				)
 				assert.Equal(t, uint64(1), data.size.Count)
 				assert.Equal(t, int64(2), data.size.Sum)
 				assert.Equal(t, expectedSizeAttributes.ToSlice(), data.size.Attributes.ToSlice())
-
-				expectedTotalAttributes := attribute.NewSet(
-					otel.AttrChainID.String("8453"),
-					otel.AttrProcessor.String("recv"),
-					otel.AttrResult.String(tt.result),
-				)
-				assert.Equal(t, int64(1), data.total.Value)
-				assert.Equal(t, expectedTotalAttributes.ToSlice(), data.total.Attributes.ToSlice())
 			})
 		}
 	})
@@ -205,29 +197,22 @@ func collectBatchMetrics(
 	require.NoError(t, reader.Collect(ctx, &resources))
 
 	var data batchMetricData
-	var foundTotal bool
 	var foundSize bool
 
 	for _, scope := range resources.ScopeMetrics {
 		for _, metric := range scope.Metrics {
-			switch metric.Name {
-			case "batches_total":
-				sum, ok := metric.Data.(metricdata.Sum[int64])
-				require.True(t, ok)
-				require.Len(t, sum.DataPoints, 1)
-				data.total = sum.DataPoints[0]
-				foundTotal = true
-			case "batch_size":
-				histogram, ok := metric.Data.(metricdata.Histogram[int64])
-				require.True(t, ok)
-				require.Len(t, histogram.DataPoints, 1)
-				data.size = histogram.DataPoints[0]
-				foundSize = true
+			if metric.Name != "batch_size" {
+				continue
 			}
+
+			histogram, ok := metric.Data.(metricdata.Histogram[int64])
+			require.True(t, ok)
+			require.Len(t, histogram.DataPoints, 1)
+			data.size = histogram.DataPoints[0]
+			foundSize = true
 		}
 	}
 
-	require.True(t, foundTotal, "batches_total metric not found")
 	require.True(t, foundSize, "batch_size metric not found")
 
 	return data

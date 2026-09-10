@@ -63,6 +63,9 @@ Shared label: `{otel_scope_name="ibc.relayer"}`
 - Transaction `client_id`: client updated by the transaction; destination for `recv`, source for `ack` and `timeout`.
 - Processor `type`: `send_to_recv`, `send_to_timeout`, or `recv_to_ack`.
 
+In metrics that label both packet sides, `chain_id` / `client_id` refer to the packet's **source** side and
+`dest_chain_id` / `dest_client_id` to its destination.
+
 Confirmations count only successful receipts for transactions broadcast by this process and are deduplicated in memory by chain and tx hash.
 Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
 EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
@@ -71,8 +74,7 @@ Collections inside that threshold omit the sample. A failed query is logged and 
 | package     | metric                         | type               | labels                                                              | notes                                                          |
 | ----------- | ------------------------------ | ------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- |
 | pipeline    | `packets_total`                | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition                                |
-| pipeline    | `batches_total`                | counter            | `chain_id`, `processor`, `result`                                   | +1 per batch submit attempt                                    |
-| pipeline    | `batch_size_*`                 | histogram          | `chain_id`, `processor`                                             | Packet count in the batch                                      |
+| pipeline    | `batch_size_*`                 | histogram          | `chain_id`, `processor`, `result`                                   | Packet count in the batch; `batch_size_count` counts batches   |
 | processors  | `relays_completed_total`       | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                           |
 | processors  | `relay_duration_*`             | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
 | processors  | `transactions_submitted_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |

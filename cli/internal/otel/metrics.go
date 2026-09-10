@@ -22,6 +22,8 @@ const (
 	AttrSigner   attribute.Key = "signer"
 	AttrWallet   attribute.Key = "wallet"
 
+	// In metrics that also carry dest_chain_id/dest_client_id, chain_id/client_id
+	// are the packet's source side.
 	AttrChainID      attribute.Key = "chain_id"
 	AttrClientID     attribute.Key = "client_id"
 	AttrDestChainID  attribute.Key = "dest_chain_id"
