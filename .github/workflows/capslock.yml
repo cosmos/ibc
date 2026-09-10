@@ -1,0 +1,234 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Capslock Capability Baseline
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  CAPSLOCK_VERSION: v0.3.3
+  CAPSLOCK_FLAGS: -packages=./... -granularity=intermediate
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ github.event_name != 'pull_request' && 'true' || steps.filter.outputs.go }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'cli/**'
+              - 'e2e/**'
+              - 'gen/go/solidity-abi/**'
+              - '.github/workflows/capslock.yml'
+
+  baseline:
+    name: Baseline ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.go == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cli
+            dir: cli
+          - name: e2e
+            dir: e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+
+      - name: Compute ref slug
+        id: slug
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          printf 'slug=%s\n' "$(printf '%s' "$REF" | tr '/' '-' | tr -c '[:alnum:]_.-' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Capslock
+        run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
+
+      - name: Generate baseline
+        working-directory: ${{ matrix.dir }}
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/capslock-out"
+          capslock $CAPSLOCK_FLAGS -output=json \
+            > "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
+          ls -lh "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
+
+      # Keyed by SHA so each push writes a new immutable entry. `compare` does an
+      # exact-match lookup on the base commit first, then falls back to the newest
+      # entry for the branch.
+      - name: Save baseline to branch cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: capslock-out/${{ matrix.name }}.json
+          key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.slug.outputs.slug }}-${{ github.sha }}
+
+      # Convenience copy for humans; the cache above is what `compare` reads.
+      - name: Upload baseline artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: capslock-baseline-${{ matrix.name }}-${{ steps.slug.outputs.slug }}
+          path: capslock-out/${{ matrix.name }}.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  compare:
+    name: Compare ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.go == 'true' && github.event_name == 'pull_request'
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cli
+            dir: cli
+          - name: e2e
+            dir: e2e
+    steps:
+      # Full history so the base commit is available for the cache-miss fallback.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+
+      - name: Resolve base
+        id: base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          slugify() { printf '%s' "$1" | tr '/' '-' | tr -c '[:alnum:]_.-' '-'; }
+          printf 'slug=%s\n' "$(slugify "$BASE_REF")" >> "$GITHUB_OUTPUT"
+          printf 'default_slug=%s\n' "$(slugify "$DEFAULT_BRANCH")" >> "$GITHUB_OUTPUT"
+          printf 'sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Install Capslock
+        run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
+
+      # Exact hit when the base commit was itself built by `baseline`; otherwise the
+      # newest entry for the base branch; otherwise the default branch's.
+      - name: Restore base branch baseline
+        id: restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: capslock-out/${{ matrix.name }}.json
+          key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.slug }}-${{ steps.base.outputs.sha }}
+          restore-keys: |
+            capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.slug }}-
+            capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.default_slug }}-
+
+      # A cold or evicted cache must not let the job pass without comparing anything,
+      # so rebuild the baseline from the base commit instead. Caches are evicted after
+      # 7 days without access, so this fires routinely on low-traffic branches.
+      - name: Generate base baseline (cache miss)
+        if: steps.restore.outputs.cache-matched-key == ''
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          echo "::notice::No cached baseline for the base branch; rebuilding from $BASE_SHA"
+          mkdir -p "$GITHUB_WORKSPACE/capslock-out"
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
+          cd "$RUNNER_TEMP/base/${{ matrix.dir }}"
+          capslock $CAPSLOCK_FLAGS -output=json \
+            > "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
+
+      - name: Compare against baseline
+        id: compare
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set +e
+          capslock $CAPSLOCK_FLAGS -output=compare \
+            "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json" > "$RUNNER_TEMP/diff.txt" 2>&1
+          rc=$?
+          set -e
+
+          # 0 = no change, 1 = capability difference found, 2 = tool error.
+          if [ "$rc" -eq 0 ]; then
+            echo "No capability changes in ${{ matrix.name }}." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$rc" -ne 1 ]; then
+            echo "Capslock failed with exit code $rc" >&2
+            cat "$RUNNER_TEMP/diff.txt" >&2
+            exit 1
+          fi
+
+          {
+            echo "### :warning: New capabilities in \`${{ matrix.name }}\`"
+            echo
+            echo "A package reachable from this module gained a capability it did not have on"
+            echo "\`${{ steps.base.outputs.slug }}\`. Review the call path below: confirm the change is"
+            echo "intended, and treat an unexplained NETWORK, EXEC, FILES or UNSAFE_POINTER"
+            echo "capability appearing in a dependency as a potential supply chain compromise."
+            echo
+            echo '```'
+            head -c 60000 "$RUNNER_TEMP/diff.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          cat "$RUNNER_TEMP/diff.txt"
+          exit 1
+
+      - name: Upload capability diff
+        if: failure() && steps.compare.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: capslock-diff-${{ matrix.name }}
+          path: ${{ runner.temp }}/diff.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  capslock-ok:
+    name: Finalize
+    if: always()
+    needs: [changes, baseline, compare]
+    runs-on: depot-ubuntu-24.04-4
+    permissions: {}
+    steps:
+      - name: Check required jobs
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
