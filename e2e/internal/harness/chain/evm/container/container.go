@@ -16,13 +16,13 @@ var nameRe = regexp.MustCompile(`[^a-z0-9_.-]+`)
 
 func Labels(runID string) map[string]string {
 	return map[string]string{
-		"ibc-link-e2e": "true",
-		"ibc-link-run": runID,
+		"ibc-cli-e2e": "true",
+		"ibc-cli-run": runID,
 	}
 }
 
 func NamePrefix(runID, chainID string) string {
-	return "ibc-link-e2e-" + safe(runID) + "-" + safe(chainID)
+	return "ibc-cli-e2e-" + safe(runID) + "-" + safe(chainID)
 }
 
 // BindPortsToLoopback keeps development RPC endpoints off external interfaces

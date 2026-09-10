@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
-	relayerv2 "github.com/cosmos/ibc/link/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 func TestValidAmountOwnsInput(t *testing.T) {
@@ -37,8 +37,8 @@ func TestRouteWaitPolicy(t *testing.T) {
 	timing := func(block, budget, poll time.Duration) environment.Timing {
 		return environment.Timing{BlockInterval: block, CompletionBudget: budget, PollInterval: poll}
 	}
-	policy := func(budget, poll, stability time.Duration) ibclink.WaitPolicy {
-		return ibclink.WaitPolicy{
+	policy := func(budget, poll, stability time.Duration) ibccli.WaitPolicy {
+		return ibccli.WaitPolicy{
 			CompletionBudget: budget,
 			StatusPoll:       poll,
 			StabilityWindow:  stability,
@@ -49,7 +49,7 @@ func TestRouteWaitPolicy(t *testing.T) {
 	tests := []struct {
 		name                string
 		source, destination environment.Timing
-		want                ibclink.WaitPolicy
+		want                ibccli.WaitPolicy
 	}{
 		{"Anvil/Anvil", anvil, anvil, policy(40*time.Second, 250*time.Millisecond, 2*time.Second)},
 		{"Besu/Besu", besu, besu, policy(80*time.Second, 250*time.Millisecond, 4*time.Second)},
@@ -75,11 +75,11 @@ func TestRouteWaitPolicy(t *testing.T) {
 }
 
 func TestAwaitStateRequiresRouteWaitPolicy(t *testing.T) {
-	_, err := AwaitState(context.Background(), &ibclink.Relayer{}, PacketTx{Sequence: 7},
+	_, err := AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.EqualError(t, err, "e2etest: packet sequence 7 has no route id")
 
-	_, err = AwaitState(context.Background(), &ibclink.Relayer{}, PacketTx{RouteID: "missing", Sequence: 7},
+	_, err = AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{RouteID: "missing", Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.EqualError(t, err, `e2etest: packet missing-7 has no wait policy for route "missing"`)
 }
@@ -95,7 +95,7 @@ func TestStatusForPacketMatchesTypedClientLocator(t *testing.T) {
 }
 
 func TestAwaitStableUsesFreshWindowAfterStateReached(t *testing.T) {
-	policy := ibclink.WaitPolicy{
+	policy := ibccli.WaitPolicy{
 		CompletionBudget: 200 * time.Millisecond,
 		StatusPoll:       10 * time.Millisecond,
 		StabilityWindow:  40 * time.Millisecond,
@@ -118,7 +118,7 @@ func TestAwaitStableUsesFreshWindowAfterStateReached(t *testing.T) {
 }
 
 func TestAwaitStableRejectsStateChangeDuringWindow(t *testing.T) {
-	policy := ibclink.WaitPolicy{
+	policy := ibccli.WaitPolicy{
 		CompletionBudget: time.Second,
 		StatusPoll:       time.Millisecond,
 		StabilityWindow:  time.Second,
@@ -137,7 +137,7 @@ func TestAwaitStableRejectsStateChangeDuringWindow(t *testing.T) {
 }
 
 func TestAwaitStableObservesAtWindowEnd(t *testing.T) {
-	policy := ibclink.WaitPolicy{
+	policy := ibccli.WaitPolicy{
 		CompletionBudget: time.Second,
 		StatusPoll:       time.Hour,
 		StabilityWindow:  time.Millisecond,
@@ -157,7 +157,7 @@ func TestAwaitStableObservesAtWindowEnd(t *testing.T) {
 }
 
 func TestAwaitStableRevalidatesTerminalStatus(t *testing.T) {
-	policy := ibclink.WaitPolicy{
+	policy := ibccli.WaitPolicy{
 		CompletionBudget: time.Second,
 		StatusPoll:       time.Hour,
 		StabilityWindow:  time.Millisecond,
@@ -220,7 +220,7 @@ func TestAwaitStableDoesNotTreatParentCancellationAsSuccess(t *testing.T) {
 	calls := 0
 	err := awaitStablePacketState(ctx, PacketTx{RouteID: "route", Sequence: 3},
 		relayerv2.PacketState_PACKET_STATE_PENDING,
-		ibclink.WaitPolicy{
+		ibccli.WaitPolicy{
 			CompletionBudget: time.Second,
 			StatusPoll:       time.Hour,
 			StabilityWindow:  time.Millisecond,

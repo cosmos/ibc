@@ -20,10 +20,10 @@ import (
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
-// deployStepResult mirrors link/internal/deploy.StepResult, which e2e cannot
+// deployStepResult mirrors cli/internal/deploy.StepResult, which e2e cannot
 // import directly (module boundary): "name" and "action" ("skipped",
 // "executed", or "planned").
 type deployStepResult struct {
@@ -31,7 +31,7 @@ type deployStepResult struct {
 	Action string `json:"action"`
 }
 
-// deployManifest is the subset of link/internal/deploy/manifest.Manifest
+// deployManifest is the subset of cli/internal/deploy/manifest.Manifest
 // this test needs to observe from the written JSON file.
 type deployManifest struct {
 	Core struct {
@@ -79,9 +79,9 @@ func TestDeployConnection(t *testing.T) {
 
 	home := t.TempDir()
 	configPath := filepath.Join(home, "ibc.yml")
-	driver, err := ibclink.NewDriver(configPath)
+	driver, err := ibccli.NewDriver(configPath)
 	require.NoError(t, err)
-	require.NoError(t, env.BindIBCLink(driver))
+	require.NoError(t, env.BindCLI(driver))
 
 	deployerKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -101,11 +101,11 @@ func TestDeployConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	const deployerAlias = "deployer"
-	err = ibclink.WriteDeployConfig(configPath, ibclink.DeployConfig{
+	err = ibccli.WriteDeployConfig(configPath, ibccli.DeployConfig{
 		DBPath:        filepath.Join(home, "unused.db"),
 		SignerAlias:   deployerAlias,
 		SignerKeyFile: driver.KeyFilePath(deployerAlias),
-		Chains: []ibclink.DeployChain{
+		Chains: []ibccli.DeployChain{
 			{ChainID: chainAID, RPC: rpcA},
 			{ChainID: chainBID, RPC: rpcB},
 		},
@@ -118,7 +118,7 @@ func TestDeployConnection(t *testing.T) {
 	// the connection is four separate idempotent commands: core on each
 	// chain, then a client on each chain tracking the other. Both client
 	// invocations derive the same shared client id.
-	sharedClientID := "link-" + chainAID + "-" + chainBID
+	sharedClientID := "cli-" + chainAID + "-" + chainBID
 	deployCommands := [][]string{
 		{"core", "--chain", chainAID, "--yes"},
 		{"core", "--chain", chainBID, "--yes"},
@@ -218,9 +218,9 @@ func TestDeployIFTBridge(t *testing.T) {
 
 	home := t.TempDir()
 	configPath := filepath.Join(home, "ibc.yml")
-	driver, err := ibclink.NewDriver(configPath)
+	driver, err := ibccli.NewDriver(configPath)
 	require.NoError(t, err)
-	require.NoError(t, env.BindIBCLink(driver))
+	require.NoError(t, env.BindCLI(driver))
 
 	deployerKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -240,11 +240,11 @@ func TestDeployIFTBridge(t *testing.T) {
 	require.NoError(t, err)
 
 	const deployerAlias = "deployer"
-	require.NoError(t, ibclink.WriteDeployConfig(configPath, ibclink.DeployConfig{
+	require.NoError(t, ibccli.WriteDeployConfig(configPath, ibccli.DeployConfig{
 		DBPath:        filepath.Join(home, "unused.db"),
 		SignerAlias:   deployerAlias,
 		SignerKeyFile: driver.KeyFilePath(deployerAlias),
-		Chains: []ibclink.DeployChain{
+		Chains: []ibccli.DeployChain{
 			{ChainID: chainAID, RPC: rpcA},
 			{ChainID: chainBID, RPC: rpcB},
 		},

@@ -42,7 +42,7 @@ lint-fix:
 
 # Run tests for the E2E harness
 [group('test')]
-test-harness: _build-link
+test-harness: _build-cli
     go test ./internal/... ./cmd/... -count=1
 
 # Rebuild test-app artifacts and typed Go bindings
@@ -54,7 +54,7 @@ test-apps:
 
 # Run E2E tests
 [group('test')]
-test: _build-link
+test: _build-cli
     # -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
     E2E_MODE={{ e2e_mode }} go test . -timeout 60m -parallel 4 {{ e2e_flags }}
 
@@ -107,5 +107,6 @@ run-all-checks: doctor doctor-tools
     just --justfile ../justfile e2e::check-matrix
 
 [private]
-_build-link:
-    just --justfile ../justfile link::build
+_build-cli:
+    just --justfile ../justfile cli::build
+    just --justfile ../justfile cli::build-test-bin

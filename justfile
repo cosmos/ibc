@@ -2,8 +2,8 @@
 
 set dotenv-load
 
-# IBC Link recipes (run from the link directory)
-mod link 'link/link.just'
+# IBC CLI recipes (run from the cli directory)
+mod cli 'cli/cli.just'
 
 # Repository E2E recipes (run from the e2e directory)
 mod e2e 'e2e/e2e.just'
@@ -24,6 +24,12 @@ lint-license:
     go run github.com/apache/skywalking-eyes/cmd/license-eye@v{{ license_eye_version }} \
       --config .licenserc.yaml header check
 
+# Add missing SPDX license headers
+[group('lint')]
+lint-fix-license:
+    go run github.com/apache/skywalking-eyes/cmd/license-eye@v{{ license_eye_version }} \
+      --config .licenserc.yaml header fix
+
 # Lint generated Solidity Go binding packages
 [group('lint')]
 lint-gen:
@@ -42,7 +48,7 @@ test-gen:
 # Run all repository checks
 [group('check')]
 run-all-checks:
-    just link::run-all-checks
+    just cli::run-all-checks
     just e2e::run-all-checks
     just lint-gen
     just test-gen

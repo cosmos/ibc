@@ -10,7 +10,7 @@ updates:
 
   - package-ecosystem: gomod
     directories:
-      - "/link"
+      - "/cli"
       - "/e2e"
       - "/gen/go/solidity-abi"
     target-branch: main

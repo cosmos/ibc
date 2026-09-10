@@ -33,13 +33,13 @@ jobs:
               - ".golangci.yml"
               - ".github/workflows/e2e.yml"
             code:
-              - "link/**"
+              - "cli/**"
               - "e2e/**"
               - "gen/go/solidity-abi/**"
               - "proto/**"
               - "scripts/**"
               - "justfile"
-              - "link/link.just"
+              - "cli/cli.just"
               - "e2e/e2e.just"
               - ".github/workflows/e2e.yml"
 
@@ -74,7 +74,7 @@ jobs:
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: |
-            link/go.sum
+            cli/go.sum
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
@@ -83,7 +83,7 @@ jobs:
       - run: docker info
       - run: just e2e::test-harness
         env:
-          IBC_BIN: ${{ github.workspace }}/link/bin/ibc
+          IBC_BIN: ${{ github.workspace }}/cli/bin/ibc
 
   test-apps:
     needs: changes
@@ -117,7 +117,7 @@ jobs:
         with:
           go-version-file: e2e/go.mod
           cache-dependency-path: |
-            link/go.sum
+            cli/go.sum
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0

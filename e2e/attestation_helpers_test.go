@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	attestorevm "github.com/cosmos/ibc/link/attestor/evm"
 )
 
 type attestationClientState struct {

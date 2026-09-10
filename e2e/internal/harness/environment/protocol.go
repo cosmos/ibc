@@ -9,7 +9,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 // EVMAddress is a non-secret, checksummed contract or signer address returned
@@ -77,7 +77,7 @@ func (c *Connection) ID() ConnectionID { return c.id }
 func (c *Connection) A() *IBCClient    { return c.a }
 func (c *Connection) B() *IBCClient    { return c.b }
 
-// Attestor is one running, config-loaded IBC Link Attestor process.
+// Attestor is one running, config-loaded attestor process.
 // ObservedIBCInstance is derived from the counterparty end of the Client's
 // Connection.
 //
@@ -93,8 +93,8 @@ type Attestor struct {
 	lease    *environmentLease
 
 	mu       sync.Mutex
-	process  *ibclink.AttestorProcess
-	launch   ibclink.AttestorLaunch
+	process  *ibccli.AttestorProcess
+	launch   ibccli.AttestorLaunch
 	restarts int
 }
 
@@ -114,7 +114,7 @@ func (a *Attestor) ObservedIBCInstance() *IBCInstance { return a.observed }
 func (a *Attestor) SignerAddress() EVMAddress         { return a.signer }
 
 // Endpoint is the Attestor's gRPC listen address as a bare host:port, the
-// form Link relayer configuration requires for remote attestor entries. It is
+// form the relayer configuration requires for remote attestor entries. It is
 // stable across Restart.
 func (a *Attestor) Endpoint() string { return a.endpoint }
 
@@ -172,7 +172,7 @@ func (a *Attestor) restartProcess(ctx context.Context) error {
 	a.restarts++
 	launch.WorkDir = fmt.Sprintf("%s-restart-%d", a.launch.WorkDir, a.restarts)
 	launch.ListenAddress = a.endpoint
-	process, err := ibclink.StartAttestor(ctx, launch)
+	process, err := ibccli.StartAttestor(ctx, launch)
 	// A non-nil process alongside an error still owns a child; keep it so
 	// Close can retry stopping it.
 	a.process = process
