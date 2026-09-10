@@ -17,6 +17,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/cosmos/ibc/cli/internal/otel"
 )
 
 func TestMetricsTransport(t *testing.T) {
@@ -56,7 +58,62 @@ func TestMetricsTransport(t *testing.T) {
 		assert.ElementsMatch(t, []attribute.KeyValue{
 			attribute.String("operation", "eth_getBlockByNumber"),
 			attribute.String("chain_id", "1"),
+			otel.AttrResult.Int(http.StatusOK),
 		}, histogram.DataPoints[0].Attributes.ToSlice())
+	})
+
+	t.Run("recordsHTTPStatusCode", func(t *testing.T) {
+		for _, tt := range []struct {
+			name       string
+			statusCode int
+		}{
+			{
+				name:       "ok",
+				statusCode: http.StatusOK,
+			},
+			{
+				name:       "serverError",
+				statusCode: http.StatusInternalServerError,
+			},
+			{
+				name:       "rateLimited",
+				statusCode: http.StatusTooManyRequests,
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ARRANGE
+				reader := setupTestMetrics(t)
+				transport := newMetricsTransport("1", roundTripFunc(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: tt.statusCode,
+						Body:       io.NopCloser(bytes.NewReader(nil)),
+					}, nil
+				}))
+				req, err := http.NewRequestWithContext(
+					t.Context(),
+					http.MethodPost,
+					"http://example.invalid",
+					bytes.NewReader([]byte(`{"jsonrpc":"2.0","method":"eth_blockNumber","id":1}`)),
+				)
+				require.NoError(t, err)
+
+				// ACT
+				resp, err := transport.RoundTrip(req)
+
+				// ASSERT
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = resp.Body.Close() })
+				assert.Equal(t, tt.statusCode, resp.StatusCode)
+
+				histogram := collectOperationHistogram(t, reader)
+				require.Len(t, histogram.DataPoints, 1)
+				assert.ElementsMatch(t, []attribute.KeyValue{
+					attribute.String("operation", "eth_blockNumber"),
+					attribute.String("chain_id", "1"),
+					otel.AttrResult.Int(tt.statusCode),
+				}, histogram.DataPoints[0].Attributes.ToSlice())
+			})
+		}
 	})
 
 	t.Run("recordsDurationOnTransportError", func(t *testing.T) {
@@ -89,6 +146,7 @@ func TestMetricsTransport(t *testing.T) {
 		assert.ElementsMatch(t, []attribute.KeyValue{
 			attribute.String("operation", "eth_call"),
 			attribute.String("chain_id", "11155111"),
+			otel.AttrResult.Int(-1),
 		}, histogram.DataPoints[0].Attributes.ToSlice())
 	})
 

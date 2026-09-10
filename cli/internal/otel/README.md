@@ -96,9 +96,9 @@ past the packet timeout, with a 15m source-finality guard) and can move to confi
 
 Shared label: `{otel_scope_name="ibc.evm_client"}`
 
-| metric                | type           | labels                  | notes                                                           |
-| --------------------- | -------------- | ----------------------- | --------------------------------------------------------------- |
-| `evm_operation_dur_*` | histogram (ms) | `chain_id`, `operation` | HTTP JSON-RPC latency. `operation` (e.g. `eth_getBlockByNumber) |
+| metric                | type           | labels                            | notes                                                                   |
+| --------------------- | -------------- | --------------------------------- | ----------------------------------------------------------------------- |
+| `evm_operation_dur_*` | histogram (ms) | `chain_id`, `operation`, `result` | HTTP JSON-RPC latency. `operation` is evm method, `result` is http code |
 
 ## Guide on creating new metrics
 

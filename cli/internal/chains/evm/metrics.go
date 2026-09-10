@@ -32,10 +32,6 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	return &instrumentation{Operation: operation}, nil
 }
 
-func (m *instrumentation) record(ctx context.Context, chainID, operation string, ts time.Time) {
-	otel.RecordOperation(ctx, m.Operation, operation, ts, otel.AttrChainID.String(chainID))
-}
-
 func meteredEthClient(ctx context.Context, chainID, rpcURL string) (*ethclient.Client, error) {
 	httpClient := &http.Client{
 		Transport: newMetricsTransport(chainID, http.DefaultTransport),
@@ -72,7 +68,21 @@ func (t *metricsTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	started := time.Now()
 	resp, err := t.base.RoundTrip(req)
 
-	t.metrics.record(req.Context(), t.chainID, operation, started)
+	var resultCode int
+	if resp != nil {
+		resultCode = resp.StatusCode
+	} else {
+		resultCode = -1
+	}
+
+	otel.RecordOperation(
+		req.Context(),
+		t.metrics.Operation,
+		operation,
+		started,
+		otel.AttrChainID.String(t.chainID),
+		otel.AttrResult.Int(resultCode),
+	)
 
 	return resp, err
 }
