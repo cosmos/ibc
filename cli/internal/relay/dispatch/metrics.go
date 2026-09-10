@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/internal/relay/processors"
 	"github.com/cosmos/ibc/cli/internal/store"
 )
 
@@ -34,18 +35,11 @@ const (
 	legRecvToAck     = "recv_to_ack"
 )
 
-type routeKey struct {
-	chainID      string
-	destChainID  string
-	clientID     string
-	destClientID string
-}
-
 type instrumentation struct {
 	PacketsPending        metric.Int64Gauge
 	ExcessiveRelayLatency metric.Int64Counter
 
-	routesFromPrevCall map[routeKey]struct{}
+	routesFromPrevCall map[processors.Route]struct{}
 	mu                 sync.Mutex
 }
 
@@ -65,50 +59,57 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	return &instrumentation{
 		PacketsPending:        packetsPending,
 		ExcessiveRelayLatency: excessiveRelayLatency,
-		routesFromPrevCall:    make(map[routeKey]struct{}),
+		routesFromPrevCall:    make(map[processors.Route]struct{}),
 	}, nil
 }
 
-func (m *instrumentation) packetsPending(ctx context.Context, packets []store.Packet) {
-	// map route => count
-	counts := make(map[routeKey]int64, len(packets))
+func (m *instrumentation) packetsPending(ctx context.Context, routes []processors.Route, packets []store.Packet) {
+	// map route => count, seeded with configured routes
+	// so routes without any packets yet still report 0
+	counts := make(map[processors.Route]int64, len(packets)+len(routes))
+
+	for _, route := range routes {
+		counts[route] = 0
+	}
+
 	for _, packet := range packets {
-		key := routeKey{
-			chainID:      packet.SourceChainID,
-			destChainID:  packet.DestinationChainID,
-			clientID:     packet.PacketSourceClientID,
-			destClientID: packet.PacketDestinationClientID,
+		key := processors.Route{
+			SourceChainID:       packet.SourceChainID,
+			SourceClientID:      packet.PacketSourceClientID,
+			DestinationChainID:  packet.DestinationChainID,
+			DestinationClientID: packet.PacketDestinationClientID,
 		}
+
 		counts[key]++
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for key, count := range counts {
-		m.recordPending(ctx, key, count)
+	for route, count := range counts {
+		m.recordPending(ctx, route, count)
 	}
 
 	// drop to zero metrics for routes from prev. call that are no longer present
-	for key := range m.routesFromPrevCall {
-		if _, ok := counts[key]; !ok {
-			m.recordPending(ctx, key, 0)
+	for route := range m.routesFromPrevCall {
+		if _, ok := counts[route]; !ok {
+			m.recordPending(ctx, route, 0)
 		}
 	}
 
 	// update the map for the next call
-	m.routesFromPrevCall = make(map[routeKey]struct{}, len(counts))
-	for key := range counts {
-		m.routesFromPrevCall[key] = struct{}{}
+	m.routesFromPrevCall = make(map[processors.Route]struct{}, len(counts))
+	for route := range counts {
+		m.routesFromPrevCall[route] = struct{}{}
 	}
 }
 
-func (m *instrumentation) recordPending(ctx context.Context, key routeKey, count int64) {
+func (m *instrumentation) recordPending(ctx context.Context, route processors.Route, count int64) {
 	m.PacketsPending.Record(ctx, count, otel.WithAttributes(
-		otel.AttrChainID.String(key.chainID),
-		otel.AttrDestChainID.String(key.destChainID),
-		otel.AttrClientID.String(key.clientID),
-		otel.AttrDestClientID.String(key.destClientID),
+		otel.AttrChainID.String(route.SourceChainID),
+		otel.AttrDestChainID.String(route.DestinationChainID),
+		otel.AttrClientID.String(route.SourceClientID),
+		otel.AttrDestClientID.String(route.DestinationClientID),
 	))
 }
 

@@ -34,6 +34,8 @@ type RelayDispatcher struct {
 	pollInterval time.Duration
 	logger       *slog.Logger
 
+	routes []processors.Route
+
 	cancel  context.CancelFunc
 	stopped chan struct{}
 }
@@ -49,6 +51,7 @@ func NewRelayDispatcher(
 		pipelines:    pipelines,
 		pollInterval: pollInterval,
 		logger:       logger.With("module", "dispatcher"),
+		routes:       pipelines.Routes(),
 	}
 }
 
@@ -108,7 +111,7 @@ func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) 
 		return errors.Wrap(err, "listing dispatchable packets")
 	}
 
-	metrics.packetsPending(ctx, packets)
+	metrics.packetsPending(ctx, d.routes, packets)
 	metrics.excessiveRelayLatency(ctx, packets)
 
 	for _, packet := range packets {

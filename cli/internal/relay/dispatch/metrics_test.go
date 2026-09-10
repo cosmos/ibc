@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/internal/relay/processors"
 	"github.com/cosmos/ibc/cli/internal/store"
 )
 
@@ -24,21 +25,21 @@ func TestInstrumentation(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		instruments, reader := newTestInstrumentation(t)
-		routeA := routeKey{
-			chainID:      "source-a",
-			destChainID:  "destination-a",
-			clientID:     "client-a",
-			destClientID: "destination-client-a",
+		routeA := processors.Route{
+			SourceChainID:       "source-a",
+			DestinationChainID:  "destination-a",
+			SourceClientID:      "client-a",
+			DestinationClientID: "destination-client-a",
 		}
-		routeB := routeKey{
-			chainID:      "source-b",
-			destChainID:  "destination-b",
-			clientID:     "client-b",
-			destClientID: "destination-client-b",
+		routeB := processors.Route{
+			SourceChainID:       "source-b",
+			DestinationChainID:  "destination-b",
+			SourceClientID:      "client-b",
+			DestinationClientID: "destination-client-b",
 		}
 
 		// ACT
-		instruments.packetsPending(ctx, []store.Packet{
+		instruments.packetsPending(ctx, nil, []store.Packet{
 			packetForRoute(routeA),
 			packetForRoute(routeA),
 			packetForRoute(routeB),
@@ -55,28 +56,53 @@ func TestInstrumentation(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		instruments, reader := newTestInstrumentation(t)
-		routeA := routeKey{
-			chainID:      "source-a",
-			destChainID:  "destination-a",
-			clientID:     "client-a",
-			destClientID: "destination-client-a",
+		routeA := processors.Route{
+			SourceChainID:       "source-a",
+			DestinationChainID:  "destination-a",
+			SourceClientID:      "client-a",
+			DestinationClientID: "destination-client-a",
 		}
-		routeB := routeKey{
-			chainID:      "source-b",
-			destChainID:  "destination-b",
-			clientID:     "client-b",
-			destClientID: "destination-client-b",
+		routeB := processors.Route{
+			SourceChainID:       "source-b",
+			DestinationChainID:  "destination-b",
+			SourceClientID:      "client-b",
+			DestinationClientID: "destination-client-b",
 		}
-		instruments.packetsPending(ctx, []store.Packet{packetForRoute(routeA)})
+		instruments.packetsPending(ctx, nil, []store.Packet{packetForRoute(routeA)})
 
 		// ACT
-		instruments.packetsPending(ctx, []store.Packet{packetForRoute(routeB)})
+		instruments.packetsPending(ctx, nil, []store.Packet{packetForRoute(routeB)})
 
 		// ASSERT
 		points := collectPacketsPending(ctx, t, reader)
 		require.Len(t, points, 2)
 		assert.Zero(t, points[routeA])
 		assert.Equal(t, int64(1), points[routeB])
+	})
+
+	t.Run("recordsZeroForConfiguredRouteWithNoPackets", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		instruments, reader := newTestInstrumentation(t)
+		routeB := processors.Route{
+			SourceChainID:       "source-b",
+			DestinationChainID:  "destination-b",
+			SourceClientID:      "client-b",
+			DestinationClientID: "destination-client-b",
+		}
+
+		// ACT
+		instruments.packetsPending(ctx, []processors.Route{{
+			SourceChainID:       routeB.SourceChainID,
+			SourceClientID:      routeB.SourceClientID,
+			DestinationChainID:  routeB.DestinationChainID,
+			DestinationClientID: routeB.DestinationClientID,
+		}}, nil)
+
+		// ASSERT
+		points := collectPacketsPending(ctx, t, reader)
+		require.Len(t, points, 1)
+		assert.Zero(t, points[routeB])
 	})
 
 	t.Run("serializesConcurrentRecordings", func(t *testing.T) {
@@ -93,13 +119,13 @@ func TestInstrumentation(t *testing.T) {
 			go func() {
 				defer wg.Done()
 
-				route := routeKey{
-					chainID:      fmt.Sprintf("source-%d", i),
-					destChainID:  fmt.Sprintf("destination-%d", i),
-					clientID:     fmt.Sprintf("client-%d", i),
-					destClientID: fmt.Sprintf("destination-client-%d", i),
+				route := processors.Route{
+					SourceChainID:       fmt.Sprintf("source-%d", i),
+					DestinationChainID:  fmt.Sprintf("destination-%d", i),
+					SourceClientID:      fmt.Sprintf("client-%d", i),
+					DestinationClientID: fmt.Sprintf("destination-client-%d", i),
 				}
-				instruments.packetsPending(ctx, []store.Packet{packetForRoute(route)})
+				instruments.packetsPending(ctx, nil, []store.Packet{packetForRoute(route)})
 			}()
 		}
 		wg.Wait()
@@ -281,12 +307,12 @@ func newTestInstrumentation(t *testing.T) (*instrumentation, *sdkmetric.ManualRe
 	return instruments, reader
 }
 
-func packetForRoute(route routeKey) store.Packet {
+func packetForRoute(route processors.Route) store.Packet {
 	return store.Packet{
-		SourceChainID:             route.chainID,
-		DestinationChainID:        route.destChainID,
-		PacketSourceClientID:      route.clientID,
-		PacketDestinationClientID: route.destClientID,
+		SourceChainID:             route.SourceChainID,
+		DestinationChainID:        route.DestinationChainID,
+		PacketSourceClientID:      route.SourceClientID,
+		PacketDestinationClientID: route.DestinationClientID,
 	}
 }
 
@@ -294,13 +320,13 @@ func collectPacketsPending(
 	ctx context.Context,
 	t *testing.T,
 	reader *sdkmetric.ManualReader,
-) map[routeKey]int64 {
+) map[processors.Route]int64 {
 	t.Helper()
 
 	var data metricdata.ResourceMetrics
 	require.NoError(t, reader.Collect(ctx, &data))
 
-	pointsByRoute := make(map[routeKey]int64)
+	pointsByRoute := make(map[processors.Route]int64)
 	for _, scope := range data.ScopeMetrics {
 		for _, collectedMetric := range scope.Metrics {
 			if collectedMetric.Name != "packets_pending" {
@@ -310,11 +336,11 @@ func collectPacketsPending(
 			gauge, ok := collectedMetric.Data.(metricdata.Gauge[int64])
 			require.True(t, ok)
 			for _, point := range gauge.DataPoints {
-				route := routeKey{
-					chainID:      attributeValue(t, point.Attributes, otel.AttrChainID),
-					destChainID:  attributeValue(t, point.Attributes, otel.AttrDestChainID),
-					clientID:     attributeValue(t, point.Attributes, otel.AttrClientID),
-					destClientID: attributeValue(t, point.Attributes, otel.AttrDestClientID),
+				route := processors.Route{
+					SourceChainID:       attributeValue(t, point.Attributes, otel.AttrChainID),
+					DestinationChainID:  attributeValue(t, point.Attributes, otel.AttrDestChainID),
+					SourceClientID:      attributeValue(t, point.Attributes, otel.AttrClientID),
+					DestinationClientID: attributeValue(t, point.Attributes, otel.AttrDestClientID),
 				}
 				pointsByRoute[route] = point.Value
 			}
