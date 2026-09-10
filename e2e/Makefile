@@ -5,7 +5,8 @@ E2E_MODE ?= fast
 FORGE_BUILD_FLAGS ?=
 
 HARNESS_DIR := internal/harness
-CONTRACT_BINDINGS := $(addprefix $(HARNESS_DIR)/environment/solidityibc/,\
+GEN_SOLIDITY_ABI_DIR := ../gen/go/solidity-abi
+CONTRACT_BINDINGS := $(addprefix $(GEN_SOLIDITY_ABI_DIR)/,\
 	accessmanager escrow testerc20 counter iftsendcallconstructor iftbatchtransfershim)
 
 help: ## List e2e commands
@@ -29,15 +30,15 @@ lint: ## Lint code
 lint-fix: ## Lint & fix code
 	golangci-lint run --fix
 
-test-harness: _build-link ## Run tests for e2e harness itself
+test-harness: _build-cli ## Run tests for e2e harness itself
 	go test ./internal/... ./cmd/... -count=1
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
 	bun install --cwd $(HARNESS_DIR)/environment/solidityibc/contracts --frozen-lockfile
 	forge build $(FORGE_BUILD_FLAGS) --root $(HARNESS_DIR)/environment/solidityibc/contracts
-	./scripts/generate-contract-bindings.sh
+	../scripts/generate-contract-bindings.sh
 
-test: _build-link ## Run e2e tests (E2E_MODE=... E2E_FLAGS=...)
+test: _build-cli ## Run e2e tests (E2E_MODE=... E2E_FLAGS=...)
 	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
 	E2E_MODE=$(E2E_MODE) go test . -timeout 60m -parallel 4 $(E2E_FLAGS)
 
@@ -80,11 +81,11 @@ run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 	$(MAKE) check-matrix
 
 # Hidden commands
-_build-link:
-	$(MAKE) -C ../link build
+_build-cli:
+	$(MAKE) -C ../cli build build-test-bin
 
 .PHONY: help doctor doctor-tools lint lint-fix
 .PHONY: test-harness test-apps test
 .PHONY: generate-matrix check-matrix
 .PHONY:	clean clean-dry-run check-stale run-all-checks
-.PHONY: _build-link
+.PHONY: _build-cli

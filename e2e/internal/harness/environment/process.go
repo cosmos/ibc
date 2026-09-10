@@ -2,19 +2,19 @@
 
 package environment
 
-import "github.com/cosmos/ibc/e2e/internal/harness/ibclink"
+import "github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 
-// BindIBCLink gives a Driver process-local access to every resolved Chain
+// BindCLI gives a Driver process-local access to every resolved Chain
 // endpoint without exposing endpoint values to the caller. The binding is
 // non-owning and becomes unusable when the Environment closes.
-func (e *Environment) BindIBCLink(driver *ibclink.Driver) error {
+func (e *Environment) BindCLI(driver *ibccli.Driver) error {
 	return e.lease.use(func() error {
-		resolvers := make(map[string]func() (string, error), len(e.chains))
+		resolvers := make(map[string]func() (ibccli.ChainEndpoints, error), len(e.chains))
 		for id, resolved := range e.chains {
-			resolvers[string(id)] = func() (string, error) {
-				return resolved.rpcURL, nil
+			resolvers[string(id)] = func() (ibccli.ChainEndpoints, error) {
+				return ibccli.ChainEndpoints{RPC: resolved.rpcURL, WS: resolved.wsURL}, nil
 			}
 		}
-		return driver.BindChainRPCs(resolvers, e.lease.acquire)
+		return driver.BindChainEndpoints(resolvers, e.lease.acquire)
 	})
 }

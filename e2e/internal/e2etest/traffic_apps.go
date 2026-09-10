@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc/counter"
+	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 )
 
 // NewTransfer constructs the Transfer app for a route. The sender must be the

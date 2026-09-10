@@ -2,7 +2,7 @@
 
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive IBC Link through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
 
 `internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
@@ -19,7 +19,7 @@ make -C e2e doctor
 make -C e2e test
 ```
 
-The test target builds `link/bin/ibc`; `IBC_BIN` overrides that path. The real Link Relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
+The test target builds `cli/bin/ibc`; `IBC_BIN` overrides that path. The real relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
 
 Execution modes choose providers from each test's declared requirements:
 
@@ -77,7 +77,7 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 `Environment` owns Chain clients and protocol resources. A route-scoped `e2etest` application hides only application ABI, transaction, event, and state mechanics. The test keeps deployment, relayer status, fault injection, manual relay, and application assertions visibly ordered; there is no second aggregate beside the Environment.
 
-`e2etest.NewSigner` creates an independent identity; tests create one per role and pass them explicitly — `Deploy` takes the deployer and relayer signers, the app constructors take the sender (the signer that deployed the apps). Managed Chains fund them through their resolved funding capability; an attached Chain must fund the public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary Link configuration.
+`e2etest.NewSigner` creates an independent identity; tests create one per role and pass them explicitly — `Deploy` takes the deployer and relayer signers, the app constructors take the sender (the signer that deployed the apps). Managed Chains fund them through their resolved funding capability; an attached Chain must fund the public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary IBC CLI configuration.
 
 Declare capabilities instead of naming a provider. For example, a controlled-mining test uses:
 
