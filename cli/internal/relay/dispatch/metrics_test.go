@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -114,6 +115,155 @@ func TestInstrumentation(t *testing.T) {
 		assert.Equal(t, int64(1), total)
 		assert.Len(t, instruments.routesFromPrevCall, 1)
 	})
+}
+
+func TestExcessiveRelayLatency(t *testing.T) {
+	now := time.Now()
+
+	base := store.Packet{
+		Status:                    store.RelayStatusPending,
+		SourceChainID:             "source",
+		DestinationChainID:        "dest",
+		PacketSourceClientID:      "client",
+		PacketDestinationClientID: "dest-client",
+	}
+
+	t.Run("sendToRecv", func(t *testing.T) {
+		ctx := context.Background()
+
+		t.Run("pastThreshold", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+			packet := base
+			packet.SourceTxTime = now.Add(-excessiveRelayLatency - time.Minute)
+			packet.PacketTimeoutTimestamp = now.Add(time.Hour)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			points := collectRelayLatency(ctx, t, reader)
+			require.Len(t, points, 1)
+			point := points[0]
+			assert.Equal(t, int64(1), point.value)
+			assert.Equal(t, legSendToRecv, attributeValue(t, point.attributes, otel.AttrType))
+			assert.Equal(t, "source", attributeValue(t, point.attributes, otel.AttrChainID))
+			assert.Equal(t, "dest", attributeValue(t, point.attributes, otel.AttrDestChainID))
+			assert.Equal(t, "client", attributeValue(t, point.attributes, otel.AttrClientID))
+			assert.Equal(t, "dest-client", attributeValue(t, point.attributes, otel.AttrDestClientID))
+		})
+
+		t.Run("withinThreshold", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+			packet := base
+			packet.SourceTxTime = now.Add(-time.Minute)
+			packet.PacketTimeoutTimestamp = now.Add(time.Hour)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			assert.Empty(t, collectRelayLatency(ctx, t, reader))
+		})
+	})
+
+	t.Run("recvToAck", func(t *testing.T) {
+		ctx := context.Background()
+		instruments, reader := newTestInstrumentation(t)
+
+		writeAckHash := "0xwriteack"
+		writeAckTime := now.Add(-excessiveRelayLatency - time.Minute)
+		packet := base
+		packet.WriteAckTxHash = &writeAckHash
+		packet.WriteAckTxTime = &writeAckTime
+		packet.PacketTimeoutTimestamp = now.Add(time.Hour)
+
+		instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+		points := collectRelayLatency(ctx, t, reader)
+		require.Len(t, points, 1)
+		assert.Equal(t, legRecvToAck, attributeValue(t, points[0].attributes, otel.AttrType))
+	})
+
+	t.Run("sendToTimeout", func(t *testing.T) {
+		ctx := context.Background()
+
+		t.Run("pastTimeoutPlusDelay", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+			packet := base
+			packet.PacketTimeoutTimestamp = now.Add(-timeoutExcessiveDelay - time.Minute)
+			packet.SourceTxTime = now.Add(-time.Hour)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			points := collectRelayLatency(ctx, t, reader)
+			require.Len(t, points, 1)
+			assert.Equal(t, legSendToTimeout, attributeValue(t, points[0].attributes, otel.AttrType))
+		})
+
+		t.Run("withinTimeoutDelay", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+			packet := base
+			packet.PacketTimeoutTimestamp = now.Add(-time.Minute)
+			packet.SourceTxTime = now.Add(-time.Hour)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			assert.Empty(t, collectRelayLatency(ctx, t, reader))
+		})
+
+		t.Run("waitsForSourceFinality", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+			packet := base
+			packet.PacketTimeoutTimestamp = now.Add(-timeoutExcessiveDelay - time.Minute)
+			packet.SourceTxTime = now.Add(-sourceFinalityDelay + time.Minute)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			assert.Empty(t, collectRelayLatency(ctx, t, reader))
+		})
+	})
+
+	t.Run("terminalStatusIsSkipped", func(t *testing.T) {
+		ctx := context.Background()
+		instruments, reader := newTestInstrumentation(t)
+		packet := base
+		packet.Status = store.RelayStatusCompleteWithAck
+		packet.SourceTxTime = now.Add(-time.Hour)
+		packet.PacketTimeoutTimestamp = now.Add(time.Hour)
+
+		instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+		assert.Empty(t, collectRelayLatency(ctx, t, reader))
+	})
+}
+
+func collectRelayLatency(
+	ctx context.Context,
+	t *testing.T,
+	reader *sdkmetric.ManualReader,
+) []relayLatencyPoint {
+	t.Helper()
+
+	var data metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(ctx, &data))
+
+	var points []relayLatencyPoint
+	for _, scope := range data.ScopeMetrics {
+		for _, collectedMetric := range scope.Metrics {
+			if collectedMetric.Name != "excessive_relay_latency_total" {
+				continue
+			}
+
+			sum, ok := collectedMetric.Data.(metricdata.Sum[int64])
+			require.True(t, ok)
+			for _, point := range sum.DataPoints {
+				points = append(points, relayLatencyPoint{value: point.Value, attributes: point.Attributes})
+			}
+		}
+	}
+
+	return points
+}
+
+type relayLatencyPoint struct {
+	value      int64
+	attributes attribute.Set
 }
 
 func newTestInstrumentation(t *testing.T) (*instrumentation, *sdkmetric.ManualReader) {

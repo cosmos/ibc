@@ -71,19 +71,26 @@ Completions and durations are recorded only on success (`CompleteWithAck`, `Comp
 EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
 Collections inside that threshold omit the sample. A failed query is logged and reported as `-1`.
 
-| package     | metric                         | type               | labels                                                              | notes                                                          |
-| ----------- | ------------------------------ | ------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- |
-| pipeline    | `packets_total`                | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition                                |
-| pipeline    | `batch_size_*`                 | histogram          | `chain_id`, `processor`, `result`                                   | Packet count in the batch; `batch_size_count` counts batches   |
-| processors  | `relays_completed_total`       | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                           |
-| processors  | `relay_duration_*`             | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
-| processors  | `transactions_submitted_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
-| processors  | `transactions_confirmed_total` | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
-| processors  | `transaction_retries_total`    | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
-| txsubmitter | `evm_gas_spent`                | observable counter | `chain_id`, `wallet`                                                | Cumulative successful owned EVM tx cost in native-token units  |
-| txsubmitter | `evm_gas_balance`              | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
-| watcher     | `watcher_events_total`         | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |
-| dispatch    | `packets_pending`              | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
+| package     | metric                          | type               | labels                                                              | notes                                                          |
+| ----------- | ------------------------------- | ------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| pipeline    | `packets_total`                 | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition                                |
+| pipeline    | `batch_size_*`                  | histogram          | `chain_id`, `processor`, `result`                                   | Packet count in the batch; `batch_size_count` counts batches   |
+| processors  | `relays_completed_total`        | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                           |
+| processors  | `relay_duration_*`              | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
+| processors  | `transactions_submitted_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
+| processors  | `transactions_confirmed_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
+| processors  | `transaction_retries_total`     | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
+| txsubmitter | `evm_gas_spent`                 | observable counter | `chain_id`, `wallet`                                                | Cumulative successful owned EVM tx cost in native-token units  |
+| txsubmitter | `evm_gas_balance`               | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
+| watcher     | `watcher_events_total`          | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |
+| dispatch    | `packets_pending`               | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
+| dispatch    | `excessive_relay_latency_total` | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per poll while a packet is pending past its leg threshold   |
+
+`excessive_relay_latency_total` counts packets still pending past a per-leg threshold, using the
+same `type` values as processor metrics (`send_to_recv`, `send_to_timeout`, `recv_to_ack`). It is an
+event counter, not a failure gauge: a packet that remains stuck increments on every dispatcher poll,
+so alerts should be built on `rate()`. The threshold is hard-coded for now (60m pending; timeouts 5m
+past the packet timeout, with a 15m source-finality guard) and can move to config in the future.
 
 ## Guide on creating new metrics
 

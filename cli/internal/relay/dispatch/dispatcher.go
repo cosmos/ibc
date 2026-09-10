@@ -109,6 +109,7 @@ func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) 
 	}
 
 	metrics.packetsPending(ctx, packets)
+	metrics.excessiveRelayLatency(ctx, packets)
 
 	for _, packet := range packets {
 		tr := processors.NewTransfer(packet, d.logger)
