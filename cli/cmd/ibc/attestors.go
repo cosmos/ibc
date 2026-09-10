@@ -33,7 +33,7 @@ func resolveAttestorToken(cfg config.Config, token string) (string, error) {
 // chainID: every configured attestor for that chain, resolved to an
 // address. Errors when none are configured or any is unresolvable.
 func attestorsForChain(cfg config.Config, chainID string) ([]string, error) {
-	configured := cfg.AttestorsForChain(chainID)
+	configured := cfg.AttestorsByChain(chainID)
 	if len(configured) == 0 {
 		return nil, errors.Errorf(
 			"no attestors configured for chain %s: add attestors entries or pass --attestors <address|alias,...>",

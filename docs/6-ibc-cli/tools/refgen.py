@@ -582,7 +582,7 @@ FALLBACK_DOCS = {
     ("DBConfig", "Type"): ("Database backend.", "70e2ad2c"),
     ("DBConfig", "URL"): ("File path for sqlite, connection string for postgres. `:memory:` is rejected.", "d084b0d4"),
     ("ChainConfig", "ChainID"): ("The chain's id, as the chain reports it.", "69a3e543"),
-    ("EVMChainConfig", "RPC"): ("JSON-RPC endpoint for the chain.", "cf552b01"),
+    ("EVMChainConfig", "RPC"): ("JSON-RPC endpoint for the chain.", "690d071f"),
     ("EVMChainConfig", "ICS26Router"): ("Address of the ICS26 router on the chain.", "1daaecba"),
     ("AttestorConfig", "Type"): ("Whether this process runs the attestor or queries it.", "a58f9a4e"),
     ("SignerConfig", "Type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
@@ -601,9 +601,8 @@ FALLBACK_DOCS = {
     ("ClientEnd", "Type"): ("Light client type.", "85b1564f"),
 }
 
-# Nothing is skipped. autoRelay was excluded while it parsed and had no
-# consumer; it is consumed at ccc3449 (watcher/set.go, and deploy
-# render-config writes it), so FLAG-17 is closed and the block is documented.
+# Explicit skips only. Unexported struct fields and yaml:"-" tags are dropped
+# in parse_go_config and never reach here.
 SKIP_FIELDS = set()
 
 # Pointer fields whose default is not a named constant anywhere: unset means
@@ -641,6 +640,13 @@ def _problem(kind, message, **fields):
 
 def _read(path):
     return open(os.path.join(IBC, path)).read()
+
+
+def _is_config_field(go_name, yaml_key):
+    """True when a struct field belongs in generated config docs."""
+    if yaml_key == "-":
+        return False
+    return go_name[0].isupper()
 
 
 def _config_files():
@@ -682,10 +688,13 @@ def parse_go_config():
                 elif ln:
                     f = re.match(r"(\w+)\s+([^\s`]+)(?:\s+`([^`]*)`)?", ln)
                     if f:
+                        go_name = f.group(1)
                         tag = re.search(r'yaml:"([^",]+)', f.group(3) or "")
-                        fields.append({"go": f.group(1), "type": f.group(2),
-                                       "yaml": tag.group(1) if tag else f.group(1),
-                                       "doc": " ".join(doc), "line": j + 1})
+                        yaml_key = tag.group(1) if tag else go_name
+                        if _is_config_field(go_name, yaml_key):
+                            fields.append({"go": go_name, "type": f.group(2),
+                                           "yaml": yaml_key,
+                                           "doc": " ".join(doc), "line": j + 1})
                     doc = []
                 else:
                     doc = []
@@ -712,13 +721,19 @@ def parse_go_config():
             defaults[(current, m.group(1))] = value
 
     # validation rules: every error string a struct's Validate can return
-    for m in re.finditer(r"func \(c (\w+)\) Validate\(\) error \{", src):
+    for m in re.finditer(r"func \(c (\w+)\) Validate\([^)]*\) error \{", src):
         recv = m.group(1)
         tail = src[m.end():]
         tail = tail[:tail.index("\n}\n")]
         msgs = []
         for e in re.finditer(r'errors\.(?:New|Errorf)\("(\.[^"]+)"((?:,\s*\w+)*)', tail):
             msgs.append((e.group(1), [a.strip() for a in e.group(2).split(",") if a.strip()]))
+        for e in re.finditer(r'errPathf\("([^"]+)",\s*"([^"]+)"((?:,\s*[\w.]+)*)', tail):
+            msgs.append((f".{e.group(1)} {e.group(2)}",
+                         [a.strip() for a in e.group(3).split(",") if a.strip()]))
+        for e in re.finditer(r'errPathIndexf\(\w+,\s*"([^"]+)"((?:,\s*[\w.]+)*)', tail):
+            msgs.append((f".[] {e.group(1)}",
+                         [a.strip() for a in e.group(2).split(",") if a.strip()]))
         validations[recv] = msgs
 
     return {"structs": structs, "aliases": aliases, "consts": consts,

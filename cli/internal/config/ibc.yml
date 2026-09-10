@@ -19,12 +19,12 @@ chains:
       rpc: https://ethereum-rpc.example.com
       # ws is required by any client end that enables autoRelay
       ws: wss://ethereum-rpc.example.com
-      ics26Router: "0x0000000000000000000000000000000000000000"
+      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ws: wss://base-rpc.example.com
-      ics26Router: "0x0000000000000000000000000000000000000000"
+      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
 
 relayer:
   # relay specific chain settings
@@ -44,7 +44,6 @@ relayer:
         type: "attestation"
         autoRelay:
           enabled: true
-          lookback: 100
       clientB:
         chainId: "8453"
         signer: "base-relayer-key"
@@ -52,7 +51,6 @@ relayer:
         type: "attestation"
         autoRelay:
           enabled: true
-          lookback: 100
 
     # a client end of type: remote delegates proof generation to a
     # ProverService over gRPC instead of building proofs from attestations, so

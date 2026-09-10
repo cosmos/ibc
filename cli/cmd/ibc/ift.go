@@ -24,7 +24,7 @@ import (
 
 var (
 	cmdTxIFT = &cobra.Command{
-		Use:   useIFT,
+		Use:   keyIFT,
 		Short: "IFT transaction subcommands",
 	}
 
@@ -48,7 +48,7 @@ var (
 	}
 
 	cmdQueryIFT = &cobra.Command{
-		Use:   useIFT,
+		Use:   keyIFT,
 		Short: "IFT query subcommands",
 	}
 

@@ -82,11 +82,13 @@ EOF
 ## 2. Validate the config
 
 ```bash
-./bin/ibc config validate --config ibc-relayer2.yml --live --strict
+./bin/ibc config validate relayer --config ibc-relayer2.yml --live
 ```
 
 ```json
 {
+  "path": "/home/you/.ibc/ibc-relayer2.yml",
+  "relayer": "valid",
   "status": "valid"
 }
 ```
