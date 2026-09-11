@@ -56,6 +56,8 @@ type Result struct {
 	Recovered   int
 	// Unresolved sequences the next pass will probe again.
 	Unresolved int
+	// Abandoned sequences held on record that no pass will probe again.
+	Abandoned int
 }
 
 // Clearer recovers packets the subscription never saw. It asks the chain which
@@ -67,6 +69,7 @@ type Clearer struct {
 	routes  map[string]config.ClientEnd
 	chain   OutstandingQuerier
 	storage ClearStore
+	abandon bool
 	logger  *slog.Logger
 }
 
@@ -75,6 +78,7 @@ func NewClearer(
 	connections []config.ConnectionConfig,
 	chain OutstandingQuerier,
 	storage ClearStore,
+	clearing ClearConfig,
 	logger *slog.Logger,
 ) *Clearer {
 	return &Clearer{
@@ -82,6 +86,7 @@ func NewClearer(
 		routes:  routesOf(chainID, connections),
 		chain:   chain,
 		storage: storage,
+		abandon: clearing.AbandonUnrecoverablePackets,
 		logger:  logger.With("module", "clearer", "chainID", chainID),
 	}
 }
@@ -137,7 +142,16 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 
 	from := state.LastProbed + 1
 
+	// abandoned sequences are carried rather than probed: dropping them from the
+	// probe is what bounds the pass, and keeping them on record is what lets an
+	// operator who later has an archive endpoint recover them by turning the
+	// setting back off.
+	// ponytail: the abandoned set is read every pass and thrown away; make the
+	// query aware of the setting if anyone parks enough of them to notice.
 	reprobe := state.Unresolved
+	if c.abandon {
+		reprobe = nil
+	}
 
 	outstanding, probed, probeHeight, err := c.outstanding(ctx, clientID, reprobe, from, latest, head.Height)
 	if err != nil {
@@ -168,7 +182,11 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 	// rather than probed had nothing learned about it, so it stays untouched
 	delta := unresolvedDelta(reprobe, unresolved, probeHeight)
 
-	result.Unresolved = len(unresolved)
+	if c.abandon {
+		result.Abandoned = len(state.Unresolved) + len(delta.Add)
+	} else {
+		result.Unresolved = len(unresolved)
+	}
 
 	return result, c.persist(ctx, clientID, rows, latest, delta)
 }
@@ -204,9 +222,20 @@ func unresolvedDelta(probed, unresolved []uint64, height uint64) store.Unresolve
 }
 
 func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
+	if c.abandon {
+		c.logger.Warn(
+			"Abandoning packets whose send log no endpoint would serve: their escrow stays locked "+
+				"and no pass will look at them again until abandonUnrecoverablePackets is turned off",
+			"clientID", clientID,
+			"sequences", sequences,
+		)
+
+		return
+	}
+
 	// nothing drains this set on an endpoint that has permanently pruned the
 	// logs, so these are re-probed forever. Point the relayer at an archive
-	// endpoint.
+	// endpoint, or abandon them.
 	c.logger.Warn(
 		"Outstanding packets whose send log no endpoint would serve: their escrow stays locked "+
 			"and every pass will retry them",

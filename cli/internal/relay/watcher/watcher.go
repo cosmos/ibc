@@ -39,6 +39,9 @@ type ClearConfig struct {
 	OnStart bool
 	// Interval how often a pass runs after that.
 	Interval time.Duration
+	// AbandonUnrecoverablePackets drops packets whose send log the endpoint will
+	// not serve out of the probe set, keeping the record of them.
+	AbandonUnrecoverablePackets bool
 }
 
 // Watcher records a packet row for every SendPacket event one chain emits on
@@ -92,7 +95,7 @@ func New(
 		routes:     routesOf(chainID, connections),
 		subscriber: subscriber,
 		storage:    storage,
-		clearer:    NewClearer(chainID, connections, querier, storage, logger),
+		clearer:    NewClearer(chainID, connections, querier, storage, clearing, logger),
 		clearing:   clearing,
 		minBackoff: minBackoff,
 		maxBackoff: maxBackoff,
@@ -322,6 +325,7 @@ func (w *Watcher) clear(ctx context.Context) {
 			"alreadyHeld", result.AlreadyHeld,
 			"recovered", result.Recovered,
 			"unresolved", result.Unresolved,
+			"abandoned", result.Abandoned,
 			"took", time.Since(started),
 		)
 	}
