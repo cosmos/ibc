@@ -90,6 +90,19 @@ func TestConfig(t *testing.T) {
 				},
 				errContains: "observability.otelFile: required",
 			},
+			{
+				name: "empty log level",
+				patch: func(c *Config) {
+					c.Logging.Level = ""
+				},
+			},
+			{
+				name: "invalid log level",
+				patch: func(c *Config) {
+					c.Logging.Level = "verbose"
+				},
+				errContains: "logging.level: must be one of",
+			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				config := DefaultConfig()

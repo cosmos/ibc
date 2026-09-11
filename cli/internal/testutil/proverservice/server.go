@@ -95,7 +95,14 @@ func NewAttestationServer(ctx context.Context, configPath string) (*http.Server,
 			{conn.ClientA, conn.ClientB},
 			{conn.ClientB, conn.ClientA},
 		} {
-			gen, resolveErr := attestation.ResolveGenerator(ctx, end.self, end.counterparty, clients, attestors)
+			gen, resolveErr := attestation.ResolveGenerator(
+				ctx,
+				end.self,
+				end.counterparty,
+				clients,
+				attestors,
+				slog.Default(),
+			)
 			if resolveErr != nil {
 				return nil, errors.Wrapf(resolveErr, "connection %q", conn.Alias)
 			}

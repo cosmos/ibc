@@ -46,7 +46,7 @@ func init() {
 	config.DeclarePersistentFlags(rootCmd, &globalFlags)
 
 	cobra.OnInitialize(func() {
-		slog.SetDefault(logging.Default(globalFlags.LogJSON))
+		slog.SetDefault(logging.Default(globalFlags.LogJSON, globalFlags.LogLevel))
 	})
 
 	rootCmd.AddCommand(
