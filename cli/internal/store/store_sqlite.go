@@ -317,6 +317,50 @@ func (db *SqliteDB) ListDispatchablePackets(ctx context.Context) ([]Packet, erro
 	return packets, nil
 }
 
+func (db *SqliteDB) MaxPacketSequence(ctx context.Context, chainID string, clientID string) (uint64, error) {
+	db.logger.Debug("MaxPacketSequence", "chainID", chainID, "clientID", clientID)
+
+	if chainID == "" || clientID == "" {
+		return 0, errors.New("chainID and clientID are required")
+	}
+
+	highest, err := db.repo.MaxPacketSequence(ctx, chainID, clientID)
+	if err != nil {
+		return 0, errNormalize(err)
+	}
+
+	return uint64(highest), nil //nolint:gosec // sequences fit in int64
+}
+
+func (db *SqliteDB) ListPacketSequencesFrom(
+	ctx context.Context,
+	chainID string,
+	clientID string,
+	fromSequence uint64,
+) ([]uint64, error) {
+	db.logger.Debug("ListPacketSequencesFrom", "chainID", chainID, "clientID", clientID, "from", fromSequence)
+
+	if chainID == "" || clientID == "" {
+		return nil, errors.New("chainID and clientID are required")
+	}
+
+	rows, err := db.repo.ListPacketSequencesFrom(ctx, reposqlite.ListPacketSequencesFromParams{
+		ChainID:      chainID,
+		ClientID:     clientID,
+		FromSequence: int64(fromSequence), //nolint:gosec // sequences fit in int64
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+
+	sequences := make([]uint64, len(rows))
+	for i, row := range rows {
+		sequences[i] = uint64(row) //nolint:gosec // sequences fit in int64
+	}
+
+	return sequences, nil
+}
+
 func (db *SqliteDB) UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error {
 	db.logger.Debug("UpdatePacketStatus", "key", key, "status", status)
 

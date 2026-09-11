@@ -19,7 +19,7 @@ type Set []*Watcher
 func NewSetFromConfig(
 	cfg config.Config,
 	clientSet *chains.ClientSet,
-	storage PacketStore,
+	storage ClearStore,
 	logger *slog.Logger,
 ) (Set, error) {
 	var set Set
@@ -39,7 +39,12 @@ func NewSetFromConfig(
 			chain.ChainID,
 			connections,
 			client,
+			client,
 			storage,
+			ClearConfig{
+				OnStart:  cfg.Relayer.ClearOnStartEnabled(),
+				Interval: cfg.Relayer.ClearIntervalFor(chain.ChainID),
+			},
 			DefaultMinBackoff,
 			DefaultMaxBackoff,
 			logger,
