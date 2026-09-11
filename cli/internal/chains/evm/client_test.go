@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/cli/internal/chains/evm/contracts/attestation"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -792,6 +793,317 @@ func TestGetAttestationSet(t *testing.T) {
 		// ASSERT
 		require.ErrorContains(t, err, "querying attestation set")
 		require.ErrorContains(t, err, "rpc down")
+	})
+}
+
+func TestLatestPacketSequence(t *testing.T) {
+	ctx := context.Background()
+
+	// keccak256("base-0" ++ 0x1260…601), the unpadded string key against the
+	// padded prevSequenceSends slot index
+	expectedSlot := common.HexToHash("0x5d9c6256e629bef42ce9a3c8e61a797cd3e91ccf3abfe2902aa51a431f3089bf")
+
+	t.Run("readsDerivedSlot", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().
+			StorageAt(ctx, common.HexToAddress(routerAddress), expectedSlot, blockLatest).
+			Return(common.BigToHash(big.NewInt(7)).Bytes(), nil).
+			Once()
+
+		sequence, err := client.LatestPacketSequence(ctx, "base-0", v2.LatestBlock)
+
+		require.NoError(t, err)
+		assert.Equal(t, uint64(7), sequence)
+	})
+
+	t.Run("heightSelectsTheBlock", func(t *testing.T) {
+		for name, height := range map[string]uint64{
+			"finalized": v2.FinalizedBlock,
+			"numbered":  1234,
+		} {
+			t.Run(name, func(t *testing.T) {
+				client, eth := newTestClient(t)
+				eth.EXPECT().
+					StorageAt(ctx, mock.Anything, expectedSlot, heightToBigInt(height)).
+					Return(common.BigToHash(big.NewInt(7)).Bytes(), nil).
+					Once()
+
+				sequence, err := client.LatestPacketSequence(ctx, "base-0", height)
+
+				require.NoError(t, err)
+				assert.Equal(t, uint64(7), sequence)
+			})
+		}
+	})
+
+	t.Run("zeroSlotMeansNothingSent", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().StorageAt(ctx, mock.Anything, expectedSlot, mock.Anything).Return(make([]byte, 32), nil).Once()
+
+		sequence, err := client.LatestPacketSequence(ctx, "base-0", v2.LatestBlock)
+
+		require.NoError(t, err)
+		assert.Zero(t, sequence)
+	})
+
+	t.Run("oversizedWordIsALayoutError", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		word := make([]byte, 32)
+		word[0], word[31] = 0x01, 0x2a
+		eth.EXPECT().StorageAt(ctx, mock.Anything, expectedSlot, mock.Anything).Return(word, nil).Once()
+
+		sequence, err := client.LatestPacketSequence(ctx, "base-0", v2.LatestBlock)
+
+		require.ErrorContains(t, err, "layout has moved")
+		// the low eight bytes hold a plausible 42: truncating would hide this
+		assert.Zero(t, sequence)
+	})
+
+	t.Run("rpcError", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().StorageAt(ctx, mock.Anything, expectedSlot, mock.Anything).Return(nil, assert.AnError).Once()
+
+		_, err := client.LatestPacketSequence(ctx, "base-0", v2.LatestBlock)
+
+		require.ErrorContains(t, err, "reading prevSequenceSends")
+	})
+}
+
+// commitmentProbe is the inner multicall call the client sends per sequence.
+func commitmentProbe(t *testing.T, clientID string, sequence uint64) []byte {
+	t.Helper()
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	data, err := routerABI.Pack(
+		commitmentMethod,
+		crypto.Keccak256Hash(hostv2.PacketCommitmentKey(clientID, sequence)),
+	)
+	require.NoError(t, err)
+
+	return data
+}
+
+func multicallCalls(t *testing.T, callData []byte) [][]byte {
+	t.Helper()
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	args, err := routerABI.Methods["multicall"].Inputs.Unpack(callData[4:])
+	require.NoError(t, err)
+
+	calls, ok := args[0].([][]byte)
+	require.True(t, ok)
+
+	return calls
+}
+
+func multicallResults(t *testing.T, results [][]byte) []byte {
+	t.Helper()
+
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	out, err := routerABI.Methods["multicall"].Outputs.Pack(results)
+	require.NoError(t, err)
+
+	return out
+}
+
+func TestPacketCommitments(t *testing.T) {
+	ctx := context.Background()
+
+	sequences := make([]uint64, commitmentProbeChunk+1)
+	for i := range sequences {
+		sequences[i] = uint64(i) + 1
+	}
+
+	t.Run("chunksAndReturnsLiveSequencesOnly", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		live := map[string]bool{
+			string(commitmentProbe(t, "base-0", 5)):                      true,
+			string(commitmentProbe(t, "base-0", commitmentProbeChunk+1)): true,
+		}
+
+		var (
+			chunkSizes []int
+			blocks     []*big.Int
+		)
+
+		eth.EXPECT().
+			CallContract(ctx, mock.Anything, mock.Anything).
+			RunAndReturn(func(_ context.Context, msg ethereum.CallMsg, block *big.Int) ([]byte, error) {
+				calls := multicallCalls(t, msg.Data)
+				chunkSizes = append(chunkSizes, len(calls))
+				blocks = append(blocks, block)
+
+				results := make([][]byte, len(calls))
+				for i, call := range calls {
+					results[i] = make([]byte, 32)
+					if live[string(call)] {
+						results[i][31] = 1
+					}
+				}
+
+				return multicallResults(t, results), nil
+			}).
+			Twice()
+
+		outstanding, err := client.PacketCommitments(ctx, "base-0", sequences, 4242)
+
+		require.NoError(t, err)
+		assert.Equal(t, []int{commitmentProbeChunk, 1}, chunkSizes)
+		assert.Equal(t, []uint64{5, commitmentProbeChunk + 1}, outstanding)
+
+		// every chunk names the height it was asked for, never the latest tag
+		assert.Equal(t, []*big.Int{big.NewInt(4242), big.NewInt(4242)}, blocks)
+	})
+
+	t.Run("secondChunkFailureDiscardsTheFirst", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		chunks := 0
+
+		eth.EXPECT().
+			CallContract(ctx, mock.Anything, mock.Anything).
+			RunAndReturn(func(_ context.Context, msg ethereum.CallMsg, _ *big.Int) ([]byte, error) {
+				chunks++
+				if chunks > 1 {
+					return nil, errors.New("rpc down")
+				}
+
+				calls := multicallCalls(t, msg.Data)
+				results := make([][]byte, len(calls))
+
+				for i := range results {
+					results[i] = make([]byte, 32)
+					results[i][31] = 1
+				}
+
+				return multicallResults(t, results), nil
+			}).
+			Twice()
+
+		outstanding, err := client.PacketCommitments(ctx, "base-0", sequences, 4242)
+
+		require.ErrorContains(t, err, "probing 1 commitments for client base-0")
+		assert.Nil(t, outstanding)
+	})
+}
+
+func TestFindSendPackets(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("omitsSequencesWithNoLog", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		log := sendPacketLog(t, common.HexToAddress(routerAddress), testPacket())
+		log.BlockNumber = 100
+		log.TxHash = txHash
+
+		var query ethereum.FilterQuery
+
+		eth.EXPECT().
+			FilterLogs(ctx, mock.Anything).
+			RunAndReturn(func(_ context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
+				query = q
+				return []types.Log{*log}, nil
+			}).
+			Once()
+		// headers are fetched through the errgroup's derived context
+		eth.EXPECT().
+			HeaderByNumber(mock.Anything, big.NewInt(100)).
+			Return(&types.Header{Time: 1752000000}, nil).
+			Once()
+
+		events, err := client.FindSendPackets(ctx, "base-0", []uint64{42, 43})
+
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		assert.Equal(t, v2.KindSendPacket, events[0].Kind)
+		assert.Equal(t, uint64(42), events[0].Packet.Sequence)
+		assert.Equal(t, txHash.String(), events[0].TxHash)
+		assert.Equal(t, time.Unix(1752000000, 0).UTC(), events[0].BlockTime)
+		// unbounded range, both sequences in the topic OR-list
+		assert.Nil(t, query.FromBlock)
+		assert.Nil(t, query.ToBlock)
+		require.Len(t, query.Topics, 3)
+		assert.Len(t, query.Topics[2], 2)
+	})
+
+	t.Run("noSequences", func(t *testing.T) {
+		client, _ := newTestClient(t)
+
+		events, err := client.FindSendPackets(ctx, "base-0", nil)
+
+		require.NoError(t, err)
+		assert.Empty(t, events)
+	})
+
+	t.Run("eachBlockIsFetchedOnce", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		// two logs in block 100, one in 101: the header reads follow the
+		// distinct blocks, not the logs
+		logs := make([]types.Log, 0, 3)
+
+		for i, blockNumber := range []uint64{100, 100, 101} {
+			packet := testPacket()
+			packet.Sequence = uint64(i + 1)
+
+			log := sendPacketLog(t, common.HexToAddress(routerAddress), packet)
+			log.BlockNumber = blockNumber
+			log.TxHash = txHash
+
+			logs = append(logs, *log)
+		}
+
+		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return(logs, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(mock.Anything, big.NewInt(100)).
+			Return(&types.Header{Time: 1752000000}, nil).
+			Once()
+		eth.EXPECT().
+			HeaderByNumber(mock.Anything, big.NewInt(101)).
+			Return(&types.Header{Time: 1752000012}, nil).
+			Once()
+
+		events, err := client.FindSendPackets(ctx, "base-0", []uint64{1, 2, 3})
+
+		require.NoError(t, err)
+		require.Len(t, events, 3)
+		assert.Equal(t, time.Unix(1752000000, 0).UTC(), events[0].BlockTime)
+		assert.Equal(t, time.Unix(1752000000, 0).UTC(), events[1].BlockTime)
+		assert.Equal(t, time.Unix(1752000012, 0).UTC(), events[2].BlockTime)
+	})
+
+	t.Run("headerErrorFailsTheBatch", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		log := sendPacketLog(t, common.HexToAddress(routerAddress), testPacket())
+		log.BlockNumber = 100
+
+		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return([]types.Log{*log}, nil).Once()
+		eth.EXPECT().
+			HeaderByNumber(mock.Anything, big.NewInt(100)).
+			Return(nil, errors.New("rpc down")).
+			Once()
+
+		_, err := client.FindSendPackets(ctx, "base-0", []uint64{42})
+
+		require.ErrorContains(t, err, "getting header 100")
+	})
+
+	t.Run("filterError", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().FilterLogs(ctx, mock.Anything).Return(nil, errors.New("rpc down")).Once()
+
+		_, err := client.FindSendPackets(ctx, "base-0", []uint64{42})
+
+		require.ErrorContains(t, err, "filtering SendPacket logs")
 	})
 }
 

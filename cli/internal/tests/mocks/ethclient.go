@@ -581,6 +581,86 @@ func (_c *MockETHClient_SendTransaction_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// StorageAt provides a mock function for the type MockETHClient
+func (_mock *MockETHClient) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
+	ret := _mock.Called(ctx, account, key, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StorageAt")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, common.Hash, *big.Int) ([]byte, error)); ok {
+		return returnFunc(ctx, account, key, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, common.Hash, *big.Int) []byte); ok {
+		r0 = returnFunc(ctx, account, key, blockNumber)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, common.Address, common.Hash, *big.Int) error); ok {
+		r1 = returnFunc(ctx, account, key, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockETHClient_StorageAt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StorageAt'
+type MockETHClient_StorageAt_Call struct {
+	*mock.Call
+}
+
+// StorageAt is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account common.Address
+//   - key common.Hash
+//   - blockNumber *big.Int
+func (_e *MockETHClient_Expecter) StorageAt(ctx any, account any, key any, blockNumber any) *MockETHClient_StorageAt_Call {
+	return &MockETHClient_StorageAt_Call{Call: _e.mock.On("StorageAt", ctx, account, key, blockNumber)}
+}
+
+func (_c *MockETHClient_StorageAt_Call) Run(run func(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int)) *MockETHClient_StorageAt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 common.Address
+		if args[1] != nil {
+			arg1 = args[1].(common.Address)
+		}
+		var arg2 common.Hash
+		if args[2] != nil {
+			arg2 = args[2].(common.Hash)
+		}
+		var arg3 *big.Int
+		if args[3] != nil {
+			arg3 = args[3].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockETHClient_StorageAt_Call) Return(bytes []byte, err error) *MockETHClient_StorageAt_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockETHClient_StorageAt_Call) RunAndReturn(run func(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)) *MockETHClient_StorageAt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SubscribeFilterLogs provides a mock function for the type MockETHClient
 func (_mock *MockETHClient) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
 	ret := _mock.Called(ctx, q, ch)
