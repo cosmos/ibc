@@ -34,22 +34,22 @@
 #       A  ◀──IBC──▶  B
 #
 #
-# Five phases, always run together:
-#   1. init      derive every key, render the chain configs into chains/local/
-#   2. start     docker compose up both chains, wait for RPC
-#   3. deploy    ibc deploy core + client on each chain (writing
-#                chains/local/link.env), then an IFT token per chain and the
+# Four phases, always run together:
+#   1. start     derive every key, render the chain configs into chains/local/,
+#                docker compose up both chains, wait for RPC
+#   2. deploy    ibc deploy core + client on each chain (writing
+#                chains/local/ibc.env), then an IFT token per chain and the
 #                bridge between them
-#   4. link      docker compose up kms, both attestors, relayer
-#   5. transfer  mint IFT on chain A, send it to chain B, and wait for the
+#   3. services  docker compose up kms, both attestors, relayer
+#   4. transfer  mint IFT on chain A, send it to chain B, and wait for the
 #                relayer to deliver it — the end-to-end assertion
 #
 # Usage:
-#   ./setup.sh              — run all five (the demo)
+#   ./setup.sh              — run all four (the demo)
 #   ./setup.sh roundtrip    — relay A -> B -> A. The return leg is what
-#                             exercises attestor-b. Skips phases 1-4 when the
+#                             exercises attestor-b. Skips phases 1-3 when the
 #                             stack is already up and deployed.
-#   ./setup.sh clean        — stop containers, remove volumes and chains/local/
+#   ./setup.sh clean        — stop containers and remove chains/local/
 #
 # Environment (optional):
 #   A_MNEMONIC           BIP-39 phrase every chain A account derives from
@@ -74,7 +74,7 @@
 #                        only and need no balance.
 #   FUNDED_ACCOUNTS      how many accounts from each chain's phrase to pre-fund
 #                        in its genesis (default 5). init logs every address.
-#   IBC_IMAGE / KMS_IMAGE image overrides for the link services and the remote
+#   IBC_IMAGE / KMS_IMAGE image overrides for the IBC services and the remote
 #                        signer; their defaults live in docker-compose.yml
 #   GENESIS_BALANCE      hex wei per funded account (default 1 000 000 ETH)
 #   QBFT_BLOCK_PERIOD_SECONDS / QBFT_EPOCH_LENGTH /
@@ -135,7 +135,7 @@ export QBFT_REQUEST_TIMEOUT_SECONDS="${QBFT_REQUEST_TIMEOUT_SECONDS:-4}"
 
 source "$LIB_DIR/common.sh"
 source "$LIB_DIR/chains.sh"
-source "$LIB_DIR/link.sh"
+source "$LIB_DIR/ibc.sh"
 
 # The transfer phase feeds these to `(( ))` and to `sleep`. Checked up front so
 # a unit suffix — IFT_POLL_INTERVAL=3s — is a message here rather than an
@@ -146,49 +146,48 @@ for var in IFT_RELAY_TIMEOUT IFT_POLL_INTERVAL IFT_MINT_AMOUNT IFT_SEND_AMOUNT; 
 done
 (( IFT_POLL_INTERVAL > 0 )) || die "IFT_POLL_INTERVAL must be greater than 0"
 
-cmd_init() {
+# Deriving the keys and starting the chains are one phase: every key here comes
+# from a mnemonic and is reproduced on every run, so there is no state to
+# inspect between rendering the genesis and booting the node that rendered it.
+cmd_start() {
   check_prerequisites
   log "--- Phase 1A: Derive keys + render chain configs ---"
   init_chains
-  log "--- Phase 1B: Derive kms keys + link.env ---"
-  init_link
-}
-
-cmd_start() {
-  run_phase "Phase 2A: Start chains"  start_chains
-  run_phase "Phase 2B: Wait for RPC"  wait_for_chains
+  log "--- Phase 1B: Derive kms keys ---"
+  init_ibc
+  run_phase "Phase 1C: Start chains"  start_chains
+  run_phase "Phase 1D: Wait for RPC"  wait_for_chains
   print_status
   log "Chains are live and producing blocks."
 }
 
 cmd_deploy() {
-  run_phase "Phase 3A: Deploy IBC on both chains" deploy_contracts
-  run_phase "Phase 3B: Deploy the IFT token and bridge" deploy_ift
+  run_phase "Phase 2A: Deploy IBC on both chains" deploy_contracts
+  run_phase "Phase 2B: Deploy the IFT token and bridge" deploy_ift
 }
 
-cmd_link() {
-  run_phase "Phase 4: Start IBC Link services" start_link
+cmd_services() {
+  run_phase "Phase 3: Start the IBC services" start_ibc
   docker compose ps
 }
 
 cmd_transfer() {
-  run_phase "Phase 5: Relay an IFT transfer A -> B" relay_ift_transfer
+  run_phase "Phase 4: Relay an IFT transfer A -> B" relay_ift_transfer
 }
 
 cmd_roundtrip() {
-  run_phase "Phase 5: Relay an IFT round trip A -> B -> A" relay_ift_roundtrip
+  run_phase "Phase 4: Relay an IFT round trip A -> B -> A" relay_ift_roundtrip
 }
 
-# Phases 1-4. Every step is idempotent, so this is the same work whether the
+# Phases 1-3. Every step is idempotent, so this is the same work whether the
 # stack is cold or already up.
 bring_up() {
   log "╔══════════════════════════════════════════════════╗"
-  log "║  besu-to-besu: 2 Besu QBFT chains (A, B) + Link  ║"
+  log "║  besu-to-besu: 2 Besu QBFT chains (A, B) + IBC   ║"
   log "╚══════════════════════════════════════════════════╝"
-  cmd_init
   cmd_start
   cmd_deploy
-  cmd_link
+  cmd_services
 }
 
 main() {
@@ -196,11 +195,11 @@ main() {
     clean) clean;                      exit 0 ;;
     "")    bring_up; cmd_transfer;     exit 0 ;;
     roundtrip)
-      # Phase 5 on its own against a stack that is already up — this is the
-      # command to reach for when iterating on the relay itself. Phases 1-4 run
+      # Phase 4 on its own against a stack that is already up — this is the
+      # command to reach for when iterating on the relay itself. Phases 1-3 run
       # only when there is nothing usable to relay over.
       if stack_ready; then
-        log "Stack is up and deployed — running phase 5 only."
+        log "Stack is up and deployed — running phase 4 only."
       else
         bring_up
       fi
@@ -212,9 +211,9 @@ main() {
 Usage: $0 [roundtrip|clean]
 
   (no argument)  bring the stack up and relay one transfer, A -> B
-  roundtrip      relay A -> B -> A. Runs phase 5 alone against a stack that is
+  roundtrip      relay A -> B -> A. Runs phase 4 alone against a stack that is
                  already up and deployed, and brings one up first if not.
-  clean          stop containers, remove volumes and chains/local/
+  clean          stop containers and remove chains/local/
 EOF
       exit 1
       ;;

@@ -5,7 +5,7 @@ server:
 
 db:
   type: sqlite
-  url: ibc.db
+  url: /data/ibc.db
 
 signers:
   - alias: relayer-a

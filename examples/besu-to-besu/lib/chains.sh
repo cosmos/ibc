@@ -303,6 +303,7 @@ _append_chain_env() {
 init_chains() {
   mkdir -p "$LOCAL_DIR"
   chmod 755 "$LOCAL_DIR"
+  mkdir -p "$LOCAL_DIR/data/A" "$LOCAL_DIR/data/B"
   _start_chains_env
   local name
   for name in "${CHAINS[@]}"; do
@@ -343,11 +344,9 @@ print_status() {
 }
 
 clean() {
-  log "Stopping containers and removing volumes..."
+  log "Stopping containers..."
   docker compose down -v --remove-orphans 2>/dev/null || true
 
-  # Drop everything derived from the mnemonic so the next init starts from a
-  # clean slate. The committed templates in chains/ are left alone.
   rm -rf "$LOCAL_DIR" 2>/dev/null || true
 
   log "Clean complete"

@@ -2,9 +2,10 @@
 
 # besu-to-besu
 
-Two independent single-validator Besu QBFT chains and the IBC Link services that
-move a token between them. One command brings up the chains, deploys IBC on
-both, and relays a transfer from A to B.
+Two independent single-validator Besu QBFT chains and the IBC services that move
+a token between them, with every signature produced by a remote signer. One
+command brings up the chains, deploys IBC on both, and relays a transfer from A
+to B.
 
 ```
         chain A (41001)                     chain B (41002)
@@ -20,7 +21,15 @@ both, and relays a transfer from A to B.
               │                                   │
               └──────────▶┌───────────┐◀──────────┘
                           │  relayer  │
-                          └───────────┘
+                          └─────┬─────┘
+                                │
+              ┌─────────────────┴─────────────────┐
+              │  Sign (gRPC)                      │
+              ▼                                   │
+        ┌───────────┐                             │
+        │    kms    │◀────────────────────────────┘
+        └───────────┘   attestor-a, attestor-b,
+                        relayer-a, relayer-b
 ```
 
 Each attestor watches one chain and signs attestations about it, nothing else.
@@ -34,8 +43,10 @@ and an RPC connection to both chains. A transfer from A to B goes:
    Chain B's light client verifies it against the attestor it authorizes —
    attestor-a, the counterparty's, not its own.
 
-kms serves all four signing keys over gRPC; no key is on disk in any other
-container.
+**None of those signatures is produced locally.** Both attestors and the relayer
+are configured with `type: remote` signers pointing at
+[cosmos/kms](https://github.com/cosmos/kms), which holds all four keys and
+serves them over gRPC.
 
 ## Quick start
 
@@ -53,7 +64,7 @@ Takes about two minutes on a warm cache, and ends with:
 
 ```
 [14:14:17] [A] minting 1000000000000000000 DEMO to 0x58A57ed9...
-[14:14:20] [A] sending 500000000000000000 DEMO to 0x58A57ed9... on chain B over link-41001-41002...
+[14:14:20] [A] sending 500000000000000000 DEMO to 0x58A57ed9... on chain B over ibc-41001-41002...
 [14:14:22]       sent in 0xbc60671b3e081d770e8704f0e6c4c25ba9fe0bfeae0a1d99418dd17dc1a5f146
 [14:14:22]       handing the packet to the relayer...
 [14:14:22]       waiting for chain B's balance to go 0 -> 500000000000000000...
@@ -70,12 +81,12 @@ no mint — it spends what the first leg delivered — so chain B ends where it
 started and chain A ends holding everything it minted:
 
 ```bash
-./setup.sh roundtrip    # phase 5 alone when the stack is already up
+./setup.sh roundtrip    # phase 4 alone when the stack is already up
 ```
 
 ```
 [14:13:27]       relayed A -> B: 0x58A57ed9... holds 500000000000000000 DEMO on chain B
-[14:13:29] [B] sending 500000000000000000 DEMO to 0x58A57ed9... on chain A over link-41001-41002...
+[14:13:29] [B] sending 500000000000000000 DEMO to 0x58A57ed9... on chain A over ibc-41001-41002...
 [14:13:48]       relayed B -> A: 0x58A57ed9... holds 1000000000000000000 DEMO on chain A
 [14:13:50] DEMO held by the deployer: chain A 1000000000000000000, chain B 0
 ```
@@ -85,13 +96,13 @@ The return leg is what exercises attestor-b and chain A's client, so a one-way
 demo leaves half the stack unverified.
 
 `roundtrip` is also the command for iterating on the relay itself. It checks
-whether the stack is usable — all four values in `link.env`, both IFT tokens in
-the manifests, and all six containers healthy — and if so runs phase 5 alone, in
+whether the stack is usable — all four values in `ibc.env`, both IFT tokens in
+the manifests, and all six containers healthy — and if so runs phase 4 alone, in
 about 45 seconds instead of two minutes. If any of that is missing or the
 containers are stopped, it brings the stack up first.
 
 ```bash
-./setup.sh clean        # stop containers, remove volumes and chains/local/
+./setup.sh clean        # stop containers and remove chains/local/
 ```
 
 Three commands, on purpose. Re-running any of them against a live stack is safe
@@ -107,16 +118,15 @@ docker compose logs -f relayer
 docker compose exec attestor-a /opt/ibc attestor info attestor-a --home /home/ibc
 ```
 
-## The five phases
+## The four phases
 
 They always run together; the names are internal, not subcommands.
 
 | Phase      | What it does                                                     |
 |------------|------------------------------------------------------------------|
-| `init`     | derive every key, render the chain configs into `chains/local/`  |
-| `start`    | `docker compose up` both chains, wait for RPC                    |
-| `deploy`   | `ibc deploy core` + `client` on each chain (writing `link.env`), then GMP, an IFT token per chain, and the bridge |
-| `link`     | `docker compose up` kms, both attestors, relayer                 |
+| `start`    | derive every key, render the chain configs into `chains/local/`, `docker compose up` both chains, wait for RPC |
+| `deploy`   | `ibc deploy core` + `client` on each chain (writing `ibc.env`), then GMP, an IFT token per chain, and the bridge |
+| `services` | `docker compose up` kms, both attestors, relayer                 |
 | `transfer` | mint IFT on A, send it to B, relay it, assert the balance moved — and with `roundtrip`, send it back |
 
 ## What makes this example different
@@ -153,7 +163,7 @@ logs. Local devnet only — never send real funds to any address this prints.
 ## Signing keys
 
 The init phase derives four keys from the same mnemonics and writes them to
-`chains/local/kms/keys/<id>.hex`, one per `grpc.keys` entry in `link/kms.yaml`.
+`chains/local/kms/keys/<id>.hex`, one per `grpc.keys` entry in `config/kms.yaml`.
 Every run prints them.
 
 | kms key id   | Source                     | Used by    | Needs gas |
@@ -169,10 +179,10 @@ chain A the moment they differ. The attestors sit at *different* indices for the
 opposite reason — the two mnemonics default to the same phrase, and a shared
 index would give two supposedly independent attestors one address.
 
-All four are `algorithm: secp256k1eth` in `link/kms.yaml`, not `secp256k1`. Only
+All four are `algorithm: secp256k1eth` in `config/kms.yaml`, not `secp256k1`. Only
 that scheme signs a pre-hashed 32-byte digest and returns the 65-byte
 recoverable signature `AttestationLightClient.sol` recovers an attestor address
-from; link rejects any other scheme at startup.
+from; the attestor rejects any other scheme at startup.
 
 The keys are written mode `0644`, unlike the `0600` Besu validator keys, because
 the kms image runs unprivileged (uid 10001) and could not otherwise read them
@@ -181,7 +191,7 @@ through the bind mount on Linux.
 ## Deploying
 
 The deploy phase puts IBC on both chains through the one-shot `deployer`
-compose service — the same `ibc` image with [link/deploy.yml](link/deploy.yml)
+compose service — the same `ibc` image with [config/deploy.yml](config/deploy.yml)
 mounted. Running it in a container means no Go toolchain on the host, and
 `besu-a` / `besu-b` resolve exactly as they do for the real services. Per chain:
 
@@ -197,12 +207,11 @@ authorizes **B's** attestor — the counterparty's, not its own. `threshold 1`
 because each chain has exactly one attestor here.
 
 The deployer is the one key that cannot live in kms: `ibc deploy` needs the raw
-private key and rejects a `type: remote` signer outright. That is why
-`link/deploy.yml` is separate from `link/ibc.yml` — it keeps the only local key
-in the example out of the relayer's config and out of the relayer's process.
+private key and rejects a `type: remote` signer outright (`deployer signer %q
+must be a local key`).
 
 Deployment writes a manifest per chain to `chains/local/deploy/deployments/`,
-and `deploy` then writes `chains/local/link.env`. Only the router addresses are
+and `deploy` then writes `chains/local/ibc.env`. Only the router addresses are
 read back out of the manifests (`.core.router`); the client id is passed to
 `deploy client` explicitly, so it is known before anything runs and needs no
 parsing.
@@ -228,7 +237,7 @@ ibc deploy ift    --chain <id> --name --symbol       # one token per chain
 ibc deploy ift-bridge --chain-a A --ift-a … --chain-b B --ift-b … --client-id …
 ibc tx ift mint   --chain A --ift … --from deployer-a --to <sender>   --amount 1e18
 ibc tx ift send   --chain A --ift … --from deployer-a --to <receiver> --amount 5e17 \
-                  --client-id link-41001-41002
+                  --client-id ibc-41001-41002
 ibc relayer relay --tx-hash <the send tx> --chain-id A
 ibc query ift balance --chain B --ift … --address <receiver>
 ```
@@ -239,9 +248,9 @@ ibc query ift balance --chain B --ift … --address <receiver>
 deployment recorded for chain <id>`).
 
 **The relay step is explicit.** `relayer.connections[].autoRelay` exists in the
-config schema and validates, but nothing in `link` reads `.Enabled` or
+config schema and validates, but nothing in the relayer reads `.Enabled` or
 `.Lookback` yet, so a packet sits unrelayed until it is handed to the relayer by
-transaction hash. That is why `link/ibc.yml` carries no `autoRelay` block: it
+transaction hash. That is why `config/ibc.yml` carries no `autoRelay` block: it
 would only imply a behaviour that is not wired up. `relayer relay` runs inside
 the `relayer` container, since the command dials the relayer's own gRPC and only
 its config describes it.
@@ -258,7 +267,7 @@ counterparty's attestor, and `deploy ift-bridge` registers a bridge on both
 tokens — so the return leg needs no extra setup.
 
 `tx ift` and `deploy` both need the raw private key, so both run as the
-`deployer` service against `link/deploy.yml`. The transfer defaults are
+`deployer` service against `config/deploy.yml`. The transfer defaults are
 overridable: `IFT_NAME`, `IFT_SYMBOL`, `IFT_MINT_AMOUNT`, `IFT_SEND_AMOUNT`,
 `IFT_RELAY_TIMEOUT` (120), `IFT_POLL_INTERVAL` (3). The last two are whole
 seconds with no unit suffix — `3`, not `3s`. Changing `IFT_NAME` or
@@ -281,7 +290,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
   http://localhost:8745   # → 0xa02a  (= 41002, chain B)
 ```
 
-The link services all listen on 3000 internally:
+The IBC services all listen on 3000 internally:
 
 | Service    | gRPC (host) |
 |------------|------------:|
@@ -299,7 +308,7 @@ so they stay off the LAN. Container-to-container traffic goes over the
 performs no caller authentication or authorization at all, so anything that can
 reach it can sign with any of the four keys. It stays on the compose network
 only; use `docker compose exec kms ...` to inspect it. A real deployment sets
-`tls_cert` / `tls_key` in `link/kms.yaml` and puts network controls in front.
+`tls_cert` / `tls_key` in `config/kms.yaml` and puts network controls in front.
 
 ## Configuration
 
@@ -322,8 +331,8 @@ To run local relayer or attestor changes, build the image and point `IBC_IMAGE`
 at it:
 
 ```bash
-docker build -t ibc-link:local --target target-builder ../../link
-IBC_IMAGE=ibc-link:local ./setup.sh
+docker build -t ibc:local --target target-builder ../../cli
+IBC_IMAGE=ibc:local ./setup.sh
 ```
 
 ## Troubleshooting
@@ -333,10 +342,10 @@ provided`.** `IBC_IMAGE` is too old. It must come from a commit that has both
 the `deploy` command and the unified top-level `attestors[]` list — older
 `attestor.attestations[]` entries carry no `type` and no `grpc`, so they cannot
 express a standalone external attestor. Check the tag first; rebuild one with
-`gh workflow run ibc-link-build.yml --ref <branch>`, which tags the image after
+`gh workflow run ibc-cli-build.yml --ref <branch>`, which tags the image after
 the ref it runs on.
 
-**A link service exits at startup.** All four values in `chains/local/link.env`
+**An IBC service exits at startup.** All four values in `chains/local/ibc.env`
 are required, and each is missed at a different stage:
 
 | Symptom on startup                               | Cause                       |
@@ -349,10 +358,6 @@ are required, and each is missed at a different stage:
 An attestor that cannot reach kms, or a client authorizing the wrong attestor
 address, both surface here.
 
-**Stale state after an upgrade.** `./setup.sh clean` removes containers, volumes,
-and `chains/local/`. It cannot remove a volume that a previous version of
-`docker-compose.yml` named and this one does not; `docker volume ls` will show
-any leftovers under the `besu-to-besu_` prefix.
 
 ## Layout
 
@@ -367,9 +372,9 @@ examples/besu-to-besu/
 │   │                             RPC waiter, render_template, cast_cli
 │   ├── chains.sh               — derivation, QBFT extraData, rendering, start /
 │   │                             wait / status / clean
-│   └── link.sh                 — kms key derivation, deployment, link.env,
+│   └── ibc.sh                  — kms key derivation, deployment, ibc.env,
 │                                 the IFT transfer
-├── link/                       — committed, no secrets. Bind-mounted verbatim:
+├── config/                     — committed, no secrets. Bind-mounted verbatim:
 │   ├── kms.yaml                — gRPC-only remote signer, 4 secp256k1eth keys
 │   ├── attestor-a.yml          — standalone attestor for chain A
 │   ├── attestor-b.yml          — standalone attestor for chain B
@@ -380,15 +385,19 @@ examples/besu-to-besu/
     ├── el-genesis.json.tmpl    — ${CHAIN_ID}, ${QBFT_EXTRADATA}, ${GENESIS_ALLOC}
     └── local/                  — generated, gitignored:
         ├── chains.env          — addresses, deployer keys, chain IDs, RPC URLs
-        ├── link.env            — router addresses and client ids, written by
+        ├── ibc.env             — router addresses and client ids, written by
         │                         the deploy phase
         ├── kms/keys/*.hex      — the four signing keys kms serves
         ├── deploy/keys/        — the two deployer keyfiles
         ├── deploy/deployments/ — one deployment manifest per chain
+        ├── data/{A,B}/         — each chain's Besu database
+        ├── relayer/            — the relayer's ibc.db and its wal, mounted at
+        │                         /data (db.url in config/ibc.yml)
         ├── A/{besu.toml, el-genesis.json, key}
         └── B/{besu.toml, el-genesis.json, key}
 ```
 
-The `link/*.yml` placeholders are expanded by link itself (`os.ExpandEnv` at
+
+The `config/*.yml` placeholders are expanded by the `ibc` binary itself (`os.ExpandEnv` at
 config load), not by `render_template` — which is why these are plain committed
 files rather than `.tmpl` files under `chains/`.

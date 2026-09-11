@@ -10,17 +10,21 @@
 #     kms  ◀── Sign ──┬── attestor-a ──┐
 #                     ├── attestor-b ──┤ StateAttestation / PacketAttestation
 #                     └── relayer  ◀───┘
-x-link-service: &link-service
+x-ibc-service: &ibc-service
   image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
   env_file:
-    - path: ./chains/local/link.env
+    - path: ./chains/local/ibc.env
       required: false
   networks: [ besu-besu-net ]
   restart: on-failure
 
+x-host-user: &host-user
+  user: "${DEPLOY_UID:-65532}:${DEPLOY_GID:-65532}"
+
 services:
 
   besu-a:
+    <<: *host-user
     image: ${BESU_IMAGE:-hyperledger/besu:25.4.0}
     container_name: besu-a
     command:
@@ -34,7 +38,7 @@ services:
       - "127.0.0.1:8546:8546"
       - "127.0.0.1:9545:9545"
     volumes:
-      - besu-a-data:/data
+      - ./chains/local/data/A:/data
       - ./chains/local/A:/evm:ro
     networks: [ besu-besu-net ]
     restart: on-failure
@@ -46,6 +50,7 @@ services:
       start_period: 10s
 
   besu-b:
+    <<: *host-user
     image: ${BESU_IMAGE:-hyperledger/besu:25.4.0}
     container_name: besu-b
     command:
@@ -59,7 +64,7 @@ services:
       - "127.0.0.1:8746:8546"
       - "127.0.0.1:9745:9545"
     volumes:
-      - besu-b-data:/data
+      - ./chains/local/data/B:/data
       - ./chains/local/B:/evm:ro
     networks: [ besu-besu-net ]
     restart: on-failure
@@ -74,7 +79,7 @@ services:
     image: ${KMS_IMAGE:-ghcr.io/cosmos/kms:latest}
     container_name: kms
     volumes:
-      - ./link/kms.yaml:/home/kms/kms.yaml:ro
+      - ./config/kms.yaml:/home/kms/kms.yaml:ro
       - ./chains/local/kms/keys:/home/kms/keys:ro
     networks: [ besu-besu-net ]
     restart: on-failure
@@ -86,11 +91,11 @@ services:
       start_period: 5s
 
   attestor-a:
-    <<: *link-service
+    <<: *ibc-service
     container_name: attestor-a
     command: [ "attestor", "run", "--home", "/home/ibc" ]
     volumes:
-      - ./link/attestor-a.yml:/home/ibc/ibc.yml:ro
+      - ./config/attestor-a.yml:/home/ibc/ibc.yml:ro
     ports:
       - "127.0.0.1:3010:3000"
     depends_on:
@@ -106,13 +111,13 @@ services:
       start_period: 10s
 
   attestor-b:
-    <<: *link-service
+    <<: *ibc-service
     container_name: attestor-b
     command: [ "attestor", "run", "--home", "/home/ibc" ]
     volumes:
-      - ./link/attestor-b.yml:/home/ibc/ibc.yml:ro
+      - ./config/attestor-b.yml:/home/ibc/ibc.yml:ro
     ports:
-      - "127.0.0.1:3011:3000" 
+      - "127.0.0.1:3011:3000"
     depends_on:
       besu-b:
         condition: service_healthy
@@ -126,11 +131,11 @@ services:
       start_period: 10s
 
   deployer:
+    <<: *host-user
     image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
     profiles: [ tools ]
-    user: "${DEPLOY_UID:-65532}:${DEPLOY_GID:-65532}"
     volumes:
-      - ./link/deploy.yml:/home/ibc/ibc.yml:ro
+      - ./config/deploy.yml:/home/ibc/ibc.yml:ro
       - ./chains/local/deploy/keys:/home/ibc/keys
       - ./chains/local/deploy/deployments:/home/ibc/deployments
     networks: [ besu-besu-net ]
@@ -141,19 +146,20 @@ services:
         condition: service_healthy
 
   relayer:
-    <<: *link-service
+    <<: [ *ibc-service, *host-user ]
     container_name: relayer
     command: [ "relayer", "run", "--home", "/home/ibc" ]
     volumes:
-      - relayer-home:/home/ibc
-      - ./link/ibc.yml:/home/ibc/ibc.yml:ro
+      - ./chains/local/relayer:/data
+      - ./config/ibc.yml:/home/ibc/ibc.yml:ro
     ports:
-      - "127.0.0.1:3000:3000"   # loopback only — see besu-a
+      - "127.0.0.1:3000:3000"
     depends_on:
       attestor-a:
         condition: service_healthy
       attestor-b:
         condition: service_healthy
+
     healthcheck:
       test: [ "CMD", "nc", "-z", "127.0.0.1", "3000" ]
       interval: 5s
@@ -161,11 +167,6 @@ services:
       retries: 30
       start_period: 10s
 
-
-volumes:
-  besu-a-data:
-  besu-b-data:
-  relayer-home:
 
 networks:
   besu-besu-net:
