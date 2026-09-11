@@ -52,6 +52,22 @@ type Repository interface {
 	// NOT_SELECTED ones included.
 	ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)
 
+	// GetClearingState returns how far clearing has probed a client. A client we hold no state for
+	// returns the zero value and no error, which means "probe from the first sequence".
+	GetClearingState(ctx context.Context, chainID string, clientID string) (ClearingState, error)
+
+	// SetClearingState advances a client's watermark and applies delta to its
+	// unresolved set. It is a delta rather than a replacement so a pass can
+	// leave sequences it did not probe alone instead of deleting them by
+	// omission.
+	SetClearingState(
+		ctx context.Context,
+		chainID string,
+		clientID string,
+		lastProbed uint64,
+		delta UnresolvedDelta,
+	) error
+
 	UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error
 
 	UpdatePacketRecvTx(ctx context.Context, key PacketKey, tx PacketTx) error
@@ -78,6 +94,25 @@ type PacketTx struct {
 	Hash           string
 	Time           time.Time
 	RelayerAddress string
+}
+
+// ClearingState how far clearing has probed one client's sequence space.
+type ClearingState struct {
+	// LastProbed every sequence at or below it is settled, recorded, or in Unresolved.
+	LastProbed uint64
+	// Unresolved sequences outstanding on chain that could not be recorded; normally empty.
+	Unresolved []uint64
+}
+
+// UnresolvedDelta the change one clearing pass makes to a client's unresolved set.
+type UnresolvedDelta struct {
+	// Add sequences found outstanding with no send log to record them from.
+	Add []uint64
+	// Resolve sequences the pass probed that no longer need remembering.
+	Resolve []uint64
+	// Height the pass probed at. Adds are recorded with it, and a resolve below
+	// the height a sequence was last seen live at is refused.
+	Height uint64
 }
 
 // WriteAck the write acknowledgement observed for a packet.

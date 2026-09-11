@@ -520,4 +520,100 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		require.NoError(t, err)
 		assert.Empty(t, sequences)
 	})
+
+	t.Run("clearingState", func(t *testing.T) {
+		const clientID = "watermark-0"
+
+		// a client we hold no state for reads as "probe from one", not as an error
+		state, err := s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, ClearingState{}, state)
+
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 4_999_900, UnresolvedDelta{
+			Add:    []uint64{12, 4_200_000},
+			Height: 10,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, ClearingState{LastProbed: 4_999_900, Unresolved: []uint64{12, 4_200_000}}, state)
+
+		// the state is scoped to the chain as well as the client
+		state, err = s.GetClearingState(ctx, chainIDBase, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, ClearingState{}, state)
+
+		// the delta touches only what it names: 12 goes unmentioned and survives
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_000, UnresolvedDelta{
+			Add:     []uint64{4_300_000},
+			Resolve: []uint64{4_200_000},
+			Height:  20,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, ClearingState{LastProbed: 5_000_000, Unresolved: []uint64{12, 4_300_000}}, state)
+
+		// re-adding a sequence already held is a noop rather than a conflict,
+		// which is what leaves its first_seen_at alone
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_010, UnresolvedDelta{
+			Add:    []uint64{12},
+			Height: 30,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{12, 4_300_000}, state.Unresolved)
+
+		// an empty delta advances the watermark and leaves the set standing
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_050, UnresolvedDelta{}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(5_000_050), state.LastProbed)
+		assert.Equal(t, []uint64{12, 4_300_000}, state.Unresolved)
+
+		// and resolving the rest empties it
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_060, UnresolvedDelta{
+			Resolve: []uint64{12, 4_300_000},
+			Height:  50,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Empty(t, state.Unresolved)
+
+		// a slow pass finishing behind a faster one cannot drag the watermark back
+		// over sequences that pass already probed. Its delta still applies
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 4_000_000, UnresolvedDelta{
+			Add:    []uint64{77},
+			Height: 100,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(5_000_060), state.LastProbed)
+		assert.Equal(t, []uint64{77}, state.Unresolved)
+
+		// a pass reading below the height the commitment was last seen live at is
+		// a lagging node, not a settled packet, so its resolve is refused
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_070, UnresolvedDelta{
+			Resolve: []uint64{77},
+			Height:  90,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{77}, state.Unresolved)
+
+		// a pass reading at or above it resolves
+		require.NoError(t, s.SetClearingState(ctx, chainIDEth, clientID, 5_000_080, UnresolvedDelta{
+			Resolve: []uint64{77},
+			Height:  100,
+		}))
+
+		state, err = s.GetClearingState(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Empty(t, state.Unresolved)
+	})
 }
