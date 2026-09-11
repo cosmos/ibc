@@ -721,7 +721,7 @@ def parse_go_config():
             defaults[(current, m.group(1))] = value
 
     # validation rules: every error string a struct's Validate can return
-    for m in re.finditer(r"func \(c (\w+)\) Validate\([^)]*\) error \{", src):
+    for m in re.finditer(r"func \((?:\w+ )?\*?(\w+)\) Validate\([^)]*\) error \{", src):
         recv = m.group(1)
         tail = src[m.end():]
         tail = tail[:tail.index("\n}\n")]
@@ -734,10 +734,67 @@ def parse_go_config():
         for e in re.finditer(r'errPathIndexf\(\w+,\s*"([^"]+)"((?:,\s*[\w.]+)*)', tail):
             msgs.append((f".[] {e.group(1)}",
                          [a.strip() for a in e.group(2).split(",") if a.strip()]))
+        unknown = {c for c in re.findall(r'\b((?:errors|fmt)\.\w+|errPath\w*)\(', tail)
+                   if c not in KNOWN_ERR_CTORS}
+        if unknown:
+            raise SourceError(
+                f"{recv}.Validate() builds errors with {', '.join(sorted(unknown))}, "
+                "which this scraper does not read. Validation rules drive the "
+                "required column, enum values, and the discriminators, so an unread "
+                "constructor silently empties all three. Teach parse_go_config() to "
+                "read it, or add it to KNOWN_ERR_CTORS if it carries no field rule.")
+
+        helpers = {h for h in re.findall(r'\.(validate\w+)', tail)
+                   if h not in KNOWN_VALIDATE_HELPERS}
+        if helpers:
+            raise SourceError(
+                f"{recv}.Validate() delegates to {', '.join(sorted(helpers))}, whose "
+                "body this scraper does not follow: the path segment is at the call "
+                "site and the message is inside the helper, so the rule cannot be "
+                "reassembled. Its checks would go unread while the page still "
+                "renders. Add it to KNOWN_VALIDATE_HELPERS once you have confirmed "
+                "what the page should say about the fields it guards.")
         validations[recv] = msgs
 
     return {"structs": structs, "aliases": aliases, "consts": consts,
             "const_type": const_type, "defaults": defaults, "validations": validations}
+
+
+# Ways a Validate() body is allowed to build an error. The scraper reads some of
+# these as field rules and knows the rest carry none. Anything outside this set is
+# a refusal, because an unread constructor harvests nothing and nothing is exactly
+# what a green check looks like: the config package moved to errPathf helpers and
+# every rule in it went invisible at once, while the pages still rendered.
+KNOWN_ERR_CTORS = {
+    "errors.New", "errors.Errorf",          # read as field rules
+    "errors.Wrap", "errors.Wrapf",          # wrap a nested Validate(), no rule
+    "errPath", "errPathIndex",              # wrap a nested error, no rule
+    "errPathf", "errPathIndexf",            # both read above
+    "fmt.Errorf", "fmt.Sprintf",            # message construction, no path segment
+}
+
+# Structs whose Validate() legitimately yields no field rule: they check
+# cross-references and delegate to nested Validate() calls rather than rejecting a
+# field's own value. Asserted in test-refgen.py, so a struct cannot go silent.
+# Validate() bodies delegate some checks to helpers on the same receiver, and the
+# scraper does not follow them: the path segment lives at the call site and the
+# message inside the helper, so the rule cannot be reassembled reliably. These are
+# the helpers that exist today. A new one is a refusal, because its rules would go
+# unread and required-ness, constraints, and fingerprints would silently drift.
+#
+# evm.ics26Router is the live example: validateICS26Router requires it, but only
+# when the caller passes the flag, so the page's "optional" is deliberate rather
+# than a miss. Do not "fix" it by asserting required.
+KNOWN_VALIDATE_HELPERS = {
+    "validateAutoRelay", "validateChainOverrides", "validateChainReferences",
+    "validateConnectionSigners", "validateConnections", "validateICS26Router",
+    "validateRunnable",
+}
+
+RULELESS_VALIDATORS = {
+    "Attestors", "Config", "ServerConfig",   # check cross-references, delegate the rest
+    "AttestationParams",                     # `return nil`, satisfies an interface
+}
 
 
 def _const_value(path, name):

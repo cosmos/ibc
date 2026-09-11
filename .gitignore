@@ -15,3 +15,7 @@ examples/besu-to-besu/logs/
 
 go.work
 go.work.sum
+
+# Python bytecode from docs/6-ibc-cli/tools
+__pycache__/
+*.pyc
