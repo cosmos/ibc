@@ -84,7 +84,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Provers
-	provers, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...))
+	provers, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...), logger)
 	if err != nil {
 		return nil, err
 	}
