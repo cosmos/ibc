@@ -4,6 +4,7 @@ package attestation
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -61,7 +62,14 @@ func TestResolveGenerator(t *testing.T) {
 
 		candidate := localCandidate(t, "watches-b", conn.ClientB.ChainID, "0xAAA")
 
-		gen, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
+		gen, err := ResolveGenerator(
+			ctx,
+			conn.ClientA,
+			conn.ClientB,
+			clientSet,
+			[]attestor.Attestor{candidate},
+			slog.Default(),
+		)
 
 		require.NoError(t, err, "address match is case-insensitive")
 		require.NotNil(t, gen)
@@ -79,7 +87,14 @@ func TestResolveGenerator(t *testing.T) {
 
 		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xaaa")
 
-		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
+		_, err := ResolveGenerator(
+			ctx,
+			conn.ClientA,
+			conn.ClientB,
+			clientSet,
+			[]attestor.Attestor{candidate},
+			slog.Default(),
+		)
 
 		require.ErrorContains(t, err, `only 1 reachable/matching attestors for chain "8453"`)
 		require.ErrorContains(t, err, "on-chain quorum requires 2")
@@ -99,7 +114,14 @@ func TestResolveGenerator(t *testing.T) {
 		first := localCandidate(t, "watcher-1", conn.ClientB.ChainID, "0xaaa")
 		second := localCandidate(t, "watcher-2", conn.ClientB.ChainID, "0xAAA")
 
-		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{first, second})
+		_, err := ResolveGenerator(
+			ctx,
+			conn.ClientA,
+			conn.ClientB,
+			clientSet,
+			[]attestor.Attestor{first, second},
+			slog.Default(),
+		)
 
 		require.ErrorContains(t, err, `attestors "watcher-1" and "watcher-2" share address "0xAAA"`)
 	})
@@ -115,7 +137,14 @@ func TestResolveGenerator(t *testing.T) {
 		// address not registered on-chain
 		candidate := localCandidate(t, "watcher", conn.ClientB.ChainID, "0xdeadbeef")
 
-		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
+		_, err := ResolveGenerator(
+			ctx,
+			conn.ClientA,
+			conn.ClientB,
+			clientSet,
+			[]attestor.Attestor{candidate},
+			slog.Default(),
+		)
 
 		require.ErrorContains(t, err, "only 0 reachable/matching attestors")
 	})
@@ -131,7 +160,14 @@ func TestResolveGenerator(t *testing.T) {
 		// wrong chain, despite matching address
 		candidate := localCandidate(t, "watcher", "some-other-chain", "0xaaa")
 
-		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, []attestor.Attestor{candidate})
+		_, err := ResolveGenerator(
+			ctx,
+			conn.ClientA,
+			conn.ClientB,
+			clientSet,
+			[]attestor.Attestor{candidate},
+			slog.Default(),
+		)
 
 		require.ErrorContains(t, err, "only 0 reachable/matching attestors")
 	})
@@ -140,7 +176,7 @@ func TestResolveGenerator(t *testing.T) {
 		conn := testConnection()
 		clientSet := chains.NewClientSet(nil)
 
-		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, nil)
+		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, nil, slog.Default())
 
 		require.ErrorContains(t, err, `no configured chain client for "1"`)
 	})
@@ -153,7 +189,7 @@ func TestResolveGenerator(t *testing.T) {
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{conn.ClientA.ChainID: selfChain})
 
-		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, nil)
+		_, err := ResolveGenerator(ctx, conn.ClientA, conn.ClientB, clientSet, nil, slog.Default())
 
 		require.ErrorContains(t, err, `no configured chain client for counterparty chain "8453"`)
 	})
