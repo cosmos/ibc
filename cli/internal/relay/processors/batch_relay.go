@@ -4,6 +4,7 @@ package processors
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -70,6 +71,7 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 // via txSubmitter
 func relayPackets(
 	ctx context.Context,
+	logger *slog.Logger,
 	chainClient chains.Client,
 	prover prover.Prover,
 	txBuilder txbuilder.TxBuilder,
@@ -79,6 +81,14 @@ func relayPackets(
 	proofHeight uint64,
 	events []v2.PacketEvent,
 ) (*v2.Submission, error) {
+	sequences := make([]uint64, len(events))
+	for i, event := range events {
+		sequences[i] = event.Packet.Sequence
+	}
+
+	logger = logger.With("kind", relayKind, "clientID", clientID, "proofHeight", proofHeight, "sequences", sequences)
+	logger.Debug("Relaying packets")
+
 	stateProof, err := prover.StateProof(ctx, proofHeight)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating state proof")
@@ -133,6 +143,8 @@ func relayPackets(
 	if err != nil {
 		return nil, errors.Wrap(err, "submitting relay tx")
 	}
+
+	logger.Info("Relayed packets", "txHash", submission.TxHash)
 
 	return submission, nil
 }
