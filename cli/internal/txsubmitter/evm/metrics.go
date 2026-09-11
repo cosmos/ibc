@@ -31,10 +31,14 @@ type chainWallet struct {
 }
 
 type walletMetrics struct {
-	address              common.Address
-	client               balanceClient
-	lastBalanceAt        time.Time
-	lastBalance          *big.Int
+	address common.Address
+	client  balanceClient
+
+	lastBalanceAt  time.Time
+	lastBalance    *big.Int
+	lastBalanceErr error
+	balanceMu      sync.Mutex
+
 	cumulativeGasCostWei *big.Int
 }
 
@@ -173,13 +177,12 @@ func (m *instrumentation) observeGasBalance(ctx context.Context, observer metric
 	now := time.Now()
 	wg := sync.WaitGroup{}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	wallets := m.snapshotWallets()
 
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	for key, w := range m.wallets {
+	for key, w := range wallets {
 		wg.Add(1)
 
 		go func(key chainWallet, w *walletMetrics) {
@@ -207,17 +210,31 @@ func (m *instrumentation) observeGasBalance(ctx context.Context, observer metric
 	return nil
 }
 
+func (m *instrumentation) snapshotWallets() map[chainWallet]*walletMetrics {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	wallets := make(map[chainWallet]*walletMetrics, len(m.wallets))
+	for key, w := range m.wallets {
+		wallets[key] = w
+	}
+
+	return wallets
+}
+
 func (w *walletMetrics) getBalance(ctx context.Context, now time.Time) (*big.Int, error) {
-	// no-op
+	w.balanceMu.Lock()
+	defer w.balanceMu.Unlock()
+
 	if now.Sub(w.lastBalanceAt) < observationThreshold {
-		return w.lastBalance, nil
+		return w.lastBalance, w.lastBalanceErr
 	}
 
 	balance, err := w.client.BalanceAt(ctx, w.address, nil)
-	if err == nil {
-		w.lastBalance = balance
-		w.lastBalanceAt = now
-	}
+
+	w.lastBalance = balance
+	w.lastBalanceErr = err
+	w.lastBalanceAt = now
 
 	return balance, err
 }

@@ -320,13 +320,51 @@ func TestGasBalance(t *testing.T) {
 			Return(nil, errors.New("rpc down")).Once()
 		instruments.setWallet("chain-a", wallet, client)
 
+		expected := map[chainWallet]float64{
+			{chainID: "chain-a", wallet: wallet}: -1,
+		}
+
+		// ACT & ASSERT
+		assert.Equal(t, expected, gasBalanceValues(t, collectGasBalance(ctx, t, reader)))
+		assert.Equal(t, expected, gasBalanceValues(t, collectGasBalance(ctx, t, reader)))
+	})
+
+	t.Run("doesNotHoldInstrumentationLockDuringQuery", func(t *testing.T) {
+		// ARRANGE
+		instruments, reader := installTestMetrics(t)
+		client := mocks.NewMockTxSubmitterETHClient(t)
+		wallet := common.HexToAddress("0x01").String()
+		started := make(chan struct{})
+		release := make(chan struct{})
+		client.EXPECT().BalanceAt(mock.Anything, common.HexToAddress(wallet), (*big.Int)(nil)).
+			Run(func(context.Context, common.Address, *big.Int) {
+				close(started)
+				<-release
+			}).
+			Return(big.NewInt(0), nil).Once()
+		instruments.setWallet("chain-a", wallet, client)
+
+		collectDone := make(chan error, 1)
+		go func() {
+			var data metricdata.ResourceMetrics
+			collectDone <- reader.Collect(context.Background(), &data)
+		}()
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("balance query did not start")
+		}
+
 		// ACT
-		values := gasBalanceValues(t, collectGasBalance(ctx, t, reader))
+		acquired := instruments.mu.TryLock()
+		if acquired {
+			instruments.mu.Unlock()
+		}
+		close(release)
 
 		// ASSERT
-		assert.Equal(t, map[chainWallet]float64{
-			{chainID: "chain-a", wallet: wallet}: -1,
-		}, values)
+		assert.True(t, acquired)
+		require.NoError(t, <-collectDone)
 	})
 }
 
@@ -450,12 +488,12 @@ func expectBalance(t *testing.T, client *mocks.MockTxSubmitterETHClient, wallet 
 func expireBalanceCache(t *testing.T, instruments *instrumentation) {
 	t.Helper()
 
-	instruments.mu.Lock()
-	defer instruments.mu.Unlock()
-
 	stale := time.Now().Add(-observationThreshold)
-	for _, wallet := range instruments.wallets {
+
+	for _, wallet := range instruments.snapshotWallets() {
+		wallet.balanceMu.Lock()
 		wallet.lastBalanceAt = stale
+		wallet.balanceMu.Unlock()
 	}
 }
 
