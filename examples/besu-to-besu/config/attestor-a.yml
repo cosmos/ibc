@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  listenAddr: 0.0.0.0:3000
+
+signers:
+  - alias: attestor-key
+    type: remote
+    grpc: kms:9090
+    remoteKeyId: attestor-a
+
+chains:
+  - chainId: "41001"
+    evm:
+      rpc: http://besu-a:8545
+      ics26Router: "${A_ICS26_ROUTER}"
+
+attestors:
+  - name: attestor-a
+    chainId: "41001"
+    type: local
+    signer: attestor-key
+    finalityOffset: 1
