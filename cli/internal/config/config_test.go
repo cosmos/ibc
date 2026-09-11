@@ -15,6 +15,8 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+	unsetEnv(t, envOtelConfigFile)
+
 	t.Run("Validate", func(t *testing.T) {
 		for _, tt := range []struct {
 			name        string
@@ -47,6 +49,46 @@ func TestConfig(t *testing.T) {
 					c.DB.URL = ""
 				},
 				errContains: "db.url: must not be empty",
+			},
+			{
+				name: "metrics disabled",
+				patch: func(c *Config) {
+					c.Observability.Metrics = false
+					c.Observability.Type = "invalid"
+					c.Observability.SimpleMetricsListenAddr = "invalid"
+				},
+			},
+			{
+				name: "metrics enabled simple",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.Type = ObservabilitySimple
+					c.Observability.SimpleMetricsListenAddr = "127.0.0.1:9090"
+				},
+			},
+			{
+				name: "invalid observability type",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.Type = "prometheus"
+				},
+				errContains: "observability.type",
+			},
+			{
+				name: "invalid observability listen address",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.SimpleMetricsListenAddr = "invalid"
+				},
+				errContains: "observability.simpleMetricsListenAddr",
+			},
+			{
+				name: "otel observability config required",
+				patch: func(c *Config) {
+					c.Observability.Metrics = true
+					c.Observability.Type = ObservabilityOTEL
+				},
+				errContains: "observability.otelFile: required",
 			},
 			{
 				name: "empty log level",
@@ -370,6 +412,7 @@ server:
 			cfg, err := LoadFromFile("ibc.yml", true)
 			require.NoError(t, err)
 			require.NoError(t, cfg.RelayerSufficiency())
+			require.Equal(t, "127.0.0.1:9090", cfg.Observability.SimpleMetricsListenAddr)
 		})
 
 		t.Run("attestationSigner", func(t *testing.T) {
@@ -490,6 +533,120 @@ attestors:
 				assert.Equal(t, tt.wantType, db.Type)
 			})
 		}
+	})
+}
+
+func TestObservabilityConfigFile(t *testing.T) {
+	unsetEnv(t, envOtelConfigFile)
+
+	for _, tt := range []struct {
+		name        string
+		cfg         Observability
+		errContains string
+	}{
+		{
+			name:        "rejectsSimpleMode",
+			cfg:         Observability{Type: ObservabilitySimple},
+			errContains: "only available",
+		},
+		{
+			name: "rejectsMissingFile",
+			cfg: Observability{
+				Type:     ObservabilityOTEL,
+				OtelFile: filepath.Join(t.TempDir(), "missing.yml"),
+			},
+			errContains: "no such file or directory",
+		},
+		{
+			name:        "requiresConfiguredOrEnvironmentFile",
+			cfg:         Observability{Type: ObservabilityOTEL},
+			errContains: "otelFile: required",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ACT
+			_, err := tt.cfg.ConfigFile()
+
+			// ASSERT
+			require.ErrorContains(t, err, tt.errContains)
+		})
+	}
+
+	t.Run("resolvesRelativePathFromCurrentDirectory", func(t *testing.T) {
+		// ARRANGE
+		dir := t.TempDir()
+		otelPath := filepath.Join(dir, "telemetry", "otel.yml")
+		require.NoError(t, os.Mkdir(filepath.Dir(otelPath), 0o755))
+		require.NoError(t, os.WriteFile(otelPath, []byte("disabled: true\n"), 0o600))
+		t.Chdir(dir)
+		cfg := Observability{Type: ObservabilityOTEL, OtelFile: "telemetry/otel.yml"}
+
+		// ACT
+		path, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, otelPath, path)
+	})
+
+	t.Run("environmentTakesPrecedence", func(t *testing.T) {
+		// ARRANGE
+		configuredPath := filepath.Join(t.TempDir(), "configured.yml")
+		envPath := filepath.Join(t.TempDir(), "environment.yml")
+		require.NoError(t, os.WriteFile(configuredPath, []byte("disabled: true\n"), 0o600))
+		require.NoError(t, os.WriteFile(envPath, []byte("disabled: true\n"), 0o600))
+		t.Setenv(envOtelConfigFile, envPath)
+		cfg := Observability{Type: ObservabilityOTEL, OtelFile: configuredPath}
+
+		// ACT
+		path, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, envPath, path)
+	})
+
+	t.Run("usesEnvironmentWithoutConfiguredFile", func(t *testing.T) {
+		// ARRANGE
+		envPath := filepath.Join(t.TempDir(), "environment.yml")
+		require.NoError(t, os.WriteFile(envPath, []byte("disabled: true\n"), 0o600))
+		t.Setenv(envOtelConfigFile, envPath)
+		cfg := Observability{Type: ObservabilityOTEL}
+
+		// ACT
+		path, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, envPath, path)
+	})
+
+	t.Run("rejectsEmptyEnvironmentOverride", func(t *testing.T) {
+		// ARRANGE
+		configuredPath := filepath.Join(t.TempDir(), "configured.yml")
+		require.NoError(t, os.WriteFile(configuredPath, []byte("disabled: true\n"), 0o600))
+		t.Setenv(envOtelConfigFile, "")
+		cfg := Observability{Type: ObservabilityOTEL, OtelFile: configuredPath}
+
+		// ACT
+		_, err := cfg.ConfigFile()
+
+		// ASSERT
+		require.ErrorContains(t, err, "empty env OTEL_CONFIG_FILE=''")
+	})
+}
+
+func unsetEnv(t *testing.T, key string) {
+	t.Helper()
+
+	value, set := os.LookupEnv(key)
+	require.NoError(t, os.Unsetenv(key))
+	t.Cleanup(func() {
+		if set {
+			require.NoError(t, os.Setenv(key, value))
+			return
+		}
+		require.NoError(t, os.Unsetenv(key))
 	})
 }
 

@@ -94,6 +94,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		srcTxSubmitter: mocks.NewMockTxSubmitter(t),
 		dstTxSubmitter: mocks.NewMockTxSubmitter(t),
 	}
+	env.srcClient.EXPECT().ChainID().Return(testRoute.SourceChainID).Maybe()
+	env.dstClient.EXPECT().ChainID().Return(testRoute.DestinationChainID).Maybe()
 
 	deps := Deps{
 		Storage: db,

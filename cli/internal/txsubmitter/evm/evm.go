@@ -31,6 +31,7 @@ const retryExpiry = 2 * time.Minute
 
 // ETHClient go-ethereum methods used by the EVM tx submitter.
 type ETHClient interface {
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)
@@ -96,7 +97,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		delay = DefaultTxSubmissionDelay
 	}
 
-	return &TxSubmitter{
+	submitter := &TxSubmitter{
 		chainID:    chainID,
 		eth:        eth,
 		signer:     chainSigner,
@@ -106,7 +107,11 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		feeCapMult: opts.GasFeeCapMultiplier,
 		tipCapMult: opts.GasTipCapMultiplier,
 		logger:     slog.With("module", "txsubmitter", "chainID", chainID),
-	}, nil
+	}
+
+	metrics.setWallet(chainID, submitter.address.String(), eth)
+
+	return submitter, nil
 }
 
 func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
@@ -140,6 +145,7 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		return nil, errors.Wrapf(err, "sending tx %s", signedTx.Hash())
 	}
 
+	metrics.startTx(c.chainID, c.address.String(), signedTx.Hash().String())
 	c.lastSubmission = time.Now()
 	c.logger.Info("Submitted tx", "txHash", signedTx.Hash(), "to", intent.To)
 
@@ -213,6 +219,7 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 
 		expiresAt := sentAt.UTC().Add(retryExpiry)
 		if expiresAt.Before(time.Unix(int64(latest.Time), 0)) {
+			metrics.forgetTx(c.chainID, txHash)
 			return true, nil
 		}
 
@@ -220,8 +227,10 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 	case err != nil:
 		return false, errors.Wrapf(err, "getting receipt for tx %s", txHash)
 	case receipt.Status != types.ReceiptStatusSuccessful:
+		metrics.endTx(c.chainID, receipt)
 		return true, nil
 	default:
+		metrics.endTx(c.chainID, receipt)
 		return false, nil
 	}
 }

@@ -123,12 +123,18 @@ func addGenerator(
 
 	switch client.Type {
 	case config.ClientTypeAttestation:
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, attestors, logger)
+		meteredAttestors := make([]attestor.Attestor, len(attestors))
+		for i, a := range attestors {
+			meteredAttestors[i] = attestor.MetricsWrapper(a)
+		}
+
+		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
 		if err != nil {
 			return err
 		}
 
-		generators[Key(client.ChainID, client.ClientID)] = gen
+		meteredProver := metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
+		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
 	case config.ClientTypeRemote:
@@ -142,9 +148,9 @@ func addGenerator(
 			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
 		}
 
-		generators[Key(client.ChainID, client.ClientID)] = remote.NewFromURL(
-			remoteParams.URL, client.ChainID, client.ClientID, logger,
-		)
+		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, logger)
+		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
+		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
 	default:

@@ -41,12 +41,15 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 	}
 
 	if !retry {
+		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.AckTxHash)
 		return tr, nil
 	}
 
 	if err := p.storage.ClearPacketAckTx(ctx, tr.Key()); err != nil {
 		return nil, errors.Wrapf(err, "clearing ack tx %s", *tr.AckTxHash)
 	}
+
+	metrics.txRetry(ctx, tr, relayTypeRecvToAck, *tr.AckTxHash)
 
 	return nil, ErrRetryingAckPacket
 }

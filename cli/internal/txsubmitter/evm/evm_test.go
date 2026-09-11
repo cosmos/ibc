@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -147,7 +148,10 @@ func TestShouldRetry(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
 		eth.EXPECT().
 			TransactionReceipt(ctx, mock.Anything).
-			Return(&types.Receipt{Status: types.ReceiptStatusFailed}, nil).
+			Return(&types.Receipt{
+				TxHash: common.HexToHash(txHash),
+				Status: types.ReceiptStatusFailed,
+			}, nil).
 			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
@@ -160,7 +164,10 @@ func TestShouldRetry(t *testing.T) {
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
 		eth.EXPECT().
 			TransactionReceipt(ctx, mock.Anything).
-			Return(&types.Receipt{Status: types.ReceiptStatusSuccessful}, nil).
+			Return(&types.Receipt{
+				TxHash: common.HexToHash(txHash),
+				Status: types.ReceiptStatusSuccessful,
+			}, nil).
 			Once()
 
 		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())

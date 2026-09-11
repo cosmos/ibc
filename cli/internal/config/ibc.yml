@@ -11,6 +11,11 @@ db:
   # type: postgres
   # url: postgres://user:password@host:port/dbname
 
+observability:
+  metrics: true
+  type: simple
+  simpleMetricsListenAddr: 127.0.0.1:9090
+
 # chains declares chain information shared by the attestor and relayer;
 # referenced by other blocks via chainId
 chains:
@@ -19,12 +24,12 @@ chains:
       rpc: https://ethereum-rpc.example.com
       # ws is required by any client end that enables autoRelay
       ws: wss://ethereum-rpc.example.com
-      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+      ics26Router: "0x0000000000000000000000000000000000000001"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ws: wss://base-rpc.example.com
-      ics26Router: "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
+      ics26Router: "0x0000000000000000000000000000000000000001"
 
 relayer:
   # relay specific chain settings

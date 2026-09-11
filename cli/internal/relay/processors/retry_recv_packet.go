@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+//nolint:dupl // the retry directions are structurally parallel by design
 package processors
 
 import (
@@ -40,12 +41,15 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	}
 
 	if !retry {
+		metrics.txConfirmed(ctx, p.route.DestinationChainID, p.route.DestinationClientID, *tr.RecvTxHash)
 		return tr, nil
 	}
 
 	if err := p.storage.ClearPacketRecvTx(ctx, tr.Key()); err != nil {
 		return nil, errors.Wrapf(err, "clearing recv tx %s", *tr.RecvTxHash)
 	}
+
+	metrics.txRetry(ctx, tr, relayTypeSendToRecv, *tr.RecvTxHash)
 
 	// error so the transfer stops processing this run; it is picked up
 	// without the recv tx and redelivered on the next run

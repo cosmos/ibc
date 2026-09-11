@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# This file is loaded by `ibc` binary when `observability.type` is "otel".
+file_format: "1.0-rc.2"
+
+resource:
+  attributes:
+    - name: service.name
+      value: ibc
+
+# "every 2s push pending metrics to collector"
+meter_provider:
+  readers:
+    - periodic:
+        interval: 2000
+        exporter:
+          otlp_http:
+            endpoint: http://127.0.0.1:4318/v1/metrics
