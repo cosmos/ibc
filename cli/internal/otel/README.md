@@ -35,10 +35,10 @@ Shared label: `{otel_scope_name="ibc.signer"}`
 
 Shared label: `{otel_scope_name="ibc.attestor"}`
 
-| metric                 | type           | labels                                        | notes                                                                                                       |
-| ---------------------- | -------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `attestor_operation_*` | histogram (ms) | `operation`, `chain_id`, `attestor`, `result` | Latency. `operation`: `latest_height`, `state_attestation`, `packet_attestation`. `result`: `ok` / `error`. |
-| `latest_height`        | gauge          | `chain_id`, `attestor`                        | Last successful height. Not written on error.                                                               |
+| metric                 | type           | labels                                                  | notes                                                                                                                                     |
+| ---------------------- | -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `attestor_operation_*` | histogram (ms) | `operation`, `chain_id`, `attestor`, `result`, `caller` | Latency. `operation`: `latest_height`, `state_attestation`, `packet_attestation`. `result`: `ok` / `error`. `caller`: `rpc` or `internal` |
+| `latest_height`        | gauge          | `chain_id`, `attestor`, `caller`                        | Last successful height. Not written on error. Same `caller` values as above.                                                              |
 
 ### Prover metrics
 

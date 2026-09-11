@@ -18,6 +18,8 @@ type instrumentation struct {
 
 var metrics = otel.RegisterMetrics("attestor", newInstrumentation)
 
+const callerDefault = "internal"
+
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	// also exposes _count for total count
 	operation, err := m.Float64Histogram("attestor_operation", otel.UnitMilliseconds())
@@ -46,6 +48,7 @@ func (m *instrumentation) record(
 		otel.AttrChainID.String(chainID),
 		otel.AttrAttestor.String(attestor),
 		otel.AttrResultError(err),
+		otel.AttrCallerFromCaller(ctx, callerDefault),
 	)
 }
 
@@ -53,6 +56,7 @@ func (m *instrumentation) latestHeight(ctx context.Context, attestor, chainID st
 	m.LatestHeight.Record(ctx, int64(height), otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrAttestor.String(attestor),
+		otel.AttrCallerFromCaller(ctx, callerDefault),
 	))
 }
 
