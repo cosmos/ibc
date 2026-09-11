@@ -190,20 +190,59 @@ func TestExcessiveRelayLatency(t *testing.T) {
 
 	t.Run("recvToAck", func(t *testing.T) {
 		ctx := context.Background()
-		instruments, reader := newTestInstrumentation(t)
 
-		writeAckHash := "0xwriteack"
-		writeAckTime := now.Add(-excessiveRelayLatency - time.Minute)
-		packet := base
-		packet.WriteAckTxHash = &writeAckHash
-		packet.WriteAckTxTime = &writeAckTime
-		packet.PacketTimeoutTimestamp = now.Add(time.Hour)
+		t.Run("afterWriteAck", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
 
-		instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+			recvHash := "0xrecv"
+			writeAckHash := "0xwriteack"
+			writeAckTime := now.Add(-excessiveRelayLatency - time.Minute)
+			packet := base
+			packet.RecvTxHash = &recvHash
+			packet.WriteAckTxHash = &writeAckHash
+			packet.WriteAckTxTime = &writeAckTime
+			packet.PacketTimeoutTimestamp = now.Add(time.Hour)
 
-		points := collectRelayLatency(ctx, t, reader)
-		require.Len(t, points, 1)
-		assert.Equal(t, legRecvToAck, attributeValue(t, points[0].attributes, otel.AttrType))
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			points := collectRelayLatency(ctx, t, reader)
+			require.Len(t, points, 1)
+			assert.Equal(t, legRecvToAck, attributeValue(t, points[0].attributes, otel.AttrType))
+		})
+
+		t.Run("writeAckLookupFailedPastTimeout", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+
+			recvHash := "0xrecv"
+			recvTime := now.Add(-time.Minute)
+			packet := base
+			packet.RecvTxHash = &recvHash
+			packet.RecvTxTime = &recvTime
+			packet.PacketTimeoutTimestamp = now.Add(-timeoutExcessiveDelay - time.Minute)
+			packet.SourceTxTime = now.Add(-time.Hour)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			assert.Empty(t, collectRelayLatency(ctx, t, reader))
+		})
+
+		t.Run("writeAckLookupFailedPastRelayThreshold", func(t *testing.T) {
+			instruments, reader := newTestInstrumentation(t)
+
+			recvHash := "0xrecv"
+			recvTime := now.Add(-excessiveRelayLatency - time.Minute)
+			packet := base
+			packet.RecvTxHash = &recvHash
+			packet.RecvTxTime = &recvTime
+			packet.PacketTimeoutTimestamp = now.Add(-timeoutExcessiveDelay - time.Minute)
+			packet.SourceTxTime = now.Add(-2 * time.Hour)
+
+			instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
+
+			points := collectRelayLatency(ctx, t, reader)
+			require.Len(t, points, 1)
+			assert.Equal(t, legRecvToAck, attributeValue(t, points[0].attributes, otel.AttrType))
+		})
 	})
 
 	t.Run("sendToTimeout", func(t *testing.T) {

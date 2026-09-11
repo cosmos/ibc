@@ -69,7 +69,7 @@ In metrics that label both packet sides, `chain_id` / `client_id` refer to the p
 Confirmations count only successful receipts for transactions broadcast by this process and are deduplicated in memory by chain and tx hash.
 Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
 EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
-Collections inside that threshold omit the sample. A failed query is logged and reported as `-1`.
+Collections inside that threshold re-emit the last observed value. A failed query is logged and reported as `-1`.
 
 | package     | metric                          | type               | labels                                                              | notes                                                          |
 | ----------- | ------------------------------- | ------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- |

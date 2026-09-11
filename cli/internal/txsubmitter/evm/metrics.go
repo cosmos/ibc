@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.opentelemetry.io/otel/metric"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
 )
@@ -31,6 +30,14 @@ type chainWallet struct {
 	wallet  string
 }
 
+type walletMetrics struct {
+	address              common.Address
+	client               balanceClient
+	lastBalanceAt        time.Time
+	lastBalance          *big.Int
+	cumulativeGasCostWei *big.Int
+}
+
 type balanceClient interface {
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 }
@@ -42,11 +49,9 @@ type instrumentation struct {
 	EVMGasSpent metric.Float64ObservableCounter
 	GasBalance  metric.Float64ObservableGauge
 
-	txOwners             map[transactionKey]string
-	cumulativeGasCostWei map[chainWallet]*big.Int
-	clients              map[chainWallet]balanceClient
-	lastObservation      map[chainWallet]time.Time
-	mu                   sync.RWMutex
+	txOwners map[transactionKey]chainWallet
+	wallets  map[chainWallet]*walletMetrics
+	mu       sync.RWMutex
 }
 
 var metrics = otel.RegisterMetrics("relayer", newInstrumentation)
@@ -63,12 +68,10 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	}
 
 	instruments := &instrumentation{
-		EVMGasSpent:          evmGasSpent,
-		GasBalance:           gasBalance,
-		txOwners:             make(map[transactionKey]string),
-		cumulativeGasCostWei: make(map[chainWallet]*big.Int),
-		clients:              make(map[chainWallet]balanceClient),
-		lastObservation:      make(map[chainWallet]time.Time),
+		EVMGasSpent: evmGasSpent,
+		GasBalance:  gasBalance,
+		txOwners:    make(map[transactionKey]chainWallet),
+		wallets:     make(map[chainWallet]*walletMetrics),
 	}
 
 	_, err = m.RegisterCallback(instruments.observeEVMGasSpent, evmGasSpent)
@@ -84,31 +87,43 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	return instruments, nil
 }
 
-func (m *instrumentation) setClient(chainID, wallet string, client balanceClient) {
+func (m *instrumentation) setWallet(chainID, wallet string, client balanceClient) {
+	key := chainWallet{chainID: chainID, wallet: wallet}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	key := chainWallet{chainID: chainID, wallet: wallet}
-	if _, exists := m.clients[key]; exists {
+	if _, exists := m.wallets[key]; exists {
 		return
 	}
 
-	m.clients[key] = client
+	m.wallets[key] = &walletMetrics{
+		address:              common.HexToAddress(wallet),
+		client:               client,
+		lastBalanceAt:        time.Time{},
+		lastBalance:          big.NewInt(0),
+		cumulativeGasCostWei: big.NewInt(0),
+	}
 }
 
 func (m *instrumentation) startTx(chainID, wallet, txHash string) {
+	walletKey := chainWallet{chainID: chainID, wallet: wallet}
+	txKey := transactionKey{chainID: chainID, txHash: txHash}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.txOwners[transactionKey{chainID: chainID, txHash: txHash}] = wallet
+	m.txOwners[txKey] = walletKey
 }
 
 func (m *instrumentation) endTx(chainID string, receipt *types.Receipt) {
+	txHash := receipt.TxHash.String()
+	txKey := transactionKey{chainID: chainID, txHash: txHash}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	txHash := receipt.TxHash.String()
-	wallet, owned := m.txOwners[transactionKey{chainID: chainID, txHash: txHash}]
+	walletKey, owned := m.txOwners[txKey]
 	if !owned {
 		return
 	}
@@ -119,42 +134,35 @@ func (m *instrumentation) endTx(chainID string, receipt *types.Receipt) {
 		return
 	}
 
-	key := chainWallet{chainID: chainID, wallet: wallet}
-	total, ok := m.cumulativeGasCostWei[key]
+	w, ok := m.wallets[walletKey]
 	if !ok {
-		total = new(big.Int)
-		m.cumulativeGasCostWei[key] = total
+		return
 	}
 
 	cost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), receipt.EffectiveGasPrice)
-	total.Add(total, cost)
+	w.cumulativeGasCostWei.Add(w.cumulativeGasCostWei, cost)
 }
 
 func (m *instrumentation) forgetTx(chainID, txHash string) {
+	txKey := transactionKey{chainID: chainID, txHash: txHash}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	delete(m.txOwners, transactionKey{chainID: chainID, txHash: txHash})
+	delete(m.txOwners, txKey)
 }
 
 func (m *instrumentation) observeEVMGasSpent(_ context.Context, observer metric.Observer) error {
-	type observation struct {
-		key   chainWallet
-		total *big.Int
-	}
-
 	m.mu.RLock()
-	observations := make([]observation, 0, len(m.cumulativeGasCostWei))
-	for key, total := range m.cumulativeGasCostWei {
-		observations = append(observations, observation{key: key, total: new(big.Int).Set(total)})
-	}
-	m.mu.RUnlock()
+	defer m.mu.RUnlock()
 
-	for _, observation := range observations {
-		value, _ := new(big.Rat).SetFrac(observation.total, weiPerNativeToken).Float64()
-		observer.ObserveFloat64(m.EVMGasSpent, value, metric.WithAttributes(
-			otel.AttrChainID.String(observation.key.chainID),
-			otel.AttrWallet.String(observation.key.wallet),
+	for walletKey, w := range m.wallets {
+		// float64(total / 10^18)
+		gasSpent, _ := new(big.Rat).SetFrac(w.cumulativeGasCostWei, weiPerNativeToken).Float64()
+
+		observer.ObserveFloat64(m.EVMGasSpent, gasSpent, metric.WithAttributes(
+			otel.AttrChainID.String(walletKey.chainID),
+			otel.AttrWallet.String(walletKey.wallet),
 		))
 	}
 
@@ -162,45 +170,54 @@ func (m *instrumentation) observeEVMGasSpent(_ context.Context, observer metric.
 }
 
 func (m *instrumentation) observeGasBalance(ctx context.Context, observer metric.Observer) error {
-	var (
-		now     = time.Now()
-		clients = make(map[chainWallet]balanceClient)
-		eg      errgroup.Group
-	)
+	now := time.Now()
+	wg := sync.WaitGroup{}
 
 	m.mu.Lock()
-	for key, client := range m.clients {
-		// To prevent live frequent RPC calls, skip if observed within the threshold.
-		if now.Sub(m.lastObservation[key]) < observationThreshold {
-			continue
-		}
+	defer m.mu.Unlock()
 
-		m.lastObservation[key] = now
-		clients[key] = client
-	}
-	m.mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 
-	for key, client := range clients {
-		addr := common.HexToAddress(key.wallet)
-		attr := metric.WithAttributes(
-			otel.AttrChainID.String(key.chainID),
-			otel.AttrWallet.String(key.wallet),
-		)
+	for key, w := range m.wallets {
+		wg.Add(1)
 
-		eg.Go(func() error {
-			balance, err := client.BalanceAt(ctx, addr, nil)
+		go func(key chainWallet, w *walletMetrics) {
+			defer wg.Done()
+
+			attrs := metric.WithAttributes(
+				otel.AttrChainID.String(key.chainID),
+				otel.AttrWallet.String(key.wallet),
+			)
+
+			balance, err := w.getBalance(ctx, now)
 			if err != nil {
-				slog.Error("Metrics: failed to get balance", "chainID", key.chainID, "wallet", key.wallet, "error", err)
-				observer.ObserveFloat64(m.GasBalance, -1, attr)
-				return nil
+				slog.Error("Metrics: getBalance failed", "chainID", key.chainID, "wallet", key.wallet, "error", err)
+				observer.ObserveFloat64(m.GasBalance, -1, attrs)
+				return
 			}
 
 			value, _ := new(big.Rat).SetFrac(balance, weiPerNativeToken).Float64()
-			observer.ObserveFloat64(m.GasBalance, value, attr)
-
-			return nil
-		})
+			observer.ObserveFloat64(m.GasBalance, value, attrs)
+		}(key, w)
 	}
 
-	return eg.Wait()
+	wg.Wait()
+
+	return nil
+}
+
+func (w *walletMetrics) getBalance(ctx context.Context, now time.Time) (*big.Int, error) {
+	// no-op
+	if now.Sub(w.lastBalanceAt) < observationThreshold {
+		return w.lastBalance, nil
+	}
+
+	balance, err := w.client.BalanceAt(ctx, w.address, nil)
+	if err == nil {
+		w.lastBalance = balance
+		w.lastBalanceAt = now
+	}
+
+	return balance, err
 }

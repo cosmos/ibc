@@ -109,7 +109,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 		logger:     slog.With("module", "txsubmitter", "chainID", chainID),
 	}
 
-	metrics.setClient(chainID, submitter.address.String(), eth)
+	metrics.setWallet(chainID, submitter.address.String(), eth)
 
 	return submitter, nil
 }

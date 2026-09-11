@@ -145,29 +145,35 @@ func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
 		return "", false
 	}
 
-	if p.WriteAckTxHash == nil {
-		if now.After(p.PacketTimeoutTimestamp) {
-			if now.Sub(p.PacketTimeoutTimestamp) < timeoutExcessiveDelay {
-				return "", false
-			}
-
-			// wait for the source tx to finalize before alerting
-			if now.Sub(p.SourceTxTime) < sourceFinalityDelay {
-				return "", false
-			}
-
-			return legSendToTimeout, true
+	// Recv is the source of truth for whether the packet can still time out.
+	// WriteAckTxHash can stay nil after a recv if write-ack lookup fails.
+	if p.RecvTxHash != nil {
+		start := p.WriteAckTxTime
+		if start == nil {
+			start = p.RecvTxTime
 		}
-
-		if now.Sub(p.SourceTxTime) > excessiveRelayLatency {
-			return legSendToRecv, true
+		if start != nil && now.Sub(*start) > excessiveRelayLatency {
+			return legRecvToAck, true
 		}
 
 		return "", false
 	}
 
-	if p.WriteAckTxTime != nil && now.Sub(*p.WriteAckTxTime) > excessiveRelayLatency {
-		return legRecvToAck, true
+	if now.After(p.PacketTimeoutTimestamp) {
+		if now.Sub(p.PacketTimeoutTimestamp) < timeoutExcessiveDelay {
+			return "", false
+		}
+
+		// wait for the source tx to finalize before alerting
+		if now.Sub(p.SourceTxTime) < sourceFinalityDelay {
+			return "", false
+		}
+
+		return legSendToTimeout, true
+	}
+
+	if now.Sub(p.SourceTxTime) > excessiveRelayLatency {
+		return legSendToRecv, true
 	}
 
 	return "", false
