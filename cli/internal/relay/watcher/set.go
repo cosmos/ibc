@@ -35,7 +35,15 @@ func NewSetFromConfig(
 			return nil, errors.Errorf("no chain client for auto-relayed chain %q", chain.ChainID)
 		}
 
-		set = append(set, New(chain.ChainID, connections, client, storage, logger))
+		set = append(set, New(
+			chain.ChainID,
+			connections,
+			client,
+			storage,
+			DefaultMinBackoff,
+			DefaultMaxBackoff,
+			logger,
+		))
 	}
 
 	return set, nil
