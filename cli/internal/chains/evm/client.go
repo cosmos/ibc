@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"log/slog"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
@@ -47,6 +49,7 @@ type ETHClient interface {
 
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
+	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
 }
 
 // Client implements chains.Client for EVM chains.
@@ -325,6 +328,196 @@ func (c *Client) commitmentExists(ctx context.Context, clientID string, sequence
 	return commitment != [32]byte{}, nil
 }
 
+// prevSequenceSends is the second field of the ibc.storage.IBCStore ERC-7201
+// namespace, whose base is
+// keccak256(uint256(keccak256("ibc.storage.IBCStore")) - 1) & ~0xff.
+var prevSequenceSendsSlot = common.BigToHash(new(big.Int).Add(
+	common.HexToHash("0x1260944489272988d9df285149b5aa1b0f48f2136d6f416159f840a3e0747600").Big(),
+	big.NewInt(1),
+))
+
+// LatestPacketSequence returns the highest sequence ever assigned on clientID
+// at height, read from the router's prevSequenceSends mapping because
+// nextSequenceSend is internal and nothing exposes it. Sequences in use are
+// 1..N, so zero means nothing has been sent on the client.
+func (c *Client) LatestPacketSequence(ctx context.Context, clientID string, height uint64) (uint64, error) {
+	// dynamically-sized mapping keys are hashed unpadded, unlike value-type keys
+	slot := crypto.Keccak256Hash([]byte(clientID), prevSequenceSendsSlot[:])
+
+	word, err := c.eth.StorageAt(ctx, c.routerAddress, slot, heightToBigInt(height))
+	if err != nil {
+		return 0, errors.Wrapf(
+			err,
+			"reading prevSequenceSends for client %s on chain %s at height %d",
+			clientID, c.chainID, height,
+		)
+	}
+
+	sequence := new(big.Int).SetBytes(word)
+	if !sequence.IsUint64() {
+		return 0, errors.Errorf(
+			"prevSequenceSends slot for client %s on chain %s holds %s, "+
+				"which is not a sequence: the ibc.storage.IBCStore layout has moved",
+			clientID, c.chainID, sequence,
+		)
+	}
+
+	return sequence.Uint64(), nil
+}
+
+// getCommitment reads the raw commitment slot and answers zero for an absent
+// one. queryPacketCommitment is the friendlier call but reverts through
+// multicall's delegatecall, and a probe has to read "settled" as a value rather
+// than as a revert. It is a view either way, which the generated bindings
+// expose as a call rather than as calldata, so its pack goes through the abi
+// while the multicall wrapping it goes through the binding.
+const commitmentMethod = "getCommitment"
+
+// routerCalls packs router calldata through the generated bindings, so a
+// signature change breaks the build rather than an eth_call.
+var routerCalls = mustRouterCalls()
+
+func mustRouterCalls() *ics26router.ContractTransactor {
+	bound, err := ics26router.NewContractTransactor(common.Address{}, nil)
+	if err != nil {
+		panic(errors.Wrap(err, "constructing ics26 router binding"))
+	}
+
+	return bound
+}
+
+// routerCalldata runs a binding call with sending disabled and returns the
+// input it would have submitted.
+func routerCalldata(call func(*bind.TransactOpts) (*types.Transaction, error)) ([]byte, error) {
+	opts := &bind.TransactOpts{
+		Nonce:    new(big.Int),
+		Signer:   func(_ common.Address, tx *types.Transaction) (*types.Transaction, error) { return tx, nil },
+		GasLimit: 1,
+		GasPrice: big.NewInt(1),
+		NoSend:   true,
+	}
+
+	tx, err := call(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return tx.Data(), nil
+}
+
+// commitmentProbeChunk is the number of commitment probes per multicall.
+// Memory expansion inside multicall is quadratic in the results it copies, so
+// gas binds near 10,000 probes under geth's default 50M cap; 1000 keeps a 14x
+// margin at a 256 KB request payload.
+const commitmentProbeChunk = 1000
+
+// PacketCommitments returns the subset of sequences whose packet commitment is
+// still live on clientID at height. It is all or nothing: a truncated set reads
+// as "everything else settled", which writes off packets whose funds are still
+// in escrow, so any failure returns nil rather than a partial slice.
+func (c *Client) PacketCommitments(
+	ctx context.Context,
+	clientID string,
+	sequences []uint64,
+	height uint64,
+) ([]uint64, error) {
+	var live []uint64
+
+	for chunk := range slices.Chunk(sequences, commitmentProbeChunk) {
+		found, err := c.probeCommitments(ctx, clientID, chunk, height)
+		if err != nil {
+			return nil, err
+		}
+
+		live = append(live, found...)
+	}
+
+	return live, nil
+}
+
+func (c *Client) probeCommitments(
+	ctx context.Context,
+	clientID string,
+	sequences []uint64,
+	height uint64,
+) ([]uint64, error) {
+	calls := make([][]byte, len(sequences))
+
+	for i, sequence := range sequences {
+		call, err := c.routerABI.Pack(
+			commitmentMethod,
+			crypto.Keccak256Hash(hostv2.PacketCommitmentKey(clientID, sequence)),
+		)
+		if err != nil {
+			return nil, errors.Wrapf(
+				err,
+				"packing %s for client %s sequence %d",
+				commitmentMethod, clientID, sequence,
+			)
+		}
+
+		calls[i] = call
+	}
+
+	input, err := routerCalldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return routerCalls.Multicall(opts, calls)
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "packing multicall for client %s on chain %s", clientID, c.chainID)
+	}
+
+	// an explicit height, never the latest tag: behind a load-balanced endpoint
+	// the tag resolves on whichever node serves the call, and one that has not
+	// caught up reads a live commitment as absent, which means settled
+	output, err := c.eth.CallContract(
+		ctx,
+		ethereum.CallMsg{To: &c.routerAddress, Data: input},
+		heightToBigInt(height),
+	)
+	if err != nil {
+		return nil, errors.Wrapf(
+			err,
+			"probing %d commitments for client %s on chain %s at height %d",
+			len(sequences), clientID, c.chainID, height,
+		)
+	}
+
+	unpacked, err := c.routerABI.Unpack("multicall", output)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unpacking multicall for client %s on chain %s", clientID, c.chainID)
+	}
+	if len(unpacked) != 1 {
+		return nil, errors.Errorf(
+			"multicall for client %s on chain %s returned %d values, expected 1",
+			clientID, c.chainID, len(unpacked),
+		)
+	}
+
+	results, ok := unpacked[0].([][]byte)
+	if !ok || len(results) != len(sequences) {
+		return nil, errors.Errorf(
+			"multicall for client %s on chain %s returned %d %T results, expected %d commitments",
+			clientID, c.chainID, len(results), unpacked[0], len(sequences),
+		)
+	}
+
+	var live []uint64
+	for i, result := range results {
+		if len(result) != common.HashLength {
+			return nil, errors.Errorf(
+				"%s for client %s sequence %d on chain %s returned %d bytes, expected %d",
+				commitmentMethod, clientID, sequences[i], c.chainID, len(result), common.HashLength,
+			)
+		}
+
+		if common.BytesToHash(result) != (common.Hash{}) {
+			live = append(live, sequences[i])
+		}
+	}
+
+	return live, nil
+}
+
 // FindRecvTx looks for the WriteAcknowledgement event because the router emits
 // no RecvPacket event; acks are written synchronously in the receive tx.
 func (c *Client) FindRecvTx(ctx context.Context, destClientID string, sequence uint64) (*v2.Tx, error) {
@@ -530,6 +723,112 @@ func (c *Client) packetLogQuery(eventName string, clientIDs, sequences []any) (e
 	return ethereum.FilterQuery{
 		Addresses: []common.Address{c.routerAddress},
 		Topics:    topics,
+	}, nil
+}
+
+// FindSendPackets returns the SendPacket events for sequences on clientID. The
+// block range is unbounded because clearing knows the sequences but not the
+// heights they landed at, exactly as findPacketTx queries today.
+func (c *Client) FindSendPackets(
+	ctx context.Context,
+	clientID string,
+	sequences []uint64,
+) ([]v2.PacketEvent, error) {
+	if len(sequences) == 0 {
+		return nil, nil
+	}
+
+	query, err := c.packetLogQuery(sendPacketEvent, []any{clientID}, toAnySlice(sequences))
+	if err != nil {
+		return nil, err
+	}
+
+	logs, err := c.eth.FilterLogs(ctx, query)
+	if err != nil {
+		return nil, errors.Wrapf(err, "filtering %s logs on chain %s", sendPacketEvent, c.chainID)
+	}
+
+	blockTimeAt, err := c.blockTimes(ctx, logs)
+	if err != nil {
+		return nil, err
+	}
+
+	events := make([]v2.PacketEvent, 0, len(logs))
+
+	for _, log := range logs {
+		event, err := c.sendPacketEvent(ctx, log, blockTimeAt)
+		if err != nil {
+			return nil, err
+		}
+
+		events = append(events, event)
+	}
+
+	return events, nil
+}
+
+// headerFetchLimit bounds the concurrent header reads one log batch issues, so
+// recovering a backlog does not arrive at a provider as a burst.
+const headerFetchLimit = 8
+
+// blockTimes resolves the distinct block times behind logs up front. One
+// eth_getLogs covers a whole chunk of sequences, but every block under it is
+// its own round trip, so fetching them one at a time is what makes a recovery
+// pass slow; these are independent reads and run as such.
+func (c *Client) blockTimes(
+	ctx context.Context,
+	logs []types.Log,
+) (func(context.Context, uint64) (time.Time, error), error) {
+	seen := make(map[uint64]struct{}, len(logs))
+
+	var numbers []uint64
+
+	for _, log := range logs {
+		if _, ok := seen[log.BlockNumber]; ok {
+			continue
+		}
+
+		seen[log.BlockNumber] = struct{}{}
+		numbers = append(numbers, log.BlockNumber)
+	}
+
+	// indexed writes rather than a shared map, so the results need no lock
+	times := make([]time.Time, len(numbers))
+
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(headerFetchLimit)
+
+	for i, number := range numbers {
+		group.Go(func() error {
+			header, err := c.eth.HeaderByNumber(groupCtx, new(big.Int).SetUint64(number))
+			if err != nil {
+				return errors.Wrapf(err, "getting header %d on chain %s", number, c.chainID)
+			}
+
+			times[i] = blockTime(header)
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	at := make(map[uint64]time.Time, len(numbers))
+	for i, number := range numbers {
+		at[number] = times[i]
+	}
+
+	return func(_ context.Context, blockNumber uint64) (time.Time, error) {
+		blockTimeAt, ok := at[blockNumber]
+		if !ok {
+			return time.Time{}, errors.Errorf(
+				"no header fetched for block %d on chain %s", blockNumber, c.chainID,
+			)
+		}
+
+		return blockTimeAt, nil
 	}, nil
 }
 
