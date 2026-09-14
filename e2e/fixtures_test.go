@@ -173,3 +173,76 @@ func TestAttestedMeshConnectsEveryChainPair(t *testing.T) {
 	}, connectionIDs)
 	require.NoError(t, environment.Validate(spec, runtime))
 }
+
+// qbftMesh declares a fully connected graph of Besu QBFT Clients over chains:
+// per Chain pair one Connection whose ends verify each other's sealed Besu
+// headers, so it needs no Attestors. Every chain must run Besu QBFT.
+func qbftMesh(chains []environment.ChainSpec) (environment.Spec, environment.Runtime) {
+	spec := environment.Spec{Chains: slices.Clone(chains)}
+	chainIDs := make([]environment.ChainID, 0, len(chains))
+	for _, chain := range chains {
+		chainIDs = append(chainIDs, fixtureChainID(chain))
+	}
+	slices.Sort(chainIDs)
+
+	for _, id := range chainIDs {
+		spec.IBCInstances = append(spec.IBCInstances, environment.NewIBCInstance{
+			ID: fixtureInstanceID(id), Chain: id, Authority: e2etest.ProtocolAuthorityID,
+		})
+	}
+	for i, a := range chainIDs {
+		for _, b := range chainIDs[i+1:] {
+			spec.Connections = append(spec.Connections, environment.ConnectionSpec{
+				ID: fixtureConnectionID(a, b),
+				A:  qbftMeshClient(a),
+				B:  qbftMeshClient(b),
+			})
+		}
+	}
+	return spec, e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
+}
+
+// qbftMeshClient never expires and tolerates a minute of clock drift between
+// the two dev chains.
+func qbftMeshClient(chain environment.ChainID) environment.NewBesuQBFTClient {
+	return environment.NewBesuQBFTClient{
+		IBCInstance:   fixtureInstanceID(chain),
+		Authority:     e2etest.ProtocolAuthorityID,
+		MaxClockDrift: 60,
+	}
+}
+
+func TestQBFTMesh(t *testing.T) {
+	spec, runtime := qbftMesh([]environment.ChainSpec{
+		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2},
+		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
+	})
+
+	want := environment.Spec{
+		Chains: []environment.ChainSpec{
+			environment.ManagedBesu{ID: "chain-b", EVMChainID: 2},
+			environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
+		},
+		IBCInstances: []environment.IBCInstanceSpec{
+			environment.NewIBCInstance{ID: "ibc-chain-a", Chain: "chain-a", Authority: e2etest.ProtocolAuthorityID},
+			environment.NewIBCInstance{ID: "ibc-chain-b", Chain: "chain-b", Authority: e2etest.ProtocolAuthorityID},
+		},
+		Connections: []environment.ConnectionSpec{
+			{
+				ID: "conn-chain-a-chain-b",
+				A: environment.NewBesuQBFTClient{
+					IBCInstance:   "ibc-chain-a",
+					Authority:     e2etest.ProtocolAuthorityID,
+					MaxClockDrift: 60,
+				},
+				B: environment.NewBesuQBFTClient{
+					IBCInstance:   "ibc-chain-b",
+					Authority:     e2etest.ProtocolAuthorityID,
+					MaxClockDrift: 60,
+				},
+			},
+		},
+	}
+	require.Equal(t, want, spec)
+	require.NoError(t, environment.Validate(spec, runtime))
+}

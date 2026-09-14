@@ -3,14 +3,18 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
@@ -236,4 +240,148 @@ func captureStdout(t *testing.T, fn func()) string {
 	require.NoError(t, err)
 
 	return string(bz)
+}
+
+func TestRenderRelayConfigBesuQBFT(t *testing.T) {
+	a := manifest.New("1", "evm")
+	a.Core.Router = "0xrouterA"
+	a.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(0), "maxClockDrift": float64(60)},
+	})
+	b := manifest.New("2", "evm")
+	b.Core.Router = "0xrouterB"
+	b.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(0), "maxClockDrift": float64(60)},
+	})
+
+	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
+	require.NoError(t, err)
+	require.Len(t, out.Relayer.Connections, 1)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Relayer.Connections[0].ClientB.Type)
+	require.Empty(t, out.Relayer.Connections[0].ClientA.Params)
+	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+}
+
+func TestWholeSeconds(t *testing.T) {
+	seconds, err := wholeSeconds(90*time.Second, "trusting-period")
+	require.NoError(t, err)
+	require.Equal(t, uint64(90), seconds)
+
+	_, err = wholeSeconds(500*time.Millisecond, "trusting-period")
+	require.ErrorContains(t, err, "whole seconds")
+
+	_, err = wholeSeconds(-time.Second, "max-clock-drift")
+	require.ErrorContains(t, err, "negative")
+}
+
+func TestRejectFlags(t *testing.T) {
+	flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
+	flags.Uint8("threshold", 1, "")
+	flags.StringSlice("attestors", nil, "")
+	require.NoError(t, flags.Parse([]string{"--threshold=2"}))
+
+	require.NoError(t, rejectFlags(flags, deploy.ClientTypeBesuQBFT, "attestors"))
+	require.ErrorContains(t, rejectFlags(flags, deploy.ClientTypeBesuQBFT, "attestors", "threshold"), "--threshold")
+}
+
+// A rerun rebuilds the constructor params from the manifest instead of the
+// counterparty chain, whose historical state may already be pruned.
+func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
+	dir := t.TempDir()
+	previous := flagDeployManifestDir
+	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
+	flagDeployManifestDir = dir
+	t.Cleanup(func() {
+		flagDeployManifestDir = previous
+		flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift
+	})
+	newFlags := func() *pflag.FlagSet {
+		flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
+		flags.DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0, "")
+		flags.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, time.Minute, "")
+		return flags
+	}
+
+	recorded := deploy.BesuQBFTParams{
+		IBCRouter:          "0x00000000000000000000000000000000000000cc",
+		InitialHeight:      112,
+		InitialTimestamp:   1788192445,
+		InitialStorageRoot: "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InitialValidators:  []string{"0x00000000000000000000000000000000000000aa"},
+		TrustingPeriod:     7200,
+		MaxClockDrift:      15,
+	}
+	m := manifest.New("1", "evm")
+	m.Core.Router = "0xrouterA"
+	m.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{
+			"ibcRouter": recorded.IBCRouter, "initialHeight": float64(recorded.InitialHeight),
+			"initialTimestamp": float64(recorded.InitialTimestamp), "initialStorageRoot": recorded.InitialStorageRoot,
+			"initialValidators": []any{recorded.InitialValidators[0]},
+			"trustingPeriod":    recorded.TrustingPeriod, "maxClockDrift": recorded.MaxClockDrift,
+		},
+	})
+	require.NoError(t, m.Save(dir))
+
+	_, err := besuQBFTParams(context.Background(), newFlags(), &sourcelessTarget{}, "1", "2", "cli-new")
+	require.ErrorContains(t, err, "cannot serve a besu-qbft trusted state")
+
+	for _, tc := range []struct {
+		name         string
+		args         []string
+		wantParamErr string
+		wantConflict string
+	}{
+		{name: "defaults preserve recorded settings"},
+		{name: "matching settings", args: []string{"--trusting-period=2h", "--max-clock-drift=15s"}},
+		{name: "changed period", args: []string{"--trusting-period=1h"}, wantConflict: "trustingPeriod"},
+		{name: "explicit zero period", args: []string{"--trusting-period=0s"}, wantConflict: "trustingPeriod"},
+		{name: "explicit default drift", args: []string{"--max-clock-drift=60s"}, wantConflict: "maxClockDrift"},
+		{name: "negative period", args: []string{"--trusting-period=-1s"}, wantParamErr: "must not be negative"},
+		{name: "fractional period", args: []string{"--trusting-period=500ms"}, wantParamErr: "must be whole seconds"},
+		{name: "negative drift", args: []string{"--max-clock-drift=-1s"}, wantParamErr: "must not be negative"},
+		{name: "fractional drift", args: []string{"--max-clock-drift=500ms"}, wantParamErr: "must be whole seconds"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flags := newFlags()
+			require.NoError(t, flags.Parse(tc.args))
+			params, err := besuQBFTParams(context.Background(), flags, nil, "1", "2", "cli-1-2")
+			if tc.wantParamErr != "" {
+				require.ErrorContains(t, err, tc.wantParamErr)
+				return
+			}
+			require.NoError(t, err)
+
+			spec := deploy.ClientSpec{
+				ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT,
+				CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2", Params: params,
+			}
+			steps := deploy.ClientSteps(&registeredClientTarget{}, dir, "1", spec)
+			done, err := steps[0].Done(context.Background())
+			if tc.wantConflict != "" {
+				require.ErrorContains(t, err, tc.wantConflict)
+				require.False(t, done)
+				return
+			}
+			require.NoError(t, err)
+			require.True(t, done)
+			require.Equal(t, recorded, params)
+		})
+	}
+}
+
+// sourcelessTarget is a deploy.Target that is not a deploy.BesuQBFTSource.
+type sourcelessTarget struct{ deploy.Target }
+
+type registeredClientTarget struct{ deploy.Target }
+
+func (*registeredClientTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
+	return "0xca", true, nil
 }

@@ -21,10 +21,10 @@ import (
 
 // stubProver records what it was asked, so the far side of the wire can assert it.
 type stubProver struct {
-	height     uint64
-	timestamp  time.Time
-	stateProof []byte
-	proofs     [][]byte
+	height      uint64
+	timestamp   time.Time
+	stateProofs [][]byte
+	proofs      [][]byte
 
 	gotHeight  uint64
 	gotKind    v2.ProofKind
@@ -35,9 +35,9 @@ func (s *stubProver) LatestProvableHeight(context.Context) (uint64, time.Time, e
 	return s.height, s.timestamp, nil
 }
 
-func (s *stubProver) StateProof(_ context.Context, height uint64) ([]byte, error) {
+func (s *stubProver) StateProof(_ context.Context, height uint64) ([][]byte, error) {
 	s.gotHeight = height
-	return s.stateProof, nil
+	return s.stateProofs, nil
 }
 
 func (s *stubProver) PacketProofs(
@@ -66,10 +66,10 @@ func newClient(t *testing.T, set *prover.Set, chainID, clientID string) *remote.
 func TestProverServiceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	stub := &stubProver{
-		height:     4321,
-		timestamp:  time.Unix(1700000000, 0).UTC(),
-		stateProof: []byte("state-proof"),
-		proofs:     [][]byte{[]byte("proof-a"), []byte("proof-b")},
+		height:      4321,
+		timestamp:   time.Unix(1700000000, 0).UTC(),
+		stateProofs: [][]byte{[]byte("state-proof-1"), []byte("state-proof-2")},
+		proofs:      [][]byte{[]byte("proof-a"), []byte("proof-b")},
 	}
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
 	client := newClient(t, set, "chain-a", "client-0")
@@ -81,10 +81,10 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		require.Equal(t, stub.timestamp, timestamp)
 	})
 
-	t.Run("state proof", func(t *testing.T) {
-		proof, err := client.StateProof(ctx, 99)
+	t.Run("state proof keeps update order", func(t *testing.T) {
+		proofs, err := client.StateProof(ctx, 99)
 		require.NoError(t, err)
-		require.Equal(t, []byte("state-proof"), proof)
+		require.Equal(t, [][]byte{[]byte("state-proof-1"), []byte("state-proof-2")}, proofs)
 		require.Equal(t, uint64(99), stub.gotHeight)
 	})
 
@@ -134,4 +134,23 @@ func TestProverServiceRejectsMismatchedProofCount(t *testing.T) {
 	_, err := client.PacketProofs(context.Background(), 1, v2.ProofKindPacketCommitment,
 		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}})
 	require.ErrorContains(t, err, "returned 1 proofs for 2 packets")
+}
+
+func TestProverServiceStateProofs(t *testing.T) {
+	for name, proofs := range map[string][][]byte{
+		"single": {[]byte("only")},
+		"multi":  {[]byte("hop-1"), []byte("hop-2")},
+		"noop":   nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			stub := &stubProver{stateProofs: proofs}
+			set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
+			client := newClient(t, set, "chain-a", "client-0")
+
+			got, err := client.StateProof(t.Context(), 1)
+			require.NoError(t, err)
+			require.Equal(t, proofs, got)
+			require.Equal(t, uint64(1), stub.gotHeight)
+		})
+	}
 }

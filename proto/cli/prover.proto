@@ -55,8 +55,11 @@ message StateProofRequest {
 }
 
 message StateProofResponse {
-  // The proof, opaque to the relayer and passed to the light client unchanged.
-  bytes proof = 1;
+  // The ordered client updates to submit before the packet calls, opaque to the
+  // relayer and passed to the light client unchanged. Usually one; several when
+  // the light client needs intermediate headers; empty when it already holds
+  // the state at the requested height.
+  repeated bytes proofs = 1;
 }
 
 message PacketProofsRequest {

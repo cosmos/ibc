@@ -33,6 +33,7 @@
 | `TestIFTTransfer_TwoTokensSameClientPair` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestManualRelay_RequestSurvivesRestart` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestPendingPacketStatusWhileDestinationMiningPaused` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
+| `TestQBFTMesh` | None | No environment | No environment | No environment |
 | `TestRelay_FilteredSequences` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestRelay_FilteredTimeoutSequences` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestRelayerRecoversAfterNodeRestart` | EVM (node lifecycle) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
@@ -40,6 +41,7 @@
 | `TestRemoteProver_RelaysPacket` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestRemoteProver_TimesOutPacket` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestRemoteSignerFixtureRequiresKeyID` | None | No environment | No environment | No environment |
+| `TestTransferBesuQBFT_AutoRelay` | EVM (provider besu) | Skip: no EVM provider satisfies requirements {Provider:besu ControlledMining:false NodeLifecycle:false} in fast mode | 2× Besu; 2 IBC instances; 1 connection; 0 attestors; 2 Besu QBFT clients | 2× Besu; 2 IBC instances; 1 connection; 0 attestors; 2 Besu QBFT clients |
 | `TestTransferTimeout_Refund` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestTransfer_AutoRelay` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestTransfer_ManualRelay` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |

@@ -289,8 +289,11 @@ func (x *StateProofRequest) GetHeight() uint64 {
 
 type StateProofResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The proof, opaque to the relayer and passed to the light client unchanged.
-	Proof         []byte `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`
+	// The ordered client updates to submit before the packet calls, opaque to the
+	// relayer and passed to the light client unchanged. Usually one; several when
+	// the light client needs intermediate headers; empty when it already holds
+	// the state at the requested height.
+	Proofs        [][]byte `protobuf:"bytes,1,rep,name=proofs,proto3" json:"proofs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -325,9 +328,9 @@ func (*StateProofResponse) Descriptor() ([]byte, []int) {
 	return file_prover_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *StateProofResponse) GetProof() []byte {
+func (x *StateProofResponse) GetProofs() [][]byte {
 	if x != nil {
-		return x.Proof
+		return x.Proofs
 	}
 	return nil
 }
@@ -626,9 +629,9 @@ const file_prover_proto_rawDesc = "" +
 	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\"Z\n" +
 	"\x11StateProofRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
-	"\x06height\x18\x02 \x01(\x04R\x06height\"*\n" +
-	"\x12StateProofResponse\x12\x14\n" +
-	"\x05proof\x18\x01 \x01(\fR\x05proof\"\xbb\x01\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\",\n" +
+	"\x12StateProofResponse\x12\x16\n" +
+	"\x06proofs\x18\x01 \x03(\fR\x06proofs\"\xbb\x01\n" +
 	"\x13PacketProofsRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12,\n" +

@@ -152,11 +152,12 @@ func init() {
 	cmdDeployClient.Flags().
 		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
 	_ = cmdDeployClient.MarkFlagRequired("counterparty-chain")
-	cmdDeployClient.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
+	cmdDeployClient.Flags().
+		StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type: attestation or besu-qbft")
 	cmdDeployClient.Flags().
 		StringSliceVar(&flagDeployAttestors, "attestors", nil,
-			"attestors for the new client: addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
-	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
+			"attestation: attestors for the new client as addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
+	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation: signature threshold")
 	cmdDeployClient.Flags().
 		StringVar(&flagDeployClientID, "client-id", "", "client id (default: cli-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
@@ -164,7 +165,14 @@ func init() {
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().
-		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
+		Uint64Var(&flagDeployTimestamp, "timestamp", 0,
+			"attestation: initial trusted timestamp seconds (default: counterparty head; besu-qbft reads it from the header)")
+	cmdDeployClient.Flags().
+		DurationVar(&flagDeployTrustingPeriod, "trusting-period", 0,
+			"besu-qbft: how long a trusted consensus state stays usable, in whole seconds (0 = never expires)")
+	cmdDeployClient.Flags().
+		DurationVar(&flagDeployMaxClockDrift, "max-clock-drift", 60*time.Second,
+			"besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds")
 
 	cmdDeployRenderConfig.Flags().
 		StringVar(&flagDeployRenderSignerA, "signer-a", "", "signers[] alias submitting relay txs on chainA")

@@ -12,20 +12,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm/contracts/attestation"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -48,6 +52,38 @@ type ETHClient interface {
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
+	GetProof(
+		ctx context.Context,
+		account common.Address,
+		keys []string,
+		blockNumber *big.Int,
+	) (*gethclient.AccountResult, error)
+}
+
+// dialedClient adds eth_getProof to ethclient.Client. The geth client is held
+// by name rather than embedded: its CallContract takes state overrides, which
+// would collide with ethclient's and break bind.ContractBackend.
+type dialedClient struct {
+	*ethclient.Client
+	proofs *gethclient.Client
+}
+
+func dial(url string) (*dialedClient, error) {
+	client, err := ethclient.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dialedClient{Client: client, proofs: gethclient.New(client.Client())}, nil
+}
+
+func (d *dialedClient) GetProof(
+	ctx context.Context,
+	account common.Address,
+	keys []string,
+	blockNumber *big.Int,
+) (*gethclient.AccountResult, error) {
+	return d.proofs.GetProof(ctx, account, keys, blockNumber)
 }
 
 // Client implements chains.Client for EVM chains.
@@ -63,7 +99,7 @@ type Client struct {
 
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	eth, err := ethclient.Dial(rpcURL)
+	eth, err := dial(rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
@@ -82,7 +118,7 @@ func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 
 	if wsURL != "" {
 		// ws is not metered
-		dialed, errDial := ethclient.Dial(wsURL)
+		dialed, errDial := dial(wsURL)
 		if errDial != nil {
 			return nil, errors.Wrapf(errDial, "dialing websocket for chain %s", chainID)
 		}
@@ -286,6 +322,238 @@ func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]stri
 	}
 
 	return addresses, set.MinRequiredSigs, nil
+}
+
+// GetHeaderRLP returns the header at height exactly as the node encodes it.
+func (c *Client) GetHeaderRLP(ctx context.Context, height uint64) ([]byte, error) {
+	header, err := c.eth.HeaderByNumber(ctx, heightToBigInt(height))
+	if err != nil {
+		return nil, errors.Wrapf(err, "getting header for height %d on chain %s", height, c.chainID)
+	}
+
+	encoded, err := besu.EncodeHeader(header)
+	if err != nil {
+		return nil, errors.Wrapf(err, "encoding header %d on chain %s", height, c.chainID)
+	}
+
+	return encoded, nil
+}
+
+// GetRouterProof proves the router account and the requested storage slots at
+// height via eth_getProof, matching storage proofs to slots by key.
+func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (v2.AccountProof, error) {
+	keys := make([]string, len(slots))
+	for i, slot := range slots {
+		keys[i] = common.Hash(slot).Hex()
+	}
+
+	result, err := c.eth.GetProof(ctx, c.routerAddress, keys, heightToBigInt(height))
+	switch {
+	case err != nil:
+		return v2.AccountProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
+	case result == nil:
+		return v2.AccountProof{}, errors.Errorf("router proof is nil at height %d on chain %s", height, c.chainID)
+	}
+
+	proof, err := accountProofFromResult(result, slots)
+	if err != nil {
+		return v2.AccountProof{}, errors.Wrapf(err, "router proof at height %d on chain %s", height, c.chainID)
+	}
+
+	return proof, nil
+}
+
+// accountProofFromResult converts an eth_getProof result, requiring exactly
+// one well-formed storage proof per requested slot regardless of response
+// order.
+func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) (v2.AccountProof, error) {
+	accountNodes, err := decodeProofNodes(result.AccountProof)
+	if err != nil {
+		return v2.AccountProof{}, errors.Wrap(err, "account proof")
+	}
+
+	byKey := make(map[[32]byte]v2.StorageProof, len(result.StorageProof))
+
+	for i, storage := range result.StorageProof {
+		key, errKey := decodeStorageKey(storage.Key)
+		if errKey != nil {
+			return v2.AccountProof{}, errors.Wrapf(errKey, "storage proof %d key", i)
+		}
+
+		if storage.Value == nil || storage.Value.Sign() < 0 || storage.Value.BitLen() > 256 {
+			return v2.AccountProof{}, errors.Errorf("storage proof %d has an invalid value", i)
+		}
+
+		nodes, errNodes := decodeProofNodes(storage.Proof)
+		if errNodes != nil {
+			return v2.AccountProof{}, errors.Wrapf(errNodes, "storage proof %d", i)
+		}
+
+		if _, dup := byKey[key]; dup {
+			return v2.AccountProof{}, errors.Errorf("duplicate storage proof for slot %s", common.Hash(key))
+		}
+
+		byKey[key] = v2.StorageProof{Key: key, Value: storage.Value, Proof: nodes}
+	}
+
+	proofs := make([]v2.StorageProof, len(slots))
+
+	for i, slot := range slots {
+		proof, ok := byKey[slot]
+		if !ok {
+			return v2.AccountProof{}, errors.Errorf("no storage proof returned for slot %s", common.Hash(slot))
+		}
+
+		proofs[i] = proof
+	}
+
+	if len(byKey) != len(slots) {
+		return v2.AccountProof{}, errors.Errorf("%d storage proofs returned for %d slots", len(byKey), len(slots))
+	}
+
+	return v2.AccountProof{
+		StorageRoot:   result.StorageHash,
+		AccountProof:  accountNodes,
+		StorageProofs: proofs,
+	}, nil
+}
+
+// decodeStorageKey accepts a 0x-prefixed key of up to 32 bytes and left-pads
+// it: Besu strips leading zero bytes and encodes the zero key as 0x0.
+func decodeStorageKey(key string) ([32]byte, error) {
+	raw, err := hexutil.Decode(key)
+	if err != nil {
+		// Besu returns 0x0 for zero; hexutil requires an even length.
+		trimmed := strings.TrimPrefix(key, "0x")
+		if len(trimmed)%2 == 1 {
+			raw, err = hexutil.Decode("0x0" + trimmed)
+		}
+
+		if err != nil {
+			return [32]byte{}, err
+		}
+	}
+
+	if len(raw) > common.HashLength {
+		return [32]byte{}, errors.Errorf("key %s is longer than 32 bytes", key)
+	}
+
+	return common.BytesToHash(raw), nil
+}
+
+func decodeProofNodes(nodes []string) ([][]byte, error) {
+	out := make([][]byte, len(nodes))
+
+	for i, node := range nodes {
+		decoded, err := hexutil.Decode(node)
+		if err != nil {
+			return nil, errors.Wrapf(err, "proof node %d", i)
+		}
+
+		out[i] = decoded
+	}
+
+	return out, nil
+}
+
+// GetBesuQBFTClientState reads and strictly decodes clientID's Besu QBFT light
+// client state.
+func (c *Client) GetBesuQBFTClientState(ctx context.Context, clientID string) (besu.ClientState, error) {
+	lightClient, err := c.besuQBFTClient(ctx, clientID)
+	if err != nil {
+		return besu.ClientState{}, err
+	}
+
+	raw, err := lightClient.GetClientState(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return besu.ClientState{}, errors.Wrapf(
+			err,
+			"querying client state for client %q on chain %s",
+			clientID,
+			c.chainID,
+		)
+	}
+
+	state, err := besu.DecodeClientState(raw)
+	if err != nil {
+		return besu.ClientState{}, errors.Wrapf(err, "client %q on chain %s", clientID, c.chainID)
+	}
+
+	return state, nil
+}
+
+// GetBesuQBFTConsensusStateHash reads the consensus state hash clientID's Besu
+// QBFT light client stores at height.
+func (c *Client) GetBesuQBFTConsensusStateHash(
+	ctx context.Context,
+	clientID string,
+	height uint64,
+) ([32]byte, error) {
+	lightClient, err := c.besuQBFTClient(ctx, clientID)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, height)
+	if err != nil {
+		if isConsensusStateNotFound(err) {
+			return [32]byte{}, errors.Wrapf(
+				v2.ErrConsensusStateNotFound, "client %q on chain %s at height %d", clientID, c.chainID, height,
+			)
+		}
+
+		return [32]byte{}, errors.Wrapf(
+			err, "querying consensus state hash at height %d for client %q on chain %s", height, clientID, c.chainID,
+		)
+	}
+
+	return hash, nil
+}
+
+func (c *Client) besuQBFTClient(ctx context.Context, clientID string) (*besuqbft.ContractCaller, error) {
+	lightClientAddr, err := c.router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "resolving light client address for %q on chain %s", clientID, c.chainID)
+	}
+
+	lightClient, err := besuqbft.NewContractCaller(lightClientAddr, c.eth)
+	if err != nil {
+		return nil, errors.Wrapf(err, "binding besu qbft light client %q on chain %s", clientID, c.chainID)
+	}
+
+	return lightClient, nil
+}
+
+var consensusStateNotFoundSelector = mustErrorSelector("ConsensusStateNotFound")
+
+func mustErrorSelector(name string) []byte {
+	parsed, err := besuqbft.ContractMetaData.GetAbi()
+	if err != nil {
+		panic(err)
+	}
+
+	return parsed.Errors[name].ID.Bytes()[:4]
+}
+
+// isConsensusStateNotFound recognizes the light client's
+// ConsensusStateNotFound(uint64) revert in a JSON-RPC error's data.
+func isConsensusStateNotFound(err error) bool {
+	var dataErr interface{ ErrorData() any }
+	if !errors.As(err, &dataErr) {
+		return false
+	}
+
+	data, ok := dataErr.ErrorData().(string)
+	if !ok {
+		return false
+	}
+
+	revert, decodeErr := hexutil.Decode(data)
+	if decodeErr != nil {
+		return false
+	}
+
+	return len(revert) >= 4 && bytes.Equal(revert[:4], consensusStateNotFoundSelector)
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {

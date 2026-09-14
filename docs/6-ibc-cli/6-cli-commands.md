@@ -177,14 +177,16 @@ Deploy and register a light client tracking a counterparty chain.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--attestors <strings>` | configured attestations for the tracked chain | Attestors for the new client: addresses, attestation names, or signer aliases. |
+| `--attestors <strings>` | configured attestations for the tracked chain | Attestation: attestors for the new client as addresses, attestation names, or signer aliases. |
 | `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
 | `--height <uint>` | counterparty head | Initial trusted height. |
-| `--threshold <uint8>` | `1` | Attestation signature threshold. |
-| `--timestamp <uint>` | counterparty head | Initial trusted timestamp seconds. |
-| `--type <string>` | `attestation` | Light client type. |
+| `--max-clock-drift <duration>` | `1m0s` | Besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds. |
+| `--threshold <uint8>` | `1` | Attestation: signature threshold. |
+| `--timestamp <uint>` | counterparty head; besu-qbft reads it from the header | Attestation: initial trusted timestamp seconds. |
+| `--trusting-period <duration>` |  | Besu-qbft: how long a trusted consensus state stays usable, in whole seconds (0 = never expires). |
+| `--type <string>` | `attestation` | Light client type: attestation or besu-qbft. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
@@ -256,7 +258,7 @@ Deploy an IFT token on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
+<!-- [main.go:L185](cli/cmd/ibc/main.go#L185) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -285,7 +287,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L183](cli/cmd/ibc/main.go#L183) -->
+<!-- [main.go:L191](cli/cmd/ibc/main.go#L191) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -310,7 +312,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L169](cli/cmd/ibc/main.go#L169) -->
+<!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -497,7 +499,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
+<!-- [main.go:L217](cli/cmd/ibc/main.go#L217) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -517,7 +519,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L214](cli/cmd/ibc/main.go#L214) -->
+<!-- [main.go:L222](cli/cmd/ibc/main.go#L222) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

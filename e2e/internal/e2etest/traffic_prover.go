@@ -56,10 +56,12 @@ func buildProverConfig(
 		require.NoError(t, err, "e2etest: resolve Connection %q", id)
 
 		config.Connections = append(config.Connections, ibccli.RelayerConnection{
-			ChainA:  chainEVMID(t, env, connection.A().IBCInstance().Chain().ID()),
-			ClientA: connection.A().ID(),
-			ChainB:  chainEVMID(t, env, connection.B().IBCInstance().Chain().ID()),
-			ClientB: connection.B().ID(),
+			ChainA:      chainEVMID(t, env, connection.A().IBCInstance().Chain().ID()),
+			ClientA:     connection.A().ID(),
+			ClientTypeA: string(connection.A().Kind()),
+			ChainB:      chainEVMID(t, env, connection.B().IBCInstance().Chain().ID()),
+			ClientB:     connection.B().ID(),
+			ClientTypeB: string(connection.B().Kind()),
 		})
 	}
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -69,6 +70,23 @@ type Client interface {
 	// GetAttestationSet returns clientID's on-chain attestor addresses and
 	// minimum required signature count.
 	GetAttestationSet(ctx context.Context, clientID string) (addresses []string, minRequiredSigs uint8, err error)
+
+	// GetHeaderRLP returns the block header at height encoded exactly as the
+	// chain sealed it, for light clients that verify raw headers.
+	GetHeaderRLP(ctx context.Context, height uint64) ([]byte, error)
+
+	// GetRouterProof returns the eth_getProof result for this chain's ICS26
+	// router at height with one storage proof per requested slot, in request
+	// order. Slots must be unique.
+	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (v2.AccountProof, error)
+
+	// GetBesuQBFTClientState reads clientID's Besu QBFT light client state.
+	GetBesuQBFTClientState(ctx context.Context, clientID string) (besu.ClientState, error)
+
+	// GetBesuQBFTConsensusStateHash reads the consensus state hash clientID's
+	// Besu QBFT light client stores at height, or
+	// v2.ErrConsensusStateNotFound when it stores none.
+	GetBesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error)
 }
 
 var _ Client = (*evm.Client)(nil)

@@ -531,7 +531,7 @@ Proves the light client's counterparty state at a height.
 
 | Field | Type | Description |
 |---|---|---|
-| `proof` | `bytes` | The proof, opaque to the relayer and passed to the light client unchanged. |
+| `proofs` | `bytes[]` | The ordered client updates to submit before the packet calls, opaque to the relayer and passed to the light client unchanged. Usually one; several when the light client needs intermediate headers; empty when it already holds the state at the requested height. |
 
 <!-- [prover.proto:L57](proto/cli/prover.proto#L57) -->
 
@@ -558,7 +558,7 @@ Proves each packet's membership or non-membership at a height, one proof per pac
 | `kind` | `ProofKind` | Which commitment to prove for every packet in this request. |
 | `packets` | `Packet[]` | The packets to prove, all under the same `kind` and `height`. |
 
-<!-- [prover.proto:L62](proto/cli/prover.proto#L62) -->
+<!-- [prover.proto:L65](proto/cli/prover.proto#L65) -->
 
 <!-- GEN:api:msg:PacketProofsRequest END -->
 
@@ -568,7 +568,7 @@ Proves each packet's membership or non-membership at a height, one proof per pac
 |---|---|---|
 | `proofs` | `bytes[]` | One proof per requested packet, in request order. |
 
-<!-- [prover.proto:L73](proto/cli/prover.proto#L73) -->
+<!-- [prover.proto:L76](proto/cli/prover.proto#L76) -->
 
 <!-- GEN:api:msg:PacketProofsResponse END -->
 
@@ -583,7 +583,7 @@ different length than the request is an error.
 | `PROOF_KIND_ACKNOWLEDGEMENT` | The packet was received and acknowledged. Proven to acknowledge it. |
 | `PROOF_KIND_RECEIPT_ABSENCE` | The packet was never received. Proven to time it out. |
 
-<!-- [prover.proto:L78](proto/cli/prover.proto#L78) -->
+<!-- [prover.proto:L81](proto/cli/prover.proto#L81) -->
 
 <!-- GEN:api:enum:ProofKind END -->
 
@@ -601,7 +601,7 @@ The packet a proof is requested for.
 | `timeout_timestamp` | `uint64` | When the packet stops being receivable, in seconds. |
 | `payloads` | `Payload[]` | The packet's application payloads. |
 
-<!-- [prover.proto:L88](proto/cli/prover.proto#L88) -->
+<!-- [prover.proto:L91](proto/cli/prover.proto#L91) -->
 
 <!-- GEN:api:msg:Packet END -->
 
@@ -615,7 +615,7 @@ The packet a proof is requested for.
 | `encoding` | `string` | How `value` is encoded. |
 | `value` | `bytes` | The application data. |
 
-<!-- [prover.proto:L101](proto/cli/prover.proto#L101) -->
+<!-- [prover.proto:L104](proto/cli/prover.proto#L104) -->
 
 <!-- GEN:api:msg:Payload END -->
 

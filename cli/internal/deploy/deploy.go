@@ -10,8 +10,11 @@ import (
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
-// ClientTypeAttestation is the only client type currently implemented.
-const ClientTypeAttestation = "attestation"
+// Client types the deploy engine can provision.
+const (
+	ClientTypeAttestation = "attestation"
+	ClientTypeBesuQBFT    = "besu-qbft"
+)
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under
 // (ICS27Lib.DEFAULT_PORT_ID). ICS27GMP.onRecvPacket requires this exact port,
@@ -31,8 +34,38 @@ type AttestationParams struct {
 	InitialTimestamp uint64
 }
 
+// BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
+// are in seconds. The initial trusted state describes the counterparty chain
+// at InitialHeight: the header timestamp, the storage root of its ICS26Router
+// (IBCRouter) and the validator set sealed in the header.
+type BesuQBFTParams struct {
+	IBCRouter          string   `json:"ibcRouter"`
+	InitialHeight      uint64   `json:"initialHeight"`
+	InitialTimestamp   uint64   `json:"initialTimestamp"`
+	InitialStorageRoot string   `json:"initialStorageRoot"`
+	InitialValidators  []string `json:"initialValidators"`
+	TrustingPeriod     uint64   `json:"trustingPeriod"`
+	MaxClockDrift      uint64   `json:"maxClockDrift"`
+}
+
+// BesuQBFTTrustedState is the counterparty state a Besu QBFT client starts
+// trusting, read from the counterparty chain at Height.
+type BesuQBFTTrustedState struct {
+	Height      uint64
+	Timestamp   uint64
+	StorageRoot string
+	Validators  []string
+}
+
+// BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
+// serve the trusted state a client tracking it is initialized with.
+type BesuQBFTSource interface {
+	BesuQBFTTrustedState(ctx context.Context, router string, height uint64) (BesuQBFTTrustedState, error)
+}
+
 // ClientSpec describes one light client to provision and register.
-// Params carries type-specific parameters (AttestationParams for "attestation").
+// Params carries type-specific parameters: AttestationParams for
+// "attestation", BesuQBFTParams for "besu-qbft".
 type ClientSpec struct {
 	ClientID             string
 	Type                 string

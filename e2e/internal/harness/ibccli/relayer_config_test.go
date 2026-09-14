@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestBuildRelayerConfigPreservesDefaultYAML(t *testing.T) {
+func TestBuildRelayerConfigYAML(t *testing.T) {
 	file, err := buildRelayerFileConfig(testRelayerConfig())
 	require.NoError(t, err)
 	data, err := yaml.Marshal(file)
@@ -163,6 +163,16 @@ func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 		edit func(*RelayerConfig)
 		err  string
 	}{
+		{
+			"missing client type A",
+			func(c *RelayerConfig) { c.Connections[0].ClientTypeA = "" },
+			`end A: unsupported client type ""`,
+		},
+		{
+			"missing client type B",
+			func(c *RelayerConfig) { c.Connections[0].ClientTypeB = "" },
+			`end B: unsupported client type ""`,
+		},
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
 		{"attestor key required", func(c *RelayerConfig) {
 			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, ChainID: "1"}}
@@ -193,7 +203,39 @@ func testRelayerConfig() RelayerConfig {
 		},
 		Connections: []RelayerConnection{{
 			ChainA: "1", ClientA: "client-1", ChainB: "2", ClientB: "client-2",
+			ClientTypeA: RelayerClientAttestation, ClientTypeB: RelayerClientAttestation,
 			AutoRelayA: true,
 		}},
 	}
+}
+
+func TestClientTypesPerEnd(t *testing.T) {
+	cfg := testRelayerConfig()
+	cfg.Connections[0].ClientTypeA = RelayerClientBesuQBFT
+	cfg.Connections[0].ClientTypeB = RelayerClientBesuQBFT
+
+	file, err := buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientB.Type)
+	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
+
+	// ends may differ
+	cfg.Connections[0].ClientTypeB = RelayerClientAttestation
+	file, err = buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, RelayerClientAttestation, file.Relayer.Connections[0].ClientB.Type)
+
+	// a prover URL overrides both ends
+	cfg.Connections[0].ProverURL = "http://prover:9090"
+	file, err = buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientB.Type)
+
+	cfg.Connections[0].ProverURL = ""
+	cfg.Connections[0].ClientTypeA = "unknown"
+	_, err = buildRelayerFileConfig(cfg)
+	require.ErrorContains(t, err, "unsupported client type")
 }

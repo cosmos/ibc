@@ -84,9 +84,10 @@ func TestGeneratorStateProof(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		proof, err := gen.StateProof(ctx, 10)
+		proofs, err := gen.StateProof(ctx, 10)
 		require.NoError(t, err)
-		require.NotEmpty(t, proof)
+		require.Len(t, proofs, 1)
+		require.NotEmpty(t, proofs[0])
 	})
 
 	t.Run("mismatchedHeightErrors", func(t *testing.T) {

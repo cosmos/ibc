@@ -160,13 +160,13 @@ func (h *handler) StateProof(
 		return nil, err
 	}
 
-	proof, err := target.StateProof(ctx, req.Msg.GetHeight())
+	proofs, err := target.StateProof(ctx, req.Msg.GetHeight())
 	if err != nil {
 		h.logger.Error("StateProof", "err", err)
 		return nil, errInternal
 	}
 
-	return connect.NewResponse(&proverv2.StateProofResponse{Proof: proof}), nil
+	return connect.NewResponse(&proverv2.StateProofResponse{Proofs: proofs}), nil
 }
 
 func (h *handler) PacketProofs(

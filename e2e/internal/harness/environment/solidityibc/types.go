@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Instance is one initialized ICS26 router installation. The router address is
@@ -45,6 +47,47 @@ type AttestationClientConfig struct {
 	InitialHeight         uint64
 	InitialTimestamp      uint64
 	RoleManager           common.Address
+}
+
+// BesuQBFTClientConfig contains the immutable constructor inputs for a Besu
+// QBFT light client. The initial trusted state describes the counterparty
+// chain at InitialHeight; RoleManager restricts proof submission to that
+// address (the host router), a zero value permits anyone.
+type BesuQBFTClientConfig struct {
+	ID                   string
+	CounterpartyClientID string
+	CounterpartyRouter   common.Address
+	InitialHeight        uint64
+	InitialTimestamp     uint64
+	InitialStorageRoot   common.Hash
+	InitialValidators    []common.Address
+	TrustingPeriod       uint64
+	MaxClockDrift        uint64
+	RoleManager          common.Address
+}
+
+func (c BesuQBFTClientConfig) snapshot() BesuQBFTClientConfig {
+	c.InitialValidators = slices.Clone(c.InitialValidators)
+	return c
+}
+
+func (c BesuQBFTClientConfig) validate() error {
+	if !validCustomClientID(c.ID) {
+		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", c.ID)
+	}
+	if c.CounterpartyClientID == "" {
+		return fmt.Errorf("client %q has an empty counterparty client id", c.ID)
+	}
+	if c.CounterpartyRouter == (common.Address{}) {
+		return fmt.Errorf("client %q has a zero counterparty router", c.ID)
+	}
+	if c.InitialHeight == 0 || c.InitialTimestamp == 0 {
+		return fmt.Errorf("client %q needs a non-zero initial trusted height and timestamp", c.ID)
+	}
+	if err := besu.ValidateValidators(c.InitialValidators); err != nil {
+		return fmt.Errorf("client %q initial validators: %w", c.ID, err)
+	}
+	return nil
 }
 
 func (c AttestationClientConfig) snapshot() AttestationClientConfig {

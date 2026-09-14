@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/besuqbft"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -29,8 +30,11 @@ type Prover interface {
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof proves the light client's counterparty state at height.
-	StateProof(ctx context.Context, height uint64) ([]byte, error)
+	// StateProof returns the ordered client updates that bring the light
+	// client to height, submitted before any packet call sharing that height.
+	// Usually one; several when validator turnover needs intermediate
+	// headers; empty when the client already holds the state at height.
+	StateProof(ctx context.Context, height uint64) ([][]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
@@ -43,7 +47,10 @@ type Prover interface {
 	) ([][]byte, error)
 }
 
-var _ Prover = (*attestation.Generator)(nil)
+var (
+	_ Prover = (*attestation.Generator)(nil)
+	_ Prover = (*besuqbft.Generator)(nil)
+)
 
 // Key identifies one configured light client by the chain it lives on and
 // its client id, the composite key Prover instances are scoped by.
@@ -82,7 +89,7 @@ func NewSetFromConfig(
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		return addGenerator(ctx, cfg, generators, connAlias, self, counterparty, clientSet, attestors, logger)
 	})
 	if err != nil {
 		return nil, err
@@ -112,6 +119,7 @@ func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counter
 
 func addGenerator(
 	ctx context.Context,
+	cfg config.Config,
 	generators map[string]Prover,
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
@@ -135,6 +143,24 @@ func addGenerator(
 
 		meteredProver := metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
+
+		return nil
+	case config.ClientTypeBesuQBFT:
+		counterpartyChain, ok := cfg.Chain(clientCounterparty.ChainID)
+		if !ok || counterpartyChain.EVM == nil {
+			return errors.Errorf(
+				"connection %q: no EVM chain config for counterparty chain %q", connAlias, clientCounterparty.ChainID,
+			)
+		}
+
+		gen, err := besuqbft.ResolveGenerator(
+			ctx, client, clientCounterparty, counterpartyChain.EVM.ICS26Router, clientSet,
+		)
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
+		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
 
 		return nil
 	case config.ClientTypeRemote:

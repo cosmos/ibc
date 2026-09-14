@@ -104,7 +104,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	mockProver := mocks.NewMockProver(t)
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([][]byte{{0x01}}, nil)
 	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
@@ -203,7 +203,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	mockProver := mocks.NewMockProver(t)
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([][]byte{{0x01}}, nil)
 	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 
@@ -310,7 +310,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	mockProver := mocks.NewMockProver(t)
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil)
-	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([]byte{0x01}, nil)
+	mockProver.EXPECT().StateProof(mock.Anything, uint64(100)).Return([][]byte{{0x01}}, nil)
 	mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything).
 		Return([][]byte{{0x02}}, nil)
 

@@ -53,27 +53,31 @@ func New(router common.Address) *TxBuilder {
 	return &TxBuilder{router: router}
 }
 
-// BuildRelayTxs packs clientUpdate and every packetRelayItems entry into a
-// single ICS26Router.multicall transaction. EVM router calldata has no
-// meaningful size limit for the batch sizes the relayer forms, so this
-// always returns exactly one tx.
+// BuildRelayTxs packs every clientUpdate.StateProofs entry in order, then
+// every packetRelayItems entry, into a single ICS26Router.multicall
+// transaction. EVM router calldata has no meaningful size limit for the batch
+// sizes the relayer forms, so this always returns exactly one tx.
 func (c *TxBuilder) BuildRelayTxs(
 	clientUpdate v2.ClientUpdate,
 	packetRelayItems []v2.PacketRelayItem,
 ) ([]v2.RelayTx, error) {
-	calls := make([][]byte, 0, len(packetRelayItems)+1)
+	calls := make([][]byte, 0, len(clientUpdate.StateProofs)+len(packetRelayItems))
 
-	updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.StateProof)
-	if err != nil {
-		return nil, err
+	for i, stateProof := range clientUpdate.StateProofs {
+		if len(stateProof) == 0 {
+			return nil, errors.Errorf("client update %d for %s is empty", i, clientUpdate.ClientID)
+		}
+
+		updateCall, err := packUpdateClient(clientUpdate.ClientID, stateProof)
+		if err != nil {
+			return nil, err
+		}
+
+		calls = append(calls, updateCall)
 	}
 
-	calls = append(calls, updateCall)
-
 	for _, item := range packetRelayItems {
-		var call []byte
-
-		call, err = packRelayItem(item)
+		call, err := packRelayItem(item)
 		if err != nil {
 			return nil, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
 		}

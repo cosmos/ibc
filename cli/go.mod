@@ -2,7 +2,7 @@
 
 module github.com/cosmos/ibc/cli
 
-go 1.26.4
+go 1.26.5
 
 require (
 	connectrpc.com/connect v1.20.0
@@ -369,3 +369,5 @@ replace (
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )
+
+replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => ../../ibc-contracts-hashed-cons/packages/go-abigen

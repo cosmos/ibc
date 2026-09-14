@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	mock "github.com/stretchr/testify/mock"
 	"math/big"
 )
@@ -392,6 +393,86 @@ func (_c *MockETHClient_FilterLogs_Call) Return(logs []types.Log, err error) *Mo
 }
 
 func (_c *MockETHClient_FilterLogs_Call) RunAndReturn(run func(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error)) *MockETHClient_FilterLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetProof provides a mock function for the type MockETHClient
+func (_mock *MockETHClient) GetProof(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int) (*gethclient.AccountResult, error) {
+	ret := _mock.Called(ctx, account, keys, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetProof")
+	}
+
+	var r0 *gethclient.AccountResult
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, []string, *big.Int) (*gethclient.AccountResult, error)); ok {
+		return returnFunc(ctx, account, keys, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, []string, *big.Int) *gethclient.AccountResult); ok {
+		r0 = returnFunc(ctx, account, keys, blockNumber)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*gethclient.AccountResult)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, common.Address, []string, *big.Int) error); ok {
+		r1 = returnFunc(ctx, account, keys, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockETHClient_GetProof_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetProof'
+type MockETHClient_GetProof_Call struct {
+	*mock.Call
+}
+
+// GetProof is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account common.Address
+//   - keys []string
+//   - blockNumber *big.Int
+func (_e *MockETHClient_Expecter) GetProof(ctx any, account any, keys any, blockNumber any) *MockETHClient_GetProof_Call {
+	return &MockETHClient_GetProof_Call{Call: _e.mock.On("GetProof", ctx, account, keys, blockNumber)}
+}
+
+func (_c *MockETHClient_GetProof_Call) Run(run func(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int)) *MockETHClient_GetProof_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 common.Address
+		if args[1] != nil {
+			arg1 = args[1].(common.Address)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		var arg3 *big.Int
+		if args[3] != nil {
+			arg3 = args[3].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockETHClient_GetProof_Call) Return(accountResult *gethclient.AccountResult, err error) *MockETHClient_GetProof_Call {
+	_c.Call.Return(accountResult, err)
+	return _c
+}
+
+func (_c *MockETHClient_GetProof_Call) RunAndReturn(run func(ctx context.Context, account common.Address, keys []string, blockNumber *big.Int) (*gethclient.AccountResult, error)) *MockETHClient_GetProof_Call {
 	_c.Call.Return(run)
 	return _c
 }

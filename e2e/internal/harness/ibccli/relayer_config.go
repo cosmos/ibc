@@ -57,8 +57,13 @@ type RelayerConnection struct {
 	AutoRelayA bool
 	AutoRelayB bool
 
-	// ProverURL points both client ends at a ProverService. Empty keeps
-	// attestation.
+	// ClientTypeA and ClientTypeB are each end's light client type, required
+	// unless ProverURL is set.
+	ClientTypeA string
+	ClientTypeB string
+
+	// ProverURL points both client ends at a ProverService, overriding the
+	// declared client types.
 	ProverURL string
 }
 
@@ -164,13 +169,13 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		clientType := relayerClientAttestation
-
-		var params map[string]any
-
-		if connection.ProverURL != "" {
-			clientType = relayerClientRemote
-			params = map[string]any{"url": connection.ProverURL}
+		typeA, paramsA, err := relayerClientEnd(connection.ClientTypeA, connection.ProverURL)
+		if err != nil {
+			return fileConfig{}, fmt.Errorf("connection %s/%s end A: %w", connection.ChainA, connection.ClientA, err)
+		}
+		typeB, paramsB, err := relayerClientEnd(connection.ClientTypeB, connection.ProverURL)
+		if err != nil {
+			return fileConfig{}, fmt.Errorf("connection %s/%s end B: %w", connection.ChainB, connection.ClientB, err)
 		}
 
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
@@ -179,21 +184,36 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				ChainID:   connection.ChainA,
 				Signer:    cfg.SignerAlias,
 				ClientID:  connection.ClientA,
-				Type:      clientType,
-				Params:    params,
+				Type:      typeA,
+				Params:    paramsA,
 				AutoRelay: autoRelay(connection.AutoRelayA),
 			},
 			ClientB: clientEndFileConfig{
 				ChainID:   connection.ChainB,
 				Signer:    cfg.SignerAlias,
 				ClientID:  connection.ClientB,
-				Type:      clientType,
-				Params:    params,
+				Type:      typeB,
+				Params:    paramsB,
 				AutoRelay: autoRelay(connection.AutoRelayB),
 			},
 		})
 	}
 	return file, nil
+}
+
+// relayerClientEnd resolves one end's explicit client type or remote prover.
+func relayerClientEnd(clientType, proverURL string) (string, map[string]any, error) {
+	if proverURL != "" {
+		return RelayerClientRemote, map[string]any{"url": proverURL}, nil
+	}
+	switch clientType {
+	case RelayerClientAttestation:
+		return RelayerClientAttestation, nil, nil
+	case RelayerClientBesuQBFT:
+		return RelayerClientBesuQBFT, nil, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported client type %q", clientType)
+	}
 }
 
 // addAttestor declares one explicitly-configured candidate attestor.
@@ -250,8 +270,9 @@ func localAttestorName(chainID string) string {
 
 const (
 	RelayerSignerLocal       = "local"
-	relayerClientAttestation = "attestation"
-	relayerClientRemote      = "remote"
+	RelayerClientAttestation = "attestation"
+	RelayerClientBesuQBFT    = "besu-qbft"
+	RelayerClientRemote      = "remote"
 
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"

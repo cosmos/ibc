@@ -421,15 +421,11 @@ func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
 		CounterpartyChainID:  spec.CounterpartyChainID,
 		CounterpartyClientID: spec.CounterpartyClientID,
 	}
-	if spec.Type == ClientTypeAttestation {
+	switch spec.Type {
+	case ClientTypeAttestation:
 		p, ok := spec.Params.(AttestationParams)
 		if !ok {
-			return manifest.Client{}, fmt.Errorf(
-				"client %q: params type %T does not match client type %q",
-				spec.ClientID,
-				spec.Params,
-				spec.Type,
-			)
+			return manifest.Client{}, paramsMismatch(spec)
 		}
 		client.Params = map[string]any{
 			"attestors":        p.Attestors,
@@ -437,8 +433,63 @@ func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
 			"initialHeight":    p.InitialHeight,
 			"initialTimestamp": p.InitialTimestamp,
 		}
+	case ClientTypeBesuQBFT:
+		p, ok := spec.Params.(BesuQBFTParams)
+		if !ok {
+			return manifest.Client{}, paramsMismatch(spec)
+		}
+		params, err := paramsToMap(p)
+		if err != nil {
+			return manifest.Client{}, fmt.Errorf("client %q: %w", spec.ClientID, err)
+		}
+		client.Params = params
 	}
 	return client, nil
+}
+
+func paramsMismatch(spec ClientSpec) error {
+	return fmt.Errorf(
+		"client %q: params type %T does not match client type %q",
+		spec.ClientID,
+		spec.Params,
+		spec.Type,
+	)
+}
+
+// BesuQBFTParamsFromClient rebuilds the params a recorded besu-qbft client
+// was deployed with, so a rerun needs no counterparty state.
+func BesuQBFTParamsFromClient(client manifest.Client) (BesuQBFTParams, error) {
+	if client.Type != ClientTypeBesuQBFT {
+		return BesuQBFTParams{}, fmt.Errorf(
+			"client %q has type %q, not %q",
+			client.ClientID,
+			client.Type,
+			ClientTypeBesuQBFT,
+		)
+	}
+	raw, err := json.Marshal(client.Params)
+	if err != nil {
+		return BesuQBFTParams{}, fmt.Errorf("client %q params: %w", client.ClientID, err)
+	}
+	var p BesuQBFTParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return BesuQBFTParams{}, fmt.Errorf("client %q params: %w", client.ClientID, err)
+	}
+	return p, nil
+}
+
+// paramsToMap round-trips a tagged struct through JSON into the manifest's
+// map form.
+func paramsToMap(v any) (map[string]any, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("encode params: %w", err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("decode params: %w", err)
+	}
+	return out, nil
 }
 
 // clientConflicts reports the identity fields on which spec disagrees with
@@ -460,6 +511,11 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 	if p, ok := spec.Params.(AttestationParams); ok && spec.Type == ClientTypeAttestation {
 		conflict("attestors", existing.Params["attestors"], p.Attestors)
 		conflict("threshold", existing.Params["threshold"], p.Threshold)
+	}
+	if p, ok := spec.Params.(BesuQBFTParams); ok && spec.Type == ClientTypeBesuQBFT {
+		conflict("ibcRouter", existing.Params["ibcRouter"], p.IBCRouter)
+		conflict("trustingPeriod", existing.Params["trustingPeriod"], p.TrustingPeriod)
+		conflict("maxClockDrift", existing.Params["maxClockDrift"], p.MaxClockDrift)
 	}
 	return diffs
 }
