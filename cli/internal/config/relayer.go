@@ -24,9 +24,14 @@ const (
 // ClientType the light client type.
 type ClientType string
 
+// DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
+const DefaultClearInterval = 5 * time.Minute
+
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
 	DispatchPollInterval *time.Duration         `yaml:"dispatchPollInterval,omitempty"`
+	ClearOnStart         *bool                  `yaml:"clearOnStart,omitempty"`
+	ClearInterval        *time.Duration         `yaml:"clearInterval,omitempty"`
 	ChainOverrides       []RelayerChainOverride `yaml:"chainOverrides"`
 	Connections          []ConnectionConfig     `yaml:"connections"`
 }
@@ -38,6 +43,12 @@ type RelayerChainOverride struct {
 	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
+	Discovery          *DiscoveryConfig  `yaml:"discovery,omitempty"`
+}
+
+// DiscoveryConfig per-chain packet discovery settings.
+type DiscoveryConfig struct {
+	ClearInterval *time.Duration `yaml:"clearInterval,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.
@@ -88,6 +99,10 @@ type AttestationParams struct{}
 func (c RelayerConfig) Validate() error {
 	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
 		return errPathf("dispatchPollInterval", "must be positive")
+	}
+
+	if c.ClearInterval != nil && *c.ClearInterval <= 0 {
+		return errPathf("clearInterval", "must be positive")
 	}
 
 	if err := c.validateChainOverrides(); err != nil {
@@ -160,6 +175,20 @@ func (c RelayerChainOverride) Validate() error {
 		if err := c.EVM.Validate(); err != nil {
 			return errPath("evm", err)
 		}
+	}
+
+	if c.Discovery != nil {
+		if err := c.Discovery.Validate(); err != nil {
+			return errPath("discovery", err)
+		}
+	}
+
+	return nil
+}
+
+func (c DiscoveryConfig) Validate() error {
+	if c.ClearInterval != nil && *c.ClearInterval <= 0 {
+		return errPathf("clearInterval", "must be positive")
 	}
 
 	return nil
@@ -315,4 +344,24 @@ func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	}
 
 	return &params, nil
+}
+
+// ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.
+func (c RelayerConfig) ClearOnStartEnabled() bool {
+	return c.ClearOnStart == nil || *c.ClearOnStart
+}
+
+// ClearIntervalFor resolves the clearing cadence for a chain, preferring its
+// discovery override.
+func (c RelayerConfig) ClearIntervalFor(chainID string) time.Duration {
+	override, ok := c.ChainOverride(chainID)
+	if ok && override.Discovery != nil && override.Discovery.ClearInterval != nil {
+		return *override.Discovery.ClearInterval
+	}
+
+	if c.ClearInterval != nil {
+		return *c.ClearInterval
+	}
+
+	return DefaultClearInterval
 }

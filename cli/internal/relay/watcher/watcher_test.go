@@ -5,6 +5,7 @@ package watcher
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -30,63 +31,62 @@ const (
 
 var blockTime = time.Unix(1_700_000_000, 0).UTC()
 
-// chain stands in for the chain-side event stream. It opens a fresh
+// subscriber stands in for the chain-side event stream. It opens a fresh
 // subscription per subscribe, so a test can watch the watcher reconnect, and
 // failNext makes the next subscribe fail instead.
-type chain struct {
+type subscriber struct {
 	mu       sync.Mutex
 	subs     []*subscription
 	failWith error
 }
 
-func newChain() *chain { return &chain{} }
+func newSubscriber() *subscriber { return &subscriber{} }
 
-func (c *chain) SubscribeSendPackets(
+func (s *subscriber) SubscribeSendPackets(
 	ctx context.Context,
 	clientIDs []string,
 	out chan<- v2.PacketEvent,
 ) (v2.Subscription, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if err := c.failWith; err != nil {
-		c.failWith = nil
+	if err := s.failWith; err != nil {
+		s.failWith = nil
 
 		return nil, err
 	}
 
 	sub := &subscription{clientIDs: clientIDs, ctx: ctx, out: out, errs: make(chan error, 1)}
-	c.subs = append(c.subs, sub)
+	s.subs = append(s.subs, sub)
 
 	return sub, nil
 }
 
 // failNext makes the next subscribe fail rather than open.
-func (c *chain) failNext(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (s *subscriber) failNext(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	c.failWith = err
+	s.failWith = err
 }
 
-// opened is how many subscriptions the watcher has opened so far.
-func (c *chain) opened() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (s *subscriber) opened() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	return len(c.subs)
+	return len(s.subs)
 }
 
 // latest is the subscription the watcher is currently reading from.
-func (c *chain) latest(t *testing.T) *subscription {
+func (s *subscriber) latest(t *testing.T) *subscription {
 	t.Helper()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	require.NotEmpty(t, c.subs, "watcher has not subscribed")
+	require.NotEmpty(t, s.subs, "watcher has not subscribed")
 
-	return c.subs[len(c.subs)-1]
+	return s.subs[len(s.subs)-1]
 }
 
 // subscription is one opened stream, which the test drives as the chain would.
@@ -103,8 +103,11 @@ func (s *subscription) Err() <-chan error { return s.errs }
 func (s *subscription) Unsubscribe() { s.unsubscribed = true }
 
 // packetStore records what the watcher writes and optionally fails the write.
+// The reads a clearing pass makes are answered from the same rows.
 type packetStore struct {
-	err     error
+	err error
+
+	mu      sync.Mutex
 	written []store.UpsertPacket
 }
 
@@ -113,18 +116,60 @@ func newPacketStore(err error) *packetStore {
 }
 
 func (s *packetStore) UpsertPacket(_ context.Context, input store.UpsertPacket) error {
+	if s.err != nil {
+		return s.err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.written = append(s.written, input)
 
-	return s.err
+	return nil
 }
 
+func (s *packetStore) MaxPacketSequence(_ context.Context, _, _ string) (uint64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var highest uint64
+	for _, packet := range s.written {
+		highest = max(highest, packet.PacketSequenceNumber)
+	}
+
+	return highest, nil
+}
+
+func (s *packetStore) ListPacketSequencesFrom(
+	_ context.Context,
+	_, _ string,
+	fromSequence uint64,
+) ([]uint64, error) {
+	var sequences []uint64
+
+	for _, sequence := range s.sequences() {
+		if sequence >= fromSequence {
+			sequences = append(sequences, sequence)
+		}
+	}
+
+	return sequences, nil
+}
+
+// sequences is every distinct sequence the store holds, which is what both
+// halves of discovery are ultimately judged on.
 func (s *packetStore) sequences() []uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	sequences := make([]uint64, 0, len(s.written))
 	for _, packet := range s.written {
 		sequences = append(sequences, packet.PacketSequenceNumber)
 	}
 
-	return sequences
+	slices.Sort(sequences)
+
+	return slices.Compact(sequences)
 }
 
 func testConnections() []config.ConnectionConfig {
@@ -143,12 +188,25 @@ func testConnections() []config.ConnectionConfig {
 	}}
 }
 
-func newTestWatcher(subscriber Subscriber, storage PacketStore) *Watcher {
+// newTestWatcher builds a watcher whose clearing pass only ever runs on a
+// reconnect, so a test that says nothing about clearing gets none.
+func newTestWatcher(chain Subscriber, storage ClearStore) *Watcher {
+	return newClearingWatcher(chain, newFakeChain(), storage, ClearConfig{Interval: time.Hour})
+}
+
+func newClearingWatcher(
+	chain Subscriber,
+	querier OutstandingQuerier,
+	storage ClearStore,
+	clearing ClearConfig,
+) *Watcher {
 	return New(
 		sourceChainID,
 		testConnections(),
-		subscriber,
+		chain,
+		querier,
 		storage,
+		clearing,
 		DefaultMinBackoff,
 		DefaultMaxBackoff,
 		slog.Default(),
@@ -175,7 +233,7 @@ func TestWatcherHandleEvent(t *testing.T) {
 
 	t.Run("sendPacketWritesOneRow", func(t *testing.T) {
 		storage := newPacketStore(nil)
-		w := newTestWatcher(newChain(), storage)
+		w := newTestWatcher(newSubscriber(), storage)
 
 		require.NoError(t, w.HandleEvent(ctx, sendPacketEvent(7)))
 
@@ -195,7 +253,7 @@ func TestWatcherHandleEvent(t *testing.T) {
 
 	t.Run("reorgedOutEventWritesNothing", func(t *testing.T) {
 		storage := newPacketStore(nil)
-		w := newTestWatcher(newChain(), storage)
+		w := newTestWatcher(newSubscriber(), storage)
 
 		event := sendPacketEvent(7)
 		event.Removed = true
@@ -206,7 +264,7 @@ func TestWatcherHandleEvent(t *testing.T) {
 
 	t.Run("anotherDestinationClientWritesNothing", func(t *testing.T) {
 		storage := newPacketStore(nil)
-		w := newTestWatcher(newChain(), storage)
+		w := newTestWatcher(newSubscriber(), storage)
 
 		event := sendPacketEvent(7)
 		event.Packet.DestinationClient = "ethereum-9"
@@ -217,7 +275,7 @@ func TestWatcherHandleEvent(t *testing.T) {
 
 	t.Run("anUnconfiguredSourceClientWritesNothing", func(t *testing.T) {
 		storage := newPacketStore(nil)
-		w := newTestWatcher(newChain(), storage)
+		w := newTestWatcher(newSubscriber(), storage)
 
 		event := sendPacketEvent(7)
 		event.Packet.SourceClient = "base-9"
@@ -228,7 +286,7 @@ func TestWatcherHandleEvent(t *testing.T) {
 
 	t.Run("otherEventKindsWriteNothing", func(t *testing.T) {
 		storage := newPacketStore(nil)
-		w := newTestWatcher(newChain(), storage)
+		w := newTestWatcher(newSubscriber(), storage)
 
 		event := sendPacketEvent(7)
 		event.Kind = v2.KindWriteAck
@@ -238,66 +296,65 @@ func TestWatcherHandleEvent(t *testing.T) {
 	})
 }
 
+// start runs a watcher up to its first open subscription.
+func start(t *testing.T, w *Watcher) *Watcher {
+	t.Helper()
+
+	require.NoError(t, w.Start())
+	synctest.Wait()
+
+	return w
+}
+
 // TestWatcherStart runs the loop inside a synctest bubble: Wait returns once
 // the watcher's goroutine is blocked again and sleeping advances the backoff
 // timers instantly, so nothing here has to poll or wait on real time.
 func TestWatcherStart(t *testing.T) {
-	// start runs the watcher up to its first open subscription.
-	start := func(t *testing.T, c *chain, storage PacketStore) *Watcher {
-		t.Helper()
-
-		w := newTestWatcher(c, storage)
-		require.NoError(t, w.Start())
-		synctest.Wait()
-
-		return w
-	}
-
 	t.Run("subscribesToTheConfiguredClients", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			c := newChain()
-			w := start(t, c, newPacketStore(nil))
+			chain := newSubscriber()
+			w := start(t, newTestWatcher(chain, newPacketStore(nil)))
 
-			assert.Equal(t, []string{sourceClientID}, c.latest(t).clientIDs)
+			assert.Equal(t, []string{sourceClientID}, chain.latest(t).clientIDs)
 			require.NoError(t, w.Stop())
 		})
 	})
 
 	t.Run("storeErrorDoesNotKillTheLoop", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			c := newChain()
+			chain := newSubscriber()
 			storage := newPacketStore(errors.New("store unavailable"))
-			w := start(t, c, storage)
+			w := start(t, newTestWatcher(chain, storage))
 
-			c.latest(t).out <- sendPacketEvent(1)
-			c.latest(t).out <- sendPacketEvent(2)
+			chain.latest(t).out <- sendPacketEvent(1)
+			chain.latest(t).out <- sendPacketEvent(2)
 			synctest.Wait()
 
-			assert.Equal(t, []uint64{1, 2}, storage.sequences())
+			assert.Empty(t, storage.written)
 			require.NoError(t, w.Stop())
 		})
 	})
 
 	t.Run("subscriptionErrorResubscribes", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			c := newChain()
+			chain := newSubscriber()
 			storage := newPacketStore(nil)
-			w := start(t, c, storage)
+			w := start(t, newTestWatcher(chain, storage))
 
-			first := c.latest(t)
+			first := chain.latest(t)
 			first.errs <- errors.New("websocket closed")
 
 			time.Sleep(DefaultMinBackoff)
 			synctest.Wait()
 
-			require.Len(t, c.subs, 2)
+			require.Equal(t, 2, chain.opened())
 
 			// the dropped subscription's context must be dead, or every
 			// reconnect leaks the goroutine feeding it
 			assert.True(t, first.unsubscribed)
 			require.Error(t, first.ctx.Err())
 
-			c.latest(t).out <- sendPacketEvent(1)
+			chain.latest(t).out <- sendPacketEvent(1)
 			synctest.Wait()
 
 			assert.Equal(t, []uint64{1}, storage.sequences())
@@ -307,23 +364,23 @@ func TestWatcherStart(t *testing.T) {
 
 	t.Run("resubscribeErrorRetriesWithBackoff", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			c := newChain()
+			chain := newSubscriber()
 			storage := newPacketStore(nil)
-			w := start(t, c, storage)
+			w := start(t, newTestWatcher(chain, storage))
 
-			c.failNext(errors.New("dial failed"))
-			c.latest(t).errs <- errors.New("websocket closed")
+			chain.failNext(errors.New("dial failed"))
+			chain.latest(t).errs <- errors.New("websocket closed")
 
 			time.Sleep(DefaultMinBackoff)
 			synctest.Wait()
-			require.Equal(t, 1, c.opened(), "the retry that failed should not have opened anything")
+			require.Equal(t, 1, chain.opened(), "the retry that failed should not have opened anything")
 
 			// the failed retry doubles the wait before the next one
 			time.Sleep(2 * DefaultMinBackoff)
 			synctest.Wait()
-			require.Equal(t, 2, c.opened())
+			require.Equal(t, 2, chain.opened())
 
-			c.latest(t).out <- sendPacketEvent(1)
+			chain.latest(t).out <- sendPacketEvent(1)
 			synctest.Wait()
 
 			assert.Equal(t, []uint64{1}, storage.sequences())
@@ -333,8 +390,8 @@ func TestWatcherStart(t *testing.T) {
 
 	t.Run("stopBlocksUntilTheLoopExits", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			c := newChain()
-			w := start(t, c, newPacketStore(nil))
+			chain := newSubscriber()
+			w := start(t, newTestWatcher(chain, newPacketStore(nil)))
 
 			require.NoError(t, w.Stop())
 
@@ -346,16 +403,16 @@ func TestWatcherStart(t *testing.T) {
 
 			// canceling the subscription context is what releases the
 			// subscription's goroutine; unsubscribing alone leaves it running
-			assert.True(t, c.latest(t).unsubscribed)
-			require.Error(t, c.latest(t).ctx.Err())
+			assert.True(t, chain.latest(t).unsubscribed)
+			require.Error(t, chain.latest(t).ctx.Err())
 		})
 	})
 
 	t.Run("subscribeErrorFailsStart", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			c := newChain()
-			c.failNext(errors.New("dial failed"))
-			w := newTestWatcher(c, newPacketStore(nil))
+			chain := newSubscriber()
+			chain.failNext(errors.New("dial failed"))
+			w := newTestWatcher(chain, newPacketStore(nil))
 
 			require.ErrorContains(t, w.Start(), "subscribing to send packets")
 
@@ -366,6 +423,146 @@ func TestWatcherStart(t *testing.T) {
 	})
 
 	t.Run("stopBeforeStartIsANoop", func(t *testing.T) {
-		require.NoError(t, newTestWatcher(newChain(), newPacketStore(nil)).Stop())
+		require.NoError(t, newTestWatcher(newSubscriber(), newPacketStore(nil)).Stop())
+	})
+}
+
+func TestWatcherClearingLoop(t *testing.T) {
+	t.Run("aSubscriptionDropClearsTheGapItLeft", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			chain := newSubscriber()
+			outstanding := newFakeChain()
+			storage := newPacketStore(nil)
+			w := start(t, newClearingWatcher(chain, outstanding, storage, ClearConfig{Interval: time.Hour}))
+
+			chain.latest(t).out <- sendPacketEvent(1)
+			synctest.Wait()
+			require.Equal(t, []uint64{1}, storage.sequences())
+
+			// sent while nothing was listening: the subscription cannot have
+			// seen these, so only the clearing pass can recover them
+			outstanding.send(1, 2, 3)
+			chain.latest(t).errs <- errors.New("websocket closed")
+
+			time.Sleep(DefaultMinBackoff)
+			synctest.Wait()
+
+			assert.Equal(t, []uint64{1, 2, 3}, storage.sequences())
+			require.NoError(t, w.Stop())
+		})
+	})
+
+	t.Run("clearOnStartHonoursTheFlag", func(t *testing.T) {
+		for _, onStart := range []bool{true, false} {
+			t.Run(map[bool]string{true: "enabled", false: "disabled"}[onStart], func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					outstanding := newFakeChain()
+					outstanding.send(1)
+
+					storage := newPacketStore(nil)
+					clearing := ClearConfig{OnStart: onStart, Interval: time.Hour}
+					w := start(t, newClearingWatcher(newSubscriber(), outstanding, storage, clearing))
+
+					if onStart {
+						assert.Equal(t, []uint64{1}, storage.sequences())
+					} else {
+						assert.Empty(t, storage.sequences())
+					}
+
+					require.NoError(t, w.Stop())
+				})
+			})
+		}
+	})
+
+	t.Run("theIntervalKeepsClearing", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			outstanding := newFakeChain()
+			outstanding.send(1)
+
+			storage := newPacketStore(nil)
+			clearing := ClearConfig{Interval: time.Minute}
+			w := start(t, newClearingWatcher(newSubscriber(), outstanding, storage, clearing))
+
+			require.Empty(t, storage.sequences())
+
+			time.Sleep(clearing.Interval)
+			synctest.Wait()
+
+			assert.Equal(t, []uint64{1}, storage.sequences())
+			require.NoError(t, w.Stop())
+		})
+	})
+
+	t.Run("rapidReconnectsCoalesceIntoOnePendingPass", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			chain := newSubscriber()
+			outstanding := newFakeChain()
+			w := start(t, newClearingWatcher(chain, outstanding, newPacketStore(nil), ClearConfig{Interval: time.Hour}))
+
+			release := outstanding.hold()
+
+			chain.latest(t).errs <- errors.New("websocket closed")
+			time.Sleep(DefaultMinBackoff)
+			synctest.Wait()
+
+			require.Equal(t, 1, outstanding.passCount())
+
+			// both reconnects land while that pass is still blocked on the gate
+			for range 2 {
+				chain.latest(t).errs <- errors.New("websocket closed")
+				time.Sleep(DefaultMaxBackoff)
+				synctest.Wait()
+			}
+
+			release()
+			synctest.Wait()
+
+			assert.Equal(t, 2, outstanding.passCount())
+			require.NoError(t, w.Stop())
+		})
+	})
+
+	t.Run("aFailingPassDoesNotStopTheWatcher", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			chain := newSubscriber()
+			outstanding := newFakeChain()
+			outstanding.failLatest(errors.New("storage layout moved"))
+
+			storage := newPacketStore(nil)
+			clearing := ClearConfig{OnStart: true, Interval: time.Hour}
+			w := start(t, newClearingWatcher(chain, outstanding, storage, clearing))
+
+			require.Equal(t, 1, outstanding.passCount())
+
+			chain.latest(t).out <- sendPacketEvent(1)
+			synctest.Wait()
+
+			assert.Equal(t, []uint64{1}, storage.sequences())
+			require.NoError(t, w.Stop())
+		})
+	})
+
+	t.Run("stopBlocksUntilTheClearingPassEnds", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			outstanding := newFakeChain()
+			release := outstanding.hold()
+
+			clearing := ClearConfig{OnStart: true, Interval: time.Hour}
+			w := start(t, newClearingWatcher(newSubscriber(), outstanding, newPacketStore(nil), clearing))
+
+			require.Equal(t, 1, outstanding.passCount())
+
+			stopped := make(chan error, 1)
+			go func() { stopped <- w.Stop() }()
+
+			synctest.Wait()
+			require.Empty(t, stopped, "Stop returned while a clearing pass was still running")
+
+			release()
+			synctest.Wait()
+
+			require.NoError(t, <-stopped)
+		})
 	})
 }

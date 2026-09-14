@@ -44,6 +44,14 @@ type Repository interface {
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
 	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 
+	// MaxPacketSequence returns the highest sequence recorded for the client, or zero if we hold no rows for it.
+	MaxPacketSequence(ctx context.Context, chainID string, clientID string) (uint64, error)
+
+	// ListPacketSequencesFrom returns the sequences we hold a row for at or above fromSequence, ascending.
+	// It filters on no status: clearing must skip a sequence we know about in any state, terminal and
+	// NOT_SELECTED ones included.
+	ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)
+
 	UpdatePacketStatus(ctx context.Context, key PacketKey, status RelayStatus) error
 
 	UpdatePacketRecvTx(ctx context.Context, key PacketKey, tx PacketTx) error

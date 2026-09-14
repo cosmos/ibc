@@ -430,4 +430,94 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		)
 		assert.Nil(t, fetch().RecvTxHash)
 	})
+
+	t.Run("clearingQueries", func(t *testing.T) {
+		const (
+			clientID      = "clearing-0"
+			otherClientID = "clearing-1"
+		)
+
+		sendTime := time.Date(2026, 8, 12, 12, 0, 0, 0, time.UTC)
+
+		insert := func(chainID string, sourceClientID string, seq uint64, status RelayStatus) {
+			// the upsert writes only the two selection statuses; the rest are
+			// transitions the pipeline makes afterwards
+			initial := RelayStatusPending
+			if status == RelayStatusNotSelected {
+				initial = status
+			}
+
+			require.NoError(t, s.UpsertPacket(ctx, UpsertPacket{
+				Status:                    initial,
+				SourceChainID:             chainID,
+				DestinationChainID:        chainIDBase,
+				SourceTxHash:              "0xclearing",
+				SourceTxTime:              sendTime,
+				PacketSequenceNumber:      seq,
+				PacketSourceClientID:      sourceClientID,
+				PacketDestinationClientID: "ethereum-0",
+				PacketTimeoutTimestamp:    sendTime.Add(time.Hour),
+			}))
+
+			if status != initial {
+				key := PacketKey{SourceChainID: chainID, SourceClientID: sourceClientID, Sequence: seq}
+				require.NoError(t, s.UpdatePacketStatus(ctx, key, status))
+			}
+		}
+
+		// A client we hold no rows for has no maximum
+		highest, err := s.MaxPacketSequence(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Zero(t, highest)
+
+		sequences, err := s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 1)
+		require.NoError(t, err)
+		assert.Empty(t, sequences)
+
+		// Inserted out of order, and in states the clearer must still treat as known
+		insert(chainIDEth, clientID, 12, RelayStatusFailed)
+		insert(chainIDEth, clientID, 5, RelayStatusPending)
+		insert(chainIDEth, clientID, 9, RelayStatusCompleteWithAck)
+		insert(chainIDEth, clientID, 11, RelayStatusNotSelected)
+
+		// Neither another client on the same chain nor the same client on another chain moves the maximum
+		insert(chainIDEth, otherClientID, 500, RelayStatusPending)
+		insert(chainIDBase, clientID, 900, RelayStatusPending)
+
+		highest, err = s.MaxPacketSequence(ctx, chainIDEth, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(12), highest)
+
+		highest, err = s.MaxPacketSequence(ctx, chainIDBase, clientID)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(900), highest)
+
+		// 9 and 12 really did reach a terminal status, so their inclusion below is meaningful
+		unfinished, err := s.ListDispatchablePackets(ctx)
+		require.NoError(t, err)
+
+		var unfinishedSequences []uint64
+
+		for _, p := range unfinished {
+			if p.SourceChainID == chainIDEth && p.PacketSourceClientID == clientID {
+				unfinishedSequences = append(unfinishedSequences, p.PacketSequenceNumber)
+			}
+		}
+
+		assert.Equal(t, []uint64{5}, unfinishedSequences)
+
+		// Ordered, scoped to the chain and client, and terminal rows included
+		sequences, err = s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 1)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{5, 9, 11, 12}, sequences)
+
+		// The floor is inclusive
+		sequences, err = s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 9)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{9, 11, 12}, sequences)
+
+		sequences, err = s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 13)
+		require.NoError(t, err)
+		assert.Empty(t, sequences)
+	})
 }

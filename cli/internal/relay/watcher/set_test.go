@@ -67,7 +67,7 @@ func TestNewSetFromConfig(t *testing.T) {
 // startup that failed.
 func TestSetStartUnwinds(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		running, failing := newChain(), newChain()
+		running, failing := newSubscriber(), newSubscriber()
 		failing.failNext(errors.New("dial failed"))
 
 		set := Set{
@@ -84,13 +84,13 @@ func TestSetStartUnwinds(t *testing.T) {
 
 func TestSetStartStop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		c := newChain()
-		set := Set{newTestWatcher(c, newPacketStore(nil))}
+		chain := newSubscriber()
+		set := Set{newTestWatcher(chain, newPacketStore(nil))}
 
 		require.NoError(t, set.Start())
 		synctest.Wait()
 
 		require.NoError(t, set.Stop())
-		assert.True(t, c.latest(t).unsubscribed)
+		assert.True(t, chain.latest(t).unsubscribed)
 	})
 }

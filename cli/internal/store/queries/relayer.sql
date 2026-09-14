@@ -142,3 +142,18 @@ AND (packet_sequence_number = sqlc.arg(sequence_number) OR sqlc.arg(sequence_num
 AND id < sqlc.arg(before)
 ORDER BY id DESC
 LIMIT sqlc.arg(row_limit);
+
+-- the CAST is load-bearing: without it sqlc types the COALESCE as interface{} on sqlite
+-- name: MaxPacketSequence :one
+SELECT CAST(COALESCE(MAX(packet_sequence_number), 0) AS bigint) FROM packets
+WHERE source_chain_id = sqlc.arg(chain_id) AND packet_source_client_id = sqlc.arg(client_id);
+
+-- clearing skips a sequence we hold a row for in ANY state, including NOT_SELECTED,
+-- so this filters on no status
+-- name: ListPacketSequencesFrom :many
+SELECT packet_sequence_number FROM packets
+WHERE source_chain_id = sqlc.arg(chain_id)
+  AND packet_source_client_id = sqlc.arg(client_id)
+  AND packet_sequence_number >= sqlc.arg(from_sequence)
+ORDER BY packet_sequence_number;
+

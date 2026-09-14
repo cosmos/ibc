@@ -33,16 +33,26 @@ type PacketStore interface {
 	UpsertPacket(ctx context.Context, input store.UpsertPacket) error
 }
 
+// ClearConfig when the watcher runs a clearing pass.
+type ClearConfig struct {
+	// OnStart runs a pass as soon as the first subscription is live.
+	OnStart bool
+	// Interval how often a pass runs after that.
+	Interval time.Duration
+}
+
 // Watcher records a packet row for every SendPacket event one chain emits on
 // the clients it watches, resubscribing with backoff whenever the subscription
-// ends. The subscription starts where the chain is and never looks backwards,
-// so a packet sent while nothing was listening is not discovered here.
+// ends. The subscription starts where the chain is and never looks backwards;
+// recovering anything it missed is the clearing pass's job.
 type Watcher struct {
 	chainID    string
 	clientIDs  []string
 	routes     map[string]config.ClientEnd
 	subscriber Subscriber
 	storage    PacketStore
+	clearer    *Clearer
+	clearing   ClearConfig
 	minBackoff time.Duration
 	maxBackoff time.Duration
 	logger     *slog.Logger
@@ -51,12 +61,16 @@ type Watcher struct {
 	stopped chan struct{}
 }
 
-// New builds the watcher for one chain.
+// New builds the watcher for one chain. The subscriber and the querier are the
+// two halves of discovery and are kept apart on purpose: the clearing pass has
+// to run when the subscription cannot.
 func New(
 	chainID string,
 	connections []config.ConnectionConfig,
 	subscriber Subscriber,
-	storage PacketStore,
+	querier OutstandingQuerier,
+	storage ClearStore,
+	clearing ClearConfig,
 	minBackoff, maxBackoff time.Duration,
 	logger *slog.Logger,
 ) *Watcher {
@@ -68,12 +82,18 @@ func New(
 		}
 	}
 
+	if clearing.Interval <= 0 {
+		clearing.Interval = config.DefaultClearInterval
+	}
+
 	return &Watcher{
 		chainID:    chainID,
 		clientIDs:  clientIDs,
 		routes:     routesOf(chainID, connections),
 		subscriber: subscriber,
 		storage:    storage,
+		clearer:    NewClearer(chainID, connections, querier, storage, logger),
+		clearing:   clearing,
 		minBackoff: minBackoff,
 		maxBackoff: maxBackoff,
 		logger:     logger.With("module", "watcher", "chainID", chainID),
@@ -182,6 +202,41 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 	// nil while a subscription is live, so only a gap paces itself
 	var resubscribe <-chan time.Time
 
+	clearTick := time.NewTicker(w.clearing.Interval)
+	defer clearTick.Stop()
+
+	var (
+		// clearDone is non-nil exactly while a pass is in flight, which is what
+		// keeps it to one at a time
+		clearDone chan struct{}
+		// pending holds a pass asked for while one was running, so a flapping
+		// endpoint coalesces into one follow-up rather than one per reconnect
+		pending bool
+	)
+
+	// a pass reads the whole sequence space of every watched client, so it runs
+	// beside the loop rather than inside it, where it would stall event handling
+	startClear := func() {
+		if clearDone != nil {
+			return
+		}
+
+		done := make(chan struct{})
+		clearDone, pending = done, false
+
+		go func() {
+			defer close(done)
+
+			w.clear(ctx)
+		}()
+	}
+
+	// Start opened the first subscription, so clearing on start belongs here;
+	// every subscribe the loop makes follows a gap, which clearing covers
+	if w.clearing.OnStart {
+		startClear()
+	}
+
 	retryIn := func(msg string, err error) {
 		w.logger.Warn(msg, "err", err, "backoff", backoff)
 
@@ -192,6 +247,10 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 	for {
 		select {
 		case <-ctx.Done():
+			if clearDone != nil {
+				<-clearDone
+			}
+
 			return
 
 		case event := <-events:
@@ -215,8 +274,56 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 
 			open, resubscribe, backoff = opened, nil, w.minBackoff
 
+			// a reconnect always follows a gap, so the pass that covers it is
+			// requested even when one is already running
+			pending = true
+
+			startClear()
+
 			w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
+
+		case <-clearTick.C:
+			// a tick that lands mid-pass is dropped rather than queued, so an
+			// overrunning pass never chains into the next one
+			startClear()
+
+		case <-clearDone:
+			clearDone = nil
+
+			if pending {
+				startClear()
+			}
 		}
+	}
+}
+
+// clear runs one pass over every watched client. A client that fails is logged
+// and left for the next pass: the backstop going quiet must not take the
+// subscription down with it.
+func (w *Watcher) clear(ctx context.Context) {
+	for _, clientID := range w.clientIDs {
+		if ctx.Err() != nil {
+			return
+		}
+
+		started := time.Now()
+
+		result, err := w.clearer.Clear(ctx, clientID)
+		if err != nil {
+			w.logger.Error("Clearing outstanding packets", "clientID", clientID, "err", err)
+			continue
+		}
+
+		w.logger.Info(
+			"Cleared outstanding packets",
+			"clientID", clientID,
+			"probed", result.Probed,
+			"outstanding", result.Outstanding,
+			"alreadyHeld", result.AlreadyHeld,
+			"recovered", result.Recovered,
+			"unresolved", result.Unresolved,
+			"took", time.Since(started),
+		)
 	}
 }
 
