@@ -4,6 +4,7 @@ package attestation
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", data),
 		}
 
-		result, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -61,7 +62,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", []byte("wrong claim")),
 			signedAttestor(t, "a2", []byte("wrong claim")),
 		}
-		_, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 		require.ErrorContains(t, err, "attested data does not match expected claim")
 	})
@@ -73,7 +74,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "valid1", data),
 			signedAttestor(t, "valid2", data),
 		}
-		result, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -84,7 +85,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", data),
 		}
 
-		_, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 	})
 
@@ -94,7 +95,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", []byte("a different claim entirely")),
 		}
 
-		_, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.ErrorContains(
 			t,
 			err,
@@ -114,7 +115,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a3", data),
 		}
 
-		result, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -131,7 +132,7 @@ func TestQueryQuorum(t *testing.T) {
 			erroring,
 		}
 
-		result, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -150,7 +151,7 @@ func TestQueryQuorum(t *testing.T) {
 		}
 
 		// threshold 2 still met by the two valid attestors despite the bad one
-		result, err := queryStateQuorum(ctx, attestors, 2, 10, data)
+		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -178,7 +179,7 @@ func TestQueryQuorum(t *testing.T) {
 			makeAttestor("a2-same-key"),
 		}
 
-		_, err = queryStateQuorum(ctx, attestors, 2, 10, data)
+		_, err = queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
 		require.ErrorContains(
 			t,
 			err,
@@ -228,7 +229,7 @@ func TestLatestProvableHeight(t *testing.T) {
 			GetBlockHeader(mock.Anything, uint64(100)).
 			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
-		height, timestamp, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
+		height, timestamp, err := latestProvableHeight(ctx, slog.Default(), attestors, 2, counterpartyChain)
 		require.NoError(t, err)
 		require.Equal(
 			t,
@@ -251,7 +252,7 @@ func TestLatestProvableHeight(t *testing.T) {
 			GetBlockHeader(mock.Anything, uint64(95)).
 			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
-		height, _, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
+		height, _, err := latestProvableHeight(ctx, slog.Default(), attestors, 2, counterpartyChain)
 		require.NoError(t, err)
 		require.Equal(t, uint64(95), height)
 	})
@@ -267,7 +268,7 @@ func TestLatestProvableHeight(t *testing.T) {
 		// before ever consulting the chain
 		counterpartyChain := mocks.NewMockClient(t)
 
-		_, _, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
+		_, _, err := latestProvableHeight(ctx, slog.Default(), attestors, 2, counterpartyChain)
 		require.ErrorContains(t, err, "quorum not met")
 	})
 
@@ -280,7 +281,7 @@ func TestLatestProvableHeight(t *testing.T) {
 		counterpartyChain := mocks.NewMockClient(t)
 		counterpartyChain.EXPECT().GetBlockHeader(mock.Anything, uint64(100)).Return(v2.BlockHeader{}, assert.AnError)
 
-		_, _, err := latestProvableHeight(ctx, attestors, 2, counterpartyChain)
+		_, _, err := latestProvableHeight(ctx, slog.Default(), attestors, 2, counterpartyChain)
 		require.ErrorContains(t, err, "getting header")
 	})
 }

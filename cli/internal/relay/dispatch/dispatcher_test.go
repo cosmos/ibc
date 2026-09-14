@@ -118,6 +118,8 @@ func (r *fakePipelines) Pipeline(context.Context, *processors.Transfer) (pipelin
 
 func (r *fakePipelines) Close() { r.closed = true }
 
+func (r *fakePipelines) Routes() []processors.Route { return nil }
+
 func dispatcherStore(t *testing.T) *store.SqliteDB {
 	t.Helper()
 

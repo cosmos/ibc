@@ -95,7 +95,7 @@ func New(attestors []Attestor) (*Service, error) {
 			return nil, fmt.Errorf("attestor with alias %s already exists", name)
 		}
 
-		set[name] = attestor
+		set[name] = MetricsWrapper(attestor)
 	}
 
 	return &Service{
@@ -106,7 +106,7 @@ func New(attestors []Attestor) (*Service, error) {
 
 // Add adds an attestor to the service. Not thread-safe.
 func (s *Service) Add(id string, attestor Attestor) {
-	s.attestors[id] = attestor
+	s.attestors[id] = MetricsWrapper(attestor)
 }
 
 // Get returns the attestor registered under alias

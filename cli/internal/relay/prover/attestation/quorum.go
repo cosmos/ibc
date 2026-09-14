@@ -5,6 +5,7 @@ package attestation
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -28,12 +29,13 @@ type quorumResult struct {
 // queryStateQuorum aggregates a StateAttestation claim across attestors.
 func queryStateQuorum(
 	ctx context.Context,
+	logger *slog.Logger,
 	attestors []attestor.Attestor,
 	threshold int,
 	height uint64,
 	expectedData []byte,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, attestors, threshold, attestorevm.TagStateAttestation, expectedData, func(
+	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagStateAttestation, expectedData, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -44,6 +46,7 @@ func queryStateQuorum(
 // queryPacketQuorum aggregates a PacketAttestation claim across attestors.
 func queryPacketQuorum(
 	ctx context.Context,
+	logger *slog.Logger,
 	attestors []attestor.Attestor,
 	threshold int,
 	packets [][]byte,
@@ -51,7 +54,7 @@ func queryPacketQuorum(
 	kind attestor.CommitmentType,
 	expectedData []byte,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, attestors, threshold, attestorevm.TagPacketAttestation, expectedData, func(
+	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagPacketAttestation, expectedData, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -81,6 +84,7 @@ type quorumResponse struct {
 // the number of distinct signers to reach threshold.
 func queryQuorum(
 	ctx context.Context,
+	logger *slog.Logger,
 	attestors []attestor.Attestor,
 	threshold int,
 	typeTag byte,
@@ -101,17 +105,18 @@ func queryQuorum(
 		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
-			responses[i] = queryOne(ctx, a, typeTag, expectedData, query)
+			responses[i] = queryOne(ctx, logger, a, typeTag, expectedData, query)
 		}(i, a)
 	}
 
 	wg.Wait()
 
-	return reduceQuorum(responses, threshold)
+	return reduceQuorum(logger, responses, threshold)
 }
 
 func queryOne(
 	ctx context.Context,
+	logger *slog.Logger,
 	a attestor.Attestor,
 	typeTag byte,
 	expectedData []byte,
@@ -119,6 +124,7 @@ func queryOne(
 ) quorumResponse {
 	attestation, err := query(ctx, a)
 	if err != nil {
+		logger.Warn("Attestor query failed", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
@@ -134,6 +140,7 @@ func queryOne(
 
 	signer, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
 	if err != nil {
+		logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
@@ -142,7 +149,7 @@ func queryOne(
 
 // reduceQuorum groups responses by their exact attestationData value
 // and returns the first value whose distinct signers reach threshold.
-func reduceQuorum(responses []quorumResponse, threshold int) (quorumResult, error) {
+func reduceQuorum(logger *slog.Logger, responses []quorumResponse, threshold int) (quorumResult, error) {
 	buckets := make(map[string][]quorumResponse)
 
 	for _, resp := range responses {
@@ -168,6 +175,20 @@ func reduceQuorum(responses []quorumResponse, threshold int) (quorumResult, erro
 		}
 
 		if len(signatures) >= threshold {
+			// quorum is met, but flag any attestors that did not contribute so a
+			// degrading set is visible before it drops below threshold
+			if len(signatures) < len(responses) {
+				logger.Warn(
+					"Attestation quorum met with some attestors excluded",
+					"signatures", len(signatures),
+					"attestors", len(responses),
+					"threshold", threshold,
+					"reasons", joinResponseErrors(responses),
+				)
+			} else {
+				logger.Debug("Attestation quorum met", "signatures", len(signatures), "threshold", threshold)
+			}
+
 			return quorumResult{AttestationData: bucket[0].data, Signatures: signatures}, nil
 		}
 	}
@@ -202,6 +223,7 @@ func joinResponseErrors(responses []quorumResponse) string {
 // that answered, requiring at least threshold of them to respond.
 func latestProvableHeight(
 	ctx context.Context,
+	logger *slog.Logger,
 	attestors []attestor.Attestor,
 	threshold int,
 	counterpartyChain chains.Client,
@@ -253,6 +275,16 @@ func latestProvableHeight(
 		return 0, time.Time{}, errors.Errorf(
 			"latest height quorum not met: got %d of %d required responses (%s)",
 			len(heights), threshold, strings.Join(errMsgs, "; "),
+		)
+	}
+
+	if len(errMsgs) > 0 {
+		logger.Warn(
+			"Some attestors did not report a latest height",
+			"responded", len(heights),
+			"attestors", len(attestors),
+			"threshold", threshold,
+			"reasons", strings.Join(errMsgs, "; "),
 		)
 	}
 

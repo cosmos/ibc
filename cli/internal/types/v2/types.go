@@ -51,6 +51,19 @@ const (
 	RelayKindTimeout
 )
 
+func (k RelayKind) String() string {
+	switch k {
+	case RelayKindRecv:
+		return "recv"
+	case RelayKindAck:
+		return "ack"
+	case RelayKindTimeout:
+		return "timeout"
+	default:
+		return "unknown"
+	}
+}
+
 // PacketRelayItem one packet operation to include in a relay tx, along with
 // the membership/non-membership proof authorizing it.
 type PacketRelayItem struct {

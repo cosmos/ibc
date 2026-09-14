@@ -16,9 +16,14 @@ import (
 
 type fakeStatusStorage struct {
 	last store.RelayStatus
+	err  error
 }
 
 func (f *fakeStatusStorage) UpdatePacketStatus(_ context.Context, _ store.PacketKey, status store.RelayStatus) error {
+	if f.err != nil {
+		return f.err
+	}
+
 	f.last = status
 
 	return nil

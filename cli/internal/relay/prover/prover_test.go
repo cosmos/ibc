@@ -4,6 +4,7 @@ package prover
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,7 +86,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		cfg, clientSet, attestors := testConfig(t)
 		conn := cfg.Relayer.Connections[0]
 
-		set, err := NewSetFromConfig(ctx, cfg, clientSet, attestors)
+		set, err := NewSetFromConfig(ctx, cfg, clientSet, attestors, slog.Default())
 		require.NoError(t, err)
 
 		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
@@ -109,7 +110,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		// ACT
-		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil)
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
 
 		// ASSERT
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
