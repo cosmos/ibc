@@ -40,7 +40,7 @@ func testClientSet(t *testing.T) *chains.ClientSet {
 
 func TestNewSetFromConfig(t *testing.T) {
 	t.Run("oneWatcherPerAutoRelayedChain", func(t *testing.T) {
-		set, err := NewSetFromConfig(testSetConfig(true), testClientSet(t), newPacketStore(nil), slog.Default())
+		set, err := NewSetFromConfig(testSetConfig(true), testClientSet(t), watcherStore(t), slog.Default())
 		require.NoError(t, err)
 		require.Len(t, set, 1)
 		assert.Equal(t, sourceChainID, set[0].chainID)
@@ -48,14 +48,14 @@ func TestNewSetFromConfig(t *testing.T) {
 	})
 
 	t.Run("noAutoRelayedEndsWatchNothing", func(t *testing.T) {
-		set, err := NewSetFromConfig(testSetConfig(false), testClientSet(t), newPacketStore(nil), slog.Default())
+		set, err := NewSetFromConfig(testSetConfig(false), testClientSet(t), watcherStore(t), slog.Default())
 		require.NoError(t, err)
 		assert.Empty(t, set)
 	})
 
 	t.Run("missingChainClientErrors", func(t *testing.T) {
 		set, err := NewSetFromConfig(
-			testSetConfig(true), chains.NewClientSet(nil), newPacketStore(nil), slog.Default(),
+			testSetConfig(true), chains.NewClientSet(nil), watcherStore(t), slog.Default(),
 		)
 		require.ErrorContains(t, err, sourceChainID)
 		assert.Nil(t, set)
@@ -71,8 +71,8 @@ func TestSetStartUnwinds(t *testing.T) {
 		failing.failNext(errors.New("dial failed"))
 
 		set := Set{
-			newTestWatcher(running, newPacketStore(nil)),
-			newTestWatcher(failing, newPacketStore(nil)),
+			newTestWatcher(running, watcherStore(t)),
+			newTestWatcher(failing, watcherStore(t)),
 		}
 
 		require.ErrorContains(t, set.Start(), sourceChainID)
@@ -85,7 +85,7 @@ func TestSetStartUnwinds(t *testing.T) {
 func TestSetStartStop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		chain := newSubscriber()
-		set := Set{newTestWatcher(chain, newPacketStore(nil))}
+		set := Set{newTestWatcher(chain, watcherStore(t))}
 
 		require.NoError(t, set.Start())
 		synctest.Wait()

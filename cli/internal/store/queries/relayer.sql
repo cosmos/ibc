@@ -157,3 +157,56 @@ WHERE source_chain_id = sqlc.arg(chain_id)
   AND packet_sequence_number >= sqlc.arg(from_sequence)
 ORDER BY packet_sequence_number;
 
+-- name: GetClearingState :one
+SELECT last_probed_sequence FROM packet_clearing_state
+WHERE source_chain_id = sqlc.arg(chain_id) AND packet_source_client_id = sqlc.arg(client_id);
+
+-- name: SetClearingState :exec
+INSERT INTO packet_clearing_state (
+    source_chain_id,
+    packet_source_client_id,
+    last_probed_sequence
+) VALUES (
+    sqlc.arg(chain_id),
+    sqlc.arg(client_id),
+    sqlc.arg(last_probed_sequence)
+)
+-- the watermark only moves forward, so a slow pass cannot drag it back over sequences
+-- another instance already probed, and a storage read gone bad cannot force a full rescan
+ON CONFLICT (source_chain_id, packet_source_client_id) DO UPDATE SET
+    last_probed_sequence = excluded.last_probed_sequence,
+    updated_at           = CURRENT_TIMESTAMP
+WHERE excluded.last_probed_sequence > packet_clearing_state.last_probed_sequence;
+
+-- name: ListUnresolvedSequences :many
+SELECT packet_sequence_number FROM packet_clearing_unresolved
+WHERE source_chain_id = sqlc.arg(chain_id) AND packet_source_client_id = sqlc.arg(client_id)
+ORDER BY packet_sequence_number;
+
+-- a sequence that is still unresolved keeps the first_seen_at it was first recorded with,
+-- since how long it has been stuck is the only signal an operator gets about it. It keeps
+-- the first last_seen_height for the same reason the watermark only moves forward: that is
+-- the lowest height the commitment is known live at, and so the loosest guard still correct
+-- name: CreateUnresolvedSequence :exec
+INSERT INTO packet_clearing_unresolved (
+    source_chain_id,
+    packet_source_client_id,
+    packet_sequence_number,
+    last_seen_height
+) VALUES (
+    sqlc.arg(chain_id),
+    sqlc.arg(client_id),
+    sqlc.arg(sequence),
+    sqlc.arg(last_seen_height)
+)
+ON CONFLICT (source_chain_id, packet_source_client_id, packet_sequence_number) DO NOTHING;
+
+-- a commitment read as absent below the height it was last seen live at is a
+-- node that has not caught up, not a settled packet, so the row stands until a
+-- probe reads it at or above that height
+-- name: DeleteUnresolvedSequence :exec
+DELETE FROM packet_clearing_unresolved
+WHERE source_chain_id = sqlc.arg(chain_id)
+  AND packet_source_client_id = sqlc.arg(client_id)
+  AND packet_sequence_number = sqlc.arg(sequence)
+  AND last_seen_height <= sqlc.arg(probe_height);
