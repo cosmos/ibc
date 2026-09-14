@@ -78,16 +78,19 @@ func TestSetStartUnwinds(t *testing.T) {
 		require.ErrorContains(t, set.Start(), sourceChainID)
 		synctest.Wait()
 
-		assert.True(t, running.unsubscribed)
+		assert.True(t, running.latest(t).unsubscribed)
 	})
 }
 
 func TestSetStartStop(t *testing.T) {
-	c := newChain()
-	set := Set{newTestWatcher(c, newPacketStore(nil))}
+	synctest.Test(t, func(t *testing.T) {
+		c := newChain()
+		set := Set{newTestWatcher(c, newPacketStore(nil))}
 
-	require.NoError(t, set.Start())
-	require.NoError(t, set.Stop())
+		require.NoError(t, set.Start())
+		synctest.Wait()
 
-	assert.True(t, c.unsubscribed)
+		require.NoError(t, set.Stop())
+		assert.True(t, c.latest(t).unsubscribed)
+	})
 }
