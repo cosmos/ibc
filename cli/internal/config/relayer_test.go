@@ -511,3 +511,22 @@ db:
 		assert.Equal(t, DefaultClearInterval, config.Relayer.ClearIntervalFor("1"))
 	})
 }
+
+func TestRelayerConfigAbandonUnrecoverablePacketsFor(t *testing.T) {
+	config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
+	require.NoError(t, err)
+
+	// a packet is only abandoned where an operator asked for it
+	for name, tt := range map[string]struct {
+		chainID string
+		want    bool
+	}{
+		"chain that asked for it":    {chainID: "1", want: true},
+		"chain with other overrides": {chainID: "8453"},
+		"chain with no override":     {chainID: "999"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, config.Relayer.AbandonUnrecoverablePacketsFor(tt.chainID))
+		})
+	}
+}

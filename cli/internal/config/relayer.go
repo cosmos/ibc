@@ -49,6 +49,10 @@ type RelayerChainOverride struct {
 // DiscoveryConfig per-chain packet discovery settings.
 type DiscoveryConfig struct {
 	ClearInterval *time.Duration `yaml:"clearInterval,omitempty"`
+	// AbandonUnrecoverablePackets stops re-probing packets whose send log the
+	// endpoint will not serve. They are remembered but never looked at again,
+	// so turning it back off recovers them against an archive endpoint.
+	AbandonUnrecoverablePackets *bool `yaml:"abandonUnrecoverablePackets,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.
@@ -364,4 +368,16 @@ func (c RelayerConfig) ClearIntervalFor(chainID string) time.Duration {
 	}
 
 	return DefaultClearInterval
+}
+
+// AbandonUnrecoverablePacketsFor reports whether a chain stops re-probing
+// packets whose send log no endpoint would serve. It defaults to false, which
+// keeps them in the probe set until an endpoint serves them.
+func (c RelayerConfig) AbandonUnrecoverablePacketsFor(chainID string) bool {
+	override, ok := c.ChainOverride(chainID)
+	if ok && override.Discovery != nil && override.Discovery.AbandonUnrecoverablePackets != nil {
+		return *override.Discovery.AbandonUnrecoverablePackets
+	}
+
+	return false
 }

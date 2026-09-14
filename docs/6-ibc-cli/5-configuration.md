@@ -197,7 +197,7 @@ With `autoRelay.enabled` on an end, the relayer carries that end's outgoing pack
 
 Auto-relaying discovers packets two ways: a websocket subscription to `SendPacket` on the source chain, and a periodic clearing pass that reads live packet commitments from the router and picks up anything the subscription missed. A pass also runs immediately after a subscription reconnect, regardless of `clearOnStart`, because a dropped connection is a known gap.
 
-A pass probes the sequences sent since the last pass, plus anything an earlier pass could not resolve, and records how far it got. Its cost tracks how much a client has sent between passes rather than over its lifetime; only the first pass on a client walks its whole sequence range. The watermark is shared, so several relayer processes can run against one database without either of them probing what the other already did. Turning `autoRelay` on for a client that has already sent packets is therefore not a fresh start: that first pass covers the client's entire sequence range, so every packet still outstanding on it gets relayed, including ones sent before the route existed. Clearing skips any sequence the relayer already holds a row for, whatever state that row is in, so it does not retry packets that have already failed.
+A pass probes the sequences sent since the last pass, plus anything an earlier pass could not resolve, and records how far it got. Its cost tracks how much a client has sent between passes rather than over its lifetime; only the first pass on a client walks its whole sequence range. Both the watermark and the commitment probes are read at `latest`. The watermark is shared, so several relayer processes can run against one database without either of them probing what the other already did. Turning `autoRelay` on for a client that has already sent packets is therefore not a fresh start: that first pass covers the client's entire sequence range, so every packet still outstanding on it gets relayed, including ones sent before the route existed. Clearing skips any sequence the relayer already holds a row for, whatever state that row is in, so it does not retry packets that have already failed.
 
 ### Relay settings
 
@@ -226,6 +226,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 | `chainOverrides[].discovery.clearInterval` | `duration` | optional | Overrides `clearInterval` for packets sourced from this chain. |
+| `chainOverrides[].discovery.abandonUnrecoverablePackets` | `bool` | `false` | Stops re-probing packets whose send log the endpoint will not serve. |
 
 <!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
@@ -245,6 +246,14 @@ relayer:
         gasFeeCapMultiplier: 1.2
         gasTipCapMultiplier: 1.1
 ```
+
+#### `discovery.abandonUnrecoverablePackets`
+
+A packet whose commitment is still live but whose `SendPacket` log the endpoint will not serve cannot be relayed: the relayer has the sequence but not the packet data. By default those sequences stay in the probe set and every pass retries them, on the assumption that the log will eventually be served. On an endpoint that has permanently pruned its logs it never will, and the retries cost a `multicall` and an `eth_getLogs` per pass forever.
+
+Setting this to `true` takes them out of the probe. The relayer still records which sequences they are, it just stops looking at them, so the per-pass cost falls back to the newly-assigned sequences. Their escrow stays locked and they are not relayed — abandoning is giving up on a packet, not resolving it. The sequences are logged at `WARN` as they are abandoned, and the `abandoned` field in each pass's log line reports how many are parked.
+
+This is reversible. Point the relayer at an archive endpoint, set it back to `false`, and the next pass probes exactly the abandoned sequences — no rescan of the client's history — writes rows for the ones it can now read, and drops them from the set as they resolve. Nothing is deleted while a packet is abandoned, which is what makes the recovery cheap.
 
 Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [opts.go:L34-L71](cli/internal/relay/pipeline/opts.go#L34-L71) -->
 
