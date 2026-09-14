@@ -232,18 +232,17 @@ func TestSubmitRecordsBeforeBroadcast(t *testing.T) {
 	}
 }
 
-func TestSubmitRejectsOversizedTransactionBeforeSigning(t *testing.T) {
+func TestSubmitRejectsInvalidEstimateBeforeSigning(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		gas         uint64
 		estimateErr error
-		tooLarge    bool
 	}{
-		{name: "estimate above block limit", gas: 30000001, tooLarge: true},
-		{name: "geth allowance", estimateErr: errors.New("gas required exceeds allowance (30000000)"), tooLarge: true},
-		{name: "block limit", estimateErr: errors.New("exceeds block gas limit"), tooLarge: true},
-		{name: "besu limit", estimateErr: errors.New("Gas estimation failed: Gas limit exceeded"), tooLarge: true},
-		{name: "revert is not a size error", estimateErr: errors.New("execution reverted")},
+		{name: "estimate above block limit", gas: 30000001},
+		{name: "geth allowance", estimateErr: errors.New("gas required exceeds allowance (30000000)")},
+		{name: "block limit", estimateErr: errors.New("exceeds block gas limit")},
+		{name: "internal error", estimateErr: errors.New("Internal error")},
+		{name: "revert", estimateErr: errors.New("Execution reverted")},
 		{name: "rpc failure is not a size error", estimateErr: errors.New("connection refused")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -262,11 +261,10 @@ func TestSubmitRejectsOversizedTransactionBeforeSigning(t *testing.T) {
 				})
 			require.Nil(t, result)
 			require.Error(t, err)
-			if tc.tooLarge {
-				require.ErrorIs(t, err, v2.ErrTxTooLarge)
-			} else {
-				require.NotErrorIs(t, err, v2.ErrTxTooLarge)
+			if tc.estimateErr != nil {
 				require.ErrorIs(t, err, tc.estimateErr)
+			} else {
+				require.ErrorContains(t, err, "estimated gas 30000001 exceeds block gas limit 30000000")
 			}
 		})
 	}

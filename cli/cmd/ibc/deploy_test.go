@@ -514,3 +514,108 @@ func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
 	flagDeployRenderSignerA = "unknown"
 	require.ErrorContains(t, deployRenderConfig(nil, []string{"1", "2"}), "signer \"unknown\" not found")
 }
+
+func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
+	previousFlags := globalFlags
+	previousDir := flagDeployManifestDir
+	previousA, previousB := flagDeployRenderSignerA, flagDeployRenderSignerB
+	previousPopulate, previousYes := flagDeployRenderPopulate, flagDeployYes
+	t.Cleanup(func() {
+		globalFlags = previousFlags
+		flagDeployManifestDir = previousDir
+		flagDeployRenderSignerA, flagDeployRenderSignerB = previousA, previousB
+		flagDeployRenderPopulate, flagDeployYes = previousPopulate, previousYes
+	})
+	home := t.TempDir()
+	t.Chdir(home)
+	flagDeployManifestDir = filepath.Join(home, "deployments")
+	flagDeployRenderPopulate, flagDeployYes = true, true
+	run := func(signerA, signerB string) error {
+		// Each invocation starts with normal validation defaults, like a new CLI process.
+		globalFlags = config.DefaultFlagSet()
+		globalFlags.Home = home
+		globalFlags.Quiet = true
+		flagDeployRenderSignerA, flagDeployRenderSignerB = signerA, signerB
+		return deployRenderConfig(nil, []string{"1", "2"})
+	}
+	relayerKey, _ := newLocalSignerConfig(t, "relayer")
+	attestorKey, attestorAddress := newLocalSignerConfig(t, "watcher-key")
+	cfg := config.DefaultConfig()
+	cfg.Signers = config.Signers{relayerKey}
+	for _, id := range []string{"1", "2"} {
+		cfg.Chains = append(cfg.Chains, config.ChainConfig{
+			ChainID: id,
+			EVM: &config.EVMChainConfig{
+				RPC: "http://localhost:8545", WS: "ws://localhost:8546",
+				ICS26Router: "0x0000000000000000000000000000000000000001",
+			},
+		})
+	}
+	path := filepath.Join(home, "ibc.yml")
+	require.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.StoreToFile(path))
+	for _, pair := range [][4]string{{"1", "a", "2", "b"}, {"2", "b", "1", "a"}} {
+		m := manifest.New(pair[0], "evm")
+		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
+		m.UpsertClient(manifest.Client{
+			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
+			Type:   deploy.ClientTypeAttestation,
+			Params: map[string]any{"attestors": []any{attestorAddress}},
+		})
+		require.NoError(t, m.Save(flagDeployManifestDir))
+	}
+
+	require.NoError(t, run("", ""))
+	draft, err := config.LoadFromFile(path, false)
+	require.NoError(t, err)
+	require.Error(t, draft.Validate())
+	require.Len(t, draft.Relayer.Connections, 1)
+	require.Empty(t, draft.Relayer.Connections[0].ClientA.Signer)
+	require.Empty(t, draft.Relayer.Connections[0].ClientB.Signer)
+	require.Len(t, draft.Attestors, 2)
+	for _, a := range draft.Attestors {
+		require.Empty(t, a.Signer)
+	}
+
+	// A key becomes available after the draft was written; preserve user settings.
+	draft.Signers = append(draft.Signers, attestorKey)
+	draft.Relayer.Connections[0].Alias = "custom-route"
+	draft.Attestors[0].FinalityOffset = 42
+	require.NoError(t, draft.StoreToFile(path))
+	require.NoError(t, run(relayerKey.Alias, relayerKey.Alias))
+	repaired, err := config.LoadFromFile(path, true)
+	require.NoError(t, err)
+	require.Len(t, repaired.Relayer.Connections, 1)
+	require.Equal(t, "custom-route", repaired.Relayer.Connections[0].Alias)
+	require.Equal(t, relayerKey.Alias, repaired.Relayer.Connections[0].ClientA.Signer)
+	require.Equal(t, relayerKey.Alias, repaired.Relayer.Connections[0].ClientB.Signer)
+	require.Len(t, repaired.Attestors, 2)
+	for i, a := range repaired.Attestors {
+		require.Equal(t, attestorKey.Alias, a.Signer)
+		require.Equal(t, draft.Attestors[i].Name, a.Name)
+		require.Equal(t, draft.Attestors[i].FinalityOffset, a.FinalityOffset)
+	}
+	require.NoError(t, run("", ""))
+	repeated, err := config.LoadFromFile(path, true)
+	require.NoError(t, err)
+	require.Equal(t, repaired, repeated)
+
+	// Draft loading still rejects identity conflicts and unknown YAML fields before writing.
+	duplicate := repaired.Attestors[0]
+	duplicate.Name = "duplicate"
+	repaired.Attestors = append(repaired.Attestors, duplicate)
+	require.NoError(t, repaired.StoreToFile(path))
+	invalid, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.ErrorContains(t, run("", ""), "duplicate local attestor signer")
+	unchanged, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, invalid, unchanged)
+
+	invalid = append(invalid, []byte("\nunknownField: true\n")...)
+	require.NoError(t, os.WriteFile(path, invalid, 0o600))
+	require.Error(t, run("", ""))
+	unchanged, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, invalid, unchanged)
+}

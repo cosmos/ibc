@@ -46,7 +46,7 @@ Shared label: `{otel_scope_name="ibc.prover"}`
 
 | metric                   | type           | labels                                                                                  | notes                                                                                                    |
 | ------------------------ | -------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `prover_operation_*`     | histogram (ms) | `operation`, `chain_id`, `client_id`, `type`, `result`; `proof_kind` on `prepare` | `operation`: `latest_provable_height`, `prepare`, `prepare`. `type` is the client/prover type. |
+| `prover_operation_*`     | histogram (ms) | `operation`, `chain_id`, `client_id`, `type`, `result`; `proof_kind` on `prepare` | `operation`: `latest_provable_height`, `prepare`. `type` is the client/prover type. |
 | `latest_provable_height` | gauge          | `chain_id`, `client_id`                                                                 | Recorded only when `latest_provable_height` succeeds.                                                    |
 | `packet_batch_size_*`    | histogram      | `chain_id`, `client_id`, `type`, `proof_kind`                                           | Packet count on Prepare. Default histogram buckets.                                                 |
 

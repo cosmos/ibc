@@ -2,13 +2,7 @@
 
 package v2
 
-import (
-	"errors"
-	"fmt"
-)
-
-// ErrTxTooLarge identifies transactions that cannot fit within the block gas limit.
-var ErrTxTooLarge = errors.New("transaction exceeds chain gas capacity")
+import "fmt"
 
 // Preparation is one bounded read-only step towards relaying a batch.
 // Advance contains one client-only update; Ready contains proofs for all packets.
@@ -19,7 +13,7 @@ type Preparation struct {
 }
 
 // BatchProofs shares a snapshot at the requested height. Update is optional.
-// Checkpoint permits submitting Update separately if the final batch is too large.
+// Checkpoint requires confirming Update separately before submitting PacketProofs.
 type BatchProofs struct {
 	Update       []byte
 	PacketProofs [][]byte

@@ -62,11 +62,11 @@ message PrepareResponse {
 }
 
 message BatchProofs {
-  // Optional final update, followed by packet calls in the same transaction.
+  // Optional update. Atomic with packet calls unless checkpoint is true.
   bytes update = 1;
   // One nonempty proof per requested packet, in request order.
   repeated bytes packet_proofs = 2;
-  // The update may be confirmed separately if the final batch is oversized.
+  // Confirm the update separately before submitting these packet proofs.
   bool checkpoint = 3;
 }
 

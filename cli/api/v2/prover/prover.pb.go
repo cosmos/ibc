@@ -392,11 +392,11 @@ func (*PrepareResponse_Ready) isPrepareResponse_Result() {}
 
 type BatchProofs struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Optional final update, followed by packet calls in the same transaction.
+	// Optional update. Atomic with packet calls unless checkpoint is true.
 	Update []byte `protobuf:"bytes,1,opt,name=update,proto3" json:"update,omitempty"`
 	// One nonempty proof per requested packet, in request order.
 	PacketProofs [][]byte `protobuf:"bytes,2,rep,name=packet_proofs,json=packetProofs,proto3" json:"packet_proofs,omitempty"`
-	// The update may be confirmed separately if the final batch is oversized.
+	// Confirm the update separately before submitting these packet proofs.
 	Checkpoint    bool `protobuf:"varint,3,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

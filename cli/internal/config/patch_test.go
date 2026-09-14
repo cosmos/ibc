@@ -182,3 +182,58 @@ func TestWithPatchPreservesRemoteProver(t *testing.T) {
 	require.Empty(t, conflicts)
 	require.Equal(t, cfg, merged)
 }
+
+func TestWithPatchResolvesDraftAttestor(t *testing.T) {
+	for _, tc := range []struct {
+		name, existingSigner, incomingSigner, wantSigner string
+	}{
+		{name: "fill", incomingSigner: "key", wantSigner: "key"},
+		{name: "retain", existingSigner: "key", wantSigner: "key"},
+		{name: "unresolved"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Attestors = Attestors{localAttestor("watcher", tc.existingSigner)}
+			cfg.Attestors[0].FinalityOffset = 42
+			incoming := Patch{Attestors: Attestors{localAttestor("watcher", tc.incomingSigner)}}
+			merged, conflicts, err := cfg.WithPatch(incoming)
+			require.NoError(t, err)
+			require.Empty(t, conflicts, "filling a missing value does not overwrite a setting")
+			require.Len(t, merged.Attestors, 1)
+			want := cfg.Attestors[0]
+			want.Signer = tc.wantSigner
+			require.Equal(t, want, merged.Attestors[0])
+			require.Equal(t, tc.existingSigner, cfg.Attestors[0].Signer, "must not mutate the input")
+			again, conflicts, err := merged.WithPatch(incoming)
+			require.NoError(t, err)
+			require.Empty(t, conflicts)
+			require.Equal(t, merged, again)
+		})
+	}
+}
+
+func TestWithPatchDoesNotGuessUnresolvedAttestorIdentity(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Attestors = Attestors{localAttestor("unresolved", "")}
+	merged, _, err := cfg.WithPatch(Patch{Attestors: Attestors{localAttestor("different-name", "key")}})
+	require.NoError(t, err)
+	require.Len(t, merged.Attestors, 2)
+	require.Empty(t, merged.Attestors[0].Signer)
+
+	incoming := localAttestor("unresolved", "key")
+	incoming.ChainID = "different-chain"
+	_, _, err = cfg.WithPatch(Patch{Attestors: Attestors{incoming}})
+	require.ErrorContains(t, err, "already names a different")
+}
+
+func TestWithPatchRejectsResolutionToExistingAttestorIdentity(t *testing.T) {
+	for _, draftFirst := range []bool{true, false} {
+		cfg := DefaultConfig()
+		cfg.Attestors = Attestors{localAttestor("resolved", "key"), localAttestor("draft", "")}
+		if draftFirst {
+			cfg.Attestors[0], cfg.Attestors[1] = cfg.Attestors[1], cfg.Attestors[0]
+		}
+		_, _, err := cfg.WithPatch(Patch{Attestors: Attestors{localAttestor("draft", "key")}})
+		require.ErrorContains(t, err, "duplicate local attestor signer")
+	}
+}

@@ -164,33 +164,75 @@ func TestFailedCheckpointDoesNotSubmitPackets(t *testing.T) {
 	require.Nil(t, saved)
 }
 
-func TestOversizedFinalBatchConfirmsUpdateSeparately(t *testing.T) {
+func TestFinalCheckpointPrecedesPacketsWithoutEstimatingCombinedTx(t *testing.T) {
+	for _, outcome := range []string{"confirmed", "failed", "Internal error", "Execution reverted"} {
+		t.Run(outcome, func(t *testing.T) {
+			e := newRelayEnv(t)
+			e.prover.EXPECT().Prepare(mock.Anything, uint64(100), mock.Anything, mock.Anything).
+				Return(&v2.Preparation{Ready: &v2.BatchProofs{
+					Update: []byte{1}, Checkpoint: true, PacketProofs: [][]byte{{2}},
+				}}, nil).Once()
+			// No combined transaction is even built or estimated.
+			build := e.builder.EXPECT().BuildRelayTx(v2.ClientUpdate{ClientID: "dst", Proof: []byte{1}},
+				[]v2.PacketRelayItem(nil)).
+				Return(v2.RelayTx{To: common.HexToAddress("0x1234").Bytes(), Data: []byte{1}}, nil).Once()
+			e.chain.EXPECT().WaitForChain(mock.Anything).Return(nil)
+			e.submitter.EXPECT().
+				Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record != nil })).
+				RunAndReturn(func(_ context.Context, _ v2.TxIntent, record func(*v2.Submission) error) (*v2.Submission, error) {
+					sub := &v2.Submission{TxHash: "checkpoint", SubmittedAt: time.Now().UTC()}
+					require.NoError(t, record(sub))
+					return sub, nil
+				}).
+				Once()
+			confirm := e.submitter.EXPECT().ShouldRetry(mock.Anything, "checkpoint", mock.Anything).
+				Return(outcome == "failed", nil).Once()
+			if outcome != "failed" {
+				// Reuse the prepared snapshot; don't fetch proofs again after confirmation.
+				packetBuild := e.builder.EXPECT().BuildRelayTx(v2.ClientUpdate{ClientID: "dst"},
+					[]v2.PacketRelayItem{{
+						Kind: v2.RelayKindRecv, Packet: e.events[0].Packet, Proof: []byte{2}, ProofHeight: 100,
+					}}).
+					Return(v2.RelayTx{To: common.HexToAddress("0x1234").Bytes(), Data: []byte{2}}, nil).Once()
+				packetBuild.NotBefore(build, confirm)
+				var packetErr error
+				var sub *v2.Submission
+				if outcome == "confirmed" {
+					sub = &v2.Submission{TxHash: "packet"}
+				} else {
+					packetErr = fmt.Errorf("%s", outcome)
+				}
+				e.submitter.EXPECT().
+					Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
+					Return(sub, packetErr).Once()
+			}
+			result, err := e.run(t.Context())
+			if outcome == "confirmed" {
+				require.NoError(t, err)
+				require.Equal(t, "packet", result.TxHash)
+			} else {
+				require.ErrorContains(t, err, outcome)
+				require.Nil(t, result)
+			}
+			pending, err := e.db.GetClientUpdate(t.Context(), "destination", "dst")
+			require.NoError(t, err)
+			require.Nil(t, pending)
+		})
+	}
+}
+
+func TestAtomicUpdateRemainsWithPackets(t *testing.T) {
 	e := newRelayEnv(t)
 	e.prover.EXPECT().Prepare(mock.Anything, uint64(100), mock.Anything, mock.Anything).
-		Return(&v2.Preparation{Ready: &v2.BatchProofs{Update: []byte{1}, Checkpoint: true, PacketProofs: [][]byte{{2}}}}, nil).
-		Once()
-	e.ready()
-	e.builder.EXPECT().BuildRelayTx(mock.Anything, mock.Anything).
-		Return(v2.RelayTx{To: common.HexToAddress("0x1234").Bytes(), Data: []byte{1}}, nil).Times(3)
-	e.chain.EXPECT().WaitForChain(mock.Anything).Return(nil).Times(3)
+		Return(&v2.Preparation{Ready: &v2.BatchProofs{Update: []byte{1}, PacketProofs: [][]byte{{2}}}}, nil).Once()
+	e.builder.EXPECT().BuildRelayTx(v2.ClientUpdate{ClientID: "dst", Proof: []byte{1}},
+		[]v2.PacketRelayItem{{Kind: v2.RelayKindRecv, Packet: e.events[0].Packet, Proof: []byte{2}, ProofHeight: 100}}).
+		Return(v2.RelayTx{To: common.HexToAddress("0x1234").Bytes(), Data: []byte{1, 2}}, nil).Once()
+	e.chain.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 	e.submitter.EXPECT().
 		Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-		Return(nil, v2.ErrTxTooLarge).
-		Once()
-	e.submitter.EXPECT().
-		Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record != nil })).
-		RunAndReturn(func(_ context.Context, _ v2.TxIntent, record func(*v2.Submission) error) (*v2.Submission, error) {
-			sub := &v2.Submission{TxHash: "checkpoint", SubmittedAt: time.Now().UTC()}
-			require.NoError(t, record(sub))
-			return sub, nil
-		}).
-		Once()
-	e.submitter.EXPECT().ShouldRetry(mock.Anything, "checkpoint", mock.Anything).Return(false, nil).Once()
-	e.submitter.EXPECT().
-		Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-		Return(&v2.Submission{TxHash: "packet"}, nil).
-		Once()
+		Return(&v2.Submission{TxHash: "atomic"}, nil).Once()
 	result, err := e.run(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, "packet", result.TxHash)
+	require.Equal(t, "atomic", result.TxHash)
 }

@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -204,17 +203,11 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 		ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data, Gas: head.GasLimit},
 	)
 	if err != nil {
-		message := strings.ToLower(err.Error())
-		if strings.Contains(message, "gas required exceeds allowance") ||
-			strings.Contains(message, "exceeds block gas limit") ||
-			strings.Contains(message, "gas estimation failed: gas limit exceeded") {
-			return nil, errors.Wrapf(v2.ErrTxTooLarge, "estimating gas: %s", err)
-		}
 		return nil, errors.Wrap(err, "estimating gas")
 	}
 
 	if head.GasLimit > 0 && gasLimit > head.GasLimit {
-		return nil, v2.ErrTxTooLarge
+		return nil, errors.Errorf("estimated gas %d exceeds block gas limit %d", gasLimit, head.GasLimit)
 	}
 	nonce, err := c.eth.PendingNonceAt(ctx, c.address)
 	if err != nil {

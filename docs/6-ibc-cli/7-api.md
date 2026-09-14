@@ -549,19 +549,22 @@ restart. No packet is marked received, acknowledged or timed out by a checkpoint
 
 | Field | Type | Description |
 |---|---|---|
-| `update` | `bytes` | Optional final update, followed by packet calls in the same transaction. |
+| `update` | `bytes` | Optional update. Atomic with packet calls unless `checkpoint` is true. |
 | `packet_proofs` | `bytes[]` | One nonempty proof per requested packet, in request order. |
-| `checkpoint` | `bool` | The `update` may be confirmed separately if the final batch is oversized. |
+| `checkpoint` | `bool` | Confirm the `update` separately before submitting these packet proofs. |
 
 <!-- [prover.proto:L64](proto/cli/prover.proto#L64) -->
 
 <!-- GEN:api:msg:BatchProofs END -->
 
-A `ready` result describes one snapshot at the requested height. The final
-update precedes packet calls in the same transaction. When `checkpoint` is true,
-the prover must support preparing again after a separately confirmed update,
-without requesting that same update again. Attestation provers return `ready`
-with `checkpoint=false`; QBFT provers support separate checkpoints.
+A `ready` result describes one snapshot at the requested height. When
+`checkpoint` is true, the relayer always confirms the update in its own
+transaction first, then submits the same packet proofs without another update.
+It does not attempt a combined transaction or classify gas-estimation errors.
+On retry or restart, the prover must support preparing against the confirmed
+state without requesting that same update again. With `checkpoint=false`, the
+update and packet calls remain atomic. Attestation provers use atomic updates;
+QBFT provers use separate checkpoints.
 
 The split state/packet RPCs have been removed. Remote services must implement
 `Prepare`; there is no legacy fallback.

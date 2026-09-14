@@ -775,6 +775,9 @@ func renderRelayConfig(
 }
 
 func deployRenderConfig(_ *cobra.Command, args []string) error {
+	// Population can emit incomplete drafts. Load them for repair; WithPatch
+	// checks identities, and population reports remaining readiness errors.
+	globalFlags.SkipConfigValidation()
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err

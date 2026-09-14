@@ -82,6 +82,6 @@ clientA:
   type: "besu-qbft"
 ```
 
-The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and warms the consensus state it trusts. The `Prepare` operation returns either a checkpoint or the final batch. A final batch shares one target header and one account/storage proof response across its update and packet proofs. Pending checkpoints are recorded before broadcast and confirmed before packet submission. No attestors are involved.
+The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and warms the consensus state it trusts. The `Prepare` operation returns either a checkpoint or the final batch. A final batch shares one target header and one account/storage proof response across its update and packet proofs. Every required update, including the final one, is submitted as a client-only checkpoint. Checkpoints are recorded before broadcast and confirmed before packet submission. The final batch reuses its prepared packet proofs after confirmation, without fetching the snapshot again or estimating a combined transaction. No attestors are involved.
 
 Misbehaviour handling is not part of this client: a conflicting consensus state for a height the client already stores is rejected, and the client keeps working.

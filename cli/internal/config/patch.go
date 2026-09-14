@@ -128,7 +128,7 @@ func sameAttestor(a, b AttestorConfig) bool {
 		return a.Name == b.Name && a.GRPC == b.GRPC
 	}
 	if a.Signer == "" || b.Signer == "" {
-		return a.Signer == b.Signer && a.Name == b.Name && a.ChainID == b.ChainID
+		return a.Name == b.Name && a.ChainID == b.ChainID
 	}
 	return a.ChainID == b.ChainID && a.Signer == b.Signer
 }
@@ -136,13 +136,24 @@ func sameAttestor(a, b AttestorConfig) bool {
 func mergeAttestors(existing, incoming Attestors) (Attestors, error) {
 	out := append(Attestors(nil), existing...)
 	for _, a := range incoming {
+		if a.Type == AttestorTypeLocal {
+			idx := slices.IndexFunc(out, func(b AttestorConfig) bool {
+				return b.Type == AttestorTypeLocal && a.Name == b.Name
+			})
+			if idx >= 0 {
+				if !sameAttestor(a, out[idx]) {
+					return nil, fmt.Errorf("local attestor name %q already names a different chain/signer", a.Name)
+				}
+				// Fill a draft without replacing its name or operational settings.
+				// An unresolved patch must not erase an already resolved signer.
+				if out[idx].Signer == "" {
+					out[idx].Signer = a.Signer
+				}
+				continue
+			}
+		}
 		if slices.ContainsFunc(out, func(b AttestorConfig) bool { return sameAttestor(a, b) }) {
 			continue
-		}
-		if a.Type == AttestorTypeLocal && slices.ContainsFunc(out, func(b AttestorConfig) bool {
-			return b.Type == AttestorTypeLocal && a.Name == b.Name
-		}) {
-			return nil, fmt.Errorf("local attestor name %q already names a different chain/signer", a.Name)
 		}
 		out = append(out, a)
 	}

@@ -137,6 +137,22 @@ func relayPackets(
 		}
 		return txSubmitter.Submit(ctx, v2.TxIntent{To: common.BytesToAddress(tx.To).Hex(), Data: tx.Data}, record)
 	}
+	submitPackets := func(ready *v2.BatchProofs, update []byte) (*v2.Submission, error) {
+		items := make([]v2.PacketRelayItem, len(events))
+		for i, event := range events {
+			items[i] = v2.PacketRelayItem{
+				Kind: relayKind, Packet: event.Packet, Acks: event.Acks,
+				Proof: ready.PacketProofs[i], ProofHeight: proofHeight,
+			}
+		}
+		sub, err := submit(update, items, false)
+		if err != nil {
+			return nil, errors.Wrap(err, "submitting relay tx")
+		}
+		logger.Info("Submitted packet relay", "txHash", sub.TxHash)
+		metrics.txSubmitted(ctx, chainID, clientID, sub.TxHash)
+		return sub, nil
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -150,25 +166,11 @@ func relayPackets(
 		}
 		update := prepared.Advance
 		if ready := prepared.Ready; ready != nil {
-			items := make([]v2.PacketRelayItem, len(events))
-			for i, event := range events {
-				items[i] = v2.PacketRelayItem{
-					Kind:        relayKind,
-					Packet:      event.Packet,
-					Acks:        event.Acks,
-					Proof:       ready.PacketProofs[i],
-					ProofHeight: proofHeight,
-				}
+			if !ready.Checkpoint {
+				return submitPackets(ready, ready.Update)
 			}
-			sub, submitErr := submit(ready.Update, items, false)
-			if submitErr == nil {
-				logger.Info("Submitted packet relay", "txHash", sub.TxHash)
-				metrics.txSubmitted(ctx, chainID, clientID, sub.TxHash)
-				return sub, nil
-			}
-			if !errors.Is(submitErr, v2.ErrTxTooLarge) || !ready.Checkpoint {
-				return nil, errors.Wrap(submitErr, "submitting relay tx")
-			}
+			// Independently applicable updates are always confirmed first. Gas
+			// estimation errors cannot reliably distinguish size from a revert.
 			update = ready.Update
 		}
 		sub, err := submit(update, nil, true)
@@ -180,6 +182,11 @@ func relayPackets(
 			Hash: sub.TxHash, Time: sub.SubmittedAt, RelayerAddress: sub.RelayerAddress,
 		}); err != nil {
 			return nil, err
+		}
+		if prepared.Ready != nil {
+			// The final checkpoint installed this batch's snapshot. Reuse its
+			// packet proofs without another header/account/storage RPC round.
+			return submitPackets(prepared.Ready, nil)
 		}
 		// Prepare reads confirmed on-chain state again. Unconfirmed cache entries
 		// never become trusted merely because submission succeeded.
