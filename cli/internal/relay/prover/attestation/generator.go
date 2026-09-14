@@ -6,9 +6,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/cli/attestor/evm/ibc"
 	"github.com/cosmos/ibc/cli/internal/chains"
@@ -34,22 +36,19 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 }
 
 func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, error) {
-	result, err := queryStateQuorum(ctx, g.attestors, g.threshold, height)
+	header, err := g.counterpartyChain.GetBlockHeader(ctx, height)
+	if err != nil {
+		return nil, errors.Wrapf(err, "getting header at height %d", height)
+	}
+
+	expectedData, err := attestorevm.EncodeStateAttestation(height, uint64(header.Timestamp.Unix()))
+	if err != nil {
+		return nil, errors.Wrap(err, "encoding expected state attestation")
+	}
+
+	result, err := queryStateQuorum(ctx, g.attestors, g.threshold, height, expectedData)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying state attestation quorum")
-	}
-
-	decodedHeight, _, err := attestorevm.DecodeStateAttestation(result.AttestationData)
-	if err != nil {
-		return nil, errors.Wrap(err, "decoding state attestation quorum result")
-	}
-
-	if decodedHeight != height {
-		return nil, errors.Errorf(
-			"state attestation height %d does not match requested height %d",
-			decodedHeight,
-			height,
-		)
 	}
 
 	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
@@ -82,30 +81,31 @@ func (g *Generator) PacketProofs(
 		encodedPackets[i] = encoded
 	}
 
-	result, err := queryPacketQuorum(ctx, g.attestors, g.threshold, encodedPackets, height, commitmentType)
+	expectedPackets := make([]attestorevm.PacketCompact, len(packets))
+	for i, packet := range packets {
+		compact, errExpected := g.expectedPacket(ctx, height, commitmentType, packet)
+		if errExpected != nil {
+			return nil, errors.Wrapf(errExpected, "expected commitment for packet %d", i)
+		}
+		expectedPackets[i] = compact
+	}
+
+	expectedData, err := attestorevm.EncodePacketAttestation(height, expectedPackets)
+	if err != nil {
+		return nil, errors.Wrap(err, "encoding expected packet attestation")
+	}
+
+	result, err := queryPacketQuorum(
+		ctx,
+		g.attestors,
+		g.threshold,
+		encodedPackets,
+		height,
+		commitmentType,
+		expectedData,
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying packet attestation quorum")
-	}
-
-	decodedHeight, decodedPackets, err := attestorevm.DecodePacketAttestation(result.AttestationData)
-	if err != nil {
-		return nil, errors.Wrap(err, "decoding packet attestation quorum result")
-	}
-
-	if decodedHeight != height {
-		return nil, errors.Errorf(
-			"packet attestation height %d does not match requested height %d",
-			decodedHeight,
-			height,
-		)
-	}
-
-	if len(decodedPackets) != len(packets) {
-		return nil, errors.Errorf(
-			"packet attestation returned %d packets, expected %d",
-			len(decodedPackets),
-			len(packets),
-		)
 	}
 
 	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
@@ -122,6 +122,41 @@ func (g *Generator) PacketProofs(
 	}
 
 	return proofs, nil
+}
+
+func (g *Generator) expectedPacket(
+	ctx context.Context,
+	height uint64,
+	kind attestor.CommitmentType,
+	packet channeltypesv2.Packet,
+) (attestorevm.PacketCompact, error) {
+	switch kind {
+	case attestor.CommitmentTypePacket:
+		return attestorevm.PacketCompact{
+			Path:       crypto.Keccak256Hash(hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence)),
+			Commitment: [32]byte(channeltypesv2.CommitPacket(packet)),
+		}, nil
+	case attestor.CommitmentTypeReceipt:
+		return attestorevm.PacketCompact{
+			Path: crypto.Keccak256Hash(hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence)),
+		}, nil
+	case attestor.CommitmentTypeAck:
+		path := crypto.Keccak256Hash(hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence))
+		commitment, err := g.counterpartyChain.GetCommitment(ctx, height, path)
+		if err != nil {
+			return attestorevm.PacketCompact{}, errors.Wrapf(
+				err,
+				"getting acknowledgement commitment at height %d",
+				height,
+			)
+		}
+		if commitment == ([32]byte{}) {
+			return attestorevm.PacketCompact{}, errors.New("acknowledgement commitment not found")
+		}
+		return attestorevm.PacketCompact{Path: path, Commitment: commitment}, nil
+	default:
+		return attestorevm.PacketCompact{}, errors.Errorf("unsupported commitment type %v", kind)
+	}
 }
 
 func commitmentTypeOf(kind v2.ProofKind) (attestor.CommitmentType, error) {

@@ -4,13 +4,17 @@ package attestation
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
@@ -81,7 +85,12 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil)
+		chain := mocks.NewMockClient(t)
+		chain.EXPECT().
+			GetBlockHeader(mock.Anything, uint64(10)).
+			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil).
+			Once()
+		gen := New(attestors, 2, chain)
 
 		proof, err := gen.StateProof(ctx, 10)
 		require.NoError(t, err)
@@ -94,7 +103,12 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil)
+		chain := mocks.NewMockClient(t)
+		chain.EXPECT().
+			GetBlockHeader(mock.Anything, uint64(11)).
+			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil).
+			Once()
+		gen := New(attestors, 2, chain)
 
 		_, err := gen.StateProof(ctx, 11)
 		require.Error(t, err)
@@ -109,9 +123,12 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		{Sequence: 2, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
 	}
 
-	compact := []attestorevm.PacketCompact{
-		{Path: [32]byte{1}, Commitment: [32]byte{2}},
-		{Path: [32]byte{3}, Commitment: [32]byte{4}},
+	compact := make([]attestorevm.PacketCompact, len(packets))
+	for i, packet := range packets {
+		compact[i] = attestorevm.PacketCompact{
+			Path:       crypto.Keccak256Hash(hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence)),
+			Commitment: [32]byte(channeltypesv2.CommitPacket(packet)),
+		}
 	}
 
 	t.Run("returnsOneProofPerPacket", func(t *testing.T) {
@@ -157,4 +174,131 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(90), height)
 	require.Equal(t, someBlockTime, timestamp)
+}
+
+func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
+	packets := []channeltypesv2.Packet{
+		{Sequence: 1, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
+		{Sequence: 2, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
+	}
+
+	for _, kind := range []v2.ProofKind{v2.ProofKindPacketCommitment, v2.ProofKindAcknowledgement, v2.ProofKindReceiptAbsence} {
+		for _, mutation := range []string{"valid", "path", "commitment", "reordered", "duplicate", "missing", "height"} {
+			t.Run(fmt.Sprintf("%v/%s", kind, mutation), func(t *testing.T) {
+				chain := mocks.NewMockClient(t)
+				expected := make([]attestorevm.PacketCompact, len(packets))
+				for i, packet := range packets {
+					switch kind {
+					case v2.ProofKindPacketCommitment:
+						expected[i].Path = crypto.Keccak256Hash(
+							hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence),
+						)
+						expected[i].Commitment = [32]byte(channeltypesv2.CommitPacket(packet))
+					case v2.ProofKindAcknowledgement:
+						expected[i].Path = crypto.Keccak256Hash(
+							hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence),
+						)
+						expected[i].Commitment = [32]byte{byte(i + 1)}
+						chain.EXPECT().
+							GetCommitment(mock.Anything, uint64(20), expected[i].Path).
+							Return(expected[i].Commitment, nil).
+							Once()
+					case v2.ProofKindReceiptAbsence:
+						expected[i].Path = crypto.Keccak256Hash(
+							hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence),
+						)
+					}
+				}
+				claims := append([]attestorevm.PacketCompact(nil), expected...)
+				height := uint64(20)
+				switch mutation {
+				case "path":
+					claims[0].Path[0] ^= 1
+				case "commitment":
+					claims[0].Commitment[0] ^= 1
+				case "reordered":
+					claims[0], claims[1] = claims[1], claims[0]
+				case "duplicate":
+					claims[1] = claims[0]
+				case "missing":
+					claims = claims[:1]
+				case "height":
+					height++
+				}
+				gen := New([]attestor.Attestor{
+					signedPacketAttestor(t, "a1", height, claims),
+					signedPacketAttestor(t, "a2", height, claims),
+				}, 2, chain)
+
+				proofs, err := gen.PacketProofs(context.Background(), 20, kind, packets)
+				if mutation == "valid" {
+					require.NoError(t, err)
+					require.Len(t, proofs, len(packets))
+				} else {
+					require.Error(t, err)
+					require.Nil(t, proofs)
+				}
+			})
+		}
+	}
+}
+
+func TestGeneratorStateTimestampMismatch(t *testing.T) {
+	chain := mocks.NewMockClient(t)
+	chain.EXPECT().
+		GetBlockHeader(mock.Anything, uint64(10)).
+		Return(v2.BlockHeader{Timestamp: someBlockTime.Add(time.Second)}, nil).
+		Once()
+	gen := New([]attestor.Attestor{signedStateAttestor(t, "a1", 10)}, 1, chain)
+
+	proof, err := gen.StateProof(context.Background(), 10)
+	require.Error(t, err)
+	require.Nil(t, proof)
+}
+
+func TestGeneratorExpectedClaimLookupFailure(t *testing.T) {
+	t.Run("stateHeader", func(t *testing.T) {
+		chain := mocks.NewMockClient(t)
+		chain.EXPECT().GetBlockHeader(mock.Anything, uint64(10)).Return(v2.BlockHeader{}, assert.AnError).Once()
+		gen := New(nil, 1, chain)
+
+		proof, err := gen.StateProof(context.Background(), 10)
+		require.ErrorIs(t, err, assert.AnError)
+		require.Nil(t, proof)
+	})
+
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "ackLookupError", err: assert.AnError},
+		{name: "missingAck"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			packet := channeltypesv2.Packet{
+				Sequence:          1,
+				SourceClient:      "src-0",
+				DestinationClient: "dst-0",
+				TimeoutTimestamp:  1000,
+			}
+			path := crypto.Keccak256Hash(hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence))
+			chain := mocks.NewMockClient(t)
+			chain.EXPECT().GetCommitment(mock.Anything, uint64(20), [32]byte(path)).Return([32]byte{}, tt.err).Once()
+			gen := New(nil, 1, chain)
+
+			proofs, err := gen.PacketProofs(
+				context.Background(),
+				20,
+				v2.ProofKindAcknowledgement,
+				[]channeltypesv2.Packet{packet},
+			)
+			require.Error(t, err)
+			if tt.err != nil {
+				require.ErrorIs(t, err, tt.err)
+			} else {
+				require.ErrorContains(t, err, "acknowledgement commitment not found")
+			}
+			require.Nil(t, proofs)
+		})
+	}
 }
