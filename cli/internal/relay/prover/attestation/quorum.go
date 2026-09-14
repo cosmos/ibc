@@ -3,6 +3,7 @@
 package attestation
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"sort"
@@ -32,8 +33,9 @@ func queryStateQuorum(
 	attestors []attestor.Attestor,
 	threshold int,
 	height uint64,
+	expectedData []byte,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagStateAttestation, func(
+	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagStateAttestation, expectedData, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -50,8 +52,9 @@ func queryPacketQuorum(
 	packets [][]byte,
 	height uint64,
 	kind attestor.CommitmentType,
+	expectedData []byte,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagPacketAttestation, func(
+	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagPacketAttestation, expectedData, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -75,7 +78,8 @@ type quorumResponse struct {
 }
 
 // queryQuorum fans query out to every attestor concurrently, keeps only
-// responses whose signature recovers over the domain-tagged digest, requires
+// responses matching the expected claim whose signature recovers over the
+// domain-tagged digest, requires
 // byte-equality of attestationData across kept responses, and requires
 // the number of distinct signers to reach threshold.
 func queryQuorum(
@@ -84,6 +88,7 @@ func queryQuorum(
 	attestors []attestor.Attestor,
 	threshold int,
 	typeTag byte,
+	expectedData []byte,
 	query attestationQuery,
 ) (quorumResult, error) {
 	if len(attestors) == 0 {
@@ -100,7 +105,7 @@ func queryQuorum(
 		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
-			responses[i] = queryOne(ctx, logger, a, typeTag, query)
+			responses[i] = queryOne(ctx, logger, a, typeTag, expectedData, query)
 		}(i, a)
 	}
 
@@ -114,6 +119,7 @@ func queryOne(
 	logger *slog.Logger,
 	a attestor.Attestor,
 	typeTag byte,
+	expectedData []byte,
 	query attestationQuery,
 ) quorumResponse {
 	attestation, err := query(ctx, a)
@@ -123,6 +129,13 @@ func queryOne(
 	}
 
 	data := attestation.AttestedData
+	if !bytes.Equal(data, expectedData) {
+		return quorumResponse{
+			name: a.Name(),
+			err:  errors.Errorf("attestor %q: attested data does not match expected claim", a.Name()),
+		}
+	}
+
 	sig := attestation.Signature
 
 	signer, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
