@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 
@@ -14,6 +15,7 @@ import (
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
 	"github.com/cosmos/ibc/cli/internal/bootstrap"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
 )
 
@@ -56,11 +58,15 @@ var (
 	}
 )
 
-func attestorRun(_ *cobra.Command, _ []string) error {
+func attestorRun(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
 	}
+
+	otel.GlobalSetup(ctx, cfg.Observability, slog.Default())
 
 	app, err := bootstrap.BuildAttestor(cfg)
 	if err != nil {

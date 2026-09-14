@@ -34,6 +34,8 @@ type Services struct {
 	AttestorService *attestor.Service
 }
 
+const rpcEnableReflection = true
+
 // BuildRelayer converts config into a runnable relayer process with all of the deps provisioned
 func BuildRelayer(cfg config.Config) (*Services, error) {
 	ctx := context.Background()
@@ -128,7 +130,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	relayerHandler := server.NewRelayerHandler(relayerService)
 
 	// Server
-	srv := server.New(cfg.Server.ListenAddress, true)
+	srv := server.New(cfg.Server.ListenAddress, rpcEnableReflection, cfg.Observability.Enabled())
 	srv.Register(relayerHandler)
 
 	if attestorHandler != nil {
@@ -183,7 +185,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}
 
 	// Server
-	srv := server.New(cfg.Server.ListenAddress, true)
+	srv := server.New(cfg.Server.ListenAddress, rpcEnableReflection, cfg.Observability.Enabled())
 	srv.Register(attestorHandler)
 
 	return &Services{
