@@ -50,7 +50,8 @@ serves them over gRPC.
 
 ## Quick start
 
-Needs `docker` (with the compose v2 plugin), `curl`, and `perl`. Everything else
+Needs `docker` (with the compose v2 plugin), `curl`, and `perl` with `JSON::PP`
+(bundled with Perl 5.14+). Everything else
 is pulled from public GHCR images — nothing is built, no `docker login`. `cast`
 (foundry) does the BIP-39 derivation; if it isn't on `PATH`, `cast_cli` runs it
 inside `$FOUNDRY_IMAGE` instead, so a host install is optional.
