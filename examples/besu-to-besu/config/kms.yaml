@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+
+grpc:
+  listen: 0.0.0.0:9090
+
+  keys:
+    - id: attestor-a
+      backend: file
+      algorithm: secp256k1eth
+      key_file: keys/attestor-a.hex
+
+    - id: attestor-b
+      backend: file
+      algorithm: secp256k1eth
+      key_file: keys/attestor-b.hex
+
+    - id: relayer-a
+      backend: file
+      algorithm: secp256k1eth
+      key_file: keys/relayer-a.hex
+
+    - id: relayer-b
+      backend: file
+      algorithm: secp256k1eth
+      key_file: keys/relayer-b.hex
