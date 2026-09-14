@@ -29,6 +29,7 @@ const (
 // SubscribeSendPackets deliberately: the backstop exists to cover the gaps the
 // tip leaves, so it must compile, and keep working, without one.
 type OutstandingQuerier interface {
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	LatestPacketSequence(ctx context.Context, sourceClientID string, height uint64) (uint64, error)
 	PacketCommitments(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error)
 	FindSendPackets(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error)
@@ -87,7 +88,16 @@ func NewClearer(
 func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 	var result Result
 
-	latest, err := c.chain.LatestPacketSequence(ctx, clientID, v2.LatestBlock)
+	// every read this pass makes names a block number rather than the latest tag:
+	// behind a load-balanced endpoint the tag resolves on whichever node serves
+	// the call, and a node that has not caught up reads a live commitment as
+	// absent, which the pass would take for settled
+	head, err := c.chain.GetBlockHeader(ctx, v2.LatestBlock)
+	if err != nil {
+		return result, errors.Wrapf(err, "reading the latest header for client %s", clientID)
+	}
+
+	latest, err := c.chain.LatestPacketSequence(ctx, clientID, head.Height)
 	if err != nil {
 		return result, errors.Wrapf(err, "reading the latest sequence for client %s", clientID)
 	}
@@ -112,7 +122,7 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 		)
 	}
 
-	outstanding, probed, err := c.outstanding(ctx, clientID, latest)
+	outstanding, probed, err := c.outstanding(ctx, clientID, latest, head.Height)
 	if err != nil {
 		return result, err
 	}
@@ -152,16 +162,33 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 // commitment is still live, with the number probed. The reads stay at the head:
 // a commitment written above the finalized head reads absent there, and absent
 // means settled.
-func (c *Clearer) outstanding(ctx context.Context, clientID string, latest uint64) ([]uint64, int, error) {
+func (c *Clearer) outstanding(
+	ctx context.Context,
+	clientID string,
+	latest, height uint64,
+) ([]uint64, int, error) {
 	var (
 		live   []uint64
 		probed int
 	)
 
 	for lo := uint64(1); lo <= latest; lo += probeChunk {
+		// a cold pass runs longer than the ~128 blocks of state a non-archive
+		// node keeps, so the height moves up with the chain rather than aging
+		// out from under the later chunks. max, because a head read served by a
+		// lagging node must not drag it back below where the sequence was read
+		if probed > 0 {
+			head, err := c.chain.GetBlockHeader(ctx, v2.LatestBlock)
+			if err != nil {
+				return nil, 0, errors.Wrapf(err, "refreshing the probe height for client %s", clientID)
+			}
+
+			height = max(height, head.Height)
+		}
+
 		chunk := sequenceRange(lo, min(lo+probeChunk-1, latest))
 
-		found, err := c.chain.PacketCommitments(ctx, clientID, chunk, v2.LatestBlock)
+		found, err := c.chain.PacketCommitments(ctx, clientID, chunk, height)
 		if err != nil {
 			return nil, 0, errors.Wrapf(err, "probing packet commitments for client %s", clientID)
 		}

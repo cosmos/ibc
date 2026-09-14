@@ -25,39 +25,79 @@ func newTestClearer(chain OutstandingQuerier, storage ClearStore) *Clearer {
 	return NewClearer(sourceChainID, testConnections(), chain, storage, slog.Default())
 }
 
-// fakeChain models what one chain has sent and what is still committed. It is
-// written out rather than generated because a pass reads it several times and
-// the answers have to stay consistent with each other: a settled sequence has
-// to read as settled from every query the pass makes.
+// fakeChain models what one chain has sent and what is still committed at a
+// given height. It is written out rather than generated because a pass reads it
+// several times and the answers have to stay consistent with each other: a
+// settled sequence has to read as settled from every query the pass makes.
 type fakeChain struct {
-	mu        sync.Mutex
-	sent      map[uint64]struct{}
+	mu     sync.Mutex
+	head   uint64
+	sentAt map[uint64]uint64
+	// headReads are served to successive latest-header reads before head is,
+	// so a test can hand the pass a head that moves backwards
+	headReads []uint64
+
 	settled   map[uint64]struct{}
 	pruned    map[uint64]struct{}
 	latestErr error
+	headErr   error
 	probeErr  error
 	passes    int
 	probes    [][]uint64
+	heights   []uint64
 	finds     [][]uint64
 	gate      chan struct{}
 }
 
 func newFakeChain() *fakeChain {
 	return &fakeChain{
-		sent:    make(map[uint64]struct{}),
+		sentAt:  make(map[uint64]uint64),
 		settled: make(map[uint64]struct{}),
 		pruned:  make(map[uint64]struct{}),
 	}
 }
 
-// send records sequences as assigned and still outstanding.
+// send records sequences as sent at the current head and still outstanding.
 func (c *fakeChain) send(sequences ...uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for _, sequence := range sequences {
-		c.sent[sequence] = struct{}{}
+		c.sentAt[sequence] = c.head
 	}
+}
+
+// mine advances the head, so sends after it read as assigned above an earlier height.
+func (c *fakeChain) mine(blocks uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.head += blocks
+}
+
+// sequenceAt is the highest sequence assigned at or below height.
+func (c *fakeChain) sequenceAt(height uint64) uint64 {
+	var latest uint64
+
+	for sequence, at := range c.sentAt {
+		if at <= height {
+			latest = max(latest, sequence)
+		}
+	}
+
+	return latest
+}
+
+func (c *fakeChain) sentBy(sequence, height uint64) bool {
+	at, ok := c.sentAt[sequence]
+
+	return ok && at <= height
+}
+
+func (c *fakeChain) sent(sequence uint64) bool {
+	_, ok := c.sentAt[sequence]
+
+	return ok
 }
 
 // settle deletes the packet commitments, as an ack or a timeout does.
@@ -94,24 +134,47 @@ func (c *fakeChain) hold() func() {
 }
 
 func (c *fakeChain) failLatest(err error)   { c.mu.Lock(); c.latestErr = err; c.mu.Unlock() }
+func (c *fakeChain) failHead(err error)     { c.mu.Lock(); c.headErr = err; c.mu.Unlock() }
 func (c *fakeChain) failProbe(err error)    { c.mu.Lock(); c.probeErr = err; c.mu.Unlock() }
 func (c *fakeChain) passCount() int         { c.mu.Lock(); defer c.mu.Unlock(); return c.passes }
 func (c *fakeChain) probeCalls() [][]uint64 { c.mu.Lock(); defer c.mu.Unlock(); return c.probes }
 func (c *fakeChain) findCalls() [][]uint64  { c.mu.Lock(); defer c.mu.Unlock(); return c.finds }
+func (c *fakeChain) probeHeights() []uint64 { c.mu.Lock(); defer c.mu.Unlock(); return c.heights }
 
-// LatestPacketSequence is read exactly once per pass, which is what the pass
-// count counts.
-func (c *fakeChain) LatestPacketSequence(_ context.Context, _ string, _ uint64) (uint64, error) {
+// serveHeads queues the heights successive latest-header reads report.
+func (c *fakeChain) serveHeads(heights ...uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.headReads = heights
+}
+
+func (c *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHeader, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.headErr != nil {
+		return v2.BlockHeader{}, c.headErr
+	}
+
+	if height == v2.LatestBlock {
+		height = c.head
+
+		if len(c.headReads) > 0 {
+			height, c.headReads = c.headReads[0], c.headReads[1:]
+		}
+	}
+
+	return v2.BlockHeader{Height: height, Timestamp: blockTime}, nil
+}
+
+// LatestPacketSequence answers for the height it is asked about, which is what
+// makes a pinned height mean anything. Every pass reads it exactly once.
+func (c *fakeChain) LatestPacketSequence(_ context.Context, _ string, height uint64) (uint64, error) {
 	c.mu.Lock()
 
 	c.passes++
-
-	var latest uint64
-	for sequence := range c.sent {
-		latest = max(latest, sequence)
-	}
-
-	err, gate := c.latestErr, c.gate
+	latest, err, gate := c.sequenceAt(height), c.latestErr, c.gate
 	c.mu.Unlock()
 
 	if gate != nil {
@@ -121,16 +184,19 @@ func (c *fakeChain) LatestPacketSequence(_ context.Context, _ string, _ uint64) 
 	return latest, err
 }
 
+// PacketCommitments answers as a node at height would: a send assigned above it
+// has no commitment there yet.
 func (c *fakeChain) PacketCommitments(
 	_ context.Context,
 	_ string,
 	sequences []uint64,
-	_ uint64,
+	height uint64,
 ) ([]uint64, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.probes = append(c.probes, slices.Clone(sequences))
+	c.heights = append(c.heights, height)
 
 	if c.probeErr != nil {
 		return nil, c.probeErr
@@ -139,8 +205,7 @@ func (c *fakeChain) PacketCommitments(
 	var live []uint64
 
 	for _, sequence := range sequences {
-		_, assigned := c.sent[sequence]
-		if _, gone := c.settled[sequence]; assigned && !gone {
+		if _, gone := c.settled[sequence]; c.sentBy(sequence, height) && !gone {
 			live = append(live, sequence)
 		}
 	}
@@ -157,8 +222,7 @@ func (c *fakeChain) FindSendPackets(_ context.Context, _ string, sequences []uin
 	var events []v2.PacketEvent
 
 	for _, sequence := range sequences {
-		_, assigned := c.sent[sequence]
-		if _, gone := c.pruned[sequence]; assigned && !gone {
+		if _, gone := c.pruned[sequence]; c.sent(sequence) && !gone {
 			events = append(events, sendPacketEvent(sequence))
 		}
 	}
@@ -403,6 +467,70 @@ func TestClearerClear(t *testing.T) {
 
 		_, err := newTestClearer(chain, storage).Clear(ctx, sourceClientID)
 		require.ErrorContains(t, err, "disk is full")
+		assert.Empty(t, recorded(t, db))
+	})
+
+	t.Run("everyProbeNamesTheHeadTheSequenceWasReadAt", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.mine(7)
+		chain.send(1, 2)
+
+		_, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []uint64{7}, chain.probeHeights())
+	})
+
+	t.Run("theHeightMovesUpWithTheChainBetweenChunks", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.mine(10)
+
+		for sequence := uint64(1); sequence <= probeChunk+1; sequence++ {
+			chain.send(sequence)
+		}
+
+		// a cold pass outlives the state a non-archive node keeps, so the
+		// second chunk reads at wherever the chain has got to by then
+		chain.serveHeads(10, 12)
+
+		_, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []uint64{10, 12}, chain.probeHeights())
+	})
+
+	t.Run("aHeadReadFromALaggingNodeCannotDragTheProbeBack", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.mine(10)
+
+		const sent = probeChunk + 1
+
+		for sequence := uint64(1); sequence <= sent; sequence++ {
+			chain.send(sequence)
+		}
+
+		// the pass opens at 10, then the refresh lands on a node six blocks behind
+		chain.serveHeads(10, 4)
+
+		result, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []uint64{10, 10}, chain.probeHeights())
+		// probing at 4 would have read the second chunk as settled and written it off
+		assert.Equal(t, sent, result.Recovered)
+	})
+
+	t.Run("aFailedHeaderReadAbortsThePass", func(t *testing.T) {
+		chain := newFakeChain()
+		chain.send(1, 2)
+		chain.failHead(errors.New("rpc timed out"))
+
+		db := watcherStore(t)
+
+		_, err := newTestClearer(chain, db).Clear(ctx, sourceClientID)
+		require.ErrorContains(t, err, "rpc timed out")
+
+		assert.Empty(t, chain.probeCalls())
 		assert.Empty(t, recorded(t, db))
 	})
 }
