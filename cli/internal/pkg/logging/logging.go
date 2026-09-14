@@ -8,8 +8,26 @@ import (
 	"time"
 )
 
-func Default(json bool) *slog.Logger {
-	opts := &slog.HandlerOptions{ReplaceAttr: ReplaceAttrs}
+// ParseLevel parses a slog level name (debug, info, warn, error;
+// case-insensitive). Empty defaults to info.
+func ParseLevel(level string) (slog.Level, error) {
+	if level == "" {
+		return slog.LevelInfo, nil
+	}
+
+	var lvl slog.Level
+	err := lvl.UnmarshalText([]byte(level))
+
+	return lvl, err
+}
+
+func Default(json bool, level string) *slog.Logger {
+	lvl, err := ParseLevel(level)
+	if err != nil {
+		lvl = slog.LevelInfo // unrecognized level falls back to info
+	}
+
+	opts := &slog.HandlerOptions{Level: lvl, ReplaceAttr: ReplaceAttrs}
 
 	var handler slog.Handler
 	if json {

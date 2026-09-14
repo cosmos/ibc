@@ -27,6 +27,7 @@ type PipelineSet struct {
 // Pipelines identifies the pipeline a transfer is relayed through.
 type Pipelines interface {
 	Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error)
+	Routes() []processors.Route
 	Close()
 }
 
@@ -87,6 +88,30 @@ func (s *PipelineSet) Pipeline(ctx context.Context, tr *processors.Transfer) (pi
 func (s *PipelineSet) isRouted(route processors.Route) bool {
 	_, _, ok := s.cfg.Relayer.ClientEnd(route.SourceChainID, route.SourceClientID)
 	return ok
+}
+
+// Routes returns every configured relay route, in both directions.
+func (s *PipelineSet) Routes() []processors.Route {
+	routes := make([]processors.Route, 0, len(s.cfg.Relayer.Connections)*2)
+
+	for _, conn := range s.cfg.Relayer.Connections {
+		routes = append(routes,
+			processors.Route{
+				SourceChainID:       conn.ClientA.ChainID,
+				SourceClientID:      conn.ClientA.ClientID,
+				DestinationChainID:  conn.ClientB.ChainID,
+				DestinationClientID: conn.ClientB.ClientID,
+			},
+			processors.Route{
+				SourceChainID:       conn.ClientB.ChainID,
+				SourceClientID:      conn.ClientB.ClientID,
+				DestinationChainID:  conn.ClientA.ChainID,
+				DestinationClientID: conn.ClientA.ClientID,
+			},
+		)
+	}
+
+	return routes
 }
 
 // Close closes every pipeline. The context the pipelines were created with

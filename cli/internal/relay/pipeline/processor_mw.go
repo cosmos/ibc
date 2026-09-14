@@ -63,6 +63,8 @@ func (mw ProcessorMW) Process(ctx context.Context, input *processors.Transfer) (
 		return input, nil
 	}
 
+	metrics.packetTransition(ctx, input, mw.internal.Status())
+
 	prevStatus := input.Status
 	input.Status = mw.internal.Status()
 
@@ -137,6 +139,8 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 			continue
 		}
 
+		metrics.packetTransition(ctx, input, mw.internal.Status())
+
 		input.Status = mw.internal.Status()
 		toProcess = append(toProcess, input)
 	}
@@ -157,8 +161,12 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 			input.ProcessingError = err
 		}
 
+		metrics.batch(ctx, mw.internal.Status(), toProcess, joinBatchError(err, toProcess))
+
 		return append(toProcess, notProcessing...), nil
 	}
+
+	metrics.batch(ctx, mw.internal.Status(), toProcess, joinBatchError(nil, output))
 
 	return append(output, notProcessing...), nil
 }
@@ -173,4 +181,18 @@ func (mw BatchProcessorMW) ShouldProcess(input *processors.Transfer) bool {
 
 func (mw BatchProcessorMW) Status() store.RelayStatus {
 	return mw.internal.Status()
+}
+
+func joinBatchError(err error, output []*processors.Transfer) error {
+	if err != nil {
+		return err
+	}
+
+	for _, tr := range output {
+		if tr != nil && tr.ProcessingError != nil {
+			return tr.ProcessingError
+		}
+	}
+
+	return nil
 }

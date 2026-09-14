@@ -3,6 +3,7 @@
 package main
 
 import (
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/internal/bootstrap"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
 )
 
@@ -83,12 +85,14 @@ func packetStateNames() []string {
 }
 
 func relayerRun(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
 	}
 
-	applyClearOnStart(cmd, &cfg)
+	otel.GlobalSetup(ctx, cfg.Observability, slog.Default())
 
 	app, err := bootstrap.BuildRelayer(cfg)
 	if err != nil {

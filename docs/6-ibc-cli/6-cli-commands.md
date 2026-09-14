@@ -73,7 +73,7 @@ The command refuses to overwrite an existing file, so it is safe to run twice. <
 
 <!-- GEN:cli:cmd:config-validate START -->
 
-Validates config's correctness.
+Validate config structure and cross-references.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -256,7 +256,7 @@ Deploy an IFT token on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L175](cli/cmd/ibc/main.go#L175) -->
+<!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -285,7 +285,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L181](cli/cmd/ibc/main.go#L181) -->
+<!-- [main.go:L183](cli/cmd/ibc/main.go#L183) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -297,12 +297,13 @@ ibc deploy ift-bridge --chain-a 41001 --ift-a 0xTokenOnA --chain-b 41002 --ift-b
 
 <!-- GEN:cli:cmd:deploy-render-config START -->
 
-Project two deployment manifests into config sections for relaying between them (stdout).
+Print the existing config plus the settings to relay between two chains.
 
 | Flag | Default | Description |
 |---|---|---|
 | `--signer-a <string>` |  | Signers[] alias submitting relay txs on chainA. |
 | `--signer-b <string>` |  | Signers[] alias submitting relay txs on chainB. |
+| `-p, --populate-config` |  | Write the printed config to the config file. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
@@ -496,7 +497,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L207](cli/cmd/ibc/main.go#L207) -->
+<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -516,7 +517,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L212](cli/cmd/ibc/main.go#L212) -->
+<!-- [main.go:L214](cli/cmd/ibc/main.go#L214) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

@@ -4,6 +4,7 @@ package livevalidate
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/pkg/errors"
 
@@ -33,7 +34,7 @@ func checkAttestorQuorum(ctx context.Context, cfg config.Config, clientSet *chai
 	attestors = append(attestors, local...)
 	attestors = append(attestors, remote...)
 
-	if _, err := prover.NewSetFromConfig(ctx, cfg, clientSet, attestors); err != nil {
+	if _, err := prover.NewSetFromConfig(ctx, cfg, clientSet, attestors, slog.Default()); err != nil {
 		return errors.Wrap(err, "attestor quorum")
 	}
 

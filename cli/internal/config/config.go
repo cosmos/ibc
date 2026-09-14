@@ -5,6 +5,8 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/goccy/go-yaml"
 
 	"github.com/cosmos/ibc/cli/internal/network"
+	"github.com/cosmos/ibc/cli/internal/pkg/logging"
 )
 
 // Chain types
@@ -37,6 +40,17 @@ const (
 	SignerRemote = "remote"
 )
 
+// Observability type. "simple" represents http server for Prometheus metrics.
+// "otel" requires otel.yml and enabled OTEL collection.
+const (
+	ObservabilitySimple = "simple"
+	ObservabilityOTEL   = "otel"
+)
+
+// env variable to override OTEL config file path.
+// Internally, OTEL SDK uses it as well.
+const envOtelConfigFile = "OTEL_CONFIG_FILE"
+
 const sqliteInMemory = ":memory:"
 
 const finalityOffsetTODO = `TODO: set appropriately. 0 defaults to chain finality`
@@ -52,12 +66,14 @@ type (
 // Config represents a config file
 // Should only contain `camelCase` keywords
 type Config struct {
-	Server    ServerConfig  `yaml:"server"`
-	DB        DBConfig      `yaml:"db"`
-	Chains    Chains        `yaml:"chains"`
-	Relayer   RelayerConfig `yaml:"relayer"`
-	Attestors Attestors     `yaml:"attestors"`
-	Signers   Signers       `yaml:"signers"`
+	Server        ServerConfig  `yaml:"server"`
+	Logging       LoggingConfig `yaml:"logging"`
+	DB            DBConfig      `yaml:"db"`
+	Observability Observability `yaml:"observability"`
+	Chains        Chains        `yaml:"chains"`
+	Relayer       RelayerConfig `yaml:"relayer"`
+	Attestors     Attestors     `yaml:"attestors"`
+	Signers       Signers       `yaml:"signers"`
 
 	originalFilePath string
 }
@@ -67,10 +83,28 @@ type ServerConfig struct {
 	ListenAddress string `yaml:"listenAddr"`
 }
 
+// LoggingConfig config for process logging. Each field is overridden by its
+// corresponding flag.
+type LoggingConfig struct {
+	// Level is a slog level name (debug, info, warn, error). Empty defaults to info.
+	Level string `yaml:"level,omitempty"`
+	// JSON emits logs as JSON instead of text.
+	JSON bool `yaml:"json"`
+}
+
 // DBConfig config for database storage.
 type DBConfig struct {
 	Type string `yaml:"type"`
 	URL  string `yaml:"url"`
+}
+
+// Observability config for metrics and tracing.
+// note: in future we'll add `tracing: true` if needed.
+type Observability struct {
+	Metrics                 bool   `yaml:"metrics"`
+	Type                    string `yaml:"type"`
+	SimpleMetricsListenAddr string `yaml:"simpleMetricsListenAddr"`
+	OtelFile                string `yaml:"otelFile"`
 }
 
 // Chains is the list of configured chains.
@@ -160,9 +194,17 @@ func DefaultConfig() Config {
 		Server: ServerConfig{
 			ListenAddress: "0.0.0.0:3000",
 		},
+		Logging: LoggingConfig{
+			Level: "info",
+		},
 		DB: DBConfig{
 			Type: DBTypeSQLite,
 			URL:  "ibc.db",
+		},
+		Observability: Observability{
+			Metrics:                 false,
+			Type:                    ObservabilitySimple,
+			SimpleMetricsListenAddr: "0.0.0.0:9090",
 		},
 		Chains: []ChainConfig{},
 		Relayer: RelayerConfig{
@@ -184,7 +226,9 @@ func (c Config) Validate() error {
 
 	for _, step := range []validationStep{
 		{"server", c.Server.Validate},
+		{"logging", c.Logging.Validate},
 		{"db", c.DB.Validate},
+		{"observability", c.Observability.Validate},
 		{"signers", c.Signers.Validate},
 		{"chains", c.Chains.Validate},
 		{"attestors", c.Attestors.Validate},
@@ -293,6 +337,14 @@ func (c ServerConfig) Validate() error {
 	return nil
 }
 
+func (c LoggingConfig) Validate() error {
+	if _, err := logging.ParseLevel(c.Level); err != nil {
+		return errPathf("level", "must be one of [debug, info, warn, error], got %q", c.Level)
+	}
+
+	return nil
+}
+
 func (c DBConfig) Validate() error {
 	switch {
 	case c.Type != DBTypeSQLite && c.Type != DBTypePostgres:
@@ -319,6 +371,63 @@ func (c DBConfig) Label() string {
 	}
 
 	return path
+}
+
+func (c Observability) Validate() error {
+	switch {
+	case !c.Metrics:
+		// don't validate disabled metrics
+		return nil
+	case c.Type != ObservabilitySimple && c.Type != ObservabilityOTEL:
+		return errPathf("type", "expected [%q, %q], got %q", ObservabilitySimple, ObservabilityOTEL, c.Type)
+	case c.Type == ObservabilitySimple:
+		if err := network.ValidateListenAddr(c.SimpleMetricsListenAddr); err != nil {
+			return errPath("simpleMetricsListenAddr", err)
+		}
+	case c.Type == ObservabilityOTEL:
+		_, err := c.ConfigFile()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c Observability) Enabled() bool {
+	// might become more complex in the future
+	return c.Metrics
+}
+
+// ConfigFile resolves the OTEL configuration file. Supports loading from OTEL_CONFIG_FILE env.
+func (c Observability) ConfigFile() (string, error) {
+	if c.Type != ObservabilityOTEL {
+		return "", fmt.Errorf("only available for observability type %q", ObservabilityOTEL)
+	}
+
+	// override file with env
+	fromEnv, envSet := os.LookupEnv(envOtelConfigFile)
+	if envSet {
+		if fromEnv == "" {
+			return "", fmt.Errorf("empty env %s=''", envOtelConfigFile)
+		}
+
+		slog.Info("Overriding OTEL config with env", "env", envOtelConfigFile, "path", fromEnv)
+		c.OtelFile = fromEnv
+	} else if c.OtelFile == "" {
+		return "", errPathf("otelFile", "required (or %s env)", envOtelConfigFile)
+	}
+
+	absPath, err := filepath.Abs(c.OtelFile)
+	if err != nil {
+		return "", errPath("otelFile", err)
+	}
+
+	if err := fileExists(absPath); err != nil {
+		return "", errPath("otelFile", err)
+	}
+
+	return absPath, nil
 }
 
 func (c Chains) Validate() error {
