@@ -73,15 +73,18 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 		}
 
 		s, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+		if err != nil {
+			return nil, "", err
+		}
 
-		return s, cfg.Alias, err
+		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
 	case config.SignerRemote:
 		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}
 
-		return s, cfg.Alias, err
+		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
 	default:
 		return nil, "", errors.Errorf("invalid signer type: %s", cfg.Type)
 	}

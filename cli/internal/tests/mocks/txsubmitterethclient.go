@@ -40,6 +40,80 @@ func (_m *MockTxSubmitterETHClient) EXPECT() *MockTxSubmitterETHClient_Expecter 
 	return &MockTxSubmitterETHClient_Expecter{mock: &_m.Mock}
 }
 
+// BalanceAt provides a mock function for the type MockTxSubmitterETHClient
+func (_mock *MockTxSubmitterETHClient) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+	ret := _mock.Called(ctx, account, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BalanceAt")
+	}
+
+	var r0 *big.Int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, *big.Int) (*big.Int, error)); ok {
+		return returnFunc(ctx, account, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, *big.Int) *big.Int); ok {
+		r0 = returnFunc(ctx, account, blockNumber)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*big.Int)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, common.Address, *big.Int) error); ok {
+		r1 = returnFunc(ctx, account, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockTxSubmitterETHClient_BalanceAt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BalanceAt'
+type MockTxSubmitterETHClient_BalanceAt_Call struct {
+	*mock.Call
+}
+
+// BalanceAt is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account common.Address
+//   - blockNumber *big.Int
+func (_e *MockTxSubmitterETHClient_Expecter) BalanceAt(ctx any, account any, blockNumber any) *MockTxSubmitterETHClient_BalanceAt_Call {
+	return &MockTxSubmitterETHClient_BalanceAt_Call{Call: _e.mock.On("BalanceAt", ctx, account, blockNumber)}
+}
+
+func (_c *MockTxSubmitterETHClient_BalanceAt_Call) Run(run func(ctx context.Context, account common.Address, blockNumber *big.Int)) *MockTxSubmitterETHClient_BalanceAt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 common.Address
+		if args[1] != nil {
+			arg1 = args[1].(common.Address)
+		}
+		var arg2 *big.Int
+		if args[2] != nil {
+			arg2 = args[2].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTxSubmitterETHClient_BalanceAt_Call) Return(intParam *big.Int, err error) *MockTxSubmitterETHClient_BalanceAt_Call {
+	_c.Call.Return(intParam, err)
+	return _c
+}
+
+func (_c *MockTxSubmitterETHClient_BalanceAt_Call) RunAndReturn(run func(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)) *MockTxSubmitterETHClient_BalanceAt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // EstimateGas provides a mock function for the type MockTxSubmitterETHClient
 func (_mock *MockTxSubmitterETHClient) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
 	ret := _mock.Called(ctx, call)
