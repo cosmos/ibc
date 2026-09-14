@@ -75,57 +75,41 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 	return res.Msg.GetHeight(), time.Unix(seconds, 0).UTC(), nil
 }
 
-func (p *Prover) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	res, err := p.client.StateProof(ctx, connect.NewRequest(&proverv2.StateProofRequest{
-		Client: p.target(),
-		Height: height,
-	}))
-	if err != nil {
-		return nil, errors.Wrap(err, "remote prover: state proof")
-	}
-
-	p.logger.Debug("Fetched state proof", "height", height)
-
-	return res.Msg.GetProofs(), nil
-}
-
-func (p *Prover) PacketProofs(
+func (p *Prover) Prepare(
 	ctx context.Context,
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
-) ([][]byte, error) {
+) (*v2.Preparation, error) {
 	protoKind, err := proofKindToProto(kind)
 	if err != nil {
 		return nil, err
 	}
-
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-
-	res, err := p.client.PacketProofs(ctx, connect.NewRequest(&proverv2.PacketProofsRequest{
-		Client:  p.target(),
-		Height:  height,
-		Kind:    protoKind,
-		Packets: packetsToProto(packets),
+	res, err := p.client.Prepare(ctx, connect.NewRequest(&proverv2.PrepareRequest{
+		Client: p.target(), Height: height, Kind: protoKind, Packets: packetsToProto(packets),
 	}))
 	if err != nil {
-		return nil, errors.Wrap(err, "remote prover: packet proofs")
+		return nil, errors.Wrap(err, "remote prover: prepare")
 	}
-
-	proofs := res.Msg.GetProofs()
-	if len(proofs) != len(packets) {
-		return nil, errors.Errorf(
-			"remote prover returned %d proofs for %d packets", len(proofs), len(packets),
-		)
+	result := &v2.Preparation{}
+	switch wire := res.Msg.GetResult().(type) {
+	case *proverv2.PrepareResponse_Advance:
+		result.Advance = wire.Advance
+	case *proverv2.PrepareResponse_Ready:
+		if wire.Ready != nil {
+			result.Ready = &v2.BatchProofs{
+				Update:       wire.Ready.Update,
+				PacketProofs: wire.Ready.PacketProofs,
+				Checkpoint:   wire.Ready.Checkpoint,
+			}
+		}
 	}
-
-	p.logger.Debug("Fetched packet proofs", "height", height, "kind", kind, "packets", len(packets))
-
-	return proofs, nil
+	if err := result.Validate(len(packets)); err != nil {
+		return nil, errors.Wrap(err, "remote prover")
+	}
+	return result, nil
 }
 
 func proofKindToProto(kind v2.ProofKind) (proverv2.ProofKind, error) {

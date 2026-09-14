@@ -137,14 +137,6 @@ func (m *instrumentation) excessiveRelayLatency(ctx context.Context, packets []s
 }
 
 func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
-	switch p.Status {
-	case store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithWriteAckError,
-		store.RelayStatusCompleteWithTimeout,
-		store.RelayStatusFailed:
-		return "", false
-	}
-
 	// Recv is the source of truth for whether the packet can still time out.
 	// WriteAckTxHash can stay nil after a recv if write-ack lookup fails.
 	if p.RecvTxHash != nil {

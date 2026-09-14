@@ -134,8 +134,8 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
 	require.Empty(t, out.Chains[1].EVM.RPC)
 
-	require.Len(t, out.Relayer.Connections, 2)
-	conn := out.Relayer.Connections[0]
+	require.Len(t, out.Connections, 2)
+	conn := out.Connections[0]
 	require.Equal(t, "1-2", conn.Alias)
 	require.Equal(t, "cli-1-2", conn.ClientA.ClientID)
 	require.Equal(t, "1", conn.ClientA.ChainID)
@@ -149,7 +149,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "signer-b", conn.ClientB.Signer)
 
 	// second connection between the same chain pair gets a seqno suffix
-	conn2 := out.Relayer.Connections[1]
+	conn2 := out.Connections[1]
 	require.Equal(t, "1-2-1", conn2.Alias)
 	require.Equal(t, "custom-a", conn2.ClientA.ClientID)
 	require.Equal(t, "custom-b", conn2.ClientB.ClientID)
@@ -208,11 +208,8 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	out, err := renderRelayConfig(config.Config{}, a, b, "", "")
 	require.NoError(t, err)
 
-	merged, _ := config.Config{}.WithPatch(config.Patch{
-		Chains:      out.Chains,
-		Connections: out.Relayer.Connections,
-		Attestors:   out.Attestors,
-	})
+	merged, _, err := config.Config{}.WithPatch(out)
+	require.NoError(t, err)
 
 	rendered := captureStdout(t, func() {
 		require.NoError(t, config.PrintYAMLWithComments(merged, config.CollectComments(merged)))
@@ -260,10 +257,10 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
 	require.NoError(t, err)
-	require.Len(t, out.Relayer.Connections, 1)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Relayer.Connections[0].ClientB.Type)
-	require.Empty(t, out.Relayer.Connections[0].ClientA.Params)
+	require.Len(t, out.Connections, 1)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
+	require.Empty(t, out.Connections[0].ClientA.Params)
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
 }
 
@@ -384,4 +381,136 @@ type registeredClientTarget struct{ deploy.Target }
 
 func (*registeredClientTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
 	return "0xca", true, nil
+}
+
+func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
+	previous := flagDeployManifestDir
+	t.Cleanup(func() { flagDeployManifestDir = previous })
+	for _, mode := range []string{"missing", "corrupt", "unreadable", "missing-client"} {
+		t.Run(mode, func(t *testing.T) {
+			flagDeployManifestDir = t.TempDir()
+			path := manifest.Path(flagDeployManifestDir, "1")
+			switch mode {
+			case "corrupt":
+				require.NoError(t, os.WriteFile(path, []byte("{"), 0o600))
+			case "unreadable":
+				require.NoError(t, os.Mkdir(path, 0o700)) // deterministic even when running as root
+			case "missing-client":
+				require.NoError(t, manifest.New("1", "evm").Save(flagDeployManifestDir))
+			}
+			_, found, err := recordedClient("1", "client")
+			require.False(t, found)
+			if mode == "corrupt" || mode == "unreadable" {
+				require.ErrorContains(t, err, path)
+				_, err = besuQBFTParams(
+					t.Context(),
+					pflag.NewFlagSet("test", pflag.ContinueOnError),
+					&sourcelessTarget{},
+					"1",
+					"2",
+					"client",
+				)
+				require.ErrorContains(t, err, path) // would report unavailable proof source if swallowed
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestPopulateRejectsDuplicateIdentitiesBeforeWritingEvenQuiet(t *testing.T) {
+	previous := globalFlags
+	t.Cleanup(func() { globalFlags = previous })
+	globalFlags = config.DefaultFlagSet()
+	globalFlags.Home = t.TempDir()
+	globalFlags.Quiet = true
+	path, err := globalFlags.ConfigPath()
+	require.NoError(t, err)
+	original := []byte("preserve me")
+	require.NoError(t, os.WriteFile(path, original, 0o600))
+	cfg := config.DefaultConfig()
+	cfg.Attestors = config.Attestors{
+		{Type: config.AttestorTypeLocal, Name: "a", ChainID: "1", Signer: "key"},
+		{Type: config.AttestorTypeLocal, Name: "b", ChainID: "1", Signer: "key"},
+	}
+	require.ErrorContains(t, populateRenderedConfig(cfg), "duplicate local attestor signer")
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, original, got)
+}
+
+func TestPopulatePermitsIncompleteDraft(t *testing.T) {
+	previous := globalFlags
+	t.Cleanup(func() { globalFlags = previous })
+	globalFlags = config.DefaultFlagSet()
+	globalFlags.Home = t.TempDir()
+	globalFlags.Quiet = true
+	cfg := config.DefaultConfig()
+	cfg.Chains = config.Chains{{ChainID: "1", EVM: &config.EVMChainConfig{}}}
+	require.Error(t, cfg.Validate())
+	require.NoError(t, populateRenderedConfig(cfg))
+	path, err := globalFlags.ConfigPath()
+	require.NoError(t, err)
+	loaded, err := config.LoadFromFile(path, false)
+	require.NoError(t, err)
+	require.Len(t, loaded.Chains, 1)
+}
+
+func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
+	previousFlags := globalFlags
+	previousDir := flagDeployManifestDir
+	previousA, previousB := flagDeployRenderSignerA, flagDeployRenderSignerB
+	previousPopulate, previousYes := flagDeployRenderPopulate, flagDeployYes
+	t.Cleanup(func() {
+		globalFlags = previousFlags
+		flagDeployManifestDir = previousDir
+		flagDeployRenderSignerA, flagDeployRenderSignerB = previousA, previousB
+		flagDeployRenderPopulate, flagDeployYes = previousPopulate, previousYes
+	})
+	home := t.TempDir()
+	t.Chdir(home)
+	globalFlags = config.DefaultFlagSet()
+	globalFlags.Home = home
+	globalFlags.Quiet = true
+	flagDeployManifestDir = filepath.Join(home, "deployments")
+	flagDeployRenderSignerA, flagDeployRenderSignerB = "", ""
+	flagDeployRenderPopulate, flagDeployYes = true, true
+
+	key, _ := newLocalSignerConfig(t, "existing-relayer")
+	cfg := config.DefaultConfig()
+	cfg.Signers = []config.SignerConfig{key}
+	for _, id := range []string{"1", "2"} {
+		cfg.Chains = append(cfg.Chains, config.ChainConfig{
+			ChainID: id,
+			EVM: &config.EVMChainConfig{
+				RPC:         "http://localhost:8545",
+				ICS26Router: "0x0000000000000000000000000000000000000001",
+			},
+		})
+	}
+	cfg.Relayer.Connections = []config.ConnectionConfig{{
+		Alias:   "custom-route",
+		ClientA: config.ClientEnd{ChainID: "2", ClientID: "b", Signer: key.Alias, Type: config.ClientTypeBesuQBFT},
+		ClientB: config.ClientEnd{ChainID: "1", ClientID: "a", Signer: key.Alias, Type: config.ClientTypeBesuQBFT},
+	}}
+	require.NoError(t, cfg.Validate())
+	path, err := globalFlags.ConfigPath()
+	require.NoError(t, err)
+	require.NoError(t, cfg.StoreToFile(path))
+	for _, pair := range [][4]string{{"1", "a", "2", "b"}, {"2", "b", "1", "a"}} {
+		m := manifest.New(pair[0], "evm")
+		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
+		m.UpsertClient(manifest.Client{
+			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
+			Type: deploy.ClientTypeBesuQBFT,
+		})
+		require.NoError(t, m.Save(flagDeployManifestDir))
+	}
+	require.NoError(t, deployRenderConfig(nil, []string{"1", "2"}))
+	loaded, err := config.LoadFromFile(path, true)
+	require.NoError(t, err)
+	require.Equal(t, cfg.Relayer.Connections, loaded.Relayer.Connections)
+
+	flagDeployRenderSignerA = "unknown"
+	require.ErrorContains(t, deployRenderConfig(nil, []string{"1", "2"}), "signer \"unknown\" not found")
 }

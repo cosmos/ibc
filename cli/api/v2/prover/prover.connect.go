@@ -37,25 +37,16 @@ const (
 	// ProverServiceLatestProvableHeightProcedure is the fully-qualified name of the ProverService's
 	// LatestProvableHeight RPC.
 	ProverServiceLatestProvableHeightProcedure = "/ibc.v2.prover.ProverService/LatestProvableHeight"
-	// ProverServiceStateProofProcedure is the fully-qualified name of the ProverService's StateProof
-	// RPC.
-	ProverServiceStateProofProcedure = "/ibc.v2.prover.ProverService/StateProof"
-	// ProverServicePacketProofsProcedure is the fully-qualified name of the ProverService's
-	// PacketProofs RPC.
-	ProverServicePacketProofsProcedure = "/ibc.v2.prover.ProverService/PacketProofs"
+	// ProverServicePrepareProcedure is the fully-qualified name of the ProverService's Prepare RPC.
+	ProverServicePrepareProcedure = "/ibc.v2.prover.ProverService/Prepare"
 )
 
 // ProverServiceClient is a client for the ibc.v2.prover.ProverService service.
 type ProverServiceClient interface {
-	// LatestProvableHeight returns the highest height a subsequent StateProof
-	// and PacketProofs call sharing that height can currently succeed at, with
-	// that height's counterparty-chain timestamp.
+	// LatestProvableHeight selects the target height and counterparty timestamp.
 	LatestProvableHeight(context.Context, *connect.Request[LatestProvableHeightRequest]) (*connect.Response[LatestProvableHeightResponse], error)
-	// StateProof proves the light client's counterparty state at a height.
-	StateProof(context.Context, *connect.Request[StateProofRequest]) (*connect.Response[StateProofResponse], error)
-	// PacketProofs proves each packet's membership or non-membership at a
-	// height, one proof per packet with indices aligned to the request.
-	PacketProofs(context.Context, *connect.Request[PacketProofsRequest]) (*connect.Response[PacketProofsResponse], error)
+	// Prepare returns one client-only checkpoint or proofs for the entire batch.
+	Prepare(context.Context, *connect.Request[PrepareRequest]) (*connect.Response[PrepareResponse], error)
 }
 
 // NewProverServiceClient constructs a client for the ibc.v2.prover.ProverService service. By
@@ -75,16 +66,10 @@ func NewProverServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(proverServiceMethods.ByName("LatestProvableHeight")),
 			connect.WithClientOptions(opts...),
 		),
-		stateProof: connect.NewClient[StateProofRequest, StateProofResponse](
+		prepare: connect.NewClient[PrepareRequest, PrepareResponse](
 			httpClient,
-			baseURL+ProverServiceStateProofProcedure,
-			connect.WithSchema(proverServiceMethods.ByName("StateProof")),
-			connect.WithClientOptions(opts...),
-		),
-		packetProofs: connect.NewClient[PacketProofsRequest, PacketProofsResponse](
-			httpClient,
-			baseURL+ProverServicePacketProofsProcedure,
-			connect.WithSchema(proverServiceMethods.ByName("PacketProofs")),
+			baseURL+ProverServicePrepareProcedure,
+			connect.WithSchema(proverServiceMethods.ByName("Prepare")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -93,8 +78,7 @@ func NewProverServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 // proverServiceClient implements ProverServiceClient.
 type proverServiceClient struct {
 	latestProvableHeight *connect.Client[LatestProvableHeightRequest, LatestProvableHeightResponse]
-	stateProof           *connect.Client[StateProofRequest, StateProofResponse]
-	packetProofs         *connect.Client[PacketProofsRequest, PacketProofsResponse]
+	prepare              *connect.Client[PrepareRequest, PrepareResponse]
 }
 
 // LatestProvableHeight calls ibc.v2.prover.ProverService.LatestProvableHeight.
@@ -102,27 +86,17 @@ func (c *proverServiceClient) LatestProvableHeight(ctx context.Context, req *con
 	return c.latestProvableHeight.CallUnary(ctx, req)
 }
 
-// StateProof calls ibc.v2.prover.ProverService.StateProof.
-func (c *proverServiceClient) StateProof(ctx context.Context, req *connect.Request[StateProofRequest]) (*connect.Response[StateProofResponse], error) {
-	return c.stateProof.CallUnary(ctx, req)
-}
-
-// PacketProofs calls ibc.v2.prover.ProverService.PacketProofs.
-func (c *proverServiceClient) PacketProofs(ctx context.Context, req *connect.Request[PacketProofsRequest]) (*connect.Response[PacketProofsResponse], error) {
-	return c.packetProofs.CallUnary(ctx, req)
+// Prepare calls ibc.v2.prover.ProverService.Prepare.
+func (c *proverServiceClient) Prepare(ctx context.Context, req *connect.Request[PrepareRequest]) (*connect.Response[PrepareResponse], error) {
+	return c.prepare.CallUnary(ctx, req)
 }
 
 // ProverServiceHandler is an implementation of the ibc.v2.prover.ProverService service.
 type ProverServiceHandler interface {
-	// LatestProvableHeight returns the highest height a subsequent StateProof
-	// and PacketProofs call sharing that height can currently succeed at, with
-	// that height's counterparty-chain timestamp.
+	// LatestProvableHeight selects the target height and counterparty timestamp.
 	LatestProvableHeight(context.Context, *connect.Request[LatestProvableHeightRequest]) (*connect.Response[LatestProvableHeightResponse], error)
-	// StateProof proves the light client's counterparty state at a height.
-	StateProof(context.Context, *connect.Request[StateProofRequest]) (*connect.Response[StateProofResponse], error)
-	// PacketProofs proves each packet's membership or non-membership at a
-	// height, one proof per packet with indices aligned to the request.
-	PacketProofs(context.Context, *connect.Request[PacketProofsRequest]) (*connect.Response[PacketProofsResponse], error)
+	// Prepare returns one client-only checkpoint or proofs for the entire batch.
+	Prepare(context.Context, *connect.Request[PrepareRequest]) (*connect.Response[PrepareResponse], error)
 }
 
 // NewProverServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -138,26 +112,18 @@ func NewProverServiceHandler(svc ProverServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(proverServiceMethods.ByName("LatestProvableHeight")),
 		connect.WithHandlerOptions(opts...),
 	)
-	proverServiceStateProofHandler := connect.NewUnaryHandler(
-		ProverServiceStateProofProcedure,
-		svc.StateProof,
-		connect.WithSchema(proverServiceMethods.ByName("StateProof")),
-		connect.WithHandlerOptions(opts...),
-	)
-	proverServicePacketProofsHandler := connect.NewUnaryHandler(
-		ProverServicePacketProofsProcedure,
-		svc.PacketProofs,
-		connect.WithSchema(proverServiceMethods.ByName("PacketProofs")),
+	proverServicePrepareHandler := connect.NewUnaryHandler(
+		ProverServicePrepareProcedure,
+		svc.Prepare,
+		connect.WithSchema(proverServiceMethods.ByName("Prepare")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/ibc.v2.prover.ProverService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ProverServiceLatestProvableHeightProcedure:
 			proverServiceLatestProvableHeightHandler.ServeHTTP(w, r)
-		case ProverServiceStateProofProcedure:
-			proverServiceStateProofHandler.ServeHTTP(w, r)
-		case ProverServicePacketProofsProcedure:
-			proverServicePacketProofsHandler.ServeHTTP(w, r)
+		case ProverServicePrepareProcedure:
+			proverServicePrepareHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -171,10 +137,6 @@ func (UnimplementedProverServiceHandler) LatestProvableHeight(context.Context, *
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.prover.ProverService.LatestProvableHeight is not implemented"))
 }
 
-func (UnimplementedProverServiceHandler) StateProof(context.Context, *connect.Request[StateProofRequest]) (*connect.Response[StateProofResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.prover.ProverService.StateProof is not implemented"))
-}
-
-func (UnimplementedProverServiceHandler) PacketProofs(context.Context, *connect.Request[PacketProofsRequest]) (*connect.Response[PacketProofsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.prover.ProverService.PacketProofs is not implemented"))
+func (UnimplementedProverServiceHandler) Prepare(context.Context, *connect.Request[PrepareRequest]) (*connect.Response[PrepareResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ibc.v2.prover.ProverService.Prepare is not implemented"))
 }

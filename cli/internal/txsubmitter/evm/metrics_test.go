@@ -246,7 +246,7 @@ func TestEVMGasSpent(t *testing.T) {
 		}).Return(errors.New("broadcast failed")).Once()
 
 		// ACT #1
-		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
+		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}}, nil)
 
 		// ASSERT #1
 		require.ErrorContains(t, err, "broadcast failed")
@@ -424,7 +424,7 @@ func submitTestTransaction(
 	eth.EXPECT().PendingNonceAt(ctx, mock.Anything).Return(7, nil).Once()
 	eth.EXPECT().SendTransaction(ctx, mock.Anything).Return(nil).Once()
 
-	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
+	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}}, nil)
 	require.NoError(t, err)
 
 	return submission.TxHash

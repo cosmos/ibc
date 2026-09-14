@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -114,7 +115,11 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	return submitter, nil
 }
 
-func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
+func (c *TxSubmitter) Submit(
+	ctx context.Context,
+	intent v2.TxIntent,
+	beforeBroadcast func(*v2.Submission) error,
+) (*v2.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -141,6 +146,16 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		return nil, errors.Wrap(err, "attaching signature")
 	}
 
+	submission := &v2.Submission{
+		TxHash:         signedTx.Hash().String(),
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: c.address.String(),
+	}
+	if beforeBroadcast != nil {
+		if err := beforeBroadcast(submission); err != nil {
+			return nil, errors.Wrap(err, "recording signed tx before broadcast")
+		}
+	}
 	if err := c.eth.SendTransaction(ctx, signedTx); err != nil {
 		return nil, errors.Wrapf(err, "sending tx %s", signedTx.Hash())
 	}
@@ -149,11 +164,7 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 	c.lastSubmission = time.Now()
 	c.logger.Info("Submitted tx", "txHash", signedTx.Hash(), "to", intent.To)
 
-	return &v2.Submission{
-		TxHash:         signedTx.Hash().String(),
-		SubmittedAt:    time.Now().UTC(),
-		RelayerAddress: c.address.String(),
-	}, nil
+	return submission, nil
 }
 
 func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Transaction, error) {
@@ -188,11 +199,23 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 		return nil, errors.Errorf("no contract code at %s", to)
 	}
 
-	gasLimit, err := c.eth.EstimateGas(ctx, ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data})
+	gasLimit, err := c.eth.EstimateGas(
+		ctx,
+		ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data, Gas: head.GasLimit},
+	)
 	if err != nil {
+		message := strings.ToLower(err.Error())
+		if strings.Contains(message, "gas required exceeds allowance") ||
+			strings.Contains(message, "exceeds block gas limit") ||
+			strings.Contains(message, "gas estimation failed: gas limit exceeded") {
+			return nil, errors.Wrapf(v2.ErrTxTooLarge, "estimating gas: %s", err)
+		}
 		return nil, errors.Wrap(err, "estimating gas")
 	}
 
+	if head.GasLimit > 0 && gasLimit > head.GasLimit {
+		return nil, v2.ErrTxTooLarge
+	}
 	nonce, err := c.eth.PendingNonceAt(ctx, c.address)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting pending nonce for %s", c.address)

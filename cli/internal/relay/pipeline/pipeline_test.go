@@ -132,11 +132,14 @@ func mockRelay(
 
 	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
-	mockProver.EXPECT().StateProof(mock.Anything, height).Return([][]byte{{0x01}}, nil).Once()
-	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
-		Return(make([][]byte, len(events)), nil).Once()
-	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
-		Return([]v2.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
+	proofs := make([][]byte, len(events))
+	for i := range proofs {
+		proofs[i] = []byte{2}
+	}
+	mockProver.EXPECT().Prepare(mock.Anything, height, mock.Anything, mock.Anything).
+		Return(&v2.Preparation{Ready: &v2.BatchProofs{Update: []byte{1}, PacketProofs: proofs}}, nil).Once()
+	txBuilder.EXPECT().BuildRelayTx(mock.Anything, mock.Anything).
+		Return(v2.RelayTx{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}, nil).Once()
 }
 
 func sendPacketEvent(sequence uint64) v2.PacketEvent {
@@ -264,11 +267,14 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-			TxHash:         recvTxHash,
-			SubmittedAt:    time.Now().UTC(),
-			RelayerAddress: "0xrelayer",
-		}, nil).Once()
+		env.dstTxSubmitter.EXPECT().
+			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
+			Return(&v2.Submission{
+				TxHash:         recvTxHash,
+				SubmittedAt:    time.Now().UTC(),
+				RelayerAddress: "0xrelayer",
+			}, nil).
+			Once()
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// success write ack: relayed back to the source chain like any other ack
@@ -284,9 +290,12 @@ func TestPipelineLifecycle(t *testing.T) {
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-		}, nil).Once()
+		env.srcTxSubmitter.EXPECT().
+			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
+			Return(&v2.Submission{
+				TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+			}, nil).
+			Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
@@ -323,9 +332,12 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-		}, nil).Once()
+		env.dstTxSubmitter.EXPECT().
+			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
+			Return(&v2.Submission{
+				TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+			}, nil).
+			Once()
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// error write ack: relayed back to the source chain
@@ -341,9 +353,12 @@ func TestPipelineLifecycle(t *testing.T) {
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-		}, nil).Once()
+		env.srcTxSubmitter.EXPECT().
+			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
+			Return(&v2.Submission{
+				TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+			}, nil).
+			Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
@@ -382,9 +397,12 @@ func TestPipelineLifecycle(t *testing.T) {
 		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
 		mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-		}, nil).Once()
+		env.srcTxSubmitter.EXPECT().
+			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
+			Return(&v2.Submission{
+				TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+			}, nil).
+			Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)

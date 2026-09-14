@@ -4,6 +4,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func TestSubmit(t *testing.T) {
 			sent = tx
 		}).Return(nil).Once()
 
-		sub, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}})
+		sub, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}}, nil)
 
 		require.NoError(t, err)
 		require.NotNil(t, sent)
@@ -96,7 +97,7 @@ func TestSubmit(t *testing.T) {
 		eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
 		eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return(nil, nil).Once()
 
-		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
+		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}}, nil)
 
 		require.ErrorContains(t, err, "no contract code")
 	})
@@ -106,7 +107,7 @@ func TestSubmit(t *testing.T) {
 
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: nil}, nil).Once()
 
-		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
+		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}}, nil)
 
 		require.ErrorContains(t, err, "EIP-1559")
 	})
@@ -184,4 +185,89 @@ func TestShouldRetry(t *testing.T) {
 
 		require.ErrorContains(t, err, "rpc down")
 	})
+}
+
+func TestSubmitRecordsBeforeBroadcast(t *testing.T) {
+	for _, failRecord := range []bool{false, true} {
+		t.Run(fmt.Sprint(failRecord), func(t *testing.T) {
+			sub, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
+			eth.EXPECT().
+				HeaderByNumber(mock.Anything, (*big.Int)(nil)).
+				Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).
+				Once()
+			eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Once()
+			eth.EXPECT().PendingCodeAt(mock.Anything, mock.Anything).Return([]byte{1}, nil).Once()
+			eth.EXPECT().EstimateGas(mock.Anything, mock.Anything).Return(uint64(21000), nil).Once()
+			eth.EXPECT().PendingNonceAt(mock.Anything, mock.Anything).Return(uint64(7), nil).Once()
+			var recorded *v2.Submission
+			if !failRecord {
+				eth.EXPECT().
+					SendTransaction(mock.Anything, mock.Anything).
+					Run(func(_ context.Context, tx *types.Transaction) {
+						require.NotNil(t, recorded)
+						require.Equal(t, tx.Hash().String(), recorded.TxHash)
+					}).
+					Return(nil).
+					Once()
+			}
+			result, err := sub.Submit(
+				t.Context(),
+				v2.TxIntent{To: toAddress, Data: []byte{1}},
+				func(s *v2.Submission) error {
+					if failRecord {
+						return errors.New("disk full")
+					}
+					snapshot := *s
+					recorded = &snapshot
+					return nil
+				},
+			)
+			if failRecord {
+				require.ErrorContains(t, err, "disk full")
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, recorded, result)
+			}
+		})
+	}
+}
+
+func TestSubmitRejectsOversizedTransactionBeforeSigning(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		gas         uint64
+		estimateErr error
+		tooLarge    bool
+	}{
+		{name: "estimate above block limit", gas: 30000001, tooLarge: true},
+		{name: "geth allowance", estimateErr: errors.New("gas required exceeds allowance (30000000)"), tooLarge: true},
+		{name: "block limit", estimateErr: errors.New("exceeds block gas limit"), tooLarge: true},
+		{name: "besu limit", estimateErr: errors.New("Gas estimation failed: Gas limit exceeded"), tooLarge: true},
+		{name: "revert is not a size error", estimateErr: errors.New("execution reverted")},
+		{name: "rpc failure is not a size error", estimateErr: errors.New("connection refused")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			submitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
+			eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).
+				Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).Once()
+			eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Once()
+			eth.EXPECT().PendingCodeAt(mock.Anything, mock.Anything).Return([]byte{1}, nil).Once()
+			eth.EXPECT().EstimateGas(mock.Anything, mock.MatchedBy(func(call ethereum.CallMsg) bool {
+				return call.Gas == 30000000
+			})).Return(tc.gas, tc.estimateErr).Once()
+			result, err := submitter.Submit(t.Context(), v2.TxIntent{To: toAddress, Data: []byte{1}},
+				func(*v2.Submission) error {
+					t.Fatal("must not record or broadcast an oversized/invalid transaction")
+					return nil
+				})
+			require.Nil(t, result)
+			require.Error(t, err)
+			if tc.tooLarge {
+				require.ErrorIs(t, err, v2.ErrTxTooLarge)
+			} else {
+				require.NotErrorIs(t, err, v2.ErrTxTooLarge)
+				require.ErrorIs(t, err, tc.estimateErr)
+			}
+		})
+	}
 }

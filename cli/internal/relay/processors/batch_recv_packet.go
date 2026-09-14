@@ -120,7 +120,7 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 	}
 
 	submission, err := relayPackets(
-		ctx, p.logger, p.destinationChainClient, p.prover, p.txBuilder, p.txSubmitter,
+		ctx, p.logger, p.destinationChainClient, p.prover, p.txBuilder, p.txSubmitter, p.storage,
 		p.route.DestinationClientID, v2.RelayKindRecv,
 		proofHeight, events,
 	)

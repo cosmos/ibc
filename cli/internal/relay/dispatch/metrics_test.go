@@ -283,19 +283,6 @@ func TestExcessiveRelayLatency(t *testing.T) {
 			assert.Empty(t, collectRelayLatency(ctx, t, reader))
 		})
 	})
-
-	t.Run("terminalStatusIsSkipped", func(t *testing.T) {
-		ctx := context.Background()
-		instruments, reader := newTestInstrumentation(t)
-		packet := base
-		packet.Status = store.RelayStatusCompleteWithAck
-		packet.SourceTxTime = now.Add(-time.Hour)
-		packet.PacketTimeoutTimestamp = now.Add(time.Hour)
-
-		instruments.excessiveRelayLatency(ctx, []store.Packet{packet})
-
-		assert.Empty(t, collectRelayLatency(ctx, t, reader))
-	})
 }
 
 func collectRelayLatency(

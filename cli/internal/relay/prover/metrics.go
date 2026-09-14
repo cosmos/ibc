@@ -112,28 +112,17 @@ func (p *instrumentedProver) LatestProvableHeight(ctx context.Context) (uint64, 
 	return height, timestamp, err
 }
 
-func (p *instrumentedProver) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
-	started := time.Now()
-	proof, err := p.Prover.StateProof(ctx, height)
-
-	metrics.record(ctx, "state_proof", p.chainID, p.clientID, p.proverType, err, started)
-
-	return proof, err
-}
-
-func (p *instrumentedProver) PacketProofs(
+func (p *instrumentedProver) Prepare(
 	ctx context.Context,
 	height uint64,
 	kind v2.ProofKind,
 	packets []types.Packet,
-) ([][]byte, error) {
+) (*v2.Preparation, error) {
 	started := time.Now()
-	proofs, err := p.Prover.PacketProofs(ctx, height, kind, packets)
-
-	metrics.record(ctx, "packet_proofs", p.chainID, p.clientID, p.proverType, err, started, proofKindAttribute(kind))
+	result, err := p.Prover.Prepare(ctx, height, kind, packets)
+	metrics.record(ctx, "prepare", p.chainID, p.clientID, p.proverType, err, started, proofKindAttribute(kind))
 	metrics.packetBatchSize(ctx, p.chainID, p.clientID, p.proverType, kind, len(packets))
-
-	return proofs, err
+	return result, err
 }
 
 func proofKindAttribute(kind v2.ProofKind) attribute.KeyValue {

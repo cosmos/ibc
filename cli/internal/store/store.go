@@ -30,6 +30,10 @@ type Store interface {
 
 // Repository represents database CRUD operations.
 type Repository interface {
+	GetClientUpdate(ctx context.Context, chainID, clientID string) (*PacketTx, error)
+	SaveClientUpdate(ctx context.Context, chainID, clientID string, tx PacketTx) error
+	ClearClientUpdate(ctx context.Context, chainID, clientID string) error
+
 	// UpsertPacket records a packet. A new packet is inserted; an existing
 	// NOT_SELECTED packet is refreshed with the input's metadata and status,
 	// but only when the input status is NOT_SELECTED or PENDING, the latter

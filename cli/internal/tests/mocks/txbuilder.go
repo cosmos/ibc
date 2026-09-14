@@ -36,47 +36,45 @@ func (_m *MockTxBuilder) EXPECT() *MockTxBuilder_Expecter {
 	return &MockTxBuilder_Expecter{mock: &_m.Mock}
 }
 
-// BuildRelayTxs provides a mock function for the type MockTxBuilder
-func (_mock *MockTxBuilder) BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error) {
-	ret := _mock.Called(clientUpdate, packetRelayItems)
+// BuildRelayTx provides a mock function for the type MockTxBuilder
+func (_mock *MockTxBuilder) BuildRelayTx(clientUpdate v2.ClientUpdate, items []v2.PacketRelayItem) (v2.RelayTx, error) {
+	ret := _mock.Called(clientUpdate, items)
 
 	if len(ret) == 0 {
-		panic("no return value specified for BuildRelayTxs")
+		panic("no return value specified for BuildRelayTx")
 	}
 
-	var r0 []v2.RelayTx
+	var r0 v2.RelayTx
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) ([]v2.RelayTx, error)); ok {
-		return returnFunc(clientUpdate, packetRelayItems)
+	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) (v2.RelayTx, error)); ok {
+		return returnFunc(clientUpdate, items)
 	}
-	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) []v2.RelayTx); ok {
-		r0 = returnFunc(clientUpdate, packetRelayItems)
+	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) v2.RelayTx); ok {
+		r0 = returnFunc(clientUpdate, items)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]v2.RelayTx)
-		}
+		r0 = ret.Get(0).(v2.RelayTx)
 	}
 	if returnFunc, ok := ret.Get(1).(func(v2.ClientUpdate, []v2.PacketRelayItem) error); ok {
-		r1 = returnFunc(clientUpdate, packetRelayItems)
+		r1 = returnFunc(clientUpdate, items)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockTxBuilder_BuildRelayTxs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BuildRelayTxs'
-type MockTxBuilder_BuildRelayTxs_Call struct {
+// MockTxBuilder_BuildRelayTx_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BuildRelayTx'
+type MockTxBuilder_BuildRelayTx_Call struct {
 	*mock.Call
 }
 
-// BuildRelayTxs is a helper method to define mock.On call
+// BuildRelayTx is a helper method to define mock.On call
 //   - clientUpdate v2.ClientUpdate
-//   - packetRelayItems []v2.PacketRelayItem
-func (_e *MockTxBuilder_Expecter) BuildRelayTxs(clientUpdate any, packetRelayItems any) *MockTxBuilder_BuildRelayTxs_Call {
-	return &MockTxBuilder_BuildRelayTxs_Call{Call: _e.mock.On("BuildRelayTxs", clientUpdate, packetRelayItems)}
+//   - items []v2.PacketRelayItem
+func (_e *MockTxBuilder_Expecter) BuildRelayTx(clientUpdate any, items any) *MockTxBuilder_BuildRelayTx_Call {
+	return &MockTxBuilder_BuildRelayTx_Call{Call: _e.mock.On("BuildRelayTx", clientUpdate, items)}
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem)) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTx_Call) Run(run func(clientUpdate v2.ClientUpdate, items []v2.PacketRelayItem)) *MockTxBuilder_BuildRelayTx_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 v2.ClientUpdate
 		if args[0] != nil {
@@ -94,12 +92,12 @@ func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(clientUpdate v2.ClientU
 	return _c
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) Return(relayTxs []v2.RelayTx, err error) *MockTxBuilder_BuildRelayTxs_Call {
-	_c.Call.Return(relayTxs, err)
+func (_c *MockTxBuilder_BuildRelayTx_Call) Return(relayTx v2.RelayTx, err error) *MockTxBuilder_BuildRelayTx_Call {
+	_c.Call.Return(relayTx, err)
 	return _c
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) RunAndReturn(run func(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error)) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTx_Call) RunAndReturn(run func(clientUpdate v2.ClientUpdate, items []v2.PacketRelayItem) (v2.RelayTx, error)) *MockTxBuilder_BuildRelayTx_Call {
 	_c.Call.Return(run)
 	return _c
 }

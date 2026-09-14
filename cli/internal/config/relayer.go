@@ -282,15 +282,20 @@ func (c RelayerConfig) validateChainOverrides() error {
 }
 
 func (c RelayerConfig) validateConnections() error {
+	for i, conn := range c.Connections {
+		if err := conn.Validate(); err != nil {
+			return errPath(fmt.Sprintf("connections[%d]", i), err)
+		}
+	}
+	return c.validateConnectionIdentities()
+}
+
+func (c RelayerConfig) validateConnectionIdentities() error {
 	aliases := make(map[string]struct{})
-	clientEnds := make(map[string]struct{})
+	clientEnds := make(map[ClientEndIdentity]struct{})
 
 	for i, conn := range c.Connections {
 		seg := fmt.Sprintf("connections[%d]", i)
-
-		if err := conn.Validate(); err != nil {
-			return errPath(seg, err)
-		}
 
 		if _, ok := aliases[conn.Alias]; ok {
 			return errPathf(seg, "duplicate alias: %q", conn.Alias)
@@ -298,7 +303,7 @@ func (c RelayerConfig) validateConnections() error {
 		aliases[conn.Alias] = struct{}{}
 
 		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
-			key := end.ChainID + "/" + end.ClientID
+			key := end.Identity()
 			if _, ok := clientEnds[key]; ok {
 				return errPathf(seg, "duplicate client %q on chain %q", end.ClientID, end.ChainID)
 			}

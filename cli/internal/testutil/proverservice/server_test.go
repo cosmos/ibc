@@ -21,10 +21,11 @@ import (
 
 // stubProver records what it was asked, so the far side of the wire can assert it.
 type stubProver struct {
-	height      uint64
-	timestamp   time.Time
-	stateProofs [][]byte
-	proofs      [][]byte
+	height    uint64
+	timestamp time.Time
+	update    []byte
+	advance   []byte
+	proofs    [][]byte
 
 	gotHeight  uint64
 	gotKind    v2.ProofKind
@@ -35,19 +36,17 @@ func (s *stubProver) LatestProvableHeight(context.Context) (uint64, time.Time, e
 	return s.height, s.timestamp, nil
 }
 
-func (s *stubProver) StateProof(_ context.Context, height uint64) ([][]byte, error) {
-	s.gotHeight = height
-	return s.stateProofs, nil
-}
-
-func (s *stubProver) PacketProofs(
+func (s *stubProver) Prepare(
 	_ context.Context,
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
-) ([][]byte, error) {
+) (*v2.Preparation, error) {
 	s.gotHeight, s.gotKind, s.gotPackets = height, kind, packets
-	return s.proofs, nil
+	if len(s.advance) > 0 {
+		return &v2.Preparation{Advance: s.advance}, nil
+	}
+	return &v2.Preparation{Ready: &v2.BatchProofs{Update: s.update, PacketProofs: s.proofs}}, nil
 }
 
 func newClient(t *testing.T, set *prover.Set, chainID, clientID string) *remote.Prover {
@@ -66,10 +65,10 @@ func newClient(t *testing.T, set *prover.Set, chainID, clientID string) *remote.
 func TestProverServiceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	stub := &stubProver{
-		height:      4321,
-		timestamp:   time.Unix(1700000000, 0).UTC(),
-		stateProofs: [][]byte{[]byte("state-proof-1"), []byte("state-proof-2")},
-		proofs:      [][]byte{[]byte("proof-a"), []byte("proof-b")},
+		height:    4321,
+		timestamp: time.Unix(1700000000, 0).UTC(),
+		update:    []byte("state-proof"),
+		proofs:    [][]byte{[]byte("proof-a"), []byte("proof-b")},
 	}
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
 	client := newClient(t, set, "chain-a", "client-0")
@@ -79,13 +78,6 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(4321), height)
 		require.Equal(t, stub.timestamp, timestamp)
-	})
-
-	t.Run("state proof keeps update order", func(t *testing.T) {
-		proofs, err := client.StateProof(ctx, 99)
-		require.NoError(t, err)
-		require.Equal(t, [][]byte{[]byte("state-proof-1"), []byte("state-proof-2")}, proofs)
-		require.Equal(t, uint64(99), stub.gotHeight)
 	})
 
 	t.Run("packet proofs", func(t *testing.T) {
@@ -106,11 +98,12 @@ func TestProverServiceRoundTrip(t *testing.T) {
 			{Sequence: 8, SourceClient: "client-0", DestinationClient: "client-1"},
 		}
 
-		proofs, err := client.PacketProofs(ctx, 4321, v2.ProofKindReceiptAbsence, packets)
+		proofs, err := client.Prepare(ctx, 4321, v2.ProofKindReceiptAbsence, packets)
 		require.NoError(t, err)
-		require.Equal(t, [][]byte{[]byte("proof-a"), []byte("proof-b")}, proofs)
+		require.Equal(t, [][]byte{[]byte("proof-a"), []byte("proof-b")}, proofs.Ready.PacketProofs)
 
 		// A dropped field proves a different packet than the one sent.
+		require.Equal(t, []byte("state-proof"), proofs.Ready.Update)
 		require.Equal(t, packets, stub.gotPackets)
 		require.Equal(t, v2.ProofKindReceiptAbsence, stub.gotKind)
 		require.Equal(t, uint64(4321), stub.gotHeight)
@@ -131,26 +124,22 @@ func TestProverServiceRejectsMismatchedProofCount(t *testing.T) {
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
 	client := newClient(t, set, "chain-a", "client-0")
 
-	_, err := client.PacketProofs(context.Background(), 1, v2.ProofKindPacketCommitment,
+	_, err := client.Prepare(context.Background(), 1, v2.ProofKindPacketCommitment,
 		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}})
-	require.ErrorContains(t, err, "returned 1 proofs for 2 packets")
+	require.Equal(t, connect.CodeInternal, connect.CodeOf(errors.Cause(err)))
 }
 
-func TestProverServiceStateProofs(t *testing.T) {
-	for name, proofs := range map[string][][]byte{
-		"single": {[]byte("only")},
-		"multi":  {[]byte("hop-1"), []byte("hop-2")},
-		"noop":   nil,
-	} {
-		t.Run(name, func(t *testing.T) {
-			stub := &stubProver{stateProofs: proofs}
-			set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
-			client := newClient(t, set, "chain-a", "client-0")
-
-			got, err := client.StateProof(t.Context(), 1)
-			require.NoError(t, err)
-			require.Equal(t, proofs, got)
-			require.Equal(t, uint64(1), stub.gotHeight)
-		})
-	}
+func TestProverServiceAdvance(t *testing.T) {
+	stub := &stubProver{advance: []byte("checkpoint")}
+	client := newClient(
+		t,
+		prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub}),
+		"chain-a",
+		"client-0",
+	)
+	result, err := client.Prepare(t.Context(), 99, v2.ProofKindPacketCommitment, nil)
+	require.NoError(t, err)
+	require.Nil(t, result.Ready)
+	require.Equal(t, stub.advance, result.Advance)
+	require.Equal(t, uint64(99), stub.gotHeight)
 }

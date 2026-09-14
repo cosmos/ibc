@@ -84,10 +84,9 @@ func TestGeneratorStateProof(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		proofs, err := gen.StateProof(ctx, 10)
+		proofs, err := gen.stateProof(ctx, 10)
 		require.NoError(t, err)
-		require.Len(t, proofs, 1)
-		require.NotEmpty(t, proofs[0])
+		require.NotEmpty(t, proofs)
 	})
 
 	t.Run("mismatchedHeightErrors", func(t *testing.T) {
@@ -98,7 +97,7 @@ func TestGeneratorStateProof(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		_, err := gen.StateProof(ctx, 11)
+		_, err := gen.stateProof(ctx, 11)
 		require.Error(t, err)
 	})
 }
@@ -124,7 +123,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
+		proofs, err := gen.packetProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
 		require.NoError(t, err)
 		require.Len(t, proofs, len(packets))
 		require.Equal(t, proofs[0], proofs[1], "the shared attestation blob is duplicated across every packet index")
@@ -135,7 +134,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		// attestor, so the generator here is given no attestors at all.
 		gen := New(nil, 2, nil, slog.Default())
 
-		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
+		_, err := gen.packetProofs(ctx, 20, v2.ProofKindUnknown, packets)
 		require.Error(t, err)
 	})
 }

@@ -151,47 +151,35 @@ func (h *handler) LatestProvableHeight(
 	}), nil
 }
 
-func (h *handler) StateProof(
+func (h *handler) Prepare(
 	ctx context.Context,
-	req *connect.Request[proverv2.StateProofRequest],
-) (*connect.Response[proverv2.StateProofResponse], error) {
+	req *connect.Request[proverv2.PrepareRequest],
+) (*connect.Response[proverv2.PrepareResponse], error) {
 	target, err := h.prover(req.Msg.GetClient())
 	if err != nil {
 		return nil, err
 	}
-
-	proofs, err := target.StateProof(ctx, req.Msg.GetHeight())
-	if err != nil {
-		h.logger.Error("StateProof", "err", err)
-		return nil, errInternal
-	}
-
-	return connect.NewResponse(&proverv2.StateProofResponse{Proofs: proofs}), nil
-}
-
-func (h *handler) PacketProofs(
-	ctx context.Context,
-	req *connect.Request[proverv2.PacketProofsRequest],
-) (*connect.Response[proverv2.PacketProofsResponse], error) {
-	target, err := h.prover(req.Msg.GetClient())
-	if err != nil {
-		return nil, err
-	}
-
 	kind, err := proofKindFromProto(req.Msg.GetKind())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-
-	proofs, err := target.PacketProofs(
-		ctx, req.Msg.GetHeight(), kind, packetsFromProto(req.Msg.GetPackets()),
-	)
+	result, err := target.Prepare(ctx, req.Msg.GetHeight(), kind, packetsFromProto(req.Msg.GetPackets()))
+	if err == nil {
+		err = result.Validate(len(req.Msg.GetPackets()))
+	}
 	if err != nil {
-		h.logger.Error("PacketProofs", "err", err)
+		h.logger.Error("Prepare", "err", err)
 		return nil, errInternal
 	}
-
-	return connect.NewResponse(&proverv2.PacketProofsResponse{Proofs: proofs}), nil
+	response := &proverv2.PrepareResponse{}
+	if result.Ready != nil {
+		response.Result = &proverv2.PrepareResponse_Ready{Ready: &proverv2.BatchProofs{
+			Update: result.Ready.Update, PacketProofs: result.Ready.PacketProofs, Checkpoint: result.Ready.Checkpoint,
+		}}
+	} else {
+		response.Result = &proverv2.PrepareResponse_Advance{Advance: result.Advance}
+	}
+	return connect.NewResponse(response), nil
 }
 
 func proofKindFromProto(kind proverv2.ProofKind) (v2.ProofKind, error) {

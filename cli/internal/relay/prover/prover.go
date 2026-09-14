@@ -25,26 +25,18 @@ import (
 // Prover generates packet membership/non-membership proofs and state
 // proofs for one configured light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent StateProof
-	// and PacketProofs call sharing that height can currently succeed at,
+	// LatestProvableHeight resolves the highest height a subsequent Prepare call can work towards,
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof returns the ordered client updates that bring the light
-	// client to height, submitted before any packet call sharing that height.
-	// Usually one; several when validator turnover needs intermediate
-	// headers; empty when the client already holds the state at height.
-	StateProof(ctx context.Context, height uint64) ([][]byte, error)
-
-	// PacketProofs proves each packet's membership or non-membership at
-	// height, one proof per packet with indices aligned to packets. Returns
-	// an error if a proof cannot be generated for any packet
-	PacketProofs(
+	// Prepare returns either a confirmed-state checkpoint to advance first,
+	// or one snapshot containing the final update and packet proofs.
+	Prepare(
 		ctx context.Context,
 		height uint64,
 		kind v2.ProofKind,
 		packets []channeltypesv2.Packet,
-	) ([][]byte, error)
+	) (*v2.Preparation, error)
 }
 
 var (
@@ -160,7 +152,12 @@ func addGenerator(
 			return errors.Wrapf(err, "connection %q", connAlias)
 		}
 
-		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
+		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
+			gen,
+			client.ChainID,
+			client.ClientID,
+			client.Type,
+		)
 
 		return nil
 	case config.ClientTypeRemote:

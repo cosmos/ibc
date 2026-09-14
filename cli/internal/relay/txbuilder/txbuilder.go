@@ -13,12 +13,9 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// TxBuilder builds transactions from packet relay and client update details
-// for one chain. It returns a list of transactions rather than one, since
-// some chains (e.g. Solana, due to tx size limits) must split a batch of
-// packet relays across multiple transactions.
+// TxBuilder builds one checkpoint or final packet transaction.
 type TxBuilder interface {
-	BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error)
+	BuildRelayTx(clientUpdate v2.ClientUpdate, items []v2.PacketRelayItem) (v2.RelayTx, error)
 }
 
 var _ TxBuilder = (*evm.TxBuilder)(nil)

@@ -37,6 +37,69 @@ func (_m *MockRepository) EXPECT() *MockRepository_Expecter {
 	return &MockRepository_Expecter{mock: &_m.Mock}
 }
 
+// ClearClientUpdate provides a mock function for the type MockRepository
+func (_mock *MockRepository) ClearClientUpdate(ctx context.Context, chainID string, clientID string) error {
+	ret := _mock.Called(ctx, chainID, clientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearClientUpdate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, chainID, clientID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepository_ClearClientUpdate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearClientUpdate'
+type MockRepository_ClearClientUpdate_Call struct {
+	*mock.Call
+}
+
+// ClearClientUpdate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - clientID string
+func (_e *MockRepository_Expecter) ClearClientUpdate(ctx any, chainID any, clientID any) *MockRepository_ClearClientUpdate_Call {
+	return &MockRepository_ClearClientUpdate_Call{Call: _e.mock.On("ClearClientUpdate", ctx, chainID, clientID)}
+}
+
+func (_c *MockRepository_ClearClientUpdate_Call) Run(run func(ctx context.Context, chainID string, clientID string)) *MockRepository_ClearClientUpdate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_ClearClientUpdate_Call) Return(err error) *MockRepository_ClearClientUpdate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepository_ClearClientUpdate_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string) error) *MockRepository_ClearClientUpdate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ClearPacketAckTx provides a mock function for the type MockRepository
 func (_mock *MockRepository) ClearPacketAckTx(ctx context.Context, key store.PacketKey) error {
 	ret := _mock.Called(ctx, key)
@@ -204,6 +267,80 @@ func (_c *MockRepository_ClearPacketTimeoutTx_Call) Return(err error) *MockRepos
 }
 
 func (_c *MockRepository_ClearPacketTimeoutTx_Call) RunAndReturn(run func(ctx context.Context, key store.PacketKey) error) *MockRepository_ClearPacketTimeoutTx_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetClientUpdate provides a mock function for the type MockRepository
+func (_mock *MockRepository) GetClientUpdate(ctx context.Context, chainID string, clientID string) (*store.PacketTx, error) {
+	ret := _mock.Called(ctx, chainID, clientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetClientUpdate")
+	}
+
+	var r0 *store.PacketTx
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*store.PacketTx, error)); ok {
+		return returnFunc(ctx, chainID, clientID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *store.PacketTx); ok {
+		r0 = returnFunc(ctx, chainID, clientID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*store.PacketTx)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, chainID, clientID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepository_GetClientUpdate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetClientUpdate'
+type MockRepository_GetClientUpdate_Call struct {
+	*mock.Call
+}
+
+// GetClientUpdate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - clientID string
+func (_e *MockRepository_Expecter) GetClientUpdate(ctx any, chainID any, clientID any) *MockRepository_GetClientUpdate_Call {
+	return &MockRepository_GetClientUpdate_Call{Call: _e.mock.On("GetClientUpdate", ctx, chainID, clientID)}
+}
+
+func (_c *MockRepository_GetClientUpdate_Call) Run(run func(ctx context.Context, chainID string, clientID string)) *MockRepository_GetClientUpdate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_GetClientUpdate_Call) Return(packetTx *store.PacketTx, err error) *MockRepository_GetClientUpdate_Call {
+	_c.Call.Return(packetTx, err)
+	return _c
+}
+
+func (_c *MockRepository_GetClientUpdate_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string) (*store.PacketTx, error)) *MockRepository_GetClientUpdate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -414,6 +551,75 @@ func (_c *MockRepository_ListPacketsBySourceTx_Call) Return(packets []store.Pack
 }
 
 func (_c *MockRepository_ListPacketsBySourceTx_Call) RunAndReturn(run func(ctx context.Context, chainID string, txHash string) ([]store.Packet, error)) *MockRepository_ListPacketsBySourceTx_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveClientUpdate provides a mock function for the type MockRepository
+func (_mock *MockRepository) SaveClientUpdate(ctx context.Context, chainID string, clientID string, tx store.PacketTx) error {
+	ret := _mock.Called(ctx, chainID, clientID, tx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveClientUpdate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, store.PacketTx) error); ok {
+		r0 = returnFunc(ctx, chainID, clientID, tx)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepository_SaveClientUpdate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveClientUpdate'
+type MockRepository_SaveClientUpdate_Call struct {
+	*mock.Call
+}
+
+// SaveClientUpdate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - clientID string
+//   - tx store.PacketTx
+func (_e *MockRepository_Expecter) SaveClientUpdate(ctx any, chainID any, clientID any, tx any) *MockRepository_SaveClientUpdate_Call {
+	return &MockRepository_SaveClientUpdate_Call{Call: _e.mock.On("SaveClientUpdate", ctx, chainID, clientID, tx)}
+}
+
+func (_c *MockRepository_SaveClientUpdate_Call) Run(run func(ctx context.Context, chainID string, clientID string, tx store.PacketTx)) *MockRepository_SaveClientUpdate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 store.PacketTx
+		if args[3] != nil {
+			arg3 = args[3].(store.PacketTx)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_SaveClientUpdate_Call) Return(err error) *MockRepository_SaveClientUpdate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepository_SaveClientUpdate_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string, tx store.PacketTx) error) *MockRepository_SaveClientUpdate_Call {
 	_c.Call.Return(run)
 	return _c
 }

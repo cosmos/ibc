@@ -169,22 +169,8 @@ func (h *Header) decodeExtraData() error {
 		)
 	}
 
-	var rawValidators [][]byte
-	if err := rlp.DecodeBytes(h.extraItems[extraIdxValidators], &rawValidators); err != nil {
+	if err := rlp.DecodeBytes(h.extraItems[extraIdxValidators], &h.Validators); err != nil {
 		return fmt.Errorf("%w: validators: %w", ErrInvalidHeader, err)
-	}
-
-	if len(rawValidators) == 0 {
-		return fmt.Errorf("%w: empty validator set", ErrInvalidHeader)
-	}
-
-	h.Validators = make([]common.Address, len(rawValidators))
-	for i, raw := range rawValidators {
-		if len(raw) != validatorLength {
-			return fmt.Errorf("%w: validator %d has %d bytes, want %d", ErrInvalidHeader, i, len(raw), validatorLength)
-		}
-
-		h.Validators[i] = common.BytesToAddress(raw)
 	}
 
 	if err := ValidateValidators(h.Validators); err != nil {

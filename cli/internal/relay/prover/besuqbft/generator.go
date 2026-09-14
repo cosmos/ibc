@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -25,8 +24,7 @@ import (
 )
 
 const (
-	// maxScan bounds the headers inspected while walking through validator
-	// turnover, and the headers stepped back under clock drift.
+	// maxScan bounds RPC work per checkpoint, not total catch-up distance.
 	maxScan = 4096
 	// maxCached bounds all cached consensus states, including the trusted anchor.
 	maxCached = 1024
@@ -53,7 +51,6 @@ type Generator struct {
 	host         chains.Client
 	counterparty chains.Client
 	clientID     string
-	logger       *slog.Logger
 
 	mu     sync.Mutex
 	cache  map[uint64]cacheEntry
@@ -82,7 +79,6 @@ func New(host, counterparty chains.Client, clientID string) *Generator {
 		host:         host,
 		counterparty: counterparty,
 		clientID:     clientID,
-		logger:       slog.With("module", "prover", "clientType", "besu-qbft", "clientID", clientID),
 		cache:        make(map[uint64]cacheEntry),
 	}
 }
@@ -171,26 +167,23 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	maxTimestamp := hostHead.Timestamp.Add(time.Duration(state.MaxClockDrift) * time.Second) //nolint:gosec // seconds
 	height, timestamp := head.Height, head.Timestamp
 
-	for steps := 0; timestamp.After(maxTimestamp); steps++ {
-		if height <= state.LatestHeight {
-			return state.LatestHeight, time.Unix(int64(trusted.Timestamp), 0).UTC(), nil //nolint:gosec // seconds
+	if timestamp.After(maxTimestamp) {
+		low, high := state.LatestHeight, height
+		timestamp = time.Unix(int64(trusted.Timestamp), 0).UTC()
+		for low < high {
+			mid := low + (high-low)/2 + 1
+			header, err := g.counterparty.GetBlockHeader(ctx, mid)
+			if err != nil {
+				return 0, time.Time{}, fmt.Errorf("reading counterparty header %d: %w", mid, err)
+			}
+			if header.Timestamp.After(maxTimestamp) {
+				high = mid - 1
+			} else {
+				low = mid
+				timestamp = header.Timestamp
+			}
 		}
-
-		if steps == maxScan {
-			return 0, time.Time{}, fmt.Errorf(
-				"counterparty head %d is more than %d blocks ahead of the host chain time plus %ds clock drift",
-				head.Height, maxScan, state.MaxClockDrift,
-			)
-		}
-
-		height--
-
-		header, err := g.counterparty.GetBlockHeader(ctx, height)
-		if err != nil {
-			return 0, time.Time{}, fmt.Errorf("reading counterparty header %d: %w", height, err)
-		}
-
-		timestamp = header.Timestamp
+		height = low
 	}
 
 	return height, timestamp, nil
@@ -212,45 +205,81 @@ func checkTrustingPeriod(state besu.ClientState, trusted besu.ConsensusState, ho
 	return nil
 }
 
-// StateProof returns the ordered updates that bring the light client from its
-// current trusted height to target: one direct update when the trusted
-// validator set still overlaps target's signers, a chain of intermediate
-// headers when turnover broke that overlap, and none when the client already
-// stores target's consensus state.
-func (g *Generator) StateProof(ctx context.Context, target uint64) ([][]byte, error) {
+// Prepare produces one checkpoint or a complete batch, never an unbounded
+// sequence of updates. The target header is fetched once; a ready batch shares
+// its account/storage proof and consensus preimage.
+func (g *Generator) Prepare(
+	ctx context.Context,
+	target uint64,
+	kind v2.ProofKind,
+	packets []channeltypesv2.Packet,
+) (*v2.Preparation, error) {
+	slots, indices, err := packetSlots(kind, packets)
+	if err != nil {
+		return nil, err
+	}
 	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
 	}
-
 	trusted, err := g.preimage(ctx, state.LatestHeight)
 	if err != nil {
 		return nil, err
 	}
-
-	if target <= state.LatestHeight {
-		return g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, target)
+	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
+	if err != nil {
+		return nil, fmt.Errorf("reading host chain head: %w", err)
 	}
-
-	hops, err := g.plan(ctx, state.LatestHeight, trusted, target)
+	if trustErr := checkTrustingPeriod(state, trusted, hostHead.Timestamp); trustErr != nil {
+		return nil, trustErr
+	}
+	targetHeader, err := g.header(ctx, target)
 	if err != nil {
 		return nil, err
 	}
-
-	updates := make([][]byte, len(hops))
-	prevHeight, prev := state.LatestHeight, trusted
-
-	for i, hop := range hops {
-		updates[i], err = besu.EncodeUpdateClient(hop.header.RLP, prevHeight, prev, hop.proof.AccountProof)
-		if err != nil {
-			return nil, fmt.Errorf("encoding update to height %d: %w", hop.header.Height, err)
-		}
-
-		g.store(hop.header.Height, hop.consensus, false)
-		prevHeight, prev = hop.header.Height, hop.consensus
+	maxTimestamp := hostHead.Timestamp.Add(time.Duration(state.MaxClockDrift) * time.Second)
+	if time.Unix(int64(targetHeader.Timestamp), 0).After(maxTimestamp) {
+		return nil, fmt.Errorf("target height %d exceeds host clock drift", target)
 	}
 
-	return updates, nil
+	header := targetHeader
+	if target > state.LatestHeight {
+		header, err = g.nextHeader(ctx, state.LatestHeight, trusted, targetHeader)
+		if err != nil {
+			return nil, err
+		}
+	}
+	advance := header.Height != target
+	proofSlots := slots
+	if advance {
+		proofSlots = nil
+	}
+	snap, err := g.snapshotForHeader(ctx, header, proofSlots)
+	if err != nil {
+		return nil, err
+	}
+	var update []byte
+	if target <= state.LatestHeight {
+		update, err = g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, snap)
+	} else {
+		update, err = besu.EncodeUpdateClient(header.RLP, state.LatestHeight, trusted, snap.proof.AccountProof)
+		if err == nil {
+			g.store(header.Height, snap.consensus, false)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if advance {
+		return &v2.Preparation{Advance: update}, nil
+	}
+	proofs, err := packetProofs(snap, kind, packets, indices)
+	if err != nil {
+		return nil, err
+	}
+	return &v2.Preparation{Ready: &v2.BatchProofs{
+		Update: update, PacketProofs: proofs, Checkpoint: len(update) != 0,
+	}}, nil
 }
 
 // updateAtOrBelowTrusted handles a target the client may already store: no
@@ -260,12 +289,10 @@ func (g *Generator) updateAtOrBelowTrusted(
 	ctx context.Context,
 	trustedHeight uint64,
 	trusted besu.ConsensusState,
-	target uint64,
-) ([][]byte, error) {
-	snap, err := g.snapshot(ctx, target, nil)
-	if err != nil {
-		return nil, err
-	}
+	snap *snapshot,
+) ([]byte, error) {
+	target := snap.header.Height
+	var err error
 
 	var stored [32]byte
 	if target == trustedHeight {
@@ -309,143 +336,94 @@ func (g *Generator) updateAtOrBelowTrusted(
 
 	g.store(target, snap.consensus, false)
 
-	return [][]byte{update}, nil
+	return update, nil
 }
 
-// plan returns the snapshots to submit, in order, ending with target. It tries
-// the direct jump first and otherwise walks forward greedily: each hop lands on
-// the last header whose signers still satisfy the current trusted set, then
-// retries the target using that header's validator set.
-func (g *Generator) plan(
+// nextHeader tries a direct jump, then scans a bounded window. Reaching the
+// work budget returns the last verified header as a checkpoint, even if its
+// validators are unchanged. Confirming it makes the next invocation resume.
+func (g *Generator) nextHeader(
 	ctx context.Context,
 	trustedHeight uint64,
 	trusted besu.ConsensusState,
-	target uint64,
-) ([]*snapshot, error) {
-	final, err := g.snapshot(ctx, target, nil)
+	target *besu.Header,
+) (*besu.Header, error) {
+	signers, err := target.Signers()
 	if err != nil {
 		return nil, err
 	}
-
-	signers, err := final.header.Signers()
-	if err != nil {
-		return nil, fmt.Errorf("header %d: %w", target, err)
+	if besu.CheckUpdate(target, signers, trusted) == nil {
+		return target, nil
 	}
-
-	if besu.CheckUpdate(final.header, signers, trusted) == nil {
-		return []*snapshot{final}, nil
-	}
-
-	g.logger.Info("validator turnover breaks the direct update; walking intermediate headers",
-		"trustedHeight", trustedHeight, "target", target)
-
-	var hops []*snapshot
-
-	current := trusted
-	last := uint64(0)
-	scanned := 0
-
-	for k := trustedHeight + 1; k <= target; {
-		if scanned == maxScan {
-			return nil, fmt.Errorf(
-				"validator turnover walk from %d towards %d exceeded %d headers", trustedHeight, target, maxScan,
-			)
+	var last *besu.Header
+	for k, scanned := trustedHeight+1, 0; k <= target.Height && scanned < maxScan; k, scanned = k+1, scanned+1 {
+		header := target
+		if k != target.Height {
+			header, err = g.header(ctx, k)
+			if err != nil {
+				return nil, err
+			}
 		}
-
-		header, err := g.header(ctx, k)
-		if err != nil {
-			return nil, err
-		}
-
-		scanned++
-
-		headerSigners, err := header.Signers()
+		signers, err := header.Signers()
 		if err != nil {
 			return nil, fmt.Errorf("header %d: %w", k, err)
 		}
-
-		if besu.CheckUpdate(header, headerSigners, current) == nil {
-			last = k
-			k++
-
-			continue
+		if err := besu.CheckUpdate(header, signers, trusted); err != nil {
+			if last == nil {
+				return nil, fmt.Errorf(
+					"no header after trusted height %d is accepted (height %d: %w)",
+					trustedHeight,
+					k,
+					err,
+				)
+			}
+			return last, nil
 		}
-
-		if last == 0 {
-			return nil, fmt.Errorf(
-				"no header after trusted height %d is accepted by its validator set (height %d fails: %w)",
-				trustedHeight, k, besu.CheckUpdate(header, headerSigners, current),
-			)
-		}
-
-		hop, err := g.snapshot(ctx, last, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		hops = append(hops, hop)
-		current = hop.consensus
-		if besu.CheckUpdate(final.header, signers, current) == nil {
-			return append(hops, final), nil
-		}
-		last = 0
+		last = header
 	}
-
-	if err := besu.CheckUpdate(final.header, signers, current); err != nil {
-		return nil, fmt.Errorf("target height %d after %d intermediate updates: %w", target, len(hops), err)
+	if last == nil {
+		return nil, fmt.Errorf("no progress from trusted height %d", trustedHeight)
 	}
-
-	return append(hops, final), nil
+	return last, nil
 }
 
-// PacketProofs proves each packet's commitment slot on the counterparty
-// router at height, wrapped with the consensus state the update at that height
-// installs.
-func (g *Generator) PacketProofs(
-	ctx context.Context,
-	height uint64,
-	kind v2.ProofKind,
-	packets []channeltypesv2.Packet,
-) ([][]byte, error) {
-	slots := make([][32]byte, len(packets))
-	index := make(map[[32]byte]int, len(packets))
+func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, []int, error) {
 	unique := make([][32]byte, 0, len(packets))
-
+	index := make(map[[32]byte]int, len(packets))
+	indices := make([]int, len(packets))
 	for i, packet := range packets {
 		path, err := packetPath(kind, packet)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		slots[i] = besu.CommitmentSlot(path)
-		if _, seen := index[slots[i]]; !seen {
-			index[slots[i]] = len(unique)
-			unique = append(unique, slots[i])
+		slot := besu.CommitmentSlot(path)
+		idx, seen := index[slot]
+		if !seen {
+			idx = len(unique)
+			index[slot] = idx
+			unique = append(unique, slot)
 		}
+		indices[i] = idx
 	}
-
-	snap, err := g.snapshot(ctx, height, unique)
-	if err != nil {
-		return nil, err
+	if len(unique) == 0 {
+		unique = nil
 	}
-	preimage := snap.consensus
-	g.store(height, preimage, false)
+	return unique, indices, nil
+}
 
+func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Packet, indices []int) ([][]byte, error) {
 	proofs := make([][]byte, len(packets))
-
 	for i, packet := range packets {
-		storage := snap.proof.StorageProofs[index[slots[i]]]
-
-		if valueErr := checkValue(kind, packet, common.BigToHash(storage.Value)); valueErr != nil {
-			return nil, fmt.Errorf("packet sequence %d at height %d: %w", packet.Sequence, height, valueErr)
+		storage := snap.proof.StorageProofs[indices[i]]
+		if err := checkValue(kind, packet, common.BigToHash(storage.Value)); err != nil {
+			return nil, fmt.Errorf("packet sequence %d at height %d: %w", packet.Sequence, snap.header.Height, err)
 		}
-
-		proofs[i], err = besu.EncodeMembershipProof(preimage, storage.Proof)
+		proof, err := besu.EncodeMembershipProof(snap.consensus, storage.Proof)
 		if err != nil {
 			return nil, fmt.Errorf("packet sequence %d: %w", packet.Sequence, err)
 		}
+		proofs[i] = proof
 	}
-
 	return proofs, nil
 }
 
@@ -514,6 +492,11 @@ func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byt
 		return nil, err
 	}
 
+	return g.snapshotForHeader(ctx, header, slots)
+}
+
+func (g *Generator) snapshotForHeader(ctx context.Context, header *besu.Header, slots [][32]byte) (*snapshot, error) {
+	height := header.Height
 	proof, err := g.counterparty.GetRouterProof(ctx, height, slots)
 	if err != nil {
 		return nil, fmt.Errorf("proving router at height %d: %w (%s)", height, err, historyHint)

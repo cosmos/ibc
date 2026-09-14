@@ -94,7 +94,7 @@ func TestPackMulticall(t *testing.T) {
 	require.Equal(t, [][]byte{call2, call1}, calls)
 }
 
-func TestBuildRelayTxs(t *testing.T) {
+func TestBuildRelayTx(t *testing.T) {
 	router := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	client := New(router)
 
@@ -110,18 +110,18 @@ func TestBuildRelayTxs(t *testing.T) {
 			},
 		},
 	}
-	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProofs: [][]byte{{0x01}}}
+	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", Proof: []byte{0x01}}
 
 	t.Run("recv", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
 			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
-		txs, err := client.BuildRelayTxs(clientUpdate, items)
+		txs, err := client.BuildRelayTx(clientUpdate, items)
 		require.NoError(t, err)
-		require.Len(t, txs, 1)
-		require.Equal(t, router.Bytes(), txs[0].To)
-		requireSelector(t, "multicall", txs[0].Data)
+		require.NotEmpty(t, txs.Data)
+		require.Equal(t, router.Bytes(), txs.To)
+		requireSelector(t, "multicall", txs.Data)
 	})
 
 	t.Run("ackRequiresAckBytes", func(t *testing.T) {
@@ -129,7 +129,7 @@ func TestBuildRelayTxs(t *testing.T) {
 			{Kind: v2.RelayKindAck, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
-		_, err := client.BuildRelayTxs(clientUpdate, items)
+		_, err := client.BuildRelayTx(clientUpdate, items)
 		require.Error(t, err)
 	})
 
@@ -138,9 +138,9 @@ func TestBuildRelayTxs(t *testing.T) {
 			{Kind: v2.RelayKindAck, Packet: packet, Acks: [][]byte{{0xac}}, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
-		txs, err := client.BuildRelayTxs(clientUpdate, items)
+		txs, err := client.BuildRelayTx(clientUpdate, items)
 		require.NoError(t, err)
-		require.Len(t, txs, 1)
+		require.NotEmpty(t, txs.Data)
 	})
 
 	t.Run("timeout", func(t *testing.T) {
@@ -148,9 +148,9 @@ func TestBuildRelayTxs(t *testing.T) {
 			{Kind: v2.RelayKindTimeout, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
-		txs, err := client.BuildRelayTxs(clientUpdate, items)
+		txs, err := client.BuildRelayTx(clientUpdate, items)
 		require.NoError(t, err)
-		require.Len(t, txs, 1)
+		require.NotEmpty(t, txs.Data)
 	})
 
 	t.Run("unsupportedKind", func(t *testing.T) {
@@ -158,7 +158,7 @@ func TestBuildRelayTxs(t *testing.T) {
 			{Kind: v2.RelayKindUnknown, Packet: packet},
 		}
 
-		_, err := client.BuildRelayTxs(clientUpdate, items)
+		_, err := client.BuildRelayTx(clientUpdate, items)
 		require.Error(t, err)
 	})
 
@@ -170,12 +170,12 @@ func TestBuildRelayTxs(t *testing.T) {
 			{Kind: v2.RelayKindRecv, Packet: multiPayloadPacket, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
-		_, err := client.BuildRelayTxs(clientUpdate, items)
+		_, err := client.BuildRelayTx(clientUpdate, items)
 		require.ErrorContains(t, err, "only supports single-payload packets")
 	})
 }
 
-func TestBuildRelayTxsClientUpdates(t *testing.T) {
+func TestBuildRelayTxClientUpdates(t *testing.T) {
 	item := v2.PacketRelayItem{
 		Kind: v2.RelayKindRecv,
 		Packet: channeltypesv2.Packet{
@@ -196,12 +196,12 @@ func TestBuildRelayTxsClientUpdates(t *testing.T) {
 	}
 	builder := New(common.HexToAddress("0x1234"))
 
-	callsOf := func(t *testing.T, txs []v2.RelayTx) [][]byte {
+	callsOf := func(t *testing.T, txs v2.RelayTx) [][]byte {
 		t.Helper()
-		require.Len(t, txs, 1)
-		requireSelector(t, "multicall", txs[0].Data)
+		require.NotEmpty(t, txs.Data)
+		requireSelector(t, "multicall", txs.Data)
 
-		args, err := routerABI.Methods["multicall"].Inputs.Unpack(txs[0].Data[4:])
+		args, err := routerABI.Methods["multicall"].Inputs.Unpack(txs.Data[4:])
 		require.NoError(t, err)
 		require.Len(t, args, 1)
 
@@ -212,7 +212,7 @@ func TestBuildRelayTxsClientUpdates(t *testing.T) {
 	}
 
 	t.Run("no update needed", func(t *testing.T) {
-		txs, err := builder.BuildRelayTxs(v2.ClientUpdate{ClientID: "ethereum-0"}, []v2.PacketRelayItem{item})
+		txs, err := builder.BuildRelayTx(v2.ClientUpdate{ClientID: "ethereum-0"}, []v2.PacketRelayItem{item})
 		require.NoError(t, err)
 
 		calls := callsOf(t, txs)
@@ -220,31 +220,29 @@ func TestBuildRelayTxsClientUpdates(t *testing.T) {
 		requireSelector(t, "recvPacket", calls[0])
 	})
 
-	t.Run("intermediate updates precede packets in order", func(t *testing.T) {
-		update := v2.ClientUpdate{ClientID: "ethereum-0", StateProofs: [][]byte{{0xa1}, {0xa2}, {0xa3}}}
-
-		txs, err := builder.BuildRelayTxs(update, []v2.PacketRelayItem{item})
-		require.NoError(t, err)
-
-		calls := callsOf(t, txs)
-		require.Len(t, calls, 4)
-
-		for i, want := range update.StateProofs {
-			requireSelector(t, "updateClient", calls[i])
-
-			args, err := routerABI.Methods["updateClient"].Inputs.Unpack(calls[i][4:])
-			require.NoError(t, err)
-			require.Equal(t, "ethereum-0", args[0])
-			require.Equal(t, want, args[1])
-		}
-
-		requireSelector(t, "recvPacket", calls[3])
-	})
-
-	t.Run("empty update payload is rejected", func(t *testing.T) {
-		_, err := builder.BuildRelayTxs(
-			v2.ClientUpdate{ClientID: "ethereum-0", StateProofs: [][]byte{{0xa1}, {}}}, []v2.PacketRelayItem{item},
+	t.Run("final update precedes packets", func(t *testing.T) {
+		tx, err := builder.BuildRelayTx(
+			v2.ClientUpdate{ClientID: "ethereum-0", Proof: []byte{0xa1}},
+			[]v2.PacketRelayItem{item},
 		)
-		require.ErrorContains(t, err, "client update 1")
+		require.NoError(t, err)
+		calls := callsOf(t, tx)
+		require.Len(t, calls, 2)
+		requireSelector(t, "updateClient", calls[0])
+		args, err := routerABI.Methods["updateClient"].Inputs.Unpack(calls[0][4:])
+		require.NoError(t, err)
+		require.Equal(t, []byte{0xa1}, args[1])
+		requireSelector(t, "recvPacket", calls[1])
+	})
+	t.Run("client only checkpoint", func(t *testing.T) {
+		tx, err := builder.BuildRelayTx(v2.ClientUpdate{ClientID: "ethereum-0", Proof: []byte{1}}, nil)
+		require.NoError(t, err)
+		calls := callsOf(t, tx)
+		require.Len(t, calls, 1)
+		requireSelector(t, "updateClient", calls[0])
+	})
+	t.Run("empty transaction rejected", func(t *testing.T) {
+		_, err := builder.BuildRelayTx(v2.ClientUpdate{ClientID: "ethereum-0"}, nil)
+		require.ErrorContains(t, err, "empty relay transaction")
 	})
 }

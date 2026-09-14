@@ -452,3 +452,32 @@ func (db *SqliteDB) ListPackets(
 
 	return packets, nil
 }
+
+func (db *SqliteDB) GetClientUpdate(ctx context.Context, chainID, clientID string) (*PacketTx, error) {
+	row, err := db.repo.GetClientUpdate(ctx, chainID, clientID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &PacketTx{
+		Hash:           row.TxHash,
+		Time:           time.Unix(0, row.SubmittedAt).UTC(),
+		RelayerAddress: row.RelayerAddress,
+	}, nil
+}
+
+func (db *SqliteDB) SaveClientUpdate(ctx context.Context, chainID, clientID string, tx PacketTx) error {
+	return db.repo.SaveClientUpdate(ctx, reposqlite.SaveClientUpdateParams{
+		ChainID:        chainID,
+		ClientID:       clientID,
+		TxHash:         tx.Hash,
+		SubmittedAt:    tx.Time.UnixNano(),
+		RelayerAddress: tx.RelayerAddress,
+	})
+}
+
+func (db *SqliteDB) ClearClientUpdate(ctx context.Context, chainID, clientID string) error {
+	return db.repo.ClearClientUpdate(ctx, chainID, clientID)
+}

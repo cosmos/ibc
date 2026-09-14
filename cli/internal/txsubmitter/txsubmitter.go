@@ -18,7 +18,9 @@ import (
 // TxSubmitter signs and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
-	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
+	// beforeBroadcast, when non-nil, must durably record the signed transaction
+	// identity. Its failure prevents broadcast; a broadcast error may be ambiguous.
+	Submit(ctx context.Context, intent v2.TxIntent, beforeBroadcast func(*v2.Submission) error) (*v2.Submission, error)
 
 	// ShouldRetry reports whether a transaction submitted at sentAt is failed
 	// or has been pending past the implementation's retry expiry and should be
