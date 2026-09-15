@@ -92,6 +92,8 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	applyClearOnStart(cmd, &cfg)
+
 	otel.GlobalSetup(ctx, cfg.Observability, slog.Default())
 
 	app, err := bootstrap.BuildRelayer(cfg)
@@ -265,9 +267,7 @@ func optional[T comparable](value T) *T {
 	return &value
 }
 
-// applyClearOnStart lets the flag override relayer.clearOnStart only when the
-// operator passed it, since the flag's own default would otherwise mask a
-// configured false on every run.
+// applyClearOnStart optional --clear-on-start overrides the config
 func applyClearOnStart(cmd *cobra.Command, cfg *config.Config) {
 	if cmd.Flags().Changed(flagClearOnStart) {
 		cfg.Relayer.ClearOnStart = &flagRelayerClearOnStart

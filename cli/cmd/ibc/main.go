@@ -114,7 +114,7 @@ func init() {
 		BoolVar(&flagRelayerPacketsAll, "all", false, "follow every page and print the combined result")
 
 	cmdRelayerRun.Flags().
-		BoolVar(&flagRelayerClearOnStart, flagClearOnStart, true, "clear outstanding packets at startup, overriding relayer.clearOnStart")
+		BoolVar(&flagRelayerClearOnStart, flagClearOnStart, true, "clear outstanding packets at startup")
 
 	// Attestor commands
 	cmdAttestor.AddCommand(cmdAttestorRun, cmdAttestorInfo, cmdAttestorLatestHeight, cmdAttestorStateAttestation)

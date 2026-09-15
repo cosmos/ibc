@@ -9,23 +9,23 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
-// ClientParams is a client type's decoded params
-type ClientParams interface {
-	isClientParams()
-	Validate() error
-}
-
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
 	ClientTypeRemote      ClientType = "remote"
 )
 
-// ClientType the light client type.
-type ClientType string
-
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
+
+// ClientParams is a client type's decoded params
+type ClientParams interface {
+	isClientParams()
+	Validate() error
+}
+
+// ClientType the light client type.
+type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -43,12 +43,10 @@ type RelayerChainOverride struct {
 	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
-	Discovery          *DiscoveryConfig  `yaml:"discovery,omitempty"`
-}
 
-// DiscoveryConfig per-chain packet discovery settings.
-type DiscoveryConfig struct {
+	// ClearInterval overrides relayer.clearInterval for packets sourced from this chain.
 	ClearInterval *time.Duration `yaml:"clearInterval,omitempty"`
+
 	// AbandonUnrecoverablePackets stops re-probing packets whose send log the
 	// endpoint will not serve. They are remembered but never looked at again,
 	// so turning it back off recovers them against an archive endpoint.
@@ -173,26 +171,14 @@ func (c RelayerChainOverride) Validate() error {
 		return errPathf("packetBatchSize", "must be positive")
 	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
 		return errPathf("packetBatchTimeout", "must be positive")
+	case c.ClearInterval != nil && *c.ClearInterval <= 0:
+		return errPathf("clearInterval", "must be positive")
 	}
 
 	if c.EVM != nil {
 		if err := c.EVM.Validate(); err != nil {
 			return errPath("evm", err)
 		}
-	}
-
-	if c.Discovery != nil {
-		if err := c.Discovery.Validate(); err != nil {
-			return errPath("discovery", err)
-		}
-	}
-
-	return nil
-}
-
-func (c DiscoveryConfig) Validate() error {
-	if c.ClearInterval != nil && *c.ClearInterval <= 0 {
-		return errPathf("clearInterval", "must be positive")
 	}
 
 	return nil
@@ -355,18 +341,20 @@ func (c RelayerConfig) ClearOnStartEnabled() bool {
 	return c.ClearOnStart == nil || *c.ClearOnStart
 }
 
-// ClearIntervalFor resolves the clearing cadence for a chain, preferring its
-// discovery override.
+// ClearIntervalFor resolves the clearing cadence for a chain, preferring its chain override.
 func (c RelayerConfig) ClearIntervalFor(chainID string) time.Duration {
+	// per chain
 	override, ok := c.ChainOverride(chainID)
-	if ok && override.Discovery != nil && override.Discovery.ClearInterval != nil {
-		return *override.Discovery.ClearInterval
+	if ok && override.ClearInterval != nil {
+		return *override.ClearInterval
 	}
 
+	// global
 	if c.ClearInterval != nil {
 		return *c.ClearInterval
 	}
 
+	// fallback
 	return DefaultClearInterval
 }
 
@@ -375,8 +363,8 @@ func (c RelayerConfig) ClearIntervalFor(chainID string) time.Duration {
 // keeps them in the probe set until an endpoint serves them.
 func (c RelayerConfig) AbandonUnrecoverablePacketsFor(chainID string) bool {
 	override, ok := c.ChainOverride(chainID)
-	if ok && override.Discovery != nil && override.Discovery.AbandonUnrecoverablePackets != nil {
-		return *override.Discovery.AbandonUnrecoverablePackets
+	if ok && override.AbandonUnrecoverablePackets != nil {
+		return *override.AbandonUnrecoverablePackets
 	}
 
 	return false

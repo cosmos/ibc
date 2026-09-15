@@ -225,8 +225,8 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
-| `chainOverrides[].discovery.clearInterval` | `duration` | optional | Overrides `clearInterval` for packets sourced from this chain. |
-| `chainOverrides[].discovery.abandonUnrecoverablePackets` | `bool` | `false` | Stops re-probing packets whose send log the endpoint will not serve. |
+| `chainOverrides[].clearInterval` | `duration` | optional | Overrides `clearInterval` for packets sourced from this chain. |
+| `chainOverrides[].abandonUnrecoverablePackets` | `bool` | `false` | Stops re-probing packets whose send log the endpoint will not serve. |
 
 <!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
@@ -247,7 +247,7 @@ relayer:
         gasTipCapMultiplier: 1.1
 ```
 
-#### `discovery.abandonUnrecoverablePackets`
+#### `abandonUnrecoverablePackets`
 
 A packet whose commitment is still live but whose `SendPacket` log the endpoint will not serve cannot be relayed: the relayer has the sequence but not the packet data. By default those sequences stay in the probe set and every pass retries them, on the assumption that the log will eventually be served. On an endpoint that has permanently pruned its logs it never will, and the retries cost a `multicall` and an `eth_getLogs` per pass forever.
 

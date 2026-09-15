@@ -36,9 +36,8 @@ relayer:
       txSubmissionDelay: 2s
       packetBatchSize: 20
       packetBatchTimeout: 10s
-      discovery:
-        clearInterval: 15m
-        abandonUnrecoverablePackets: true
+      clearInterval: 15m
+      abandonUnrecoverablePackets: true
     - chainId: "8453"
   connections:
     - alias: "eth-base"

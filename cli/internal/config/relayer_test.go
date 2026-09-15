@@ -34,8 +34,9 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, 10*time.Minute, *config.Relayer.ClearInterval)
 		require.Len(t, config.Relayer.ChainOverrides, 2)
 		chain := config.Relayer.ChainOverrides[0]
-		require.NotNil(t, chain.Discovery)
-		assert.Equal(t, 15*time.Minute, *chain.Discovery.ClearInterval)
+		assert.Equal(t, 15*time.Minute, *chain.ClearInterval)
+		require.NotNil(t, chain.AbandonUnrecoverablePackets)
+		assert.True(t, *chain.AbandonUnrecoverablePackets)
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
@@ -204,12 +205,12 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: "relayer.clearInterval: must be positive",
 			},
 			{
-				name: "non-positive discovery clear interval",
+				name: "non-positive chain override clear interval",
 				patch: func(c *Config) {
 					interval := -time.Minute
-					c.Relayer.ChainOverrides[0].Discovery.ClearInterval = &interval
+					c.Relayer.ChainOverrides[0].ClearInterval = &interval
 				},
-				errContains: "relayer.chainOverrides[0].discovery.clearInterval: must be positive",
+				errContains: "relayer.chainOverrides[0].clearInterval: must be positive",
 			},
 			{
 				name: "negative tx submission delay",
@@ -486,9 +487,9 @@ func TestRelayerConfigClearIntervalFor(t *testing.T) {
 		chainID string
 		want    time.Duration
 	}{
-		"chain with a discovery override": {chainID: "1", want: 15 * time.Minute},
-		"chain without one":               {chainID: "8453", want: 10 * time.Minute},
-		"unconfigured chain":              {chainID: "999", want: 10 * time.Minute},
+		"chain with a clearInterval override": {chainID: "1", want: 15 * time.Minute},
+		"chain without one":                   {chainID: "8453", want: 10 * time.Minute},
+		"unconfigured chain":                  {chainID: "999", want: 10 * time.Minute},
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, tt.want, config.Relayer.ClearIntervalFor(tt.chainID))
