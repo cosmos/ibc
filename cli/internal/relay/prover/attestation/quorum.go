@@ -77,11 +77,7 @@ type quorumResponse struct {
 	err    error
 }
 
-// queryQuorum fans query out to every attestor concurrently, keeps only
-// responses matching the expected claim whose signature recovers over the
-// domain-tagged digest, requires
-// byte-equality of attestationData across kept responses, and requires
-// the number of distinct signers to reach threshold.
+// queryQuorum collects signatures from distinct signers over the expected claim.
 func queryQuorum(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -150,53 +146,38 @@ func queryOne(
 // reduceQuorum groups responses by their exact attestationData value
 // and returns the first value whose distinct signers reach threshold.
 func reduceQuorum(logger *slog.Logger, responses []quorumResponse, threshold int) (quorumResult, error) {
-	buckets := make(map[string][]quorumResponse)
-
+	var result quorumResult
+	seen := make(map[common.Address]bool)
 	for _, resp := range responses {
-		if resp.err != nil {
+		if resp.err != nil || seen[resp.signer] {
 			continue
 		}
-
-		buckets[string(resp.data)] = append(buckets[string(resp.data)], resp)
+		seen[resp.signer] = true
+		result.AttestationData = resp.data
+		result.Signatures = append(result.Signatures, resp.sig)
 	}
 
-	for _, bucket := range buckets {
-		seenSigners := make(map[common.Address]struct{})
-
-		var signatures [][]byte
-
-		for _, resp := range bucket {
-			if _, dup := seenSigners[resp.signer]; dup {
-				continue
-			}
-
-			seenSigners[resp.signer] = struct{}{}
-			signatures = append(signatures, resp.sig)
-		}
-
-		if len(signatures) >= threshold {
-			// quorum is met, but flag any attestors that did not contribute so a
-			// degrading set is visible before it drops below threshold
-			if len(signatures) < len(responses) {
-				logger.Warn(
-					"Attestation quorum met with some attestors excluded",
-					"signatures", len(signatures),
-					"attestors", len(responses),
-					"threshold", threshold,
-					"reasons", joinResponseErrors(responses),
-				)
-			} else {
-				logger.Debug("Attestation quorum met", "signatures", len(signatures), "threshold", threshold)
-			}
-
-			return quorumResult{AttestationData: bucket[0].data, Signatures: signatures}, nil
-		}
+	if len(result.Signatures) == 0 || len(result.Signatures) < threshold {
+		return quorumResult{}, errors.Errorf(
+			"quorum not met: got %d of %d required signatures from %d configured attestors (%s)",
+			len(result.Signatures), threshold, len(responses), joinResponseErrors(responses),
+		)
 	}
 
-	return quorumResult{}, errors.Errorf(
-		"quorum not met: no attestationData value reached %d required signatures from %d configured attestors (%s)",
-		threshold, len(responses), joinResponseErrors(responses),
-	)
+	if len(result.Signatures) < len(responses) {
+		// quorum is met, but flag any attestors that did not contribute so a
+		// degrading set is visible before it drops below threshold
+		logger.Warn(
+			"Attestation quorum met with some attestors excluded",
+			"signatures", len(result.Signatures),
+			"attestors", len(responses),
+			"threshold", threshold,
+			"reasons", joinResponseErrors(responses),
+		)
+	} else {
+		logger.Debug("Attestation quorum met", "signatures", len(result.Signatures), "threshold", threshold)
+	}
+	return result, nil
 }
 
 // joinResponseErrors summarizes why each non-contributing attestor was
@@ -212,7 +193,7 @@ func joinResponseErrors(responses []quorumResponse) string {
 	}
 
 	if len(msgs) == 0 {
-		return "no errors; excluded due to disagreeing data or duplicate signer"
+		return "no errors; excluded due to duplicate signer"
 	}
 
 	return strings.Join(msgs, "; ")
