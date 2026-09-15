@@ -197,19 +197,11 @@ func checkTrustingPeriod(state besu.ClientState, trusted besu.ConsensusState, ho
 	return nil
 }
 
-// Prepare produces one checkpoint or a complete batch, never an unbounded
-// sequence of updates. The target header is fetched once; a ready batch shares
-// its account/storage proof and consensus preimage.
-func (g *Generator) Prepare(
-	ctx context.Context,
-	target uint64,
-	kind v2.ProofKind,
-	packets []channeltypesv2.Packet,
-) (*v2.Preparation, error) {
-	slots, indices, err := packetSlots(kind, packets)
-	if err != nil {
-		return nil, err
-	}
+// StateProof returns the client updates that bring the light client to
+// target, one per updateClient call in submission order. Above the trusted
+// height each update is the furthest header the previous one's validators
+// accept, so the sequence is empty only when the client already stores target.
+func (g *Generator) StateProof(ctx context.Context, target uint64) ([][]byte, error) {
 	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
@@ -234,42 +226,59 @@ func (g *Generator) Prepare(
 		return nil, fmt.Errorf("target height %d exceeds host clock drift", target)
 	}
 
-	header := targetHeader
-	if target > state.LatestHeight {
-		header, err = g.nextHeader(ctx, state.LatestHeight, trusted, targetHeader)
+	if target <= state.LatestHeight {
+		snap, err := g.snapshotForHeader(ctx, targetHeader, nil)
 		if err != nil {
 			return nil, err
 		}
-	}
-	advance := header.Height != target
-	proofSlots := slots
-	if advance {
-		proofSlots = nil
-	}
-	snap, err := g.snapshotForHeader(ctx, header, proofSlots)
-	if err != nil {
-		return nil, err
-	}
-	var update []byte
-	if target <= state.LatestHeight {
-		update, err = g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, snap)
-	} else {
-		update, err = besu.EncodeUpdateClient(header.RLP, state.LatestHeight, trusted, snap.proof.AccountProof)
-		if err == nil {
-			g.store(header.Height, snap.consensus, false)
+		update, err := g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, snap)
+		if err != nil || update == nil {
+			return nil, err
 		}
+		return [][]byte{update}, nil
 	}
+
+	var updates [][]byte
+	trustedHeight := state.LatestHeight
+	for {
+		header, err := g.nextHeader(ctx, trustedHeight, trusted, targetHeader)
+		if err != nil {
+			return nil, err
+		}
+		snap, err := g.snapshotForHeader(ctx, header, nil)
+		if err != nil {
+			return nil, err
+		}
+		update, err := besu.EncodeUpdateClient(header.RLP, trustedHeight, trusted, snap.proof.AccountProof)
+		if err != nil {
+			return nil, fmt.Errorf("encoding update to height %d: %w", header.Height, err)
+		}
+		updates = append(updates, update)
+		if header.Height == target {
+			g.store(target, snap.consensus, false)
+			return updates, nil
+		}
+		trustedHeight, trusted = header.Height, snap.consensus
+	}
+}
+
+// PacketProofs proves each packet's claim against the router storage at
+// height, sharing one eth_getProof call across packets with the same slot.
+func (g *Generator) PacketProofs(
+	ctx context.Context,
+	height uint64,
+	kind v2.ProofKind,
+	packets []channeltypesv2.Packet,
+) ([][]byte, error) {
+	slots, indices, err := packetSlots(kind, packets)
 	if err != nil {
 		return nil, err
 	}
-	if advance {
-		return &v2.Preparation{Advance: update}, nil
-	}
-	proofs, err := packetProofs(snap, kind, packets, indices)
+	snap, err := g.snapshot(ctx, height, slots)
 	if err != nil {
 		return nil, err
 	}
-	return &v2.Preparation{Ready: &v2.BatchProofs{Update: update, PacketProofs: proofs}}, nil
+	return packetProofs(snap, kind, packets, indices)
 }
 
 // updateAtOrBelowTrusted handles a target the client may already store: no

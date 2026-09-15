@@ -74,11 +74,11 @@ type PacketRelayItem struct {
 	ProofHeight uint64
 }
 
-// ClientUpdate optionally updates a client before packet operations.
-// Intermediate checkpoints are separate confirmed transactions.
+// ClientUpdate the client updates applied in order to a destination client
+// before any packet operations in the same tx are processed.
 type ClientUpdate struct {
-	ClientID string
-	Proof    []byte
+	ClientID    string
+	StateProofs [][]byte
 }
 
 // RelayTx one transaction ready to submit, targeting To with calldata Data.

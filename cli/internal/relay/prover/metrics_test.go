@@ -59,14 +59,11 @@ func TestInstrumentation(t *testing.T) {
 		ctx := context.Background()
 		reader := setTestMetrics(t)
 		prover := mocks.NewMockProver(t)
-		prover.EXPECT().
-			Prepare(ctx, uint64(7), v2.ProofKindPacketCommitment, []channeltypesv2.Packet(nil)).
-			Return(nil, errors.New("proof unavailable")).
-			Once()
+		prover.EXPECT().StateProof(ctx, uint64(7)).Return(nil, errors.New("proof unavailable")).Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
-		proof, err := instrumented.Prepare(ctx, 7, v2.ProofKindPacketCommitment, nil)
+		proof, err := instrumented.StateProof(ctx, 7)
 
 		// ASSERT
 		require.ErrorContains(t, err, "proof unavailable")
@@ -76,9 +73,7 @@ func TestInstrumentation(t *testing.T) {
 		operation := requireFloat64Histogram(t, collected, "prover_operation")
 		require.Len(t, operation.DataPoints, 1)
 		assert.Equal(t, uint64(1), operation.DataPoints[0].Count)
-		base := operationAttributes("prepare", "error")
-		expectedAttributes := attribute.NewSet(
-			append(base.ToSlice(), otel.AttrProofKind.String("packet_commitment"))...)
+		expectedAttributes := operationAttributes("state_proof", "error")
 		assert.Equal(t, expectedAttributes.ToSlice(), operation.DataPoints[0].Attributes.ToSlice())
 	})
 
@@ -90,17 +85,17 @@ func TestInstrumentation(t *testing.T) {
 		packets := []channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}}
 		expectedProofs := [][]byte{{0x1}, {0x2}}
 		prover.EXPECT().
-			Prepare(ctx, uint64(9), v2.ProofKindPacketCommitment, packets).
-			Return(&v2.Preparation{Ready: &v2.BatchProofs{PacketProofs: expectedProofs}}, nil).
+			PacketProofs(ctx, uint64(9), v2.ProofKindPacketCommitment, packets).
+			Return(expectedProofs, nil).
 			Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
-		proofs, err := instrumented.Prepare(ctx, 9, v2.ProofKindPacketCommitment, packets)
+		proofs, err := instrumented.PacketProofs(ctx, 9, v2.ProofKindPacketCommitment, packets)
 
 		// ASSERT
 		require.NoError(t, err)
-		assert.Equal(t, expectedProofs, proofs.Ready.PacketProofs)
+		assert.Equal(t, expectedProofs, proofs)
 
 		collected := collectMetrics(ctx, t, reader)
 		expectedAttributes := attribute.NewSet(
@@ -116,7 +111,7 @@ func TestInstrumentation(t *testing.T) {
 		expectedOperationAttributes := attribute.NewSet(
 			append(expectedAttributes.ToSlice(),
 				otel.AttrResult.String("ok"),
-				otel.AttrOp.String("prepare"),
+				otel.AttrOp.String("packet_proofs"),
 			)...,
 		)
 		assert.Equal(t, expectedOperationAttributes.ToSlice(), operation.DataPoints[0].Attributes.ToSlice())

@@ -25,18 +25,25 @@ import (
 // Prover generates packet membership/non-membership proofs and state
 // proofs for one configured light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent Prepare call can work towards,
+	// LatestProvableHeight resolves the highest height a subsequent StateProof
+	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// Prepare returns either a confirmed-state checkpoint to advance first,
-	// or one snapshot containing the final update and packet proofs.
-	Prepare(
+	// StateProof proves the light client's counterparty state at height as
+	// one or more client updates applied in order within the same
+	// transaction. Empty when the client already stores that height.
+	StateProof(ctx context.Context, height uint64) ([][]byte, error)
+
+	// PacketProofs proves each packet's membership or non-membership at
+	// height, one proof per packet with indices aligned to packets. Returns
+	// an error if a proof cannot be generated for any packet
+	PacketProofs(
 		ctx context.Context,
 		height uint64,
 		kind v2.ProofKind,
 		packets []channeltypesv2.Packet,
-	) (*v2.Preparation, error)
+	) ([][]byte, error)
 }
 
 var (

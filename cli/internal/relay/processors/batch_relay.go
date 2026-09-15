@@ -66,9 +66,9 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 	}
 }
 
-// relayPackets prepares proofs for events at proofHeight, confirms any
-// client-only checkpoints the prover requires first, then submits one
-// transaction carrying the final client update and every packet.
+// relayPackets generates a state proof and per-packet proofs for events at
+// proofHeight, asks txBuilder for the resulting transaction, and submits it
+// via txSubmitter
 func relayPackets(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -89,67 +89,64 @@ func relayPackets(
 	logger = logger.With("kind", relayKind, "clientID", clientID, "proofHeight", proofHeight, "sequences", sequences)
 	logger.Debug("Relaying packets")
 
-	chainID := chainClient.ChainID()
-	unlock, err := lockClient(ctx, chainID, clientID)
+	stateProofs, err := prover.StateProof(ctx, proofHeight)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "generating state proof")
 	}
-	defer unlock()
 
 	packets := make([]channeltypesv2.Packet, len(events))
 	for i, event := range events {
 		packets[i] = event.Packet
 	}
-	submit := func(update []byte, items []v2.PacketRelayItem) (*v2.Submission, error) {
-		tx, err := txBuilder.BuildRelayTx(v2.ClientUpdate{ClientID: clientID, Proof: update}, items)
-		if err != nil {
-			return nil, errors.Wrap(err, "building relay tx")
-		}
 
-		waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
-		defer cancel()
-		if err := chainClient.WaitForChain(waitCtx); err != nil {
-			return nil, errors.Wrap(err, "waiting for chain")
-		}
-		return txSubmitter.Submit(ctx, v2.TxIntent{To: common.BytesToAddress(tx.To).Hex(), Data: tx.Data})
+	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets)
+	if err != nil {
+		return nil, errors.Wrap(err, "generating packet proofs")
 	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		prepared, err := prover.Prepare(ctx, proofHeight, proofKindFor(relayKind), packets)
-		if err != nil {
-			return nil, errors.Wrap(err, "preparing relay proofs")
-		}
-		if err := prepared.Validate(len(packets)); err != nil {
-			return nil, err
-		}
-		if prepared.Ready == nil {
-			// Prepare reads confirmed on-chain state again after the checkpoint lands.
-			sub, err := submit(prepared.Advance, nil)
-			if err != nil {
-				return nil, errors.Wrap(err, "submitting client checkpoint")
-			}
-			logger.Info("Submitted client checkpoint", "txHash", sub.TxHash)
-			if err := confirmClientUpdate(ctx, txSubmitter, *sub); err != nil {
-				return nil, err
-			}
-			continue
-		}
 
-		items := make([]v2.PacketRelayItem, len(events))
-		for i, event := range events {
-			items[i] = v2.PacketRelayItem{
-				Kind: relayKind, Packet: event.Packet, Acks: event.Acks,
-				Proof: prepared.Ready.PacketProofs[i], ProofHeight: proofHeight,
-			}
+	items := make([]v2.PacketRelayItem, len(events))
+	for i, event := range events {
+		items[i] = v2.PacketRelayItem{
+			Kind:        relayKind,
+			Packet:      event.Packet,
+			Acks:        event.Acks,
+			Proof:       packetProofs[i],
+			ProofHeight: proofHeight,
 		}
-		sub, err := submit(prepared.Ready.Update, items)
-		if err != nil {
-			return nil, errors.Wrap(err, "submitting relay tx")
-		}
-		logger.Info("Relayed packets", "txHash", sub.TxHash)
-		metrics.txSubmitted(ctx, chainID, clientID, sub.TxHash)
-		return sub, nil
 	}
+
+	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
+		ClientID:    clientID,
+		StateProofs: stateProofs,
+	}, items)
+	if err != nil {
+		return nil, errors.Wrap(err, "building relay tx")
+	}
+
+	if len(relayTxs) != 1 {
+		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
+	}
+
+	relayTx := relayTxs[0]
+
+	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
+	defer cancel()
+
+	if err = chainClient.WaitForChain(waitCtx); err != nil {
+		return nil, errors.Wrap(err, "waiting for chain")
+	}
+
+	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
+		To:   common.BytesToAddress(relayTx.To).Hex(),
+		Data: relayTx.Data,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "submitting relay tx")
+	}
+
+	logger.Info("Relayed packets", "txHash", submission.TxHash)
+
+	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
+
+	return submission, nil
 }

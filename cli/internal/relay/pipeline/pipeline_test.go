@@ -132,14 +132,11 @@ func mockRelay(
 
 	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
-	proofs := make([][]byte, len(events))
-	for i := range proofs {
-		proofs[i] = []byte{2}
-	}
-	mockProver.EXPECT().Prepare(mock.Anything, height, mock.Anything, mock.Anything).
-		Return(&v2.Preparation{Ready: &v2.BatchProofs{Update: []byte{1}, PacketProofs: proofs}}, nil).Once()
-	txBuilder.EXPECT().BuildRelayTx(mock.Anything, mock.Anything).
-		Return(v2.RelayTx{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}, nil).Once()
+	mockProver.EXPECT().StateProof(mock.Anything, height).Return([][]byte{{0x01}}, nil).Once()
+	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
+		Return(make([][]byte, len(events)), nil).Once()
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
+		Return([]v2.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
 }
 
 func sendPacketEvent(sequence uint64) v2.PacketEvent {

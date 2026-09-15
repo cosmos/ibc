@@ -13,11 +13,17 @@ option go_package = "github.com/cosmos/ibc/cli/api/v2/prover";
 // Every request names the light client it is scoped to, so one service can
 // serve many clients across many chains.
 service ProverService {
-  // LatestProvableHeight selects the target height and counterparty timestamp.
+  // LatestProvableHeight returns the highest height a subsequent StateProof
+  // and PacketProofs call sharing that height can currently succeed at, with
+  // that height's counterparty-chain timestamp.
   rpc LatestProvableHeight(LatestProvableHeightRequest) returns (LatestProvableHeightResponse) {}
-  // Prepare returns one client-only checkpoint or proofs for the entire batch.
-  rpc Prepare(PrepareRequest) returns (PrepareResponse) {}
 
+  // StateProof proves the light client's counterparty state at a height.
+  rpc StateProof(StateProofRequest) returns (StateProofResponse) {}
+
+  // PacketProofs proves each packet's membership or non-membership at a
+  // height, one proof per packet with indices aligned to the request.
+  rpc PacketProofs(PacketProofsRequest) returns (PacketProofsResponse) {}
 }
 
 // Client identifies one configured light client: the chain it lives on and its
@@ -41,31 +47,32 @@ message LatestProvableHeightResponse {
   uint64 timestamp = 2;
 }
 
-message PrepareRequest {
-  // The light client to prepare.
+message StateProofRequest {
+  // The light client this call is scoped to.
   Client client = 1;
-  // The target counterparty height.
+  // The counterparty height to prove at.
   uint64 height = 2;
-  // The claim required for every packet.
+}
+
+message StateProofResponse {
+  // The proof, opaque to the relayer and passed to the light client unchanged.
+  bytes proof = 1;
+}
+
+message PacketProofsRequest {
+  // The light client this call is scoped to.
+  Client client = 1;
+  // The counterparty height to prove at.
+  uint64 height = 2;
+  // Which commitment to prove for every packet in this request.
   ProofKind kind = 3;
-  // Packets in proof order.
+  // The packets to prove, all under the same kind and height.
   repeated Packet packets = 4;
 }
 
-message PrepareResponse {
-  // A checkpoint to confirm first, or a complete final batch.
-  oneof result {
-    // Confirm this client-only update before preparing again. No packets yet.
-    bytes advance = 1;
-    BatchProofs ready = 2;
-  }
-}
-
-message BatchProofs {
-  // Optional update, submitted in the same transaction as the packet calls.
-  bytes update = 1;
-  // One nonempty proof per requested packet, in request order.
-  repeated bytes packet_proofs = 2;
+message PacketProofsResponse {
+  // One proof per requested packet, in request order.
+  repeated bytes proofs = 1;
 }
 
 enum ProofKind {

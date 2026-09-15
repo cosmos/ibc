@@ -18,7 +18,7 @@ import (
 )
 
 // Generator implements prover.Prover for one configured
-// attestation light client: LatestProvableHeight/Prepare all
+// attestation light client: LatestProvableHeight/StateProof/PacketProofs all
 // query the same fixed attestor set with the same quorum threshold
 type Generator struct {
 	attestors         []attestor.Attestor
@@ -45,7 +45,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	return latestProvableHeight(ctx, g.logger, g.attestors, g.threshold, g.counterpartyChain)
 }
 
-func (g *Generator) stateProof(ctx context.Context, height uint64) ([]byte, error) {
+func (g *Generator) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
 	result, err := queryStateQuorum(ctx, g.logger, g.attestors, g.threshold, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying state attestation quorum")
@@ -69,10 +69,10 @@ func (g *Generator) stateProof(ctx context.Context, height uint64) ([]byte, erro
 		return nil, errors.Wrap(err, "encoding state attestation proof")
 	}
 
-	return proof, nil
+	return [][]byte{proof}, nil
 }
 
-func (g *Generator) packetProofs(
+func (g *Generator) PacketProofs(
 	ctx context.Context,
 	height uint64,
 	kind v2.ProofKind,
@@ -126,7 +126,7 @@ func (g *Generator) packetProofs(
 	}
 
 	// The attestor returns one shared proof blob covering every packet in the
-	// batch; Prepare's contract is one proof per input packet, so the same
+	// batch; PacketProofs' contract is one proof per input packet, so the same
 	// blob is returned len(packets) times.
 	proofs := make([][]byte, len(packets))
 	for i := range proofs {
@@ -147,21 +147,4 @@ func commitmentTypeOf(kind v2.ProofKind) (attestor.CommitmentType, error) {
 	default:
 		return 0, errors.Errorf("unsupported proof kind %v", kind)
 	}
-}
-
-func (g *Generator) Prepare(
-	ctx context.Context,
-	height uint64,
-	kind v2.ProofKind,
-	packets []channeltypesv2.Packet,
-) (*v2.Preparation, error) {
-	update, err := g.stateProof(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-	proofs, err := g.packetProofs(ctx, height, kind, packets)
-	if err != nil {
-		return nil, err
-	}
-	return &v2.Preparation{Ready: &v2.BatchProofs{Update: update, PacketProofs: proofs}}, nil
 }

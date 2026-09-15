@@ -105,24 +105,24 @@ func (_c *MockProver_LatestProvableHeight_Call) RunAndReturn(run func(ctx contex
 	return _c
 }
 
-// Prepare provides a mock function for the type MockProver
-func (_mock *MockProver) Prepare(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) (*v2.Preparation, error) {
+// PacketProofs provides a mock function for the type MockProver
+func (_mock *MockProver) PacketProofs(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error) {
 	ret := _mock.Called(ctx, height, kind, packets)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Prepare")
+		panic("no return value specified for PacketProofs")
 	}
 
-	var r0 *v2.Preparation
+	var r0 [][]byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) (*v2.Preparation, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) ([][]byte, error)); ok {
 		return returnFunc(ctx, height, kind, packets)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) *v2.Preparation); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) [][]byte); ok {
 		r0 = returnFunc(ctx, height, kind, packets)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*v2.Preparation)
+			r0 = ret.Get(0).([][]byte)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64, v2.ProofKind, []types.Packet) error); ok {
@@ -133,21 +133,21 @@ func (_mock *MockProver) Prepare(ctx context.Context, height uint64, kind v2.Pro
 	return r0, r1
 }
 
-// MockProver_Prepare_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Prepare'
-type MockProver_Prepare_Call struct {
+// MockProver_PacketProofs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PacketProofs'
+type MockProver_PacketProofs_Call struct {
 	*mock.Call
 }
 
-// Prepare is a helper method to define mock.On call
+// PacketProofs is a helper method to define mock.On call
 //   - ctx context.Context
 //   - height uint64
 //   - kind v2.ProofKind
 //   - packets []types.Packet
-func (_e *MockProver_Expecter) Prepare(ctx any, height any, kind any, packets any) *MockProver_Prepare_Call {
-	return &MockProver_Prepare_Call{Call: _e.mock.On("Prepare", ctx, height, kind, packets)}
+func (_e *MockProver_Expecter) PacketProofs(ctx any, height any, kind any, packets any) *MockProver_PacketProofs_Call {
+	return &MockProver_PacketProofs_Call{Call: _e.mock.On("PacketProofs", ctx, height, kind, packets)}
 }
 
-func (_c *MockProver_Prepare_Call) Run(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet)) *MockProver_Prepare_Call {
+func (_c *MockProver_PacketProofs_Call) Run(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet)) *MockProver_PacketProofs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -175,12 +175,80 @@ func (_c *MockProver_Prepare_Call) Run(run func(ctx context.Context, height uint
 	return _c
 }
 
-func (_c *MockProver_Prepare_Call) Return(preparation *v2.Preparation, err error) *MockProver_Prepare_Call {
-	_c.Call.Return(preparation, err)
+func (_c *MockProver_PacketProofs_Call) Return(bytess [][]byte, err error) *MockProver_PacketProofs_Call {
+	_c.Call.Return(bytess, err)
 	return _c
 }
 
-func (_c *MockProver_Prepare_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) (*v2.Preparation, error)) *MockProver_Prepare_Call {
+func (_c *MockProver_PacketProofs_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error)) *MockProver_PacketProofs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StateProof provides a mock function for the type MockProver
+func (_mock *MockProver) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
+	ret := _mock.Called(ctx, height)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StateProof")
+	}
+
+	var r0 [][]byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([][]byte, error)); ok {
+		return returnFunc(ctx, height)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) [][]byte); ok {
+		r0 = returnFunc(ctx, height)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([][]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
+		r1 = returnFunc(ctx, height)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockProver_StateProof_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StateProof'
+type MockProver_StateProof_Call struct {
+	*mock.Call
+}
+
+// StateProof is a helper method to define mock.On call
+//   - ctx context.Context
+//   - height uint64
+func (_e *MockProver_Expecter) StateProof(ctx any, height any) *MockProver_StateProof_Call {
+	return &MockProver_StateProof_Call{Call: _e.mock.On("StateProof", ctx, height)}
+}
+
+func (_c *MockProver_StateProof_Call) Run(run func(ctx context.Context, height uint64)) *MockProver_StateProof_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uint64
+		if args[1] != nil {
+			arg1 = args[1].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockProver_StateProof_Call) Return(bytes [][]byte, err error) *MockProver_StateProof_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockProver_StateProof_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([][]byte, error)) *MockProver_StateProof_Call {
 	_c.Call.Return(run)
 	return _c
 }

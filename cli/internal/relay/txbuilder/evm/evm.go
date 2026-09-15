@@ -53,31 +53,40 @@ func New(router common.Address) *TxBuilder {
 	return &TxBuilder{router: router}
 }
 
-// BuildRelayTx builds one client-only checkpoint or one final packet batch.
-func (c *TxBuilder) BuildRelayTx(clientUpdate v2.ClientUpdate, items []v2.PacketRelayItem) (v2.RelayTx, error) {
-	calls := make([][]byte, 0, len(items)+1)
-	if len(clientUpdate.Proof) > 0 {
-		call, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.Proof)
+// BuildRelayTxs packs every clientUpdate proof and every packetRelayItems
+// entry into a single ICS26Router.multicall transaction. EVM router calldata
+// has no meaningful size limit for the batch sizes the relayer forms, so this
+// always returns exactly one tx.
+func (c *TxBuilder) BuildRelayTxs(
+	clientUpdate v2.ClientUpdate,
+	packetRelayItems []v2.PacketRelayItem,
+) ([]v2.RelayTx, error) {
+	calls := make([][]byte, 0, len(clientUpdate.StateProofs)+len(packetRelayItems))
+
+	for _, proof := range clientUpdate.StateProofs {
+		updateCall, err := packUpdateClient(clientUpdate.ClientID, proof)
 		if err != nil {
-			return v2.RelayTx{}, err
+			return nil, err
 		}
-		calls = append(calls, call)
+
+		calls = append(calls, updateCall)
 	}
-	for _, item := range items {
+
+	for _, item := range packetRelayItems {
 		call, err := packRelayItem(item)
 		if err != nil {
-			return v2.RelayTx{}, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
+			return nil, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
 		}
+
 		calls = append(calls, call)
 	}
-	if len(calls) == 0 {
-		return v2.RelayTx{}, errors.New("empty relay transaction")
-	}
-	data, err := packMulticall(calls)
+
+	tx, err := packMulticall(calls)
 	if err != nil {
-		return v2.RelayTx{}, err
+		return nil, err
 	}
-	return v2.RelayTx{To: c.router.Bytes(), Data: data}, nil
+
+	return []v2.RelayTx{{To: c.router.Bytes(), Data: tx}}, nil
 }
 
 func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
@@ -114,7 +123,7 @@ func height(h uint64) ics26router.IICS02ClientMsgsHeight {
 }
 
 // packUpdateClient packs a call to updateClient(clientId, updateMsg), where
-// updateMsg is the already-encoded proof produced by prover.Prover.Prepare.
+// updateMsg is the already-encoded proof produced by prover.Prover.StateProof.
 func packUpdateClient(clientID string, updateMsg []byte) ([]byte, error) {
 	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return router.UpdateClient(opts, clientID, updateMsg)

@@ -24,7 +24,10 @@ func TestProverRequestTimeout(t *testing.T) {
 	_, _, err := prover.LatestProvableHeight(ctx)
 	require.NoError(t, err)
 
-	_, err = prover.Prepare(ctx, 1, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{{Sequence: 1}})
+	_, err = prover.StateProof(ctx, 1)
+	require.NoError(t, err)
+
+	_, err = prover.PacketProofs(ctx, 1, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{{Sequence: 1}})
 	require.NoError(t, err)
 }
 
@@ -40,16 +43,20 @@ func (c timeoutProverClient) LatestProvableHeight(
 	return connect.NewResponse(&proverv2.LatestProvableHeightResponse{}), nil
 }
 
-func (c timeoutProverClient) Prepare(
+func (c timeoutProverClient) StateProof(
 	ctx context.Context,
-	_ *connect.Request[proverv2.PrepareRequest],
-) (*connect.Response[proverv2.PrepareResponse], error) {
+	_ *connect.Request[proverv2.StateProofRequest],
+) (*connect.Response[proverv2.StateProofResponse], error) {
 	c.requireDeadline(ctx)
-	return connect.NewResponse(
-		&proverv2.PrepareResponse{
-			Result: &proverv2.PrepareResponse_Ready{Ready: &proverv2.BatchProofs{PacketProofs: [][]byte{{1}}}},
-		},
-	), nil
+	return connect.NewResponse(&proverv2.StateProofResponse{}), nil
+}
+
+func (c timeoutProverClient) PacketProofs(
+	ctx context.Context,
+	_ *connect.Request[proverv2.PacketProofsRequest],
+) (*connect.Response[proverv2.PacketProofsResponse], error) {
+	c.requireDeadline(ctx)
+	return connect.NewResponse(&proverv2.PacketProofsResponse{Proofs: [][]byte{{0x1}}}), nil
 }
 
 func (c timeoutProverClient) requireDeadline(ctx context.Context) {
