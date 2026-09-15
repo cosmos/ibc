@@ -67,7 +67,7 @@ func TestQueryQuorum(t *testing.T) {
 		require.ErrorContains(t, err, "attested data does not match expected claim")
 	})
 
-	t.Run("validQuorumWinsEvenWhenWrongClaimAlsoHasQuorum", func(t *testing.T) {
+	t.Run("validQuorumWithWrongClaimQuorum", func(t *testing.T) {
 		attestors := []attestor.Attestor{
 			signedAttestor(t, "wrong1", []byte("wrong claim")),
 			signedAttestor(t, "wrong2", []byte("wrong claim")),
@@ -105,10 +105,6 @@ func TestQueryQuorum(t *testing.T) {
 	})
 
 	t.Run("majorityQuorumMetDespiteFirstAttestorDisagreeing", func(t *testing.T) {
-		// a1 answers first (by configured order) with a stale/wrong claim; a2
-		// and a3 agree with each other and alone meet the threshold. Quorum
-		// must be reduced by grouping on value, not by anchoring to whichever
-		// response happens to come first.
 		attestors := []attestor.Attestor{
 			signedAttestor(t, "a1", []byte("stale claim")),
 			signedAttestor(t, "a2", data),
