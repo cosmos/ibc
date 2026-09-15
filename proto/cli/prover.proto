@@ -62,12 +62,10 @@ message PrepareResponse {
 }
 
 message BatchProofs {
-  // Optional update. Atomic with packet calls unless checkpoint is true.
+  // Optional update, submitted in the same transaction as the packet calls.
   bytes update = 1;
   // One nonempty proof per requested packet, in request order.
   repeated bytes packet_proofs = 2;
-  // Confirm the update separately before submitting these packet proofs.
-  bool checkpoint = 3;
 }
 
 enum ProofKind {

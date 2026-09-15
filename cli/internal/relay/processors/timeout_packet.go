@@ -115,7 +115,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 	}
 
 	submission, err := relayPackets(
-		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter, p.storage,
+		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
 		p.route.SourceClientID, v2.RelayKindTimeout,
 		proofHeight, events,
 	)

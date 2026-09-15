@@ -44,7 +44,6 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
-		testClientUpdateJournal(t, db)
 		testListPackets(t, db)
 
 		// Close DB for a subsequent test
@@ -84,7 +83,6 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
-		testClientUpdateJournal(t, db)
 		testListPackets(t, db)
 	})
 
@@ -111,7 +109,6 @@ func TestStore(t *testing.T) {
 
 		// ACT + ASSERT
 		testRepoReadWrite(t, db)
-		testClientUpdateJournal(t, db)
 		testListPackets(t, db)
 	})
 }

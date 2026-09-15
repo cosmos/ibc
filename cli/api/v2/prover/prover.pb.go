@@ -392,12 +392,10 @@ func (*PrepareResponse_Ready) isPrepareResponse_Result() {}
 
 type BatchProofs struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Optional update. Atomic with packet calls unless checkpoint is true.
+	// Optional update, submitted in the same transaction as the packet calls.
 	Update []byte `protobuf:"bytes,1,opt,name=update,proto3" json:"update,omitempty"`
 	// One nonempty proof per requested packet, in request order.
-	PacketProofs [][]byte `protobuf:"bytes,2,rep,name=packet_proofs,json=packetProofs,proto3" json:"packet_proofs,omitempty"`
-	// Confirm the update separately before submitting these packet proofs.
-	Checkpoint    bool `protobuf:"varint,3,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	PacketProofs  [][]byte `protobuf:"bytes,2,rep,name=packet_proofs,json=packetProofs,proto3" json:"packet_proofs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -444,13 +442,6 @@ func (x *BatchProofs) GetPacketProofs() [][]byte {
 		return x.PacketProofs
 	}
 	return nil
-}
-
-func (x *BatchProofs) GetCheckpoint() bool {
-	if x != nil {
-		return x.Checkpoint
-	}
-	return false
 }
 
 type Packet struct {
@@ -636,13 +627,10 @@ const file_prover_proto_rawDesc = "" +
 	"\x0fPrepareResponse\x12\x1a\n" +
 	"\aadvance\x18\x01 \x01(\fH\x00R\aadvance\x122\n" +
 	"\x05ready\x18\x02 \x01(\v2\x1a.ibc.v2.prover.BatchProofsH\x00R\x05readyB\b\n" +
-	"\x06result\"j\n" +
+	"\x06result\"J\n" +
 	"\vBatchProofs\x12\x16\n" +
 	"\x06update\x18\x01 \x01(\fR\x06update\x12#\n" +
-	"\rpacket_proofs\x18\x02 \x03(\fR\fpacketProofs\x12\x1e\n" +
-	"\n" +
-	"checkpoint\x18\x03 \x01(\bR\n" +
-	"checkpoint\"\xd9\x01\n" +
+	"\rpacket_proofs\x18\x02 \x03(\fR\fpacketProofs\"\xd9\x01\n" +
 	"\x06Packet\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\x04R\bsequence\x12#\n" +
 	"\rsource_client\x18\x02 \x01(\tR\fsourceClient\x12-\n" +

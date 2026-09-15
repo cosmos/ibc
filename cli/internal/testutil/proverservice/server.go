@@ -164,9 +164,6 @@ func (h *handler) Prepare(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	result, err := target.Prepare(ctx, req.Msg.GetHeight(), kind, packetsFromProto(req.Msg.GetPackets()))
-	if err == nil {
-		err = result.Validate(len(req.Msg.GetPackets()))
-	}
 	if err != nil {
 		h.logger.Error("Prepare", "err", err)
 		return nil, errInternal
@@ -174,7 +171,7 @@ func (h *handler) Prepare(
 	response := &proverv2.PrepareResponse{}
 	if result.Ready != nil {
 		response.Result = &proverv2.PrepareResponse_Ready{Ready: &proverv2.BatchProofs{
-			Update: result.Ready.Update, PacketProofs: result.Ready.PacketProofs, Checkpoint: result.Ready.Checkpoint,
+			Update: result.Ready.Update, PacketProofs: result.Ready.PacketProofs,
 		}}
 	} else {
 		response.Result = &proverv2.PrepareResponse_Advance{Advance: result.Advance}

@@ -4,7 +4,6 @@ package processors
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -14,7 +13,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
-	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -68,8 +66,9 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 	}
 }
 
-// relayPackets confirms any client-only checkpoints before submitting packets.
-// Only the final packet transaction is returned to packet status tracking.
+// relayPackets prepares proofs for events at proofHeight, confirms any
+// client-only checkpoints the prover requires first, then submits one
+// transaction carrying the final client update and every packet.
 func relayPackets(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -77,7 +76,6 @@ func relayPackets(
 	prover prover.Prover,
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
-	storage TxStorage,
 	clientID string,
 	relayKind v2.RelayKind,
 	proofHeight uint64,
@@ -97,25 +95,12 @@ func relayPackets(
 		return nil, err
 	}
 	defer unlock()
-	var pending *store.PacketTx
-	if err := storage.Transact(ctx, func(repo store.Repository) error {
-		var err error
-		pending, err = repo.GetClientUpdate(ctx, chainID, clientID)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-	if pending != nil {
-		if err := confirmClientUpdate(ctx, storage, txSubmitter, chainID, clientID, *pending); err != nil {
-			return nil, err
-		}
-	}
 
 	packets := make([]channeltypesv2.Packet, len(events))
 	for i, event := range events {
 		packets[i] = event.Packet
 	}
-	submit := func(update []byte, items []v2.PacketRelayItem, checkpoint bool) (*v2.Submission, error) {
+	submit := func(update []byte, items []v2.PacketRelayItem) (*v2.Submission, error) {
 		tx, err := txBuilder.BuildRelayTx(v2.ClientUpdate{ClientID: clientID, Proof: update}, items)
 		if err != nil {
 			return nil, errors.Wrap(err, "building relay tx")
@@ -123,44 +108,10 @@ func relayPackets(
 
 		waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
 		defer cancel()
-		if waitErr := chainClient.WaitForChain(waitCtx); waitErr != nil {
-			return nil, errors.Wrap(waitErr, "waiting for chain")
+		if err := chainClient.WaitForChain(waitCtx); err != nil {
+			return nil, errors.Wrap(err, "waiting for chain")
 		}
-		var record func(*v2.Submission) error
-		if checkpoint {
-			record = func(sub *v2.Submission) error {
-				return storage.Transact(ctx, func(repo store.Repository) error {
-					return repo.SaveClientUpdate(ctx, chainID, clientID, store.PacketTx{
-						Hash: sub.TxHash, Time: sub.SubmittedAt, RelayerAddress: sub.RelayerAddress,
-					})
-				})
-			}
-		}
-		sub, err := txSubmitter.Submit(ctx, v2.TxIntent{To: common.BytesToAddress(tx.To).Hex(), Data: tx.Data}, record)
-		if checkpoint && errors.Is(err, v2.ErrTxRejected) {
-			if clearErr := storage.Transact(ctx, func(repo store.Repository) error {
-				return repo.ClearClientUpdate(ctx, chainID, clientID)
-			}); clearErr != nil {
-				return nil, fmt.Errorf("%w; clearing rejected checkpoint: %w", err, clearErr)
-			}
-		}
-		return sub, err
-	}
-	submitPackets := func(ready *v2.BatchProofs, update []byte) (*v2.Submission, error) {
-		items := make([]v2.PacketRelayItem, len(events))
-		for i, event := range events {
-			items[i] = v2.PacketRelayItem{
-				Kind: relayKind, Packet: event.Packet, Acks: event.Acks,
-				Proof: ready.PacketProofs[i], ProofHeight: proofHeight,
-			}
-		}
-		sub, err := submit(update, items, false)
-		if err != nil {
-			return nil, errors.Wrap(err, "submitting relay tx")
-		}
-		logger.Info("Submitted packet relay", "txHash", sub.TxHash)
-		metrics.txSubmitted(ctx, chainID, clientID, sub.TxHash)
-		return sub, nil
+		return txSubmitter.Submit(ctx, v2.TxIntent{To: common.BytesToAddress(tx.To).Hex(), Data: tx.Data})
 	}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -170,34 +121,35 @@ func relayPackets(
 		if err != nil {
 			return nil, errors.Wrap(err, "preparing relay proofs")
 		}
-		if validationErr := prepared.Validate(len(packets)); validationErr != nil {
-			return nil, validationErr
-		}
-		update := prepared.Advance
-		if ready := prepared.Ready; ready != nil {
-			if !ready.Checkpoint {
-				return submitPackets(ready, ready.Update)
-			}
-			// Independently applicable updates are always confirmed first. Gas
-			// estimation errors cannot reliably distinguish size from a revert.
-			update = ready.Update
-		}
-		sub, err := submit(update, nil, true)
-		if err != nil {
-			return nil, errors.Wrap(err, "submitting client checkpoint")
-		}
-		logger.Info("Submitted client checkpoint", "txHash", sub.TxHash)
-		if err := confirmClientUpdate(ctx, storage, txSubmitter, chainID, clientID, store.PacketTx{
-			Hash: sub.TxHash, Time: sub.SubmittedAt, RelayerAddress: sub.RelayerAddress,
-		}); err != nil {
+		if err := prepared.Validate(len(packets)); err != nil {
 			return nil, err
 		}
-		if prepared.Ready != nil {
-			// The final checkpoint installed this batch's snapshot. Reuse its
-			// packet proofs without another header/account/storage RPC round.
-			return submitPackets(prepared.Ready, nil)
+		if prepared.Ready == nil {
+			// Prepare reads confirmed on-chain state again after the checkpoint lands.
+			sub, err := submit(prepared.Advance, nil)
+			if err != nil {
+				return nil, errors.Wrap(err, "submitting client checkpoint")
+			}
+			logger.Info("Submitted client checkpoint", "txHash", sub.TxHash)
+			if err := confirmClientUpdate(ctx, txSubmitter, *sub); err != nil {
+				return nil, err
+			}
+			continue
 		}
-		// Prepare reads confirmed on-chain state again. Unconfirmed cache entries
-		// never become trusted merely because submission succeeded.
+
+		items := make([]v2.PacketRelayItem, len(events))
+		for i, event := range events {
+			items[i] = v2.PacketRelayItem{
+				Kind: relayKind, Packet: event.Packet, Acks: event.Acks,
+				Proof: prepared.Ready.PacketProofs[i], ProofHeight: proofHeight,
+			}
+		}
+		sub, err := submit(prepared.Ready.Update, items)
+		if err != nil {
+			return nil, errors.Wrap(err, "submitting relay tx")
+		}
+		logger.Info("Relayed packets", "txHash", sub.TxHash)
+		metrics.txSubmitted(ctx, chainID, clientID, sub.TxHash)
+		return sub, nil
 	}
 }

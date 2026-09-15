@@ -279,16 +279,6 @@ func TestWholeSeconds(t *testing.T) {
 	require.ErrorContains(t, err, "negative")
 }
 
-func TestRejectFlags(t *testing.T) {
-	flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
-	flags.Uint8("threshold", 1, "")
-	flags.StringSlice("attestors", nil, "")
-	require.NoError(t, flags.Parse([]string{"--threshold=2"}))
-
-	require.NoError(t, rejectFlags(flags, deploy.ClientTypeBesuQBFT, "attestors"))
-	require.ErrorContains(t, rejectFlags(flags, deploy.ClientTypeBesuQBFT, "attestors", "threshold"), "--threshold")
-}
-
 func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) {
 	previousDir := flagDeployManifestDir
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift

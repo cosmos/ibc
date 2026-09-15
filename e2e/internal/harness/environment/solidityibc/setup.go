@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
@@ -704,7 +705,7 @@ func (s *Setup) verifyBesuQBFTClient(
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query client state: %w", clientID, err)
 	}
-	if err := validateBesuClientState(raw); err != nil {
+	if _, err := besu.DecodeClientState(raw); err != nil {
 		return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 	}
 	return Client{ID: clientID, Address: registered, CounterpartyClientID: counterpartyClientID}, nil

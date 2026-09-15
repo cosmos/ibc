@@ -541,30 +541,22 @@ Returns one client-only checkpoint or proofs for the entire batch.
 
 Exactly one result is present. An `advance` result must make durable progress
 towards the requested height. The relayer submits it without packet calls, waits
-for successful confirmation, then prepares again from confirmed state. It journals
-the signed transaction hash before broadcast and recovers pending submissions on
-restart. No packet is marked received, acknowledged or timed out by a checkpoint.
+for it to confirm, then prepares again from confirmed state. No packet is marked
+received, acknowledged or timed out by a checkpoint.
 
 <!-- GEN:api:msg:BatchProofs START -->
 
 | Field | Type | Description |
 |---|---|---|
-| `update` | `bytes` | Optional update. Atomic with packet calls unless `checkpoint` is true. |
+| `update` | `bytes` | Optional update, submitted in the same transaction as the packet calls. |
 | `packet_proofs` | `bytes[]` | One nonempty proof per requested packet, in request order. |
-| `checkpoint` | `bool` | Confirm the `update` separately before submitting these packet proofs. |
 
 <!-- [prover.proto:L64](proto/cli/prover.proto#L64) -->
 
 <!-- GEN:api:msg:BatchProofs END -->
 
-A `ready` result describes one snapshot at the requested height. When
-`checkpoint` is true, the relayer always confirms the update in its own
-transaction first, then submits the same packet proofs without another update.
-It does not attempt a combined transaction or classify gas-estimation errors.
-On retry or restart, the prover must support preparing against the confirmed
-state without requesting that same update again. With `checkpoint=false`, the
-update and packet calls remain atomic. Attestation provers use atomic updates;
-QBFT provers use separate checkpoints.
+A `ready` result describes one snapshot at the requested height. The relayer
+submits the update, when present, and every packet call in one transaction.
 
 The split state/packet RPCs have been removed. Remote services must implement
 `Prepare`; there is no legacy fallback.
@@ -577,7 +569,7 @@ The split state/packet RPCs have been removed. Remote services must implement
 | `PROOF_KIND_ACKNOWLEDGEMENT` | The packet was received and acknowledged. Proven to acknowledge it. |
 | `PROOF_KIND_RECEIPT_ABSENCE` | The packet was never received. Proven to time it out. |
 
-<!-- [prover.proto:L73](proto/cli/prover.proto#L73) -->
+<!-- [prover.proto:L71](proto/cli/prover.proto#L71) -->
 
 <!-- GEN:api:enum:ProofKind END -->
 
@@ -595,7 +587,7 @@ The packet a proof is requested for.
 | `timeout_timestamp` | `uint64` | When the packet stops being receivable, in seconds. |
 | `payloads` | `Payload[]` | The packet's application payloads. |
 
-<!-- [prover.proto:L83](proto/cli/prover.proto#L83) -->
+<!-- [prover.proto:L81](proto/cli/prover.proto#L81) -->
 
 <!-- GEN:api:msg:Packet END -->
 
@@ -609,7 +601,7 @@ The packet a proof is requested for.
 | `encoding` | `string` | How `value` is encoded. |
 | `value` | `bytes` | The application data. |
 
-<!-- [prover.proto:L96](proto/cli/prover.proto#L96) -->
+<!-- [prover.proto:L94](proto/cli/prover.proto#L94) -->
 
 <!-- GEN:api:msg:Payload END -->
 

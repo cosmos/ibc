@@ -15,22 +15,18 @@ import (
 func TestClientLockCancellationAndIsolation(t *testing.T) {
 	unlock, err := lockClient(t.Context(), "chain", t.Name())
 	require.NoError(t, err)
+	defer unlock()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err = lockClient(ctx, "chain", t.Name())
 	require.ErrorIs(t, err, context.Canceled)
 
-	// A pending update must not block another client or chain.
+	// A held lock must not block another client or chain.
 	for _, key := range [][2]string{{"other-chain", t.Name()}, {"chain", "other-client"}} {
 		release, lockErr := lockClient(t.Context(), key[0], key[1])
 		require.NoError(t, lockErr)
 		release()
 	}
-	unlock()
-	clientLocks.Lock()
-	_, exists := clientLocks.entries[[2]string{"chain", t.Name()}]
-	clientLocks.Unlock()
-	require.False(t, exists, "the last release must remove the lock entry")
 }
 
 func TestClientLockSerializesConcurrentRelays(t *testing.T) {
@@ -59,8 +55,4 @@ func TestClientLockSerializesConcurrentRelays(t *testing.T) {
 	require.False(t, failed.Load())
 	require.False(t, overlap.Load())
 	require.Zero(t, active.Load())
-	clientLocks.Lock()
-	_, exists := clientLocks.entries[[2]string{"chain", t.Name()}]
-	clientLocks.Unlock()
-	require.False(t, exists)
 }

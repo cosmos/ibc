@@ -184,24 +184,27 @@ func (h *Header) decodeExtraData() error {
 	return nil
 }
 
-// ValidateValidators rejects empty sets, the zero address and duplicates, as
-// the light client constructor and header parser do.
+// ValidateValidators rejects empty sets, the zero address, duplicates and
+// unsorted sets, as the light client's _validateValidators does. Besu writes
+// validator sets in ascending address order.
 func ValidateValidators(validators []common.Address) error {
 	if len(validators) == 0 {
 		return errors.New("empty validator set")
 	}
 
-	seen := make(map[common.Address]struct{}, len(validators))
-	for _, validator := range validators {
+	for i, validator := range validators {
 		if validator == (common.Address{}) {
 			return errors.New("zero validator address")
 		}
 
-		if _, dup := seen[validator]; dup {
-			return fmt.Errorf("duplicate validator %s", validator)
+		if i > 0 {
+			switch validator.Cmp(validators[i-1]) {
+			case 0:
+				return fmt.Errorf("duplicate validator %s", validator)
+			case -1:
+				return fmt.Errorf("validator %s is out of order", validator)
+			}
 		}
-
-		seen[validator] = struct{}{}
 	}
 
 	return nil
@@ -287,10 +290,5 @@ func RecoverSealSigner(digest common.Hash, seal []byte) (common.Address, error) 
 		return common.Address{}, fmt.Errorf("%w: %w", ErrInvalidSeal, err)
 	}
 
-	signer := crypto.PubkeyToAddress(*pub)
-	if signer == (common.Address{}) {
-		return common.Address{}, fmt.Errorf("%w: recovered the zero address", ErrInvalidSeal)
-	}
-
-	return signer, nil
+	return crypto.PubkeyToAddress(*pub), nil
 }

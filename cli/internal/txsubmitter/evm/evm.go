@@ -5,7 +5,6 @@ package evm
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"math/big"
 	"sync"
@@ -115,11 +114,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	return submitter, nil
 }
 
-func (c *TxSubmitter) Submit(
-	ctx context.Context,
-	intent v2.TxIntent,
-	beforeBroadcast func(*v2.Submission) error,
-) (*v2.Submission, error) {
+func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -146,20 +141,7 @@ func (c *TxSubmitter) Submit(
 		return nil, errors.Wrap(err, "attaching signature")
 	}
 
-	submission := &v2.Submission{
-		TxHash:         signedTx.Hash().String(),
-		SubmittedAt:    time.Now().UTC(),
-		RelayerAddress: c.address.String(),
-	}
-	if beforeBroadcast != nil {
-		if err := beforeBroadcast(submission); err != nil {
-			return nil, errors.Wrap(err, "recording signed tx before broadcast")
-		}
-	}
 	if err := c.eth.SendTransaction(ctx, signedTx); err != nil {
-		if isRejectedBroadcast(err) {
-			err = fmt.Errorf("%w: %w", v2.ErrTxRejected, err)
-		}
 		return nil, errors.Wrapf(err, "sending tx %s", signedTx.Hash())
 	}
 
@@ -167,7 +149,11 @@ func (c *TxSubmitter) Submit(
 	c.lastSubmission = time.Now()
 	c.logger.Info("Submitted tx", "txHash", signedTx.Hash(), "to", intent.To)
 
-	return submission, nil
+	return &v2.Submission{
+		TxHash:         signedTx.Hash().String(),
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: c.address.String(),
+	}, nil
 }
 
 func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Transaction, error) {
@@ -210,9 +196,6 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 		return nil, errors.Wrap(err, "estimating gas")
 	}
 
-	if head.GasLimit > 0 && gasLimit > head.GasLimit {
-		return nil, errors.Errorf("estimated gas %d exceeds block gas limit %d", gasLimit, head.GasLimit)
-	}
 	nonce, err := c.eth.PendingNonceAt(ctx, c.address)
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting pending nonce for %s", c.address)

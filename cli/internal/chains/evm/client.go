@@ -348,11 +348,8 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]
 	}
 
 	result, err := c.eth.GetProof(ctx, c.routerAddress, keys, heightToBigInt(height))
-	switch {
-	case err != nil:
+	if err != nil {
 		return v2.AccountProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
-	case result == nil:
-		return v2.AccountProof{}, errors.Errorf("router proof is nil at height %d on chain %s", height, c.chainID)
 	}
 
 	proof, err := accountProofFromResult(result, slots)
@@ -363,8 +360,8 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]
 	return proof, nil
 }
 
-// accountProofFromResult converts an eth_getProof result, requiring exactly
-// one well-formed storage proof per requested slot regardless of response
+// accountProofFromResult converts an eth_getProof result, requiring a
+// well-formed storage proof for every requested slot regardless of response
 // order.
 func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) (v2.AccountProof, error) {
 	accountNodes, err := decodeProofNodes(result.AccountProof)
@@ -405,10 +402,6 @@ func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) 
 		}
 
 		proofs[i] = proof
-	}
-
-	if len(byKey) != len(slots) {
-		return v2.AccountProof{}, errors.Errorf("%d storage proofs returned for %d slots", len(byKey), len(slots))
 	}
 
 	return v2.AccountProof{

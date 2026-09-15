@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -81,8 +82,11 @@ func (b *Builder) SetTimestamp(timestamp uint64) *Builder {
 	return b
 }
 
+// SetValidators writes validators in ascending address order, as Besu does.
 func (b *Builder) SetValidators(validators []common.Address) *Builder {
-	b.extraItems[extraIdxValidators] = mustRLP(validators)
+	sorted := slices.Clone(validators)
+	slices.SortFunc(sorted, func(a, b common.Address) int { return a.Cmp(b) })
+	b.extraItems[extraIdxValidators] = mustRLP(sorted)
 	return b
 }
 

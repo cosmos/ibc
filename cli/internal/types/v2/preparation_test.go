@@ -24,8 +24,6 @@ func TestPreparationValidate(t *testing.T) {
 		{name: "missing proof", preparation: &Preparation{Ready: &BatchProofs{}}, count: 1},
 		{name: "extra proof", preparation: &Preparation{Ready: &BatchProofs{PacketProofs: [][]byte{{1}}}}},
 		{name: "empty proof", preparation: &Preparation{Ready: &BatchProofs{PacketProofs: [][]byte{nil}}}, count: 1},
-		{name: "checkpoint without update", preparation: &Preparation{Ready: &BatchProofs{Checkpoint: true}}},
-		{name: "checkpoint", preparation: &Preparation{Ready: &BatchProofs{Update: []byte{1}, Checkpoint: true}}, valid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.preparation.Validate(tc.count)

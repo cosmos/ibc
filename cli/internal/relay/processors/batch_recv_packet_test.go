@@ -112,14 +112,11 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		Return(v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().
-		Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-		Return(&v2.Submission{
-			TxHash:         "0xrecv",
-			SubmittedAt:    time.Now().UTC(),
-			RelayerAddress: "0xrelayer",
-		}, nil).
-		Once()
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
+	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
@@ -213,14 +210,11 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		Return(v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().
-		Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-		Return(&v2.Submission{
-			TxHash:         "0xrecv",
-			SubmittedAt:    time.Now().UTC(),
-			RelayerAddress: "0xrelayer",
-		}, nil).
-		Once()
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
+	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
@@ -322,14 +316,11 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		Return(v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().
-		Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-		Return(&v2.Submission{
-			TxHash:         "0xrecv",
-			SubmittedAt:    time.Now().UTC(),
-			RelayerAddress: "0xrelayer",
-		}, nil).
-		Once()
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
+	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},

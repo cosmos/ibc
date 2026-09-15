@@ -84,6 +84,12 @@ func TestParseHeaderRejectsMalformed(t *testing.T) {
 	})
 }
 
+func TestValidateValidatorsRequiresSortedSet(t *testing.T) {
+	v := besutest.MustFixture(t).InitialTrustedValidators
+	require.NoError(t, besu.ValidateValidators(v))
+	require.ErrorContains(t, besu.ValidateValidators([]common.Address{v[1], v[0]}), "out of order")
+}
+
 func TestSignersRejectsBadSeals(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	keys := besutest.Keys(4)

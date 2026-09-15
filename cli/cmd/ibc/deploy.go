@@ -259,18 +259,14 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
 }
 
-// deploy client flags that only apply to one client type.
+// besu-qbft deploy client flags.
 const (
-	flagNameAttestors      = "attestors"
-	flagNameThreshold      = "threshold"
-	flagNameTimestamp      = "timestamp"
 	flagNameTrustingPeriod = "trusting-period"
 	flagNameMaxClockDrift  = "max-clock-drift"
 )
 
 // clientSpec assembles the ClientSpec for --chain tracking --counterparty-chain,
-// defaulting trusted state from the counterparty chain head. flags is checked
-// for options that do not apply to the chosen client type.
+// defaulting trusted state from the counterparty chain head.
 func clientSpec(
 	ctx context.Context,
 	cfg config.Config,
@@ -301,18 +297,12 @@ func clientSpec(
 	}
 	switch flagDeployClientType {
 	case deploy.ClientTypeAttestation:
-		if err := rejectFlags(flags, spec.Type, flagNameTrustingPeriod, flagNameMaxClockDrift); err != nil {
-			return deploy.ClientSpec{}, err
-		}
 		params, err := attestationParams(ctx, cfg, counterpartyTarget, counterpartyChainID)
 		if err != nil {
 			return deploy.ClientSpec{}, err
 		}
 		spec.Params = params
 	case deploy.ClientTypeBesuQBFT:
-		if err := rejectFlags(flags, spec.Type, flagNameAttestors, flagNameThreshold, flagNameTimestamp); err != nil {
-			return deploy.ClientSpec{}, err
-		}
 		params, err := besuQBFTParams(ctx, flags, counterpartyTarget, chainID, counterpartyChainID, clientID)
 		if err != nil {
 			return deploy.ClientSpec{}, err
@@ -486,17 +476,6 @@ func wholeSeconds(d time.Duration, flag string) (uint64, error) {
 		return 0, errors.Errorf("--%s must be whole seconds, got %s", flag, d)
 	}
 	return uint64(d / time.Second), nil
-}
-
-// rejectFlags errors when a flag that belongs to another client type was set
-// explicitly. Defaults never trip it.
-func rejectFlags(flags *pflag.FlagSet, clientType string, names ...string) error {
-	for _, name := range names {
-		if flags.Changed(name) {
-			return errors.Errorf("--%s does not apply to %s clients", name, clientType)
-		}
-	}
-	return nil
 }
 
 // defaultClientID derives the shared client id for a chain pair, stable

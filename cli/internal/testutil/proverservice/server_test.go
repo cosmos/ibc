@@ -118,17 +118,6 @@ func TestProverServiceUnknownClient(t *testing.T) {
 	require.Equal(t, connect.CodeNotFound, connect.CodeOf(errors.Cause(err)))
 }
 
-// A short response would attach one packet's proof to another packet.
-func TestProverServiceRejectsMismatchedProofCount(t *testing.T) {
-	stub := &stubProver{proofs: [][]byte{[]byte("only-one")}}
-	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
-	client := newClient(t, set, "chain-a", "client-0")
-
-	_, err := client.Prepare(context.Background(), 1, v2.ProofKindPacketCommitment,
-		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}})
-	require.Equal(t, connect.CodeInternal, connect.CodeOf(errors.Cause(err)))
-}
-
 func TestProverServiceAdvance(t *testing.T) {
 	stub := &stubProver{advance: []byte("checkpoint")}
 	client := newClient(

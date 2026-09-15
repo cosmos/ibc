@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"sync"
 	"time"
 
@@ -22,13 +21,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
-)
-
-const (
-	// maxScan bounds RPC work per checkpoint, not total catch-up distance.
-	maxScan = 4096
-	// maxCached bounds all cached consensus states, including the trusted anchor.
-	maxCached = 1024
 )
 
 // Errors the prover surfaces to the pipeline.
@@ -53,9 +45,8 @@ type Generator struct {
 	counterparty chains.Client
 	clientID     string
 
-	mu     sync.Mutex
-	cache  map[uint64]cacheEntry
-	anchor uint64
+	mu    sync.Mutex
+	cache map[uint64]cacheEntry
 }
 
 // cacheEntry is a consensus state the prover derived from the counterparty.
@@ -278,9 +269,7 @@ func (g *Generator) Prepare(
 	if err != nil {
 		return nil, err
 	}
-	return &v2.Preparation{Ready: &v2.BatchProofs{
-		Update: update, PacketProofs: proofs, Checkpoint: len(update) != 0,
-	}}, nil
+	return &v2.Preparation{Ready: &v2.BatchProofs{Update: update, PacketProofs: proofs}}, nil
 }
 
 // updateAtOrBelowTrusted handles a target the client may already store: no
@@ -314,8 +303,6 @@ func (g *Generator) updateAtOrBelowTrusted(
 				ErrConflictingConsensusState, target, common.Hash(stored), hash)
 		}
 
-		g.store(target, snap.consensus, true)
-
 		return nil, nil
 	case !errors.Is(err, v2.ErrConsensusStateNotFound):
 		return nil, err
@@ -335,55 +322,59 @@ func (g *Generator) updateAtOrBelowTrusted(
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
 
-	g.store(target, snap.consensus, false)
-
 	return update, nil
 }
 
-// nextHeader tries a direct jump, then scans a bounded window. Reaching the
-// work budget returns the last verified header as a checkpoint, even if its
-// validators are unchanged. Confirming it makes the next invocation resume.
+// nextHeader returns the newest header at or below target that trusted
+// accepts: target itself when possible, otherwise the result of bisecting the
+// heights in between. Acceptance is monotone while validators leave and do not
+// return; when it is not, the probe still only advances on accepted headers
+// and its last candidate is trustedHeight+1, so it fails only when no
+// checkpoint exists there either.
 func (g *Generator) nextHeader(
 	ctx context.Context,
 	trustedHeight uint64,
 	trusted besu.ConsensusState,
 	target *besu.Header,
 ) (*besu.Header, error) {
-	signers, err := target.Signers()
+	check := func(header *besu.Header) (error, error) {
+		signers, err := header.Signers()
+		if err != nil {
+			return nil, fmt.Errorf("header %d: %w", header.Height, err)
+		}
+		return besu.CheckUpdate(header, signers, trusted), nil
+	}
+	rejected, err := check(target)
 	if err != nil {
 		return nil, err
 	}
-	if besu.CheckUpdate(target, signers, trusted) == nil {
+	if rejected == nil {
 		return target, nil
 	}
 	var last *besu.Header
-	for k, scanned := trustedHeight+1, 0; k <= target.Height && scanned < maxScan; k, scanned = k+1, scanned+1 {
-		header := target
-		if k != target.Height {
-			header, err = g.header(ctx, k)
-			if err != nil {
-				return nil, err
-			}
-		}
-		signers, err := header.Signers()
+	rejectedAt := target.Height
+	low, high := trustedHeight, target.Height-1
+	for low < high {
+		mid := low + (high-low+1)/2
+		header, err := g.header(ctx, mid)
 		if err != nil {
-			return nil, fmt.Errorf("header %d: %w", k, err)
+			return nil, err
 		}
-		if err := besu.CheckUpdate(header, signers, trusted); err != nil {
-			if last == nil {
-				return nil, fmt.Errorf(
-					"no header after trusted height %d is accepted (height %d: %w)",
-					trustedHeight,
-					k,
-					err,
-				)
-			}
-			return last, nil
+		checkErr, err := check(header)
+		if err != nil {
+			return nil, err
 		}
-		last = header
+		if checkErr != nil {
+			rejected, rejectedAt = checkErr, mid
+			high = mid - 1
+			continue
+		}
+		low, last = mid, header
 	}
 	if last == nil {
-		return nil, fmt.Errorf("no progress from trusted height %d", trustedHeight)
+		return nil, fmt.Errorf(
+			"no header after trusted height %d is accepted (height %d: %w)", trustedHeight, rejectedAt, rejected,
+		)
 	}
 	return last, nil
 }
@@ -548,9 +539,7 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besu.Consensus
 
 	if hash != common.Hash(stored) {
 		g.mu.Lock()
-		if current, exists := g.cache[height]; exists && !current.verified &&
-			current.state.Timestamp == state.Timestamp && current.state.StorageRoot == state.StorageRoot &&
-			slices.Equal(current.state.Validators, state.Validators) {
+		if current, exists := g.cache[height]; exists && !current.verified {
 			delete(g.cache, height)
 		}
 		g.mu.Unlock()
@@ -566,8 +555,9 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besu.Consensus
 	return state, nil
 }
 
-// store preserves verified values and retains the newest heights plus the
-// trusted anchor within maxCached entries.
+// store caches state for height, never replacing a verified entry. A verified
+// entry is the client's latest height, which the contract never lowers, so
+// everything below it can no longer be read and is dropped.
 func (g *Generator) store(height uint64, state besu.ConsensusState, verified bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -577,20 +567,13 @@ func (g *Generator) store(height uint64, state besu.ConsensusState, verified boo
 	}
 
 	g.cache[height] = cacheEntry{state: state, verified: verified}
-
-	if verified && height > g.anchor {
-		g.anchor = height
-	}
-
-	if len(g.cache) <= maxCached {
+	if !verified {
 		return
 	}
 
-	oldest := height
 	for h := range g.cache {
-		if h != g.anchor && (oldest == g.anchor || h < oldest) {
-			oldest = h
+		if h < height {
+			delete(g.cache, h)
 		}
 	}
-	delete(g.cache, oldest)
 }

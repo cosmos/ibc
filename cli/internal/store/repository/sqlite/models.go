@@ -8,14 +8,6 @@ import (
 	"time"
 )
 
-type ClientUpdate struct {
-	ChainID        string
-	ClientID       string
-	TxHash         string
-	SubmittedAt    int64
-	RelayerAddress string
-}
-
 type Packet struct {
 	ID                        int64
 	CreatedAt                 time.Time

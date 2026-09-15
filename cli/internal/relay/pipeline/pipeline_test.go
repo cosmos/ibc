@@ -267,14 +267,11 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstTxSubmitter.EXPECT().
-			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-			Return(&v2.Submission{
-				TxHash:         recvTxHash,
-				SubmittedAt:    time.Now().UTC(),
-				RelayerAddress: "0xrelayer",
-			}, nil).
-			Once()
+		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash:         recvTxHash,
+			SubmittedAt:    time.Now().UTC(),
+			RelayerAddress: "0xrelayer",
+		}, nil).Once()
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// success write ack: relayed back to the source chain like any other ack
@@ -290,12 +287,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().
-			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-			Return(&v2.Submission{
-				TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-			}, nil).
-			Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
@@ -332,12 +326,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstTxSubmitter.EXPECT().
-			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-			Return(&v2.Submission{
-				TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-			}, nil).
-			Once()
+		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
 		// error write ack: relayed back to the source chain
@@ -353,12 +344,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().
-			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-			Return(&v2.Submission{
-				TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-			}, nil).
-			Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
@@ -397,12 +385,9 @@ func TestPipelineLifecycle(t *testing.T) {
 		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
 		mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().
-			Submit(mock.Anything, mock.Anything, mock.MatchedBy(func(record func(*v2.Submission) error) bool { return record == nil })).
-			Return(&v2.Submission{
-				TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
-			}, nil).
-			Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)

@@ -111,8 +111,8 @@ func (_c *MockTxSubmitter_ShouldRetry_Call) RunAndReturn(run func(ctx context.Co
 }
 
 // Submit provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) Submit(ctx context.Context, intent v2.TxIntent, beforeBroadcast func(*v2.Submission) error) (*v2.Submission, error) {
-	ret := _mock.Called(ctx, intent, beforeBroadcast)
+func (_mock *MockTxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
+	ret := _mock.Called(ctx, intent)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Submit")
@@ -120,18 +120,18 @@ func (_mock *MockTxSubmitter) Submit(ctx context.Context, intent v2.TxIntent, be
 
 	var r0 *v2.Submission
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent, func(*v2.Submission) error) (*v2.Submission, error)); ok {
-		return returnFunc(ctx, intent, beforeBroadcast)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent) (*v2.Submission, error)); ok {
+		return returnFunc(ctx, intent)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent, func(*v2.Submission) error) *v2.Submission); ok {
-		r0 = returnFunc(ctx, intent, beforeBroadcast)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent) *v2.Submission); ok {
+		r0 = returnFunc(ctx, intent)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*v2.Submission)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, v2.TxIntent, func(*v2.Submission) error) error); ok {
-		r1 = returnFunc(ctx, intent, beforeBroadcast)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v2.TxIntent) error); ok {
+		r1 = returnFunc(ctx, intent)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -146,12 +146,11 @@ type MockTxSubmitter_Submit_Call struct {
 // Submit is a helper method to define mock.On call
 //   - ctx context.Context
 //   - intent v2.TxIntent
-//   - beforeBroadcast func(*v2.Submission) error
-func (_e *MockTxSubmitter_Expecter) Submit(ctx any, intent any, beforeBroadcast any) *MockTxSubmitter_Submit_Call {
-	return &MockTxSubmitter_Submit_Call{Call: _e.mock.On("Submit", ctx, intent, beforeBroadcast)}
+func (_e *MockTxSubmitter_Expecter) Submit(ctx any, intent any) *MockTxSubmitter_Submit_Call {
+	return &MockTxSubmitter_Submit_Call{Call: _e.mock.On("Submit", ctx, intent)}
 }
 
-func (_c *MockTxSubmitter_Submit_Call) Run(run func(ctx context.Context, intent v2.TxIntent, beforeBroadcast func(*v2.Submission) error)) *MockTxSubmitter_Submit_Call {
+func (_c *MockTxSubmitter_Submit_Call) Run(run func(ctx context.Context, intent v2.TxIntent)) *MockTxSubmitter_Submit_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -161,14 +160,9 @@ func (_c *MockTxSubmitter_Submit_Call) Run(run func(ctx context.Context, intent 
 		if args[1] != nil {
 			arg1 = args[1].(v2.TxIntent)
 		}
-		var arg2 func(*v2.Submission) error
-		if args[2] != nil {
-			arg2 = args[2].(func(*v2.Submission) error)
-		}
 		run(
 			arg0,
 			arg1,
-			arg2,
 		)
 	})
 	return _c
@@ -179,7 +173,7 @@ func (_c *MockTxSubmitter_Submit_Call) Return(submission *v2.Submission, err err
 	return _c
 }
 
-func (_c *MockTxSubmitter_Submit_Call) RunAndReturn(run func(ctx context.Context, intent v2.TxIntent, beforeBroadcast func(*v2.Submission) error) (*v2.Submission, error)) *MockTxSubmitter_Submit_Call {
+func (_c *MockTxSubmitter_Submit_Call) RunAndReturn(run func(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)) *MockTxSubmitter_Submit_Call {
 	_c.Call.Return(run)
 	return _c
 }

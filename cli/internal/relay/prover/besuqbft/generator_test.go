@@ -105,7 +105,7 @@ func (e *fixtureEnv) expectInitialAnchor(t *testing.T) {
 		Return(mustHash(t, e.fixture.InitialConsensusState()), nil).Once()
 }
 
-func TestStateProofDirectUpdate(t *testing.T) {
+func TestPrepareDirectUpdate(t *testing.T) {
 	ctx := context.Background()
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
@@ -184,7 +184,7 @@ func TestPrepareValidatorTurnoverCheckpoints(t *testing.T) {
 	}
 }
 
-func TestStateProofUnbridgeableTurnover(t *testing.T) {
+func TestPrepareUnbridgeableTurnover(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	env.gen.store(10, besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}, true)
@@ -200,37 +200,7 @@ func TestStateProofUnbridgeableTurnover(t *testing.T) {
 	assert.Empty(t, updates)
 }
 
-func TestPrepareScanBudgetReturnsCheckpoint(t *testing.T) {
-	env := newFixtureEnv(t)
-	keys := besutest.Keys(2)
-	const anchor, target = uint64(10), uint64(10 + maxScan + 1)
-	env.gen.store(anchor, besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:1])}, true)
-	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(anchor), nil).Once()
-	final := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, target, keys[1:])
-	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, target).Return(final.RLP, nil).Once()
-	env.counterparty.EXPECT().GetRouterProof(mock.Anything, target-1, [][32]byte(nil)).
-		Return(v2.AccountProof{}, nil).Once()
-	next := anchor + 1
-	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, mock.MatchedBy(func(height uint64) bool {
-		return height > anchor && height < target
-	})).RunAndReturn(func(_ context.Context, height uint64) ([]byte, error) {
-		require.Equal(t, next, height)
-		next++
-		return sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, height, keys[:1]).RLP, nil
-	}).Times(maxScan)
-
-	updates, err := env.prepareUpdate(context.Background(), target)
-	require.NoError(t, err)
-	require.Len(t, updates, 1)
-	decoded, err := besutest.DecodeUpdateClient(updates[0])
-	require.NoError(t, err)
-	header, err := besu.ParseHeader(decoded.HeaderRLP)
-	require.NoError(t, err)
-	require.Equal(t, target-1, header.Height)
-	assert.Equal(t, target, next)
-}
-
-func TestStateProofTargetAlreadyStored(t *testing.T) {
+func TestPrepareTargetAlreadyStored(t *testing.T) {
 	ctx := context.Background()
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
@@ -246,7 +216,7 @@ func TestStateProofTargetAlreadyStored(t *testing.T) {
 	assert.Nil(t, updates, "no update needed")
 }
 
-func TestStateProofTargetEqualsVerifiedAnchor(t *testing.T) {
+func TestPrepareTargetEqualsVerifiedAnchor(t *testing.T) {
 	for _, conflict := range []bool{false, true} {
 		t.Run(fmt.Sprintf("conflict=%t", conflict), func(t *testing.T) {
 			env := newFixtureEnv(t)
@@ -275,7 +245,7 @@ func TestStateProofTargetEqualsVerifiedAnchor(t *testing.T) {
 	}
 }
 
-func TestStateProofTargetConflicts(t *testing.T) {
+func TestPrepareTargetConflicts(t *testing.T) {
 	ctx := context.Background()
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
@@ -295,7 +265,7 @@ func TestStateProofTargetConflicts(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflictingConsensusState)
 }
 
-func TestStateProofBackfillBelowTrusted(t *testing.T) {
+func TestPrepareBackfillBelowTrusted(t *testing.T) {
 	ctx := context.Background()
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
@@ -370,27 +340,6 @@ func TestPreimageRecoversFromStaleUnverifiedCache(t *testing.T) {
 	state, err = env.gen.preimage(t.Context(), update.Height)
 	require.NoError(t, err)
 	require.Equal(t, want, state)
-}
-
-func TestPreimageMismatchPreservesConcurrentCacheRefresh(t *testing.T) {
-	for _, verified := range []bool{false, true} {
-		t.Run(fmt.Sprintf("verified=%t", verified), func(t *testing.T) {
-			env := newFixtureEnv(t)
-			update := env.fixture.NonAdjacentUpdate
-			want := update.ExpectedConsensusState()
-			stale := want
-			stale.StorageRoot = common.Hash{0xff}
-			env.gen.store(update.Height, stale, false)
-			env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
-				Run(func(context.Context, string, uint64) {
-					env.gen.store(update.Height, want, verified)
-				}).Return(mustHash(t, want), nil).Once()
-
-			_, err := env.gen.preimage(t.Context(), update.Height)
-			require.ErrorContains(t, err, "hashes to")
-			require.Equal(t, cacheEntry{state: want, verified: verified}, env.gen.cache[update.Height])
-		})
-	}
 }
 
 // expectProofAt wires the counterparty reads PacketProofs performs at a
@@ -650,44 +599,6 @@ func TestResolveChecksRouterAndClientType(t *testing.T) {
 	})
 }
 
-func TestStoreBoundsCacheWithoutAnchor(t *testing.T) {
-	env := newFixtureEnv(t)
-	state := env.fixture.InitialConsensusState()
-	for height := uint64(1); height <= 2*maxCached; height++ {
-		env.gen.store(height, state, false)
-		require.LessOrEqual(t, len(env.gen.cache), maxCached)
-	}
-	require.Len(t, env.gen.cache, maxCached)
-}
-
-func TestStoreBoundsCacheAndRetainsAnchor(t *testing.T) {
-	for _, anchor := range []uint64{10, 2000} {
-		env := newFixtureEnv(t)
-		state := env.fixture.InitialConsensusState()
-		env.gen.store(anchor, state, true)
-		for height := anchor + 1; height < anchor+2*maxCached; height++ {
-			env.gen.store(height, state, false)
-			require.LessOrEqual(t, len(env.gen.cache), maxCached)
-			require.Equal(t, cacheEntry{state: state, verified: true}, env.gen.cache[anchor])
-		}
-		require.Len(t, env.gen.cache, maxCached)
-		require.NotContains(t, env.gen.cache, anchor+1)
-		require.Contains(t, env.gen.cache, anchor+2*maxCached-1)
-
-		// Backfills must not displace the anchor or newer cached heights.
-		env.gen.store(anchor-1, state, false)
-		require.NotContains(t, env.gen.cache, anchor-1)
-		require.Len(t, env.gen.cache, maxCached)
-
-		// Advancing the anchor makes its predecessor eligible for eviction.
-		newAnchor := anchor + 2*maxCached
-		env.gen.store(newAnchor, state, true)
-		require.NotContains(t, env.gen.cache, anchor)
-		require.Equal(t, cacheEntry{state: state, verified: true}, env.gen.cache[newAnchor])
-		require.Len(t, env.gen.cache, maxCached)
-	}
-}
-
 // splitPath decomposes a raw commitment path into its client id and sequence,
 // asserting the expected kind byte.
 func splitPath(t *testing.T, path []byte, kind byte) (string, uint64) {
@@ -741,7 +652,7 @@ func TestPrepareLongHistoryResumesFromConfirmedState(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	const anchor = uint64(10)
-	const bridge = anchor + maxScan + 1
+	const bridge = anchor + 1000
 	const target = bridge + 2
 	latest := anchor
 	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
@@ -761,8 +672,10 @@ func TestPrepareLongHistoryResumesFromConfirmedState(t *testing.T) {
 		})
 	env.host.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
 		Return(v2.BlockHeader{Timestamp: time.Unix(1700000000+int64(target), 0)}, nil)
+	fetched := 0
 	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, mock.Anything).RunAndReturn(
 		func(_ context.Context, h uint64) ([]byte, error) {
+			fetched++
 			set := keys[:4]
 			if h == bridge {
 				set = keys[2:6]
@@ -772,12 +685,14 @@ func TestPrepareLongHistoryResumesFromConfirmedState(t *testing.T) {
 			return sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, h, set).RLP, nil
 		})
 	env.counterparty.EXPECT().GetRouterProof(mock.Anything, mock.Anything, [][32]byte(nil)).
-		Return(v2.AccountProof{AccountProof: accountNodes(t, env.fixture.NonAdjacentUpdate)}, nil).Times(3)
-	for i, want := range []uint64{bridge - 1, bridge, target} {
+		Return(v2.AccountProof{AccountProof: accountNodes(t, env.fixture.NonAdjacentUpdate)}, nil).Times(2)
+	// The bisection finds the newest header the old set still accepts, then
+	// the confirmed bridge reaches the target directly.
+	for i, want := range []uint64{bridge, target} {
 		result, err := env.gen.Prepare(t.Context(), target, v2.ProofKindPacketCommitment, nil)
 		require.NoError(t, err)
 		payload := result.Advance
-		if i == 2 {
+		if i == 1 {
 			require.NotNil(t, result.Ready)
 			payload = result.Ready.Update
 		} else {
@@ -796,6 +711,7 @@ func TestPrepareLongHistoryResumesFromConfirmedState(t *testing.T) {
 		latest = want // only successful on-chain confirmation changes the source of truth
 		confirmed[want] = besu.ConsensusState{Timestamp: header.Timestamp, Validators: header.Validators}
 	}
+	require.Less(t, fetched, 20, "bisection must not walk the history linearly")
 }
 
 func TestPrepareSharesTargetSnapshot(t *testing.T) {

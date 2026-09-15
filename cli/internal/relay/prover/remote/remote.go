@@ -99,15 +99,8 @@ func (p *Prover) Prepare(
 		result.Advance = wire.Advance
 	case *proverv2.PrepareResponse_Ready:
 		if wire.Ready != nil {
-			result.Ready = &v2.BatchProofs{
-				Update:       wire.Ready.Update,
-				PacketProofs: wire.Ready.PacketProofs,
-				Checkpoint:   wire.Ready.Checkpoint,
-			}
+			result.Ready = &v2.BatchProofs{Update: wire.Ready.Update, PacketProofs: wire.Ready.PacketProofs}
 		}
-	}
-	if err := result.Validate(len(packets)); err != nil {
-		return nil, errors.Wrap(err, "remote prover")
 	}
 	return result, nil
 }

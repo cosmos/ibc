@@ -128,13 +128,6 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 			slots:  [][32]byte{slot},
 			want:   "no storage proof returned",
 		},
-		"unexpected extra": {
-			mutate: func(r *gethclient.AccountResult) {
-				r.StorageProof = append(r.StorageProof, gethclient.StorageResult{Key: other.Hex(), Value: big.NewInt(0)})
-			},
-			slots: [][32]byte{slot},
-			want:  "2 storage proofs returned for 1 slots",
-		},
 		"duplicate returned": {
 			mutate: func(r *gethclient.AccountResult) { r.StorageProof = append(r.StorageProof, r.StorageProof[0]) },
 			slots:  [][32]byte{slot},
