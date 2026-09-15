@@ -23,7 +23,9 @@ Slower than the unit tests: four cases mutate the CLI wiring, and each of
 those rebuilds the binary, because Cobra computes a flag's default when the
 flag is registered.
 """
+import difflib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +36,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import refgen  # noqa: E402
 
 ROOT = refgen.ROOT
+TICK = chr(96)
+
 PASS, FAIL = [], []
 
 
@@ -75,12 +79,70 @@ class Sandbox:
         shutil.rmtree(self.dir, ignore_errors=True)
         return False
 
-    def edit(self, path, old, new, count=1):
+    def edit(self, path, old, new, count=1, optional=False):
         full = os.path.join(self.dir, path)
         text = open(full).read()
         if old not in text:
+            if optional:
+                return
             raise AssertionError(f"{path} no longer contains {old!r}; the mutation is stale")
         open(full, "w").write(text.replace(old, new, count))
+
+    def rename(self, subdir, old, new):
+        """Rename an identifier across a directory, and prove it happened.
+
+        `edit(optional=True)` per file is silent when an anchor goes stale, so
+        a rename test would keep passing while renaming nothing. Counting the
+        files touched is what stops that.
+        """
+        full = os.path.join(self.dir, subdir)
+        touched = 0
+        for f in sorted(os.listdir(full)):
+            if not f.endswith(".go"):
+                continue
+            path = os.path.join(full, f)
+            text = open(path).read()
+            if old in text:
+                open(path, "w").write(text.replace(old, new))
+                touched += 1
+        if not touched:
+            raise AssertionError(
+                f"{old!r} appears in no file under {subdir}; the mutation is stale "
+                "and this test would have passed without renaming anything")
+        return touched
+
+    def respace(self, path, decl):
+        """Collapse the column padding inside one declaration.
+
+        Whitespace only, and no line moves, so a citation's line number is
+        still true and the only change is one a reader could never see.
+        """
+        full = os.path.join(self.dir, path)
+        text = open(full).read()
+        if decl not in text:
+            raise AssertionError(f"{path} no longer contains {decl!r}; the mutation is stale")
+        start = text.index(decl)
+        end = text.index("\n}\n", start)
+        block = re.sub(r"[ \t]{2,}", " ", text[start:end])
+        open(full, "w").write(text[:start] + block + text[end:])
+
+    def add_field(self, path, after_yaml_key, line):
+        """Insert a struct field after the one carrying `after_yaml_key`.
+
+        Anchoring on the literal source line means gofmt realigning the struct
+        -- which it does whenever a longer field name lands beside it -- takes
+        the mutation stale. The yaml key is the part a reader would recognise,
+        so it is the part to anchor on.
+        """
+        full = os.path.join(self.dir, path)
+        text = open(full).read()
+        rx = re.compile(r"^.*`yaml:\"" + re.escape(after_yaml_key) + r"\"`.*$", re.M)
+        m = rx.search(text)
+        if not m:
+            raise AssertionError(
+                f"{path} declares no field with yaml key {after_yaml_key!r}; "
+                "the mutation is stale")
+        open(full, "w").write(text[:m.end()] + "\n" + line + text[m.end():])
 
     def append(self, path, text):
         with open(os.path.join(self.dir, path), "a") as fh:
@@ -108,6 +170,61 @@ def red_then_healed(box, kind, expect_in_diff):
     assert healed != before, "regenerating changed nothing"
     assert expect_in_diff in healed, f"{expect_in_diff!r} did not reach the page"
     assert refgen.run(kind, page, check=True) == 0, "second check should be green"
+
+
+_BASELINE = {}
+
+
+def baseline(kind):
+    """What the generator produces from the source as it stands."""
+    if kind not in _BASELINE:
+        saved = refgen.IBC
+        try:
+            refgen.IBC = ROOT
+            refgen._ANCHORS.clear()
+            _BASELINE[kind] = refgen.GENERATORS[kind]()
+        finally:
+            refgen.IBC = saved
+            refgen._ANCHORS.clear()
+    return _BASELINE[kind]
+
+
+CITE = re.compile(r"^<!-- \[.*\]\(.*\) -->$", re.M)
+
+
+def unchanged(box, kind, rename=None, cites=True):
+    """Every generated region is byte-identical to the baseline.
+
+    The other direction of the same contract. `red_then_healed` and `raises`
+    prove the generator notices a change; this proves it does not notice one a
+    reader could never see. Without it a generator passes its whole suite while
+    billing a developer for every rename, which is the complaint these cases
+    exist to answer.
+
+    `rename` is (old, new) for a case that moves a directory: a citation names
+    a real path, so it is expected to follow the move, and only the path is
+    allowed to differ.
+    """
+    got = refgen.GENERATORS[kind]()
+    want = baseline(kind)
+    if rename:
+        old, new = rename
+        got = {k: v.replace(new, old) for k, v in got.items()}
+    if not cites:
+        # a mutation that adds a line moves every line below it, so the
+        # citations move with it. That is the citations staying right, not the
+        # tables drifting.
+        got = {k: CITE.sub("", v) for k, v in got.items()}
+        want = {k: CITE.sub("", v) for k, v in want.items()}
+    assert set(got) == set(want), (
+        f"regions changed: only in new {sorted(set(got) - set(want))}, "
+        f"only in old {sorted(set(want) - set(got))}")
+    for region in sorted(want):
+        assert got[region] == want[region], (
+            f"{region} changed, but nothing a reader sees did:\n"
+            + "\n".join(difflib.unified_diff(
+                want[region].splitlines(), got[region].splitlines(),
+                "before", "after", lineterm="")))
 
 
 def raises(box, kind, expect_in_message):
@@ -305,13 +422,8 @@ def _():
 @case("a new config struct reachable from Config is discovered, not listed")
 def _():
     with Sandbox() as box:
-        # Anchor on the field line rather than the struct's closing brace: the
-        # brace moved when an unexported field was added below Signers, and the
-        # mutation went stale rather than testing anything.
-        box.edit("cli/internal/config/config.go",
-                 '\tSigners   Signers       `yaml:"signers"`\n',
-                 '\tSigners   Signers       `yaml:"signers"`\n'
-                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n')
+        box.add_field("cli/internal/config/config.go", "signers",
+                      '\tMetrics MetricsConfig `yaml:"metrics"`')
         box.append("cli/internal/config/config.go",
                    '\n\ntype MetricsConfig struct {\n'
                    '\tListenAddress string `yaml:"listenAddr"`\n}\n')
@@ -327,10 +439,8 @@ def _():
 @case("a new config struct's table and heading arrive in the plan")
 def _():
     with Sandbox() as box:
-        box.edit("cli/internal/config/config.go",
-                 '\tSigners   Signers       `yaml:"signers"`\n',
-                 '\tSigners   Signers       `yaml:"signers"`\n'
-                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n')
+        box.add_field("cli/internal/config/config.go", "signers",
+                      '\tMetrics MetricsConfig `yaml:"metrics"`')
         box.append("cli/internal/config/config.go",
                    '\n\n// MetricsConfig config for the metrics endpoint.\n'
                    'type MetricsConfig struct {\n'
@@ -443,6 +553,218 @@ def _():
         box.edit("proto/cli/attestor.proto",
                  "message InfoRequest { string attestor = 1; }", "")
         raises(box, "api", "InfoRequest")
+
+
+@case("a streaming rpc raises rather than vanishing from the page")
+def _():
+    with Sandbox() as box:
+        box.edit("proto/cli/relayer.proto", "  rpc Relay(",
+                 "  rpc Watch(stream WatchRequest) returns (stream WatchResponse);\n"
+                 "  rpc Relay(")
+        raises(box, "api", "does not read")
+
+
+@case("a map field raises rather than vanishing from its table")
+def _():
+    with Sandbox() as box:
+        box.edit("proto/cli/relayer.proto", "message RelayRequest {",
+                 "message RelayRequest {\n  map<string, string> labels = 99;")
+        raises(box, "api", "does not read")
+
+
+# --------------------------------------- source a reader's table depends on
+#
+# Each of these used to shorten a table rather than refuse. A shorter table
+# reads exactly like a complete one, and regenerating makes the check green
+# again, so the page can lose a whole block and look current.
+
+
+@case("an embedded struct folded into the parent's keys raises")
+def _():
+    with Sandbox() as box:
+        box.add_field("cli/internal/config/config.go", "deployer,omitempty",
+                      "\tExtra ExtraFields `yaml:\",inline\"`")
+        raises(box, "config", "does not read")
+
+
+@case("an anonymous nested struct raises rather than losing its rows")
+def _():
+    with Sandbox() as box:
+        box.add_field("cli/internal/config/config.go", "deployer,omitempty",
+                      "\tTuning struct{ N int } `yaml:\"tuning\"`")
+        raises(box, "config", "does not read")
+
+
+@case("a second exported builder for the root config raises")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/config.go",
+                 "func DefaultConfig() Config {",
+                 "func EmptyConfig() Config {\n\treturn Config{}\n}\n\n"
+                 "func DefaultConfig() Config {")
+        raises(box, "config", "cannot locate")
+
+
+# ------------------------------------------- changes a reader cannot see
+#
+# Each case below is a change a developer makes without thinking about it, and
+# which changes no word on the page. The generator used to stop for most of
+# them and ask to be taught a new name. Now it must not notice at all.
+
+
+@case("the config builder returning a pointer changes nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/config.go",
+                 "func DefaultConfig() Config {", "func DefaultConfig() *Config {")
+        box.edit("cli/internal/config/config.go", "\treturn Config{", "\treturn &Config{")
+        unchanged(box, "config")
+
+
+@case("splitting the root command into its own file changes nothing")
+def _():
+    with Sandbox() as box:
+        src = os.path.join(box.dir, "cli/cmd/ibc")
+        text = open(os.path.join(src, "main.go")).read()
+        at = text.index("var rootCmd")
+        with open(os.path.join(src, "root.go"), "w") as fh:
+            fh.write('package main\n\nimport (\n\t"github.com/spf13/cobra"\n)\n\n'
+                     + text[at:])
+        with open(os.path.join(src, "main.go"), "w") as fh:
+            fh.write(text[:at])
+        refgen._ANCHORS.clear()
+        unchanged(box, "config")
+
+
+@case("a trailing comment on a config field changes nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/config.go",
+                 "Deployer string %syaml:\"deployer,omitempty\"%s" % (TICK, TICK),
+                 "Deployer string %syaml:\"deployer,omitempty\"%s // set per chain"
+                 % (TICK, TICK))
+        unchanged(box, "config")
+
+
+@case("a named string constant added to the config package changes nothing")
+def _():
+    with Sandbox() as box:
+        # `const X string = "..."` says its type is the builtin, not one of the
+        # package's own string types. Reading it as an enum member rendered
+        # every string key in every table as a list of unrelated values.
+        box.edit("cli/internal/config/errors.go", "package config",
+                 'package config\n\nconst DefaultListenAddr string = "127.0.0.1:9090"')
+        unchanged(box, "config", cites=False)
+
+
+@case("a comment that spells out a constant changes nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/errors.go", "package config",
+                 'package config\n\n// Note: DBTypePostgres = "mysql" before v2.')
+        unchanged(box, "config", cites=False)
+
+
+@case("a trailing comment on a proto field changes nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("proto/cli/relayer.proto",
+                 "  string source_chain_id = 2;",
+                 "  string source_chain_id = 2; // as the chain reports it")
+        unchanged(box, "api")
+
+
+@case("a comment detached from the field below it documents nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("proto/cli/relayer.proto", "message RelayRequest {",
+                 "message RelayRequest {\n  // TODO: add a total before v3.\n")
+        unchanged(box, "api", cites=False)
+
+
+@case("renaming the CLI's entry point file changes nothing")
+def _():
+    with Sandbox() as box:
+        src = os.path.join(box.dir, "cli/cmd/ibc")
+        os.rename(os.path.join(src, "main.go"), os.path.join(src, "root.go"))
+        refgen._ANCHORS.clear()
+        unchanged(box, "cli", rename=("main.go", "root.go"))
+
+
+@case("renaming a Go field while keeping its yaml key changes nothing")
+def _():
+    with Sandbox() as box:
+        # the key a reader writes is the yaml one; the Go spelling beside it is
+        # the package's business. Keying the hand-written descriptions on the
+        # Go name made this rename a refusal for about thirty fields.
+        for sub in ("cli/internal/config",):
+            box.rename(sub, "ListenAddress", "Listen")
+        unchanged(box, "config")
+
+
+@case("renaming a validation helper changes nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/config.go",
+                 "validateChainReferences", "checkChainReferences", count=-1)
+        unchanged(box, "config")
+
+
+@case("renaming a Validate receiver changes nothing")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/config.go",
+                 "func (c Observability) Validate() error {",
+                 "func (obs Observability) Validate() error {")
+        box.edit("cli/internal/config/config.go",
+                 "\tswitch {\n\tcase !c.Metrics:", "\tswitch {\n\tcase !obs.Metrics:")
+        unchanged(box, "config")
+
+
+@case("renaming an error constructor changes nothing")
+def _():
+    with Sandbox() as box:
+        for f in ("errors.go", "config.go", "relayer.go"):
+            box.edit(f"cli/internal/config/{f}", "errPathf", "cfgErrorf", count=-1)
+        unchanged(box, "config")
+
+
+@case("renaming a command variable changes nothing")
+def _():
+    with Sandbox() as box:
+        box.rename("cli/cmd/ibc", "cmdDeployClient", "deployClientCmd")
+        unchanged(box, "cli")
+
+
+@case("renaming the root command variable changes nothing")
+def _():
+    with Sandbox() as box:
+        box.rename("cli/cmd/ibc", "rootCmd", "cliRoot")
+        unchanged(box, "cli")
+
+
+@case("moving the CLI to another directory changes only the citations")
+def _():
+    with Sandbox() as box:
+        os.rename(os.path.join(box.dir, "cli"), os.path.join(box.dir, "link"))
+        refgen._ANCHORS.clear()
+        unchanged(box, "config", rename=("cli/", "link/"))
+        unchanged(box, "cli", rename=("cli/", "link/"))
+
+
+@case("realigning a struct's columns changes nothing")
+def _():
+    with Sandbox() as box:
+        # gofmt re-pads a struct's columns whenever a longer field name lands
+        # beside it. Squeeze the padding out without moving a line, so the only
+        # difference is the whitespace a reader never sees.
+        box.respace("cli/internal/config/config.go", "type Config struct {")
+        r = subprocess.run(["gofmt", "-l", "internal/config/config.go"],
+                           cwd=os.path.join(box.dir, "cli"),
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        assert r.stdout.strip(), "the respacing should have left the file unformatted"
+        unchanged(box, "config")
 
 
 for name in PASS:

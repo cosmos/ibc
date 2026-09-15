@@ -275,13 +275,10 @@ def _():
     key = ("PacketSelector", "sequence_number")
     saved = refgen.FIELD_DOCS[key]
     try:
-        # the real check runs against source; simulate by removing the entry's
-        # partner condition, which is what a new comment upstream would create
+        # a field with both a comment upstream and an entry here means one of
+        # them has not been re-read, so it must raise rather than pick one
         del refgen.FIELD_DOCS[key]
-        try:
-            refgen.gen_api()
-        except refgen.SourceError as e:
-            assert "sequence_number" not in str(e) or True
+        refgen.gen_api()          # no entry, no comment: fine
         # an entry for a field that does not exist must raise
         refgen.FIELD_DOCS[("PacketSelector", "gone_away")] = ("x", "y")
         try:
@@ -344,7 +341,7 @@ def _():
 def _():
     saved = dict(refgen.FALLBACK_DOCS)
     try:
-        del refgen.FALLBACK_DOCS[("ServerConfig", "ListenAddress")]
+        del refgen.FALLBACK_DOCS[("ServerConfig", "listenAddr")]
         try:
             refgen.gen_config()
         except refgen.SourceError:
@@ -367,11 +364,88 @@ def _():
     raise AssertionError("expected SourceError")
 
 
+@case("config: error builders are found by shape, however they are spelled")
+def _():
+    # The four spellings Go allows for the same signature. Reading only one of
+    # them means a constructor written another way carries its rules off the
+    # page while the page still renders, which is the failure this replaced a
+    # hardcoded list of names to avoid.
+    for sig in ("segment string, format string, args ...any",
+                "segment, format string, args ...any",
+                "string, string"):
+        got = refgen._path_error_ctors("func e(%s) error { return nil }" % sig)
+        assert got == {"e": "seg_fmt"}, (sig, got)
+    for sig, kind in (("segment string, err error", "seg_err"),
+                      ("idx int, format string, args ...any", "idx_fmt"),
+                      ("idx int, err error", "idx_err")):
+        got = refgen._path_error_ctors("func e(%s) error { return nil }" % sig)
+        assert got == {"e": kind}, (sig, got)
+    # a function of another shape is not one of these
+    assert refgen._path_error_ctors(
+        "func store(c Config, path string, m map[string]string) error { return nil }") == {}
+
+    # and the package's own builders are still all found
+    src = "\n".join(refgen._read(f) for f in refgen._config_files())
+    found = refgen._path_error_ctors(src)
+    assert set(found.values()) == {"seg_err", "seg_fmt", "idx_err", "idx_fmt"}, found
+
+
+@case("config: every method in the package is parsed, so no helper goes unread")
+def _():
+    src = "\n".join(refgen._read(f) for f in refgen._config_files())
+    declared = {(m.group(2), m.group(3)) for m in
+                re.finditer(r"^func \((\w+ )?\*?(\w+)\) (\w+)\(", src, re.M)}
+    parsed = set(refgen._method_bodies(src))
+    assert not declared - parsed, sorted(declared - parsed)
+
+
+@case("config: a brace inside a string does not cut a Validate body short")
+def _():
+    # A rule below a raw string containing a lone `}` used to be unreadable,
+    # and unreadable means absent from the page rather than reported.
+    body = ('func (c T) Validate() error {\n'
+            '\t_ = `\n}\n`\n'
+            '\treturn errPathf("key", "required")\n}\n')
+    rules = refgen._rules_in("".join(refgen._method_bodies(body).values()),
+                             {"errPathf": "seg_fmt"})
+    assert rules == [(".key required", [])], rules
+    # and a parameter list with its own parentheses parses too
+    body = ('func (c T) Validate(check func(string) error) error {\n'
+            '\treturn errPathf("key", "required")\n}\n')
+    rules = refgen._rules_in("".join(refgen._method_bodies(body).values()),
+                             {"errPathf": "seg_fmt"})
+    assert rules == [(".key required", [])], rules
+
+
+@case("config: a default constant is read from its declaration, not a comment")
+def _():
+    import tempfile
+    saved, saved_anchors = refgen.IBC, dict(refgen._ANCHORS)
+    with tempfile.TemporaryDirectory() as d:
+        os.makedirs(os.path.join(d, "cli", "pkg"))
+        with open(os.path.join(d, "cli", "pkg", "opts.go"), "w") as fh:
+            fh.write("package pkg\n\n"
+                     "// DefaultThing = 99 * time.Second  (before the change)\n"
+                     "/*\nDefaultThing = 98 * time.Second\n*/\n"
+                     "const (\n\tDefaultThing = 2 * time.Second\n)\n")
+        try:
+            refgen.IBC = d
+            refgen._ANCHORS.clear()
+            refgen._ANCHORS.update({"__root__": d, "cli_module": "cli"})
+            value, path, _line = refgen._const_value("DefaultThing")
+        finally:
+            refgen.IBC = saved
+            refgen._ANCHORS.clear()
+            refgen._ANCHORS.update(saved_anchors)
+    assert value == "2s", value
+    assert path.endswith("opts.go"), path
+
+
 @case("config: a missing default constant is an error, not a stale number")
 def _():
-    key = ("RelayerConfig", "DispatchPollInterval")
+    key = ("RelayerConfig", "dispatchPollInterval")
     saved = refgen.DEFAULT_CONSTS[key]
-    refgen.DEFAULT_CONSTS[key] = [("", "cli/internal/relay/dispatch/dispatcher.go", "GoneAway")]
+    refgen.DEFAULT_CONSTS[key] = [("", "GoneAway")]
     try:
         refgen.gen_config()
     except refgen.SourceError:
