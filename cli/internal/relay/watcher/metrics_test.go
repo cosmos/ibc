@@ -21,7 +21,7 @@ func TestWatcherHandleEventMetrics(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		reader := setupWatcherMetrics(t)
-		w := newTestWatcher(newSubscriber(), watcherStore(t))
+		w := newTestWatcher(newFakeChain(t), watcherStore(t))
 
 		// ACT
 		err := w.HandleEvent(ctx, sendPacketEvent(7))
@@ -35,7 +35,7 @@ func TestWatcherHandleEventMetrics(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		reader := setupWatcherMetrics(t)
-		w := newTestWatcher(newSubscriber(), watcherStore(t))
+		w := newTestWatcher(newFakeChain(t), watcherStore(t))
 		event := sendPacketEvent(7)
 		event.Removed = true
 
@@ -51,7 +51,7 @@ func TestWatcherHandleEventMetrics(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		reader := setupWatcherMetrics(t)
-		w := newTestWatcher(newSubscriber(), watcherStore(t))
+		w := newTestWatcher(newFakeChain(t), watcherStore(t))
 		event := sendPacketEvent(7)
 		event.Kind = v2.KindWriteAck
 
@@ -67,7 +67,7 @@ func TestWatcherHandleEventMetrics(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		reader := setupWatcherMetrics(t)
-		w := newTestWatcher(newSubscriber(), watcherStore(t))
+		w := newTestWatcher(newFakeChain(t), watcherStore(t))
 		event := sendPacketEvent(7)
 
 		// ACT
@@ -88,7 +88,7 @@ func TestWatcherHandleEventMetrics(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		reader := setupWatcherMetrics(t)
-		w := newTestWatcher(newSubscriber(), &failingStore{
+		w := newTestWatcher(newFakeChain(t), &failingStore{
 			ClearStore: watcherStore(t),
 			err:        errors.New("store unavailable"),
 		})

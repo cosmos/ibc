@@ -23,8 +23,14 @@ const (
 // slow store write does not immediately back up the websocket.
 const eventBuffer = 128
 
-// Subscriber the chain-side event stream.
-type Subscriber interface {
+// Chain represents chain client
+type Chain interface {
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+
+	LatestPacketSequence(ctx context.Context, sourceClientID string, height uint64) (uint64, error)
+	PacketCommitments(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error)
+	FindSendPackets(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error)
+
 	SubscribeSendPackets(ctx context.Context, clientIDs []string, out chan<- v2.PacketEvent) (v2.Subscription, error)
 }
 
@@ -52,12 +58,12 @@ type Config struct {
 // ends. The subscription starts where the chain is and never looks backwards;
 // recovering anything it missed is the clearing pass's job.
 type Watcher struct {
-	chainID    string
-	clientIDs  []string
-	routes     map[string]config.ClientEnd
-	subscriber Subscriber
-	storage    PacketStore
-	clearer    *Clearer
+	chainID   string
+	clientIDs []string
+	routes    map[string]config.ClientEnd
+	chain     Chain
+	storage   PacketStore
+	clearer   *Clearer
 
 	cfg Config
 
@@ -73,8 +79,7 @@ type Watcher struct {
 func New(
 	chainID string,
 	connections []config.ConnectionConfig,
-	subscriber Subscriber,
-	querier OutstandingQuerier,
+	chain Chain,
 	storage ClearStore,
 	cfg Config,
 	logger *slog.Logger,
@@ -91,15 +96,17 @@ func New(
 		}
 	}
 
+	clearer := NewClearer(chainID, connections, chain, storage, cfg, logger)
+
 	return &Watcher{
-		chainID:    chainID,
-		clientIDs:  clientIDs,
-		routes:     routesOf(chainID, connections),
-		subscriber: subscriber,
-		storage:    storage,
-		clearer:    NewClearer(chainID, connections, querier, storage, cfg, logger),
-		cfg:        cfg,
-		logger:     logger.With("module", "watcher", "chainID", chainID),
+		chainID:   chainID,
+		clientIDs: clientIDs,
+		routes:    routesOf(chainID, connections),
+		chain:     chain,
+		storage:   storage,
+		clearer:   clearer,
+		cfg:       cfg,
+		logger:    logger.With("module", "watcher", "chainID", chainID),
 	}
 }
 
@@ -152,7 +159,7 @@ func (s stream) errs() <-chan error {
 
 func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (stream, error) {
 	subCtx, cancel := context.WithCancel(ctx)
-	sub, err := w.subscriber.SubscribeSendPackets(subCtx, w.clientIDs, events)
+	sub, err := w.chain.SubscribeSendPackets(subCtx, w.clientIDs, events)
 	if err != nil {
 		cancel()
 

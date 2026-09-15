@@ -25,16 +25,6 @@ const (
 	sendLogChunk = 200
 )
 
-// OutstandingQuerier the chain reads a clearing pass makes. It excludes
-// SubscribeSendPackets deliberately: the backstop exists to cover the gaps the
-// tip leaves, so it must compile, and keep working, without one.
-type OutstandingQuerier interface {
-	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
-	LatestPacketSequence(ctx context.Context, sourceClientID string, height uint64) (uint64, error)
-	PacketCommitments(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error)
-	FindSendPackets(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error)
-}
-
 // ClearStore the persistence a clearing pass reads and writes.
 type ClearStore interface {
 	PacketStore
@@ -67,7 +57,7 @@ type Result struct {
 type Clearer struct {
 	chainID string
 	routes  map[string]config.ClientEnd
-	chain   OutstandingQuerier
+	chain   Chain
 	storage ClearStore
 	abandon bool
 	logger  *slog.Logger
@@ -76,7 +66,7 @@ type Clearer struct {
 func NewClearer(
 	chainID string,
 	connections []config.ConnectionConfig,
-	chain OutstandingQuerier,
+	chain Chain,
 	storage ClearStore,
 	cfg Config,
 	logger *slog.Logger,

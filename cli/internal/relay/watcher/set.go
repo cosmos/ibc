@@ -43,7 +43,7 @@ func NewSetFromConfig(
 			AbandonUnrecoverablePackets: cfg.Relayer.AbandonUnrecoverablePacketsFor(chain.ChainID),
 		}
 
-		watcher := New(chain.ChainID, connections, client, client, storage, watcherConfig, logger)
+		watcher := New(chain.ChainID, connections, client, storage, watcherConfig, logger)
 
 		set = append(set, watcher)
 	}

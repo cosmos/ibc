@@ -5,8 +5,6 @@ package watcher
 import (
 	"context"
 	"log/slog"
-	"slices"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,233 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/store"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 // waitFor bounds how long a test blocks on a clearing pass's own goroutine.
 const waitFor = 5 * time.Second
 
-func newTestClearer(chain OutstandingQuerier, storage ClearStore) *Clearer {
+func newTestClearer(chain Chain, storage ClearStore) *Clearer {
 	return newClearer(chain, storage, Config{})
 }
 
-func newClearer(chain OutstandingQuerier, storage ClearStore, cfg Config) *Clearer {
+func newClearer(chain Chain, storage ClearStore, cfg Config) *Clearer {
 	return NewClearer(sourceChainID, testConnections(), chain, storage, cfg, slog.Default())
-}
-
-// fakeChain models what one chain has sent and what is still committed at a
-// given height. It is written out rather than generated because a pass reads it
-// several times and the answers have to stay consistent with each other: a
-// settled sequence has to read as settled from every query the pass makes.
-type fakeChain struct {
-	mu     sync.Mutex
-	head   uint64
-	sentAt map[uint64]uint64
-	// headReads are served to successive latest-header reads before head is,
-	// so a test can hand the pass a head that moves backwards
-	headReads []uint64
-
-	settled   map[uint64]struct{}
-	pruned    map[uint64]struct{}
-	latestErr error
-	headErr   error
-	probeErr  error
-	passes    int
-	probes    [][]uint64
-	heights   []uint64
-	finds     [][]uint64
-	gate      chan struct{}
-}
-
-func newFakeChain() *fakeChain {
-	return &fakeChain{
-		sentAt:  make(map[uint64]uint64),
-		settled: make(map[uint64]struct{}),
-		pruned:  make(map[uint64]struct{}),
-	}
-}
-
-// send records sequences as sent at the current head and still outstanding.
-func (c *fakeChain) send(sequences ...uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for _, sequence := range sequences {
-		c.sentAt[sequence] = c.head
-	}
-}
-
-// mine advances the head, so sends after it read as assigned above an earlier height.
-func (c *fakeChain) mine(blocks uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.head += blocks
-}
-
-// sequenceAt is the highest sequence assigned at or below height.
-func (c *fakeChain) sequenceAt(height uint64) uint64 {
-	var latest uint64
-
-	for sequence, at := range c.sentAt {
-		if at <= height {
-			latest = max(latest, sequence)
-		}
-	}
-
-	return latest
-}
-
-func (c *fakeChain) sentBy(sequence, height uint64) bool {
-	at, ok := c.sentAt[sequence]
-
-	return ok && at <= height
-}
-
-func (c *fakeChain) sent(sequence uint64) bool {
-	_, ok := c.sentAt[sequence]
-
-	return ok
-}
-
-// settle deletes the packet commitments, as an ack or a timeout does.
-func (c *fakeChain) settle(sequences ...uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for _, sequence := range sequences {
-		c.settled[sequence] = struct{}{}
-	}
-}
-
-// prune drops sends from the log index while leaving their commitments live.
-func (c *fakeChain) prune(sequences ...uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for _, sequence := range sequences {
-		c.pruned[sequence] = struct{}{}
-	}
-}
-
-// unprune serves the sends again, as pointing the relayer at an archive endpoint does.
-func (c *fakeChain) unprune(sequences ...uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for _, sequence := range sequences {
-		delete(c.pruned, sequence)
-	}
-}
-
-// hold blocks every clearing pass until the returned func releases them. It
-// ignores the context on purpose, so a test can assert Stop waits for a pass
-// that has not noticed the cancellation yet.
-func (c *fakeChain) hold() func() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.gate = make(chan struct{})
-	gate := c.gate
-
-	return func() { close(gate) }
-}
-
-func (c *fakeChain) failLatest(err error)   { c.mu.Lock(); c.latestErr = err; c.mu.Unlock() }
-func (c *fakeChain) failHead(err error)     { c.mu.Lock(); c.headErr = err; c.mu.Unlock() }
-func (c *fakeChain) failProbe(err error)    { c.mu.Lock(); c.probeErr = err; c.mu.Unlock() }
-func (c *fakeChain) passCount() int         { c.mu.Lock(); defer c.mu.Unlock(); return c.passes }
-func (c *fakeChain) probeCalls() [][]uint64 { c.mu.Lock(); defer c.mu.Unlock(); return c.probes }
-func (c *fakeChain) findCalls() [][]uint64  { c.mu.Lock(); defer c.mu.Unlock(); return c.finds }
-func (c *fakeChain) probeHeights() []uint64 { c.mu.Lock(); defer c.mu.Unlock(); return c.heights }
-
-// serveHeads queues the heights successive latest-header reads report.
-func (c *fakeChain) serveHeads(heights ...uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.headReads = heights
-}
-
-func (c *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHeader, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.headErr != nil {
-		return v2.BlockHeader{}, c.headErr
-	}
-
-	if height == v2.LatestBlock {
-		height = c.head
-
-		if len(c.headReads) > 0 {
-			height, c.headReads = c.headReads[0], c.headReads[1:]
-		}
-	}
-
-	return v2.BlockHeader{Height: height, Timestamp: blockTime}, nil
-}
-
-// LatestPacketSequence answers for the height it is asked about, which is what
-// makes a pinned height mean anything. Every pass reads it exactly once.
-func (c *fakeChain) LatestPacketSequence(_ context.Context, _ string, height uint64) (uint64, error) {
-	c.mu.Lock()
-
-	c.passes++
-	latest, err, gate := c.sequenceAt(height), c.latestErr, c.gate
-	c.mu.Unlock()
-
-	if gate != nil {
-		<-gate
-	}
-
-	return latest, err
-}
-
-// PacketCommitments answers as a node at height would: a send assigned above it
-// has no commitment there yet.
-func (c *fakeChain) PacketCommitments(
-	_ context.Context,
-	_ string,
-	sequences []uint64,
-	height uint64,
-) ([]uint64, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.probes = append(c.probes, slices.Clone(sequences))
-	c.heights = append(c.heights, height)
-
-	if c.probeErr != nil {
-		return nil, c.probeErr
-	}
-
-	var live []uint64
-
-	for _, sequence := range sequences {
-		if _, gone := c.settled[sequence]; c.sentBy(sequence, height) && !gone {
-			live = append(live, sequence)
-		}
-	}
-
-	return live, nil
-}
-
-func (c *fakeChain) FindSendPackets(_ context.Context, _ string, sequences []uint64) ([]v2.PacketEvent, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.finds = append(c.finds, slices.Clone(sequences))
-
-	var events []v2.PacketEvent
-
-	for _, sequence := range sequences {
-		if _, gone := c.pruned[sequence]; c.sent(sequence) && !gone {
-			events = append(events, sendPacketEvent(sequence))
-		}
-	}
-
-	return events, nil
 }
 
 // failingWrites fails every row write inside the pass's transaction, leaving
@@ -341,9 +123,9 @@ func TestClearerClear(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("outstandingCommitmentsGetRows", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2, 3, 4, 5)
-		chain.settle(1, 2, 4)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2, 3, 4, 5)
+		chain.settleSequences(1, 2, 4)
 
 		db := watcherStore(t)
 
@@ -369,9 +151,9 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("settledCommitmentsWriteNothing", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2, 3)
-		chain.settle(1, 2, 3)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2, 3)
+		chain.settleSequences(1, 2, 3)
 
 		db := watcherStore(t)
 
@@ -392,8 +174,8 @@ func TestClearerClear(t *testing.T) {
 			store.RelayStatusCompleteWithAck,
 		} {
 			t.Run(string(status), func(t *testing.T) {
-				chain := newFakeChain()
-				chain.send(1, 2)
+				chain := newFakeChain(t)
+				chain.sendSequences(1, 2)
 
 				db := watcherStore(t)
 				hold(t, db, 1, status)
@@ -409,8 +191,8 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("theSkipQueryIsBoundedByTheWatermark", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2, 3, 4)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2, 3, 4)
 
 		db := watcherStore(t)
 		require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 2, store.UnresolvedDelta{}))
@@ -427,8 +209,8 @@ func TestClearerClear(t *testing.T) {
 	// so the sequence counter trails rows the subscription already wrote. Nothing
 	// is written off by carrying on: the range is bounded by what the chain reports
 	t.Run("aChainBehindOurRowsKeepsClearing", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
 
 		db := watcherStore(t)
 		hold(t, db, 7, store.RelayStatusPending)
@@ -444,8 +226,8 @@ func TestClearerClear(t *testing.T) {
 	// a pass that read a stale watermark reports the bound it probed to, and the
 	// store keeps the higher one another instance already earned
 	t.Run("aWatermarkBehindTheStoredOneDoesNotMoveIt", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2, 3)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2, 3)
 
 		db := watcherStore(t)
 		require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 9, store.UnresolvedDelta{}))
@@ -457,7 +239,7 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("aClientWithNothingSentProbesNothing", func(t *testing.T) {
-		chain := newFakeChain()
+		chain := newFakeChain(t)
 
 		result, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -467,8 +249,8 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("probeFailureWritesNothing", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
 		chain.failProbe(errors.New("rpc refused the batch"))
 
 		db := watcherStore(t)
@@ -480,12 +262,12 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("bothQueriesAreChunked", func(t *testing.T) {
-		chain := newFakeChain()
+		chain := newFakeChain(t)
 
 		const sent = probeChunk + sendLogChunk
 
 		for sequence := uint64(1); sequence <= sent; sequence++ {
-			chain.send(sequence)
+			chain.sendSequences(sequence)
 		}
 
 		result, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
@@ -499,10 +281,10 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("theSequenceIsReadBeforeTheProbe", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
 
-		release := chain.hold()
+		release := chain.blockClears()
 		done := make(chan Result, 1)
 
 		db := watcherStore(t)
@@ -525,17 +307,17 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("aWarmPassProbesOnlyWhatTheWatermarkHasNotSettled", func(t *testing.T) {
-		chain := newFakeChain()
+		chain := newFakeChain(t)
 
 		const sent = 2 * probeChunk
 
 		for sequence := uint64(1); sequence <= sent; sequence++ {
-			chain.send(sequence)
+			chain.sendSequences(sequence)
 		}
 
 		// everything is settled but one packet, which stays stuck in a terminal
 		// state: a client's history must not pin the probe to it
-		chain.settle(sequenceRange(2, sent)...)
+		chain.settleSequences(sequenceRange(2, sent)...)
 
 		clearer := newTestClearer(chain, watcherStore(t))
 
@@ -546,7 +328,7 @@ func TestClearerClear(t *testing.T) {
 		coldCalls := len(chain.probeCalls())
 		require.Equal(t, 2, coldCalls)
 
-		chain.send(sent + 1)
+		chain.sendSequences(sent + 1)
 
 		warm, err := clearer.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -557,9 +339,9 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("anUnresolvedSendIsProbedUntilItSettles", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
-		chain.prune(1)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
+		chain.pruneSequences(1)
 
 		db := watcherStore(t)
 		clearer := newTestClearer(chain, db)
@@ -583,7 +365,7 @@ func TestClearerClear(t *testing.T) {
 
 		// an ack or a timeout deletes the commitment, which is the only thing
 		// that drains the set
-		chain.settle(1)
+		chain.settleSequences(1)
 
 		result, err = clearer.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -593,10 +375,10 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("aLaggingHeadCannotResolveAnUnresolvedSend", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.mine(10)
-		chain.send(1, 2)
-		chain.prune(1)
+		chain := newFakeChain(t)
+		chain.mineBlocks(10)
+		chain.sendSequences(1, 2)
+		chain.pruneSequences(1)
 
 		db := watcherStore(t)
 		clearer := newTestClearer(chain, db)
@@ -618,7 +400,7 @@ func TestClearerClear(t *testing.T) {
 
 		// a pass that reads at or above the height the commitment was last seen
 		// live at still resolves it
-		chain.settle(1)
+		chain.settleSequences(1)
 
 		_, err = clearer.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -627,9 +409,9 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("anAbandonedSendIsRememberedButNotProbed", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
-		chain.prune(1)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
+		chain.pruneSequences(1)
 
 		db := watcherStore(t)
 		abandoning := newClearer(chain, db, Config{AbandonUnrecoverablePackets: true})
@@ -653,7 +435,7 @@ func TestClearerClear(t *testing.T) {
 
 		// an archive endpoint turns up later: turning the setting off is the
 		// whole recovery, since the sequence was never forgotten
-		chain.unprune(1)
+		chain.unpruneSequences(1)
 
 		result, err = newTestClearer(chain, db).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -665,8 +447,8 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("aFailedRowWriteLeavesNoWatermark", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
 
 		db := watcherStore(t)
 		storage := failingWrites{ClearStore: db, err: errors.New("disk is full")}
@@ -679,9 +461,9 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("everyProbeNamesTheHeadTheSequenceWasReadAt", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.mine(7)
-		chain.send(1, 2)
+		chain := newFakeChain(t)
+		chain.mineBlocks(7)
+		chain.sendSequences(1, 2)
 
 		_, err := newTestClearer(chain, watcherStore(t)).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
@@ -690,11 +472,11 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("theHeightMovesUpWithTheChainBetweenChunks", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.mine(10)
+		chain := newFakeChain(t)
+		chain.mineBlocks(10)
 
 		for sequence := uint64(1); sequence <= probeChunk+1; sequence++ {
-			chain.send(sequence)
+			chain.sendSequences(sequence)
 		}
 
 		// a cold pass outlives the state a non-archive node keeps, so the
@@ -708,13 +490,13 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("aHeadReadFromALaggingNodeCannotDragTheProbeBack", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.mine(10)
+		chain := newFakeChain(t)
+		chain.mineBlocks(10)
 
 		const sent = probeChunk + 1
 
 		for sequence := uint64(1); sequence <= sent; sequence++ {
-			chain.send(sequence)
+			chain.sendSequences(sequence)
 		}
 
 		// the pass opens at 10, then the refresh lands on a node six blocks behind
@@ -729,8 +511,8 @@ func TestClearerClear(t *testing.T) {
 	})
 
 	t.Run("aFailedHeaderReadAbortsThePass", func(t *testing.T) {
-		chain := newFakeChain()
-		chain.send(1, 2)
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
 		chain.failHead(errors.New("rpc timed out"))
 
 		db := watcherStore(t)

@@ -72,8 +72,8 @@ func TestNewSetFromConfig(t *testing.T) {
 // startup that failed.
 func TestSetStartUnwinds(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		running, failing := newSubscriber(), newSubscriber()
-		failing.failNext(errors.New("dial failed"))
+		running, failing := newFakeChain(t), newFakeChain(t)
+		failing.failNextSub(errors.New("dial failed"))
 
 		set := Set{
 			newTestWatcher(running, watcherStore(t)),
@@ -83,19 +83,19 @@ func TestSetStartUnwinds(t *testing.T) {
 		require.ErrorContains(t, set.Start(), sourceChainID)
 		synctest.Wait()
 
-		assert.True(t, running.latest(t).unsubscribed)
+		assert.True(t, running.latestSub().unsubscribed)
 	})
 }
 
 func TestSetStartStop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		chain := newSubscriber()
+		chain := newFakeChain(t)
 		set := Set{newTestWatcher(chain, watcherStore(t))}
 
 		require.NoError(t, set.Start())
 		synctest.Wait()
 
 		require.NoError(t, set.Stop())
-		assert.True(t, chain.latest(t).unsubscribed)
+		assert.True(t, chain.latestSub().unsubscribed)
 	})
 }
