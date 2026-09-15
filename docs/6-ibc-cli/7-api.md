@@ -3,6 +3,20 @@ title: "API"
 description: "The two gRPC services a running relayer and attestor serve, and how to call them."
 ---
 
+<!-- GEN:notice START -->
+
+<!--
+Tables between GEN markers on this page are generated from this
+repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
+run overwrites whatever is there, so a hand edit looks like a fix and is not.
+The prose around them is written by hand and is yours to change.
+
+After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
+before opening a pull request.
+-->
+
+<!-- GEN:notice END -->
+
 The IBC CLI exposes two APIs: a relayer API and an attestation API.
 
 The relayer's API has two main parts:

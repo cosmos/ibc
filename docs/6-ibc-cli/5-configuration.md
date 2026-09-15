@@ -3,6 +3,20 @@ title: "Configuration"
 description: "Configure chains, connections, attestors, signers, and storage in ibc.yml."
 ---
 
+<!-- GEN:notice START -->
+
+<!--
+Tables between GEN markers on this page are generated from this
+repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
+run overwrites whatever is there, so a hand edit looks like a fix and is not.
+The prose around them is written by hand and is yours to change.
+
+After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
+before opening a pull request.
+-->
+
+<!-- GEN:notice END -->
+
 The IBC CLI reads its configuration from `ibc.yml`. The file tells the CLI:
 
 - which chains to connect to
@@ -122,11 +136,31 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 |---|---|---|---|
 | `listenAddr` | `string` | `0.0.0.0:3000` | Address the gRPC server binds. It serves the relayer and attestor APIs together. |
 
-<!-- [config.go:L66](cli/internal/config/config.go#L66) -->
+<!-- [config.go:L82](cli/internal/config/config.go#L82) -->
 
 <!-- GEN:config:server END -->
 
 Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/bootstrap/bootstrap.go#L120) --> <!-- [server.go:L103-L113](cli/internal/server/server.go#L103-L113) -->
+
+## `logging`
+
+`logging` sets how the process writes its own logs. Each key has a matching
+flag, and the flag wins only when it is passed explicitly, so a value here
+survives an ordinary invocation.
+
+<!-- GEN:config:logging START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `level` | `string` | `info` | A slog level name (debug, info, warn, error). Empty defaults to info. |
+| `json` | `bool` | optional | Emits logs as JSON instead of text. |
+
+<!-- [config.go:L88](cli/internal/config/config.go#L88) -->
+
+<!-- GEN:config:logging END -->
+
+`--log-level` and `--log-json` override their keys for one run.
+<!-- [config.go:L213-L222](cli/cmd/ibc/config.go#L213-L222) -->
 
 ## `db`
 
@@ -139,11 +173,35 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
 | `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
 
-<!-- [config.go:L71](cli/internal/config/config.go#L71) -->
+<!-- [config.go:L96](cli/internal/config/config.go#L96) -->
 
 <!-- GEN:config:db END -->
 
 `ibc relayer run` applies pending migrations at startup. Pass `--no-migrate` to disable automatic migration, or run `ibc migrate up` separately.
+
+## `observability`
+
+`observability` turns metrics on and says how they are served. With `metrics`
+false nothing else in the block is read, and the process logs that observability
+is disabled.
+
+<!-- GEN:config:observability START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `metrics` | `bool` | `false` | Whether the process exports metrics. When false, the rest of this block is ignored. |
+| `type` | `string` | `simple` | Which exporter serves the metrics. |
+| `simpleMetricsListenAddr` | `string` | `0.0.0.0:9090` | Address the `simple` exporter serves metrics on. |
+| `otelFile` | `string` | optional | OpenTelemetry configuration file, read when `type` is `otel`. `OTEL_CONFIG_FILE` overrides it, and one of the two is required. |
+
+<!-- [config.go:L103](cli/internal/config/config.go#L103) -->
+
+<!-- GEN:config:observability END -->
+
+`simple` serves Prometheus metrics over HTTP on `simpleMetricsListenAddr`.
+`otel` collects through OpenTelemetry instead and needs a configuration file,
+from `otelFile` or from `OTEL_CONFIG_FILE`.
+<!-- [config.go:L43-L47](cli/internal/config/config.go#L43-L47) -->
 
 ## `chains`
 
@@ -159,7 +217,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
 
-<!-- [config.go:L80](cli/internal/config/config.go#L80) -->
+<!-- [config.go:L114](cli/internal/config/config.go#L114) -->
 
 <!-- GEN:config:chains END -->
 
@@ -257,7 +315,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
+<!-- [config.go:L138](cli/internal/config/config.go#L138) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -280,7 +338,7 @@ attestors:
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port. |
 
-<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
+<!-- [config.go:L138](cli/internal/config/config.go#L138) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -304,7 +362,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
+<!-- [config.go:L163](cli/internal/config/config.go#L163) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -329,7 +387,7 @@ signers:
 | `grpc` | `string` | **required** | Address for a remote signer. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
 
-<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
+<!-- [config.go:L163](cli/internal/config/config.go#L163) -->
 
 <!-- GEN:config:signers:remote END -->
 

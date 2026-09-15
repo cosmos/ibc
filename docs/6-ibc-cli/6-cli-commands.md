@@ -3,6 +3,20 @@ title: "CLI commands"
 description: "IBC CLI command reference"
 ---
 
+<!-- GEN:notice START -->
+
+<!--
+Tables between GEN markers on this page are generated from this
+repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
+run overwrites whatever is there, so a hand edit looks like a fix and is not.
+The prose around them is written by hand and is yours to change.
+
+After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
+before opening a pull request.
+-->
+
+<!-- GEN:notice END -->
+
 The IBC CLI contains commands for configuring, deploying, running, and monitoring IBC deployments, relayers, and attestors.
 
 Commands are grouped here the way the binary groups them, so any of them prints its own flags with `--help`. The sections run in the order a reader meets them: `config` and `keys`, then `deploy`, then `relayer` and `attestor`, then `tx` and `query`, then `migrate`.
@@ -17,9 +31,10 @@ Commands are grouped here the way the binary groups them, so any of them prints 
 | `--db <string>` |  | Database URL override. |
 | `--home <string>` | `~/.ibc` | IBC home directory. |
 | `--log-json` |  | Enable JSON logging. |
+| `--log-level <string>` | `info` | Log level (debug, info, warn, error). |
 | `-q, --quiet` |  | Quiet mode. |
 
-<!-- [flags.go:L38](cli/internal/config/flags.go#L38) -->
+<!-- [flags.go:L40](cli/internal/config/flags.go#L40) -->
 
 <!-- GEN:cli:global-flags END -->
 
@@ -185,7 +200,7 @@ Deploy and register a light client tracking a counterparty chain.
 | `--threshold <uint8>` | `1` | Attestation signature threshold. |
 | `--timestamp <uint>` | counterparty head | Initial trusted timestamp seconds. |
 | `--type <string>` | `attestation` | Light client type. |
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -211,7 +226,7 @@ Deploy the core IBC routing stack on one chain.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -229,7 +244,7 @@ Deploy the ICS27-GMP app on one chain.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -250,7 +265,7 @@ Deploy an IFT token on one chain.
 | `--name <string>` | required | ERC20 token name. |
 | `--owner <string>` | `deployer` | Token owner address. |
 | `--symbol <string>` | required | ERC20 token symbol (need not be unique). |
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -301,7 +316,7 @@ Print the existing config plus the settings to relay between two chains.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--signer-a <string>` |  | Signers[] alias submitting relay txs on chainA. |
+| `--signer-a <string>` | required | Signers[] alias submitting relay txs on chainA. |
 | `--signer-b <string>` |  | Signers[] alias submitting relay txs on chainB. |
 | `-p, --populate-config` |  | Write the printed config to the config file. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |

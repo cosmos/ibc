@@ -200,6 +200,8 @@ def _():
     # holds in the docs repo and in the copy that lives beside the code
     for gen in refgen.GENERATORS.values():
         for region, body in gen().items():
+            if region == "notice":
+                continue          # says what the page is, not what the code says
             cites = re.findall(r"\]\(([^)#]+)#L(\d+)", body)
             assert cites, f"{region} carries no citation"
             for path, line in cites:
@@ -270,26 +272,164 @@ def _():
                 assert cells[-1], f"{region}: {cells[0]} has no description"
 
 
-@case("api: a field that gains a proto comment raises, so FIELD_DOCS cannot shadow it")
+@case("probe: a flag group is not read as a flag, and does not claim required")
 def _():
+    # cobra says `at least one of the flags in the group [alpha beta] is
+    # required`. Reading that as a flag name produced a flag called
+    # "alpha beta", which matches nothing -- so both real flags rendered
+    # optional while the binary refused to run without one.
+    for line in ("Error: at least one of the flags in the group [alpha beta] is required",
+                 "Error: if any flags in the group [alpha beta] are set they must all be set"):
+        hits = [rx.search(line) for rx in refgen._REQUIRED_ALSO]
+        assert not any(hits), (line, hits)
+        assert any(rx.search(line) for rx in refgen._FLAG_GROUP), line
+    # a genuine single-flag message is still read
+    assert refgen._REQUIRED_ALSO[0].search("Error: --chain is required")
+
+
+@case("probe: only the error line is read, never the usage block under it")
+def _():
+    out = ("Error: accepts 1 arg(s), received 0\n"
+           "Usage:\n  ibc keys show [name] [flags]\n"
+           "Flags:\n      --private   required for remote signers\n")
+    assert refgen._error_line(out) == "Error: accepts 1 arg(s), received 0"
+    # the usage text below must not be mined for requirements
+    assert not refgen._REQUIRED_ALSO[0].search(refgen._error_line(out))
+
+
+@case("probe: a command whose answer is a floor is recorded as one")
+def _():
+    binary = refgen.build_cli()
+    tree = refgen.walk_cli(binary)
+    refgen.required_flags(binary, tree)
+    # every command that reports required flags stops at the first value it
+    # rejects, so each of them is a floor and the report has to say so
+    assert refgen.INCOMPLETE_PROBES, "nothing recorded as incomplete"
+    for path in refgen.INCOMPLETE_PROBES:
+        assert path in tree, path
+
+
+@case("plan: a description gap names the declaration to go and fix")
+def _():
+    key = ("ServerConfig", "listenAddr")
+    saved = dict(refgen.FALLBACK_DOCS)
+    try:
+        del refgen.FALLBACK_DOCS[key]
+        refgen.PLAN = []
+        refgen.gen_config()
+        gaps = [c for c in refgen.PLAN if c["kind"] == "missing_description"]
+    finally:
+        refgen.PLAN = None
+        refgen.FALLBACK_DOCS.clear()
+        refgen.FALLBACK_DOCS.update(saved)
+    assert gaps, "no missing_description recorded"
+    g = gaps[0]
+    assert g["file"].endswith(".go"), g
+    assert isinstance(g["line"], int) and g["line"] > 0, g
+    line = refgen._read(g["file"]).split("\n")[g["line"] - 1]
+    assert "ListenAddress" in line, (g, line)
+
+
+@case("report: a page the tool could not read is named, and the exit code says so")
+def _():
+    # This is the failure the report exists to prevent, and the report had it:
+    # a refused page was dropped from `plans` and rc=2 was overwritten by rc=1,
+    # so it printed "every table matches the source" and exited 0.
+    refused = [{"page": "x.md", "kind": "api", "regions": 0,
+                "refused": "go build failed", "stale": [], "missing_marker": [],
+                "orphaned_marker": [], "curation": []}]
+    out = refgen.report(refused)
+    assert "could not be read" in out.lower(), out
+    assert "go build failed" in out, out
+    assert "every table matches the source" not in out, out
+
+
+@case("report: counts only the pages it could actually read")
+def _():
+    plans = [{"page": "a.md", "kind": "api", "regions": 7, "stale": [],
+              "missing_marker": [], "orphaned_marker": [], "curation": []},
+             {"page": "b.md", "kind": "cli", "regions": 0, "refused": "nope",
+              "stale": [], "missing_marker": [], "orphaned_marker": [],
+              "curation": []}]
+    out = refgen.report(plans)
+    assert "7 regions across 1 page" in out, out
+
+
+@case("report: a message naming a file is not cut at the file's dot")
+def _():
+    plans = [{"page": "a.md", "kind": "config", "regions": 1, "stale": [],
+              "missing_marker": [], "orphaned_marker": [],
+              "curation": [{"kind": "missing_description",
+                            "message": "DBConfig.URL has no doc comment in "
+                                       "cli/internal/config/config.go anywhere. Fix it.",
+                            "file": "cli/internal/config/config.go", "line": 3}]}]
+    out = refgen.report(plans)
+    assert "config.go anywhere" in out, out
+
+
+@case("notice: every page carries one, and it says the prose is still yours")
+def _():
+    for kind, gen in refgen.GENERATORS.items():
+        blocks = gen()
+        assert "notice" in blocks, kind
+        body = blocks["notice"]
+        assert body.startswith(refgen.COMMENT[0]), (kind, body[:40])
+        assert body.rstrip().endswith(refgen.COMMENT[1]), kind
+        assert "AGENTS.md" in body, kind
+        # it must not tell anyone to stop editing the prose, which is theirs
+        assert "yours to change" in body, kind
+
+
+@case("notice: it is not a section, so it gets no heading and goes first")
+def _():
+    assert refgen._suggest_heading("notice") == ""
+    assert refgen._suggest_heading("cli:cmd:keys-export") == "### `ibc keys export`"
+
+
+@case("notice: a marker above the frontmatter is refused")
+def _():
+    page = ("<!-- GEN:notice START -->\n<!-- GEN:notice END -->\n"
+            "---\ntitle: \"X\"\n---\n\nbody\n")
+    try:
+        refgen._check_notice_placement(page, "x.md")
+    except refgen.MarkerError as e:
+        assert "frontmatter" in str(e), e
+    else:
+        raise AssertionError("a notice above the frontmatter must be refused")
+    ok = ("---\ntitle: \"X\"\n---\n\n<!-- GEN:notice START -->\n"
+          "<!-- GEN:notice END -->\n\nbody\n")
+    refgen._check_notice_placement(ok, "x.md")      # must not raise
+
+
+@case("api: a proto field with no comment and no entry raises, not a blank cell")
+def _():
+    # This used to return an empty string and raise nothing, so a new field on
+    # a public API shipped with a blank Description and a clean check.
     key = ("PacketSelector", "sequence_number")
     saved = refgen.FIELD_DOCS[key]
     try:
-        # a field with both a comment upstream and an entry here means one of
-        # them has not been re-read, so it must raise rather than pick one
         del refgen.FIELD_DOCS[key]
-        refgen.gen_api()          # no entry, no comment: fine
-        # an entry for a field that does not exist must raise
-        refgen.FIELD_DOCS[("PacketSelector", "gone_away")] = ("x", "y")
         try:
             refgen.gen_api()
         except refgen.SourceError as e:
-            assert "gone_away" in str(e), e
-            return
+            assert "sequence_number" in str(e), e
+        else:
+            raise AssertionError("a field nobody described must not render blank")
+    finally:
+        refgen.FIELD_DOCS[key] = saved
+
+
+@case("api: an entry for a field that is gone raises")
+def _():
+    refgen.FIELD_DOCS[("PacketSelector", "gone_away")] = ("x", "y")
+    try:
+        refgen.gen_api()
+    except refgen.SourceError as e:
+        assert "gone_away" in str(e), e
+    else:
         raise AssertionError("expected SourceError for a dead FIELD_DOCS entry")
     finally:
         refgen.FIELD_DOCS.pop(("PacketSelector", "gone_away"), None)
-        refgen.FIELD_DOCS[key] = saved
 
 
 @case("api: a list renders as an array, not as protobuf's `repeated`")
