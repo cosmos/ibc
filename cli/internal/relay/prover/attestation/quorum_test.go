@@ -51,7 +51,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", data),
 		}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		result, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -62,7 +62,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", []byte("wrong claim")),
 			signedAttestor(t, "a2", []byte("wrong claim")),
 		}
-		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		_, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 		require.ErrorContains(t, err, "attested data does not match expected claim")
 	})
@@ -74,7 +74,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "valid1", data),
 			signedAttestor(t, "valid2", data),
 		}
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		result, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -85,7 +85,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", data),
 		}
 
-		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		_, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 	})
 
@@ -95,7 +95,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", []byte("a different claim entirely")),
 		}
 
-		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		_, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(
 			t,
 			err,
@@ -111,7 +111,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a3", data),
 		}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		result, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -128,7 +128,7 @@ func TestQueryQuorum(t *testing.T) {
 			erroring,
 		}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		result, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -147,7 +147,7 @@ func TestQueryQuorum(t *testing.T) {
 		}
 
 		// threshold 2 still met by the two valid attestors despite the bad one
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		result, err := New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -175,7 +175,7 @@ func TestQueryQuorum(t *testing.T) {
 			makeAttestor("a2-same-key"),
 		}
 
-		_, err = queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		_, err = New(attestors, 2, nil, slog.Default()).newRound("state").queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(
 			t,
 			err,
