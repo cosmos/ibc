@@ -83,6 +83,7 @@ func (g *Generator) PacketProofs(
 	}
 
 	encodedPackets := make([][]byte, len(packets))
+	expectedPackets := make([]attestorevm.PacketCompact, len(packets))
 
 	for i, packet := range packets {
 		encoded, errEnc := ibc.EncodePacket(packet)
@@ -91,10 +92,7 @@ func (g *Generator) PacketProofs(
 		}
 
 		encodedPackets[i] = encoded
-	}
 
-	expectedPackets := make([]attestorevm.PacketCompact, len(packets))
-	for i, packet := range packets {
 		compact, errExpected := g.expectedPacket(ctx, height, commitmentType, packet)
 		if errExpected != nil {
 			return nil, errors.Wrapf(errExpected, "expected commitment for packet %d", i)

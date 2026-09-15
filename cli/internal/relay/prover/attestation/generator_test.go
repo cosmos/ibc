@@ -183,60 +183,89 @@ func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
 		{Sequence: 2, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
 	}
 
+	tests := []struct {
+		name    string
+		height  uint64
+		mutate  func([]attestorevm.PacketCompact) []attestorevm.PacketCompact
+		wantErr bool
+	}{
+		{name: "valid", height: 20},
+		{
+			name: "path", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				claims[0].Path[0] ^= 1
+				return claims
+			},
+		},
+		{
+			name: "commitment", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				claims[0].Commitment[0] ^= 1
+				return claims
+			},
+		},
+		{
+			name: "reordered", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				return []attestorevm.PacketCompact{claims[1], claims[0]}
+			},
+		},
+		{
+			name: "duplicate", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				return []attestorevm.PacketCompact{claims[0], claims[0]}
+			},
+		},
+		{
+			name: "missing", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				return claims[:1]
+			},
+		},
+		{name: "height", height: 21, wantErr: true},
+	}
+
 	for _, kind := range []v2.ProofKind{v2.ProofKindPacketCommitment, v2.ProofKindAcknowledgement, v2.ProofKindReceiptAbsence} {
-		for _, mutation := range []string{"valid", "path", "commitment", "reordered", "duplicate", "missing", "height"} {
-			t.Run(fmt.Sprintf("%v/%s", kind, mutation), func(t *testing.T) {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%v/%s", kind, tt.name), func(t *testing.T) {
 				chain := mocks.NewMockClient(t)
-				expected := make([]attestorevm.PacketCompact, len(packets))
+				claims := make([]attestorevm.PacketCompact, len(packets))
 				for i, packet := range packets {
 					switch kind {
 					case v2.ProofKindPacketCommitment:
-						expected[i].Path = crypto.Keccak256Hash(
+						claims[i].Path = crypto.Keccak256Hash(
 							hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence),
 						)
-						expected[i].Commitment = [32]byte(channeltypesv2.CommitPacket(packet))
+						claims[i].Commitment = [32]byte(channeltypesv2.CommitPacket(packet))
 					case v2.ProofKindAcknowledgement:
-						expected[i].Path = crypto.Keccak256Hash(
+						claims[i].Path = crypto.Keccak256Hash(
 							hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence),
 						)
-						expected[i].Commitment = [32]byte{byte(i + 1)}
+						claims[i].Commitment = [32]byte{byte(i + 1)}
 						chain.EXPECT().
-							GetCommitment(mock.Anything, uint64(20), expected[i].Path).
-							Return(expected[i].Commitment, nil).
+							GetCommitment(mock.Anything, uint64(20), claims[i].Path).
+							Return(claims[i].Commitment, nil).
 							Once()
 					case v2.ProofKindReceiptAbsence:
-						expected[i].Path = crypto.Keccak256Hash(
+						claims[i].Path = crypto.Keccak256Hash(
 							hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence),
 						)
 					}
 				}
-				claims := append([]attestorevm.PacketCompact(nil), expected...)
-				height := uint64(20)
-				switch mutation {
-				case "path":
-					claims[0].Path[0] ^= 1
-				case "commitment":
-					claims[0].Commitment[0] ^= 1
-				case "reordered":
-					claims[0], claims[1] = claims[1], claims[0]
-				case "duplicate":
-					claims[1] = claims[0]
-				case "missing":
-					claims = claims[:1]
-				case "height":
-					height++
+				if tt.mutate != nil {
+					claims = tt.mutate(claims)
 				}
 				gen := New([]attestor.Attestor{
-					signedPacketAttestor(t, "a1", height, claims),
-					signedPacketAttestor(t, "a2", height, claims),
+					signedPacketAttestor(t, "a1", tt.height, claims),
+					signedPacketAttestor(t, "a2", tt.height, claims),
 				}, 2, chain, slog.Default())
 
 				proofs, err := gen.PacketProofs(context.Background(), 20, kind, packets)
-				if mutation == "valid" {
+				if !tt.wantErr {
 					require.NoError(t, err)
 					require.Len(t, proofs, len(packets))
 				} else {
-					require.Error(t, err)
+					require.ErrorContains(t, err, "attested data does not match expected claim")
 					require.Nil(t, proofs)
 				}
 			})
@@ -253,7 +282,7 @@ func TestGeneratorStateTimestampMismatch(t *testing.T) {
 	gen := New([]attestor.Attestor{signedStateAttestor(t, "a1", 10)}, 1, chain, slog.Default())
 
 	proof, err := gen.StateProof(context.Background(), 10)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "attested data does not match expected claim")
 	require.Nil(t, proof)
 }
 
