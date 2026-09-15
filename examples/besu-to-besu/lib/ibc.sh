@@ -252,7 +252,7 @@ deploy_ift() {
 _leg() {
   local src="$1" dst="$2"
   local src_id dst_id ift_src ift_dst sender receiver
-  local before expected balance hash waited=0
+  local before expected balance hash
 
   src_id=$(_chain_attr "$src" CHAIN_ID); dst_id=$(_chain_attr "$dst" CHAIN_ID)
   ift_src=$(_token "$src_id"); ift_dst=$(_token "$dst_id")
@@ -287,7 +287,8 @@ _leg() {
     || die "'ibc relayer relay' failed for the $src -> $dst leg"
 
   log "      waiting for chain $dst's balance to go $before -> $expected..."
-  while (( waited < IFT_RELAY_TIMEOUT )); do
+  local deadline=$((SECONDS + IFT_RELAY_TIMEOUT))
+  while (( SECONDS < deadline )); do
     # A failed query is a retry, not a fatal: the poll outlives one transient
     # RPC hiccup and only the timeout below ends the wait.
     balance=$(_balance "$dst_id" "$ift_dst" "$receiver")
@@ -296,7 +297,6 @@ _leg() {
       return 0
     fi
     sleep "$IFT_POLL_INTERVAL"
-    (( waited += IFT_POLL_INTERVAL ))
   done
 
   die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected" \
