@@ -18,7 +18,7 @@ type Set []*Watcher
 // at least one of its routes.
 func NewSetFromConfig(
 	cfg config.Config,
-	clientSet *chains.ClientSet,
+	clients *chains.ClientSet,
 	storage ClearStore,
 	logger *slog.Logger,
 ) (Set, error) {
@@ -30,26 +30,22 @@ func NewSetFromConfig(
 			continue
 		}
 
-		client, ok := clientSet.Get(chain.ChainID)
+		client, ok := clients.Get(chain.ChainID)
 		if !ok {
 			return nil, errors.Errorf("no chain client for auto-relayed chain %q", chain.ChainID)
 		}
 
-		set = append(set, New(
-			chain.ChainID,
-			connections,
-			client,
-			client,
-			storage,
-			ClearConfig{
-				OnStart:                     cfg.Relayer.ClearOnStartEnabled(),
-				Interval:                    cfg.Relayer.ClearIntervalFor(chain.ChainID),
-				AbandonUnrecoverablePackets: cfg.Relayer.AbandonUnrecoverablePacketsFor(chain.ChainID),
-			},
-			DefaultMinBackoff,
-			DefaultMaxBackoff,
-			logger,
-		))
+		watcherConfig := Config{
+			MinBackoff:                  DefaultMinBackoff,
+			MaxBackoff:                  DefaultMaxBackoff,
+			CleanOnStart:                cfg.Relayer.ClearOnStartEnabled(),
+			ClearInterval:               cfg.Relayer.ClearIntervalFor(chain.ChainID),
+			AbandonUnrecoverablePackets: cfg.Relayer.AbandonUnrecoverablePacketsFor(chain.ChainID),
+		}
+
+		watcher := New(chain.ChainID, connections, client, client, storage, watcherConfig, logger)
+
+		set = append(set, watcher)
 	}
 
 	return set, nil

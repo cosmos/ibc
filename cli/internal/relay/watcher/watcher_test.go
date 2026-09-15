@@ -135,24 +135,29 @@ func testConnections() []config.ConnectionConfig {
 // newTestWatcher builds a watcher whose clearing pass only ever runs on a
 // reconnect, so a test that says nothing about clearing gets none.
 func newTestWatcher(chain Subscriber, storage ClearStore) *Watcher {
-	return newClearingWatcher(chain, newFakeChain(), storage, ClearConfig{Interval: time.Hour})
+	return newClearingWatcher(chain, newFakeChain(), storage, Config{ClearInterval: time.Hour})
 }
 
 func newClearingWatcher(
 	chain Subscriber,
 	querier OutstandingQuerier,
 	storage ClearStore,
-	clearing ClearConfig,
+	cfg Config,
 ) *Watcher {
+	if cfg.MinBackoff == 0 {
+		cfg.MinBackoff = DefaultMinBackoff
+	}
+	if cfg.MaxBackoff == 0 {
+		cfg.MaxBackoff = DefaultMaxBackoff
+	}
+
 	return New(
 		sourceChainID,
 		testConnections(),
 		chain,
 		querier,
 		storage,
-		clearing,
-		DefaultMinBackoff,
-		DefaultMaxBackoff,
+		cfg,
 		slog.Default(),
 	)
 }
@@ -170,6 +175,16 @@ func sendPacketEvent(sequence uint64) v2.PacketEvent {
 			TimeoutTimestamp:  uint64(blockTime.Add(time.Hour).Unix()),
 		},
 	}
+}
+
+func TestWatcherNew(t *testing.T) {
+	t.Run("defaultsClearIntervalWhenUnset", func(t *testing.T) {
+		// ARRANGE / ACT
+		w := newClearingWatcher(newSubscriber(), newFakeChain(), watcherStore(t), Config{})
+
+		// ASSERT
+		assert.Equal(t, config.DefaultClearInterval, w.cfg.ClearInterval)
+	})
 }
 
 func TestWatcherHandleEvent(t *testing.T) {
@@ -398,7 +413,7 @@ func TestWatcherClearingLoop(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			chain := newSubscriber()
 			outstanding := newFakeChain()
-			w := start(t, newClearingWatcher(chain, outstanding, db, ClearConfig{Interval: time.Hour}))
+			w := start(t, newClearingWatcher(chain, outstanding, db, Config{ClearInterval: time.Hour}))
 
 			chain.latest(t).out <- sendPacketEvent(1)
 			synctest.Wait()
@@ -426,8 +441,8 @@ func TestWatcherClearingLoop(t *testing.T) {
 					outstanding := newFakeChain()
 					outstanding.send(1)
 
-					clearing := ClearConfig{OnStart: onStart, Interval: time.Hour}
-					w := start(t, newClearingWatcher(newSubscriber(), outstanding, db, clearing))
+					cfg := Config{CleanOnStart: onStart, ClearInterval: time.Hour}
+					w := start(t, newClearingWatcher(newSubscriber(), outstanding, db, cfg))
 
 					if onStart {
 						assert.Equal(t, []uint64{1}, recorded(t, db))
@@ -448,12 +463,12 @@ func TestWatcherClearingLoop(t *testing.T) {
 			outstanding := newFakeChain()
 			outstanding.send(1)
 
-			clearing := ClearConfig{Interval: time.Minute}
-			w := start(t, newClearingWatcher(newSubscriber(), outstanding, db, clearing))
+			cfg := Config{ClearInterval: time.Minute}
+			w := start(t, newClearingWatcher(newSubscriber(), outstanding, db, cfg))
 
 			require.Empty(t, recorded(t, db))
 
-			time.Sleep(clearing.Interval)
+			time.Sleep(cfg.ClearInterval)
 			synctest.Wait()
 
 			assert.Equal(t, []uint64{1}, recorded(t, db))
@@ -467,7 +482,7 @@ func TestWatcherClearingLoop(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			chain := newSubscriber()
 			outstanding := newFakeChain()
-			w := start(t, newClearingWatcher(chain, outstanding, db, ClearConfig{Interval: time.Hour}))
+			w := start(t, newClearingWatcher(chain, outstanding, db, Config{ClearInterval: time.Hour}))
 
 			release := outstanding.hold()
 
@@ -500,8 +515,8 @@ func TestWatcherClearingLoop(t *testing.T) {
 			outstanding := newFakeChain()
 			outstanding.failLatest(errors.New("storage layout moved"))
 
-			clearing := ClearConfig{OnStart: true, Interval: time.Hour}
-			w := start(t, newClearingWatcher(chain, outstanding, db, clearing))
+			cfg := Config{CleanOnStart: true, ClearInterval: time.Hour}
+			w := start(t, newClearingWatcher(chain, outstanding, db, cfg))
 
 			require.Equal(t, 1, outstanding.passCount())
 
@@ -520,8 +535,8 @@ func TestWatcherClearingLoop(t *testing.T) {
 			outstanding := newFakeChain()
 			release := outstanding.hold()
 
-			clearing := ClearConfig{OnStart: true, Interval: time.Hour}
-			w := start(t, newClearingWatcher(newSubscriber(), outstanding, db, clearing))
+			cfg := Config{CleanOnStart: true, ClearInterval: time.Hour}
+			w := start(t, newClearingWatcher(newSubscriber(), outstanding, db, cfg))
 
 			require.Equal(t, 1, outstanding.passCount())
 

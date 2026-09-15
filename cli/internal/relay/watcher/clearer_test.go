@@ -22,11 +22,11 @@ import (
 const waitFor = 5 * time.Second
 
 func newTestClearer(chain OutstandingQuerier, storage ClearStore) *Clearer {
-	return newClearer(chain, storage, ClearConfig{})
+	return newClearer(chain, storage, Config{})
 }
 
-func newClearer(chain OutstandingQuerier, storage ClearStore, clearing ClearConfig) *Clearer {
-	return NewClearer(sourceChainID, testConnections(), chain, storage, clearing, slog.Default())
+func newClearer(chain OutstandingQuerier, storage ClearStore, cfg Config) *Clearer {
+	return NewClearer(sourceChainID, testConnections(), chain, storage, cfg, slog.Default())
 }
 
 // fakeChain models what one chain has sent and what is still committed at a
@@ -632,7 +632,7 @@ func TestClearerClear(t *testing.T) {
 		chain.prune(1)
 
 		db := watcherStore(t)
-		abandoning := newClearer(chain, db, ClearConfig{AbandonUnrecoverablePackets: true})
+		abandoning := newClearer(chain, db, Config{AbandonUnrecoverablePackets: true})
 
 		result, err := abandoning.Clear(ctx, sourceClientID)
 		require.NoError(t, err)

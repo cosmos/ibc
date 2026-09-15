@@ -33,12 +33,15 @@ type PacketStore interface {
 	UpsertPacket(ctx context.Context, input store.UpsertPacket) error
 }
 
-// ClearConfig when the watcher runs a clearing pass.
-type ClearConfig struct {
-	// OnStart runs a pass as soon as the first subscription is live.
-	OnStart bool
-	// Interval how often a pass runs after that.
-	Interval time.Duration
+// Config the Watcher configuration.
+type Config struct {
+	MinBackoff time.Duration
+	MaxBackoff time.Duration
+
+	// CleanOnStart runs a pass as soon as the first subscription is live.
+	CleanOnStart bool
+	// ClearInterval how often a pass runs after that.
+	ClearInterval time.Duration
 	// AbandonUnrecoverablePackets drops packets whose send log the endpoint will
 	// not serve out of the probe set, keeping the record of them.
 	AbandonUnrecoverablePackets bool
@@ -55,10 +58,10 @@ type Watcher struct {
 	subscriber Subscriber
 	storage    PacketStore
 	clearer    *Clearer
-	clearing   ClearConfig
-	minBackoff time.Duration
-	maxBackoff time.Duration
-	logger     *slog.Logger
+
+	cfg Config
+
+	logger *slog.Logger
 
 	cancel  context.CancelFunc
 	stopped chan struct{}
@@ -73,10 +76,13 @@ func New(
 	subscriber Subscriber,
 	querier OutstandingQuerier,
 	storage ClearStore,
-	clearing ClearConfig,
-	minBackoff, maxBackoff time.Duration,
+	cfg Config,
 	logger *slog.Logger,
 ) *Watcher {
+	if cfg.ClearInterval <= 0 {
+		cfg.ClearInterval = config.DefaultClearInterval
+	}
+
 	clientIDs := make([]string, 0, len(connections))
 
 	for _, conn := range connections {
@@ -85,35 +91,16 @@ func New(
 		}
 	}
 
-	if clearing.Interval <= 0 {
-		clearing.Interval = config.DefaultClearInterval
-	}
-
 	return &Watcher{
 		chainID:    chainID,
 		clientIDs:  clientIDs,
 		routes:     routesOf(chainID, connections),
 		subscriber: subscriber,
 		storage:    storage,
-		clearer:    NewClearer(chainID, connections, querier, storage, clearing, logger),
-		clearing:   clearing,
-		minBackoff: minBackoff,
-		maxBackoff: maxBackoff,
+		clearer:    NewClearer(chainID, connections, querier, storage, cfg, logger),
+		cfg:        cfg,
 		logger:     logger.With("module", "watcher", "chainID", chainID),
 	}
-}
-
-// routesOf maps each watched client to the end its packets are relayed to.
-func routesOf(chainID string, connections []config.ConnectionConfig) map[string]config.ClientEnd {
-	routes := make(map[string]config.ClientEnd, len(connections))
-
-	for _, conn := range connections {
-		if source, destination, ok := conn.SourceEnd(chainID); ok {
-			routes[source.ClientID] = destination
-		}
-	}
-
-	return routes
 }
 
 // Start subscribes and begins the event loop in its own goroutine, failing if
@@ -200,12 +187,12 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 	// the events channel outlives each subscription, so a reconnect keeps
 	// whatever the dropped one had already buffered
 	events := open.events
-	backoff := w.minBackoff
+	backoff := w.cfg.MinBackoff
 
 	// nil while a subscription is live, so only a gap paces itself
 	var resubscribe <-chan time.Time
 
-	clearTick := time.NewTicker(w.clearing.Interval)
+	clearTick := time.NewTicker(w.cfg.ClearInterval)
 	defer clearTick.Stop()
 
 	var (
@@ -236,7 +223,7 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 
 	// Start opened the first subscription, so clearing on start belongs here;
 	// every subscribe the loop makes follows a gap, which clearing covers
-	if w.clearing.OnStart {
+	if w.cfg.CleanOnStart {
 		startClear()
 	}
 
@@ -244,7 +231,7 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 		w.logger.Warn(msg, "err", err, "backoff", backoff)
 
 		resubscribe = time.After(backoff)
-		backoff = min(backoff*2, w.maxBackoff)
+		backoff = min(backoff*2, w.cfg.MaxBackoff)
 	}
 
 	for {
@@ -275,7 +262,7 @@ func (w *Watcher) run(ctx context.Context, open stream) {
 				continue
 			}
 
-			open, resubscribe, backoff = opened, nil, w.minBackoff
+			open, resubscribe, backoff = opened, nil, w.cfg.MinBackoff
 
 			// a reconnect always follows a gap, so the pass that covers it is
 			// requested even when one is already running
@@ -392,6 +379,19 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 		)
 	}
 	return nil
+}
+
+// routesOf maps each watched client to the end its packets are relayed to.
+func routesOf(chainID string, connections []config.ConnectionConfig) map[string]config.ClientEnd {
+	routes := make(map[string]config.ClientEnd, len(connections))
+
+	for _, conn := range connections {
+		if source, destination, ok := conn.SourceEnd(chainID); ok {
+			routes[source.ClientID] = destination
+		}
+	}
+
+	return routes
 }
 
 func packetRow(chainID, destChainID string, event v2.PacketEvent) store.UpsertPacket {

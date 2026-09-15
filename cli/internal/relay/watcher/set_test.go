@@ -45,6 +45,11 @@ func TestNewSetFromConfig(t *testing.T) {
 		require.Len(t, set, 1)
 		assert.Equal(t, sourceChainID, set[0].chainID)
 		assert.Equal(t, []string{sourceClientID}, set[0].clientIDs)
+		assert.Equal(t, DefaultMinBackoff, set[0].cfg.MinBackoff)
+		assert.Equal(t, DefaultMaxBackoff, set[0].cfg.MaxBackoff)
+		assert.Equal(t, config.DefaultClearInterval, set[0].cfg.ClearInterval)
+		assert.True(t, set[0].cfg.CleanOnStart)
+		assert.False(t, set[0].cfg.AbandonUnrecoverablePackets)
 	})
 
 	t.Run("noAutoRelayedEndsWatchNothing", func(t *testing.T) {

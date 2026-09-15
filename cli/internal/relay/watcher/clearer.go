@@ -78,7 +78,7 @@ func NewClearer(
 	connections []config.ConnectionConfig,
 	chain OutstandingQuerier,
 	storage ClearStore,
-	clearing ClearConfig,
+	cfg Config,
 	logger *slog.Logger,
 ) *Clearer {
 	return &Clearer{
@@ -86,7 +86,7 @@ func NewClearer(
 		routes:  routesOf(chainID, connections),
 		chain:   chain,
 		storage: storage,
-		abandon: clearing.AbandonUnrecoverablePackets,
+		abandon: cfg.AbandonUnrecoverablePackets,
 		logger:  logger.With("module", "clearer", "chainID", chainID),
 	}
 }
