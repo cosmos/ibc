@@ -72,6 +72,10 @@ func UnitSeconds() metric.InstrumentOption {
 	return metric.WithUnit(unitSeconds)
 }
 
+func WithAttributes(attrs ...attribute.KeyValue) metric.MeasurementOption {
+	return metric.WithAttributes(attrs...)
+}
+
 func AttrResultError(err error) attribute.KeyValue {
 	if err == nil {
 		return AttrResult.String("ok")

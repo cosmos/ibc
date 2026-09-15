@@ -397,6 +397,11 @@ func (c Observability) Validate() error {
 	return nil
 }
 
+func (c Observability) Enabled() bool {
+	// might become more complex in the future
+	return c.Metrics
+}
+
 // ConfigFile resolves the OTEL configuration file. Supports loading from OTEL_CONFIG_FILE env.
 func (c Observability) ConfigFile() (string, error) {
 	if c.Type != ObservabilityOTEL {
@@ -429,18 +434,13 @@ func (c Observability) ConfigFile() (string, error) {
 }
 
 func (c Chains) Validate() error {
+	chainIDs := make(map[string]struct{})
+
 	for i, chain := range c {
 		if err := chain.Validate(); err != nil {
 			return errPathIndex(i, err)
 		}
-	}
-	return c.validateIdentities()
-}
 
-func (c Chains) validateIdentities() error {
-	chainIDs := make(map[string]struct{})
-
-	for i, chain := range c {
 		if _, ok := chainIDs[chain.ChainID]; ok {
 			return errPathIndexf(i, "duplicate %q", chain.ChainID)
 		}
@@ -492,21 +492,16 @@ func (c EVMChainConfig) Validate(validateICS26Router bool) error {
 
 // Validate validates the attestors list. Allows empty.
 func (a Attestors) Validate() error {
-	for i, attestor := range a {
-		if err := attestor.Validate(); err != nil {
-			return errPathIndex(i, err)
-		}
-	}
-	return a.validateIdentities()
-}
-
-func (a Attestors) validateIdentities() error {
 	localNames := make(map[string]struct{})
 	// keyed by chainId+signer: the same signer backing one operator's local
 	// attestor on two different chains is fine, but reusing it for two
 	// attestors on the same chain is always a redundant duplicate.
-	localChainSigners := make(map[[2]string]struct{})
+	localChainSigners := make(map[string]struct{})
 	for i, attestor := range a {
+		if err := attestor.Validate(); err != nil {
+			return errPathIndex(i, err)
+		}
+
 		if attestor.Type != AttestorTypeLocal {
 			continue
 		}
@@ -516,11 +511,7 @@ func (a Attestors) validateIdentities() error {
 		}
 		localNames[attestor.Name] = struct{}{}
 
-		if attestor.Signer == "" {
-			// Generated drafts may not have resolved this signer yet.
-			continue
-		}
-		chainSigner := [2]string{attestor.ChainID, attestor.Signer}
+		chainSigner := attestor.ChainID + "/" + attestor.Signer
 		if _, exists := localChainSigners[chainSigner]; exists {
 			return errPathIndexf(i, "duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
 		}

@@ -186,7 +186,7 @@ Deploy and register a light client tracking a counterparty chain.
 | `--max-clock-drift <duration>` | `1m0s` | Besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds. |
 | `--threshold <uint8>` | `1` | Attestation: signature threshold. |
 | `--timestamp <uint>` | counterparty head; besu-qbft reads it from the header | Attestation: initial trusted timestamp seconds. |
-| `--trusting-period <duration>` |  | Besu-qbft: how long a trusted consensus state stays usable, in whole seconds (0 = never expires). |
+| `--trusting-period <duration>` |  | Besu-qbft: required for new clients; trusted state lifetime in whole seconds (explicit 0 = never expires; omitted on reruns preserves recorded value). |
 | `--type <string>` | `attestation` | Light client type: attestation or besu-qbft. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
@@ -304,8 +304,8 @@ Print the existing config plus the settings to relay between two chains.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--signer-a <string>` |  | Override the relay signer on chainA; omitted preserves existing settings. |
-| `--signer-b <string>` |  | Override the relay signer on chainB; omitted preserves existing settings. |
+| `--signer-a <string>` |  | Signers[] alias submitting relay txs on chainA. |
+| `--signer-b <string>` |  | Signers[] alias submitting relay txs on chainB. |
 | `-p, --populate-config` |  | Write the printed config to the config file. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
@@ -316,13 +316,6 @@ Print the existing config plus the settings to relay between two chains.
 <!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
-
-Population matches existing connections by their client endpoints, regardless of
-alias or A/B ordering, and local attestors by chain/signer. Existing names and
-operational settings are preserved. `--signer-a` and `--signer-b` override
-existing signers only when supplied; new routes may retain TODO signer fields.
-Ambiguous aliases and duplicate identities fail before writing. Incomplete drafts
-are allowed, with readiness warnings even in quiet mode.
 
 ### `ibc deploy show`
 

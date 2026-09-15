@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Instance is one initialized ICS26 router installation. The router address is
@@ -84,8 +82,13 @@ func (c BesuQBFTClientConfig) validate() error {
 	if c.InitialHeight == 0 || c.InitialTimestamp == 0 {
 		return fmt.Errorf("client %q needs a non-zero initial trusted height and timestamp", c.ID)
 	}
-	if err := besu.ValidateValidators(c.InitialValidators); err != nil {
-		return fmt.Errorf("client %q initial validators: %w", c.ID, err)
+	if len(c.InitialValidators) == 0 {
+		return fmt.Errorf("client %q has no initial validators", c.ID)
+	}
+	for i, validator := range c.InitialValidators {
+		if validator == (common.Address{}) || slices.Contains(c.InitialValidators[:i], validator) {
+			return fmt.Errorf("client %q has a zero or duplicate initial validator %s", c.ID, validator)
+		}
 	}
 	return nil
 }

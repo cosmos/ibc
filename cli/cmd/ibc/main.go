@@ -169,15 +169,15 @@ func init() {
 			"attestation: initial trusted timestamp seconds (default: counterparty head; besu-qbft reads it from the header)")
 	cmdDeployClient.Flags().
 		DurationVar(&flagDeployTrustingPeriod, "trusting-period", 0,
-			"besu-qbft: how long a trusted consensus state stays usable, in whole seconds (0 = never expires)")
+			"besu-qbft: required for new clients; trusted state lifetime in whole seconds (explicit 0 = never expires; omitted on reruns preserves recorded value)")
 	cmdDeployClient.Flags().
 		DurationVar(&flagDeployMaxClockDrift, "max-clock-drift", 60*time.Second,
 			"besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds")
 
 	cmdDeployRenderConfig.Flags().
-		StringVar(&flagDeployRenderSignerA, "signer-a", "", "Override the relay signer on chainA; omitted preserves existing settings")
+		StringVar(&flagDeployRenderSignerA, "signer-a", "", "signers[] alias submitting relay txs on chainA")
 	cmdDeployRenderConfig.Flags().
-		StringVar(&flagDeployRenderSignerB, "signer-b", "", "Override the relay signer on chainB; omitted preserves existing settings")
+		StringVar(&flagDeployRenderSignerB, "signer-b", "", "signers[] alias submitting relay txs on chainB")
 	cmdDeployRenderConfig.Flags().
 		BoolVarP(&flagDeployRenderPopulate, "populate-config", "p", false, "write the printed config to the config file")
 

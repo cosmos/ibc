@@ -53,7 +53,7 @@ func (m *instrumentation) record(
 }
 
 func (m *instrumentation) latestHeight(ctx context.Context, attestor, chainID string, height uint64) {
-	m.LatestHeight.Record(ctx, int64(height), metric.WithAttributes(
+	m.LatestHeight.Record(ctx, int64(height), otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrAttestor.String(attestor),
 		otel.AttrCallerFromCaller(ctx, callerDefault),

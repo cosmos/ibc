@@ -26,7 +26,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 }
 
 func (m *instrumentation) sendPacket(ctx context.Context, chainID string) {
-	m.EventsTotal.Add(ctx, 1, metric.WithAttributes(
+	m.EventsTotal.Add(ctx, 1, otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrType.String("send_packet"),
 	))

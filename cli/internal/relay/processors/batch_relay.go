@@ -4,6 +4,7 @@ package processors
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -122,8 +123,8 @@ func relayPackets(
 
 		waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
 		defer cancel()
-		if err := chainClient.WaitForChain(waitCtx); err != nil {
-			return nil, errors.Wrap(err, "waiting for chain")
+		if waitErr := chainClient.WaitForChain(waitCtx); waitErr != nil {
+			return nil, errors.Wrap(waitErr, "waiting for chain")
 		}
 		var record func(*v2.Submission) error
 		if checkpoint {
@@ -135,7 +136,15 @@ func relayPackets(
 				})
 			}
 		}
-		return txSubmitter.Submit(ctx, v2.TxIntent{To: common.BytesToAddress(tx.To).Hex(), Data: tx.Data}, record)
+		sub, err := txSubmitter.Submit(ctx, v2.TxIntent{To: common.BytesToAddress(tx.To).Hex(), Data: tx.Data}, record)
+		if checkpoint && errors.Is(err, v2.ErrTxRejected) {
+			if clearErr := storage.Transact(ctx, func(repo store.Repository) error {
+				return repo.ClearClientUpdate(ctx, chainID, clientID)
+			}); clearErr != nil {
+				return nil, fmt.Errorf("%w; clearing rejected checkpoint: %w", err, clearErr)
+			}
+		}
+		return sub, err
 	}
 	submitPackets := func(ready *v2.BatchProofs, update []byte) (*v2.Submission, error) {
 		items := make([]v2.PacketRelayItem, len(events))

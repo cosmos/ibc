@@ -105,7 +105,7 @@ func (m *instrumentation) packetsPending(ctx context.Context, routes []processor
 }
 
 func (m *instrumentation) recordPending(ctx context.Context, route processors.Route, count int64) {
-	m.PacketsPending.Record(ctx, count, metric.WithAttributes(
+	m.PacketsPending.Record(ctx, count, otel.WithAttributes(
 		otel.AttrChainID.String(route.SourceChainID),
 		otel.AttrDestChainID.String(route.DestinationChainID),
 		otel.AttrClientID.String(route.SourceClientID),
@@ -126,7 +126,7 @@ func (m *instrumentation) excessiveRelayLatency(ctx context.Context, packets []s
 			continue
 		}
 
-		m.ExcessiveRelayLatency.Add(ctx, 1, metric.WithAttributes(
+		m.ExcessiveRelayLatency.Add(ctx, 1, otel.WithAttributes(
 			otel.AttrChainID.String(packet.SourceChainID),
 			otel.AttrDestChainID.String(packet.DestinationChainID),
 			otel.AttrClientID.String(packet.PacketSourceClientID),
@@ -137,6 +137,14 @@ func (m *instrumentation) excessiveRelayLatency(ctx context.Context, packets []s
 }
 
 func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
+	switch p.Status {
+	case store.RelayStatusCompleteWithAck,
+		store.RelayStatusCompleteWithWriteAckError,
+		store.RelayStatusCompleteWithTimeout,
+		store.RelayStatusFailed:
+		return "", false
+	}
+
 	// Recv is the source of truth for whether the packet can still time out.
 	// WriteAckTxHash can stay nil after a recv if write-ack lookup fails.
 	if p.RecvTxHash != nil {

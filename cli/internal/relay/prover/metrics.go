@@ -64,7 +64,7 @@ func (m *instrumentation) record(
 }
 
 func (m *instrumentation) latestProvableHeight(ctx context.Context, chainID, clientID string, height uint64) {
-	m.LatestProvableHeight.Record(ctx, int64(height), metric.WithAttributes(
+	m.LatestProvableHeight.Record(ctx, int64(height), otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrClientID.String(clientID),
 	))
@@ -76,7 +76,7 @@ func (m *instrumentation) packetBatchSize(
 	kind v2.ProofKind,
 	size int,
 ) {
-	m.PacketBatchSize.Record(ctx, int64(size), metric.WithAttributes(
+	m.PacketBatchSize.Record(ctx, int64(size), otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrClientID.String(clientID),
 		otel.AttrType.String(typ),

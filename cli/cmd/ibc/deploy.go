@@ -407,6 +407,11 @@ func besuQBFTParams(
 		}
 		return params, nil
 	}
+	if !flags.Changed(flagNameTrustingPeriod) {
+		return deploy.BesuQBFTParams{}, errors.New(
+			"--trusting-period is required for a new besu-qbft client: choose a duration based on validator governance, or explicitly use 0 to never expire",
+		)
+	}
 	source, ok := counterpartyTarget.(deploy.BesuQBFTSource)
 	if !ok {
 		return deploy.BesuQBFTParams{}, errors.Errorf(
@@ -730,14 +735,27 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) c
 	}
 }
 
+// renderedDeployment is the subset of the config schema render-config emits,
+// so the output can be merged into ibc.yml without unrelated sections.
+type renderedDeployment struct {
+	Chains  []config.ChainConfig `yaml:"chains"`
+	Relayer struct {
+		Connections []config.ConnectionConfig `yaml:"connections"`
+	} `yaml:"relayer"`
+	Attestors config.Attestors `yaml:"attestors"`
+}
+
 // renderRelayConfig projects two deployment manifests into the config
 // sections needed to relay between them for every mutual client pair.
 func renderRelayConfig(
 	cfg config.Config,
 	a, b *manifest.Manifest,
 	signerA, signerB string,
-) (config.Patch, error) {
-	out := config.Patch{Chains: []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}}
+) (renderedDeployment, error) {
+	full := cfg
+	full.Chains = []config.ChainConfig{renderedChain(cfg, a), renderedChain(cfg, b)}
+	full.Relayer.Connections = nil
+	full.Attestors = nil
 
 	baseAlias := a.ChainID + "-" + b.ChainID
 	seenAttestors := make(map[string]struct{})
@@ -750,19 +768,19 @@ func renderRelayConfig(
 			continue
 		}
 		alias := baseAlias
-		if seq := len(out.Connections); seq > 0 {
+		if seq := len(full.Relayer.Connections); seq > 0 {
 			alias = fmt.Sprintf("%s-%d", baseAlias, seq)
 		}
-		out.Connections = append(out.Connections, config.ConnectionConfig{
+		full.Relayer.Connections = append(full.Relayer.Connections, config.ConnectionConfig{
 			Alias:   alias,
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
-		out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		full.Attestors = appendUniqueAttestors(full.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
 	}
-	if len(out.Connections) == 0 {
-		return config.Patch{}, errors.Errorf(
+	if len(full.Relayer.Connections) == 0 {
+		return renderedDeployment{}, errors.Errorf(
 			"no mutual client pair between chains %s and %s: run `ibc deploy client` on each chain first (chains %s and %s)",
 			a.ChainID,
 			b.ChainID,
@@ -771,21 +789,22 @@ func renderRelayConfig(
 		)
 	}
 
+	out := renderedDeployment{Chains: full.Chains, Attestors: full.Attestors}
+	out.Relayer.Connections = full.Relayer.Connections
+
 	return out, nil
 }
 
 func deployRenderConfig(_ *cobra.Command, args []string) error {
-	// Population can emit incomplete drafts. Load them for repair; WithPatch
-	// checks identities, and population reports remaining readiness errors.
-	globalFlags.SkipConfigValidation()
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return err
 	}
 	signers := []string{flagDeployRenderSignerA, flagDeployRenderSignerB}
-	for _, alias := range signers {
+	for i, alias := range signers {
 		if alias == "" {
-			continue
+			return errors.Errorf("--signer-%c is required: the signers[] alias submitting relay txs on %s",
+				'a'+i, args[i])
 		}
 		if _, ok := cfg.Signer(alias); !ok {
 			return errors.Errorf("signer %q not found in config", alias)
@@ -810,10 +829,13 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	merged, conflicts, err := cfg.WithPatch(out)
-	if err != nil {
-		return err
+	patch := config.Patch{
+		Chains:      out.Chains,
+		Connections: out.Relayer.Connections,
+		Attestors:   out.Attestors,
 	}
+
+	merged, conflicts := cfg.WithPatch(patch)
 
 	if err := config.PrintYAMLWithComments(merged, config.CollectComments(merged)); err != nil {
 		return err
@@ -859,13 +881,6 @@ func populateRenderedConfig(merged config.Config) error {
 		return err
 	}
 
-	if err := merged.ValidateIdentities(); err != nil {
-		return err
-	}
-	if err := merged.Validate(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "Config is not runnable yet: %v\n", err)
-	}
-
 	if storeErr := merged.StoreToFileWithComments(configPath); storeErr != nil {
 		return storeErr
 	}
@@ -875,6 +890,10 @@ func populateRenderedConfig(merged config.Config) error {
 	}
 
 	_, _ = fmt.Fprintf(os.Stderr, "Wrote %s\n", configPath)
+
+	if validateErr := merged.Validate(); validateErr != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Config is not runnable yet: %v\n", validateErr)
+	}
 
 	return nil
 }

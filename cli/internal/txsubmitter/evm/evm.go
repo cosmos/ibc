@@ -5,6 +5,7 @@ package evm
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math/big"
 	"sync"
@@ -156,6 +157,9 @@ func (c *TxSubmitter) Submit(
 		}
 	}
 	if err := c.eth.SendTransaction(ctx, signedTx); err != nil {
+		if isRejectedBroadcast(err) {
+			err = fmt.Errorf("%w: %w", v2.ErrTxRejected, err)
+		}
 		return nil, errors.Wrapf(err, "sending tx %s", signedTx.Hash())
 	}
 

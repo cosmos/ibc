@@ -113,13 +113,24 @@ func TestSimpleMeterProviderStop(t *testing.T) {
 	// ARRANGE
 	cfg := config.Observability{
 		Type:                    config.ObservabilitySimple,
-		SimpleMetricsListenAddr: "127.0.0.1:0",
+		SimpleMetricsListenAddr: availableListenAddress(t),
 	}
 	_, stop, err := newSimpleMeterProvider(cfg, testLogger())
 	require.NoError(t, err)
 
 	// ACT & ASSERT
 	require.NoError(t, stop())
+}
+
+func availableListenAddress(t *testing.T) string {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	address := ln.Addr().String()
+	require.NoError(t, ln.Close())
+
+	return address
 }
 
 func testLogger() *slog.Logger {
@@ -132,15 +143,4 @@ func writeOtelConfig(t *testing.T, body string) string {
 	path := filepath.Join(t.TempDir(), "otel.yml")
 	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 	return path
-}
-
-// The scrape integration test needs an address before provider construction.
-// The stop-only test does not and binds port zero directly.
-func availableListenAddress(t *testing.T) string {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	address := ln.Addr().String()
-	require.NoError(t, ln.Close())
-	return address
 }

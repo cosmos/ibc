@@ -126,7 +126,7 @@ func txKey(chainID, txHash string) string {
 
 // chain receiving the transaction, client updated by that transaction
 func txMetricAttributes(chainID, clientID string) metric.MeasurementOption {
-	return metric.WithAttributes(
+	return otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrClientID.String(clientID),
 	)
@@ -142,7 +142,7 @@ func txAttributes(tr *Transfer, extra ...attribute.KeyValue) metric.MeasurementO
 
 	attrs = append(attrs, extra...)
 
-	return metric.WithAttributes(attrs...)
+	return otel.WithAttributes(attrs...)
 }
 
 func completedRelayLegs(tr *Transfer) []completedRelayLeg {

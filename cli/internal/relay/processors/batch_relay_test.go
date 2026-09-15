@@ -5,17 +5,23 @@ package processors
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	"github.com/cosmos/ibc/cli/internal/service/signer"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
+	"github.com/cosmos/ibc/cli/internal/txsubmitter"
+	"github.com/cosmos/ibc/cli/internal/txsubmitter/evm"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -48,19 +54,116 @@ func newRelayEnv(t *testing.T) *relayEnv {
 }
 
 func (e *relayEnv) run(ctx context.Context) (*v2.Submission, error) {
+	return e.runWithSubmitter(ctx, e.submitter)
+}
+
+func (e *relayEnv) runWithSubmitter(ctx context.Context, submitter txsubmitter.TxSubmitter) (*v2.Submission, error) {
 	return relayPackets(
 		ctx,
 		slog.Default(),
 		e.chain,
 		e.prover,
 		e.builder,
-		e.submitter,
+		submitter,
 		e.db,
 		"dst",
 		v2.RelayKindRecv,
 		100,
 		e.events,
 	)
+}
+
+type checkpointRPCError struct {
+	code    int
+	message string
+}
+
+func (e checkpointRPCError) Error() string  { return e.message }
+func (e checkpointRPCError) ErrorCode() int { return e.code }
+
+func TestCheckpointBroadcastFailureRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sendErr  error
+		rejected bool
+	}{
+		{"besu rejected", checkpointRPCError{-32004, "Upfront cost exceeds account balance"}, true},
+		{"geth rejected", checkpointRPCError{-32000, "exceeds block gas limit"}, true},
+		{"transport uncertain", io.ErrUnexpectedEOF, false},
+		{"canceled", context.Canceled, false},
+		{"nonce too low", checkpointRPCError{-32001, "Nonce too low"}, false},
+		{"already known", checkpointRPCError{-32000, "already known"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newRelayEnv(t)
+			eth := mocks.NewMockTxSubmitterETHClient(t)
+			chainSigner, err := signer.GenerateLocalSecp256k1Signer()
+			require.NoError(t, err)
+			submitter, err := evm.New("1", eth, chainSigner, evm.ChainOptions{TxSubmissionDelay: time.Millisecond})
+			require.NoError(t, err)
+			e.prover.EXPECT().Prepare(mock.Anything, uint64(100), mock.Anything, mock.Anything).
+				Return(&v2.Preparation{Advance: []byte{1}}, nil).Once()
+			e.builder.EXPECT().BuildRelayTx(mock.Anything, mock.Anything).
+				RunAndReturn(func(_ v2.ClientUpdate, items []v2.PacketRelayItem) (v2.RelayTx, error) {
+					return v2.RelayTx{
+						To:   common.HexToAddress("0x1234").Bytes(),
+						Data: []byte{byte(len(items) + 1)},
+					}, nil
+				}).Twice()
+			e.chain.EXPECT().WaitForChain(mock.Anything).Return(nil).Twice()
+			eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).
+				Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).Twice()
+			eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Twice()
+			eth.EXPECT().PendingCodeAt(mock.Anything, mock.Anything).Return([]byte{1}, nil).Twice()
+			eth.EXPECT().EstimateGas(mock.Anything, mock.Anything).Return(uint64(21000), nil).Twice()
+			eth.EXPECT().PendingNonceAt(mock.Anything, mock.Anything).Return(uint64(7), nil).Twice()
+			sendCtx, cancelSend := context.WithCancel(t.Context())
+			defer cancelSend()
+			var checkpoint common.Hash
+			eth.EXPECT().SendTransaction(mock.Anything, mock.Anything).
+				Run(func(ctx context.Context, tx *types.Transaction) {
+					checkpoint = tx.Hash()
+					pending, loadErr := e.db.GetClientUpdate(ctx, "destination", "dst")
+					require.NoError(t, loadErr)
+					require.NotNil(t, pending, "the signed identity must precede the send attempt")
+					require.Equal(t, checkpoint.Hex(), pending.Hash)
+					if tc.name == "canceled" {
+						cancelSend()
+					}
+				}).Return(tc.sendErr).Once()
+			result, err := e.runWithSubmitter(sendCtx, submitter)
+			require.Nil(t, result)
+			require.ErrorIs(t, err, tc.sendErr)
+			pending, loadErr := e.db.GetClientUpdate(t.Context(), "destination", "dst")
+			require.NoError(t, loadErr)
+			if tc.rejected {
+				require.ErrorIs(t, err, v2.ErrTxRejected)
+				require.Nil(t, pending)
+				// No receipt lookup is expected: a rejected checkpoint cannot stall this relay.
+			} else {
+				require.NotErrorIs(t, err, v2.ErrTxRejected)
+				require.NotNil(t, pending)
+				require.Equal(t, checkpoint.Hex(), pending.Hash)
+				recovered := eth.EXPECT().TransactionReceipt(mock.Anything, checkpoint).
+					Return(&types.Receipt{TxHash: checkpoint, Status: types.ReceiptStatusSuccessful}, nil).Once()
+				e.prover.EXPECT().Prepare(mock.Anything, uint64(100), mock.Anything, mock.Anything).
+					Return(&v2.Preparation{Ready: &v2.BatchProofs{PacketProofs: [][]byte{{2}}}}, nil).
+					NotBefore(recovered).Once()
+			}
+			if tc.rejected {
+				e.ready()
+			}
+			eth.EXPECT().SendTransaction(mock.Anything, mock.Anything).Return(nil).Once()
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			result, err = e.runWithSubmitter(ctx, submitter)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			pending, err = e.db.GetClientUpdate(t.Context(), "destination", "dst")
+			require.NoError(t, err)
+			require.Nil(t, pending)
+		})
+	}
 }
 
 func (e *relayEnv) ready() {

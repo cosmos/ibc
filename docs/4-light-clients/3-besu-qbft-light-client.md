@@ -63,12 +63,12 @@ Both take the consensus state for the proof height along with the proof nodes, w
 ## Deploying
 
 ```sh
-ibc deploy client --chain 1 --counterparty-chain 2 --type besu-qbft [--height N] [--trusting-period 336h] [--max-clock-drift 60s]
+ibc deploy client --chain 1 --counterparty-chain 2 --type besu-qbft [--height N] --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
 ```
 
-The CLI reads the counterparty's header at `--height` (default: its head) and the counterparty router's storage root at that height, and deploys the client with that as its first trusted state. The counterparty core stack must already be deployed, because its router address is read from the manifest. `--trusting-period` defaults to never expiring and `--max-clock-drift` to one minute; both must be whole seconds. The attestation-only flags do not apply.
+The CLI reads the counterparty's header at `--height` (default: its head) and the counterparty router's storage root at that height, and deploys the client with that as its first trusted state. The counterparty core stack must already be deployed, because its router address is read from the manifest. `--trusting-period` is required for new clients. Set `TRUSTING_PERIOD` to a duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. Explicit `--trusting-period 0` disables expiry and requires trusting historical validator keys indefinitely. `--max-clock-drift` defaults to one minute; both durations must be whole seconds. The attestation-only flags do not apply.
 
-The client's role manager is this chain's router, so only calls routed through `ICS26Router` reach it. Rerunning the command reuses the recorded parameters and reports the client as already deployed. Explicitly supplying different trust settings reports a conflict; use a new client ID to deploy with different settings.
+The client's role manager is this chain's router, so only calls routed through `ICS26Router` reach it. Rerunning the command without trust flags reuses the recorded parameters and reports the client as already deployed. Explicitly supplying different trust settings reports a conflict; use a new client ID to deploy with different settings.
 
 ## Relaying
 

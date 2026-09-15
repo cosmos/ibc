@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/escrow"
@@ -705,7 +704,7 @@ func (s *Setup) verifyBesuQBFTClient(
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query client state: %w", clientID, err)
 	}
-	if _, err := besu.DecodeClientState(raw); err != nil {
+	if err := validateBesuClientState(raw); err != nil {
 		return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 	}
 	return Client{ID: clientID, Address: registered, CounterpartyClientID: counterpartyClientID}, nil

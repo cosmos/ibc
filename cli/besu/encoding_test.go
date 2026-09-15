@@ -3,6 +3,7 @@
 package besu_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -125,4 +126,30 @@ func TestConsensusStateHashChangesWithEveryField(t *testing.T) {
 	assert.NotEqual(t, h0, h1)
 	assert.NotEqual(t, h0, h2)
 	assert.NotEqual(t, h0, h3)
+}
+
+func TestPayloadDecodersRejectMalformedData(t *testing.T) {
+	for name, data := range map[string][]byte{
+		"empty":          nil,
+		"short word":     {0},
+		"invalid offset": bytes.Repeat([]byte{0xff}, 32),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := besutest.DecodeProofNodes(data)
+			require.Error(t, err)
+			_, err = besutest.DecodeUpdateClient(data)
+			require.Error(t, err)
+			_, err = besutest.DecodeMembershipProof(data)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestUpdateClientRejectsNonzeroRevision(t *testing.T) {
+	encoded, err := besu.EncodeUpdateClient(nil, 1, besu.ConsensusState{}, nil)
+	require.NoError(t, err)
+	// The tuple offset and header offset precede trustedHeight.revisionNumber.
+	encoded[3*32-1] = 1
+	_, err = besutest.DecodeUpdateClient(encoded)
+	require.ErrorContains(t, err, "trusted revision number 1, want 0")
 }

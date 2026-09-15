@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -546,6 +547,14 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besu.Consensus
 	}
 
 	if hash != common.Hash(stored) {
+		g.mu.Lock()
+		if current, exists := g.cache[height]; exists && !current.verified &&
+			current.state.Timestamp == state.Timestamp && current.state.StorageRoot == state.StorageRoot &&
+			slices.Equal(current.state.Validators, state.Validators) {
+			delete(g.cache, height)
+		}
+		g.mu.Unlock()
+
 		return besu.ConsensusState{}, fmt.Errorf(
 			"consensus state rebuilt for height %d hashes to %s but the light client stores %s",
 			height, hash, common.Hash(stored),

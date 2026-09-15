@@ -7,6 +7,7 @@ import (
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // ConsensusState is what the light client trusts about one Besu height. The
@@ -22,7 +23,12 @@ type ConsensusState struct {
 // stores per height. The struct holds a dynamic array, so the encoding starts
 // with an offset word.
 func (c ConsensusState) Hash() (common.Hash, error) {
-	return besumsgs.ConsensusStateHash(c.toABI())
+	data, err := messageBindings.TryPackConsensusState(c.toABI())
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("encode consensus state: %w", err)
+	}
+
+	return crypto.Keccak256Hash(data[4:]), nil
 }
 
 func (c ConsensusState) toABI() besumsgs.IBesuLightClientMsgsConsensusState {
@@ -52,10 +58,19 @@ func DecodeClientState(data []byte) (ClientState, error) {
 		)
 	}
 
-	state, err := besumsgs.DecodeClientState(data)
+	inputs := messageBindings.GetABI().Methods["clientState"].Inputs
+	values, err := inputs.Unpack(data)
 	if err != nil {
 		return ClientState{}, fmt.Errorf("%w: %w", ErrInvalidClientState, err)
 	}
+
+	var decoded struct {
+		State besumsgs.IBesuLightClientMsgsClientState
+	}
+	if err := inputs.Copy(&decoded, values); err != nil {
+		return ClientState{}, fmt.Errorf("%w: %w", ErrInvalidClientState, err)
+	}
+	state := decoded.State
 
 	if state.LatestHeight.RevisionNumber != 0 {
 		return ClientState{}, fmt.Errorf(

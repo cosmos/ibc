@@ -347,6 +347,52 @@ func TestPreimageVerifiesOnceAndRejectsMismatch(t *testing.T) {
 	})
 }
 
+func TestPreimageRecoversFromStaleUnverifiedCache(t *testing.T) {
+	env := newFixtureEnv(t)
+	update := env.fixture.NonAdjacentUpdate
+	want := update.ExpectedConsensusState()
+	stale := want
+	stale.StorageRoot = common.Hash{0xff}
+	env.gen.store(update.Height, stale, false)
+	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
+		Return(mustHash(t, want), nil).Twice()
+
+	_, err := env.gen.preimage(t.Context(), update.Height)
+	require.ErrorContains(t, err, "hashes to")
+	require.NotContains(t, env.gen.cache, update.Height)
+
+	env.expectSnapshot(t, update)
+	state, err := env.gen.preimage(t.Context(), update.Height)
+	require.NoError(t, err)
+	require.Equal(t, want, state)
+	require.True(t, env.gen.cache[update.Height].verified)
+
+	state, err = env.gen.preimage(t.Context(), update.Height)
+	require.NoError(t, err)
+	require.Equal(t, want, state)
+}
+
+func TestPreimageMismatchPreservesConcurrentCacheRefresh(t *testing.T) {
+	for _, verified := range []bool{false, true} {
+		t.Run(fmt.Sprintf("verified=%t", verified), func(t *testing.T) {
+			env := newFixtureEnv(t)
+			update := env.fixture.NonAdjacentUpdate
+			want := update.ExpectedConsensusState()
+			stale := want
+			stale.StorageRoot = common.Hash{0xff}
+			env.gen.store(update.Height, stale, false)
+			env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
+				Run(func(context.Context, string, uint64) {
+					env.gen.store(update.Height, want, verified)
+				}).Return(mustHash(t, want), nil).Once()
+
+			_, err := env.gen.preimage(t.Context(), update.Height)
+			require.ErrorContains(t, err, "hashes to")
+			require.Equal(t, cacheEntry{state: want, verified: verified}, env.gen.cache[update.Height])
+		})
+	}
+}
+
 // expectProofAt wires the counterparty reads PacketProofs performs at a
 // fixture height, answering each requested slot with valueFor.
 func (e *fixtureEnv) expectProofAt(

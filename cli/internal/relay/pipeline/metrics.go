@@ -45,7 +45,7 @@ func (m *instrumentation) packetTransition(ctx context.Context, tr *processors.T
 		return
 	}
 
-	m.PacketsTotal.Add(ctx, 1, metric.WithAttributes(
+	m.PacketsTotal.Add(ctx, 1, otel.WithAttributes(
 		otel.AttrChainID.String(tr.SourceChainID),
 		otel.AttrDestChainID.String(tr.DestinationChainID),
 		otel.AttrClientID.String(tr.PacketSourceClientID),
@@ -63,7 +63,7 @@ func (m *instrumentation) batch(
 	processor := batchProcessorName(status)
 	chainID := batchChainID(batch[0], processor)
 
-	m.BatchSize.Record(ctx, int64(len(batch)), metric.WithAttributes(
+	m.BatchSize.Record(ctx, int64(len(batch)), otel.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrProcessor.String(processor),
 		otel.AttrResultError(err),
