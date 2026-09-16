@@ -85,13 +85,13 @@ func TestInstrumentation(t *testing.T) {
 		packets := []channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}}
 		expectedProofs := [][]byte{{0x1}, {0x2}}
 		prover.EXPECT().
-			PacketProofs(ctx, uint64(9), v2.ProofKindPacketCommitment, packets).
+			PacketProofs(ctx, uint64(9), v2.ProofKindPacketCommitment, packets, []channeltypesv2.Acknowledgement(nil)).
 			Return(expectedProofs, nil).
 			Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
-		proofs, err := instrumented.PacketProofs(ctx, 9, v2.ProofKindPacketCommitment, packets)
+		proofs, err := instrumented.PacketProofs(ctx, 9, v2.ProofKindPacketCommitment, packets, nil)
 
 		// ASSERT
 		require.NoError(t, err)

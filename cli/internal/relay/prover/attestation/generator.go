@@ -76,10 +76,15 @@ func (g *Generator) PacketProofs(
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
+	acknowledgements []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
 	commitmentType, err := commitmentTypeOf(kind)
 	if err != nil {
 		return nil, err
+	}
+
+	if kind == v2.ProofKindAcknowledgement && len(acknowledgements) != len(packets) {
+		return nil, errors.New("acknowledgement count must match packet count")
 	}
 
 	encodedPackets := make([][]byte, len(packets))
@@ -93,7 +98,11 @@ func (g *Generator) PacketProofs(
 
 		encodedPackets[i] = encoded
 
-		compact, errExpected := g.expectedPacket(ctx, height, commitmentType, packet)
+		var ack channeltypesv2.Acknowledgement
+		if kind == v2.ProofKindAcknowledgement {
+			ack = acknowledgements[i]
+		}
+		compact, errExpected := expectedPacket(commitmentType, packet, ack)
 		if errExpected != nil {
 			return nil, errors.Wrapf(errExpected, "expected commitment for packet %d", i)
 		}
@@ -135,11 +144,10 @@ func (g *Generator) PacketProofs(
 	return proofs, nil
 }
 
-func (g *Generator) expectedPacket(
-	ctx context.Context,
-	height uint64,
+func expectedPacket(
 	kind attestor.CommitmentType,
 	packet channeltypesv2.Packet,
+	acknowledgement channeltypesv2.Acknowledgement,
 ) (attestorevm.PacketCompact, error) {
 	switch kind {
 	case attestor.CommitmentTypePacket:
@@ -153,17 +161,7 @@ func (g *Generator) expectedPacket(
 		}, nil
 	case attestor.CommitmentTypeAck:
 		path := crypto.Keccak256Hash(hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence))
-		commitment, err := g.counterpartyChain.GetCommitment(ctx, height, path)
-		if err != nil {
-			return attestorevm.PacketCompact{}, errors.Wrapf(
-				err,
-				"getting acknowledgement commitment at height %d",
-				height,
-			)
-		}
-		if commitment == ([32]byte{}) {
-			return attestorevm.PacketCompact{}, errors.New("acknowledgement commitment not found")
-		}
+		commitment := [32]byte(channeltypesv2.CommitAcknowledgement(acknowledgement))
 		return attestorevm.PacketCompact{Path: path, Commitment: commitment}, nil
 	default:
 		return attestorevm.PacketCompact{}, errors.Errorf("unsupported commitment type %v", kind)
