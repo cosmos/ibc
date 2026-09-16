@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"testing"
 )
 
 const (
@@ -27,19 +28,35 @@ func DumpEnabled() bool {
 	return dumpEnabled
 }
 
+func DumpTestDirectory(t testing.TB, runID string, path string) {
+	t.Helper()
+
+	log := dumpLogger(runID, "test", t.Name())
+
+	dest, err := tryDumpDirectory(runID, path, t.Name())
+	switch {
+	case err != nil:
+		log.Error("Failed to dump directory", "path", path, "error", err)
+	case dest == "":
+		log.Info("No files to dump", "path", path)
+	default:
+		log.Info("Dumped directory", "dest", dest)
+	}
+}
+
 func init() {
 	enabled, dir, err := setupDumpEnabled()
 	if err != nil {
-		slog.Error("E2E dumps: failed to initialize", "error", err)
+		slog.Error("Failed to setup E2E dumps", "module", "e2e.dumps", "error", err)
 		return
+	}
+
+	if enabled {
+		dumpLogger("", "E2E_DUMP enabled", "dir", dumpDir)
 	}
 
 	dumpEnabled = enabled
 	dumpDir = dir
-
-	if enabled {
-		slog.Info("E2E_DUMP enabled", "dumpDir", dumpDir)
-	}
 }
 
 func setupDumpEnabled() (bool, string, error) {
@@ -70,19 +87,21 @@ func setupDumpEnabled() (bool, string, error) {
 }
 
 func dumpDirectory(runID, path string) {
-	dest, err := tryDumpDirectory(runID, path)
+	log := dumpLogger(runID)
+
+	dest, err := tryDumpDirectory(runID, path, "")
 	switch {
 	case err != nil:
-		slog.Error("E2E dumps: failed to dump directory", "runID", runID, "path", path, "error", err)
+		log.Error("Failed to dump directory", "path", path, "error", err)
 		return
 	case dest == "":
-		slog.Info("E2E dumps: no files to dump", "runID", runID, "path", path)
+		log.Info("No files to dump", "path", path)
 	default:
-		slog.Info("E2E dumps: dumped directory", "runID", runID, "dest", dest)
+		log.Info("Dumped directory", "dest", dest)
 	}
 }
 
-func tryDumpDirectory(runID, path string) (string, error) {
+func tryDumpDirectory(runID, path, testName string) (string, error) {
 	switch {
 	case dumpDir == "":
 		return "", fmt.Errorf("dump directory is not configured")
@@ -119,7 +138,12 @@ func tryDumpDirectory(runID, path string) (string, error) {
 		return "", err
 	}
 
-	dest := filepath.Join(dumpDir, runDir, filepath.Base(src))
+	dest := filepath.Join(dumpDir, runDir)
+	if testName != "" {
+		dest = filepath.Join(dest, sanitizeDumpSegment(testName))
+	}
+
+	dest = filepath.Join(dest, filepath.Base(src))
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return "", fmt.Errorf("create dump run directory: %w", err)
 	}
@@ -140,4 +164,29 @@ func getRunDumpDir(runID string) (string, error) {
 	}
 
 	return filepath.Join("pid-"+pid, ts), nil
+}
+
+func sanitizeDumpSegment(name string) string {
+	mapper := func(r rune) rune {
+		switch r {
+		case '/', '\\', filepath.ListSeparator:
+			return '_'
+		default:
+			return r
+		}
+	}
+
+	name = strings.Map(mapper, name)
+	name = strings.TrimSpace(name)
+
+	return name
+}
+
+func dumpLogger(runID string, labels ...any) *slog.Logger {
+	labels = append(labels, "module", "e2e.dumps")
+	if runID != "" {
+		labels = append(labels, "runID", runID)
+	}
+
+	return slog.With(labels...)
 }
