@@ -12,7 +12,7 @@ require (
 	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260912185752-40bdd21205d7
+	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260915181702-f6a4899607a9
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
