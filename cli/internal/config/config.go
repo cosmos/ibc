@@ -247,6 +247,25 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// ValidateIdentities checks that signers, chains, connections and attestors
+// are uniquely identified, without requiring the config to be runnable. It is
+// the subset of Validate that generated drafts with TODO fields must satisfy.
+func (c Config) ValidateIdentities() error {
+	if err := c.Signers.validateIdentities(); err != nil {
+		return errPath("signers", err)
+	}
+	if err := c.Chains.validateIdentities(); err != nil {
+		return errPath("chains", err)
+	}
+	if err := c.Relayer.validateConnectionIdentities(); err != nil {
+		return errPath("relayer", err)
+	}
+	if err := c.Attestors.validateIdentities(); err != nil {
+		return errPath("attestors", err)
+	}
+	return nil
+}
+
 // RelayerSufficiency validates the relayer server is runnable
 func (c Config) RelayerSufficiency() error {
 	if len(c.Relayer.Connections) == 0 {
@@ -429,20 +448,12 @@ func (c Observability) ConfigFile() (string, error) {
 }
 
 func (c Chains) Validate() error {
-	chainIDs := make(map[string]struct{})
-
 	for i, chain := range c {
 		if err := chain.Validate(); err != nil {
 			return errPathIndex(i, err)
 		}
-
-		if _, ok := chainIDs[chain.ChainID]; ok {
-			return errPathIndexf(i, "duplicate %q", chain.ChainID)
-		}
-		chainIDs[chain.ChainID] = struct{}{}
 	}
-
-	return nil
+	return c.validateIdentities()
 }
 
 func (c ChainConfig) Validate() error {
@@ -487,33 +498,12 @@ func (c EVMChainConfig) Validate(validateICS26Router bool) error {
 
 // Validate validates the attestors list. Allows empty.
 func (a Attestors) Validate() error {
-	localNames := make(map[string]struct{})
-	// keyed by chainId+signer: the same signer backing one operator's local
-	// attestor on two different chains is fine, but reusing it for two
-	// attestors on the same chain is always a redundant duplicate.
-	localChainSigners := make(map[string]struct{})
 	for i, attestor := range a {
 		if err := attestor.Validate(); err != nil {
 			return errPathIndex(i, err)
 		}
-
-		if attestor.Type != AttestorTypeLocal {
-			continue
-		}
-
-		if _, exists := localNames[attestor.Name]; exists {
-			return errPathIndexf(i, "duplicate local attestor name: %q", attestor.Name)
-		}
-		localNames[attestor.Name] = struct{}{}
-
-		chainSigner := attestor.ChainID + "/" + attestor.Signer
-		if _, exists := localChainSigners[chainSigner]; exists {
-			return errPathIndexf(i, "duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
-		}
-		localChainSigners[chainSigner] = struct{}{}
 	}
-
-	return nil
+	return a.validateIdentities()
 }
 
 func (c AttestorConfig) Validate() error {
@@ -553,20 +543,22 @@ func (c AttestorConfig) Validate() error {
 }
 
 func (c Signers) Validate() error {
-	set := make(map[string]struct{})
-
 	for i, signer := range c {
 		if err := signer.Validate(); err != nil {
 			return errPathIndex(i, err)
 		}
+	}
+	return c.validateIdentities()
+}
 
+func (c Signers) validateIdentities() error {
+	set := make(map[string]struct{})
+	for i, signer := range c {
 		if _, exists := set[signer.Alias]; exists {
 			return errPathIndexf(i, "duplicate alias: %q", signer.Alias)
 		}
-
 		set[signer.Alias] = struct{}{}
 	}
-
 	return nil
 }
 
@@ -597,6 +589,49 @@ func (c SignerConfig) Validate() error {
 		if err := fileExistsInAny(fallbacks...); err != nil {
 			return errPath("file", fmt.Errorf("%s: %w", path, err))
 		}
+	}
+
+	return nil
+}
+
+func (c Chains) validateIdentities() error {
+	chainIDs := make(map[string]struct{})
+
+	for i, chain := range c {
+		if _, ok := chainIDs[chain.ChainID]; ok {
+			return errPathIndexf(i, "duplicate %q", chain.ChainID)
+		}
+		chainIDs[chain.ChainID] = struct{}{}
+	}
+
+	return nil
+}
+
+func (a Attestors) validateIdentities() error {
+	localNames := make(map[string]struct{})
+	// keyed by chainId+signer: the same signer backing one operator's local
+	// attestor on two different chains is fine, but reusing it for two
+	// attestors on the same chain is always a redundant duplicate.
+	localChainSigners := make(map[[2]string]struct{})
+	for i, attestor := range a {
+		if attestor.Type != AttestorTypeLocal {
+			continue
+		}
+
+		if _, exists := localNames[attestor.Name]; exists {
+			return errPathIndexf(i, "duplicate local attestor name: %q", attestor.Name)
+		}
+		localNames[attestor.Name] = struct{}{}
+
+		if attestor.Signer == "" {
+			// Generated drafts may not have resolved this signer yet.
+			continue
+		}
+		chainSigner := [2]string{attestor.ChainID, attestor.Signer}
+		if _, exists := localChainSigners[chainSigner]; exists {
+			return errPathIndexf(i, "duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
+		}
+		localChainSigners[chainSigner] = struct{}{}
 	}
 
 	return nil
