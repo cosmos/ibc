@@ -30,10 +30,9 @@ type Prover interface {
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof proves the light client's counterparty state at height as
-	// one or more client updates applied in order within the same
-	// transaction. Empty when the client already stores that height.
-	StateProof(ctx context.Context, height uint64) ([][]byte, error)
+	// StateProof returns one client update for the counterparty state at height.
+	// Empty when the client already stores that height.
+	StateProof(ctx context.Context, height uint64) ([]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns

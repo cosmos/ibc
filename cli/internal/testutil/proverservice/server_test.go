@@ -35,9 +35,9 @@ func (s *stubProver) LatestProvableHeight(context.Context) (uint64, time.Time, e
 	return s.height, s.timestamp, nil
 }
 
-func (s *stubProver) StateProof(_ context.Context, height uint64) ([][]byte, error) {
+func (s *stubProver) StateProof(_ context.Context, height uint64) ([]byte, error) {
 	s.gotHeight = height
-	return [][]byte{s.stateProof}, nil
+	return s.stateProof, nil
 }
 
 func (s *stubProver) PacketProofs(
@@ -84,7 +84,7 @@ func TestProverServiceRoundTrip(t *testing.T) {
 	t.Run("state proof", func(t *testing.T) {
 		proof, err := client.StateProof(ctx, 99)
 		require.NoError(t, err)
-		require.Equal(t, [][]byte{[]byte("state-proof")}, proof)
+		require.Equal(t, []byte("state-proof"), proof)
 		require.Equal(t, uint64(99), stub.gotHeight)
 	})
 

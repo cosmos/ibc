@@ -111,11 +111,11 @@ func TestStateProofDirectUpdate(t *testing.T) {
 	env.expectInitialAnchor(t)
 	env.expectHeader(t, update)
 
-	updates, err := env.prepareUpdate(ctx, update.Height)
+	proof, err := env.prepareUpdate(ctx, update.Height)
 	require.NoError(t, err)
-	require.Len(t, updates, 1)
+	require.NotEmpty(t, proof)
 
-	decoded, err := besutest.DecodeUpdateClient(updates[0])
+	decoded, err := besutest.DecodeUpdateClient(proof)
 	require.NoError(t, err)
 	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRLP)
 	assert.Equal(t, env.fixture.InitialTrustedHeight, decoded.TrustedHeight)
@@ -140,97 +140,39 @@ func sealedHeader(t *testing.T, template []byte, height uint64, keys []*ecdsa.Pr
 	return header
 }
 
-func TestStateProofValidatorTurnoverChain(t *testing.T) {
-	env := newFixtureEnv(t)
-	keys := besutest.Keys(10)
-	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
-	height := uint64(10)
-	headers := make(map[uint64]*besu.Header)
-	for i, set := range [][]*ecdsa.PrivateKey{keys[2:6], keys[2:6], keys[4:8], keys[4:8], keys[6:10]} {
-		h := uint64(i) + 11
-		headers[h] = sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, h, set)
-	}
-	env.counterparty.EXPECT().
-		GetHeaderRLP(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, h uint64) ([]byte, error) { return headers[h].RLP, nil })
-	env.gen.store(height, trusted, true)
-	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(height), nil).Once()
-	hops := []uint64{12, 14, 15}
-
-	updates, err := env.prepareUpdate(t.Context(), 15)
-	require.NoError(t, err)
-	require.Len(t, updates, len(hops))
-	// Each hop is the furthest header the previous hop's validators accept,
-	// and trusts that previous hop rather than the on-chain anchor.
-	for i, hop := range hops {
-		update, err := besutest.DecodeUpdateClient(updates[i])
-		require.NoError(t, err)
-		require.Equal(t, height, update.TrustedHeight)
-		require.Equal(t, trusted, update.ConsensusStatePreimage)
-		require.Equal(t, headers[hop].RLP, update.HeaderRLP)
-		signers, err := headers[hop].Signers()
-		require.NoError(t, err)
-		require.NoError(t, besu.CheckUpdate(headers[hop], signers, trusted))
-		height = hop
-		trusted = consensusOf(headers[hop])
-	}
-	require.False(t, env.gen.cache[15].verified)
-	_, cached := env.gen.cache[12]
-	require.False(t, cached, "intermediate hops are not anchors until the client stores them")
-}
-
-// sealedHeaderBy builds a header whose validator set and commit sealers differ.
-func sealedHeaderBy(t *testing.T, template []byte, height uint64, validators, sealers []*ecdsa.PrivateKey) *besu.Header {
-	t.Helper()
-
-	header, err := besutest.MustBuilder(template).
-		SetHeight(height).
-		SetTimestamp(1700000000 + height).
-		SetValidators(besutest.Addresses(validators)).
-		MustSign(sealers...).Header()
-	require.NoError(t, err)
-	return header
-}
-
-func TestStateProofBridgesThinlySealedBlock(t *testing.T) {
-	env := newFixtureEnv(t)
-	keys := besutest.Keys(8)
-	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
-	env.gen.store(10, trusted, true)
-	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(10), nil).Once()
-	template := env.fixture.AdjacentUpdate.HeaderRLP
-	headers := map[uint64]*besu.Header{
-		// Same new set at 11 and 12, but only one trusted validator sealed 11.
-		11: sealedHeaderBy(t, template, 11, keys[2:6], keys[3:6]),
-		12: sealedHeaderBy(t, template, 12, keys[2:6], keys[2:5]),
-		13: sealedHeaderBy(t, template, 13, keys[4:8], keys[4:8]),
-	}
-	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, h uint64) ([]byte, error) { return headers[h].RLP, nil })
-	updates, err := env.prepareUpdate(t.Context(), 13)
-	require.NoError(t, err)
-	require.Len(t, updates, 2)
-	for i, want := range []uint64{12, 13} {
-		update, err := besutest.DecodeUpdateClient(updates[i])
-		require.NoError(t, err)
-		require.Equal(t, headers[want].RLP, update.HeaderRLP)
-	}
-}
-
-func TestStateProofUnbridgeableTurnover(t *testing.T) {
+func TestStateProofRejectsValidatorTurnoverRequiringIntermediateUpdates(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	env.gen.store(10, besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}, true)
 	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(10), nil).Once()
-	for _, height := range []uint64{11, 12} {
-		header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, height, keys[4:])
-		env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, height).Return(header.RLP, nil).Once()
-	}
+	// A bridge using keys[2:6] could reach this target, but this prover must
+	// reject it without fetching intermediate headers or emitting a partial update.
+	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[4:])
+	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, uint64(12)).Return(header.RLP, nil).Once()
 
-	updates, err := env.prepareUpdate(context.Background(), 12)
+	update, err := env.prepareUpdate(t.Context(), 12)
 	require.ErrorIs(t, err, besu.ErrInsufficientOverlap)
-	require.ErrorContains(t, err, "no header after trusted height 10")
-	assert.Empty(t, updates)
+	require.ErrorContains(t, err, "intermediate updates are not supported")
+	require.Empty(t, update)
+	require.NotContains(t, env.gen.cache, uint64(12))
+}
+
+func TestStateProofValidatorTurnoverWithSufficientOverlap(t *testing.T) {
+	env := newFixtureEnv(t)
+	keys := besutest.Keys(6)
+	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
+	env.gen.store(10, trusted, true)
+	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(10), nil).Once()
+	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[2:])
+	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, uint64(12)).Return(header.RLP, nil).Once()
+
+	proof, err := env.prepareUpdate(t.Context(), 12)
+	require.NoError(t, err)
+	update, err := besutest.DecodeUpdateClient(proof)
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), update.TrustedHeight)
+	require.Equal(t, trusted, update.ConsensusStatePreimage)
+	require.Equal(t, header.RLP, update.HeaderRLP)
 }
 
 func TestStateProofTargetAlreadyStored(t *testing.T) {
@@ -244,9 +186,9 @@ func TestStateProofTargetAlreadyStored(t *testing.T) {
 	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 		Return(mustHash(t, update.ExpectedConsensusState()), nil).Once()
 
-	updates, err := env.prepareUpdate(ctx, update.Height)
+	proof, err := env.prepareUpdate(ctx, update.Height)
 	require.NoError(t, err)
-	assert.Nil(t, updates, "no update needed")
+	assert.Nil(t, proof, "no update needed")
 }
 
 func TestStateProofTargetEqualsVerifiedAnchor(t *testing.T) {
@@ -265,13 +207,13 @@ func TestStateProofTargetEqualsVerifiedAnchor(t *testing.T) {
 				Once()
 			env.expectHeader(t, update)
 
-			updates, err := env.prepareUpdate(context.Background(), update.Height)
+			proof, err := env.prepareUpdate(context.Background(), update.Height)
 			if conflict {
 				require.ErrorIs(t, err, ErrConflictingConsensusState)
 			} else {
 				require.NoError(t, err)
 			}
-			require.Empty(t, updates)
+			require.Empty(t, proof)
 			require.Equal(t, trusted, env.gen.cache[update.Height].state)
 			// No consensus hash RPC is needed for an already verified anchor.
 		})
@@ -310,11 +252,11 @@ func TestStateProofBackfillBelowTrusted(t *testing.T) {
 	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 		Return([32]byte{}, v2.ErrConsensusStateNotFound).Once()
 
-	updates, err := env.prepareUpdate(ctx, update.Height)
+	proof, err := env.prepareUpdate(ctx, update.Height)
 	require.NoError(t, err)
-	require.Len(t, updates, 1)
+	require.NotEmpty(t, proof)
 
-	decoded, err := besutest.DecodeUpdateClient(updates[0])
+	decoded, err := besutest.DecodeUpdateClient(proof)
 	require.NoError(t, err)
 	assert.Equal(t, anchor, decoded.TrustedHeight)
 }
@@ -637,7 +579,7 @@ func splitPath(t *testing.T, path []byte, kind byte) (string, uint64) {
 
 // prepareUpdate calls StateProof with a host head shortly after the cached
 // anchor's timestamp so trusting period and clock drift checks pass.
-func (e *fixtureEnv) prepareUpdate(ctx context.Context, height uint64) ([][]byte, error) {
+func (e *fixtureEnv) prepareUpdate(ctx context.Context, height uint64) ([]byte, error) {
 	timestamp := e.fixture.InitialTrustedTimestamp
 	for _, entry := range e.gen.cache {
 		timestamp = entry.state.Timestamp
@@ -646,56 +588,6 @@ func (e *fixtureEnv) prepareUpdate(ctx context.Context, height uint64) ([][]byte
 	e.host.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
 		Return(v2.BlockHeader{Timestamp: time.Unix(int64(timestamp+15000), 0)}, nil).Once()
 	return e.gen.StateProof(ctx, height)
-}
-
-func TestStateProofLongHistoryBisects(t *testing.T) {
-	env := newFixtureEnv(t)
-	keys := besutest.Keys(8)
-	const anchor = uint64(10)
-	const bridge = anchor + 1000
-	const target = bridge + 2
-	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
-	env.gen.store(anchor, trusted, true)
-	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).RunAndReturn(
-		func(context.Context, string) (besu.ClientState, error) {
-			state := env.clientState(anchor)
-			state.TrustingPeriod = 0
-			return state, nil
-		}).Once()
-	env.host.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
-		Return(v2.BlockHeader{Timestamp: time.Unix(1700000000+int64(target), 0)}, nil).Once()
-	fetched := 0
-	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, mock.Anything).RunAndReturn(
-		func(_ context.Context, h uint64) ([]byte, error) {
-			fetched++
-			set := keys[:4]
-			if h == bridge {
-				set = keys[2:6]
-			} else if h > bridge {
-				set = keys[4:8]
-			}
-			return sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, h, set).RLP, nil
-		})
-	updates, err := env.gen.StateProof(t.Context(), target)
-	require.NoError(t, err)
-	require.Len(t, updates, 2)
-	// The bisection finds the newest header the old set still accepts, and
-	// that bridge reaches the target directly.
-	trustedHeight := anchor
-	for i, want := range []uint64{bridge, target} {
-		update, err := besutest.DecodeUpdateClient(updates[i])
-		require.NoError(t, err)
-		header, err := besu.ParseHeader(update.HeaderRLP)
-		require.NoError(t, err)
-		require.Equal(t, want, header.Height)
-		require.Equal(t, trustedHeight, update.TrustedHeight)
-		signers, err := header.Signers()
-		require.NoError(t, err)
-		require.NoError(t, besu.CheckUpdate(header, signers, trusted))
-		trustedHeight = want
-		trusted = besu.ConsensusState{Timestamp: header.Timestamp, Validators: header.Validators}
-	}
-	require.Less(t, fetched, 20, "bisection must not walk the history linearly")
 }
 
 func TestPacketProofsShareSlot(t *testing.T) {

@@ -160,17 +160,13 @@ func (h *handler) StateProof(
 		return nil, err
 	}
 
-	proofs, err := target.StateProof(ctx, req.Msg.GetHeight())
+	proof, err := target.StateProof(ctx, req.Msg.GetHeight())
 	if err != nil {
 		h.logger.Error("StateProof", "err", err)
 		return nil, errInternal
 	}
-	if len(proofs) != 1 {
-		h.logger.Error("StateProof", "err", "wire format carries exactly one update", "updates", len(proofs))
-		return nil, errInternal
-	}
 
-	return connect.NewResponse(&proverv2.StateProofResponse{Proof: proofs[0]}), nil
+	return connect.NewResponse(&proverv2.StateProofResponse{Proof: proof}), nil
 }
 
 func (h *handler) PacketProofs(

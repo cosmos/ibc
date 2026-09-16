@@ -75,7 +75,7 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 	return res.Msg.GetHeight(), time.Unix(seconds, 0).UTC(), nil
 }
 
-func (p *Prover) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
+func (p *Prover) StateProof(ctx context.Context, height uint64) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -89,7 +89,7 @@ func (p *Prover) StateProof(ctx context.Context, height uint64) ([][]byte, error
 
 	p.logger.Debug("Fetched state proof", "height", height)
 
-	return [][]byte{res.Msg.GetProof()}, nil
+	return res.Msg.GetProof(), nil
 }
 
 func (p *Prover) PacketProofs(

@@ -110,7 +110,7 @@ func TestBuildRelayTxs(t *testing.T) {
 			},
 		},
 	}
-	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProofs: [][]byte{{0x01}}}
+	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}
 
 	t.Run("recv", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
@@ -217,21 +217,19 @@ func TestBuildRelayTxsClientUpdates(t *testing.T) {
 		requireSelector(t, "recvPacket", calls[0])
 	})
 
-	t.Run("updates precede packets in order", func(t *testing.T) {
+	t.Run("update precedes packets", func(t *testing.T) {
 		txs, err := builder.BuildRelayTxs(
-			v2.ClientUpdate{ClientID: "ethereum-0", StateProofs: [][]byte{{0xa1}, {0xa2}}},
+			v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0xa1}},
 			[]v2.PacketRelayItem{item},
 		)
 		require.NoError(t, err)
 
 		calls := callsOf(t, txs)
-		require.Len(t, calls, 3)
-		for i, want := range []byte{0xa1, 0xa2} {
-			requireSelector(t, "updateClient", calls[i])
-			args, err := routerABI.Methods["updateClient"].Inputs.Unpack(calls[i][4:])
-			require.NoError(t, err)
-			require.Equal(t, []byte{want}, args[1])
-		}
-		requireSelector(t, "recvPacket", calls[2])
+		require.Len(t, calls, 2)
+		requireSelector(t, "updateClient", calls[0])
+		args, err := routerABI.Methods["updateClient"].Inputs.Unpack(calls[0][4:])
+		require.NoError(t, err)
+		require.Equal(t, []byte{0xa1}, args[1])
+		requireSelector(t, "recvPacket", calls[1])
 	})
 }

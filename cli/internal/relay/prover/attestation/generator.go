@@ -45,7 +45,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	return latestProvableHeight(ctx, g.logger, g.attestors, g.threshold, g.counterpartyChain)
 }
 
-func (g *Generator) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
+func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, error) {
 	result, err := queryStateQuorum(ctx, g.logger, g.attestors, g.threshold, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying state attestation quorum")
@@ -69,7 +69,7 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([][]byte, er
 		return nil, errors.Wrap(err, "encoding state attestation proof")
 	}
 
-	return [][]byte{proof}, nil
+	return proof, nil
 }
 
 func (g *Generator) PacketProofs(

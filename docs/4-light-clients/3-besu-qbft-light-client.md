@@ -47,7 +47,7 @@ Besu validators seal a block by signing a digest of its header, with the seals t
 
 The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. A trusted state that has expired can no longer anchor an update, and the client has to be deployed again.
 
-Heights need not be consecutive. Every QBFT block is final, so the relayer updates straight to the newest header the client will accept. When validators rotate so far between two updates that the overlap rule fails, the relayer bisects the intermediate headers for the newest one the trusted set still accepts, then repeats from that header until it reaches the target. The resulting updates travel as consecutive `updateClient` calls in the same transaction as the packets, each trusting the one before it.
+Heights need not be consecutive. Every QBFT block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state. If validator turnover prevents a direct update, proof generation fails; automatic catch-up through intermediate updates is not supported.
 
 ## Membership and non-membership
 
@@ -82,6 +82,6 @@ clientA:
   type: "besu-qbft"
 ```
 
-The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and warms the consensus state it trusts. The state proof is the chain of updates that brings the client to the target height, empty when the client already stores it. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved.
+The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and warms the consensus state it trusts. The state proof is a single update to the target height, empty when the client already stores it. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved.
 
 Misbehaviour handling is not part of this client: a conflicting consensus state for a height the client already stores is rejected, and the client keeps working.

@@ -89,7 +89,7 @@ func relayPackets(
 	logger = logger.With("kind", relayKind, "clientID", clientID, "proofHeight", proofHeight, "sequences", sequences)
 	logger.Debug("Relaying packets")
 
-	stateProofs, err := prover.StateProof(ctx, proofHeight)
+	stateProof, err := prover.StateProof(ctx, proofHeight)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating state proof")
 	}
@@ -116,8 +116,8 @@ func relayPackets(
 	}
 
 	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
-		ClientID:    clientID,
-		StateProofs: stateProofs,
+		ClientID:   clientID,
+		StateProof: stateProof,
 	}, items)
 	if err != nil {
 		return nil, errors.Wrap(err, "building relay tx")

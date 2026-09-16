@@ -186,23 +186,23 @@ func (_c *MockProver_PacketProofs_Call) RunAndReturn(run func(ctx context.Contex
 }
 
 // StateProof provides a mock function for the type MockProver
-func (_mock *MockProver) StateProof(ctx context.Context, height uint64) ([][]byte, error) {
+func (_mock *MockProver) StateProof(ctx context.Context, height uint64) ([]byte, error) {
 	ret := _mock.Called(ctx, height)
 
 	if len(ret) == 0 {
 		panic("no return value specified for StateProof")
 	}
 
-	var r0 [][]byte
+	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([][]byte, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([]byte, error)); ok {
 		return returnFunc(ctx, height)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) [][]byte); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) []byte); ok {
 		r0 = returnFunc(ctx, height)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([][]byte)
+			r0 = ret.Get(0).([]byte)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
@@ -243,12 +243,12 @@ func (_c *MockProver_StateProof_Call) Run(run func(ctx context.Context, height u
 	return _c
 }
 
-func (_c *MockProver_StateProof_Call) Return(bytes [][]byte, err error) *MockProver_StateProof_Call {
+func (_c *MockProver_StateProof_Call) Return(bytes []byte, err error) *MockProver_StateProof_Call {
 	_c.Call.Return(bytes, err)
 	return _c
 }
 
-func (_c *MockProver_StateProof_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([][]byte, error)) *MockProver_StateProof_Call {
+func (_c *MockProver_StateProof_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([]byte, error)) *MockProver_StateProof_Call {
 	_c.Call.Return(run)
 	return _c
 }

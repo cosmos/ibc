@@ -53,7 +53,7 @@ func New(router common.Address) *TxBuilder {
 	return &TxBuilder{router: router}
 }
 
-// BuildRelayTxs packs every clientUpdate proof and every packetRelayItems
+// BuildRelayTxs packs the optional clientUpdate proof and every packetRelayItems
 // entry into a single ICS26Router.multicall transaction. EVM router calldata
 // has no meaningful size limit for the batch sizes the relayer forms, so this
 // always returns exactly one tx.
@@ -61,10 +61,10 @@ func (c *TxBuilder) BuildRelayTxs(
 	clientUpdate v2.ClientUpdate,
 	packetRelayItems []v2.PacketRelayItem,
 ) ([]v2.RelayTx, error) {
-	calls := make([][]byte, 0, len(clientUpdate.StateProofs)+len(packetRelayItems))
+	calls := make([][]byte, 0, 1+len(packetRelayItems))
 
-	for _, proof := range clientUpdate.StateProofs {
-		updateCall, err := packUpdateClient(clientUpdate.ClientID, proof)
+	if len(clientUpdate.StateProof) > 0 {
+		updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.StateProof)
 		if err != nil {
 			return nil, err
 		}

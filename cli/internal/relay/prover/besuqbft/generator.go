@@ -36,10 +36,6 @@ var (
 	ErrReceiptExists      = errors.New("packet receipt exists on the counterparty")
 )
 
-// sealScanWindow bounds the linear probe above the trusted height after a
-// failed bisection; it only needs to outlast a run of thinly sealed blocks.
-const sealScanWindow = 32
-
 const historyHint = "the counterparty node may not serve state this old: raise its Bonsai history limit or use an archive node"
 
 // Generator implements prover.Prover for one Besu QBFT light client. host is
@@ -139,8 +135,8 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 	return nil
 }
 
-// LatestProvableHeight returns the newest counterparty height the light client
-// will accept now: every QBFT block is final, so this is the chain head unless
+// LatestProvableHeight returns the newest counterparty height within clock drift:
+// every QBFT block is final, so this is the chain head unless
 // its timestamp exceeds the host chain's time plus the client's clock drift
 // allowance, in which case it steps back to the newest admissible header.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
@@ -208,11 +204,9 @@ func checkTrustingPeriod(state besu.ClientState, trusted besu.ConsensusState, ho
 	return nil
 }
 
-// StateProof returns the client updates that bring the light client to
-// target, one per updateClient call in submission order. Above the trusted
-// height each update is the furthest header the previous one's validators
-// accept, so the sequence is empty only when the client already stores target.
-func (g *Generator) StateProof(ctx context.Context, target uint64) ([][]byte, error) {
+// StateProof returns a single update from the client's trusted state to target,
+// or nil when the client already stores target. Intermediate updates are not supported.
+func (g *Generator) StateProof(ctx context.Context, target uint64) ([]byte, error) {
 	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
@@ -238,31 +232,25 @@ func (g *Generator) StateProof(ctx context.Context, target uint64) ([][]byte, er
 	}
 
 	if target <= state.LatestHeight {
-		update, err := g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, targetHeader)
-		if err != nil || update == nil {
-			return nil, err
-		}
-		return [][]byte{update}, nil
+		return g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, targetHeader)
 	}
 
-	var updates [][]byte
-	trustedHeight := state.LatestHeight
-	for {
-		header, err := g.nextHeader(ctx, trustedHeight, trusted, targetHeader)
-		if err != nil {
-			return nil, err
-		}
-		update, err := besu.EncodeUpdateClient(header.RLP, trustedHeight, trusted)
-		if err != nil {
-			return nil, fmt.Errorf("encoding update to height %d: %w", header.Height, err)
-		}
-		updates = append(updates, update)
-		if header.Height == target {
-			g.store(target, consensusOf(header), false)
-			return updates, nil
-		}
-		trustedHeight, trusted = header.Height, consensusOf(header)
+	signers, err := targetHeader.Signers()
+	if err != nil {
+		return nil, fmt.Errorf("header %d: %w", target, err)
 	}
+	if checkErr := besu.CheckUpdate(targetHeader, signers, trusted); checkErr != nil {
+		return nil, fmt.Errorf(
+			"direct update from trusted height %d to %d failed (intermediate updates are not supported): %w",
+			state.LatestHeight, target, checkErr,
+		)
+	}
+	update, err := besu.EncodeUpdateClient(targetHeader.RLP, state.LatestHeight, trusted)
+	if err != nil {
+		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
+	}
+	g.store(target, consensusOf(targetHeader), false)
+	return update, nil
 }
 
 // PacketProofs proves each packet's claim against the router storage at
@@ -337,74 +325,6 @@ func (g *Generator) updateAtOrBelowTrusted(
 	}
 
 	return update, nil
-}
-
-// nextHeader returns the newest header at or below target that trusted
-// accepts: target itself when possible, otherwise the result of bisecting the
-// heights in between. Acceptance is monotone while validators leave and do not
-// return, but a block carries only the commit seals its proposer collected, so
-// two blocks with the same validator set can differ in how many trusted
-// validators signed. When the bisection therefore ends with nothing accepted,
-// the heights just above trustedHeight are probed one by one before giving up.
-func (g *Generator) nextHeader(
-	ctx context.Context,
-	trustedHeight uint64,
-	trusted besu.ConsensusState,
-	target *besu.Header,
-) (*besu.Header, error) {
-	check := func(header *besu.Header) (error, error) {
-		signers, err := header.Signers()
-		if err != nil {
-			return nil, fmt.Errorf("header %d: %w", header.Height, err)
-		}
-		return besu.CheckUpdate(header, signers, trusted), nil
-	}
-	rejected, err := check(target)
-	if err != nil {
-		return nil, err
-	}
-	if rejected == nil {
-		return target, nil
-	}
-	var last *besu.Header
-	rejectedAt := target.Height
-	low, high := trustedHeight, target.Height-1
-	for low < high {
-		mid := low + (high-low+1)/2
-		header, err := g.header(ctx, mid)
-		if err != nil {
-			return nil, err
-		}
-		checkErr, err := check(header)
-		if err != nil {
-			return nil, err
-		}
-		if checkErr != nil {
-			rejected, rejectedAt = checkErr, mid
-			high = mid - 1
-			continue
-		}
-		low, last = mid, header
-	}
-	if last != nil {
-		return last, nil
-	}
-	for h := trustedHeight + 2; h < target.Height && h <= trustedHeight+sealScanWindow; h++ {
-		header, err := g.header(ctx, h)
-		if err != nil {
-			return nil, err
-		}
-		checkErr, err := check(header)
-		if err != nil {
-			return nil, err
-		}
-		if checkErr == nil {
-			return header, nil
-		}
-	}
-	return nil, fmt.Errorf(
-		"no header after trusted height %d is accepted (height %d: %w)", trustedHeight, rejectedAt, rejected,
-	)
 }
 
 func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, []int, error) {
