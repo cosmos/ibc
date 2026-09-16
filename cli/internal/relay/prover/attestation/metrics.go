@@ -25,7 +25,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 }
 
 func (g *Generator) recordDataMatch(ctx context.Context, attestor string, matches bool) {
-	metrics.DataMatches.Add(ctx, 1, otel.WithAttributes(
+	metrics.DataMatches.Add(ctx, 1, metric.WithAttributes(
 		otel.AttrChainID.String(g.chainID),
 		otel.AttrClientID.String(g.clientID),
 		otel.AttrAttestor.String(attestor),
