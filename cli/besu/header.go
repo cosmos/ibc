@@ -76,6 +76,18 @@ func EncodeHeader(h *types.Header) ([]byte, error) {
 	return encoded, nil
 }
 
+// ParseSealedHeader encodes a node-supplied header the way Besu sealed it
+// and parses the BFT fields the light client checks. Deploy and the prover
+// both start from this: validators come from extraData, not a QBFT RPC.
+func ParseSealedHeader(h *types.Header) (*Header, error) {
+	encoded, err := EncodeHeader(h)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseHeader(encoded)
+}
+
 // ParseHeader decodes a raw Besu header and validates the fields the light
 // client checks so a bad header fails before it is submitted.
 func ParseHeader(headerRLP []byte) (*Header, error) {

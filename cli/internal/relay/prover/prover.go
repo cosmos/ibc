@@ -151,8 +151,19 @@ func addGenerator(
 			)
 		}
 
+		host, ok := clientSet.EVM(client.ChainID)
+		if !ok {
+			return errors.Errorf("connection %q: no EVM client for chain %q", connAlias, client.ChainID)
+		}
+		counterparty, ok := clientSet.EVM(clientCounterparty.ChainID)
+		if !ok {
+			return errors.Errorf(
+				"connection %q: no EVM client for counterparty chain %q", connAlias, clientCounterparty.ChainID,
+			)
+		}
+
 		gen, err := besuqbft.ResolveGenerator(
-			ctx, client, clientCounterparty, counterpartyChain.EVM.ICS26Router, clientSet,
+			ctx, client, clientCounterparty, counterpartyChain.EVM.ICS26Router, host, counterparty,
 		)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)

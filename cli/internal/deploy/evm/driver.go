@@ -320,11 +320,7 @@ func (d *Driver) BesuQBFTTrustedState(
 	if err != nil {
 		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("fetch header %d: %w", height, err)
 	}
-	encoded, err := besu.EncodeHeader(header)
-	if err != nil {
-		return deploy.BesuQBFTTrustedState{}, err
-	}
-	parsed, err := besu.ParseHeader(encoded)
+	parsed, err := besu.ParseSealedHeader(header)
 	if err != nil {
 		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("header %d is not a Besu QBFT header: %w", height, err)
 	}

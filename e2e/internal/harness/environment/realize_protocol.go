@@ -14,10 +14,9 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
@@ -639,18 +638,18 @@ func besuQBFTTrustedState(ctx context.Context, chain *Chain) (besuTrustedState, 
 		if headerErr != nil {
 			return headerErr
 		}
-		if header.Number == nil || !header.Number.IsUint64() || header.Number.Sign() == 0 {
-			return errors.New("a Besu QBFT client needs a non-zero uint64 trusted height")
+		parsed, parseErr := besu.ParseSealedHeader(header)
+		if parseErr != nil {
+			return fmt.Errorf("header is not a Besu QBFT header: %w", parseErr)
 		}
-		validators, validatorsErr := besuQBFTValidators(ctx, client.RPCClient(), header.Number.Uint64())
-		if validatorsErr != nil {
-			return validatorsErr
+		if parsed.Height == 0 {
+			return errors.New("a Besu QBFT client needs a non-zero trusted height")
 		}
 		state = besuTrustedState{
-			height:     header.Number.Uint64(),
-			timestamp:  header.Time,
-			stateRoot:  header.Root,
-			validators: validators,
+			height:     parsed.Height,
+			timestamp:  parsed.Timestamp,
+			stateRoot:  parsed.StateRoot,
+			validators: parsed.Validators,
 		}
 		return nil
 	})
@@ -658,23 +657,6 @@ func besuQBFTTrustedState(ctx context.Context, chain *Chain) (besuTrustedState, 
 		return besuTrustedState{}, fmt.Errorf("Chain %q has no EVM client", chain.id)
 	}
 	return state, err
-}
-
-// Query the validators for this block, not the pending block's next validator set.
-func besuQBFTValidators(ctx context.Context, client *rpc.Client, height uint64) ([]common.Address, error) {
-	var validators []common.Address
-	if err := client.CallContext(
-		ctx,
-		&validators,
-		"qbft_getValidatorsByBlockNumber",
-		hexutil.EncodeUint64(height),
-	); err != nil {
-		return nil, fmt.Errorf("query Besu QBFT validators at height %d: %w", height, err)
-	}
-	if len(validators) == 0 {
-		return nil, fmt.Errorf("no Besu QBFT validators at height %d", height)
-	}
-	return validators, nil
 }
 
 func clientID(connectionID ConnectionID, end string, declaration ClientSpec) string {

@@ -16,14 +16,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/gethclient"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 func hexNodes(nodes [][]byte) []string {
@@ -193,16 +191,6 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 			slots:  [][32]byte{slot},
 			want:   "invalid value",
 		},
-		"malformed node hex": {
-			mutate: func(r *gethclient.AccountResult) { r.StorageProof[0].Proof = []string{"0xzz"} },
-			slots:  [][32]byte{slot},
-			want:   "proof node 0",
-		},
-		"malformed account node": {
-			mutate: func(r *gethclient.AccountResult) { r.AccountProof = []string{"nothex"} },
-			slots:  [][32]byte{slot},
-			want:   "account proof",
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := *result
@@ -215,19 +203,15 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 	}
 }
 
-func TestGetHeaderRLP(t *testing.T) {
+func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	ctx := context.Background()
 	client, eth := newTestClient(t)
 
 	header := &types.Header{Number: big.NewInt(7), Time: 1700000000, Difficulty: big.NewInt(1), Extra: []byte{1, 2, 3}}
 	eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).Return(header, nil).Once()
 
-	got, err := client.GetHeaderRLP(ctx, 7)
-	require.NoError(t, err)
-
-	want, err := rlp.EncodeToBytes(header)
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
+	_, err := client.SealedHeader(ctx, 7)
+	require.ErrorContains(t, err, "not a Besu QBFT header")
 }
 
 type fakeDataError struct{ data string }
@@ -312,7 +296,7 @@ func TestBesuQBFTReads(t *testing.T) {
 			Return(nil, fakeDataError{data: hexutil.Encode(revert)}).Once()
 
 		_, err = client.GetBesuQBFTConsensusStateHash(ctx, "besu-0", 999)
-		require.ErrorIs(t, err, v2.ErrConsensusStateNotFound)
+		require.ErrorIs(t, err, ErrConsensusStateNotFound)
 	})
 
 	t.Run("other revert is not mistaken for not found", func(t *testing.T) {
@@ -328,6 +312,6 @@ func TestBesuQBFTReads(t *testing.T) {
 
 		_, err = client.GetBesuQBFTConsensusStateHash(ctx, "besu-0", 5)
 		require.Error(t, err)
-		require.NotErrorIs(t, err, v2.ErrConsensusStateNotFound)
+		require.NotErrorIs(t, err, ErrConsensusStateNotFound)
 	})
 }

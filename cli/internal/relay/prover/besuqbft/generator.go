@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -18,7 +17,7 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/internal/chains"
+	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -38,30 +37,30 @@ var (
 
 const historyHint = "the counterparty node may not serve state this old: raise its Bonsai history limit or use an archive node"
 
+// chain is the EVM reads the prover needs. *evm.Client is the production
+// implementation; tests use a fake.
+type chain interface {
+	ChainID() string
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+	SealedHeader(ctx context.Context, height uint64) (*besu.Header, error)
+	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.AccountProof, error)
+	GetBesuQBFTClientState(ctx context.Context, clientID string) (besu.ClientState, error)
+	GetBesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error)
+}
+
 // Generator implements prover.Prover for one Besu QBFT light client. host is
 // the chain the client lives on; counterparty is the Besu chain it tracks.
 type Generator struct {
-	host         chains.Client
-	counterparty chains.Client
+	host         chain
+	counterparty chain
 	clientID     string
-
-	mu    sync.Mutex
-	cache map[uint64]cacheEntry
-}
-
-// cacheEntry is a consensus state the prover derived from the counterparty.
-// verified means its hash was checked against the light client's storage, so
-// it may be used as a trusted anchor without another chain read.
-type cacheEntry struct {
-	state    besu.ConsensusState
-	verified bool
 }
 
 // snapshot is everything the prover reads about one counterparty height for
 // packet proofs: the header and the router's account and storage proofs.
 type snapshot struct {
 	header    *besu.Header
-	proof     v2.AccountProof
+	proof     evm.AccountProof
 	consensus besu.ConsensusState
 }
 
@@ -73,13 +72,8 @@ func consensusOf(header *besu.Header) besu.ConsensusState {
 
 // New builds a Generator without touching either chain; ResolveGenerator is
 // the production entry point.
-func New(host, counterparty chains.Client, clientID string) *Generator {
-	return &Generator{
-		host:         host,
-		counterparty: counterparty,
-		clientID:     clientID,
-		cache:        make(map[uint64]cacheEntry),
-	}
+func New(host, counterparty chain, clientID string) *Generator {
+	return &Generator{host: host, counterparty: counterparty, clientID: clientID}
 }
 
 // ResolveGenerator builds the prover for self, tracking counterparty, and
@@ -89,20 +83,8 @@ func ResolveGenerator(
 	ctx context.Context,
 	self, counterparty config.ClientEnd,
 	counterpartyRouter string,
-	clientSet *chains.ClientSet,
+	host, counterpartyChain *evm.Client,
 ) (*Generator, error) {
-	host, ok := clientSet.Get(self.ChainID)
-	if !ok {
-		return nil, fmt.Errorf("client %q: no configured chain client for %q", self.ClientID, self.ChainID)
-	}
-
-	counterpartyChain, ok := clientSet.Get(counterparty.ChainID)
-	if !ok {
-		return nil, fmt.Errorf(
-			"client %q: no configured chain client for counterparty chain %q", self.ClientID, counterparty.ChainID,
-		)
-	}
-
 	gen := New(host, counterpartyChain, self.ClientID)
 	if err := gen.resolve(ctx, counterpartyRouter); err != nil {
 		return nil, err
@@ -249,7 +231,6 @@ func (g *Generator) StateProof(ctx context.Context, target uint64) ([]byte, erro
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
-	g.store(target, consensusOf(targetHeader), false)
 	return update, nil
 }
 
@@ -306,7 +287,7 @@ func (g *Generator) updateAtOrBelowTrusted(
 		}
 
 		return nil, nil
-	case !errors.Is(err, v2.ErrConsensusStateNotFound):
+	case !errors.Is(err, evm.ErrConsensusStateNotFound):
 		return nil, err
 	}
 
@@ -411,14 +392,9 @@ func checkValue(kind v2.ProofKind, packet channeltypesv2.Packet, value common.Ha
 
 // header fetches and parses the counterparty header at height.
 func (g *Generator) header(ctx context.Context, height uint64) (*besu.Header, error) {
-	raw, err := g.counterparty.GetHeaderRLP(ctx, height)
+	header, err := g.counterparty.SealedHeader(ctx, height)
 	if err != nil {
 		return nil, fmt.Errorf("reading counterparty header %d: %w", height, err)
-	}
-
-	header, err := besu.ParseHeader(raw)
-	if err != nil {
-		return nil, fmt.Errorf("counterparty header %d: %w", height, err)
 	}
 
 	if header.Height != height {
@@ -436,11 +412,6 @@ func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byt
 		return nil, err
 	}
 
-	return g.snapshotForHeader(ctx, header, slots)
-}
-
-func (g *Generator) snapshotForHeader(ctx context.Context, header *besu.Header, slots [][32]byte) (*snapshot, error) {
-	height := header.Height
 	proof, err := g.counterparty.GetRouterProof(ctx, height, slots)
 	if err != nil {
 		return nil, fmt.Errorf("proving router at height %d: %w (%s)", height, err, historyHint)
@@ -450,27 +421,14 @@ func (g *Generator) snapshotForHeader(ctx context.Context, header *besu.Header, 
 }
 
 // preimage returns the consensus state the light client stores at height,
-// verified against the stored hash the first time it is used as an anchor.
+// rebuilt from the counterparty header and checked against the stored hash.
 func (g *Generator) preimage(ctx context.Context, height uint64) (besu.ConsensusState, error) {
-	g.mu.Lock()
-	entry, ok := g.cache[height]
-	g.mu.Unlock()
-
-	if ok && entry.verified {
-		return entry.state, nil
+	header, err := g.header(ctx, height)
+	if err != nil {
+		return besu.ConsensusState{}, fmt.Errorf("rebuilding trusted consensus state at height %d: %w", height, err)
 	}
 
-	state := entry.state
-
-	if !ok {
-		header, err := g.header(ctx, height)
-		if err != nil {
-			return besu.ConsensusState{}, fmt.Errorf("rebuilding trusted consensus state at height %d: %w", height, err)
-		}
-
-		state = consensusOf(header)
-	}
-
+	state := consensusOf(header)
 	stored, err := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, height)
 	if err != nil {
 		return besu.ConsensusState{}, err
@@ -482,42 +440,11 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besu.Consensus
 	}
 
 	if hash != common.Hash(stored) {
-		g.mu.Lock()
-		if current, exists := g.cache[height]; exists && !current.verified {
-			delete(g.cache, height)
-		}
-		g.mu.Unlock()
-
 		return besu.ConsensusState{}, fmt.Errorf(
 			"consensus state rebuilt for height %d hashes to %s but the light client stores %s",
 			height, hash, common.Hash(stored),
 		)
 	}
 
-	g.store(height, state, true)
-
 	return state, nil
-}
-
-// store caches state for height, never replacing a verified entry. A verified
-// entry is the client's latest height, which the contract never lowers, so
-// everything below it can no longer be read and is dropped.
-func (g *Generator) store(height uint64, state besu.ConsensusState, verified bool) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	if existing, ok := g.cache[height]; ok && existing.verified {
-		return
-	}
-
-	g.cache[height] = cacheEntry{state: state, verified: verified}
-	if !verified {
-		return
-	}
-
-	for h := range g.cache {
-		if h < height {
-			delete(g.cache, h)
-		}
-	}
 }

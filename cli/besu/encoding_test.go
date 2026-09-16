@@ -150,6 +150,24 @@ func TestPayloadDecodersRejectMalformedData(t *testing.T) {
 	}
 }
 
+func TestConsensusStateHashMatchesSolidity(t *testing.T) {
+	fixture := besutest.MustFixture(t)
+	// keccak256(abi.encode(ConsensusState)) for qbft.json's initial trusted state,
+	// computed independently with `cast abi-encode ... | cast keccak`.
+	got, err := fixture.InitialConsensusState().Hash()
+	require.NoError(t, err)
+	assert.Equal(t, common.HexToHash("0x6ad73b19daaa61fcfc6d16fb89695b52ab719cc0348d014fd7cac8c1fd102bda"), got)
+}
+
+func TestCommitmentSlotMatchesSolidity(t *testing.T) {
+	fixture := besutest.MustFixture(t)
+	assert.Equal(
+		t,
+		common.HexToHash("0x54dec64b8cfb867e4e0b052552b929bd5886439932474991c8895d84bcc8c6d9"),
+		besu.CommitmentSlot(fixture.Membership.Path),
+	)
+}
+
 func TestUpdateClientRejectsNonzeroRevision(t *testing.T) {
 	encoded, err := besu.EncodeUpdateClient(nil, 1, besu.ConsensusState{})
 	require.NoError(t, err)

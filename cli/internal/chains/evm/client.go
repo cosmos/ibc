@@ -65,6 +65,27 @@ type Client struct {
 	logger        *slog.Logger
 }
 
+// ErrConsensusStateNotFound reports that a light client stores nothing at the
+// requested height.
+var ErrConsensusStateNotFound = errors.New("consensus state not found")
+
+// AccountProof is an eth_getProof result for one account at one height: the
+// account's storage root, the account proof nodes against the block's state
+// root and one storage proof per requested slot, in request order.
+type AccountProof struct {
+	StorageRoot   [32]byte
+	AccountProof  [][]byte
+	StorageProofs []StorageProof
+}
+
+// StorageProof is one storage slot's value and trie proof nodes from
+// eth_getProof. Value is zero for an absent slot.
+type StorageProof struct {
+	Key   [32]byte
+	Value *big.Int
+	Proof [][]byte
+}
+
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
 	eth, err := ethclient.Dial(rpcURL)
@@ -292,24 +313,29 @@ func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]stri
 	return addresses, set.MinRequiredSigs, nil
 }
 
-// GetHeaderRLP returns the header at height exactly as the node encodes it.
-func (c *Client) GetHeaderRLP(ctx context.Context, height uint64) ([]byte, error) {
+// SealedHeader returns the Besu QBFT header at height, parsed from the node's
+// sealed RLP. Validators come from extraData.
+func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.Header, error) {
 	header, err := c.eth.HeaderByNumber(ctx, heightToBigInt(height))
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting header for height %d on chain %s", height, c.chainID)
 	}
 
-	encoded, err := besu.EncodeHeader(header)
+	sealed, err := besu.ParseSealedHeader(header)
 	if err != nil {
-		return nil, errors.Wrapf(err, "encoding header %d on chain %s", height, c.chainID)
+		return nil, errors.Wrapf(err, "header %d on chain %s is not a Besu QBFT header", height, c.chainID)
 	}
 
-	return encoded, nil
+	if height != v2.LatestBlock && sealed.Height != height {
+		return nil, errors.Errorf("chain %s returned header %d for height %d", c.chainID, sealed.Height, height)
+	}
+
+	return sealed, nil
 }
 
 // GetRouterProof proves the router account and the requested storage slots at
 // height via eth_getProof, matching storage proofs to slots by key.
-func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (v2.AccountProof, error) {
+func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (AccountProof, error) {
 	keys := make([]string, len(slots))
 	for i, slot := range slots {
 		keys[i] = common.Hash(slot).Hex()
@@ -317,12 +343,12 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]
 
 	result, err := ethGetProof(ctx, c.eth, c.routerAddress, keys, heightToBigInt(height))
 	if err != nil {
-		return v2.AccountProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
+		return AccountProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
 	}
 
 	proof, err := accountProofFromResult(result, slots)
 	if err != nil {
-		return v2.AccountProof{}, errors.Wrapf(err, "router proof at height %d on chain %s", height, c.chainID)
+		return AccountProof{}, errors.Wrapf(err, "router proof at height %d on chain %s", height, c.chainID)
 	}
 
 	return proof, nil
@@ -347,90 +373,48 @@ func ethGetProof(
 // accountProofFromResult converts an eth_getProof result, requiring a
 // well-formed storage proof for every requested slot regardless of response
 // order.
-func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) (v2.AccountProof, error) {
-	accountNodes, err := decodeProofNodes(result.AccountProof)
-	if err != nil {
-		return v2.AccountProof{}, errors.Wrap(err, "account proof")
-	}
-
-	byKey := make(map[[32]byte]v2.StorageProof, len(result.StorageProof))
+func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) (AccountProof, error) {
+	byKey := make(map[[32]byte]StorageProof, len(result.StorageProof))
 
 	for i, storage := range result.StorageProof {
-		key, errKey := decodeStorageKey(storage.Key)
-		if errKey != nil {
-			return v2.AccountProof{}, errors.Wrapf(errKey, "storage proof %d key", i)
-		}
+		key := common.BytesToHash(common.FromHex(storage.Key))
 
 		if storage.Value == nil || storage.Value.Sign() < 0 || storage.Value.BitLen() > 256 {
-			return v2.AccountProof{}, errors.Errorf("storage proof %d has an invalid value", i)
-		}
-
-		nodes, errNodes := decodeProofNodes(storage.Proof)
-		if errNodes != nil {
-			return v2.AccountProof{}, errors.Wrapf(errNodes, "storage proof %d", i)
+			return AccountProof{}, errors.Errorf("storage proof %d has an invalid value", i)
 		}
 
 		if _, dup := byKey[key]; dup {
-			return v2.AccountProof{}, errors.Errorf("duplicate storage proof for slot %s", common.Hash(key))
+			return AccountProof{}, errors.Errorf("duplicate storage proof for slot %s", common.Hash(key))
 		}
 
-		byKey[key] = v2.StorageProof{Key: key, Value: storage.Value, Proof: nodes}
+		byKey[key] = StorageProof{Key: key, Value: storage.Value, Proof: decodeProofNodes(storage.Proof)}
 	}
 
-	proofs := make([]v2.StorageProof, len(slots))
+	proofs := make([]StorageProof, len(slots))
 
 	for i, slot := range slots {
 		proof, ok := byKey[slot]
 		if !ok {
-			return v2.AccountProof{}, errors.Errorf("no storage proof returned for slot %s", common.Hash(slot))
+			return AccountProof{}, errors.Errorf("no storage proof returned for slot %s", common.Hash(slot))
 		}
 
 		proofs[i] = proof
 	}
 
-	return v2.AccountProof{
+	return AccountProof{
 		StorageRoot:   result.StorageHash,
-		AccountProof:  accountNodes,
+		AccountProof:  decodeProofNodes(result.AccountProof),
 		StorageProofs: proofs,
 	}, nil
 }
 
-// decodeStorageKey accepts a 0x-prefixed key of up to 32 bytes and left-pads
-// it: Besu strips leading zero bytes and encodes the zero key as 0x0.
-func decodeStorageKey(key string) ([32]byte, error) {
-	raw, err := hexutil.Decode(key)
-	if err != nil {
-		// Besu returns 0x0 for zero; hexutil requires an even length.
-		trimmed := strings.TrimPrefix(key, "0x")
-		if len(trimmed)%2 == 1 {
-			raw, err = hexutil.Decode("0x0" + trimmed)
-		}
-
-		if err != nil {
-			return [32]byte{}, err
-		}
-	}
-
-	if len(raw) > common.HashLength {
-		return [32]byte{}, errors.Errorf("key %s is longer than 32 bytes", key)
-	}
-
-	return common.BytesToHash(raw), nil
-}
-
-func decodeProofNodes(nodes []string) ([][]byte, error) {
+func decodeProofNodes(nodes []string) [][]byte {
 	out := make([][]byte, len(nodes))
-
 	for i, node := range nodes {
-		decoded, err := hexutil.Decode(node)
-		if err != nil {
-			return nil, errors.Wrapf(err, "proof node %d", i)
-		}
-
-		out[i] = decoded
+		out[i] = common.FromHex(node)
 	}
 
-	return out, nil
+	return out
 }
 
 // GetBesuQBFTClientState reads and strictly decodes clientID's Besu QBFT light
@@ -475,7 +459,7 @@ func (c *Client) GetBesuQBFTConsensusStateHash(
 	if err != nil {
 		if isConsensusStateNotFound(err) {
 			return [32]byte{}, errors.Wrapf(
-				v2.ErrConsensusStateNotFound, "client %q on chain %s at height %d", clientID, c.chainID, height,
+				ErrConsensusStateNotFound, "client %q on chain %s at height %d", clientID, c.chainID, height,
 			)
 		}
 

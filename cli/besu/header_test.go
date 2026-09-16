@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -170,5 +171,22 @@ func TestCommitSealDigestIgnoresSeals(t *testing.T) {
 
 func TestEncodeHeaderRejectsNil(t *testing.T) {
 	_, err := besu.EncodeHeader(nil)
+	require.Error(t, err)
+}
+
+func TestParseSealedHeader(t *testing.T) {
+	fixture := besutest.MustFixture(t)
+	update := fixture.AdjacentUpdate
+	var header types.Header
+	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
+
+	got, err := besu.ParseSealedHeader(&header)
+	require.NoError(t, err)
+	assert.Equal(t, update.Height, got.Height)
+	assert.Equal(t, update.ExpectedTimestamp, got.Timestamp)
+	assert.Equal(t, update.ExpectedStateRoot, got.StateRoot)
+	assert.Equal(t, update.ExpectedValidators, got.Validators)
+
+	_, err = besu.ParseSealedHeader(nil)
 	require.Error(t, err)
 }
