@@ -57,7 +57,7 @@ Attestation prover metric (`otel_scope_name="ibc.prover.attestation"`):
 
 | Metric | Type | Labels | Notes |
 | --- | --- | --- | --- |
-| `attestation_data_matches_total` | counter | `chain_id`, `client_id`, `attestor`, `result` | Whether returned data matches the expected claim (`true|false`), before signature validation. RPC failures excluded. |
+| `attestation_data_matches_total` | counter | `chain_id`, `client_id`, `attestor`, `result` | Whether returned data matches the expected claim (`true|false`). |
 
 ### Relayer metrics
 
