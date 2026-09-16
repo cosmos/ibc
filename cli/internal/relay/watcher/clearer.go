@@ -242,6 +242,7 @@ func (c *Clearer) calcOutstanding(
 		return nil
 	}
 
+	// todo: https://github.com/cosmos/ibc/pull/1456#discussion_r3972377804 
 	if len(unresolved) > 0 {
 		if err := probe(unresolved); err != nil {
 			return nil, 0, 0, err
@@ -308,6 +309,8 @@ func (c *Clearer) sends(
 
 		found := make(map[uint64]struct{}, len(events))
 
+		// todo: "Foreign sends stay unresolved"
+		// todo https://github.com/cosmos/ibc/pull/1454#discussion_r3972388543
 		for _, event := range events {
 			// a send naming a counterparty we do not relay to is not ours to
 			// record, the same check the subscription path makes
