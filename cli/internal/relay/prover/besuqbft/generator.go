@@ -36,6 +36,10 @@ var (
 	ErrReceiptExists      = errors.New("packet receipt exists on the counterparty")
 )
 
+// sealScanWindow bounds the linear probe above the trusted height after a
+// failed bisection; it only needs to outlast a run of thinly sealed blocks.
+const sealScanWindow = 32
+
 const historyHint = "the counterparty node may not serve state this old: raise its Bonsai history limit or use an archive node"
 
 // Generator implements prover.Prover for one Besu QBFT light client. host is
@@ -337,9 +341,10 @@ func (g *Generator) updateAtOrBelowTrusted(
 // nextHeader returns the newest header at or below target that trusted
 // accepts: target itself when possible, otherwise the result of bisecting the
 // heights in between. Acceptance is monotone while validators leave and do not
-// return; when it is not, the probe still only advances on accepted headers
-// and its last candidate is trustedHeight+1, so it fails only when no
-// checkpoint exists there either.
+// return, but a block carries only the commit seals its proposer collected, so
+// two blocks with the same validator set can differ in how many trusted
+// validators signed. When the bisection therefore ends with nothing accepted,
+// the heights just above trustedHeight are probed one by one before giving up.
 func (g *Generator) nextHeader(
 	ctx context.Context,
 	trustedHeight uint64,
@@ -380,12 +385,25 @@ func (g *Generator) nextHeader(
 		}
 		low, last = mid, header
 	}
-	if last == nil {
-		return nil, fmt.Errorf(
-			"no header after trusted height %d is accepted (height %d: %w)", trustedHeight, rejectedAt, rejected,
-		)
+	if last != nil {
+		return last, nil
 	}
-	return last, nil
+	for h := trustedHeight + 2; h < target.Height && h <= trustedHeight+sealScanWindow; h++ {
+		header, err := g.header(ctx, h)
+		if err != nil {
+			return nil, err
+		}
+		checkErr, err := check(header)
+		if err != nil {
+			return nil, err
+		}
+		if checkErr == nil {
+			return header, nil
+		}
+	}
+	return nil, fmt.Errorf(
+		"no header after trusted height %d is accepted (height %d: %w)", trustedHeight, rejectedAt, rejected,
+	)
 }
 
 func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, []int, error) {

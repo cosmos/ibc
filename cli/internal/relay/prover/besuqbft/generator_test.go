@@ -193,6 +193,50 @@ func TestStateProofValidatorTurnoverChain(t *testing.T) {
 	require.False(t, cached, "intermediate hops are not anchors until the client stores them")
 }
 
+// sealedHeaderBy builds a header whose validator set and commit sealers differ.
+func sealedHeaderBy(t *testing.T, template []byte, height uint64, validators, sealers []*ecdsa.PrivateKey) *besu.Header {
+	t.Helper()
+
+	header, err := besutest.MustBuilder(template).
+		SetHeight(height).
+		SetTimestamp(1700000000 + height).
+		SetValidators(besutest.Addresses(validators)).
+		MustSign(sealers...).Header()
+	require.NoError(t, err)
+	return header
+}
+
+func TestStateProofBridgesThinlySealedBlock(t *testing.T) {
+	env := newFixtureEnv(t)
+	keys := besutest.Keys(8)
+	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
+	env.gen.store(10, trusted, true)
+	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(10), nil).Once()
+	template := env.fixture.AdjacentUpdate.HeaderRLP
+	headers := map[uint64]*besu.Header{
+		// Same new set at 11 and 12, but only one trusted validator sealed 11.
+		11: sealedHeaderBy(t, template, 11, keys[2:6], keys[3:6]),
+		12: sealedHeaderBy(t, template, 12, keys[2:6], keys[2:5]),
+		13: sealedHeaderBy(t, template, 13, keys[4:8], keys[4:8]),
+	}
+	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, h uint64) ([]byte, error) { return headers[h].RLP, nil })
+	nodes := accountNodes(t, env.fixture.NonAdjacentUpdate)
+	for _, hop := range []uint64{12, 13} {
+		env.counterparty.EXPECT().GetRouterProof(mock.Anything, hop, [][32]byte(nil)).
+			Return(v2.AccountProof{AccountProof: nodes}, nil).Once()
+	}
+
+	updates, err := env.prepareUpdate(t.Context(), 13)
+	require.NoError(t, err)
+	require.Len(t, updates, 2)
+	for i, want := range []uint64{12, 13} {
+		update, err := besutest.DecodeUpdateClient(updates[i])
+		require.NoError(t, err)
+		require.Equal(t, headers[want].RLP, update.HeaderRLP)
+	}
+}
+
 func TestStateProofUnbridgeableTurnover(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
