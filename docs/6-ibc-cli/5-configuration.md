@@ -40,79 +40,82 @@ Values can contain `${VAR}`. The CLI replaces each variable from the environment
 
 ## Example config.yml
 
-This configuration comes from the tutorial. In this setup, a single process runs the relayer and one attestor for each chain.
+A working configuration, copied from the fixture the CLI's own tests load and validate. Every key below is one the relayer accepts today: if a key is renamed and this file is not updated, the Go test suite fails.
+
+<!-- GEN:config:example START -->
 
 ```yaml
 server:
   listenAddr: 0.0.0.0:3000
-
+signers:
+  - alias: "relayer-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "relayer-key-id"
+  - alias: "attestor-dan-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-key-id"
 db:
   type: sqlite
   url: ibc.db
-
 chains:
-  - chainId: "41001"
+  - chainId: "1"
     evm:
-      rpc: http://localhost:8545
-      ws: ws://localhost:8546
-      ics26Router: "0x64A6714075b7590f8b07D07a5B431409337de29B"
-    deployer: deployer
-
-  - chainId: "41002"
+      rpc: https://ethereum-rpc.example.com
+      ws: wss://ethereum-rpc.example.com
+      ics26Router: "0x0000000000000000000000000000000000000001"
+  - chainId: "8453"
     evm:
-      rpc: http://localhost:8745
-      ws: ws://localhost:8746
-      ics26Router: "0x64A6714075b7590f8b07D07a5B431409337de29B"
-    deployer: deployer
-
+      rpc: https://base-rpc.example.com
+      ics26Router: "0x0000000000000000000000000000000000000001"
 relayer:
+  dispatchPollInterval: 3s
+  chainOverrides:
+    - chainId: "1"
+      evm:
+        gasFeeCapMultiplier: 1.5
+        gasTipCapMultiplier: 1.5
+      txSubmissionDelay: 2s
+      packetBatchSize: 20
+      packetBatchTimeout: 10s
+    - chainId: "8453"
   connections:
-    - alias: 41001-41002
+    - alias: "eth-base"
       clientA:
-        chainId: "41001"
-        signer: relayer
-        clientId: cli-41001-41002
-        type: attestation
+        chainId: "1"
+        signer: "relayer-key"
+        clientId: "base-0"
+        type: "attestation"
         autoRelay:
-          enabled: true
+          enabled: false
       clientB:
-        chainId: "41002"
-        signer: relayer
-        clientId: cli-41001-41002
-        type: attestation
-        autoRelay:
-          enabled: true
-
+        chainId: "8453"
+        signer: "relayer-key"
+        clientId: "ethereum-0"
+        type: "attestation"
 attestors:
-  - name: attestor-41001
+  - name: "attestor-alice-base"
+    type: remote
+    grpc: attestor-alice.example.com:3000
+  - name: "attestor-bob-base"
+    type: remote
+    grpc: attestor-bob.example.com:3000
+  - name: "attestor-dan-base"
+    chainId: "8453"
     type: local
-    chainId: "41001"
-    signer: attestor-41001
+    signer: "attestor-dan-key"
     finalityOffset: 1
-
-  - name: attestor-41002
+  - name: "attestor-dan-ethereum"
+    chainId: "1"
     type: local
-    chainId: "41002"
-    signer: attestor-41002
-    finalityOffset: 1
-
-signers:
-  - alias: deployer
-    type: local
-    file: deployer
-
-  - alias: relayer
-    type: local
-    file: relayer
-
-  - alias: attestor-41001
-    type: local
-    file: attestor-41001
-
-  - alias: attestor-41002
-    type: local
-    file: attestor-41002
+    signer: "attestor-dan-key"
 ```
+
+<!-- [sample.yml:L1](cli/internal/config/testdata/sample.yml#L1) -->
+
+<!-- GEN:config:example END -->
+
 
 The following fields in this file are references to other fields:
 
@@ -124,7 +127,7 @@ The following fields in this file are references to other fields:
 | A local attestor's `chainId` | A `chains[].chainId` value <!-- [config.go:L551-L554](cli/internal/config/config.go#L551-L554) --> | Config load; `evm.rpc` required to run |
 | `chains[].deployer` | A `signers[].alias` value <!-- [config.go:L557-L564](cli/internal/config/config.go#L557-L564) --> | Config load |
 
-For example, `signer: attestor-41001` selects the signer whose alias is `attestor-41001`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. Any unresolved reference fails at load — including on `ibc config validate` — before a relayer or attestor process starts.
+For example, `signer: attestor-dan-key` selects the signer whose alias is `attestor-dan-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. Any unresolved reference fails at load — including on `ibc config validate` — before a relayer or attestor process starts.
 
 ## `server`
 

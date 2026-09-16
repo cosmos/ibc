@@ -7,9 +7,13 @@ pages carry tables derived from that surface:
 
 | Page | Covers | Derived from |
 |------|--------|--------------|
-| [5-configuration.md](../5-configuration.md) | every key in `ibc.yml` | the config structs in `cli/internal/config/` |
+| [5-configuration.md](../5-configuration.md) | every key in `ibc.yml`, and the example config | the config structs in `cli/internal/config/`, and the yaml fixture that package's tests load |
 | [6-cli-commands.md](../6-cli-commands.md) | every command and flag | the built binary's command tree, plus the wiring in `cli/cmd/ibc/` |
 | [7-api.md](../7-api.md) | both gRPC services | `proto/cli/*.proto` |
+
+The example config on that page is copied from the fixture the Go tests load
+with validation on, so a renamed key fails `go test` in the same pull request.
+Do not edit it here; edit the fixture.
 
 Other pages in `docs/6-ibc-cli/` -- the overview, the tutorial, the two
 standalone guides -- mention the same commands and keys in hand-written prose
@@ -76,11 +80,17 @@ everything else on that page anyway: the descriptions, the markers, the
 sections, the prose. Leaving them because the page will not regenerate yet is
 how a whole page gets skipped over one line of protobuf.
 
-**A key or field nobody has described** (`missing_description`). Fix it at the
-source: add a doc comment to the declaration, which the plan names by file and
-line. The page then documents itself and nothing has to be maintained in this
-directory. Only when the declaration genuinely cannot be edited, add an entry
-to `FALLBACK_DOCS` in `refgen.py` with the fingerprint the plan gives you.
+**A key or field nobody has described** (`missing_description` for a config
+key, `missing_field_description` for a proto field). Fix it at the source: add
+a doc comment to the declaration, or a comment above the proto field, which the
+plan names by file and line. The page then documents itself and nothing has to
+be maintained in this directory.
+
+Only when the declaration genuinely cannot be edited, add an entry in
+`refgen.py`: `FALLBACK_DOCS` for a config key, keyed on the **yaml key** rather
+than the Go field name, with the fingerprint the plan gives you; `FIELD_DOCS`
+for a proto field. The plan carries no fingerprint for a proto field, so that
+one is worth avoiding -- edit the `.proto` comment instead.
 
 **If the code does not say what something means, ask the person you are working
 with.** They wrote it. A guess reads exactly like knowledge on the page, and
@@ -115,12 +125,19 @@ Other choices the source cannot make live in `refgen.py`:
 | To change | Edit |
 |-----------|------|
 | the order command groups appear in | `CLI_SECTION_ORDER`. Membership is discovered; a new group missing from the list refuses |
-| commands left off the page entirely | `CLI_EXCLUDED`, currently `completion` and `help` |
+| commands left off the page entirely | `CLI_EXCLUDED`, currently `completion` and `help`. For a command readers never run -- never one that refused |
 | where a pointer field's default comes from | `DEFAULT_CONSTS`, which names the constant rather than repeating its value |
 | a pointer field with no named default | `NO_NAMED_DEFAULT`, so a new one cannot quietly read as optional |
-| a config field to leave out | `SKIP_FIELDS` |
+| a config field to leave out | `SKIP_FIELDS`, for a field readers never write |
 | which services the API page covers | `SERVICES` |
 | which program the pages document, if this repo ever holds two | `CLI_PACKAGE` |
+
+**`SKIP_FIELDS` and `CLI_EXCLUDED` delete a row.** Nothing checks either for
+obsolescence, so a key or command listed there is gone from the page for good,
+including after it is renamed. Never reach for one to make a refusal go away.
+A refusal means the tool could not read something, and dropping the row answers
+it with exactly the short-table-that-reads-complete this page refuses
+everywhere else. If a key refused, resolve the refusal or hand it back.
 
 ## 3. Heal the tables
 
@@ -154,9 +171,9 @@ Running twice and changing nothing proves the tool is stable, not that it is
 right.
 
 That is the whole check **unless you edited `refgen.py`**. The two suites below
-test the generator, not the documentation, and one of them takes many minutes
-because it rebuilds the binary repeatedly. Running them after an ordinary
-documentation change is waste.
+test the generator, not the documentation: about 50 seconds and about 3 and a
+half minutes, the second because it rebuilds the binary repeatedly. Running
+them after an ordinary documentation change is waste.
 
 ```sh
 # only if you changed refgen.py
@@ -164,15 +181,28 @@ python3 docs/6-ibc-cli/tools/test-refgen.py
 python3 docs/6-ibc-cli/tools/test-refgen-e2e.py
 ```
 
-Run each once. A suite that passes has told you what it knows; do not run it
-again in another copy of the tree.
-
 **The suites read the working tree, not a clean one.** So if the source holds
 something the generator refuses to read -- anything you are handing back -- the
 suites fail on that same refusal, and go on failing until it is resolved. That
-is expected, and it is not yours to fix. Check that the failures name the
-refusals you already know about, say so under *Handed back*, and move on. Do
-not go looking for a version of the tree where they pass.
+part is expected and is not yours to fix.
+
+**Do not classify those failures by eye.** A failure that names a refusal you
+already know about is not proof it came from that refusal: a case asserts the
+*kind* of refusal it expects, so an edit of yours that makes the generator stop
+refusing surfaces as a failure naming the very refusal you were told to expect.
+Get the list from a tree without your change instead, and compare:
+
+```sh
+git worktree add /tmp/refgen-clean HEAD
+python3 /tmp/refgen-clean/docs/6-ibc-cli/tools/test-refgen.py   # the suite without your edit
+git worktree remove /tmp/refgen-clean
+```
+
+(A worktree, not `git stash` -- the stash stack is shared, and popping it can
+take changes that are not yours.)
+
+Any failure present in yours and absent there is yours. Say the rest under
+*Handed back* and move on.
 
 ## 6. Report what you wrote
 
@@ -218,8 +248,12 @@ that needed nothing.
 ## What you must never do
 
 Write a heading with a placeholder under it. State a value the source does not
-state. Delete a marker to make a refusal go away. Edit inside a generated
+state. Delete a marker the generator still fills. Edit inside a generated
 region.
+
+(Deleting the marker pair for something the source no longer has is step 2's
+`orphaned_marker`, and is correct. The difference is whether the subject is
+gone, or merely unreadable.)
 
 **Never set `REFGEN_NO_REQUIRED_FLAGS`, `REFGEN_NO_REQUIRED_KEYS` or
 `REFGEN_NO_BUILD`.** Two of those switch off the checks that catch a whole page

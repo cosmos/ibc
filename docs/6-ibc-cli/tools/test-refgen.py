@@ -508,7 +508,8 @@ def _():
         del refgen.FALLBACK_DOCS[("ServerConfig", "listenAddr")]
         try:
             refgen.gen_config()
-        except refgen.SourceError:
+        except refgen.SourceError as e:
+            assert e.kind == "missing_description", f"raised {e.kind!r}: {e}"
             return
         raise AssertionError("expected SourceError")
     finally:
@@ -516,15 +517,37 @@ def _():
         refgen.FALLBACK_DOCS.update(saved)
 
 
-@case("config: a fallback description that the source now provides is an error")
+@case("config: the canary fires when no validation message is recognised any more")
 def _():
-    refgen.FALLBACK_DOCS[("AttestorConfig", "Name")] = "shadows a real doc comment"
+    # The guard against the worst thing this tool can do: render a whole page
+    # of `optional` because the config package reworded its errors. It had no
+    # test at all -- it could be deleted outright and both suites stayed green.
+    saved = refgen.REQUIREMENT_VOCABULARY
+    refgen.REQUIREMENT_VOCABULARY = ("no-message-says-this",)
     try:
         refgen.gen_config()
-    except refgen.SourceError:
+    except refgen.SourceError as e:
+        assert e.kind == "all_keys_optional", f"raised {e.kind!r}: {e}"
         return
     finally:
-        del refgen.FALLBACK_DOCS[("AttestorConfig", "Name")]
+        refgen.REQUIREMENT_VOCABULARY = saved
+    raise AssertionError("expected the canary to refuse")
+
+
+@case("config: a fallback description that the source now provides is an error")
+def _():
+    # Keyed on the yaml key, not the Go field name. Keyed on "Name" this entry
+    # matched no field at all, so the refusal under test never ran and the case
+    # passed on `dead_description` instead -- which is why the kind is asserted
+    # rather than the mere fact of a raise.
+    refgen.FALLBACK_DOCS[("AttestorConfig", "name")] = "shadows a real doc comment"
+    try:
+        refgen.gen_config()
+    except refgen.SourceError as e:
+        assert e.kind == "stale_fallback", f"raised {e.kind!r}: {e}"
+        return
+    finally:
+        del refgen.FALLBACK_DOCS[("AttestorConfig", "name")]
     raise AssertionError("expected SourceError")
 
 

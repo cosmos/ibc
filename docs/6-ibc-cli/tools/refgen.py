@@ -746,7 +746,17 @@ GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int"
 
 
 class SourceError(Exception):
-    pass
+    """A refusal to publish. `kind` names which one.
+
+    The kind is carried rather than only phrased, because a test that matched
+    the message as a substring accepted any refusal that happened to name the
+    same identifier -- two cases named for `stale_fallback` were both passing
+    on a different refusal entirely.
+    """
+
+    def __init__(self, message, kind=None):
+        super().__init__(message)
+        self.kind = kind
 
 
 # When PLAN is a list, a problem is recorded and generation continues with a
@@ -765,7 +775,7 @@ PLAN = None
 def _problem(kind, message, **fields):
     """Raise, or record and continue in plan mode."""
     if PLAN is None:
-        raise SourceError(message)
+        raise SourceError(message, kind)
     PLAN.append(dict(kind=kind, message=message, **fields))
 
 
@@ -1249,7 +1259,15 @@ def parse_go_config():
                     doc = []
                     continue
                 for go_name in names:
-                    yaml_key = tag.group(1) if tag else go_name
+                    # No tag is not an error: goccy lowercases the field name
+                    # and the key works. Falling back to the Go name published
+                    # a key the CLI rejects outright -- it runs with
+                    # DisallowUnknownField, so `MaxRecvBytes` answers
+                    # `unknown field`, while the sample config this same tool
+                    # documents writes `maxrecvbytes`. Verified against the
+                    # binary: ToLower over the whole name, so `TLSCertFile`
+                    # becomes `tlscertfile` and not `tlsCertFile`.
+                    yaml_key = tag.group(1) if tag else go_name.lower()
                     if _is_config_field(go_name, yaml_key):
                         fields.append({"go": go_name, "type": f.group(2),
                                        "yaml": yaml_key, "doc": " ".join(doc),
@@ -1272,7 +1290,13 @@ def parse_go_config():
             "column is read from exactly one of them, and picking the first "
             "silently replaces every default on the page with whatever that "
             "one sets. Name the builder, or fold the others into it.")
-    body, _end = _go_block(src, re.search(DEFAULTS_FUNC, src, re.M).end())
+    # comments blanked, string bodies kept: the row patterns below are anchored
+    # at end-of-line, so a trailing `// note` on a default stopped the row from
+    # matching at all and the default silently left the page. Every other Go
+    # read in this file already goes through a blanked copy; this one did not.
+    # Blanking preserves length, so the offsets still index the real source.
+    body, _end = _go_block(blanked_strings,
+                           re.search(DEFAULTS_FUNC, blanked_strings, re.M).end())
     current = None
     for ln in body.split("\n"):
         s = ln.strip()
@@ -1753,13 +1777,72 @@ def _requirement_canary(model):
     seen = [msg for rules in model["validations"].values() for msg, _a in rules
             if any(w in msg for w in REQUIREMENT_VOCABULARY)]
     if not seen and not os.environ.get("REFGEN_NO_REQUIRED_KEYS"):
-        raise SourceError(
+        raise SourceError(kind="all_keys_optional", message=(
             "no validation message uses any of "
             f"{', '.join(repr(w) for w in REQUIREMENT_VOCABULARY)}, so every key "
             "on the page would be rendered `optional`. Either nothing is "
             "required any more, or the config package reworded its errors and "
             "this tool is now reading none of them. Confirm which, then update "
-            "REQUIREMENT_VOCABULARY or set REFGEN_NO_REQUIRED_KEYS=1.")
+            "REQUIREMENT_VOCABULARY or set REFGEN_NO_REQUIRED_KEYS=1."))
+
+
+def _example_config():
+    """The config fixture the config package's own tests load and validate.
+
+    Copied, not written here and not synthesised. It is a file the Go suite
+    already parses with validation on, so a key renamed without updating it
+    fails `go test` in the same pull request that renamed it -- a stronger
+    guarantee than anything this tool could check for itself, and one that
+    costs nothing to follow. The example on this page used to be a hand-copy
+    of the tutorial's config: nothing checked it, and a rename left it showing
+    a key that no longer existed.
+
+    The fixture is found by what the tests load rather than by its path, so
+    renaming it or moving testdata costs nothing. Two fixtures is a stop:
+    which config a reference page should show is not this tool's decision.
+    """
+    pkg = _anchors()["config_pkg"]
+    tests = [f for f in _walk(".go")
+             if f.endswith("_test.go") and os.path.dirname(f) == pkg]
+    names, validated = set(), False
+    for f in tests:
+        src = _blank_comments(_read(f))
+        for m in re.finditer(
+                r'filepath\.Join\(\s*"([^"]+)"\s*,\s*"([^"]+\.ya?ml)"\s*\)', src):
+            names.add((m.group(1), m.group(2)))
+        if re.search(r"LoadFromFile\([^)]*,\s*true\s*\)", src):
+            validated = True
+    if not names:
+        _problem("no_example_config",
+                 f"no yaml fixture is loaded by the tests in {pkg}, so there is "
+                 "no example config that anything keeps valid. The example is "
+                 "copied from the fixture the Go tests already validate.",
+                 package=pkg)
+        return ""
+    if len(names) > 1:
+        _problem("ambiguous_example_config",
+                 f"{pkg} tests load more than one yaml fixture "
+                 f"({', '.join('/'.join(n) for n in sorted(names))}); which one a "
+                 "reference page should show is a choice this tool cannot make.",
+                 package=pkg, fixtures=sorted("/".join(n) for n in names))
+        return ""
+    sub, name = names.pop()
+    rel = os.path.join(pkg, sub, name)
+    if not os.path.exists(os.path.join(IBC, rel)):
+        _problem("unreadable_example_config",
+                 f"the tests load {rel}, but it is not there to read", file=rel)
+        return ""
+    if not validated:
+        _problem("unvalidated_example_config",
+                 f"no test in {pkg} loads a config with validation on, so nothing "
+                 f"proves {rel} is still valid. The example is published on the "
+                 "strength of that test.",
+                 file=rel)
+        return ""
+    text = open(os.path.join(IBC, rel)).read()
+    # the licence header is a fact about the repository, not about the config
+    text = re.sub(r"\A(\s*#[^\n]*\n)+", "", text).strip("\n")
+    return "```yaml\n" + text + "\n```\n\n" + cite(rel, 1)
 
 
 def gen_config():
@@ -1792,6 +1875,7 @@ def gen_config():
             body += " " + cite(path, line)
         blocks[sec["region"]] = body
 
+    blocks["config:example"] = _example_config()
     blocks["notice"] = _notice()
 
     # A repeated type name only matters if both would reach a page: the tables
@@ -1903,10 +1987,22 @@ def _parse_flags(help_text, section):
         elif out and line.startswith("  "):
             out[-1]["doc"] += " " + line.strip()
     for f in out:
-        d = re.search(r"\s*\(default:?\s+(.+)\)$", f["doc"])
-        f["default"] = d.group(1).strip('"') if d else ""
+        # The last parenthetical, not the first. `re.search` is leftmost and
+        # `(.+)` is greedy, so a flag carrying both the author's `(default: x)`
+        # and Cobra's `(default "y")` captured everything between the first
+        # opener and the last closer, publishing `x) (default "y` as the
+        # default. Cobra's comes last because Cobra appends it, and it is the
+        # binary's own answer, so it wins; the author's parenthetical stays in
+        # the description, which is where prose about a computed default reads.
+        d = None
+        if f["doc"].endswith(")"):
+            for m in re.finditer(r"\s*\(default:?\s+", f["doc"]):
+                d = m
         if d:
+            f["default"] = f["doc"][d.end():-1].strip().strip('"')
             f["doc"] = f["doc"][:d.start()].rstrip()
+        else:
+            f["default"] = ""
     return [f for f in out if f["name"] != "help"]
 
 
@@ -2155,11 +2251,11 @@ def required_flags(binary, tree):
     # every table quietly loses its `required` marks, and the page still renders
     # -- which is what a green check looks like when a generator has gone blind.
     if not any(per_leaf.values()) and not os.environ.get("REFGEN_NO_REQUIRED_FLAGS"):
-        raise SourceError(
+        raise SourceError(kind="all_flags_optional", message=(
             "no command reports a required flag. Either the CLI genuinely has "
             "none, or Cobra no longer says `required flag(s) \"x\" not set` and "
             "this probe now reads every flag as optional. Confirm which, then "
-            "set REFGEN_NO_REQUIRED_FLAGS=1 if the CLI really has none.")
+            "set REFGEN_NO_REQUIRED_FLAGS=1 if the CLI really has none."))
 
     INCOMPLETE_PROBES.clear()
     INCOMPLETE_PROBES.extend(sorted(incomplete))
@@ -2356,14 +2452,27 @@ def gen_cli():
     # removes the need for a threshold rule, a fold rule, and a cross-reference.
     # Root flags are the exception, stated once at the top: they apply to all
     # 28 commands, and inlining them would add 140 rows.
+    # What a command inherits is read from the command's own help, not inferred
+    # from its ancestor's. Cobra prints a group's local and persistent flags
+    # together under `Flags:`, so `.Flags()` where `.PersistentFlags()` was
+    # meant was indistinguishable there -- and put a row on all eight commands
+    # under `deploy`, each of which answers `unknown flag`. The child's help
+    # separates them: `Global Flags:` is exactly what it inherits. The binary
+    # already answered this question; the tool was throwing the answer away.
+    root_flags = {f["name"] for f in _parse_flags(tree[""]["help"], "Flags:")}
+
     def inherited_by(path):
-        return [(node, f) for node, node_tree in tree.items()
-                if node and node_tree["subs"] and path.startswith(node + " ")
-                for f in node_tree["flags"]]
+        """Flags `path` inherits from a group, the root's excluded.
+
+        Root flags are documented once at the top of the page rather than on
+        each of the 28 commands, so they come out here.
+        """
+        return [f for f in _parse_flags(tree[path]["help"], "Global Flags:")
+                if f["name"] not in root_flags]
 
     for path in leaves:
         rows = sorted(_flag_rows(tree[path]["flags"], path, required))
-        for _node, f in sorted(inherited_by(path), key=lambda e: e[1]["name"]):
+        for f in sorted(inherited_by(path), key=lambda e: e["name"]):
             # the flag is declared on the group and required, or not, by this
             # command
             rows += _flag_rows([f], path, required)
@@ -2387,6 +2496,26 @@ def gen_cli():
                      f"`ibc {node}` has flags and no command under it, so they "
                      "appear in no table",
                      node=node, flags=[f["name"] for f in node_tree["flags"]])
+            continue
+        if not node_tree["subs"]:
+            continue          # a leaf's own flags are documented in its own table
+        # A group flag no command under it actually inherits is registered with
+        # `.Flags()` rather than `.PersistentFlags()`. It reaches no table now
+        # that inheritance is read from the child, and a flag documented
+        # nowhere is the same failure as one documented everywhere falsely --
+        # so it stops here rather than going quiet.
+        reaches = set()
+        for p in under:
+            reaches.update(f["name"] for f in inherited_by(p))
+        orphans = [f["name"] for f in node_tree["flags"]
+                   if f["name"] not in reaches and f["name"] not in root_flags]
+        if orphans:
+            _problem("uninherited_flag",
+                     f"`ibc {node}` registers {', '.join('--' + o for o in orphans)} "
+                     "but no command under it inherits them, so they appear in no "
+                     "table. `.Flags()` registers a flag on the group alone; "
+                     "`.PersistentFlags()` is what makes it reach the commands.",
+                     node=node, flags=orphans)
 
     blocks["notice"] = _notice()
     for region, body in blocks.items():

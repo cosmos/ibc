@@ -227,12 +227,29 @@ def unchanged(box, kind, rename=None, cites=True):
                 "before", "after", lineterm="")))
 
 
-def raises(box, kind, expect_in_message):
+DISCOVER_KINDS = os.environ.get("REFGEN_TEST_DISCOVER_KINDS")
+
+
+def raises(box, kind, expect_in_message, expect_kind=None):
+    """The generator refuses, and refuses about the right thing.
+
+    `expect_kind` is the point. Matching only a substring accepted any refusal
+    that happened to name the same identifier: two cases named for
+    `stale_fallback` both passed on `dead_description`, and a refusal an agent
+    accidentally removed could be replaced by an unrelated one without the
+    suite noticing. A `MarkerError` carries no kind, so those cases pass None.
+    """
     try:
         box.page(kind, own=True)
         refgen.GENERATORS[kind]()
     except (refgen.SourceError, refgen.MarkerError) as e:
+        got = getattr(e, "kind", None)
+        if DISCOVER_KINDS:
+            print(f"    KIND {kind} {expect_in_message!r} -> {got!r}")
         assert expect_in_message in str(e), f"raised, but not about {expect_in_message!r}: {e}"
+        if expect_kind is not None:
+            assert got == expect_kind, (
+                f"raised {got!r}, expected {expect_kind!r}: {e}")
         return
     raise AssertionError(f"expected a raise mentioning {expect_in_message!r}")
 
@@ -300,7 +317,7 @@ var cmdFakeGroupThing = &cobra.Command{
                  "cmdMigrate.AddCommand(cmdMigrateUp, cmdMigrateDown, cmdMigrateStatus)\n"
                  "\tcmdFakeGroup.AddCommand(cmdFakeGroupThing)\n"
                  "\trootCmd.AddCommand(cmdFakeGroup)")
-        raises(box, "cli", "fakegroup")
+        raises(box, "cli", "fakegroup", "ungrouped_command")
 
 
 @case("a new group flag reaches every command under it")
@@ -325,7 +342,7 @@ def _():
         box.edit("cli/internal/config/config.go",
                  'ListenAddress string `yaml:"listenAddr"`',
                  'ListenAddress string `yaml:"listenAddr"`\n\tFake string `yaml:"fake"`')
-        raises(box, "config", "Fake")
+        raises(box, "config", "Fake", "missing_description")
 
 
 @case("a key that gains a doc comment upstream raises, so the fallback cannot shadow it")
@@ -335,7 +352,7 @@ def _():
                  '\tListenAddress string `yaml:"listenAddr"`',
                  '\t// ListenAddress is the address the server binds.\n'
                  '\tListenAddress string `yaml:"listenAddr"`')
-        raises(box, "config", "FALLBACK_DOCS")
+        raises(box, "config", "FALLBACK_DOCS", "stale_fallback")
 
 
 @case("a renamed default constant raises rather than leaving a stale number")
@@ -343,7 +360,7 @@ def _():
     with Sandbox() as box:
         box.edit("cli/internal/relay/pipeline/opts.go",
                  "DefaultBatchSize", "DefaultBatchSizeRenamed", count=99)
-        raises(box, "config", "DefaultBatchSize")
+        raises(box, "config", "DefaultBatchSize", "unreadable_default")
 
 
 @case("a changed default value reaches the page")
@@ -394,7 +411,7 @@ def _():
         box.edit("cli/internal/config/config.go",
                  'ListenAddress string `yaml:"listenAddr"`',
                  'ListenAddress []string `yaml:"listenAddr"`')
-        raises(box, "config", "fingerprint")
+        raises(box, "config", "fingerprint", "fingerprint_mismatch")
 
 
 @case("a validation rule added to a described key raises on its fingerprint")
@@ -408,7 +425,7 @@ def _():
 		return errors.New(".listenAddr required")
 	}
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {''')
-        raises(box, "config", "fingerprint")
+        raises(box, "config", "fingerprint", "fingerprint_mismatch")
 
 
 @case("a described key that is removed leaves no dead description")
@@ -416,7 +433,8 @@ def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/relayer.go",
                  '\tGasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`\n', "")
-        raises(box, "config", "FALLBACK_DOCS describes fields that are gone")
+        raises(box, "config", "FALLBACK_DOCS describes fields that are gone",
+               "dead_description")
 
 
 # ----------------------------------------------- discovery, not hardcoded lists
@@ -464,7 +482,7 @@ def _():
         open(os.path.join(box.dir, "proto/cli/extra.proto"), "w").write(
             'syntax = "proto3";\n\npackage ibc.v2.extra;\n\n'
             "// Something new.\nmessage NewThing {\n  string name = 1;\n}\n")
-        raises(box, "api", "extra")
+        raises(box, "api", "extra", "unlisted_service")
 
 
 @case("a new group flag reaches every command in that group")
@@ -546,7 +564,7 @@ def _():
                  "message TransactionInfo {\n  string tx_hash = 1;\n}")
         # the field carried a hand-written description, so removing it leaves a
         # dead entry rather than quietly shrinking the table
-        raises(box, "api", "TransactionInfo.chain_id")
+        raises(box, "api", "TransactionInfo.chain_id", "dead_field_doc")
 
 
 @case("a removed proto message raises, and the message says what to do")
@@ -554,7 +572,7 @@ def _():
     with Sandbox() as box:
         box.edit("proto/cli/attestor.proto",
                  "message InfoRequest { string attestor = 1; }", "")
-        raises(box, "api", "InfoRequest")
+        raises(box, "api", "InfoRequest", "dead_field_doc")
 
 
 @case("a streaming rpc raises rather than vanishing from the page")
@@ -563,7 +581,7 @@ def _():
         box.edit("proto/cli/relayer.proto", "  rpc Relay(",
                  "  rpc Watch(stream WatchRequest) returns (stream WatchResponse);\n"
                  "  rpc Relay(")
-        raises(box, "api", "does not read")
+        raises(box, "api", "does not read", "unreadable_declaration")
 
 
 @case("a map field raises rather than vanishing from its table")
@@ -571,7 +589,7 @@ def _():
     with Sandbox() as box:
         box.edit("proto/cli/relayer.proto", "message RelayRequest {",
                  "message RelayRequest {\n  map<string, string> labels = 99;")
-        raises(box, "api", "does not read")
+        raises(box, "api", "does not read", "unreadable_declaration")
 
 
 # --------------------------------------- source a reader's table depends on
@@ -586,7 +604,7 @@ def _():
     with Sandbox() as box:
         box.add_field("cli/internal/config/config.go", "deployer,omitempty",
                       "\tExtra ExtraFields `yaml:\",inline\"`")
-        raises(box, "config", "does not read")
+        raises(box, "config", "does not read", "unreadable_member")
 
 
 @case("an anonymous nested struct raises rather than losing its rows")
@@ -594,7 +612,7 @@ def _():
     with Sandbox() as box:
         box.add_field("cli/internal/config/config.go", "deployer,omitempty",
                       "\tTuning struct{ N int } `yaml:\"tuning\"`")
-        raises(box, "config", "does not read")
+        raises(box, "config", "does not read", "unreadable_member")
 
 
 @case("a second exported builder for the root config raises")
@@ -645,6 +663,187 @@ def _():
                  "Deployer string %syaml:\"deployer,omitempty\"%s" % (TICK, TICK),
                  "Deployer string %syaml:\"deployer,omitempty\"%s // set per chain"
                  % (TICK, TICK))
+        unchanged(box, "config")
+
+
+@case("the required-flag canary fires when the probe stops recognising Cobra")
+def _():
+    # The CLI-side twin of the config canary, and the other guard with no test:
+    # both could be deleted and all 110 cases stayed green. Simulated at the
+    # regexes rather than by rewording Cobra, because the regexes are what goes
+    # stale when Cobra rewords itself.
+    saved, saved_also = refgen._REQUIRED, list(refgen._REQUIRED_ALSO)
+    refgen._REQUIRED = re.compile(r"cobra-said-something-else-entirely")
+    refgen._REQUIRED_ALSO[:] = []
+    try:
+        refgen.GENERATORS["cli"]()
+    except refgen.SourceError as e:
+        assert e.kind == "all_flags_optional", f"raised {e.kind!r}: {e}"
+        return
+    finally:
+        refgen._REQUIRED = saved
+        refgen._REQUIRED_ALSO[:] = saved_also
+    raise AssertionError("expected the canary to refuse")
+
+
+@case("the example config tracks the fixture the Go tests validate")
+def _():
+    with Sandbox() as box:
+        box.edit("cli/internal/config/testdata/sample.yml",
+                 "listenAddr: 0.0.0.0:3000", "listenAddr: 0.0.0.0:3999")
+        red_then_healed(box, "config", "0.0.0.0:3999")
+
+
+@case("the example config is the fixture byte for byte")
+def _():
+    with Sandbox() as box:
+        # A copy that quietly reformats is a copy a reader cannot trust: the
+        # whole point is that what the page shows is what the tests validate.
+        block = refgen.GENERATORS["config"]()["config:example"]
+        body = block.split("```yaml\n", 1)[1].rsplit("\n```", 1)[0]
+        fixture = open(os.path.join(
+            box.dir, "cli/internal/config/testdata/sample.yml")).read()
+        stripped = fixture[fixture.index("server:"):].strip("\n")
+        assert body == stripped, "the published example is not the fixture"
+
+
+@case("the example config refuses when the fixture the tests load is gone")
+def _():
+    with Sandbox() as box:
+        os.remove(os.path.join(box.dir,
+                               "cli/internal/config/testdata/sample.yml"))
+        raises(box, "config", "not there to read", "unreadable_example_config")
+
+
+@case("a second test fixture refuses rather than picking one")
+def _():
+    with Sandbox() as box:
+        # Which config a reference page should show is an editorial choice, and
+        # picking the first silently would publish whichever sorted first.
+        src = os.path.join(box.dir, "cli/internal/config/testdata")
+        shutil.copyfile(os.path.join(src, "sample.yml"),
+                        os.path.join(src, "other.yml"))
+        box.edit("cli/internal/config/relayer_test.go",
+                 'filepath.Join("testdata", "sample.yml")',
+                 'filepath.Join("testdata", "other.yml")', count=1)
+        raises(box, "config", "more than one yaml fixture",
+               "ambiguous_example_config")
+
+
+@case("a group flag registered non-persistently refuses instead of reaching every command")
+def _():
+    with Sandbox() as box:
+        # `.Flags()` where `.PersistentFlags()` was meant is one character in
+        # review. Cobra prints a group's local and persistent flags together
+        # under `Flags:`, so inferring inheritance from the group's own help
+        # put this row on all eight commands under `deploy`, every one of which
+        # answers `unknown flag: --audit-log`. The child's help distinguishes
+        # them -- only genuinely inherited flags appear under `Global Flags:`
+        # -- so the flag now reaches no table, and reaching no table is refused.
+        box.edit("cli/cmd/ibc/main.go",
+                 'dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")',
+                 'dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")\n'
+                 '\tcmdDeploy.Flags().Bool("audit-log", false, "write an audit log")')
+        raises(box, "cli", "audit-log", "uninherited_flag")
+
+
+@case("a group flag registered persistently still reaches every command under it")
+def _():
+    with Sandbox() as box:
+        # The other direction of the same contract: the fix above must not make
+        # a correctly-registered group flag disappear.
+        box.edit("cli/cmd/ibc/main.go",
+                 'dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")',
+                 'dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")\n'
+                 '\tdpf.Bool("audit-log", false, "write an audit log")')
+        blocks = refgen.GENERATORS["cli"]()
+        under = [r for r in blocks if r.startswith("cli:cmd:deploy-")]
+        assert under, "no deploy subcommand regions found"
+        missing = [r for r in under if "--audit-log" not in blocks[r]]
+        assert not missing, f"group flag missing from {missing}"
+
+
+@case("a flag with both an author default and a Cobra default publishes the Cobra one")
+def _():
+    with Sandbox() as box:
+        # `re.search` is leftmost and `(.+)` is greedy, so a flag carrying both
+        # spanned from the author's parenthetical to Cobra's closing paren and
+        # published `cli-<a>-<b>, chain ids sorted) (default "auto` as the
+        # default. Cobra's is the binary's answer and wins; the author's prose
+        # about the computed value stays in the description, where it reads.
+        box.edit("cli/cmd/ibc/main.go",
+                 'StringVar(&flagDeployClientID, "client-id", "", '
+                 '"client id (default: cli-<a>-<b>, chain ids sorted)")',
+                 'StringVar(&flagDeployClientID, "client-id", "auto", '
+                 '"client id (default: cli-<a>-<b>, chain ids sorted)")')
+        blocks = refgen.GENERATORS["cli"]()
+        row = [l for b in blocks.values() for l in b.split("\n")
+               if "`--client-id" in l and "chain ids sorted" in l]
+        assert row, "the client-id row disappeared"
+        for l in row:
+            cell = l.split("|")[2].strip()
+            assert cell == "`auto`", f"default cell is {cell!r}, not Cobra's:\n{l}"
+            assert '(default "' not in l, f"Cobra's parenthetical leaked:\n{l}"
+            assert "chain ids sorted" in l, f"author's prose lost:\n{l}"
+
+
+@case("an exported config field with no yaml tag publishes the key the binary accepts")
+def _():
+    with Sandbox() as box:
+        # Forgetting the tag is the most ordinary omission in Go, and the
+        # fallback published the Go field name. goccy lowercases an untagged
+        # field, and the CLI runs with DisallowUnknownField, so the page named
+        # a key the binary answers `unknown field "MaxRecvBytes"` to -- while
+        # refgen's own sample config wrote `maxrecvbytes`. Verified against the
+        # binary: plain ToLower of the whole name, not camelCase.
+        box.edit("cli/internal/config/config.go",
+                 'ListenAddress string %syaml:"listenAddr"%s' % (TICK, TICK),
+                 'ListenAddress string %syaml:"listenAddr"%s\n\n'
+                 '\t// MaxRecvBytes is the largest request the gRPC server accepts.\n'
+                 '\tMaxRecvBytes int' % (TICK, TICK))
+        server = refgen.GENERATORS["config"]()["config:server"]
+        assert "`maxrecvbytes`" in server, f"lowercased key missing:\n{server}"
+        assert "MaxRecvBytes" not in server, f"Go field name published:\n{server}"
+
+
+@case("an untagged field whose name is an acronym is lowercased whole")
+def _():
+    with Sandbox() as box:
+        # `TLSCertFile` becomes `tlscertfile`, not `tlsCertFile`: the rule is
+        # ToLower over the whole name, which a camelCase guess would get wrong.
+        box.edit("cli/internal/config/config.go",
+                 'ListenAddress string %syaml:"listenAddr"%s' % (TICK, TICK),
+                 'ListenAddress string %syaml:"listenAddr"%s\n\n'
+                 '\t// TLSCertFile is the certificate the gRPC server presents.\n'
+                 '\tTLSCertFile string' % (TICK, TICK))
+        server = refgen.GENERATORS["config"]()["config:server"]
+        assert "`tlscertfile`" in server, f"expected tlscertfile:\n{server}"
+
+
+@case("a trailing comment inside the defaults builder changes nothing")
+def _():
+    with Sandbox() as box:
+        # The twin of the case above, and the one that bit. Every other Go read
+        # in refgen goes through a comment-blanked copy; the defaults scan read
+        # raw source with `$`-anchored row patterns, so annotating a default --
+        # the most innocuous edit there is -- deleted it. `db.url` went from
+        # `ibc.db` to `optional`, which is wrong twice: the default vanished and
+        # the key is in fact required.
+        box.edit("cli/internal/config/config.go",
+                 'URL:  "ibc.db",',
+                 'URL:  "ibc.db", // relative to the IBC home directory')
+        unchanged(box, "config")
+
+
+@case("a comment on the line opening a nested default struct changes nothing")
+def _():
+    with Sandbox() as box:
+        # The same scan matches `Field: Type{$` to learn which struct the rows
+        # below belong to. A comment there orphaned every default in the block,
+        # not just one row.
+        box.edit("cli/internal/config/config.go",
+                 "DB: DBConfig{",
+                 "DB: DBConfig{ // sqlite unless the operator says otherwise")
         unchanged(box, "config")
 
 
