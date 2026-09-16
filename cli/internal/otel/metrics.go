@@ -18,7 +18,6 @@ const (
 	AttrOp     attribute.Key = "operation"
 	AttrType   attribute.Key = "type"
 	AttrResult attribute.Key = "result"
-	// AttrCode qualifies an error result with a protocol code where one exists.
 	AttrCode   attribute.Key = "code"
 	AttrCaller attribute.Key = "caller"
 
