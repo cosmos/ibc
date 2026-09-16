@@ -1541,6 +1541,19 @@ def discover_config_sections(model):
     return out
 
 
+def _rules_for(struct, field, model):
+    """Every validation rule that names this field.
+
+    What the fingerprint is computed over, and what a `fingerprint_mismatch`
+    has to report: a rule that only changed wording still moves the hash, and
+    still changes what the Default-or-required column says.
+    """
+    return sorted(set(
+        msg for msg, _a in
+        model.get("deep_validations", model["validations"]).get(struct, [])
+        if msg.lstrip(".").split()[0].split("[")[0] == field["yaml"]))
+
+
 def _fingerprint(struct, field, model):
     """Hash the source a hand-written description depends on.
 
@@ -1550,10 +1563,8 @@ def _fingerprint(struct, field, model):
     validation rule naming it: enough to catch a real change, and blind to
     whitespace and to code elsewhere in the struct.
     """
-    rules = sorted(set(
-        msg for msg, _a in model.get("deep_validations", model["validations"]).get(struct, [])
-        if msg.lstrip(".").split()[0].split("[")[0] == field["yaml"]))
-    basis = "|".join([field["type"], field["yaml"], *rules])
+    basis = "|".join([field["type"], field["yaml"],
+                      *_rules_for(struct, field, model)])
     return hashlib.sha1(basis.encode()).hexdigest()[:8]
 
 
@@ -2430,6 +2441,33 @@ def stale_regions(kind, path):
     return stale
 
 
+def _dropped_requirements(text, blocks):
+    """Keys the page calls required that the regenerated tables do not.
+
+    The most consequential diff this tool produces and the least obvious: it
+    reads as ordinary drift. A key stops being required when the code stops
+    requiring it, and also when a validation message is reworded past the words
+    `_requirement` reads -- and only the first of those is a real change.
+    """
+    was = _requirements(text)
+    now = {}
+    for region, body in blocks.items():
+        for line in body.split("\n"):
+            row = ROW.match(line)
+            if row:
+                now[(region, row.group(1))] = bool(_SAYS_REQUIRED.search(row.group(2)))
+    return [{
+        "kind": "requirement_dropped",
+        "message": f"{key} in {region} is documented as required and the "
+                   "regenerated table does not call it required. A key stops "
+                   "being required when the code stops requiring it, and also "
+                   "when a validation message is reworded past the words this "
+                   "tool reads. Confirm which before accepting.",
+        "region": region, "key": key,
+    } for (region, key), required in sorted(was.items())
+        if required and region in blocks and not now.get((region, key), True)]
+
+
 def plan(kind, path):
     """Everything a human or an agent needs to bring one page back in line.
 
@@ -2454,10 +2492,26 @@ def plan(kind, path):
     finally:
         curation, PLAN = PLAN, None
 
+    # the config walk runs more than once per generation, so a problem raised
+    # inside it is recorded each time. One gap should be one line of work.
+    seen, unique = set(), []
+    for c in curation:
+        fingerprint = (c["kind"], c["message"])
+        if fingerprint not in seen:
+            seen.add(fingerprint)
+            unique.append(c)
+    curation = unique
+
     text = open(path).read()
     regions = find_regions(text)
     present = [i for i, *_ in regions]
     order = list(blocks)
+
+    # A key the page calls required and the regeneration does not is the most
+    # consequential diff this tool produces and the least obvious: it reads as
+    # ordinary drift. It belongs in the work order, and from there in the pull
+    # request, rather than in a line of stderr nobody keeps.
+    curation += _dropped_requirements(text, blocks)
 
     def after(region):
         """The last region already on the page that precedes this one in source

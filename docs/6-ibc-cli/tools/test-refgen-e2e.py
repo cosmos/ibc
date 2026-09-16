@@ -371,6 +371,8 @@ def _():
     with Sandbox() as box:
         box.append("proto/cli/relayer.proto", '''
 message FakeThing {
+  // Fake is a field nobody reads, described so this case tests the marker
+  // rule rather than the description rule.
   string fake = 1;
 }
 ''')

@@ -330,6 +330,30 @@ def _():
     assert "ListenAddress" in line, (g, line)
 
 
+@case("plan: a key that stops being required is named in the work order")
+def _():
+    # The worst diff this tool can produce and the least obvious: a validation
+    # message reworded past the words `_requirement` knows turns a mandatory
+    # key optional, and it reads as ordinary drift.
+    page = ("<!-- GEN:config:db START -->\n"
+            "| Key | Type | Default or required | Description |\n"
+            "|---|---|---|---|\n"
+            "| `url` | `string` | **required** | x. |\n"
+            "| `type` | `string` | **required** | y. |\n"
+            "<!-- GEN:config:db END -->\n")
+    blocks = {"config:db": ("| Key | Type | Default or required | Description |\n"
+                            "|---|---|---|---|\n"
+                            "| `url` | `string` | optional | x. |\n"
+                            "| `type` | `string` | **required** | y. |\n")}
+    got = refgen._dropped_requirements(page, blocks)
+    assert len(got) == 1, got
+    assert got[0]["key"] == "`url`" and got[0]["region"] == "config:db", got
+    # a key that is still required must not be reported
+    assert all(g["key"] != "`type`" for g in got), got
+    # and neither must a region the regeneration did not produce
+    assert refgen._dropped_requirements(page, {}) == []
+
+
 @case("report: a page the tool could not read is named, and the exit code says so")
 def _():
     # This is the failure the report exists to prevent, and the report had it:
