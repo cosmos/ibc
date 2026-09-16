@@ -38,18 +38,6 @@ type ClearStore interface {
 	Transact(ctx context.Context, call func(repo store.Repository) error) error
 }
 
-// Result the counts one clearing pass produced.
-type Result struct {
-	Probed      int
-	Outstanding int
-	AlreadyHeld int
-	Recovered   int
-	// Unresolved sequences the next pass will probe again.
-	Unresolved int
-	// Abandoned sequences held on record that no pass will probe again.
-	Abandoned int
-}
-
 // Clearer recovers packets the subscription never saw. It asks the chain which
 // packet commitments are still live and writes a row for each one we hold no
 // record of, then records how far it probed so the next pass covers the new
@@ -61,6 +49,18 @@ type Clearer struct {
 	storage ClearStore
 	abandon bool
 	logger  *slog.Logger
+}
+
+// Result the counts one clearing pass produced.
+type Result struct {
+	Probed      int
+	Outstanding int
+	AlreadyHeld int
+	Recovered   int
+	// Unresolved sequences the next pass will probe again.
+	Unresolved int
+	// Abandoned sequences held on record that no pass will probe again.
+	Abandoned int
 }
 
 func NewClearer(
@@ -143,14 +143,14 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 		reprobe = nil
 	}
 
-	outstanding, probed, probeHeight, err := c.outstanding(ctx, clientID, reprobe, from, latest, head.Height)
+	outstanding, probed, probeHeight, err := c.calcOutstanding(ctx, clientID, reprobe, from, latest, head.Height)
 	if err != nil {
 		return result, err
 	}
 
 	result.Probed, result.Outstanding = probed, len(outstanding)
 
-	unrecorded, err := c.unrecorded(ctx, clientID, from, outstanding)
+	unrecorded, err := c.calcUnrecorded(ctx, clientID, from, outstanding)
 	if err != nil {
 		return result, err
 	}
@@ -181,36 +181,6 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 	return result, c.persist(ctx, clientID, rows, latest, delta)
 }
 
-// unresolvedDelta is the change a pass makes to the unresolved set: what it
-// found outstanding with no send log, and what it probed and no longer needs to
-// remember. Sequences absent from both are left alone.
-func unresolvedDelta(probed, unresolved []uint64, height uint64) store.UnresolvedDelta {
-	delta := store.UnresolvedDelta{Height: height}
-
-	held := make(map[uint64]struct{}, len(probed))
-	for _, sequence := range probed {
-		held[sequence] = struct{}{}
-	}
-
-	stuck := make(map[uint64]struct{}, len(unresolved))
-
-	for _, sequence := range unresolved {
-		stuck[sequence] = struct{}{}
-
-		if _, ok := held[sequence]; !ok {
-			delta.Add = append(delta.Add, sequence)
-		}
-	}
-
-	for _, sequence := range probed {
-		if _, ok := stuck[sequence]; !ok {
-			delta.Resolve = append(delta.Resolve, sequence)
-		}
-	}
-
-	return delta
-}
-
 func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
 	if c.abandon {
 		c.logger.Warn(
@@ -234,11 +204,11 @@ func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
 	)
 }
 
-// outstanding probes the sequences the watermark has not settled and returns
+// calcOutstanding probes the sequences the watermark has not settled and returns
 // those whose commitment is still live, with the number probed and the height
 // the pass ended at. The reads stay at the head: a commitment written above the
 // finalized head reads absent there, and absent means settled.
-func (c *Clearer) outstanding(
+func (c *Clearer) calcOutstanding(
 	ctx context.Context,
 	clientID string,
 	unresolved []uint64,
@@ -287,11 +257,11 @@ func (c *Clearer) outstanding(
 	return live, probed, height, nil
 }
 
-// unrecorded drops the sequences we already hold a row for. The query is bounded
+// calcUnrecorded drops the sequences we already hold a row for. The query is bounded
 // by the probe's own floor, so an unresolved sequence below it goes unchecked: it
 // normally has no row, and where another instance recorded one first UpsertPacket
 // leaves that row standing rather than duplicating it.
-func (c *Clearer) unrecorded(
+func (c *Clearer) calcUnrecorded(
 	ctx context.Context,
 	clientID string,
 	from uint64,
@@ -398,6 +368,36 @@ func (c *Clearer) persist(
 		}
 		return nil
 	})
+}
+
+// unresolvedDelta is the change a pass makes to the unresolved set: what it
+// found outstanding with no send log, and what it probed and no longer needs to
+// remember. Sequences absent from both are left alone.
+func unresolvedDelta(probed, unresolved []uint64, height uint64) store.UnresolvedDelta {
+	delta := store.UnresolvedDelta{Height: height}
+
+	held := make(map[uint64]struct{}, len(probed))
+	for _, sequence := range probed {
+		held[sequence] = struct{}{}
+	}
+
+	stuck := make(map[uint64]struct{}, len(unresolved))
+
+	for _, sequence := range unresolved {
+		stuck[sequence] = struct{}{}
+
+		if _, ok := held[sequence]; !ok {
+			delta.Add = append(delta.Add, sequence)
+		}
+	}
+
+	for _, sequence := range probed {
+		if _, ok := stuck[sequence]; !ok {
+			delta.Resolve = append(delta.Resolve, sequence)
+		}
+	}
+
+	return delta
 }
 
 func sequenceRange(from, to uint64) []uint64 {
