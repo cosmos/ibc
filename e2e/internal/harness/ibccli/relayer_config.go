@@ -47,20 +47,18 @@ type RelayerChain struct {
 	PacketBatchTimeout time.Duration
 }
 
-// RelayerConnection is a reciprocal on-chain client pair. Clients are the
-// registered client identifiers (locators).
-type RelayerConnection struct {
-	ChainA     string
-	ClientA    string
-	ChainB     string
-	ClientB    string
-	AutoRelayA bool
-	AutoRelayB bool
+// RelayerClientEnd is a registered client and its endpoint relay policy.
+type RelayerClientEnd struct {
+	ChainID  string
+	ClientID string
+	// ClientType is required unless the connection uses a remote prover.
+	ClientType string
+	AutoRelay  bool
+}
 
-	// ClientTypeA and ClientTypeB are each end's light client type, required
-	// unless ProverURL is set.
-	ClientTypeA string
-	ClientTypeB string
+// RelayerConnection is a reciprocal on-chain client pair.
+type RelayerConnection struct {
+	A, B RelayerClientEnd
 
 	// ProverURL points both client ends at a ProverService, overriding the
 	// declared client types.
@@ -169,51 +167,48 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		typeA, paramsA, err := relayerClientEnd(connection.ClientTypeA, connection.ProverURL)
+		a, err := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
 		if err != nil {
-			return fileConfig{}, fmt.Errorf("connection %s/%s end A: %w", connection.ChainA, connection.ClientA, err)
+			return fileConfig{}, fmt.Errorf(
+				"connection %s/%s end A: %w",
+				connection.A.ChainID,
+				connection.A.ClientID,
+				err,
+			)
 		}
-		typeB, paramsB, err := relayerClientEnd(connection.ClientTypeB, connection.ProverURL)
+		b, err := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
 		if err != nil {
-			return fileConfig{}, fmt.Errorf("connection %s/%s end B: %w", connection.ChainB, connection.ClientB, err)
+			return fileConfig{}, fmt.Errorf(
+				"connection %s/%s end B: %w",
+				connection.B.ChainID,
+				connection.B.ClientID,
+				err,
+			)
 		}
-
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
-			Alias: connection.ClientA + "-" + connection.ClientB,
-			ClientA: clientEndFileConfig{
-				ChainID:   connection.ChainA,
-				Signer:    cfg.SignerAlias,
-				ClientID:  connection.ClientA,
-				Type:      typeA,
-				Params:    paramsA,
-				AutoRelay: autoRelay(connection.AutoRelayA),
-			},
-			ClientB: clientEndFileConfig{
-				ChainID:   connection.ChainB,
-				Signer:    cfg.SignerAlias,
-				ClientID:  connection.ClientB,
-				Type:      typeB,
-				Params:    paramsB,
-				AutoRelay: autoRelay(connection.AutoRelayB),
-			},
+			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
+			ClientA: a,
+			ClientB: b,
 		})
 	}
 	return file, nil
 }
 
-// relayerClientEnd resolves one end's explicit client type or remote prover.
-func relayerClientEnd(clientType, proverURL string) (string, map[string]any, error) {
+func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) (clientEndFileConfig, error) {
+	result := clientEndFileConfig{
+		ChainID:   end.ChainID,
+		ClientID:  end.ClientID,
+		Signer:    signer,
+		Type:      end.ClientType,
+		AutoRelay: autoRelay(end.AutoRelay),
+	}
 	if proverURL != "" {
-		return RelayerClientRemote, map[string]any{"url": proverURL}, nil
+		result.Type = RelayerClientRemote
+		result.Params = map[string]any{"url": proverURL}
+	} else if end.ClientType != RelayerClientAttestation && end.ClientType != RelayerClientBesuQBFT {
+		return clientEndFileConfig{}, fmt.Errorf("unsupported client type %q", end.ClientType)
 	}
-	switch clientType {
-	case RelayerClientAttestation:
-		return RelayerClientAttestation, nil, nil
-	case RelayerClientBesuQBFT:
-		return RelayerClientBesuQBFT, nil, nil
-	default:
-		return "", nil, fmt.Errorf("unsupported client type %q", clientType)
-	}
+	return result, nil
 }
 
 // addAttestor declares one explicitly-configured candidate attestor.

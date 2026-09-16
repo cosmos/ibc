@@ -331,7 +331,6 @@ type bootstrapTarget struct {
 
 func (t *bootstrapTarget) BesuQBFTTrustedState(
 	_ context.Context,
-	_ string,
 	height uint64,
 ) (deploy.BesuQBFTTrustedState, error) {
 	t.called = true

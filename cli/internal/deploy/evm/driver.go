@@ -307,14 +307,10 @@ func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
 }
 
 // BesuQBFTTrustedState reads the sealed header at height on this driver's
-// chain; router is checked for shape only, since the trusted state is the
-// header alone.
+// chain.
 func (d *Driver) BesuQBFTTrustedState(
-	ctx context.Context, router string, height uint64,
+	ctx context.Context, height uint64,
 ) (deploy.BesuQBFTTrustedState, error) {
-	if !common.IsHexAddress(router) {
-		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("invalid router address %q", router)
-	}
 	number := new(big.Int).SetUint64(height)
 	header, err := d.backend.HeaderByNumber(ctx, number)
 	if err != nil {

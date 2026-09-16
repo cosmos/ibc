@@ -430,7 +430,7 @@ func besuQBFTParams(
 		}
 		height = max(head, 1)
 	}
-	state, err := source.BesuQBFTTrustedState(ctx, counterparty.Core.Router, height)
+	state, err := source.BesuQBFTTrustedState(ctx, height)
 	if err != nil {
 		return deploy.BesuQBFTParams{}, errors.Wrapf(
 			err,

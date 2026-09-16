@@ -408,7 +408,7 @@ func buildConfig(
 		})
 	}
 
-	connections := map[string]int{}
+	connections := map[[4]string]int{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
 		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
@@ -426,37 +426,42 @@ func buildConfig(
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
 		connection := ibccli.RelayerConnection{
-			ChainA:      sourceChain,
-			ClientA:     clients.SourceClientID,
-			ClientTypeA: string(clients.SourceClientKind),
-			ChainB:      destinationChain,
-			ClientB:     clients.DestClientID,
-			ClientTypeB: string(clients.DestClientKind),
+			A: ibccli.RelayerClientEnd{
+				ChainID:    sourceChain,
+				ClientID:   clients.SourceClientID,
+				ClientType: string(clients.SourceClientKind),
+				AutoRelay:  !route.Manual,
+			},
+			B: ibccli.RelayerClientEnd{
+				ChainID:    destinationChain,
+				ClientID:   clients.DestClientID,
+				ClientType: string(clients.DestClientKind),
+			},
 		}
-		if connection.ChainB+"/"+connection.ClientB < connection.ChainA+"/"+connection.ClientA {
-			connection.ChainA, connection.ClientA, connection.ClientTypeA, connection.ChainB, connection.ClientB, connection.ClientTypeB =
-				connection.ChainB, connection.ClientB, connection.ClientTypeB, connection.ChainA, connection.ClientA, connection.ClientTypeA
-		}
-		key := connection.ChainA + "/" + connection.ClientA
-
-		index, seen := connections[key]
-		if !seen {
-			index = len(config.Connections)
-			connections[key] = index
-			config.Connections = append(config.Connections, connection)
-		}
-
-		// the reverse route shares this connection, so each direction turns on
-		// the end it is sent from rather than the whole connection
-		if !route.Manual {
-			if config.Connections[index].ClientA == clients.SourceClientID {
-				config.Connections[index].AutoRelayA = true
-			} else {
-				config.Connections[index].AutoRelayB = true
-			}
-		}
+		mergeRelayerConnection(&config, connections, connection)
 	}
 	return config, options
+}
+
+// mergeRelayerConnection combines directional routes into one reciprocal pair.
+func mergeRelayerConnection(
+	config *ibccli.RelayerConfig,
+	indices map[[4]string]int,
+	connection ibccli.RelayerConnection,
+) {
+	if connection.B.ChainID < connection.A.ChainID ||
+		(connection.B.ChainID == connection.A.ChainID && connection.B.ClientID < connection.A.ClientID) {
+		connection.A, connection.B = connection.B, connection.A
+	}
+	key := [4]string{connection.A.ChainID, connection.A.ClientID, connection.B.ChainID, connection.B.ClientID}
+	if index, seen := indices[key]; seen {
+		existing := &config.Connections[index]
+		existing.A.AutoRelay = existing.A.AutoRelay || connection.A.AutoRelay
+		existing.B.AutoRelay = existing.B.AutoRelay || connection.B.AutoRelay
+		return
+	}
+	indices[key] = len(config.Connections)
+	config.Connections = append(config.Connections, connection)
 }
 
 func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {

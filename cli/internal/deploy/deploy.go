@@ -59,7 +59,7 @@ type BesuQBFTTrustedState struct {
 // BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
 // serve the trusted state a client tracking it is initialized with.
 type BesuQBFTSource interface {
-	BesuQBFTTrustedState(ctx context.Context, router string, height uint64) (BesuQBFTTrustedState, error)
+	BesuQBFTTrustedState(ctx context.Context, height uint64) (BesuQBFTTrustedState, error)
 }
 
 // ClientSpec describes one light client to provision and register.

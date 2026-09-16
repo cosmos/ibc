@@ -79,7 +79,7 @@ signers:
 
 func TestClientEndsOptOutOfAutoRelay(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].AutoRelayA = false
+	cfg.Connections[0].A.AutoRelay = false
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
@@ -165,12 +165,12 @@ func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 	}{
 		{
 			"missing client type A",
-			func(c *RelayerConfig) { c.Connections[0].ClientTypeA = "" },
+			func(c *RelayerConfig) { c.Connections[0].A.ClientType = "" },
 			`end A: unsupported client type ""`,
 		},
 		{
 			"missing client type B",
-			func(c *RelayerConfig) { c.Connections[0].ClientTypeB = "" },
+			func(c *RelayerConfig) { c.Connections[0].B.ClientType = "" },
 			`end B: unsupported client type ""`,
 		},
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
@@ -201,18 +201,24 @@ func testRelayerConfig() RelayerConfig {
 			{ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1", ICS26Router: "router-1"},
 			{ChainID: "2", RPC: "http://chain-2", ICS26Router: "router-2"},
 		},
-		Connections: []RelayerConnection{{
-			ChainA: "1", ClientA: "client-1", ChainB: "2", ClientB: "client-2",
-			ClientTypeA: RelayerClientAttestation, ClientTypeB: RelayerClientAttestation,
-			AutoRelayA: true,
-		}},
+		Connections: []RelayerConnection{
+			{
+				A: RelayerClientEnd{
+					ChainID:    "1",
+					ClientID:   "client-1",
+					ClientType: RelayerClientAttestation,
+					AutoRelay:  true,
+				},
+				B: RelayerClientEnd{ChainID: "2", ClientID: "client-2", ClientType: RelayerClientAttestation},
+			},
+		},
 	}
 }
 
 func TestClientTypesPerEnd(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].ClientTypeA = RelayerClientBesuQBFT
-	cfg.Connections[0].ClientTypeB = RelayerClientBesuQBFT
+	cfg.Connections[0].A.ClientType = RelayerClientBesuQBFT
+	cfg.Connections[0].B.ClientType = RelayerClientBesuQBFT
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
@@ -221,7 +227,7 @@ func TestClientTypesPerEnd(t *testing.T) {
 	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
 
 	// ends may differ
-	cfg.Connections[0].ClientTypeB = RelayerClientAttestation
+	cfg.Connections[0].B.ClientType = RelayerClientAttestation
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
 	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
@@ -235,7 +241,7 @@ func TestClientTypesPerEnd(t *testing.T) {
 	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientB.Type)
 
 	cfg.Connections[0].ProverURL = ""
-	cfg.Connections[0].ClientTypeA = "unknown"
+	cfg.Connections[0].A.ClientType = "unknown"
 	_, err = buildRelayerFileConfig(cfg)
 	require.ErrorContains(t, err, "unsupported client type")
 }
