@@ -72,7 +72,6 @@ type attestationQuery func(context.Context, attestor.Attestor) (attestor.Attesta
 type quorumResponse struct {
 	name   string
 	signer common.Address
-	data   []byte
 	sig    []byte
 	err    error
 }
@@ -107,7 +106,11 @@ func queryQuorum(
 
 	wg.Wait()
 
-	return reduceQuorum(logger, responses, threshold)
+	signatures, err := reduceQuorum(logger, responses, threshold)
+	if err != nil {
+		return quorumResult{}, err
+	}
+	return quorumResult{AttestationData: expectedData, Signatures: signatures}, nil
 }
 
 func queryOne(
@@ -140,44 +143,42 @@ func queryOne(
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
-	return quorumResponse{name: a.Name(), signer: signer, data: data, sig: sig}
+	return quorumResponse{name: a.Name(), signer: signer, sig: sig}
 }
 
-// reduceQuorum groups responses by their exact attestationData value
-// and returns the first value whose distinct signers reach threshold.
-func reduceQuorum(logger *slog.Logger, responses []quorumResponse, threshold int) (quorumResult, error) {
-	var result quorumResult
+// reduceQuorum deduplicates signers and enforces the signature threshold.
+func reduceQuorum(logger *slog.Logger, responses []quorumResponse, threshold int) ([][]byte, error) {
+	var signatures [][]byte
 	seen := make(map[common.Address]bool)
 	for _, resp := range responses {
 		if resp.err != nil || seen[resp.signer] {
 			continue
 		}
 		seen[resp.signer] = true
-		result.AttestationData = resp.data
-		result.Signatures = append(result.Signatures, resp.sig)
+		signatures = append(signatures, resp.sig)
 	}
 
-	if len(result.Signatures) == 0 || len(result.Signatures) < threshold {
-		return quorumResult{}, errors.Errorf(
+	if len(signatures) == 0 || len(signatures) < threshold {
+		return nil, errors.Errorf(
 			"quorum not met: got %d of %d required signatures from %d configured attestors (%s)",
-			len(result.Signatures), threshold, len(responses), joinResponseErrors(responses),
+			len(signatures), threshold, len(responses), joinResponseErrors(responses),
 		)
 	}
 
-	if len(result.Signatures) < len(responses) {
+	if len(signatures) < len(responses) {
 		// quorum is met, but flag any attestors that did not contribute so a
 		// degrading set is visible before it drops below threshold
 		logger.Warn(
 			"Attestation quorum met with some attestors excluded",
-			"signatures", len(result.Signatures),
+			"signatures", len(signatures),
 			"attestors", len(responses),
 			"threshold", threshold,
 			"reasons", joinResponseErrors(responses),
 		)
 	} else {
-		logger.Debug("Attestation quorum met", "signatures", len(result.Signatures), "threshold", threshold)
+		logger.Debug("Attestation quorum met", "signatures", len(signatures), "threshold", threshold)
 	}
-	return result, nil
+	return signatures, nil
 }
 
 // joinResponseErrors summarizes why each non-contributing attestor was
