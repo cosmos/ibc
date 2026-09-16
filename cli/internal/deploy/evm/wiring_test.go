@@ -301,13 +301,13 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "besu-1",
 		Params: deploy.BesuQBFTParams{
-			IBCRouter:          fixture.RouterAddress.Hex(),
-			InitialHeight:      fixture.InitialTrustedHeight,
-			InitialTimestamp:   fixture.InitialTrustedTimestamp,
-			InitialStorageRoot: fixture.InitialTrustedStorageRoot.Hex(),
-			InitialValidators:  validators,
-			TrustingPeriod:     fixture.TrustingPeriod,
-			MaxClockDrift:      fixture.MaxClockDrift,
+			IBCRouter:         fixture.RouterAddress.Hex(),
+			InitialHeight:     fixture.InitialTrustedHeight,
+			InitialTimestamp:  fixture.InitialTrustedTimestamp,
+			InitialStateRoot:  fixture.InitialTrustedStateRoot.Hex(),
+			InitialValidators: validators,
+			TrustingPeriod:    fixture.TrustingPeriod,
+			MaxClockDrift:     fixture.MaxClockDrift,
 		},
 	}
 	ref, err := d.ProvisionClient(ctx, core.Router, spec)

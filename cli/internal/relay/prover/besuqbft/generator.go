@@ -61,11 +61,18 @@ type cacheEntry struct {
 	verified bool
 }
 
-// snapshot is everything the prover reads about one counterparty height.
+// snapshot is everything the prover reads about one counterparty height for
+// packet proofs: the header and the router's account and storage proofs.
 type snapshot struct {
 	header    *besu.Header
 	proof     v2.AccountProof
 	consensus besu.ConsensusState
+}
+
+// consensusOf is the consensus state an update to header installs. Every
+// field comes from the header, so no historical state is needed.
+func consensusOf(header *besu.Header) besu.ConsensusState {
+	return besu.ConsensusState{Timestamp: header.Timestamp, StateRoot: header.StateRoot, Validators: header.Validators}
 }
 
 // New builds a Generator without touching either chain; ResolveGenerator is
@@ -231,11 +238,7 @@ func (g *Generator) StateProof(ctx context.Context, target uint64) ([][]byte, er
 	}
 
 	if target <= state.LatestHeight {
-		snap, err := g.snapshotForHeader(ctx, targetHeader, nil)
-		if err != nil {
-			return nil, err
-		}
-		update, err := g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, snap)
+		update, err := g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, targetHeader)
 		if err != nil || update == nil {
 			return nil, err
 		}
@@ -249,25 +252,23 @@ func (g *Generator) StateProof(ctx context.Context, target uint64) ([][]byte, er
 		if err != nil {
 			return nil, err
 		}
-		snap, err := g.snapshotForHeader(ctx, header, nil)
-		if err != nil {
-			return nil, err
-		}
-		update, err := besu.EncodeUpdateClient(header.RLP, trustedHeight, trusted, snap.proof.AccountProof)
+		update, err := besu.EncodeUpdateClient(header.RLP, trustedHeight, trusted)
 		if err != nil {
 			return nil, fmt.Errorf("encoding update to height %d: %w", header.Height, err)
 		}
 		updates = append(updates, update)
 		if header.Height == target {
-			g.store(target, snap.consensus, false)
+			g.store(target, consensusOf(header), false)
 			return updates, nil
 		}
-		trustedHeight, trusted = header.Height, snap.consensus
+		trustedHeight, trusted = header.Height, consensusOf(header)
 	}
 }
 
 // PacketProofs proves each packet's claim against the router storage at
 // height, sharing one eth_getProof call across packets with the same slot.
+// Only the first proof carries the router account proof: the contract caches
+// the proven storage root for the rest of the transaction.
 func (g *Generator) PacketProofs(
 	ctx context.Context,
 	height uint64,
@@ -292,9 +293,9 @@ func (g *Generator) updateAtOrBelowTrusted(
 	ctx context.Context,
 	trustedHeight uint64,
 	trusted besu.ConsensusState,
-	snap *snapshot,
+	header *besu.Header,
 ) ([]byte, error) {
-	target := snap.header.Height
+	target := header.Height
 	var err error
 
 	var stored [32]byte
@@ -306,7 +307,7 @@ func (g *Generator) updateAtOrBelowTrusted(
 
 	switch {
 	case err == nil:
-		hash, hashErr := snap.consensus.Hash()
+		hash, hashErr := consensusOf(header).Hash()
 		if hashErr != nil {
 			return nil, hashErr
 		}
@@ -321,16 +322,16 @@ func (g *Generator) updateAtOrBelowTrusted(
 		return nil, err
 	}
 
-	signers, err := snap.header.Signers()
+	signers, err := header.Signers()
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", target, err)
 	}
 
-	if checkErr := besu.CheckUpdate(snap.header, signers, trusted); checkErr != nil {
+	if checkErr := besu.CheckUpdate(header, signers, trusted); checkErr != nil {
 		return nil, fmt.Errorf("backfilling height %d from trusted height %d: %w", target, trustedHeight, checkErr)
 	}
 
-	update, err := besu.EncodeUpdateClient(snap.header.RLP, trustedHeight, trusted, snap.proof.AccountProof)
+	update, err := besu.EncodeUpdateClient(header.RLP, trustedHeight, trusted)
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
@@ -437,7 +438,11 @@ func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Pa
 		if err := checkValue(kind, packet, common.BigToHash(storage.Value)); err != nil {
 			return nil, fmt.Errorf("packet sequence %d at height %d: %w", packet.Sequence, snap.header.Height, err)
 		}
-		proof, err := besu.EncodeMembershipProof(snap.consensus, storage.Proof)
+		accountProof := snap.proof.AccountProof
+		if i > 0 {
+			accountProof = nil
+		}
+		proof, err := besu.EncodeMembershipProof(snap.consensus, accountProof, storage.Proof)
 		if err != nil {
 			return nil, fmt.Errorf("packet sequence %d: %w", packet.Sequence, err)
 		}
@@ -521,15 +526,7 @@ func (g *Generator) snapshotForHeader(ctx context.Context, header *besu.Header, 
 		return nil, fmt.Errorf("proving router at height %d: %w (%s)", height, err, historyHint)
 	}
 
-	return &snapshot{
-		header: header,
-		proof:  proof,
-		consensus: besu.ConsensusState{
-			Timestamp:   header.Timestamp,
-			StorageRoot: proof.StorageRoot,
-			Validators:  header.Validators,
-		},
-	}, nil
+	return &snapshot{header: header, proof: proof, consensus: consensusOf(header)}, nil
 }
 
 // preimage returns the consensus state the light client stores at height,
@@ -546,12 +543,12 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besu.Consensus
 	state := entry.state
 
 	if !ok {
-		snap, err := g.snapshot(ctx, height, nil)
+		header, err := g.header(ctx, height)
 		if err != nil {
 			return besu.ConsensusState{}, fmt.Errorf("rebuilding trusted consensus state at height %d: %w", height, err)
 		}
 
-		state = snap.consensus
+		state = consensusOf(header)
 	}
 
 	stored, err := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, height)

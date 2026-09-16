@@ -17,13 +17,13 @@ import (
 func TestProofNodesRoundTrip(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 
-	nodes, err := fixture.NonAdjacentUpdate.AccountProofNodes()
+	nodes, err := fixture.Membership.AccountProofNodes()
 	require.NoError(t, err)
 	require.NotEmpty(t, nodes)
 
 	encoded, err := besu.EncodeProofNodes(nodes)
 	require.NoError(t, err)
-	assert.Equal(t, []byte(fixture.NonAdjacentUpdate.AccountProof), encoded)
+	assert.Equal(t, []byte(fixture.Membership.AccountProof), encoded)
 
 	empty, err := besu.EncodeProofNodes(nil)
 	require.NoError(t, err)
@@ -37,12 +37,9 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	update := fixture.NonAdjacentUpdate
 
-	nodes, err := update.AccountProofNodes()
-	require.NoError(t, err)
-
 	preimage := fixture.InitialConsensusState()
 
-	encoded, err := besu.EncodeUpdateClient(update.HeaderRLP, update.TrustedHeight, preimage, nodes)
+	encoded, err := besu.EncodeUpdateClient(update.HeaderRLP, update.TrustedHeight, preimage)
 	require.NoError(t, err)
 
 	decoded, err := besutest.DecodeUpdateClient(encoded)
@@ -50,7 +47,6 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRLP)
 	assert.Equal(t, update.TrustedHeight, decoded.TrustedHeight)
 	assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
-	assert.Equal(t, nodes, decoded.AccountProof)
 }
 
 func TestMembershipProofRoundTrip(t *testing.T) {
@@ -60,14 +56,23 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 	for _, m := range []besutest.MembershipFixture{fixture.Membership, fixture.NonMembership} {
 		nodes, err := m.ProofNodes()
 		require.NoError(t, err)
+		accountNodes, err := m.AccountProofNodes()
+		require.NoError(t, err)
 
-		encoded, err := besu.EncodeMembershipProof(preimage, nodes)
+		encoded, err := besu.EncodeMembershipProof(preimage, accountNodes, nodes)
 		require.NoError(t, err)
 
 		decoded, err := besutest.DecodeMembershipProof(encoded)
 		require.NoError(t, err)
 		assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
+		assert.Equal(t, accountNodes, decoded.AccountProofNodes)
 		assert.Equal(t, nodes, decoded.ProofNodes)
+
+		cached, err := besu.EncodeMembershipProof(preimage, nil, nodes)
+		require.NoError(t, err)
+		decoded, err = besutest.DecodeMembershipProof(cached)
+		require.NoError(t, err)
+		assert.Empty(t, decoded.AccountProofNodes)
 	}
 }
 
@@ -114,7 +119,7 @@ func TestConsensusStateHashChangesWithEveryField(t *testing.T) {
 	require.NoError(t, err)
 
 	root := base
-	root.StorageRoot[0] ^= 1
+	root.StateRoot[0] ^= 1
 	h2, err := root.Hash()
 	require.NoError(t, err)
 
@@ -146,7 +151,7 @@ func TestPayloadDecodersRejectMalformedData(t *testing.T) {
 }
 
 func TestUpdateClientRejectsNonzeroRevision(t *testing.T) {
-	encoded, err := besu.EncodeUpdateClient(nil, 1, besu.ConsensusState{}, nil)
+	encoded, err := besu.EncodeUpdateClient(nil, 1, besu.ConsensusState{})
 	require.NoError(t, err)
 	// The tuple offset and header offset precede trustedHeight.revisionNumber.
 	encoded[3*32-1] = 1

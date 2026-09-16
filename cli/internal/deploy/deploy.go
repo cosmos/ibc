@@ -36,25 +36,24 @@ type AttestationParams struct {
 
 // BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
 // are in seconds. The initial trusted state describes the counterparty chain
-// at InitialHeight: the header timestamp, the storage root of its ICS26Router
-// (IBCRouter) and the validator set sealed in the header.
+// at InitialHeight: the header timestamp, state root and validator set.
 type BesuQBFTParams struct {
-	IBCRouter          string   `json:"ibcRouter"`
-	InitialHeight      uint64   `json:"initialHeight"`
-	InitialTimestamp   uint64   `json:"initialTimestamp"`
-	InitialStorageRoot string   `json:"initialStorageRoot"`
-	InitialValidators  []string `json:"initialValidators"`
-	TrustingPeriod     uint64   `json:"trustingPeriod"`
-	MaxClockDrift      uint64   `json:"maxClockDrift"`
+	IBCRouter         string   `json:"ibcRouter"`
+	InitialHeight     uint64   `json:"initialHeight"`
+	InitialTimestamp  uint64   `json:"initialTimestamp"`
+	InitialStateRoot  string   `json:"initialStateRoot"`
+	InitialValidators []string `json:"initialValidators"`
+	TrustingPeriod    uint64   `json:"trustingPeriod"`
+	MaxClockDrift     uint64   `json:"maxClockDrift"`
 }
 
 // BesuQBFTTrustedState is the counterparty state a Besu QBFT client starts
 // trusting, read from the counterparty chain at Height.
 type BesuQBFTTrustedState struct {
-	Height      uint64
-	Timestamp   uint64
-	StorageRoot string
-	Validators  []string
+	Height     uint64
+	Timestamp  uint64
+	StateRoot  string
+	Validators []string
 }
 
 // BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can

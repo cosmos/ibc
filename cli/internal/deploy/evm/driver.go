@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy"
@@ -52,8 +51,6 @@ type Driver struct {
 	chainID *big.Int
 	key     *ecdsa.PrivateKey
 	backend backend
-	// proofs serves eth_getProof; nil for drivers built on a simulated backend.
-	proofs *gethclient.Client
 }
 
 // Options configures an EVM driver.
@@ -85,7 +82,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 	if chainID.String() != opts.ChainID {
 		return nil, fmt.Errorf("rpc %s reports chain id %s, config says %s", opts.RPCURL, chainID, opts.ChainID)
 	}
-	return &Driver{chainID: chainID, key: key, backend: client, proofs: gethclient.New(client.Client())}, nil
+	return &Driver{chainID: chainID, key: key, backend: client}, nil
 }
 
 func (d *Driver) SupportedClientTypes() []string {
@@ -255,7 +252,7 @@ func (d *Driver) provisionBesuQBFT(
 		args.router,
 		params.InitialHeight,
 		params.InitialTimestamp,
-		args.storageRoot,
+		args.stateRoot,
 		args.validators,
 		params.TrustingPeriod,
 		params.MaxClockDrift,
@@ -271,9 +268,9 @@ func (d *Driver) provisionBesuQBFT(
 }
 
 type besuQBFTConstructorArgs struct {
-	router      common.Address
-	storageRoot [32]byte
-	validators  []common.Address
+	router     common.Address
+	stateRoot  [32]byte
+	validators []common.Address
 }
 
 // besuQBFTArgs validates besu-qbft params and converts them for the contract
@@ -285,11 +282,11 @@ func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
 	if p.InitialHeight == 0 || p.InitialTimestamp == 0 {
 		return besuQBFTConstructorArgs{}, fmt.Errorf("initial height and timestamp required")
 	}
-	root, err := hexutil.Decode(p.InitialStorageRoot)
+	root, err := hexutil.Decode(p.InitialStateRoot)
 	if err != nil || len(root) != common.HashLength {
 		return besuQBFTConstructorArgs{}, fmt.Errorf(
-			"initial storage root %q must be 32 hex bytes",
-			p.InitialStorageRoot,
+			"initial state root %q must be 32 hex bytes",
+			p.InitialStateRoot,
 		)
 	}
 	validators := make([]common.Address, len(p.InitialValidators))
@@ -303,20 +300,18 @@ func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
 		return besuQBFTConstructorArgs{}, fmt.Errorf("initial validators: %w", err)
 	}
 	return besuQBFTConstructorArgs{
-		router:      common.HexToAddress(p.IBCRouter),
-		storageRoot: common.BytesToHash(root),
-		validators:  validators,
+		router:     common.HexToAddress(p.IBCRouter),
+		stateRoot:  common.BytesToHash(root),
+		validators: validators,
 	}, nil
 }
 
 // BesuQBFTTrustedState reads the sealed header at height on this driver's
-// chain and the storage root of router at that height.
+// chain; router is checked for shape only, since the trusted state is the
+// header alone.
 func (d *Driver) BesuQBFTTrustedState(
 	ctx context.Context, router string, height uint64,
 ) (deploy.BesuQBFTTrustedState, error) {
-	if d.proofs == nil {
-		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("driver has no eth_getProof client")
-	}
 	if !common.IsHexAddress(router) {
 		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("invalid router address %q", router)
 	}
@@ -333,19 +328,15 @@ func (d *Driver) BesuQBFTTrustedState(
 	if err != nil {
 		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("header %d is not a Besu QBFT header: %w", height, err)
 	}
-	proof, err := d.proofs.GetProof(ctx, common.HexToAddress(router), nil, number)
-	if err != nil {
-		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("fetch router %s proof at height %d: %w", router, height, err)
-	}
 	validators := make([]string, len(parsed.Validators))
 	for i, v := range parsed.Validators {
 		validators[i] = v.Hex()
 	}
 	return deploy.BesuQBFTTrustedState{
-		Height:      parsed.Height,
-		Timestamp:   parsed.Timestamp,
-		StorageRoot: proof.StorageHash.Hex(),
-		Validators:  validators,
+		Height:     parsed.Height,
+		Timestamp:  parsed.Timestamp,
+		StateRoot:  parsed.StateRoot.Hex(),
+		Validators: validators,
 	}, nil
 }
 

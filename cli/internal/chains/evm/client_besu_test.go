@@ -38,7 +38,7 @@ func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [3
 
 	fixture := besutest.MustFixture(t)
 
-	accountNodes, err := fixture.NonAdjacentUpdate.AccountProofNodes()
+	accountNodes, err := fixture.Membership.AccountProofNodes()
 	require.NoError(t, err)
 
 	storageNodes, err := fixture.Membership.ProofNodes()
@@ -50,7 +50,7 @@ func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [3
 	return &gethclient.AccountResult{
 		Address:      fixture.RouterAddress,
 		AccountProof: hexNodes(accountNodes),
-		StorageHash:  fixture.NonAdjacentUpdate.ExpectedStorageRoot,
+		StorageHash:  common.HexToHash("0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa"),
 		StorageProof: []gethclient.StorageResult{{Key: slot.Hex(), Value: value, Proof: hexNodes(storageNodes)}},
 	}, accountNodes, slot, value
 }

@@ -629,13 +629,13 @@ func besuQBFTSpec() ClientSpec {
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
 		Params: BesuQBFTParams{
-			IBCRouter:          "0x00000000000000000000000000000000000000cc",
-			InitialHeight:      112,
-			InitialTimestamp:   1788192445,
-			InitialStorageRoot: "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
-			InitialValidators:  []string{"0x00000000000000000000000000000000000000aa"},
-			TrustingPeriod:     1209600,
-			MaxClockDrift:      15,
+			IBCRouter:         "0x00000000000000000000000000000000000000cc",
+			InitialHeight:     112,
+			InitialTimestamp:  1788192445,
+			InitialStateRoot:  "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
+			InitialValidators: []string{"0x00000000000000000000000000000000000000aa"},
+			TrustingPeriod:    1209600,
+			MaxClockDrift:     15,
 		},
 	}
 }

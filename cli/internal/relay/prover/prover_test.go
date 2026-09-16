@@ -17,7 +17,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 func testConnection() config.ConnectionConfig {
@@ -151,9 +150,6 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 
 	chainA := mocks.NewMockClient(t)
 	chainB := mocks.NewMockClient(t)
-	accountNodes, err := anchor.AccountProofNodes()
-	require.NoError(t, err)
-
 	// the client on chain 1 tracks chain 2's router; the one on chain 2 tracks chain 1's
 	for _, end := range []struct {
 		host, counterparty *mocks.MockClient
@@ -171,8 +167,6 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 			GetHeaderRLP(mock.Anything, anchor.Height).
 			Return([]byte(anchor.HeaderRLP), nil).
 			Once()
-		end.counterparty.EXPECT().GetRouterProof(mock.Anything, anchor.Height, mock.Anything).
-			Return(v2.AccountProof{StorageRoot: anchor.ExpectedStorageRoot, AccountProof: accountNodes}, nil).Once()
 	}
 
 	clientSet := chains.NewClientSet(map[string]chains.Client{"1": chainA, "2": chainB})

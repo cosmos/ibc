@@ -17,13 +17,13 @@ type UpdateClient struct {
 	HeaderRLP              []byte
 	TrustedHeight          uint64
 	ConsensusStatePreimage besu.ConsensusState
-	AccountProof           [][]byte
 }
 
 // MembershipProof is the decoded form of the proof bytes a verifyMembership or
 // verifyNonMembership call carries.
 type MembershipProof struct {
 	ConsensusStatePreimage besu.ConsensusState
+	AccountProofNodes      [][]byte
 	ProofNodes             [][]byte
 }
 
@@ -56,16 +56,10 @@ func DecodeUpdateClient(data []byte) (UpdateClient, error) {
 		)
 	}
 
-	nodes, err := DecodeProofNodes(decoded.AccountProof)
-	if err != nil {
-		return UpdateClient{}, err
-	}
-
 	return UpdateClient{
 		HeaderRLP:              decoded.HeaderRlp,
 		TrustedHeight:          decoded.TrustedHeight.RevisionHeight,
 		ConsensusStatePreimage: consensusState(decoded.ConsensusStatePreimage),
-		AccountProof:           nodes,
 	}, nil
 }
 
@@ -81,6 +75,7 @@ func DecodeMembershipProof(data []byte) (MembershipProof, error) {
 	decoded := arguments.Proof
 	return MembershipProof{
 		ConsensusStatePreimage: consensusState(decoded.ConsensusStatePreimage),
+		AccountProofNodes:      decoded.AccountProofNodes,
 		ProofNodes:             decoded.ProofNodes,
 	}, nil
 }
@@ -101,7 +96,7 @@ func EncodeClientState(state besu.ClientState) ([]byte, error) {
 }
 
 func consensusState(state besumsgs.IBesuLightClientMsgsConsensusState) besu.ConsensusState {
-	return besu.ConsensusState{Timestamp: state.Timestamp, StorageRoot: state.StorageRoot, Validators: state.Validators}
+	return besu.ConsensusState{Timestamp: state.Timestamp, StateRoot: state.StateRoot, Validators: state.Validators}
 }
 
 func decodeArguments(method string, data []byte, destination any) error {

@@ -51,6 +51,7 @@ type Header struct {
 	RLP         []byte
 	Height      uint64
 	Timestamp   uint64
+	StateRoot   common.Hash
 	Validators  []common.Address
 	CommitSeals [][]byte
 
@@ -110,8 +111,7 @@ func (h *Header) decodeFixedFields() error {
 		return fmt.Errorf("%w: ommers hash %s is not the empty list hash", ErrInvalidHeader, ommers)
 	}
 
-	var stateRoot common.Hash
-	if err := rlp.DecodeBytes(h.items[idxStateRoot], &stateRoot); err != nil {
+	if err := rlp.DecodeBytes(h.items[idxStateRoot], &h.StateRoot); err != nil {
 		return fmt.Errorf("%w: state root: %w", ErrInvalidHeader, err)
 	}
 

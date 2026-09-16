@@ -554,7 +554,7 @@ func (p *PreparedBesuQBFTClient) Deploy(ctx context.Context) (Client, error) {
 				config.CounterpartyRouter,
 				config.InitialHeight,
 				config.InitialTimestamp,
-				config.InitialStorageRoot,
+				config.InitialStateRoot,
 				config.InitialValidators,
 				config.TrustingPeriod,
 				config.MaxClockDrift,

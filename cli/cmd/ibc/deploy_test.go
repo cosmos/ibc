@@ -357,13 +357,13 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 	}
 
 	recorded := deploy.BesuQBFTParams{
-		IBCRouter:          "0x00000000000000000000000000000000000000cc",
-		InitialHeight:      112,
-		InitialTimestamp:   1788192445,
-		InitialStorageRoot: "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
-		InitialValidators:  []string{"0x00000000000000000000000000000000000000aa"},
-		TrustingPeriod:     7200,
-		MaxClockDrift:      15,
+		IBCRouter:         "0x00000000000000000000000000000000000000cc",
+		InitialHeight:     112,
+		InitialTimestamp:  1788192445,
+		InitialStateRoot:  "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
+		InitialValidators: []string{"0x00000000000000000000000000000000000000aa"},
+		TrustingPeriod:    7200,
+		MaxClockDrift:     15,
 	}
 	m := manifest.New("1", "evm")
 	m.Core.Router = "0xrouterA"
@@ -372,7 +372,7 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{
 			"ibcRouter": recorded.IBCRouter, "initialHeight": float64(recorded.InitialHeight),
-			"initialTimestamp": float64(recorded.InitialTimestamp), "initialStorageRoot": recorded.InitialStorageRoot,
+			"initialTimestamp": float64(recorded.InitialTimestamp), "initialStateRoot": recorded.InitialStateRoot,
 			"initialValidators": []any{recorded.InitialValidators[0]},
 			"trustingPeriod":    recorded.TrustingPeriod, "maxClockDrift": recorded.MaxClockDrift,
 		},

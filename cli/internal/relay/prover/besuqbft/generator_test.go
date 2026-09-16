@@ -64,10 +64,10 @@ func mustHash(t *testing.T, state besu.ConsensusState) [32]byte {
 	return hash
 }
 
-func accountNodes(t *testing.T, update besutest.UpdateFixture) [][]byte {
+func accountNodes(t *testing.T, m besutest.MembershipFixture) [][]byte {
 	t.Helper()
 
-	nodes, err := update.AccountProofNodes()
+	nodes, err := m.AccountProofNodes()
 	require.NoError(t, err)
 
 	return nodes
@@ -82,16 +82,12 @@ func proofNodes(t *testing.T, m besutest.MembershipFixture) [][]byte {
 	return nodes
 }
 
-// expectSnapshot wires the counterparty reads snapshot(height) performs for a
-// fixture update.
-func (e *fixtureEnv) expectSnapshot(t *testing.T, update besutest.UpdateFixture) {
+// expectHeader wires the counterparty header read for a fixture update; an
+// update needs nothing else from the counterparty.
+func (e *fixtureEnv) expectHeader(t *testing.T, update besutest.UpdateFixture) {
 	t.Helper()
 
 	e.counterparty.EXPECT().GetHeaderRLP(mock.Anything, update.Height).Return([]byte(update.HeaderRLP), nil)
-	e.counterparty.EXPECT().GetRouterProof(mock.Anything, update.Height, mock.Anything).Return(v2.AccountProof{
-		StorageRoot:  update.ExpectedStorageRoot,
-		AccountProof: accountNodes(t, update),
-	}, nil)
 }
 
 // expectInitialAnchor makes the initial trusted state resolvable: the fixture
@@ -113,7 +109,7 @@ func TestStateProofDirectUpdate(t *testing.T) {
 	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).
 		Return(env.clientState(env.fixture.InitialTrustedHeight), nil).Once()
 	env.expectInitialAnchor(t)
-	env.expectSnapshot(t, update)
+	env.expectHeader(t, update)
 
 	updates, err := env.prepareUpdate(ctx, update.Height)
 	require.NoError(t, err)
@@ -124,7 +120,6 @@ func TestStateProofDirectUpdate(t *testing.T) {
 	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRLP)
 	assert.Equal(t, env.fixture.InitialTrustedHeight, decoded.TrustedHeight)
 	assert.Equal(t, env.fixture.InitialConsensusState(), decoded.ConsensusStatePreimage)
-	assert.Equal(t, accountNodes(t, update), decoded.AccountProof)
 
 	// the installed state is cached unverified for the packet proofs that follow
 	entry, ok := env.gen.cache[update.Height]
@@ -158,15 +153,9 @@ func TestStateProofValidatorTurnoverChain(t *testing.T) {
 	env.counterparty.EXPECT().
 		GetHeaderRLP(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, h uint64) ([]byte, error) { return headers[h].RLP, nil })
-	nodes := accountNodes(t, env.fixture.NonAdjacentUpdate)
 	env.gen.store(height, trusted, true)
 	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(height), nil).Once()
 	hops := []uint64{12, 14, 15}
-	for _, hop := range hops {
-		env.counterparty.EXPECT().GetRouterProof(mock.Anything, hop, [][32]byte(nil)).
-			Return(v2.AccountProof{StorageRoot: common.BigToHash(new(big.Int).SetUint64(hop)), AccountProof: nodes}, nil).
-			Once()
-	}
 
 	updates, err := env.prepareUpdate(t.Context(), 15)
 	require.NoError(t, err)
@@ -183,10 +172,7 @@ func TestStateProofValidatorTurnoverChain(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, besu.CheckUpdate(headers[hop], signers, trusted))
 		height = hop
-		trusted = besu.ConsensusState{
-			Timestamp: headers[hop].Timestamp, Validators: headers[hop].Validators,
-			StorageRoot: common.BigToHash(new(big.Int).SetUint64(hop)),
-		}
+		trusted = consensusOf(headers[hop])
 	}
 	require.False(t, env.gen.cache[15].verified)
 	_, cached := env.gen.cache[12]
@@ -221,12 +207,6 @@ func TestStateProofBridgesThinlySealedBlock(t *testing.T) {
 	}
 	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, h uint64) ([]byte, error) { return headers[h].RLP, nil })
-	nodes := accountNodes(t, env.fixture.NonAdjacentUpdate)
-	for _, hop := range []uint64{12, 13} {
-		env.counterparty.EXPECT().GetRouterProof(mock.Anything, hop, [][32]byte(nil)).
-			Return(v2.AccountProof{AccountProof: nodes}, nil).Once()
-	}
-
 	updates, err := env.prepareUpdate(t.Context(), 13)
 	require.NoError(t, err)
 	require.Len(t, updates, 2)
@@ -260,7 +240,7 @@ func TestStateProofTargetAlreadyStored(t *testing.T) {
 
 	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(update.Height), nil).Once()
 	// trusted anchor is the update height itself
-	env.expectSnapshot(t, update)
+	env.expectHeader(t, update)
 	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 		Return(mustHash(t, update.ExpectedConsensusState()), nil).Once()
 
@@ -283,7 +263,7 @@ func TestStateProofTargetEqualsVerifiedAnchor(t *testing.T) {
 				GetBesuQBFTClientState(mock.Anything, clientID).
 				Return(env.clientState(update.Height), nil).
 				Once()
-			env.expectSnapshot(t, update)
+			env.expectHeader(t, update)
 
 			updates, err := env.prepareUpdate(context.Background(), update.Height)
 			if conflict {
@@ -310,7 +290,7 @@ func TestStateProofTargetConflicts(t *testing.T) {
 		Return(env.clientState(update.Height+1), nil).
 		Once()
 	env.gen.store(update.Height+1, tampered, true) // some verified anchor above the target
-	env.expectSnapshot(t, update)
+	env.expectHeader(t, update)
 	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 		Return(mustHash(t, tampered), nil).Once()
 
@@ -326,7 +306,7 @@ func TestStateProofBackfillBelowTrusted(t *testing.T) {
 
 	env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).Return(env.clientState(anchor), nil).Once()
 	env.gen.store(anchor, env.fixture.InitialConsensusState(), true)
-	env.expectSnapshot(t, update)
+	env.expectHeader(t, update)
 	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 		Return([32]byte{}, v2.ErrConsensusStateNotFound).Once()
 
@@ -345,7 +325,7 @@ func TestPreimageVerifiesOnceAndRejectsMismatch(t *testing.T) {
 	update := env.fixture.NonAdjacentUpdate
 
 	t.Run("rebuild then cache", func(t *testing.T) {
-		env.expectSnapshot(t, update)
+		env.expectHeader(t, update)
 		env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 			Return(mustHash(t, update.ExpectedConsensusState()), nil).Once()
 
@@ -361,7 +341,7 @@ func TestPreimageVerifiesOnceAndRejectsMismatch(t *testing.T) {
 
 	t.Run("mismatch", func(t *testing.T) {
 		other := newFixtureEnv(t)
-		other.expectSnapshot(t, update)
+		other.expectHeader(t, update)
 		other.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 			Return([32]byte{0xff}, nil).Once()
 
@@ -375,7 +355,7 @@ func TestPreimageRecoversFromStaleUnverifiedCache(t *testing.T) {
 	update := env.fixture.NonAdjacentUpdate
 	want := update.ExpectedConsensusState()
 	stale := want
-	stale.StorageRoot = common.Hash{0xff}
+	stale.StateRoot = common.Hash{0xff}
 	env.gen.store(update.Height, stale, false)
 	env.host.EXPECT().GetBesuQBFTConsensusStateHash(mock.Anything, clientID, update.Height).
 		Return(mustHash(t, want), nil).Twice()
@@ -384,7 +364,7 @@ func TestPreimageRecoversFromStaleUnverifiedCache(t *testing.T) {
 	require.ErrorContains(t, err, "hashes to")
 	require.NotContains(t, env.gen.cache, update.Height)
 
-	env.expectSnapshot(t, update)
+	env.expectHeader(t, update)
 	state, err := env.gen.preimage(t.Context(), update.Height)
 	require.NoError(t, err)
 	require.Equal(t, want, state)
@@ -398,13 +378,14 @@ func TestPreimageRecoversFromStaleUnverifiedCache(t *testing.T) {
 // expectProofAt wires the counterparty reads PacketProofs performs at a
 // fixture height, answering each requested slot with valueFor.
 func (e *fixtureEnv) expectProofAt(
+	t *testing.T,
 	update besutest.UpdateFixture,
 	valueFor func(slot [32]byte) (*big.Int, [][]byte),
 ) {
 	e.counterparty.EXPECT().GetHeaderRLP(mock.Anything, update.Height).Return([]byte(update.HeaderRLP), nil).Once()
 	e.counterparty.EXPECT().GetRouterProof(mock.Anything, update.Height, mock.Anything).RunAndReturn(
 		func(_ context.Context, _ uint64, slots [][32]byte) (v2.AccountProof, error) {
-			proof := v2.AccountProof{StorageRoot: update.ExpectedStorageRoot}
+			proof := v2.AccountProof{AccountProof: accountNodes(t, e.fixture.Membership)}
 			for _, slot := range slots {
 				value, nodes := valueFor(slot)
 				proof.StorageProofs = append(
@@ -451,7 +432,7 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("membership wraps the storage proof with the proof-height preimage", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(update, func([32]byte) (*big.Int, [][]byte) { return commitment, membershipNodes })
+		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return commitment, membershipNodes })
 
 		proofs, err := env.gen.PacketProofs(
 			ctx,
@@ -465,12 +446,13 @@ func TestPacketProofs(t *testing.T) {
 		decoded, err := besutest.DecodeMembershipProof(proofs[0])
 		require.NoError(t, err)
 		assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
+		assert.Equal(t, accountNodes(t, fixture.Membership), decoded.AccountProofNodes)
 		assert.Equal(t, membershipNodes, decoded.ProofNodes)
 	})
 
 	t.Run("commitment mismatch", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(1), membershipNodes })
+		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(1), membershipNodes })
 
 		_, err := env.gen.PacketProofs(ctx, update.Height, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{sent})
 		require.ErrorIs(t, err, ErrCommitmentMismatch)
@@ -478,7 +460,7 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("receipt absence uses the fixture exclusion proof", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(update, func(slot [32]byte) (*big.Int, [][]byte) {
+		env.expectProofAt(t, update, func(slot [32]byte) (*big.Int, [][]byte) {
 			require.Equal(t, besu.CommitmentSlot(fixture.NonMembership.Path), common.Hash(slot))
 			return big.NewInt(0), nonMembershipNodes
 		})
@@ -500,7 +482,7 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("receipt present fails absence", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(1), [][]byte{{0x01}} })
+		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(1), [][]byte{{0x01}} })
 
 		_, err := env.gen.PacketProofs(
 			ctx,
@@ -513,7 +495,7 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("acknowledgement requires a value", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(0), nil })
+		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(0), nil })
 
 		_, err := env.gen.PacketProofs(
 			ctx,
@@ -523,18 +505,6 @@ func TestPacketProofs(t *testing.T) {
 		)
 		require.ErrorIs(t, err, ErrAckMissing)
 	})
-
-	t.Run("duplicate slots are requested once", func(t *testing.T) {
-		env := newFixtureEnv(t)
-		env.expectProofAt(update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(0), nonMembershipNodes })
-
-		proofs, err := env.gen.PacketProofs(
-			ctx, update.Height, v2.ProofKindReceiptAbsence, []channeltypesv2.Packet{received, received},
-		)
-		require.NoError(t, err)
-		require.Len(t, proofs, 2)
-		assert.Equal(t, proofs[0], proofs[1])
-	})
 }
 
 func TestLatestProvableHeight(t *testing.T) {
@@ -542,40 +512,43 @@ func TestLatestProvableHeight(t *testing.T) {
 
 	t.Run("head when within drift", func(t *testing.T) {
 		env := newFixtureEnv(t)
+		base := int64(env.fixture.InitialTrustedTimestamp) //nolint:gosec // fixture timestamp
 		env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).
 			Return(env.clientState(env.fixture.InitialTrustedHeight), nil).Once()
 		env.expectInitialAnchor(t)
 		env.host.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
-			Return(v2.BlockHeader{Height: 500, Timestamp: time.Unix(1788192450, 0)}, nil).Once()
+			Return(v2.BlockHeader{Height: 500, Timestamp: time.Unix(base+35, 0)}, nil).Once()
 		env.counterparty.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
-			Return(v2.BlockHeader{Height: 120, Timestamp: time.Unix(1788192460, 0)}, nil).Once()
+			Return(v2.BlockHeader{Height: 120, Timestamp: time.Unix(base+45, 0)}, nil).Once()
 
 		height, ts, err := env.gen.LatestProvableHeight(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, uint64(120), height)
-		assert.Equal(t, time.Unix(1788192460, 0), ts)
+		assert.Equal(t, time.Unix(base+45, 0), ts)
 	})
 
 	t.Run("steps back under clock drift", func(t *testing.T) {
 		env := newFixtureEnv(t)
+		anchor := env.fixture.InitialTrustedHeight
+		base := int64(env.fixture.InitialTrustedTimestamp) //nolint:gosec // fixture timestamp
 		env.host.EXPECT().GetBesuQBFTClientState(mock.Anything, clientID).
-			Return(env.clientState(env.fixture.InitialTrustedHeight), nil).Once()
+			Return(env.clientState(anchor), nil).Once()
 		env.expectInitialAnchor(t)
-		// host is at t=1000, drift 15 -> headers newer than 1015 are inadmissible
+		// host is 15s behind the anchor with drift 15 -> only the anchor itself is admissible
 		env.host.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
-			Return(v2.BlockHeader{Height: 500, Timestamp: time.Unix(1788192400, 0)}, nil).Once()
+			Return(v2.BlockHeader{Height: 500, Timestamp: time.Unix(base-15, 0)}, nil).Once()
 		env.counterparty.EXPECT().GetBlockHeader(mock.Anything, uint64(v2.LatestBlock)).
-			Return(v2.BlockHeader{Height: 120, Timestamp: time.Unix(1788192460, 0)}, nil).Once()
+			Return(v2.BlockHeader{Height: anchor + 2, Timestamp: time.Unix(base+45, 0)}, nil).Once()
 		env.counterparty.EXPECT().GetBlockHeader(mock.Anything, mock.Anything).RunAndReturn(
 			func(_ context.Context, height uint64) (v2.BlockHeader, error) {
-				ts := int64(1788192415) + (int64(height)-118)*5
+				ts := base + (int64(height)-int64(anchor))*5 //nolint:gosec // small test heights
 				return v2.BlockHeader{Height: height, Timestamp: time.Unix(ts, 0)}, nil
 			})
 
 		height, ts, err := env.gen.LatestProvableHeight(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, uint64(118), height)
-		assert.Equal(t, time.Unix(1788192415, 0), ts)
+		assert.Equal(t, anchor, height)
+		assert.Equal(t, time.Unix(base, 0).UTC(), ts)
 	})
 }
 
@@ -703,9 +676,6 @@ func TestStateProofLongHistoryBisects(t *testing.T) {
 			}
 			return sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, h, set).RLP, nil
 		})
-	env.counterparty.EXPECT().GetRouterProof(mock.Anything, mock.Anything, [][32]byte(nil)).
-		Return(v2.AccountProof{AccountProof: accountNodes(t, env.fixture.NonAdjacentUpdate)}, nil).Times(2)
-
 	updates, err := env.gen.StateProof(t.Context(), target)
 	require.NoError(t, err)
 	require.Len(t, updates, 2)
@@ -737,8 +707,7 @@ func TestPacketProofsShareSlot(t *testing.T) {
 	require.Len(t, slots, 1)
 	env.counterparty.EXPECT().GetHeaderRLP(mock.Anything, update.Height).Return(update.HeaderRLP, nil).Once()
 	env.counterparty.EXPECT().GetRouterProof(mock.Anything, update.Height, slots).Return(v2.AccountProof{
-		StorageRoot:  update.ExpectedStorageRoot,
-		AccountProof: accountNodes(t, update),
+		AccountProof: accountNodes(t, env.fixture.NonMembership),
 		StorageProofs: []v2.StorageProof{
 			{Key: slots[0], Value: big.NewInt(0), Proof: proofNodes(t, env.fixture.NonMembership)},
 		},
@@ -749,5 +718,14 @@ func TestPacketProofsShareSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Len(t, proofs, 2)
-	require.Equal(t, proofs[0], proofs[1])
+	// The first proof carries the account proof; the rest reuse the storage
+	// root the contract caches for the transaction.
+	first, err := besutest.DecodeMembershipProof(proofs[0])
+	require.NoError(t, err)
+	second, err := besutest.DecodeMembershipProof(proofs[1])
+	require.NoError(t, err)
+	require.Equal(t, accountNodes(t, env.fixture.NonMembership), first.AccountProofNodes)
+	require.Empty(t, second.AccountProofNodes)
+	require.Equal(t, first.ProofNodes, second.ProofNodes)
+	require.Equal(t, first.ConsensusStatePreimage, second.ConsensusStatePreimage)
 }

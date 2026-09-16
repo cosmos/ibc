@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
@@ -361,7 +360,7 @@ func prepareConnections(
 				authority, _ := runtime.evmAccount(client.Authority)
 				counterparty := dependencies.instances[clientIBCInstance(counterpartyEnd.declaration)]
 				counterpartyRouter := common.HexToAddress(string(counterparty.locator))
-				trusted, err := besuQBFTTrustedState(ctx, counterparty.chain, counterpartyRouter)
+				trusted, err := besuQBFTTrustedState(ctx, counterparty.chain)
 				if err != nil {
 					return dependencies, fmt.Errorf(
 						"prepare IBC Client %q counterparty trusted state: %w",
@@ -380,7 +379,7 @@ func prepareConnections(
 						CounterpartyRouter:   counterpartyRouter,
 						InitialHeight:        trusted.height,
 						InitialTimestamp:     trusted.timestamp,
-						InitialStorageRoot:   trusted.storageRoot,
+						InitialStateRoot:     trusted.stateRoot,
 						InitialValidators:    trusted.validators,
 						TrustingPeriod:       client.TrustingPeriod,
 						MaxClockDrift:        client.MaxClockDrift,
@@ -624,17 +623,16 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 }
 
 // besuTrustedState is what a Besu QBFT Client starts trusting about the
-// counterparty chain: its head header and the router's storage root there.
+// counterparty chain: its head header's timestamp, state root and validators.
 type besuTrustedState struct {
-	height      uint64
-	timestamp   uint64
-	storageRoot common.Hash
-	validators  []common.Address
+	height     uint64
+	timestamp  uint64
+	stateRoot  common.Hash
+	validators []common.Address
 }
 
-// besuQBFTTrustedState reads chain's head as a sealed Besu QBFT header and the
-// storage root of router at that height.
-func besuQBFTTrustedState(ctx context.Context, chain *Chain, router common.Address) (besuTrustedState, error) {
+// besuQBFTTrustedState reads chain's head as a sealed Besu QBFT header.
+func besuQBFTTrustedState(ctx context.Context, chain *Chain) (besuTrustedState, error) {
 	var state besuTrustedState
 	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
 		header, headerErr := client.Client().HeaderByNumber(ctx, nil)
@@ -648,15 +646,11 @@ func besuQBFTTrustedState(ctx context.Context, chain *Chain, router common.Addre
 		if validatorsErr != nil {
 			return validatorsErr
 		}
-		proof, proofErr := gethclient.New(client.RPCClient()).GetProof(ctx, router, nil, header.Number)
-		if proofErr != nil {
-			return fmt.Errorf("eth_getProof for router %s: %w", router, proofErr)
-		}
 		state = besuTrustedState{
-			height:      header.Number.Uint64(),
-			timestamp:   header.Time,
-			storageRoot: proof.StorageHash,
-			validators:  validators,
+			height:     header.Number.Uint64(),
+			timestamp:  header.Time,
+			stateRoot:  header.Root,
+			validators: validators,
 		}
 		return nil
 	})

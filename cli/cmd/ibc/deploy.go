@@ -439,13 +439,13 @@ func besuQBFTParams(
 		)
 	}
 	return deploy.BesuQBFTParams{
-		IBCRouter:          counterparty.Core.Router,
-		InitialHeight:      state.Height,
-		InitialTimestamp:   state.Timestamp,
-		InitialStorageRoot: state.StorageRoot,
-		InitialValidators:  state.Validators,
-		TrustingPeriod:     trustingPeriod,
-		MaxClockDrift:      maxClockDrift,
+		IBCRouter:         counterparty.Core.Router,
+		InitialHeight:     state.Height,
+		InitialTimestamp:  state.Timestamp,
+		InitialStateRoot:  state.StateRoot,
+		InitialValidators: state.Validators,
+		TrustingPeriod:    trustingPeriod,
+		MaxClockDrift:     maxClockDrift,
 	}, nil
 }
 

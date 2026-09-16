@@ -10,13 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// ConsensusState is what the light client trusts about one Besu height. The
-// contract stores only its Hash, so callers resend the full value with every
-// update and every membership proof.
+// ConsensusState is what the light client trusts about one Besu height. Every
+// field comes from the header, so it can always be rebuilt without historical
+// state. The contract stores only its Hash, so callers resend the full value
+// with every update and every membership proof.
 type ConsensusState struct {
-	Timestamp   uint64
-	StorageRoot common.Hash
-	Validators  []common.Address
+	Timestamp  uint64
+	StateRoot  common.Hash
+	Validators []common.Address
 }
 
 // Hash is keccak256(abi.encode(ConsensusState)), the value the light client
@@ -33,7 +34,7 @@ func (c ConsensusState) Hash() (common.Hash, error) {
 
 func (c ConsensusState) toABI() besumsgs.IBesuLightClientMsgsConsensusState {
 	return besumsgs.IBesuLightClientMsgsConsensusState{
-		Timestamp: c.Timestamp, StorageRoot: c.StorageRoot, Validators: c.Validators,
+		Timestamp: c.Timestamp, StateRoot: c.StateRoot, Validators: c.Validators,
 	}
 }
 

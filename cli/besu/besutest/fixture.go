@@ -27,13 +27,13 @@ var qbftFixtureJSON []byte
 
 // Fixture mirrors the qbft.json layout.
 type Fixture struct {
-	RouterAddress             common.Address   `json:"routerAddress"`
-	InitialTrustedHeight      uint64           `json:"initialTrustedHeight"`
-	InitialTrustedTimestamp   uint64           `json:"initialTrustedTimestamp"`
-	InitialTrustedStorageRoot common.Hash      `json:"initialTrustedStorageRoot"`
-	InitialTrustedValidators  []common.Address `json:"initialTrustedValidators"`
-	TrustingPeriod            uint64           `json:"trustingPeriod"`
-	MaxClockDrift             uint64           `json:"maxClockDrift"`
+	RouterAddress            common.Address   `json:"routerAddress"`
+	InitialTrustedHeight     uint64           `json:"initialTrustedHeight"`
+	InitialTrustedTimestamp  uint64           `json:"initialTrustedTimestamp"`
+	InitialTrustedStateRoot  common.Hash      `json:"initialTrustedStateRoot"`
+	InitialTrustedValidators []common.Address `json:"initialTrustedValidators"`
+	TrustingPeriod           uint64           `json:"trustingPeriod"`
+	MaxClockDrift            uint64           `json:"maxClockDrift"`
 
 	AdjacentUpdate    UpdateFixture `json:"adjacentUpdate"`
 	NonAdjacentUpdate UpdateFixture `json:"nonAdjacentUpdate"`
@@ -46,20 +46,21 @@ type Fixture struct {
 }
 
 // UpdateFixture is one header update. The negative cases carry no expected
-// state and an empty account proof.
+// state.
 type UpdateFixture struct {
-	Height              uint64           `json:"height"`
-	HeaderRLP           hexutil.Bytes    `json:"headerRlp"`
-	TrustedHeight       uint64           `json:"trustedHeight"`
-	AccountProof        hexutil.Bytes    `json:"accountProof"` // abi.encode(bytes[])
-	ExpectedTimestamp   uint64           `json:"expectedTimestamp"`
-	ExpectedStorageRoot common.Hash      `json:"expectedStorageRoot"`
-	ExpectedValidators  []common.Address `json:"expectedValidators"`
+	Height             uint64           `json:"height"`
+	HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
+	TrustedHeight      uint64           `json:"trustedHeight"`
+	ExpectedTimestamp  uint64           `json:"expectedTimestamp"`
+	ExpectedStateRoot  common.Hash      `json:"expectedStateRoot"`
+	ExpectedValidators []common.Address `json:"expectedValidators"`
 }
 
-// MembershipFixture is one storage proof. Value is empty for non-membership.
+// MembershipFixture is one storage proof with the account proof that anchors
+// it to the header's state root. Value is empty for non-membership.
 type MembershipFixture struct {
-	Proof             hexutil.Bytes `json:"proof"` // abi.encode(bytes[]) of the storage proof nodes
+	Proof             hexutil.Bytes `json:"proof"`        // abi.encode(bytes[]) of the storage proof nodes
+	AccountProof      hexutil.Bytes `json:"accountProof"` // abi.encode(bytes[]) of the account proof nodes
 	ProofHeight       uint64        `json:"proofHeight"`
 	Path              hexutil.Bytes `json:"path"`
 	Value             hexutil.Bytes `json:"value"`
@@ -91,27 +92,27 @@ func MustFixture(tb testing.TB) Fixture {
 // InitialConsensusState is the consensus state the fixture client is deployed with.
 func (f Fixture) InitialConsensusState() besu.ConsensusState {
 	return besu.ConsensusState{
-		Timestamp:   f.InitialTrustedTimestamp,
-		StorageRoot: f.InitialTrustedStorageRoot,
-		Validators:  f.InitialTrustedValidators,
+		Timestamp:  f.InitialTrustedTimestamp,
+		StateRoot:  f.InitialTrustedStateRoot,
+		Validators: f.InitialTrustedValidators,
 	}
 }
 
 // ExpectedConsensusState is the consensus state the update installs.
 func (u UpdateFixture) ExpectedConsensusState() besu.ConsensusState {
 	return besu.ConsensusState{
-		Timestamp:   u.ExpectedTimestamp,
-		StorageRoot: u.ExpectedStorageRoot,
-		Validators:  u.ExpectedValidators,
+		Timestamp:  u.ExpectedTimestamp,
+		StateRoot:  u.ExpectedStateRoot,
+		Validators: u.ExpectedValidators,
 	}
-}
-
-// AccountProofNodes unwraps the abi.encode(bytes[]) account proof.
-func (u UpdateFixture) AccountProofNodes() ([][]byte, error) {
-	return DecodeProofNodes(u.AccountProof)
 }
 
 // ProofNodes unwraps the abi.encode(bytes[]) storage proof.
 func (m MembershipFixture) ProofNodes() ([][]byte, error) {
 	return DecodeProofNodes(m.Proof)
+}
+
+// AccountProofNodes unwraps the abi.encode(bytes[]) account proof.
+func (m MembershipFixture) AccountProofNodes() ([][]byte, error) {
+	return DecodeProofNodes(m.AccountProof)
 }

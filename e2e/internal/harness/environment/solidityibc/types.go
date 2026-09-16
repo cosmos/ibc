@@ -59,7 +59,7 @@ type BesuQBFTClientConfig struct {
 	CounterpartyRouter   common.Address
 	InitialHeight        uint64
 	InitialTimestamp     uint64
-	InitialStorageRoot   common.Hash
+	InitialStateRoot     common.Hash
 	InitialValidators    []common.Address
 	TrustingPeriod       uint64
 	MaxClockDrift        uint64
