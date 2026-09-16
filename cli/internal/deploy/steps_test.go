@@ -4,6 +4,7 @@ package deploy
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"testing"
 
@@ -637,6 +638,30 @@ func besuQBFTSpec() ClientSpec {
 			TrustingPeriod:    1209600,
 			MaxClockDrift:     15,
 		},
+	}
+}
+
+func TestSpecToClientBesuQBFTParams(t *testing.T) {
+	for _, noValidators := range []bool{false, true} {
+		spec := besuQBFTSpec()
+		params := spec.Params.(BesuQBFTParams)
+		params.InitialHeight = 1<<53 + 1 // Must not round through float64 before saving.
+		if noValidators {
+			params.InitialValidators = nil
+		}
+		spec.Params = params
+
+		client, err := specToClient(spec, "0xclient")
+		require.NoError(t, err)
+		want, err := json.Marshal(params)
+		require.NoError(t, err)
+		got, err := json.Marshal(client.Params)
+		require.NoError(t, err)
+		require.JSONEq(t, string(want), string(got))
+
+		decoded, err := BesuQBFTParamsFromClient(client)
+		require.NoError(t, err)
+		require.Equal(t, params, decoded)
 	}
 }
 

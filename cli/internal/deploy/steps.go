@@ -438,11 +438,15 @@ func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
 		if !ok {
 			return manifest.Client{}, paramsMismatch(spec)
 		}
-		params, err := paramsToMap(p)
-		if err != nil {
-			return manifest.Client{}, fmt.Errorf("client %q: %w", spec.ClientID, err)
+		client.Params = map[string]any{
+			"ibcRouter":         p.IBCRouter,
+			"initialHeight":     p.InitialHeight,
+			"initialTimestamp":  p.InitialTimestamp,
+			"initialStateRoot":  p.InitialStateRoot,
+			"initialValidators": p.InitialValidators,
+			"trustingPeriod":    p.TrustingPeriod,
+			"maxClockDrift":     p.MaxClockDrift,
 		}
-		client.Params = params
 	}
 	return client, nil
 }
@@ -476,20 +480,6 @@ func BesuQBFTParamsFromClient(client manifest.Client) (BesuQBFTParams, error) {
 		return BesuQBFTParams{}, fmt.Errorf("client %q params: %w", client.ClientID, err)
 	}
 	return p, nil
-}
-
-// paramsToMap round-trips a tagged struct through JSON into the manifest's
-// map form.
-func paramsToMap(v any) (map[string]any, error) {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return nil, fmt.Errorf("encode params: %w", err)
-	}
-	var out map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, fmt.Errorf("decode params: %w", err)
-	}
-	return out, nil
 }
 
 // clientConflicts reports the identity fields on which spec disagrees with
