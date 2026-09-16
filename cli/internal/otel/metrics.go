@@ -15,12 +15,11 @@ import (
 
 // Metric attribute keys.
 const (
-	AttrOp            attribute.Key = "operation"
-	AttrType          attribute.Key = "type"
-	AttrResult        attribute.Key = "result"
-	AttrCode          attribute.Key = "code"
-	AttrFailureReason attribute.Key = "failure_reason"
-	AttrCaller        attribute.Key = "caller"
+	AttrOp     attribute.Key = "operation"
+	AttrType   attribute.Key = "type"
+	AttrResult attribute.Key = "result"
+	AttrCode   attribute.Key = "code"
+	AttrCaller attribute.Key = "caller"
 
 	AttrAttestor attribute.Key = "attestor"
 	AttrSigner   attribute.Key = "signer"
