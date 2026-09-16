@@ -14,8 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -55,19 +57,74 @@ func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [3
 	}, accountNodes, slot, value
 }
 
+type ethProofAPI struct {
+	account common.Address
+	keys    []string
+	block   string
+	result  *gethclient.AccountResult
+}
+
+func (a *ethProofAPI) GetProof(
+	_ context.Context,
+	account common.Address,
+	keys []string,
+	blockNr string,
+) (map[string]any, error) {
+	a.account = account
+	a.keys = keys
+	a.block = blockNr
+
+	return accountResultJSON(a.result), nil
+}
+
+func accountResultJSON(r *gethclient.AccountResult) map[string]any {
+	storage := make([]map[string]any, len(r.StorageProof))
+	for i, proof := range r.StorageProof {
+		storage[i] = map[string]any{
+			"key":   proof.Key,
+			"value": (*hexutil.Big)(proof.Value),
+			"proof": proof.Proof,
+		}
+	}
+
+	return map[string]any{
+		"address":      r.Address,
+		"accountProof": r.AccountProof,
+		"storageHash":  r.StorageHash,
+		"storageProof": storage,
+	}
+}
+
+func clientWithProofAPI(t *testing.T, api *ethProofAPI) *Client {
+	t.Helper()
+
+	srv := rpc.NewServer()
+	t.Cleanup(srv.Stop)
+	require.NoError(t, srv.RegisterName("eth", api))
+
+	client, err := NewWithClient(chainIDEth, ethclient.NewClient(rpc.DialInProc(srv)), routerAddress)
+	require.NoError(t, err)
+
+	return client
+}
+
 func TestGetRouterProof(t *testing.T) {
 	ctx := context.Background()
 	result, accountNodes, slot, value := fixtureAccountResult(t)
 
-	t.Run("converts by key", func(t *testing.T) {
-		client, eth := newTestClient(t)
-		eth.EXPECT().
-			GetProof(ctx, common.HexToAddress(routerAddress), []string{common.Hash(slot).Hex()}, big.NewInt(114)).
-			Return(result, nil).
-			Once()
+	t.Run("requires RPC client", func(t *testing.T) {
+		client, _ := newTestClient(t)
+		_, err := client.GetRouterProof(ctx, 114, [][32]byte{slot})
+		require.ErrorContains(t, err, "eth_getProof")
+	})
 
-		proof, err := client.GetRouterProof(ctx, 114, [][32]byte{slot})
+	t.Run("converts by key", func(t *testing.T) {
+		api := &ethProofAPI{result: result}
+		proof, err := clientWithProofAPI(t, api).GetRouterProof(ctx, 114, [][32]byte{slot})
 		require.NoError(t, err)
+		assert.Equal(t, common.HexToAddress(routerAddress), api.account)
+		assert.Equal(t, []string{common.Hash(slot).Hex()}, api.keys)
+		assert.Equal(t, hexutil.EncodeUint64(114), api.block)
 		assert.Equal(t, [32]byte(result.StorageHash), proof.StorageRoot)
 		assert.Equal(t, accountNodes, proof.AccountProof)
 		require.Len(t, proof.StorageProofs, 1)
@@ -77,14 +134,12 @@ func TestGetRouterProof(t *testing.T) {
 	})
 
 	t.Run("no slots", func(t *testing.T) {
-		client, eth := newTestClient(t)
 		accountOnly := *result
 		accountOnly.StorageProof = nil
-		eth.EXPECT().GetProof(ctx, common.HexToAddress(routerAddress), []string{}, big.NewInt(114)).
-			Return(&accountOnly, nil).Once()
-
-		proof, err := client.GetRouterProof(ctx, 114, nil)
+		api := &ethProofAPI{result: &accountOnly}
+		proof, err := clientWithProofAPI(t, api).GetRouterProof(ctx, 114, nil)
 		require.NoError(t, err)
+		assert.Empty(t, api.keys)
 		assert.Empty(t, proof.StorageProofs)
 		assert.Equal(t, accountNodes, proof.AccountProof)
 	})

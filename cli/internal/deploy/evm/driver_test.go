@@ -112,9 +112,3 @@ func TestBesuQBFTArgs(t *testing.T) {
 		})
 	}
 }
-
-func TestBesuQBFTTrustedStateRequiresProofClient(t *testing.T) {
-	d := &Driver{chainID: big.NewInt(1)}
-	_, err := d.BesuQBFTTrustedState(context.Background(), "0x00000000000000000000000000000000000000cc", 1)
-	require.ErrorContains(t, err, "eth_getProof")
-}
