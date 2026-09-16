@@ -439,7 +439,9 @@ func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
 			}
 			height, timestamp, err := env.gen.LatestProvableHeight(context.Background())
 			if tc.expired {
-				require.ErrorIs(t, err, ErrClientExpired)
+				require.NoError(t, err)
+				assert.Equal(t, state.LatestHeight, height)
+				assert.Equal(t, time.Unix(int64(trusted.Timestamp), 0).UTC(), timestamp)
 				return
 			}
 			require.NoError(t, err)
@@ -520,4 +522,25 @@ func TestPacketProofsShareSlot(t *testing.T) {
 	require.Empty(t, second.AccountProofNodes)
 	require.Equal(t, first.ProofNodes, second.ProofNodes)
 	require.Equal(t, first.ConsensusStatePreimage, second.ConsensusStatePreimage)
+}
+
+func TestExpiredClientStoredTargets(t *testing.T) {
+	for _, target := range []uint64{112, 113, 114} {
+		t.Run(fmt.Sprint(target), func(t *testing.T) {
+			env := newFixtureEnv(t)
+			env.setAnchor(t, 112, env.fixture.InitialConsensusState())
+			env.host.clientState.LatestHeight = 113
+			env.counterparty.sealed[113] = consensusHeader(113, env.fixture.InitialConsensusState())
+			env.host.hashes[113] = env.host.hashes[112]
+			env.counterparty.sealed[114] = consensusHeader(114, env.fixture.InitialConsensusState())
+			env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(env.fixture.InitialTrustedTimestamp+env.fixture.TrustingPeriod), 0)}
+			proof, err := env.gen.StateProof(t.Context(), target)
+			if target == 114 {
+				require.ErrorIs(t, err, ErrClientExpired)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Empty(t, proof)
+		})
+	}
 }

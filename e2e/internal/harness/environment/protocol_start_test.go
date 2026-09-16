@@ -243,7 +243,7 @@ func TestPreparedClientsRejectExistingSignerReuseBeforeDeployment(t *testing.T) 
 	require.NoError(t, err)
 	spec := Spec{Connections: []ConnectionSpec{{
 		ID: "connection-ab",
-		A:  ExistingClient{ID: "existing", IBCInstance: "ibc-a"},
+		A:  ExistingClient{Kind: ClientKindAttestation, ID: "existing", IBCInstance: "ibc-a"},
 		B: NewClient{
 			IBCInstance: "ibc-b", Attestors: []AttestorSpec{{ID: "new", Authority: "new-signer"}},
 		},
@@ -291,7 +291,7 @@ func TestClientIDUsesStableConnectionEnd(t *testing.T) {
 	}))
 	require.NotEqual(t, id, clientID("connection-ab", "B", client))
 	require.NotEqual(t, id, clientID("other", "A", client))
-	require.Equal(t, "existing", clientID("connection-ab", "A", ExistingClient{ID: "existing"}))
+	require.Equal(t, "existing", clientID("connection-ab", "A", ExistingClient{Kind: ClientKindAttestation, ID: "existing"}))
 }
 
 func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {
@@ -351,7 +351,7 @@ func mixedProtocolSpec() Spec {
 				IBCInstance: "ibc-a", Authority: "client-owner", MinRequiredSignatures: 1,
 				Attestors: []AttestorSpec{{ID: "attestor-a", Authority: "attestor-signer"}},
 			},
-			B: ExistingClient{IBCInstance: "ibc-b", ID: "existing-client-b"},
+			B: ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-b", ID: "existing-client-b"},
 		}},
 	}
 }

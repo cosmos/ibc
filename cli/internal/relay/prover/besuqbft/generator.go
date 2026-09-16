@@ -81,7 +81,7 @@ func New(host, counterparty chain, clientID string) *Generator {
 // tracked router is counterparty's configured router.
 func ResolveGenerator(
 	ctx context.Context,
-	self, counterparty config.ClientEnd,
+	self config.ClientEnd,
 	counterpartyRouter string,
 	host, counterpartyChain *evm.Client,
 ) (*Generator, error) {
@@ -111,7 +111,7 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 	}
 
 	if _, err := g.preimage(ctx, state.LatestHeight); err != nil {
-		return fmt.Errorf("client %q: warming trusted consensus state: %w", g.clientID, err)
+		return fmt.Errorf("client %q: verifying trusted consensus state: %w", g.clientID, err)
 	}
 
 	return nil
@@ -121,6 +121,7 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 // every QBFT block is final, so this is the chain head unless
 // its timestamp exceeds the host chain's time plus the client's clock drift
 // allowance, in which case it steps back to the newest admissible header.
+// An expired client can still prove packets at its latest trusted height.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
@@ -137,7 +138,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
 	}
 	if expiredErr := checkTrustingPeriod(state, trusted, hostHead.Timestamp); expiredErr != nil {
-		return 0, time.Time{}, expiredErr
+		return state.LatestHeight, time.Unix(int64(trusted.Timestamp), 0).UTC(), nil
 	}
 
 	head, err := g.counterparty.GetBlockHeader(ctx, v2.LatestBlock)
@@ -193,6 +194,27 @@ func (g *Generator) StateProof(ctx context.Context, target uint64) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
+	targetHeader, err := g.header(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	if target <= state.LatestHeight {
+		stored, err := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, target)
+		switch {
+		case err == nil:
+			hash, err := consensusOf(targetHeader).Hash()
+			if err != nil {
+				return nil, err
+			}
+			if hash != common.Hash(stored) {
+				return nil, fmt.Errorf("%w: height %d stores %s, counterparty state hashes to %s",
+					ErrConflictingConsensusState, target, common.Hash(stored), hash)
+			}
+			return nil, nil
+		case !errors.Is(err, evm.ErrConsensusStateNotFound):
+			return nil, err
+		}
+	}
 	trusted, err := g.preimage(ctx, state.LatestHeight)
 	if err != nil {
 		return nil, err
@@ -204,17 +226,9 @@ func (g *Generator) StateProof(ctx context.Context, target uint64) ([]byte, erro
 	if trustErr := checkTrustingPeriod(state, trusted, hostHead.Timestamp); trustErr != nil {
 		return nil, trustErr
 	}
-	targetHeader, err := g.header(ctx, target)
-	if err != nil {
-		return nil, err
-	}
 	maxTimestamp := hostHead.Timestamp.Add(time.Duration(state.MaxClockDrift) * time.Second)
 	if time.Unix(int64(targetHeader.Timestamp), 0).After(maxTimestamp) {
 		return nil, fmt.Errorf("target height %d exceeds host clock drift", target)
-	}
-
-	if target <= state.LatestHeight {
-		return g.updateAtOrBelowTrusted(ctx, state.LatestHeight, trusted, targetHeader)
 	}
 
 	signers, err := targetHeader.Signers()
@@ -253,59 +267,6 @@ func (g *Generator) PacketProofs(
 		return nil, err
 	}
 	return packetProofs(snap, kind, packets, indices)
-}
-
-// updateAtOrBelowTrusted handles a target the client may already store: no
-// update when the stored hash matches, an error when it conflicts, and a
-// single backfill update from the trusted height when nothing is stored.
-func (g *Generator) updateAtOrBelowTrusted(
-	ctx context.Context,
-	trustedHeight uint64,
-	trusted besu.ConsensusState,
-	header *besu.Header,
-) ([]byte, error) {
-	target := header.Height
-	var err error
-
-	var stored [32]byte
-	if target == trustedHeight {
-		stored, err = trusted.Hash()
-	} else {
-		stored, err = g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, target)
-	}
-
-	switch {
-	case err == nil:
-		hash, hashErr := consensusOf(header).Hash()
-		if hashErr != nil {
-			return nil, hashErr
-		}
-
-		if hash != common.Hash(stored) {
-			return nil, fmt.Errorf("%w: height %d stores %s, counterparty state hashes to %s",
-				ErrConflictingConsensusState, target, common.Hash(stored), hash)
-		}
-
-		return nil, nil
-	case !errors.Is(err, evm.ErrConsensusStateNotFound):
-		return nil, err
-	}
-
-	signers, err := header.Signers()
-	if err != nil {
-		return nil, fmt.Errorf("header %d: %w", target, err)
-	}
-
-	if checkErr := besu.CheckUpdate(header, signers, trusted); checkErr != nil {
-		return nil, fmt.Errorf("backfilling height %d from trusted height %d: %w", target, trustedHeight, checkErr)
-	}
-
-	update, err := besu.EncodeUpdateClient(header.RLP, trustedHeight, trusted)
-	if err != nil {
-		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
-	}
-
-	return update, nil
 }
 
 func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, []int, error) {

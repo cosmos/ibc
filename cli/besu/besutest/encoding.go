@@ -27,7 +27,7 @@ type MembershipProof struct {
 	ProofNodes             [][]byte
 }
 
-// DecodeProofNodes reverses besu.EncodeProofNodes.
+// DecodeProofNodes decodes the fixture ABI encoding of bytes[].
 func DecodeProofNodes(data []byte) ([][]byte, error) {
 	var decoded struct {
 		Nodes [][]byte

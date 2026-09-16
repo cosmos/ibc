@@ -10,18 +10,6 @@ import (
 
 var messageBindings = besumsgs.NewBindings()
 
-// EncodeProofNodes is abi.encode(bytes[]) over ordered RLP trie nodes, the
-// shape the captured fixtures store proofs in.
-func EncodeProofNodes(nodes [][]byte) ([]byte, error) {
-	data, err := messageBindings.TryPackProofNodes(nodes)
-	if err != nil {
-		return nil, fmt.Errorf("encode proof nodes: %w", err)
-	}
-
-	// Wire payloads contain ABI arguments without the schema function selector.
-	return data[4:], nil
-}
-
 // EncodeUpdateClient builds the updateClient payload: the raw header, the
 // trusted height (revision 0) and the preimage of the consensus state trusted
 // at that height.

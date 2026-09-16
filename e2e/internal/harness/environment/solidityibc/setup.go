@@ -479,7 +479,7 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 		return Client{}, registerErr
 	}
 
-	client, err := s.verifyClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID)
+	client, err := s.verifyClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID, "attestation")
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC verify deployed Client %q: %w", config.ID, err)
 	}
@@ -577,7 +577,7 @@ func (p *PreparedBesuQBFTClient) Deploy(ctx context.Context) (Client, error) {
 		return Client{}, registerErr
 	}
 
-	client, err := s.verifyBesuQBFTClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID)
+	client, err := s.verifyClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID, "besu-qbft")
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC verify deployed Besu QBFT Client %q: %w", config.ID, err)
 	}
@@ -635,80 +635,64 @@ func (s *Setup) verifyClientVacant(ctx context.Context, instance Instance, clien
 
 // AttachClient discovers the light-client address from the router, verifies
 // the reciprocal counterparty ID and EVM empty Merkle prefix, and confirms the
-// registered contract exposes a valid attestation set.
+// registered contract exposes valid state for the declared kind.
 func (s *Setup) AttachClient(
 	ctx context.Context,
 	router common.Address,
-	clientID string,
-	counterpartyClientID string,
+	clientID, counterpartyClientID, kind string,
 ) (Client, error) {
 	instance, err := s.AttachInstance(ctx, router)
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 	}
-	return s.verifyClient(ctx, instance, clientID, common.Address{}, counterpartyClientID)
+	return s.verifyClient(ctx, instance, clientID, common.Address{}, counterpartyClientID, kind)
 }
 
-// verifyClient checks an attestation Client's registration and attestation set.
+// verifyClient checks registration and the declared light client's state.
 func (s *Setup) verifyClient(
 	ctx context.Context,
 	instance Instance,
 	clientID string,
 	expectedAddress common.Address,
-	counterpartyClientID string,
+	counterpartyClientID, kind string,
 ) (Client, error) {
 	registered, err := s.verifyClientRegistration(ctx, instance, clientID, expectedAddress, counterpartyClientID)
 	if err != nil {
 		return Client{}, err
 	}
-
-	lightClient, err := attestation.NewContract(registered, s.backend)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind attestation contract: %w", clientID, err)
+	client := Client{ID: clientID, Address: registered, CounterpartyClientID: counterpartyClientID}
+	switch kind {
+	case "attestation":
+		lightClient, err := attestation.NewContract(registered, s.backend)
+		if err != nil {
+			return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind attestation contract: %w", clientID, err)
+		}
+		set, err := lightClient.GetAttestationSet(&bind.CallOpts{Context: ctx})
+		if err != nil {
+			return Client{}, fmt.Errorf("solidity IBC attach Client %q: query attestation set: %w", clientID, err)
+		}
+		if len(set.AttestorAddresses) == 0 || set.MinRequiredSigs == 0 ||
+			int(set.MinRequiredSigs) > len(set.AttestorAddresses) {
+			return Client{}, fmt.Errorf("solidity IBC attach Client %q: invalid attestation set", clientID)
+		}
+		client.Attestors = slices.Clone(set.AttestorAddresses)
+		client.MinRequiredSignatures = set.MinRequiredSigs
+	case "besu-qbft":
+		lightClient, err := besuqbft.NewContractCaller(registered, s.backend)
+		if err != nil {
+			return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind besu qbft contract: %w", clientID, err)
+		}
+		raw, err := lightClient.GetClientState(&bind.CallOpts{Context: ctx})
+		if err != nil {
+			return Client{}, fmt.Errorf("solidity IBC attach Client %q: query client state: %w", clientID, err)
+		}
+		if _, err := besu.DecodeClientState(raw); err != nil {
+			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
+		}
+	default:
+		return Client{}, fmt.Errorf("unsupported client kind %q", kind)
 	}
-	set, err := lightClient.GetAttestationSet(&bind.CallOpts{Context: ctx})
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query attestation set: %w", clientID, err)
-	}
-	if len(set.AttestorAddresses) == 0 || set.MinRequiredSigs == 0 ||
-		int(set.MinRequiredSigs) > len(set.AttestorAddresses) {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: invalid attestation set", clientID)
-	}
-	return Client{
-		ID:                    clientID,
-		Address:               registered,
-		CounterpartyClientID:  counterpartyClientID,
-		Attestors:             slices.Clone(set.AttestorAddresses),
-		MinRequiredSignatures: set.MinRequiredSigs,
-	}, nil
-}
-
-// verifyBesuQBFTClient checks a Besu QBFT Client's registration and that the
-// registered contract exposes a decodable Besu client state.
-func (s *Setup) verifyBesuQBFTClient(
-	ctx context.Context,
-	instance Instance,
-	clientID string,
-	expectedAddress common.Address,
-	counterpartyClientID string,
-) (Client, error) {
-	registered, err := s.verifyClientRegistration(ctx, instance, clientID, expectedAddress, counterpartyClientID)
-	if err != nil {
-		return Client{}, err
-	}
-
-	lightClient, err := besuqbft.NewContractCaller(registered, s.backend)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind besu qbft contract: %w", clientID, err)
-	}
-	raw, err := lightClient.GetClientState(&bind.CallOpts{Context: ctx})
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: query client state: %w", clientID, err)
-	}
-	if _, err := besu.DecodeClientState(raw); err != nil {
-		return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
-	}
-	return Client{ID: clientID, Address: registered, CounterpartyClientID: counterpartyClientID}, nil
+	return client, nil
 }
 
 // verifyClientRegistration proves clientID resolves to a deployed contract at

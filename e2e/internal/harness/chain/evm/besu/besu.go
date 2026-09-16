@@ -230,7 +230,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			"--min-gas-price=0",
 			"--rpc-http-enabled",
 			"--rpc-http-host=0.0.0.0",
-			"--rpc-http-api=ETH,NET,WEB3,QBFT",
+			"--rpc-http-api=ETH,NET,WEB3",
 			"--rpc-ws-enabled",
 			"--rpc-ws-host=0.0.0.0",
 			"--rpc-ws-api=ETH,NET,WEB3",

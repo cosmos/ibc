@@ -14,25 +14,6 @@ import (
 	"github.com/cosmos/ibc/cli/besu/besutest"
 )
 
-func TestProofNodesRoundTrip(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-
-	nodes, err := fixture.Membership.AccountProofNodes()
-	require.NoError(t, err)
-	require.NotEmpty(t, nodes)
-
-	encoded, err := besu.EncodeProofNodes(nodes)
-	require.NoError(t, err)
-	assert.Equal(t, []byte(fixture.Membership.AccountProof), encoded)
-
-	empty, err := besu.EncodeProofNodes(nil)
-	require.NoError(t, err)
-
-	decoded, err := besutest.DecodeProofNodes(empty)
-	require.NoError(t, err)
-	assert.Empty(t, decoded)
-}
-
 func TestUpdateClientRoundTrip(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	update := fixture.NonAdjacentUpdate

@@ -163,7 +163,7 @@ func addGenerator(
 		}
 
 		gen, err := besuqbft.ResolveGenerator(
-			ctx, client, clientCounterparty, counterpartyChain.EVM.ICS26Router, host, counterparty,
+			ctx, client, counterpartyChain.EVM.ICS26Router, host, counterparty,
 		)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)

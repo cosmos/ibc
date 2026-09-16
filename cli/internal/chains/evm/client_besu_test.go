@@ -123,7 +123,6 @@ func TestGetRouterProof(t *testing.T) {
 		assert.Equal(t, common.HexToAddress(routerAddress), api.account)
 		assert.Equal(t, []string{common.Hash(slot).Hex()}, api.keys)
 		assert.Equal(t, hexutil.EncodeUint64(114), api.block)
-		assert.Equal(t, [32]byte(result.StorageHash), proof.StorageRoot)
 		assert.Equal(t, accountNodes, proof.AccountProof)
 		require.Len(t, proof.StorageProofs, 1)
 		assert.Equal(t, slot, proof.StorageProofs[0].Key)

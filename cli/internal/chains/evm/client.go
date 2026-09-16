@@ -70,10 +70,9 @@ type Client struct {
 var ErrConsensusStateNotFound = errors.New("consensus state not found")
 
 // AccountProof is an eth_getProof result for one account at one height: the
-// account's storage root, the account proof nodes against the block's state
-// root and one storage proof per requested slot, in request order.
+// account proof nodes against the block's state root and one storage proof
+// per requested slot, in request order.
 type AccountProof struct {
-	StorageRoot   [32]byte
 	AccountProof  [][]byte
 	StorageProofs []StorageProof
 }
@@ -402,7 +401,6 @@ func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) 
 	}
 
 	return AccountProof{
-		StorageRoot:   result.StorageHash,
 		AccountProof:  decodeProofNodes(result.AccountProof),
 		StorageProofs: proofs,
 	}, nil

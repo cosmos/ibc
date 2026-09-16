@@ -25,12 +25,12 @@ For every height it has accepted, the client trusts one consensus state: the hea
 ```solidity
 struct ConsensusState {
     uint64 timestamp;
-    bytes32 storageRoot;
+    bytes32 stateRoot;
     address[] validators;
 }
 ```
 
-The contract stores only the hash of each consensus state. Whoever submits an update or a proof must send the full consensus state it relies on, and the contract checks that it hashes to what it stored. The relayer caches the consensus states it has verified or submitted and rebuilds missing ones from the counterparty header alone, so rebuilding never depends on state the counterparty node may have pruned.
+The contract stores only the hash of each consensus state. Whoever submits an update or a proof must send the full consensus state it relies on, and the contract checks that it hashes to what it stored. The relayer rebuilds consensus states from the counterparty header alone, so rebuilding never depends on state the counterparty node may have pruned.
 
 <Warning>
 Packet proofs are the only reads that need historical state. Besu's default Bonsai storage answers `eth_getProof` only for roughly the last 512 blocks, so packets whose proof height has fallen out of that window fail with an error naming the height until the relayer picks a newer height. Run the counterparty node with a larger `--bonsai-historical-block-limit`, or with archive storage, if relaying may lag that far.
@@ -45,7 +45,7 @@ Besu validators seal a block by signing a digest of its header, with the seals t
 - **Trusted overlap.** More than one third of the validators trusted at the trusted height must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers.
 - **Quorum.** At least two thirds of the header's own validator set must be among the signers, which is the same threshold Besu needs to produce the block.
 
-The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. A trusted state that has expired can no longer anchor an update, and the client has to be deployed again.
+The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. A trusted state that has expired can no longer anchor an update, but stored consensus states remain usable for packet proofs. Advancing an expired client requires redeployment.
 
 Heights need not be consecutive. Every QBFT block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state. If validator turnover prevents a direct update, proof generation fails; automatic catch-up through intermediate updates is not supported.
 
@@ -82,6 +82,6 @@ clientA:
   type: "besu-qbft"
 ```
 
-The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and warms the consensus state it trusts. The state proof is a single update to the target height, empty when the client already stores it. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved.
+The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and verifies the consensus state it trusts. The state proof is a single update to the target height, empty when the client already stores it. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved.
 
 Misbehaviour handling is not part of this client: a conflicting consensus state for a height the client already stores is rejected, and the client keeps working.

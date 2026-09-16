@@ -264,8 +264,10 @@ func newClientAuthority(spec ClientSpec) (IBCInstanceID, AuthorityID, bool) {
 	}
 }
 
-// ExistingClient identifies an already-created IBC Client by its protocol ID.
+// ExistingClient identifies an already-created IBC Client by its protocol ID
+// and explicit kind. Attestors are only valid for attestation clients.
 type ExistingClient struct {
+	Kind        ClientKind
 	IBCInstance IBCInstanceID
 	ID          string
 	Attestors   []AttestorSpec
@@ -353,6 +355,12 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		instance = declaration.IBCInstance
+		if declaration.Kind != ClientKindAttestation && declaration.Kind != ClientKindBesuQBFT {
+			return "", errorsf("IBC Client %q: unsupported kind %q", clientLabel(connectionID, end), declaration.Kind)
+		}
+		if declaration.Kind == ClientKindBesuQBFT && len(declaration.Attestors) != 0 {
+			return "", errorsf("IBC Client %q: besu-qbft does not use attestors", clientLabel(connectionID, end))
+		}
 		variantField = "id"
 		variantValue = declaration.ID
 	default:

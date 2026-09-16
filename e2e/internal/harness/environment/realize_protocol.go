@@ -447,6 +447,7 @@ func acquireIBCClient(
 	kind := ClientKindAttestation
 	switch client := declaration.(type) {
 	case ExistingClient:
+		kind = client.Kind
 		setup, setupErr := solidityIBCSetup(ctx, instance.chain)
 		if setupErr != nil {
 			return nil, setupErr
@@ -456,17 +457,20 @@ func acquireIBCClient(
 			common.HexToAddress(string(instance.locator)),
 			client.ID,
 			counterpartyID,
+			string(kind),
 		)
 		if err != nil {
 			return nil, err
 		}
-		if attestorErr := requireDeclaredAttestors(
-			label,
-			resolved.Attestors,
-			declaration.clientAttestors(),
-			runtime,
-		); attestorErr != nil {
-			return nil, attestorErr
+		if kind == ClientKindAttestation {
+			if attestorErr := requireDeclaredAttestors(
+				label,
+				resolved.Attestors,
+				declaration.clientAttestors(),
+				runtime,
+			); attestorErr != nil {
+				return nil, attestorErr
+			}
 		}
 	case NewClient, NewBesuQBFTClient:
 		_, authorityID, _ := newClientAuthority(declaration)
