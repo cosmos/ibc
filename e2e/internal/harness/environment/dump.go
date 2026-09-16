@@ -51,12 +51,12 @@ func init() {
 		return
 	}
 
-	if enabled {
-		dumpLogger("", "E2E_DUMP enabled", "dir", dumpDir)
-	}
-
 	dumpEnabled = enabled
 	dumpDir = dir
+
+	if enabled {
+		dumpLogger("").Info("E2E_DUMP enabled", "dir", dumpDir)
+	}
 }
 
 func setupDumpEnabled() (bool, string, error) {
