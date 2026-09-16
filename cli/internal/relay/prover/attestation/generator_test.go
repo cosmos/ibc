@@ -141,7 +141,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
+		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets, nil)
 		require.NoError(t, err)
 		require.Len(t, proofs, len(packets))
 		require.Equal(t, proofs[0], proofs[1], "the shared attestation blob is duplicated across every packet index")
@@ -152,7 +152,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		// attestor, so the generator here is given no attestors at all.
 		gen := New(nil, 2, nil, slog.Default())
 
-		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
+		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets, nil)
 		require.Error(t, err)
 	})
 }
@@ -230,6 +230,7 @@ func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(fmt.Sprintf("%v/%s", kind, tt.name), func(t *testing.T) {
 				chain := mocks.NewMockClient(t)
+				var acknowledgements []channeltypesv2.Acknowledgement
 				claims := make([]attestorevm.PacketCompact, len(packets))
 				for i, packet := range packets {
 					switch kind {
@@ -242,11 +243,9 @@ func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
 						claims[i].Path = crypto.Keccak256Hash(
 							hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence),
 						)
-						claims[i].Commitment = [32]byte{byte(i + 1)}
-						chain.EXPECT().
-							GetCommitment(mock.Anything, uint64(20), claims[i].Path).
-							Return(claims[i].Commitment, nil).
-							Once()
+						ack := channeltypesv2.NewAcknowledgement([]byte{byte(i + 1)})
+						acknowledgements = append(acknowledgements, ack)
+						claims[i].Commitment = [32]byte(channeltypesv2.CommitAcknowledgement(ack))
 					case v2.ProofKindReceiptAbsence:
 						claims[i].Path = crypto.Keccak256Hash(
 							hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence),
@@ -261,7 +260,7 @@ func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
 					signedPacketAttestor(t, "a2", tt.height, claims),
 				}, 2, chain, slog.Default())
 
-				proofs, err := gen.PacketProofs(context.Background(), 20, kind, packets)
+				proofs, err := gen.PacketProofs(context.Background(), 20, kind, packets, acknowledgements)
 				if !tt.wantErr {
 					require.NoError(t, err)
 					require.Len(t, proofs, len(packets))
@@ -280,56 +279,68 @@ func TestGeneratorStateTimestampMismatch(t *testing.T) {
 		GetBlockHeader(mock.Anything, uint64(10)).
 		Return(v2.BlockHeader{Timestamp: someBlockTime.Add(time.Second)}, nil).
 		Once()
-	gen := New([]attestor.Attestor{signedStateAttestor(t, "a1", 10)}, 1, chain)
+	gen := New([]attestor.Attestor{signedStateAttestor(t, "a1", 10)}, 1, chain, slog.Default())
 
-	proof, err := gen.StateProof(context.Background(), 10)
+	payloads, err := gen.ClientUpdatePayloads(context.Background(), 10)
 	require.ErrorContains(t, err, "attested data does not match expected claim")
-	require.Nil(t, proof)
+	require.Nil(t, payloads)
 }
 
 func TestGeneratorExpectedClaimLookupFailure(t *testing.T) {
 	t.Run("stateHeader", func(t *testing.T) {
 		chain := mocks.NewMockClient(t)
 		chain.EXPECT().GetBlockHeader(mock.Anything, uint64(10)).Return(v2.BlockHeader{}, assert.AnError).Once()
-		gen := New(nil, 1, chain)
+		gen := New(nil, 1, chain, slog.Default())
 
-		proof, err := gen.StateProof(context.Background(), 10)
+		payloads, err := gen.ClientUpdatePayloads(context.Background(), 10)
 		require.ErrorIs(t, err, assert.AnError)
-		require.Nil(t, proof)
+		require.Nil(t, payloads)
 	})
+}
 
-	for _, tt := range []struct {
-		name string
-		err  error
+func TestGeneratorAcknowledgementProofs(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		acknowledgements []channeltypesv2.Acknowledgement
+		wantErr          bool
 	}{
-		{name: "ackLookupError", err: assert.AnError},
-		{name: "missingAck"},
+		{name: "multiple payloads", acknowledgements: []channeltypesv2.Acknowledgement{channeltypesv2.NewAcknowledgement([]byte("a"), []byte("b"))}},
+		{name: "universal error", acknowledgements: []channeltypesv2.Acknowledgement{channeltypesv2.NewAcknowledgement(channeltypesv2.ErrorAcknowledgement[:])}},
+		{name: "missing", wantErr: true},
+		{name: "too many", acknowledgements: []channeltypesv2.Acknowledgement{{}, {}}, wantErr: true},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			packet := channeltypesv2.Packet{
 				Sequence:          1,
-				SourceClient:      "src-0",
 				DestinationClient: "dst-0",
-				TimeoutTimestamp:  1000,
+				Payloads:          []channeltypesv2.Payload{{}, {}},
 			}
-			path := crypto.Keccak256Hash(hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence))
-			chain := mocks.NewMockClient(t)
-			chain.EXPECT().GetCommitment(mock.Anything, uint64(20), [32]byte(path)).Return([32]byte{}, tt.err).Once()
-			gen := New(nil, 1, chain)
-
+			var attestors []attestor.Attestor
+			if !tc.wantErr {
+				claim := attestorevm.PacketCompact{
+					Path: crypto.Keccak256Hash(
+						hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence),
+					),
+					Commitment: [32]byte(channeltypesv2.CommitAcknowledgement(tc.acknowledgements[0])),
+				}
+				attestors = []attestor.Attestor{signedPacketAttestor(t, "a1", 20, []attestorevm.PacketCompact{claim})}
+			}
+			// No chain client: acknowledgements must not require historical state reads.
+			gen := New(attestors, 1, nil, slog.Default())
 			proofs, err := gen.PacketProofs(
 				context.Background(),
 				20,
 				v2.ProofKindAcknowledgement,
 				[]channeltypesv2.Packet{packet},
+				tc.acknowledgements,
 			)
-			require.Error(t, err)
-			if tt.err != nil {
-				require.ErrorIs(t, err, tt.err)
+			if tc.wantErr {
+				require.ErrorContains(t, err, "acknowledgement count must match packet count")
+				require.Nil(t, proofs)
 			} else {
-				require.ErrorContains(t, err, "acknowledgement commitment not found")
+				require.NoError(t, err)
+				require.Len(t, proofs, 1)
 			}
-			require.Nil(t, proofs)
 		})
 	}
 }

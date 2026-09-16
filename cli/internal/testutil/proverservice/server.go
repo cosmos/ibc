@@ -184,7 +184,11 @@ func (h *handler) PacketProofs(
 	}
 
 	proofs, err := target.PacketProofs(
-		ctx, req.Msg.GetHeight(), kind, packetsFromProto(req.Msg.GetPackets()),
+		ctx,
+		req.Msg.GetHeight(),
+		kind,
+		packetsFromProto(req.Msg.GetPackets()),
+		acknowledgementsFromProto(req.Msg.GetAcknowledgements()),
 	)
 	if err != nil {
 		h.logger.Error("PacketProofs", "err", err)
@@ -244,5 +248,16 @@ func payloadsFromProto(payloads []*proverv2.Payload) []channeltypesv2.Payload {
 		}
 	}
 
+	return out
+}
+
+func acknowledgementsFromProto(acks []*proverv2.Acknowledgement) []channeltypesv2.Acknowledgement {
+	if len(acks) == 0 {
+		return nil
+	}
+	out := make([]channeltypesv2.Acknowledgement, len(acks))
+	for i, ack := range acks {
+		out[i] = channeltypesv2.Acknowledgement{AppAcknowledgements: ack.GetAppAcknowledgements()}
+	}
 	return out
 }
