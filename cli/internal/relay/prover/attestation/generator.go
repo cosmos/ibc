@@ -32,12 +32,15 @@ type Generator struct {
 }
 
 func New(
+	chainID, clientID string,
 	attestors []attestor.Attestor,
 	threshold int,
 	counterpartyChain chains.Client,
 	logger *slog.Logger,
 ) *Generator {
 	return &Generator{
+		chainID:           chainID,
+		clientID:          clientID,
 		attestors:         attestors,
 		threshold:         threshold,
 		counterpartyChain: counterpartyChain,
@@ -50,28 +53,26 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 }
 
 func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, error) {
-	round := g.newRound("state")
 	header, err := g.counterpartyChain.GetBlockHeader(ctx, height)
 	if err != nil {
-		return nil, round.fail(ctx, reasonExpectedClaimLookup, errors.Wrapf(err, "getting header at height %d", height))
+		return nil, errors.Wrapf(err, "getting header at height %d", height)
 	}
 
 	expectedData, err := attestorevm.EncodeStateAttestation(height, uint64(header.Timestamp.Unix()))
 	if err != nil {
-		return nil, round.fail(ctx, reasonInternal, errors.Wrap(err, "encoding expected state attestation"))
+		return nil, errors.Wrap(err, "encoding expected state attestation")
 	}
 
-	result, err := round.queryStateQuorum(ctx, height, expectedData)
+	result, err := g.queryStateQuorum(ctx, height, expectedData)
 	if err != nil {
-		return nil, round.fail(ctx, reasonQuorumNotMet, errors.Wrap(err, "querying state attestation quorum"))
+		return nil, errors.Wrap(err, "querying state attestation quorum")
 	}
 
 	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
-		return nil, round.fail(ctx, reasonInternal, errors.Wrap(err, "encoding state attestation proof"))
+		return nil, errors.Wrap(err, "encoding state attestation proof")
 	}
 
-	round.succeed(ctx)
 	return proof, nil
 }
 
@@ -82,15 +83,13 @@ func (g *Generator) PacketProofs(
 	packets []channeltypesv2.Packet,
 	acknowledgements []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
-	round := g.newRound(metricProofKind(kind))
-
 	commitmentType, err := commitmentTypeOf(kind)
 	if err != nil {
-		return nil, round.fail(ctx, reasonInternal, err)
+		return nil, err
 	}
 
 	if kind == v2.ProofKindAcknowledgement && len(acknowledgements) != len(packets) {
-		return nil, round.fail(ctx, reasonInternal, errors.New("acknowledgement count must match packet count"))
+		return nil, errors.New("acknowledgement count must match packet count")
 	}
 
 	encodedPackets := make([][]byte, len(packets))
@@ -99,11 +98,7 @@ func (g *Generator) PacketProofs(
 	for i, packet := range packets {
 		encoded, errEnc := ibc.EncodePacket(packet)
 		if errEnc != nil {
-			return nil, round.fail(
-				ctx,
-				reasonInternal,
-				errors.Wrapf(errEnc, "encoding packet sequence %d", packet.Sequence),
-			)
+			return nil, errors.Wrapf(errEnc, "encoding packet sequence %d", packet.Sequence)
 		}
 
 		encodedPackets[i] = encoded
@@ -114,28 +109,24 @@ func (g *Generator) PacketProofs(
 		}
 		compact, errExpected := expectedPacket(commitmentType, packet, ack)
 		if errExpected != nil {
-			return nil, round.fail(
-				ctx,
-				reasonExpectedClaimLookup,
-				errors.Wrapf(errExpected, "expected commitment for packet %d", i),
-			)
+			return nil, errors.Wrapf(errExpected, "expected commitment for packet %d", i)
 		}
 		expectedPackets[i] = compact
 	}
 
 	expectedData, err := attestorevm.EncodePacketAttestation(height, expectedPackets)
 	if err != nil {
-		return nil, round.fail(ctx, reasonInternal, errors.Wrap(err, "encoding expected packet attestation"))
+		return nil, errors.Wrap(err, "encoding expected packet attestation")
 	}
 
-	result, err := round.queryPacketQuorum(ctx, encodedPackets, height, commitmentType, expectedData)
+	result, err := g.queryPacketQuorum(ctx, encodedPackets, height, commitmentType, expectedData)
 	if err != nil {
-		return nil, round.fail(ctx, reasonQuorumNotMet, errors.Wrap(err, "querying packet attestation quorum"))
+		return nil, errors.Wrap(err, "querying packet attestation quorum")
 	}
 
 	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
-		return nil, round.fail(ctx, reasonInternal, errors.Wrap(err, "encoding packet attestation proof"))
+		return nil, errors.Wrap(err, "encoding packet attestation proof")
 	}
 
 	// The attestor returns one shared proof blob covering every packet in the
@@ -146,7 +137,6 @@ func (g *Generator) PacketProofs(
 		proofs[i] = proof
 	}
 
-	round.succeed(ctx)
 	return proofs, nil
 }
 

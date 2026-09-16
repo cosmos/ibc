@@ -53,31 +53,11 @@ Shared label: `{otel_scope_name="ibc.prover"}`
 
 `proof_kind`: `packet_commitment`, `acknowledgement`, `receipt_absence`, `unknown`.
 
-### Attestation aggregation metrics
+Attestation prover metric (`otel_scope_name="ibc.prover.attestation"`):
 
-Scope: `ibc.attestation`. Both counters use `chain_id`, `client_id`, `proof_kind`,
-`result` (`ok|error`), and `failure_reason` (`none` on success).
-The IDs identify the light client being updated. Proof kinds are `state`,
-`packet_commitment`, `acknowledgement`, `receipt_absence`, and `unknown` for invalid input.
-
-| Counter | Records | Failure reasons |
-| --- | --- | --- |
-| `aggregation_rounds_total` | One per completed StateProof/PacketProofs call | `quorum_not_met`, `expected_claim_lookup`, `internal`, `canceled` |
-| `aggregation_responses_total` | One per queried attestor; adds `attestor` label | `rpc_error`, `timeout`, `claim_mismatch`, `invalid_signature`, `duplicate_signer`, `canceled` |
-
-Responses count as successful when valid and unique, even if the round lacks quorum.
-The first valid response per signer in configured order is accepted; duplicates are excluded.
-Header lookup failures and invalid input (including missing acknowledgements) emit no responses. A caller deadline
-or cancellation marks a failed round `canceled`; an individual attestor deadline is `timeout`.
-LatestProvableHeight is excluded. Existing metrics cover latency.
-
-Exclusions by attestor:
-
-```promql
-sum by (chain_id, client_id, attestor, failure_reason) (
-  rate(aggregation_responses_total{result="error"}[5m])
-)
-```
+| Metric | Type | Labels | Notes |
+| --- | --- | --- | --- |
+| `attestation_data_matches_total` | counter | `chain_id`, `client_id`, `attestor`, `result` | Whether returned data matches the expected claim (`true|false`), before signature validation. RPC failures excluded. |
 
 ### Relayer metrics
 
