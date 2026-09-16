@@ -35,9 +35,7 @@ func ResolveGenerator(
 		return nil, errors.Errorf("no configured chain client for counterparty chain %q", counterparty.ChainID)
 	}
 
-	gen := New(matched, int(minRequiredSigs), counterpartyChain, logger)
-	gen.chainID, gen.clientID = self.ChainID, self.ClientID
-	return gen, nil
+	return New(self.ChainID, self.ClientID, matched, int(minRequiredSigs), counterpartyChain, logger), nil
 }
 
 // MatchAttestors resolves self's on-chain attestation set and returns the
