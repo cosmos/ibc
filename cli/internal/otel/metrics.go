@@ -18,6 +18,8 @@ const (
 	AttrOp     attribute.Key = "operation"
 	AttrType   attribute.Key = "type"
 	AttrResult attribute.Key = "result"
+	// AttrCode qualifies an error result with a protocol code where one exists.
+	AttrCode   attribute.Key = "code"
 	AttrCaller attribute.Key = "caller"
 
 	AttrAttestor attribute.Key = "attestor"
@@ -69,10 +71,6 @@ func UnitMilliseconds() metric.InstrumentOption {
 
 func UnitSeconds() metric.InstrumentOption {
 	return metric.WithUnit(unitSeconds)
-}
-
-func WithAttributes(attrs ...attribute.KeyValue) metric.MeasurementOption {
-	return metric.WithAttributes(attrs...)
 }
 
 func AttrResultError(err error) attribute.KeyValue {
