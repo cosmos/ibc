@@ -165,6 +165,33 @@ func TestClearerClear(t *testing.T) {
 		assert.Empty(t, chain.findCalls())
 	})
 
+	t.Run("aForeignSendIsResolvedWithoutARow", func(t *testing.T) {
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2)
+		chain.misrouteSequences(1)
+
+		db := watcherStore(t)
+		clearer := newTestClearer(chain, db)
+
+		result, err := clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		// the endpoint served the send, so declining to record it resolves it:
+		// carrying it would re-probe a packet no pass can ever relay
+		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1}, result)
+		assert.Equal(t, []uint64{2}, recorded(t, db))
+		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
+
+		probes, finds := len(chain.probeCalls()), len(chain.findCalls())
+
+		_, err = clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		// the watermark covers it, so the next pass neither probes nor looks it up
+		assert.Empty(t, chain.probeCalls()[probes:])
+		assert.Empty(t, chain.findCalls()[finds:])
+	})
+
 	t.Run("sequencesWeHoldAreSkippedInEveryState", func(t *testing.T) {
 		for _, status := range []store.RelayStatus{
 			store.RelayStatusPending,
@@ -408,6 +435,42 @@ func TestClearerClear(t *testing.T) {
 		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 	})
 
+	// a mixed pass probes a new range as well as the carried set, and the chain
+	// moves on in between. The carried sequence has to be weighed against the
+	// height it was read at, not the one a later chunk raised the pass to
+	t.Run("aHeightRaisedByANewRangeCannotResolveTheCarriedSet", func(t *testing.T) {
+		chain := newFakeChain(t)
+
+		// the new sequence is visible at the head the pass opens on, the carried
+		// one only from the height it was last seen live at
+		chain.mineBlocks(10)
+		chain.sendSequences(3)
+		chain.mineBlocks(10)
+		chain.sendSequences(1)
+		chain.pruneSequences(1)
+
+		db := watcherStore(t)
+		require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 2, store.UnresolvedDelta{
+			Add:    []uint64{1},
+			Height: 20,
+		}))
+
+		// the pass opens on a node at 10, where sequence 1 reads absent, and the
+		// chain has reached 30 by the time the probe refreshes its height
+		chain.serveHeads(10, 10, 30)
+
+		result, err := newTestClearer(chain, db).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		// resolving on the opening height would have forgotten the only record of
+		// a live packet the raised height was never read against
+		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1, Unresolved: 1}, result)
+		assert.Equal(t, []uint64{3}, recorded(t, db))
+		assert.Equal(t, store.ClearingState{LastProbed: 3, Unresolved: []uint64{1}}, clearingState(t, db))
+		assert.Equal(t, [][]uint64{{3}, {1}}, chain.probeCalls())
+		assert.Equal(t, []uint64{10, 30}, chain.probeHeights())
+	})
+
 	t.Run("anAbandonedSendIsRememberedButNotProbed", func(t *testing.T) {
 		chain := newFakeChain(t)
 		chain.sendSequences(1, 2)
@@ -469,6 +532,27 @@ func TestClearerClear(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, []uint64{7}, chain.probeHeights())
+	})
+
+	t.Run("aCommitmentSettledAboveTheProbeHeightReadsLive", func(t *testing.T) {
+		chain := newFakeChain(t)
+		chain.mineBlocks(5)
+		chain.sendSequences(1)
+		chain.mineBlocks(10)
+		chain.settleSequences(1)
+
+		// the pass reads at 5, where the ack that deleted the commitment at 15
+		// has not landed: deletion only counts from the height it happened at
+		chain.serveHeads(5, 5)
+
+		db := watcherStore(t)
+
+		result, err := newTestClearer(chain, db).Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []uint64{5}, chain.probeHeights())
+		assert.Equal(t, Result{Probed: 1, Outstanding: 1, Recovered: 1}, result)
+		assert.Equal(t, []uint64{1}, recorded(t, db))
 	})
 
 	t.Run("theHeightMovesUpWithTheChainBetweenChunks", func(t *testing.T) {

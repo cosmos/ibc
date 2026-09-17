@@ -208,6 +208,11 @@ func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
 // those whose commitment is still live, with the number probed and the height
 // the pass ended at. The reads stay at the head: a commitment written above the
 // finalized head reads absent there, and absent means settled.
+//
+// The height it returns is the one the carried set was read at, which is what
+// the store weighs a resolve against: resolving a sequence read absent at a
+// stale height on the strength of a height a later chunk raised would forget a
+// packet that is still live.
 func (c *Clearer) calcOutstanding(
 	ctx context.Context,
 	clientID string,
@@ -242,15 +247,17 @@ func (c *Clearer) calcOutstanding(
 		return nil
 	}
 
-	// todo: https://github.com/cosmos/ibc/pull/1456#discussion_r3972377804 
-	if len(unresolved) > 0 {
-		if err := probe(unresolved); err != nil {
+	for lo := from; lo <= latest; lo += probeChunk {
+		if err := probe(sequenceRange(lo, min(lo+probeChunk-1, latest))); err != nil {
 			return nil, 0, 0, err
 		}
 	}
 
-	for lo := from; lo <= latest; lo += probeChunk {
-		if err := probe(sequenceRange(lo, min(lo+probeChunk-1, latest))); err != nil {
+	// the carried set is probed last so that height cannot move above it: a
+	// resolve is only ever weighed against the height the sequence it resolves
+	// was actually read at
+	if len(unresolved) > 0 {
+		if err := probe(unresolved); err != nil {
 			return nil, 0, 0, err
 		}
 	}
@@ -309,9 +316,12 @@ func (c *Clearer) sends(
 
 		found := make(map[uint64]struct{}, len(events))
 
-		// todo: "Foreign sends stay unresolved"
-		// todo https://github.com/cosmos/ibc/pull/1454#discussion_r3972388543
 		for _, event := range events {
+			// the endpoint served this send, so it is resolved whatever we
+			// decide to do with it: the unresolved set is about logs no
+			// endpoint would serve, not about packets we declined to record
+			found[event.Packet.Sequence] = struct{}{}
+
 			// a send naming a counterparty we do not relay to is not ours to
 			// record, the same check the subscription path makes
 			route, configured := c.routes[event.Packet.SourceClient]
@@ -327,7 +337,6 @@ func (c *Clearer) sends(
 			}
 
 			rows = append(rows, packetRow(c.chainID, route.ChainID, event))
-			found[event.Packet.Sequence] = struct{}{}
 		}
 
 		// a send whose log the endpoint no longer serves costs one packet;

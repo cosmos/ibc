@@ -26,8 +26,12 @@ type fakeChain struct {
 	// so a test can hand the pass a head that moves backwards
 	headReads []uint64
 
-	settled   map[uint64]struct{}
+	// settled is the height each commitment was deleted at, so a read pinned
+	// below it still sees the commitment a real node would still serve
+	settled map[uint64]uint64
+
 	pruned    map[uint64]struct{}
+	misrouted map[uint64]struct{}
 	latestErr error
 	headErr   error
 	probeErr  error
@@ -54,10 +58,11 @@ func newFakeChain(t *testing.T) *fakeChain {
 	t.Helper()
 
 	return &fakeChain{
-		t:       t,
-		sentAt:  make(map[uint64]uint64),
-		settled: make(map[uint64]struct{}),
-		pruned:  make(map[uint64]struct{}),
+		t:         t,
+		sentAt:    make(map[uint64]uint64),
+		settled:   make(map[uint64]uint64),
+		pruned:    make(map[uint64]struct{}),
+		misrouted: make(map[uint64]struct{}),
 	}
 }
 
@@ -117,7 +122,7 @@ func (c *fakeChain) PacketCommitments(
 	var live []uint64
 
 	for _, sequence := range sequences {
-		if _, gone := c.settled[sequence]; c.sentBy(sequence, height) && !gone {
+		if c.sentBy(sequence, height) && !c.settledBy(sequence, height) {
 			live = append(live, sequence)
 		}
 	}
@@ -134,9 +139,17 @@ func (c *fakeChain) FindSendPackets(_ context.Context, _ string, sequences []uin
 	var events []v2.PacketEvent
 
 	for _, sequence := range sequences {
-		if _, gone := c.pruned[sequence]; c.sentSequences(sequence) && !gone {
-			events = append(events, sendPacketEvent(sequence))
+		if _, gone := c.pruned[sequence]; !c.sentSequences(sequence) || gone {
+			continue
 		}
+
+		if _, foreign := c.misrouted[sequence]; foreign {
+			events = append(events, foreignPacketEvent(sequence))
+
+			continue
+		}
+
+		events = append(events, sendPacketEvent(sequence))
 	}
 
 	return events, nil
@@ -209,13 +222,20 @@ func (c *fakeChain) sentSequences(sequence uint64) bool {
 	return ok
 }
 
-// settleSequences deletes the packet commitments, as an ack or a timeout does.
+func (c *fakeChain) settledBy(sequence, height uint64) bool {
+	at, ok := c.settled[sequence]
+
+	return ok && at <= height
+}
+
+// settleSequences deletes the packet commitments at the current head, as an ack
+// or a timeout does.
 func (c *fakeChain) settleSequences(sequences ...uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for _, sequence := range sequences {
-		c.settled[sequence] = struct{}{}
+		c.settled[sequence] = c.head
 	}
 }
 
@@ -226,6 +246,16 @@ func (c *fakeChain) pruneSequences(sequences ...uint64) {
 
 	for _, sequence := range sequences {
 		c.pruned[sequence] = struct{}{}
+	}
+}
+
+// misrouteSequences serves the sends naming a counterparty we do not relay to.
+func (c *fakeChain) misrouteSequences(sequences ...uint64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, sequence := range sequences {
+		c.misrouted[sequence] = struct{}{}
 	}
 }
 

@@ -232,7 +232,6 @@ func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (st
 	return stream{sub, events, cancel}, nil
 }
 
-// todo: "Core Retry Behavior Untested (max backoff, buffered events survive reconnect)"
 func (w *Watcher) run(ctx context.Context, eventStream stream) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -340,7 +339,7 @@ func (w *Watcher) run(ctx context.Context, eventStream stream) {
 			eventStream = newStream
 			resubscribeChan = nil
 
-			// todo: "backoff resets too early — Subscribe success resets delay before the replacement is healthy"
+			// future: consider gradual backoff decrease
 			backoff = w.cfg.MinBackoff
 
 			// it will either instantly triggerClear() or act as marker to triggerClear() as soon

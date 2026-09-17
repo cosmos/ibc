@@ -99,6 +99,15 @@ func sendPacketEvent(sequence uint64) v2.PacketEvent {
 	}
 }
 
+// foreignPacketEvent is a send off the configured route, which no connection
+// names a destination chain for.
+func foreignPacketEvent(sequence uint64) v2.PacketEvent {
+	event := sendPacketEvent(sequence)
+	event.Packet.DestinationClient = "unconfigured-0"
+
+	return event
+}
+
 func TestWatcherNew(t *testing.T) {
 	t.Run("defaultsClearIntervalWhenUnset", func(t *testing.T) {
 		// ARRANGE / ACT
