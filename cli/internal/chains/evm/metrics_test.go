@@ -189,6 +189,13 @@ func TestMeteredClient(t *testing.T) {
 				},
 				call: func(c ETHClient) error { _, _, err := c.TransactionByHash(ctx, hash); return err },
 			},
+			{
+				operation: "eth_getStorageAt",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().StorageAt(ctx, address, hash, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.StorageAt(ctx, address, hash, nil); return err },
+			},
 		} {
 			t.Run(tt.operation, func(t *testing.T) {
 				// ARRANGE

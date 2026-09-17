@@ -379,7 +379,7 @@ func (w *Watcher) clear(ctx context.Context) {
 			"recovered", result.Recovered,
 			"unresolved", result.Unresolved,
 			"abandoned", result.Abandoned,
-			"took", time.Since(started),
+			"elapsed", time.Since(started).String(),
 		)
 	}
 }
