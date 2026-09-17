@@ -202,13 +202,13 @@ func qbftMesh(chains []environment.ChainSpec) (environment.Spec, environment.Run
 	return spec, e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 }
 
-// qbftMeshClient never expires and tolerates a minute of clock drift between
-// the two dev chains.
+// qbftMeshClient trusts states for 14 days and tolerates a minute of clock drift.
 func qbftMeshClient(chain environment.ChainID) environment.NewBesuQBFTClient {
 	return environment.NewBesuQBFTClient{
-		IBCInstance:   fixtureInstanceID(chain),
-		Authority:     e2etest.ProtocolAuthorityID,
-		MaxClockDrift: 60,
+		IBCInstance:    fixtureInstanceID(chain),
+		Authority:      e2etest.ProtocolAuthorityID,
+		TrustingPeriod: 14 * 24 * 60 * 60,
+		MaxClockDrift:  60,
 	}
 }
 
@@ -231,14 +231,16 @@ func TestQBFTMesh(t *testing.T) {
 			{
 				ID: "conn-chain-a-chain-b",
 				A: environment.NewBesuQBFTClient{
-					IBCInstance:   "ibc-chain-a",
-					Authority:     e2etest.ProtocolAuthorityID,
-					MaxClockDrift: 60,
+					IBCInstance:    "ibc-chain-a",
+					Authority:      e2etest.ProtocolAuthorityID,
+					TrustingPeriod: 14 * 24 * 60 * 60,
+					MaxClockDrift:  60,
 				},
 				B: environment.NewBesuQBFTClient{
-					IBCInstance:   "ibc-chain-b",
-					Authority:     e2etest.ProtocolAuthorityID,
-					MaxClockDrift: 60,
+					IBCInstance:    "ibc-chain-b",
+					Authority:      e2etest.ProtocolAuthorityID,
+					TrustingPeriod: 14 * 24 * 60 * 60,
+					MaxClockDrift:  60,
 				},
 			},
 		},
