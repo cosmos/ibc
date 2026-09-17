@@ -16,14 +16,46 @@ import (
 
 func TestAutoRelay_PacketIsClearedOnRestart(t *testing.T) {
 	t.Parallel()
-	t.Skip("TODO")
 
-	// todo deploy stuff
-	// todo send packet1 -> OK
-	// todo disable relayer
-	// todo send packet2, on chain
-	// todo start relayer with clearOnStart=true
-	// todo packet2 should be delivered eventually
+	// ARRANGE
+	// Given attested setup
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	env := e2etest.Start(t, spec, runtime)
+
+	// Given signers
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+
+	// Given relayer deployment with clearing enabled
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	configMutator := func(cfg *ibccli.RelayerConfig) {
+		cfg.ClearOnStart = true
+		cfg.ClearInterval = 2 * time.Second
+	}
+
+	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, configMutator, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	ctx := t.Context()
+
+	// Given started relayer
+	relayer := e2etest.StartRelayer(t, driver, env)
+
+	// Given sample transfer sent and auto-relayed
+	transfer1 := mustSend(t, transferApp, big.NewInt(100_000))
+	mustDeliver(t, relayer, transfer1)
+
+	// ACT #1
+	require.NoError(t, relayer.Stop(ctx))
+
+	// ACT #2
+	// Send packet2 while the relayer is down so the packet is not auto-relayed.
+	transfer2 := mustSend(t, transferApp, big.NewInt(200_000))
+
+	// ACT #3
+	relayer = e2etest.StartRelayer(t, driver, env)
+
+	// ASSERT
+	mustDeliver(t, relayer, transfer2)
 }
 
 func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
@@ -55,21 +87,11 @@ func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
 	transferAppAB := e2etest.NewTransfer(t, env, deployment, sender, routeAB)
 	transferAppBA := e2etest.NewTransfer(t, env, deployment, sender, routeBA)
 
-	ctx := t.Context()
-
 	// Given 4 packets send BEFORE relayer was started
-	send := func(app *e2etest.Transfer, amount *big.Int) *e2etest.TransferSend {
-		transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: amount})
-		require.NoError(t, err)
-		require.NoError(t, transfer.VerifyEscrowed(ctx))
-
-		return transfer
-	}
-
-	t1 := send(transferAppAB, big.NewInt(100_000))
-	t2 := send(transferAppAB, big.NewInt(200_000))
-	t3 := send(transferAppBA, big.NewInt(300_000))
-	t4 := send(transferAppBA, big.NewInt(400_000))
+	t1 := mustSend(t, transferAppAB, big.NewInt(100_000))
+	t2 := mustSend(t, transferAppAB, big.NewInt(200_000))
+	t3 := mustSend(t, transferAppBA, big.NewInt(300_000))
+	t4 := mustSend(t, transferAppBA, big.NewInt(400_000))
 
 	// ACT start the relayer
 	// discover and relay all 4 packets without any websocket event.
@@ -77,16 +99,10 @@ func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
 
 	// ASSERT
 	// Every packet reaches SUCCEEDED and the destination balances reflect delivery.
-	assert := func(transfer *e2etest.TransferSend) {
-		_, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
-		require.NoError(t, err)
-		require.NoError(t, transfer.VerifyDelivered(ctx))
-	}
-
-	assert(t1)
-	assert(t2)
-	assert(t3)
-	assert(t4)
+	mustDeliver(t, relayer, t1)
+	mustDeliver(t, relayer, t2)
+	mustDeliver(t, relayer, t3)
+	mustDeliver(t, relayer, t4)
 }
 
 func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
@@ -138,6 +154,28 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+}
+
+func mustSend(t *testing.T, app *e2etest.Transfer, amount *big.Int) *e2etest.TransferSend {
+	t.Helper()
+
+	ctx := t.Context()
+
+	transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: amount})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
+
+	return transfer
+}
+
+func mustDeliver(t *testing.T, relayer *ibccli.Relayer, transfer *e2etest.TransferSend) {
+	t.Helper()
+
+	ctx := t.Context()
+
+	_, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 }
