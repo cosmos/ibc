@@ -122,7 +122,7 @@ For example, `signer: attestor-41001` selects the signer whose alias is `attesto
 |---|---|---|---|
 | `listenAddr` | `string` | `0.0.0.0:3000` | Address the gRPC server binds. It serves the relayer and attestor APIs together. |
 
-<!-- [config.go:L66](cli/internal/config/config.go#L66) -->
+<!-- [config.go:L82](cli/internal/config/config.go#L82) -->
 
 <!-- GEN:config:server END -->
 
@@ -139,7 +139,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `type` | `sqlite` \| `postgres` | `sqlite` | Database backend. |
 | `url` | `string` | `ibc.db` | File path for sqlite, connection string for postgres. `:memory:` is rejected. |
 
-<!-- [config.go:L71](cli/internal/config/config.go#L71) -->
+<!-- [config.go:L96](cli/internal/config/config.go#L96) -->
 
 <!-- GEN:config:db END -->
 
@@ -159,7 +159,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | optional | Address of the ICS26 router on the chain. |
 
-<!-- [config.go:L80](cli/internal/config/config.go#L80) -->
+<!-- [config.go:L117](cli/internal/config/config.go#L117) -->
 
 <!-- GEN:config:chains END -->
 
@@ -273,7 +273,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
+<!-- [config.go:L141](cli/internal/config/config.go#L141) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -296,7 +296,7 @@ attestors:
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port. |
 
-<!-- [config.go:L104](cli/internal/config/config.go#L104) -->
+<!-- [config.go:L141](cli/internal/config/config.go#L141) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -320,7 +320,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
+<!-- [config.go:L166](cli/internal/config/config.go#L166) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -345,11 +345,43 @@ signers:
 | `grpc` | `string` | **required** | Address for a remote signer. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
 
-<!-- [config.go:L129](cli/internal/config/config.go#L129) -->
+<!-- [config.go:L166](cli/internal/config/config.go#L166) -->
 
 <!-- GEN:config:signers:remote END -->
 
 The remote signer holds the key material and performs signing.
+
+## `logging`
+
+Choose the minimum log level with `logging.level`.
+
+<!-- GEN:config:logging START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `level` | `string` | `info` | A slog level name (debug, info, warn, error). Empty defaults to info. |
+| `json` | `bool` | optional | Emits logs as JSON instead of text. |
+
+<!-- [config.go:L88](cli/internal/config/config.go#L88) -->
+
+<!-- GEN:config:logging END -->
+
+## `observability`
+
+Enable metrics with `observability.metrics`. The `simple` backend serves Prometheus metrics directly; `otel` loads an OpenTelemetry configuration file.
+
+<!-- GEN:config:observability START -->
+
+| Key | Type | Default or required | Description |
+|---|---|---|---|
+| `metrics` | `bool` | `false` | Enables metric collection and export. |
+| `type` | `string` | `simple` | Selects simple Prometheus export or an OTEL configuration file. |
+| `simpleMetricsListenAddr` | `string` | `0.0.0.0:9090` | The Prometheus listener address in simple mode. |
+| `otelFile` | `string` | optional | The OTEL configuration file, overridden by OTEL_CONFIG_FILE. |
+
+<!-- [config.go:L102](cli/internal/config/config.go#L102) -->
+
+<!-- GEN:config:observability END -->
 
 ## Split the configuration by process
 

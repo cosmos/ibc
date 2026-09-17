@@ -43,10 +43,11 @@ const (
 // errorAcknowledgement is the universal error acknowledgement commitment.
 var errorAcknowledgement = sha256.Sum256([]byte("UNIVERSAL_ERROR_ACKNOWLEDGEMENT"))
 
-// ETHClient go-ethereum methods used by Client.
+// ETHClient go-ethereum methods used by Client and by the tx submitter.
 type ETHClient interface {
 	bind.ContractBackend
 
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
@@ -63,10 +64,21 @@ type Client struct {
 	logger        *slog.Logger
 }
 
-func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
-	eth, err := meteredEthClient(context.Background(), chainID, rpcURL)
+// Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
+func Dial(chainID, rpcURL string) (ETHClient, error) {
+	eth, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
+	}
+
+	return newMeteredClient(chainID, eth), nil
+}
+
+// New dials the chain.
+func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
+	eth, err := Dial(chainID, rpcURL)
+	if err != nil {
+		return nil, err
 	}
 
 	var ws ETHClient

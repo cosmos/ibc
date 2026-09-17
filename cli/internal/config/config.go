@@ -98,13 +98,16 @@ type DBConfig struct {
 	URL  string `yaml:"url"`
 }
 
-// Observability config for metrics and tracing.
-// note: in future we'll add `tracing: true` if needed.
+// Observability configures metric collection and export.
 type Observability struct {
-	Metrics                 bool   `yaml:"metrics"`
-	Type                    string `yaml:"type"`
+	// Metrics enables metric collection and export.
+	Metrics bool `yaml:"metrics"`
+	// Type selects simple Prometheus export or an OTEL configuration file.
+	Type string `yaml:"type"`
+	// SimpleMetricsListenAddr is the Prometheus listener address in simple mode.
 	SimpleMetricsListenAddr string `yaml:"simpleMetricsListenAddr"`
-	OtelFile                string `yaml:"otelFile"`
+	// OtelFile is the OTEL configuration file, overridden by OTEL_CONFIG_FILE.
+	OtelFile string `yaml:"otelFile"`
 }
 
 // Chains is the list of configured chains.
@@ -392,11 +395,6 @@ func (c Observability) Validate() error {
 	}
 
 	return nil
-}
-
-func (c Observability) Enabled() bool {
-	// might become more complex in the future
-	return c.Metrics
 }
 
 // ConfigFile resolves the OTEL configuration file. Supports loading from OTEL_CONFIG_FILE env.

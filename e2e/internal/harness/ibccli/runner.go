@@ -74,6 +74,10 @@ func (r *Driver) MigrateUp(ctx context.Context) error {
 	return nil
 }
 
+func (r *Driver) ConfigHome() string {
+	return r.configHome
+}
+
 func (r *Driver) configArgs() []string {
 	return []string{"--home", r.configHome, "--config", r.configName}
 }
