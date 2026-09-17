@@ -73,6 +73,8 @@ func TestResolveGenerator(t *testing.T) {
 
 		require.NoError(t, err, "address match is case-insensitive")
 		require.NotNil(t, gen)
+		require.Equal(t, conn.ClientA.ChainID, gen.chainID)
+		require.Equal(t, conn.ClientA.ClientID, gen.clientID)
 	})
 
 	t.Run("insufficientMatchingAttestorsErrors", func(t *testing.T) {
