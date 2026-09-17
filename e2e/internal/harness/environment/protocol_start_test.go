@@ -291,7 +291,11 @@ func TestClientIDUsesStableConnectionEnd(t *testing.T) {
 	}))
 	require.NotEqual(t, id, clientID("connection-ab", "B", client))
 	require.NotEqual(t, id, clientID("other", "A", client))
-	require.Equal(t, "existing", clientID("connection-ab", "A", ExistingClient{Kind: ClientKindAttestation, ID: "existing"}))
+	require.Equal(
+		t,
+		"existing",
+		clientID("connection-ab", "A", ExistingClient{Kind: ClientKindAttestation, ID: "existing"}),
+	)
 }
 
 func TestFailedAttestorStartRetainsPartialCleanup(t *testing.T) {

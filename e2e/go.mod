@@ -349,6 +349,8 @@ require (
 )
 
 replace (
+	// Match the CLI's Besu bindings from cosmos/ibc-contracts#1138.
+	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260917161050-aafbb70223e2
 	// Matches link: the prover service pulls in link's signer package, which
 	// needs this cometbft.
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336

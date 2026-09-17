@@ -13,7 +13,7 @@ import (
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box
-// binary. If Attestors is empty, one default local attestor per chain is used.
+// binary. An empty Attestors list runs without attestors.
 type RelayerConfig struct {
 	DBPath      string
 	SignerAlias string
@@ -24,7 +24,7 @@ type RelayerConfig struct {
 	// SignerRemoteKeyID is the opaque remote KMS key selector sent to GetKey
 	// and Sign. It is distinct from the signer alias and address.
 	SignerRemoteKeyID string
-	// SignerKeyFile backs the default local signer and default local attestors.
+	// SignerKeyFile backs the local transaction signer.
 	SignerKeyFile string
 	// FinalityOffset applies to local attestations and pipeline finality
 	// checks: heights up to "latest" minus the offset count as final. The dev
@@ -154,15 +154,9 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		})
 	}
 
-	if len(cfg.Attestors) == 0 {
-		for _, chain := range cfg.Chains {
-			addDefaultLocalAttestor(&file, processSigner, cfg.FinalityOffset, chain.ChainID)
-		}
-	} else {
-		for _, attestor := range cfg.Attestors {
-			if err := addAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
-				return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
-			}
+	for _, attestor := range cfg.Attestors {
+		if err := addAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
+			return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
 		}
 	}
 
@@ -212,9 +206,7 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) (cli
 }
 
 // addAttestor declares one explicitly-configured candidate attestor.
-// Local entries always bring their own key file, unlike the implicit
-// default (addDefaultLocalAttestor), so multiple local attestors don't
-// share a signing identity.
+// Local entries bring their own key file.
 func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
 	case RelayerAttestorRemote:
@@ -242,25 +234,6 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 	default:
 		return fmt.Errorf("unsupported attestor type %q", attestor.Type)
 	}
-}
-
-// addDefaultLocalAttestor declares the default local attestor for a chain,
-// backed by the relayer process's own signer.
-func addDefaultLocalAttestor(file *fileConfig, processSigner signerConfig, finalityOffset uint64, chainID string) {
-	name := localAttestorName(chainID)
-	signerAlias := name + "-signer"
-
-	signer := processSigner
-	signer.Alias = signerAlias
-	file.Signers = append(file.Signers, signer)
-	file.Attestors = append(file.Attestors, attestorFileConfig{
-		Name: name, ChainID: chainID, Type: RelayerAttestorLocal,
-		Signer: signerAlias, FinalityOffset: uint(finalityOffset),
-	})
-}
-
-func localAttestorName(chainID string) string {
-	return "local-attestor-" + chainID
 }
 
 const (

@@ -419,3 +419,12 @@ func TestExistingClientKind(t *testing.T) {
 	})
 	require.ErrorContains(t, err, "does not use attestors")
 }
+
+func TestBesuQBFTClientTrustingPeriod(t *testing.T) {
+	client := NewBesuQBFTClient{IBCInstance: "ibc-a", Authority: "signer", TrustingPeriod: 1}
+	_, err := validateClientSpec("connection", "A", client)
+	require.NoError(t, err)
+	client.TrustingPeriod = 0
+	_, err = validateClientSpec("connection", "A", client)
+	require.ErrorContains(t, err, "trusting period must be positive")
+}

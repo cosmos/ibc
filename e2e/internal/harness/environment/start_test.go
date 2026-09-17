@@ -67,11 +67,13 @@ func TestStartRejectsAttestorSignerReuseAcrossClientsBeforeAcquisition(t *testin
 		},
 		Connections: []ConnectionSpec{{
 			ID: "connection-ab",
-			A: ExistingClient{Kind: ClientKindAttestation,
+			A: ExistingClient{
+				Kind:        ClientKindAttestation,
 				IBCInstance: "ibc-a", ID: "existing-a",
 				Attestors: []AttestorSpec{{ID: "attestor-a", Authority: "signer-a"}},
 			},
-			B: ExistingClient{Kind: ClientKindAttestation,
+			B: ExistingClient{
+				Kind:        ClientKindAttestation,
 				IBCInstance: "ibc-b", ID: "existing-b",
 				Attestors: []AttestorSpec{{ID: "attestor-b", Authority: "signer-b"}},
 			},

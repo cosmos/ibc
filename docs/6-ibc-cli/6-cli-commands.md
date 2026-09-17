@@ -198,6 +198,8 @@ Deploy and register a light client tracking a counterparty chain.
 
 <!-- GEN:cli:cmd:deploy-client END -->
 
+For a new Besu QBFT client, configure the counterparty chain's `evm.ics26Router` with its deployed router address; no local counterparty manifest is required.
+
 ```bash
 ibc deploy client --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
 ```

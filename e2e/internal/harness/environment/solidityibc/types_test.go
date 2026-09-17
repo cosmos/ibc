@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBesuQBFTClientConfigValidators(t *testing.T) {
+func TestBesuQBFTClientConfigValidation(t *testing.T) {
 	validator := common.HexToAddress("0x01")
 	config := BesuQBFTClientConfig{
 		ID: "cli-test", CounterpartyClientID: "cli-other",
 		CounterpartyRouter: common.HexToAddress("0x02"),
-		InitialHeight:      1, InitialTimestamp: 1,
+		InitialHeight:      1, InitialTimestamp: 1, TrustingPeriod: 1,
 	}
 	for _, tc := range []struct {
 		name       string
@@ -36,4 +36,7 @@ func TestBesuQBFTClientConfigValidators(t *testing.T) {
 			}
 		})
 	}
+	config.InitialValidators = []common.Address{validator}
+	config.TrustingPeriod = 0
+	require.ErrorContains(t, config.validate(), "trusting period must be positive")
 }

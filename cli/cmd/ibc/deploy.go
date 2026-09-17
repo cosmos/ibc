@@ -303,7 +303,11 @@ func clientSpec(
 		}
 		spec.Params = params
 	case deploy.ClientTypeBesuQBFT:
-		params, err := besuQBFTParams(ctx, flags, counterpartyTarget, chainID, counterpartyChainID, clientID)
+		// newTarget already checked that the counterparty is a configured EVM chain.
+		counterparty, _ := cfg.Chain(counterpartyChainID)
+		params, err := besuQBFTParams(
+			ctx, counterparty.EVM.ICS26Router, flags, counterpartyTarget, chainID, counterpartyChainID, clientID,
+		)
 		if err != nil {
 			return deploy.ClientSpec{}, err
 		}
@@ -368,6 +372,7 @@ func attestationParams(
 // the counterparty at --height (default: head).
 func besuQBFTParams(
 	ctx context.Context,
+	counterpartyRouter string,
 	flags *pflag.FlagSet,
 	counterpartyTarget deploy.Target,
 	chainID, counterpartyChainID, clientID string,
@@ -411,18 +416,9 @@ func besuQBFTParams(
 			"counterparty chain %s cannot serve a besu-qbft trusted state", counterpartyChainID,
 		)
 	}
-	counterparty, err := manifest.Load(flagDeployManifestDir, counterpartyChainID)
-	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(
-			err,
-			"load manifest for counterparty chain %s",
-			counterpartyChainID,
-		)
-	}
-	if counterparty == nil || counterparty.Core.Router == "" {
+	if !common.IsHexAddress(counterpartyRouter) || common.HexToAddress(counterpartyRouter) == (common.Address{}) {
 		return deploy.BesuQBFTParams{}, errors.Errorf(
-			"no core deployment recorded for counterparty chain %s: run `ibc deploy core --chain %s` first",
-			counterpartyChainID, counterpartyChainID,
+			"counterparty chain %s needs a valid nonzero evm.ics26Router in config", counterpartyChainID,
 		)
 	}
 	height := flagDeployHeight
@@ -442,7 +438,7 @@ func besuQBFTParams(
 		)
 	}
 	return deploy.BesuQBFTParams{
-		IBCRouter:         counterparty.Core.Router,
+		IBCRouter:         counterpartyRouter,
 		InitialHeight:     state.Height,
 		InitialTimestamp:  state.Timestamp,
 		InitialStateRoot:  state.StateRoot,

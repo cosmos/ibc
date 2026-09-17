@@ -370,5 +370,5 @@ replace (
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )
 
-// Temporary: consume the Besu generators from the sibling contracts checkout.
-replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => ../../ibc-contracts/packages/go-abigen
+// Consume the Besu generators from cosmos/ibc-contracts#1138.
+replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260917161050-aafbb70223e2

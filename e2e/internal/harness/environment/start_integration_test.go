@@ -229,11 +229,13 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		},
 		Connections: []environment.ConnectionSpec{{
 			ID: "attached-connection",
-			A: environment.ExistingClient{Kind: environment.ClientKindAttestation,
+			A: environment.ExistingClient{
+				Kind:        environment.ClientKindAttestation,
 				IBCInstance: "attached-ibc-a", ID: createdConnection.A().ID(),
 				Attestors: []environment.AttestorSpec{{ID: "attached-attestor-a", Authority: signerA}},
 			},
-			B: environment.ExistingClient{Kind: environment.ClientKindAttestation,
+			B: environment.ExistingClient{
+				Kind:        environment.ClientKindAttestation,
 				IBCInstance: "attached-ibc-b", ID: createdConnection.B().ID(),
 				Attestors: []environment.AttestorSpec{{ID: "attached-attestor-b", Authority: signerB}},
 			},
@@ -272,7 +274,8 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		},
 		Connections: []environment.ConnectionSpec{{
 			ID: "created-connection",
-			A: environment.ExistingClient{Kind: environment.ClientKindAttestation,
+			A: environment.ExistingClient{
+				Kind:        environment.ClientKindAttestation,
 				IBCInstance: "created-ibc-a", ID: createdConnection.A().ID(),
 			},
 			B: environment.NewClient{

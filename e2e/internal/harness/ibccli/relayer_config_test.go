@@ -11,7 +11,14 @@ import (
 )
 
 func TestBuildRelayerConfigYAML(t *testing.T) {
-	file, err := buildRelayerFileConfig(testRelayerConfig())
+	cfg := testRelayerConfig()
+	for _, chain := range cfg.Chains {
+		cfg.Attestors = append(cfg.Attestors, RelayerAttestor{
+			Name: "local-attestor-" + chain.ChainID, Type: RelayerAttestorLocal,
+			ChainID: chain.ChainID, KeyFile: cfg.SignerKeyFile,
+		})
+	}
+	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
 	data, err := yaml.Marshal(file)
 	require.NoError(t, err)
@@ -120,43 +127,6 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	require.Equal(t, cfg.SignerAlias, file.Relayer.Connections[0].ClientB.Signer)
 }
 
-func TestRemoteSignerBacksDefaultLocalAttestors(t *testing.T) {
-	cfg := testRelayerConfig()
-	cfg.SignerType = RelayerSignerRemote
-	cfg.SignerKeyFile = ""
-	cfg.SignerGRPC = "kms:9090"
-	cfg.SignerRemoteKeyID = "relay-key"
-
-	file, err := buildRelayerFileConfig(cfg)
-	require.NoError(t, err)
-	require.Equal(t, []signerConfig{
-		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},
-		{
-			Alias: "local-attestor-1-signer", Type: RelayerSignerRemote,
-			GRPC: "kms:9090", RemoteKeyID: "relay-key",
-		},
-		{
-			Alias: "local-attestor-2-signer", Type: RelayerSignerRemote,
-			GRPC: "kms:9090", RemoteKeyID: "relay-key",
-		},
-	}, file.Signers)
-}
-
-func TestExplicitAttestorsSuppressDefaultLocalAttestors(t *testing.T) {
-	cfg := testRelayerConfig()
-	cfg.Attestors = []RelayerAttestor{{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"}}
-
-	file, err := buildRelayerFileConfig(cfg)
-	require.NoError(t, err)
-	// Explicit attestors suppress defaults for every chain, not just the ones referenced.
-	require.Equal(t, []attestorFileConfig{
-		{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
-	}, file.Attestors)
-	require.Equal(t, []signerConfig{
-		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
-	}, file.Signers)
-}
-
 func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name string
@@ -225,6 +195,10 @@ func TestClientTypesPerEnd(t *testing.T) {
 	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientB.Type)
 	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
+	require.Empty(t, file.Attestors)
+	require.Equal(t, []signerConfig{
+		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
+	}, file.Signers)
 
 	// ends may differ
 	cfg.Connections[0].B.ClientType = RelayerClientAttestation

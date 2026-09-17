@@ -267,7 +267,7 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
 }
 
-func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) {
+func TestBesuQBFTParamsBootstrap(t *testing.T) {
 	previousDir := flagDeployManifestDir
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
 	previousHeight := flagDeployHeight
@@ -278,18 +278,22 @@ func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) 
 		flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift
 		flagDeployHeight = previousHeight
 	})
-	counterparty := manifest.New("2", "evm")
-	counterparty.Core.Router = "0xrouter"
-	require.NoError(t, counterparty.Save(flagDeployManifestDir))
 	for _, tc := range []struct {
 		name       string
 		args       []string
 		wantPeriod uint64
+		router     string
 		wantErr    string
 	}{
 		{name: "omitted", wantErr: "--trusting-period is required for a new besu-qbft client"},
 		{name: "explicit zero", args: []string{"--trusting-period=0"}, wantErr: "--trusting-period must be positive"},
-		{name: "finite", args: []string{"--trusting-period=2h"}, wantPeriod: 7200},
+		{
+			name: "finite without manifest", args: []string{"--trusting-period=2h"}, wantPeriod: 7200,
+			router: "0x00000000000000000000000000000000000000bb",
+		},
+		{name: "missing router", args: []string{"--trusting-period=2h"}, router: "", wantErr: "evm.ics26Router"},
+		{name: "malformed router", args: []string{"--trusting-period=2h"}, router: "bad", wantErr: "evm.ics26Router"},
+		{name: "zero router", args: []string{"--trusting-period=2h"}, router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
@@ -297,7 +301,7 @@ func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) 
 			flags.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, time.Minute, "")
 			require.NoError(t, flags.Parse(tc.args))
 			source := &bootstrapTarget{}
-			params, err := besuQBFTParams(t.Context(), flags, source, "1", "2", "new-client")
+			params, err := besuQBFTParams(t.Context(), tc.router, flags, source, "1", "2", "new-client")
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -306,6 +310,7 @@ func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) 
 			require.NoError(t, err)
 			require.True(t, source.called)
 			require.Equal(t, tc.wantPeriod, params.TrustingPeriod)
+			require.Equal(t, tc.router, params.IBCRouter)
 			require.Equal(t, uint64(60), params.MaxClockDrift)
 			require.Equal(t, uint64(1), params.InitialHeight)
 		})
@@ -368,7 +373,7 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 
 	flags := newFlags()
 	require.NoError(t, flags.Parse([]string{"--trusting-period=2h"}))
-	_, err := besuQBFTParams(context.Background(), flags, &sourcelessTarget{}, "1", "2", "cli-new")
+	_, err := besuQBFTParams(context.Background(), "", flags, &sourcelessTarget{}, "1", "2", "cli-new")
 	require.ErrorContains(t, err, "cannot serve a besu-qbft trusted state")
 
 	for _, tc := range []struct {
@@ -391,7 +396,7 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := newFlags()
 			require.NoError(t, flags.Parse(tc.args))
-			params, err := besuQBFTParams(context.Background(), flags, nil, "1", "2", "cli-1-2")
+			params, err := besuQBFTParams(context.Background(), "", flags, nil, "1", "2", "cli-1-2")
 			if tc.wantParamErr != "" {
 				require.ErrorContains(t, err, tc.wantParamErr)
 				return
@@ -446,6 +451,7 @@ func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
 				require.ErrorContains(t, err, path)
 				_, err = besuQBFTParams(
 					t.Context(),
+					"",
 					pflag.NewFlagSet("test", pflag.ContinueOnError),
 					&sourcelessTarget{},
 					"1",
