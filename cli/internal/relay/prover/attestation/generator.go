@@ -64,12 +64,12 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, height uint64) ([]b
 		)
 	}
 
-	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
+	payload, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
 		return nil, errors.Wrap(err, "encoding state attestation proof")
 	}
 
-	return proof, nil
+	return payload, nil
 }
 
 func (g *Generator) PacketProofs(

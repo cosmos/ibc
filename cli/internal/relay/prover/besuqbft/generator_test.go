@@ -176,11 +176,11 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	env.expectInitialAnchor(t)
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	proof, err := env.prepareUpdate(ctx, update.Height)
+	payload, err := env.prepareUpdate(ctx, update.Height)
 	require.NoError(t, err)
-	require.NotEmpty(t, proof)
+	require.NotEmpty(t, payload)
 
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(proof)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
 	require.NoError(t, err)
 	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
 	assert.Equal(
@@ -229,9 +229,9 @@ func TestClientUpdatePayloadValidatorTurnoverWithSufficientOverlap(t *testing.T)
 	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[2:])
 	env.counterparty.sealed[12] = header
 
-	proof, err := env.prepareUpdate(t.Context(), 12)
+	payload, err := env.prepareUpdate(t.Context(), 12)
 	require.NoError(t, err)
-	update, err := besumsgs.NewBindings().UnpackUpdateClient(proof)
+	update, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
 	require.NoError(t, err)
 	require.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: uint64(10)}, update.TrustedHeight)
 	require.Equal(t, trusted, update.ConsensusStatePreimage)
@@ -244,9 +244,9 @@ func TestClientUpdatePayloadTargetAlreadyStored(t *testing.T) {
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	proof, err := env.prepareUpdate(t.Context(), update.Height)
+	payload, err := env.prepareUpdate(t.Context(), update.Height)
 	require.NoError(t, err)
-	assert.Nil(t, proof, "no update needed")
+	assert.Nil(t, payload, "no update needed")
 }
 
 func TestClientUpdatePayloadTargetConflicts(t *testing.T) {
@@ -270,11 +270,11 @@ func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 	env.host.hashes[update.Height] = hashResult{err: evm.ErrConsensusStateNotFound}
 
-	proof, err := env.prepareUpdate(t.Context(), update.Height)
+	payload, err := env.prepareUpdate(t.Context(), update.Height)
 	require.NoError(t, err)
-	require.NotEmpty(t, proof)
+	require.NotEmpty(t, payload)
 
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(proof)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
 	require.NoError(t, err)
 	assert.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: anchor}, decoded.TrustedHeight)
 }
@@ -581,9 +581,9 @@ func TestExpiredClientStoredTargets(t *testing.T) {
 			env.host.latest = &v2.BlockHeader{
 				Timestamp: time.Unix(int64(env.fixture.InitialTrustedTimestamp+env.fixture.TrustingPeriod), 0),
 			}
-			proof, err := env.gen.ClientUpdatePayload(t.Context(), target)
+			payload, err := env.gen.ClientUpdatePayload(t.Context(), target)
 			require.ErrorIs(t, err, ErrClientExpired)
-			require.Empty(t, proof)
+			require.Empty(t, payload)
 		})
 	}
 }

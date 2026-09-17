@@ -25,6 +25,9 @@ import (
 var qbftFixtureJSON []byte
 
 // Fixture mirrors the qbft.json layout.
+//
+// TODO(FOU-1406): Move fixture generation from ibc-contracts into this repo's
+// e2e flow and share these fixture types with the generator.
 type Fixture struct {
 	RouterAddress            common.Address   `json:"routerAddress"`
 	InitialTrustedHeight     uint64           `json:"initialTrustedHeight"`

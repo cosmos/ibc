@@ -160,13 +160,13 @@ func (h *handler) ClientUpdatePayload(
 		return nil, err
 	}
 
-	proof, err := target.ClientUpdatePayload(ctx, req.Msg.GetHeight())
+	payload, err := target.ClientUpdatePayload(ctx, req.Msg.GetHeight())
 	if err != nil {
 		h.logger.Error("ClientUpdatePayload", "err", err)
 		return nil, errInternal
 	}
 
-	return connect.NewResponse(&proverv2.ClientUpdatePayloadResponse{Payload: proof}), nil
+	return connect.NewResponse(&proverv2.ClientUpdatePayloadResponse{Payload: payload}), nil
 }
 
 func (h *handler) PacketProofs(

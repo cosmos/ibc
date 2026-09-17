@@ -82,6 +82,6 @@ clientA:
   type: "besu-qbft"
 ```
 
-The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and verifies the consensus state it trusts. The state proof is a single update to the target height, empty when the client already stores it. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved.
+The relayer reads the client's state from its chain, checks that the router it proves is the counterparty chain's configured router, and verifies the consensus state it trusts. The client update payload encodes a single update to the target height and is empty when the client already stores it. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved.
 
 Misbehaviour handling is not part of this client: a conflicting consensus state for a height the client already stores is rejected, and the client keeps working.

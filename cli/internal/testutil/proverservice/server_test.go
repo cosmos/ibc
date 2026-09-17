@@ -82,9 +82,9 @@ func TestProverServiceRoundTrip(t *testing.T) {
 	})
 
 	t.Run("client update payload", func(t *testing.T) {
-		proof, err := client.ClientUpdatePayload(ctx, 99)
+		payload, err := client.ClientUpdatePayload(ctx, 99)
 		require.NoError(t, err)
-		require.Equal(t, []byte("client-update-payload"), proof)
+		require.Equal(t, []byte("client-update-payload"), payload)
 		require.Equal(t, uint64(99), stub.gotHeight)
 	})
 
