@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -107,13 +109,67 @@ func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
 
 func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 	t.Parallel()
-	t.Skip("TODO")
 
-	// todo deploy stuff
-	// todo send packet1 -> OK
-	// todo somehow cut off websocket connection
-	// todo wait for reconnect
-	// todo send packet2 -> OK
+	// ARRANGE
+	// Given attested setup
+	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	env := e2etest.Start(t, spec, runtime)
+
+	// Given signers
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+
+	// Given relayer deployment with auto-relay
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+
+	// Given chain A
+	chainA, err := env.Chain(e2etest.ChainA)
+	require.NoError(t, err)
+	chainAID := strconv.FormatUint(chainA.EVMChainID(), 10)
+
+	// Given (!) websocket proxy for chain A that allows to cut off the relayer's websocket subscription.
+	// relayer <-> ws_proxy <-> chain A
+	chainWSProxy := chainevm.NewWebSocketProxy(t, chainA.WSURL())
+
+	// Given NO clearOnStart and long clearInterval
+	// (so the clearing pass is not triggered)
+	configMutator := func(cfg *ibccli.RelayerConfig) {
+		cfg.ClearOnStart = false
+		cfg.ClearInterval = 1 * time.Hour
+
+		for i := range cfg.Chains {
+			if cfg.Chains[i].ChainID == chainAID {
+				cfg.Chains[i].WS = chainWSProxy.URL()
+				return
+			}
+		}
+
+		t.Fatalf("chain %s not found in relayer config", chainAID)
+	}
+
+	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, configMutator, route)
+
+	// Given deployed transfer app
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+
+	// Given started relayer
+	relayer := e2etest.StartRelayer(t, driver, env)
+
+	// Given packet1 sent and auto-relayed
+	transfer1 := mustSend(t, transferApp, big.NewInt(100_000))
+	mustDeliver(t, relayer, transfer1)
+
+	// ACT #1: break the relayer's websocket subscription through the proxy.
+	chainWSProxy.Kill()
+	time.Sleep(time.Second)
+
+	// ACT #2: restore the proxy; the relayer resubscribes and triggers ws reconnection + clearing pass.
+	chainWSProxy.Revive()
+
+	// ACT/ASSERT #3: send packet2 after reconnect; the resubscribed watcher
+	// should pick it up.
+	transfer2 := mustSend(t, transferApp, big.NewInt(200_000))
+	mustDeliver(t, relayer, transfer2)
 }
 
 func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
