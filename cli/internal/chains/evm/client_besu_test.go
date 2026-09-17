@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
@@ -19,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
@@ -60,6 +62,7 @@ type ethProofAPI struct {
 	keys    []string
 	block   string
 	result  *gethclient.AccountResult
+	err     error
 }
 
 func (a *ethProofAPI) GetProof(
@@ -71,6 +74,10 @@ func (a *ethProofAPI) GetProof(
 	a.account = account
 	a.keys = keys
 	a.block = blockNr
+
+	if a.err != nil {
+		return nil, a.err
+	}
 
 	return accountResultJSON(a.result), nil
 }
@@ -140,6 +147,59 @@ func TestGetRouterProof(t *testing.T) {
 		assert.Empty(t, proof.StorageProofs)
 		assert.Equal(t, accountNodes, proof.AccountProof)
 	})
+}
+
+func TestNewGetRouterProofRecordsRealResponses(t *testing.T) {
+	result, accountNodes, slot, value := fixtureAccountResult(t)
+
+	for _, tt := range []struct {
+		name   string
+		err    error
+		result string
+		code   string
+	}{
+		{name: "success", result: "ok"},
+		{name: "RPC error", err: jsonRPCError{code: -32000}, result: "error", code: "jsonrpc_-32000"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := installTestMetrics(t)
+			api := &ethProofAPI{result: result, err: tt.err}
+			rpcServer := rpc.NewServer()
+			t.Cleanup(rpcServer.Stop)
+			require.NoError(t, rpcServer.RegisterName("eth", api))
+			server := httptest.NewServer(rpcServer)
+			t.Cleanup(server.Close)
+
+			client, err := New(chainIDEth, server.URL, "", routerAddress)
+			require.NoError(t, err)
+
+			proof, err := client.GetRouterProof(t.Context(), 114, [][32]byte{slot})
+			if tt.err != nil {
+				var rpcErr rpc.Error
+				require.ErrorAs(t, err, &rpcErr)
+				assert.Equal(t, -32000, rpcErr.ErrorCode())
+				assert.Empty(t, proof)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, accountNodes, proof.AccountProof)
+				require.Len(t, proof.StorageProofs, 1)
+				assert.Equal(t, slot, proof.StorageProofs[0].Key)
+				assert.Equal(t, value, proof.StorageProofs[0].Value)
+				assert.Equal(t, decodeProofNodes(result.StorageProof[0].Proof), proof.StorageProofs[0].Proof)
+			}
+			assert.Equal(t, common.HexToAddress(routerAddress), api.account)
+			assert.Equal(t, []string{common.Hash(slot).Hex()}, api.keys)
+			assert.Equal(t, hexutil.EncodeUint64(114), api.block)
+
+			point := requireSingleOperation(t, reader)
+			assert.ElementsMatch(t, []attribute.KeyValue{
+				attribute.String("operation", "eth_getProof"),
+				attribute.String("chain_id", chainIDEth),
+				attribute.String("result", tt.result),
+				attribute.String("code", tt.code),
+			}, point.Attributes.ToSlice())
+		})
+	}
 }
 
 func TestAccountProofFromResultValidation(t *testing.T) {

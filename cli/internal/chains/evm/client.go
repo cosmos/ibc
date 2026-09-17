@@ -54,6 +54,15 @@ type ETHClient interface {
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 }
 
+type proofClient interface {
+	GetProof(
+		ctx context.Context,
+		account common.Address,
+		keys []string,
+		blockNumber *big.Int,
+	) (*gethclient.AccountResult, error)
+}
+
 // Client implements chains.Client for EVM chains.
 type Client struct {
 	chainID       string
@@ -353,7 +362,7 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]
 	return proof, nil
 }
 
-// ethGetProof calls eth_getProof via gethclient on eth's underlying RPC client.
+// ethGetProof uses the client's proof operation, falling back to raw RPC clients.
 func ethGetProof(
 	ctx context.Context,
 	eth ETHClient,
@@ -361,6 +370,10 @@ func ethGetProof(
 	keys []string,
 	blockNumber *big.Int,
 ) (*gethclient.AccountResult, error) {
+	if client, ok := eth.(proofClient); ok {
+		return client.GetProof(ctx, account, keys, blockNumber)
+	}
+
 	carrier, ok := eth.(interface{ Client() *rpc.Client })
 	if !ok || carrier.Client() == nil {
 		return nil, errors.New("eth client does not support eth_getProof")
