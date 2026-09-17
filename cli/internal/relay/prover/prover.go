@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package prover generates packet membership/non-membership proofs and
-// light-client state proofs. There is one implementation per light-client
+// light-client update payloads. There is one implementation per light-client
 // type.
 package prover
 
@@ -22,17 +22,17 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// Prover generates packet membership/non-membership proofs and state
-// proofs for one configured light client.
+// Prover generates packet membership/non-membership proofs and update
+// payloads for one configured light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent StateProof
+	// LatestProvableHeight resolves the highest height a subsequent ClientUpdatePayload
 	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof returns one client update for the counterparty state at height.
+	// ClientUpdatePayload returns the encoded updateMsg for the counterparty state at height.
 	// Empty when the client already stores that height.
-	StateProof(ctx context.Context, height uint64) ([]byte, error)
+	ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns

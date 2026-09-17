@@ -163,7 +163,7 @@ func (e *fixtureEnv) expectInitialAnchor(t *testing.T) {
 	e.setAnchor(t, e.fixture.InitialTrustedHeight, e.fixture.InitialConsensusState())
 }
 
-func TestStateProofDirectUpdate(t *testing.T) {
+func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	ctx := context.Background()
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
@@ -192,7 +192,7 @@ func sealedHeader(t *testing.T, template []byte, height uint64, keys []*ecdsa.Pr
 	return header
 }
 
-func TestStateProofRejectsValidatorTurnoverRequiringIntermediateUpdates(t *testing.T) {
+func TestClientUpdatePayloadRejectsValidatorTurnoverRequiringIntermediateUpdates(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
@@ -205,7 +205,7 @@ func TestStateProofRejectsValidatorTurnoverRequiringIntermediateUpdates(t *testi
 	require.Empty(t, update)
 }
 
-func TestStateProofValidatorTurnoverWithSufficientOverlap(t *testing.T) {
+func TestClientUpdatePayloadValidatorTurnoverWithSufficientOverlap(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(6)
 	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
@@ -222,7 +222,7 @@ func TestStateProofValidatorTurnoverWithSufficientOverlap(t *testing.T) {
 	require.Equal(t, header.RLP, update.HeaderRLP)
 }
 
-func TestStateProofTargetAlreadyStored(t *testing.T) {
+func TestClientUpdatePayloadTargetAlreadyStored(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
@@ -233,7 +233,7 @@ func TestStateProofTargetAlreadyStored(t *testing.T) {
 	assert.Nil(t, proof, "no update needed")
 }
 
-func TestStateProofTargetConflicts(t *testing.T) {
+func TestClientUpdatePayloadTargetConflicts(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
 	tampered := update.ExpectedConsensusState()
@@ -246,7 +246,7 @@ func TestStateProofTargetConflicts(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflictingConsensusState)
 }
 
-func TestStateProofBackfillBelowTrusted(t *testing.T) {
+func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
 	anchor := update.Height + 5
@@ -488,7 +488,7 @@ func (e *fixtureEnv) prepareUpdate(ctx context.Context, height uint64) ([]byte, 
 		timestamp = sealed.Timestamp
 	}
 	e.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(timestamp+15000), 0)} //nolint:gosec // test offset
-	return e.gen.StateProof(ctx, height)
+	return e.gen.ClientUpdatePayload(ctx, height)
 }
 
 func TestPacketProofsShareSlot(t *testing.T) {
@@ -534,7 +534,7 @@ func TestExpiredClientStoredTargets(t *testing.T) {
 			env.host.hashes[113] = env.host.hashes[112]
 			env.counterparty.sealed[114] = consensusHeader(114, env.fixture.InitialConsensusState())
 			env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(env.fixture.InitialTrustedTimestamp+env.fixture.TrustingPeriod), 0)}
-			proof, err := env.gen.StateProof(t.Context(), target)
+			proof, err := env.gen.ClientUpdatePayload(t.Context(), target)
 			if target == 114 {
 				require.ErrorIs(t, err, ErrClientExpired)
 			} else {

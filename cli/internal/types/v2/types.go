@@ -74,11 +74,11 @@ type PacketRelayItem struct {
 	ProofHeight uint64
 }
 
-// ClientUpdate the state proof to update a destination client with before
+// ClientUpdate the payload to update a destination client with before
 // any packet operations in the same tx are processed.
 type ClientUpdate struct {
-	ClientID   string
-	StateProof []byte // Empty when no update is needed.
+	ClientID string
+	Payload  []byte // Empty when no update is needed.
 }
 
 // RelayTx one transaction ready to submit, targeting To with calldata Data.

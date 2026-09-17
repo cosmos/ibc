@@ -187,9 +187,9 @@ func checkTrustingPeriod(state besu.ClientState, trusted besu.ConsensusState, ho
 	return nil
 }
 
-// StateProof returns a single update from the client's trusted state to target,
+// ClientUpdatePayload returns an encoded updateMsg from the client's trusted state to target,
 // or nil when the client already stores target. Intermediate updates are not supported.
-func (g *Generator) StateProof(ctx context.Context, target uint64) ([]byte, error) {
+func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]byte, error) {
 	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err

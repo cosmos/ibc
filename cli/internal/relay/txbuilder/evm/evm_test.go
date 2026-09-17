@@ -110,7 +110,7 @@ func TestBuildRelayTxs(t *testing.T) {
 			},
 		},
 	}
-	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0x01}}
+	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", Payload: []byte{0x01}}
 
 	t.Run("recv", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
@@ -219,7 +219,7 @@ func TestBuildRelayTxsClientUpdates(t *testing.T) {
 
 	t.Run("update precedes packets", func(t *testing.T) {
 		txs, err := builder.BuildRelayTxs(
-			v2.ClientUpdate{ClientID: "ethereum-0", StateProof: []byte{0xa1}},
+			v2.ClientUpdate{ClientID: "ethereum-0", Payload: []byte{0xa1}},
 			[]v2.PacketRelayItem{item},
 		)
 		require.NoError(t, err)

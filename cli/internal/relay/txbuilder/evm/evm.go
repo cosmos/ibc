@@ -53,7 +53,7 @@ func New(router common.Address) *TxBuilder {
 	return &TxBuilder{router: router}
 }
 
-// BuildRelayTxs packs the optional clientUpdate proof and every packetRelayItems
+// BuildRelayTxs packs the optional clientUpdate payload and every packetRelayItems
 // entry into a single ICS26Router.multicall transaction. EVM router calldata
 // has no meaningful size limit for the batch sizes the relayer forms, so this
 // always returns exactly one tx.
@@ -63,8 +63,8 @@ func (c *TxBuilder) BuildRelayTxs(
 ) ([]v2.RelayTx, error) {
 	calls := make([][]byte, 0, 1+len(packetRelayItems))
 
-	if len(clientUpdate.StateProof) > 0 {
-		updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.StateProof)
+	if len(clientUpdate.Payload) > 0 {
+		updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +123,7 @@ func height(h uint64) ics26router.IICS02ClientMsgsHeight {
 }
 
 // packUpdateClient packs a call to updateClient(clientId, updateMsg), where
-// updateMsg is the already-encoded proof produced by prover.Prover.StateProof.
+// updateMsg is the already-encoded payload produced by prover.Prover.ClientUpdatePayload.
 func packUpdateClient(clientID string, updateMsg []byte) ([]byte, error) {
 	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return router.UpdateClient(opts, clientID, updateMsg)
