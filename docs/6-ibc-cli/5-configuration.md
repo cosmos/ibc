@@ -191,9 +191,9 @@ The deployer must be a local signer, because deployment requires direct access t
 
 Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](cli/cmd/ibc/deploy.go#L256-L262) -->
 
-The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](cli/internal/config/relayer.go#L149-L176) -->
+The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L185-L192](cli/internal/config/relayer.go#L185-L192) -->
 
-With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](cli/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L237-L264](cli/internal/config/config.go#L237-L264) --> Unset and `false` are the same input. <!-- [relayer.go:L118-L135](cli/internal/config/relayer.go#L118-L135) -->
+With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [set.go:L27-L39](cli/internal/relay/watcher/set.go#L27-L39) --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [config.go:L511-L528](cli/internal/config/config.go#L511-L528) --> Unset and `false` are the same input. <!-- [relayer.go:L126-L142](cli/internal/config/relayer.go#L126-L142) -->
 
 ### Relay settings
 
@@ -288,7 +288,7 @@ A remote entry does not set `chainId` or `signer`. The process obtains the attes
 
 Fields from the other attestor type are rejected. A remote attestor cannot set `chainId`, and a local attestor cannot set `grpc`. <!-- [config.go:L513-L536](cli/internal/config/config.go#L513-L536) -->
 
-Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [config.go:L474-L503](cli/internal/config/config.go#L474-L503) -->
+Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [config.go:L381-L396](cli/internal/config/config.go#L381-L396) -->
 
 ## `signers`
 
