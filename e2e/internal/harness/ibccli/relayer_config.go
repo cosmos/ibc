@@ -128,11 +128,10 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
 		Signers: []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
-		// The default 15m clearing cadence is mainnet-shaped; harness uses 5s.
 		Relayer: &relayerFileConfig{
 			DispatchPollInterval: "100ms",
 			ClearOnStart:         cfg.ClearOnStart,
-			ClearInterval:        cfg.ClearInterval.String(),
+			ClearInterval:        durationYAML(cfg.ClearInterval),
 		},
 	}
 
@@ -301,6 +300,13 @@ type clientEndFileConfig struct {
 
 type autoRelayFileConfig struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+func durationYAML(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	return d.String()
 }
 
 func autoRelay(enabled bool) *autoRelayFileConfig {
