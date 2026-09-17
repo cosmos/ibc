@@ -27,7 +27,7 @@ func TestProverRequestTimeout(t *testing.T) {
 	_, err = prover.StateProof(ctx, 1)
 	require.NoError(t, err)
 
-	_, err = prover.PacketProofs(ctx, 1, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{{Sequence: 1}})
+	_, err = prover.PacketProofs(ctx, 1, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{{Sequence: 1}}, nil)
 	require.NoError(t, err)
 }
 
@@ -65,4 +65,18 @@ func (c timeoutProverClient) requireDeadline(ctx context.Context) {
 	deadline, ok := ctx.Deadline()
 	require.True(c.t, ok)
 	require.WithinDuration(c.t, time.Now().Add(requestTimeout), deadline, time.Second)
+}
+
+func TestPacketProofsRejectsAcknowledgementCountMismatch(t *testing.T) {
+	for _, acks := range [][]channeltypesv2.Acknowledgement{nil, {{}, {}}} {
+		prover := &Prover{}
+		_, err := prover.PacketProofs(
+			context.Background(),
+			1,
+			v2.ProofKindAcknowledgement,
+			[]channeltypesv2.Packet{{Sequence: 1}},
+			acks,
+		)
+		require.ErrorContains(t, err, "acknowledgement count must match packet count")
+	}
 }
