@@ -26,7 +26,7 @@ import (
 // Errors the prover surfaces to the pipeline.
 var (
 	ErrClientExpired = errors.New(
-		"besu qbft light client trusting period has expired; the client must be redeployed",
+		"besu qbft light client trusting period has expired; the consensus state is no longer usable",
 	)
 	ErrConflictingConsensusState = errors.New(
 		"besu qbft light client stores a different consensus state at the target height",
@@ -98,8 +98,31 @@ func ResolveGenerator(
 	return gen, nil
 }
 
-func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) error {
+func (g *Generator) clientState(ctx context.Context) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
+	if err != nil {
+		return state, err
+	}
+	if state.TrustingPeriod == 0 {
+		return state, errors.New("besu qbft trusting period must be nonzero")
+	}
+	return state, nil
+}
+
+func unixSeconds(timestamp time.Time) (uint64, error) {
+	seconds := timestamp.Unix()
+	if seconds < 0 {
+		return 0, errors.New("negative chain timestamp")
+	}
+	return uint64(seconds), nil
+}
+
+func exceedsClockDrift(target, host, drift uint64) bool {
+	return target > host && target-host > drift
+}
+
+func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) error {
+	state, err := g.clientState(ctx)
 	if err != nil {
 		return fmt.Errorf("client %q is not a besu-qbft light client: %w", g.clientID, err)
 	}
@@ -122,13 +145,10 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 	return nil
 }
 
-// LatestProvableHeight returns the newest counterparty height within clock drift:
-// every QBFT block is final, so this is the chain head unless
-// its timestamp exceeds the host chain's time plus the client's clock drift
-// allowance, in which case it steps back to the newest admissible header.
-// An expired client can still prove packets at its latest trusted height.
+// LatestProvableHeight selects the newest clock-admissible height and checks
+// direct-update readiness. It does not search for intermediate validator updates.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
+	state, err := g.clientState(ctx)
 	if err != nil {
 		return 0, time.Time{}, err
 	}
@@ -142,8 +162,12 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
 	}
-	if expiredErr := checkTrustingPeriod(state, trusted, hostHead.Timestamp); expiredErr != nil {
-		return state.LatestHeight.RevisionHeight, time.Unix(int64(trusted.Timestamp), 0).UTC(), nil
+	hostSeconds, err := unixSeconds(hostHead.Timestamp)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	if expiredErr := checkTrustingPeriod(state.TrustingPeriod, trusted.Timestamp, hostSeconds); expiredErr != nil {
+		return 0, time.Time{}, expiredErr
 	}
 
 	head, err := g.counterparty.GetBlockHeader(ctx, v2.LatestBlock)
@@ -151,10 +175,13 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		return 0, time.Time{}, fmt.Errorf("reading counterparty chain head: %w", err)
 	}
 
-	maxTimestamp := hostHead.Timestamp.Add(time.Duration(state.MaxClockDrift) * time.Second) //nolint:gosec // seconds
+	headSeconds, err := unixSeconds(head.Timestamp)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
 	height, timestamp := head.Height, head.Timestamp
 
-	if timestamp.After(maxTimestamp) {
+	if exceedsClockDrift(headSeconds, hostSeconds, state.MaxClockDrift) {
 		low, high := state.LatestHeight.RevisionHeight, height
 		timestamp = time.Unix(int64(trusted.Timestamp), 0).UTC()
 		for low < high {
@@ -163,7 +190,11 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 			if err != nil {
 				return 0, time.Time{}, fmt.Errorf("reading counterparty header %d: %w", mid, err)
 			}
-			if header.Timestamp.After(maxTimestamp) {
+			seconds, err := unixSeconds(header.Timestamp)
+			if err != nil {
+				return 0, time.Time{}, err
+			}
+			if exceedsClockDrift(seconds, hostSeconds, state.MaxClockDrift) {
 				high = mid - 1
 			} else {
 				low = mid
@@ -173,33 +204,38 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		height = low
 	}
 
+	if height != state.LatestHeight.RevisionHeight {
+		header, headerErr := g.header(ctx, height)
+		if headerErr != nil {
+			return 0, time.Time{}, headerErr
+		}
+		if checkErr := checkDirectUpdate(header, trusted, state, hostSeconds); checkErr != nil {
+			return 0, time.Time{}, checkErr
+		}
+	}
 	return height, timestamp, nil
 }
 
-func checkTrustingPeriod(
-	state besumsgs.IBesuLightClientMsgsClientState,
-	trusted besumsgs.IBesuLightClientMsgsConsensusState,
-	hostTime time.Time,
-) error {
-	if state.TrustingPeriod == 0 {
-		return nil
+func checkTrustingPeriod(period, timestamp, host uint64) error {
+	// Equivalent to Solidity's widened timestamp + period > block.timestamp.
+	if host >= timestamp && host-timestamp >= period {
+		return fmt.Errorf("%w: timestamp %d, trusting period %ds", ErrClientExpired, timestamp, period)
 	}
-
-	// the contract requires trusted.timestamp + trustingPeriod > block.timestamp
-	if trusted.Timestamp+state.TrustingPeriod <= uint64(hostTime.Unix()) { //nolint:gosec // seconds since epoch
-		return fmt.Errorf(
-			"%w: trusted height %d timestamp %d, trusting period %ds",
-			ErrClientExpired, state.LatestHeight.RevisionHeight, trusted.Timestamp, state.TrustingPeriod,
-		)
-	}
-
 	return nil
 }
 
 // ClientUpdatePayload returns an encoded updateMsg from the client's trusted state to target,
-// or nil when the client already stores target. Intermediate updates are not supported.
+// or nil when the client already stores an unexpired target. Intermediate updates are not supported.
 func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]byte, error) {
-	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
+	state, err := g.clientState(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
+	if err != nil {
+		return nil, fmt.Errorf("reading host chain head: %w", err)
+	}
+	hostSeconds, err := unixSeconds(hostHead.Timestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +247,13 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 		stored, storedErr := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, target)
 		switch {
 		case storedErr == nil:
+			if trustErr := checkTrustingPeriod(
+				state.TrustingPeriod,
+				targetHeader.Timestamp,
+				hostSeconds,
+			); trustErr != nil {
+				return nil, fmt.Errorf("proof height %d: %w", target, trustErr)
+			}
 			hash, hashErr := besu.HashConsensusState(consensusOf(targetHeader))
 			if hashErr != nil {
 				return nil, hashErr
@@ -228,33 +271,44 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if err != nil {
 		return nil, err
 	}
-	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
-	if err != nil {
-		return nil, fmt.Errorf("reading host chain head: %w", err)
-	}
-	if trustErr := checkTrustingPeriod(state, trusted, hostHead.Timestamp); trustErr != nil {
+	if trustErr := checkTrustingPeriod(state.TrustingPeriod, trusted.Timestamp, hostSeconds); trustErr != nil {
 		return nil, trustErr
 	}
-	maxTimestamp := hostHead.Timestamp.Add(time.Duration(state.MaxClockDrift) * time.Second)
-	if time.Unix(int64(targetHeader.Timestamp), 0).After(maxTimestamp) {
-		return nil, fmt.Errorf("target height %d exceeds host clock drift", target)
-	}
-
-	signers, err := targetHeader.Signers()
-	if err != nil {
-		return nil, fmt.Errorf("header %d: %w", target, err)
-	}
-	if checkErr := besu.CheckUpdate(targetHeader, signers, trusted); checkErr != nil {
-		return nil, fmt.Errorf(
-			"direct update from trusted height %d to %d failed (intermediate updates are not supported): %w",
-			state.LatestHeight.RevisionHeight, target, checkErr,
-		)
+	if checkErr := checkDirectUpdate(targetHeader, trusted, state, hostSeconds); checkErr != nil {
+		return nil, checkErr
 	}
 	update, err := besu.EncodeUpdateClient(targetHeader.RLP, state.LatestHeight.RevisionHeight, trusted)
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
 	return update, nil
+}
+
+// checkDirectUpdate validates a target against an already verified, unexpired anchor.
+func checkDirectUpdate(
+	target *besu.Header,
+	trusted besumsgs.IBesuLightClientMsgsConsensusState,
+	state besumsgs.IBesuLightClientMsgsClientState,
+	hostSeconds uint64,
+) error {
+	if trustErr := checkTrustingPeriod(state.TrustingPeriod, target.Timestamp, hostSeconds); trustErr != nil {
+		return fmt.Errorf("proof height %d: %w", target.Height, trustErr)
+	}
+	if exceedsClockDrift(target.Timestamp, hostSeconds, state.MaxClockDrift) {
+		return fmt.Errorf("target height %d exceeds host clock drift", target.Height)
+	}
+
+	signers, err := target.Signers()
+	if err != nil {
+		return fmt.Errorf("header %d: %w", target.Height, err)
+	}
+	if checkErr := besu.CheckUpdate(target, signers, trusted); checkErr != nil {
+		return fmt.Errorf(
+			"direct update from trusted height %d to %d failed (intermediate updates are not supported): %w",
+			state.LatestHeight.RevisionHeight, target.Height, checkErr,
+		)
+	}
+	return nil
 }
 
 // PacketProofs proves each packet's claim against the router storage at

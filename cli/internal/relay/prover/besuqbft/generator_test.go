@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -32,6 +33,8 @@ type hashResult struct {
 }
 
 type fakeChain struct {
+	sealedReads    []uint64
+	hashReads      []uint64
 	id             string
 	latest         *v2.BlockHeader
 	headers        map[uint64]v2.BlockHeader
@@ -61,6 +64,7 @@ func (f *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHe
 }
 
 func (f *fakeChain) SealedHeader(_ context.Context, height uint64) (*besu.Header, error) {
+	f.sealedReads = append(f.sealedReads, height)
 	h, ok := f.sealed[height]
 	if !ok {
 		return nil, fmt.Errorf("no sealed header %d", height)
@@ -80,6 +84,7 @@ func (f *fakeChain) GetBesuQBFTClientState(context.Context, string) (besumsgs.IB
 }
 
 func (f *fakeChain) GetBesuQBFTConsensusStateHash(_ context.Context, _ string, height uint64) ([32]byte, error) {
+	f.hashReads = append(f.hashReads, height)
 	r, ok := f.hashes[height]
 	if !ok {
 		return [32]byte{}, fmt.Errorf("no consensus hash at %d", height)
@@ -197,7 +202,7 @@ func sealedHeader(t *testing.T, template []byte, height uint64, keys []*ecdsa.Pr
 	return header
 }
 
-func TestClientUpdatePayloadRejectsValidatorTurnoverRequiringIntermediateUpdates(t *testing.T) {
+func TestClientUpdatePayloadRejectsDirectUpdateWithInsufficientOverlap(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
@@ -411,15 +416,19 @@ func TestLatestProvableHeight(t *testing.T) {
 
 	t.Run("head when within drift", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		base := int64(env.fixture.InitialTrustedTimestamp) //nolint:gosec // fixture timestamp
 		env.expectInitialAnchor(t)
-		env.host.latest = &v2.BlockHeader{Height: 500, Timestamp: time.Unix(base+35, 0)}
-		env.counterparty.latest = &v2.BlockHeader{Height: 120, Timestamp: time.Unix(base+45, 0)}
+		header := parsedUpdate(t, env.fixture.NonAdjacentUpdate)
+		env.counterparty.sealed[header.Height] = header
+		timestamp := time.Unix(int64(header.Timestamp), 0)
+		env.host.latest = &v2.BlockHeader{Height: 500, Timestamp: timestamp}
+		env.counterparty.latest = &v2.BlockHeader{Height: header.Height, Timestamp: timestamp}
 
 		height, ts, err := env.gen.LatestProvableHeight(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, uint64(120), height)
-		assert.Equal(t, time.Unix(base+45, 0), ts)
+		assert.Equal(t, header.Height, height)
+		assert.Equal(t, timestamp, ts)
+		require.Equal(t, []uint64{env.fixture.InitialTrustedHeight, header.Height}, env.counterparty.sealedReads)
+		require.Equal(t, []uint64{env.fixture.InitialTrustedHeight}, env.host.hashReads)
 	})
 
 	t.Run("steps back under clock drift", func(t *testing.T) {
@@ -439,6 +448,8 @@ func TestLatestProvableHeight(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, anchor, height)
 		assert.Equal(t, time.Unix(base, 0).UTC(), ts)
+		require.Equal(t, []uint64{anchor}, env.counterparty.sealedReads)
+		require.Equal(t, []uint64{anchor}, env.host.hashReads)
 	})
 }
 
@@ -453,7 +464,7 @@ func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
 		{name: "host ahead of wall clock", hostOffset: time.Hour, age: 120, period: 120, expired: true},
 		{name: "one second before expiry", age: 119, period: 120},
 		{name: "at expiry", age: 120, period: 120, expired: true},
-		{name: "never expires", age: 3600},
+		{name: "maximum period", age: 3600, period: math.MaxUint64},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := newFixtureEnv(t)
@@ -466,18 +477,21 @@ func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
 			env.host.clientState = state
 			env.host.latest = &v2.BlockHeader{Height: 500, Timestamp: hostTime}
 			if !tc.expired {
-				env.counterparty.latest = &v2.BlockHeader{Height: 120, Timestamp: hostTime}
+				env.counterparty.latest = &v2.BlockHeader{
+					Height:    state.LatestHeight.RevisionHeight,
+					Timestamp: time.Unix(int64(trusted.Timestamp), 0).UTC(),
+				}
 			}
 			height, timestamp, err := env.gen.LatestProvableHeight(context.Background())
 			if tc.expired {
-				require.NoError(t, err)
-				assert.Equal(t, state.LatestHeight.RevisionHeight, height)
-				assert.Equal(t, time.Unix(int64(trusted.Timestamp), 0).UTC(), timestamp)
+				require.ErrorIs(t, err, ErrClientExpired)
+				assert.Zero(t, height)
+				assert.True(t, timestamp.IsZero())
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, uint64(120), height)
-			assert.Equal(t, hostTime, timestamp)
+			assert.Equal(t, state.LatestHeight.RevisionHeight, height)
+			assert.Equal(t, env.counterparty.latest.Timestamp, timestamp)
 		})
 	}
 }
@@ -568,12 +582,136 @@ func TestExpiredClientStoredTargets(t *testing.T) {
 				Timestamp: time.Unix(int64(env.fixture.InitialTrustedTimestamp+env.fixture.TrustingPeriod), 0),
 			}
 			proof, err := env.gen.ClientUpdatePayload(t.Context(), target)
-			if target == 114 {
+			require.ErrorIs(t, err, ErrClientExpired)
+			require.Empty(t, proof)
+		})
+	}
+}
+
+func TestTimeChecks(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		timestamp, host, period uint64
+		expired                 bool
+	}{
+		{"before expiry", 100, 119, 20, false},
+		{"at expiry", 100, 120, 20, true},
+		{"after expiry", 100, 121, 20, true},
+		{"future anchor", 120, 100, 20, false},
+		{"wide sum", 1700000000, 1700000000, math.MaxUint64, false},
+		{"maximum host", 1, math.MaxUint64, math.MaxUint64, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := checkTrustingPeriod(tc.period, tc.timestamp, tc.host)
+			if tc.expired {
 				require.ErrorIs(t, err, ErrClientExpired)
 			} else {
 				require.NoError(t, err)
 			}
-			require.Empty(t, proof)
 		})
 	}
+	for _, tc := range []struct {
+		target, host, drift uint64
+		exceeds             bool
+	}{
+		{100, 100, 0, false},
+		{99, 100, 0, false},
+		{101, 100, 0, true},
+		{120, 100, 20, false},
+		{121, 100, 20, true},
+		{math.MaxUint64, 100, math.MaxUint64, false},
+		{10000000100, 100, 10000000000, false},
+	} {
+		require.Equal(t, tc.exceeds, exceedsClockDrift(tc.target, tc.host, tc.drift))
+	}
+	_, err := unixSeconds(time.Unix(-1, 0))
+	require.ErrorContains(t, err, "negative chain timestamp")
+}
+
+func TestRejectZeroTrustingPeriod(t *testing.T) {
+	env := newFixtureEnv(t)
+	env.expectInitialAnchor(t)
+	env.host.clientState.TrustingPeriod = 0
+	require.ErrorContains(
+		t,
+		env.gen.resolve(t.Context(), env.fixture.RouterAddress.Hex()),
+		"trusting period must be nonzero",
+	)
+	_, _, err := env.gen.LatestProvableHeight(t.Context())
+	require.ErrorContains(t, err, "trusting period must be nonzero")
+	_, err = env.gen.ClientUpdatePayload(t.Context(), env.fixture.InitialTrustedHeight)
+	require.ErrorContains(t, err, "trusting period must be nonzero")
+}
+
+func TestLatestProvableHeightRejectsInsufficientOverlap(t *testing.T) {
+	env := newFixtureEnv(t)
+	keys := besutest.Keys(8)
+	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
+		Timestamp:  1700000010,
+		Validators: besutest.Addresses(keys[:4]),
+	}
+	env.setAnchor(t, 10, trusted)
+	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[4:])
+	env.counterparty.sealed[12] = header
+	env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(1700000012, 0)}
+	env.counterparty.latest = &v2.BlockHeader{Height: 12, Timestamp: env.host.latest.Timestamp}
+	height, _, err := env.gen.LatestProvableHeight(t.Context())
+	require.ErrorIs(t, err, besu.ErrInsufficientOverlap)
+	require.Zero(t, height)
+}
+
+func TestExpiredHistoricalTargetWithLiveAnchor(t *testing.T) {
+	for _, stored := range []bool{false, true} {
+		t.Run(fmt.Sprint(stored), func(t *testing.T) {
+			env := newFixtureEnv(t)
+			trusted := env.fixture.InitialConsensusState()
+			trusted.Timestamp = 200
+			env.setAnchor(t, 20, trusted)
+			env.host.clientState.TrustingPeriod = 100
+			historical := trusted
+			historical.Timestamp = 100
+			env.counterparty.sealed[10] = consensusHeader(10, historical)
+			if stored {
+				env.host.hashes[10] = hashResult{hash: mustHash(t, historical)}
+			} else {
+				env.host.hashes[10] = hashResult{err: evm.ErrConsensusStateNotFound}
+			}
+			env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(200, 0)}
+			_, err := env.gen.ClientUpdatePayload(t.Context(), 10)
+			require.ErrorIs(t, err, ErrClientExpired)
+		})
+	}
+}
+
+func TestLargeClockDrift(t *testing.T) {
+	for _, drift := range []uint64{10000000000, math.MaxUint64} {
+		t.Run(fmt.Sprint(drift), func(t *testing.T) {
+			env := newFixtureEnv(t)
+			env.expectInitialAnchor(t)
+			env.host.clientState.MaxClockDrift = drift
+			env.host.clientState.TrustingPeriod = math.MaxUint64
+			header := parsedUpdate(t, env.fixture.NonAdjacentUpdate)
+			env.counterparty.sealed[header.Height] = header
+			timestamp := time.Unix(int64(header.Timestamp), 0)
+			env.host.latest = &v2.BlockHeader{Timestamp: timestamp.Add(-time.Second)}
+			env.counterparty.latest = &v2.BlockHeader{Height: header.Height, Timestamp: timestamp}
+			height, _, err := env.gen.LatestProvableHeight(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, header.Height, height)
+			payload, err := env.gen.ClientUpdatePayload(t.Context(), height)
+			require.NoError(t, err)
+			require.NotEmpty(t, payload)
+		})
+	}
+}
+
+func TestLiveTargetCannotUpdateFromExpiredAnchor(t *testing.T) {
+	env := newFixtureEnv(t)
+	env.expectInitialAnchor(t)
+	env.host.clientState.TrustingPeriod = 1
+	header := parsedUpdate(t, env.fixture.NonAdjacentUpdate)
+	env.counterparty.sealed[header.Height] = header
+	env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(header.Timestamp), 0)}
+	_, err := env.gen.ClientUpdatePayload(t.Context(), header.Height)
+	require.ErrorIs(t, err, ErrClientExpired)
 }
