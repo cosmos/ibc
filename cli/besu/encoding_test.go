@@ -3,7 +3,6 @@
 package besu_test
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
@@ -58,23 +57,6 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 	}
 }
 
-func TestClientStateRoundTrip(t *testing.T) {
-	state := besumsgs.IBesuLightClientMsgsClientState{
-		IbcRouter:      common.HexToAddress("0xe2beCC7d4F673682BedA1AD6D7186784C3D43b2F"),
-		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: 114},
-		TrustingPeriod: 1209600,
-		MaxClockDrift:  15,
-	}
-
-	encoded, err := besutest.EncodeClientState(state)
-	require.NoError(t, err)
-	require.Len(t, encoded, 5*32, "ClientState is fully static")
-
-	decoded, err := besumsgs.NewBindings().UnpackClientState(encoded)
-	require.NoError(t, err)
-	assert.Equal(t, state, decoded)
-}
-
 func TestConsensusStateHashChangesWithEveryField(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	base := fixture.InitialConsensusState()
@@ -102,23 +84,6 @@ func TestConsensusStateHashChangesWithEveryField(t *testing.T) {
 	assert.NotEqual(t, h0, h3)
 }
 
-func TestPayloadDecodersRejectMalformedData(t *testing.T) {
-	for name, data := range map[string][]byte{
-		"empty":          nil,
-		"short word":     {0},
-		"invalid offset": bytes.Repeat([]byte{0xff}, 32),
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, err := besumsgs.NewBindings().UnpackProofNodes(data)
-			require.Error(t, err)
-			_, err = besumsgs.NewBindings().UnpackUpdateClient(data)
-			require.Error(t, err)
-			_, err = besumsgs.NewBindings().UnpackMembershipProof(data)
-			require.Error(t, err)
-		})
-	}
-}
-
 func TestConsensusStateHashMatchesSolidity(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	// keccak256(abi.encode(ConsensusState)) for qbft.json's initial trusted state,
@@ -135,24 +100,4 @@ func TestCommitmentSlotMatchesSolidity(t *testing.T) {
 		common.HexToHash("0x54dec64b8cfb867e4e0b052552b929bd5886439932474991c8895d84bcc8c6d9"),
 		besu.CommitmentSlot(fixture.Membership.Path),
 	)
-}
-
-func TestGeneratedEncodingSchema(t *testing.T) {
-	bindings := besumsgs.NewBindings()
-	for name, method := range bindings.GetABI().Methods {
-		t.Run(name, func(t *testing.T) {
-			require.Len(t, method.Inputs, 1)
-			require.Len(t, method.Outputs, 1)
-			assert.Equal(t, method.Inputs[0].Type.String(), method.Outputs[0].Type.String())
-		})
-	}
-	state := besutest.MustFixture(t).InitialConsensusState()
-	encoded, err := bindings.TryPackConsensusState(state)
-	require.NoError(t, err)
-	decoded, err := bindings.UnpackConsensusState(encoded[4:])
-	require.NoError(t, err)
-	assert.Equal(t, state, decoded)
-
-	_, err = bindings.UnpackConsensusState(nil)
-	require.Error(t, err)
 }

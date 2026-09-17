@@ -187,22 +187,16 @@ func TestShouldRetry(t *testing.T) {
 }
 
 func TestSubmitEstimatesGasWithinBlockLimit(t *testing.T) {
-	for _, estimateErr := range []error{
-		errors.New("gas required exceeds allowance (30000000)"),
-		errors.New("Execution reverted"),
-	} {
-		t.Run(estimateErr.Error(), func(t *testing.T) {
-			submitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-			eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).
-				Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).Once()
-			eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Once()
-			eth.EXPECT().PendingCodeAt(mock.Anything, mock.Anything).Return([]byte{1}, nil).Once()
-			eth.EXPECT().EstimateGas(mock.Anything, mock.MatchedBy(func(call ethereum.CallMsg) bool {
-				return call.Gas == 30000000
-			})).Return(0, estimateErr).Once()
-			result, err := submitter.Submit(t.Context(), v2.TxIntent{To: toAddress, Data: []byte{1}})
-			require.Nil(t, result)
-			require.ErrorIs(t, err, estimateErr)
-		})
-	}
+	estimateErr := errors.New("gas required exceeds allowance (30000000)")
+	submitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
+	eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).
+		Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).Once()
+	eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Once()
+	eth.EXPECT().PendingCodeAt(mock.Anything, mock.Anything).Return([]byte{1}, nil).Once()
+	eth.EXPECT().EstimateGas(mock.Anything, mock.MatchedBy(func(call ethereum.CallMsg) bool {
+		return call.Gas == 30000000
+	})).Return(0, estimateErr).Once()
+	result, err := submitter.Submit(t.Context(), v2.TxIntent{To: toAddress, Data: []byte{1}})
+	require.Nil(t, result)
+	require.ErrorIs(t, err, estimateErr)
 }

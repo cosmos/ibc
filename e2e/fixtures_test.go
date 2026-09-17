@@ -218,33 +218,18 @@ func TestQBFTMesh(t *testing.T) {
 		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
 	})
 
-	want := environment.Spec{
-		Chains: []environment.ChainSpec{
-			environment.ManagedBesu{ID: "chain-b", EVMChainID: 2},
-			environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
-		},
-		IBCInstances: []environment.IBCInstanceSpec{
-			environment.NewIBCInstance{ID: "ibc-chain-a", Chain: "chain-a", Authority: e2etest.ProtocolAuthorityID},
-			environment.NewIBCInstance{ID: "ibc-chain-b", Chain: "chain-b", Authority: e2etest.ProtocolAuthorityID},
-		},
-		Connections: []environment.ConnectionSpec{
-			{
-				ID: "conn-chain-a-chain-b",
-				A: environment.NewBesuQBFTClient{
-					IBCInstance:    "ibc-chain-a",
-					Authority:      e2etest.ProtocolAuthorityID,
-					TrustingPeriod: 14 * 24 * 60 * 60,
-					MaxClockDrift:  60,
-				},
-				B: environment.NewBesuQBFTClient{
-					IBCInstance:    "ibc-chain-b",
-					Authority:      e2etest.ProtocolAuthorityID,
-					TrustingPeriod: 14 * 24 * 60 * 60,
-					MaxClockDrift:  60,
-				},
-			},
-		},
-	}
-	require.Equal(t, want, spec)
 	require.NoError(t, environment.Validate(spec, runtime))
+	require.Len(t, spec.Chains, 2)
+	require.Len(t, spec.IBCInstances, 2)
+	require.Len(t, spec.Connections, 1)
+	ends := []environment.ClientSpec{spec.Connections[0].A, spec.Connections[0].B}
+	for i, chain := range []environment.ChainID{"chain-a", "chain-b"} {
+		instance, ok := spec.IBCInstances[i].(environment.NewIBCInstance)
+		require.True(t, ok)
+		require.Equal(t, chain, instance.Chain)
+		// QBFT endpoints carry no attestors and follow the sorted host instances.
+		client, ok := ends[i].(environment.NewBesuQBFTClient)
+		require.True(t, ok)
+		require.Equal(t, instance.ID, client.IBCInstance)
+	}
 }

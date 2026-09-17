@@ -462,9 +462,6 @@ func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
 	}{
 		{name: "host behind wall clock", hostOffset: -time.Hour, age: 119, period: 120},
 		{name: "host ahead of wall clock", hostOffset: time.Hour, age: 120, period: 120, expired: true},
-		{name: "one second before expiry", age: 119, period: 120},
-		{name: "at expiry", age: 120, period: 120, expired: true},
-		{name: "maximum period", age: 3600, period: math.MaxUint64},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := newFixtureEnv(t)

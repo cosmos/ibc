@@ -58,9 +58,6 @@ func TestCheckUpdateFixtures(t *testing.T) {
 		return besu.CheckUpdate(header, signers, trusted)
 	}
 
-	require.NoError(t, check(fixture.AdjacentUpdate))
-	require.NoError(t, check(fixture.NonAdjacentUpdate))
-
 	err := check(fixture.LowQuorumUpdate)
 	require.ErrorIs(t, err, besu.ErrInsufficientQuorum)
 

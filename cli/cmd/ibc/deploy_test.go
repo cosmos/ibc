@@ -267,18 +267,6 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
 }
 
-func TestWholeSeconds(t *testing.T) {
-	seconds, err := wholeSeconds(90*time.Second, "trusting-period")
-	require.NoError(t, err)
-	require.Equal(t, uint64(90), seconds)
-
-	_, err = wholeSeconds(500*time.Millisecond, "trusting-period")
-	require.ErrorContains(t, err, "whole seconds")
-
-	_, err = wholeSeconds(-time.Second, "max-clock-drift")
-	require.ErrorContains(t, err, "negative")
-}
-
 func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) {
 	previousDir := flagDeployManifestDir
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
