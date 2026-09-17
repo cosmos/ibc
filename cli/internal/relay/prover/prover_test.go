@@ -126,8 +126,20 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 	}
 	cfg := config.Config{
 		Chains: config.Chains{
-			{ChainID: "1", EVM: &config.EVMChainConfig{RPC: "http://a", ICS26Router: "0x00000000000000000000000000000000000000aa"}},
-			{ChainID: "2", EVM: &config.EVMChainConfig{RPC: "http://b", ICS26Router: "0x00000000000000000000000000000000000000bb"}},
+			{
+				ChainID: "1",
+				EVM: &config.EVMChainConfig{
+					RPC:         "http://a",
+					ICS26Router: "0x00000000000000000000000000000000000000aa",
+				},
+			},
+			{
+				ChainID: "2",
+				EVM: &config.EVMChainConfig{
+					RPC:         "http://b",
+					ICS26Router: "0x00000000000000000000000000000000000000bb",
+				},
+			},
 		},
 		Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
 	}

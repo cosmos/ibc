@@ -5,6 +5,7 @@ package besu
 import (
 	"fmt"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -20,7 +21,7 @@ func QuorumRequired(validators int) int { return validators - validators/3 }
 // update from a client that trusts the validators in trusted. It runs both
 // threshold rules and flags the case where no signer is a header validator,
 // which points at a header encoding problem rather than turnover.
-func CheckUpdate(target *Header, signers []common.Address, trusted ConsensusState) error {
+func CheckUpdate(target *Header, signers []common.Address, trusted besumsgs.IBesuLightClientMsgsConsensusState) error {
 	headerSigners := countMembers(signers, target.Validators)
 	hint := ""
 	if headerSigners == 0 {

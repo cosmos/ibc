@@ -6,7 +6,8 @@
 // consensus state hashing, storage slot derivation and the ABI encoders for
 // the BesuQBFTLightClient wire formats.
 //
-// It mirrors ibc-contracts/ibc-solidity/contracts/light-clients/besu on the
+// Wire types and codecs are generated upstream.
+// The Go consensus algorithms follow ibc-contracts/ibc-solidity/contracts/light-clients/besu on the
 // hashed-consensus-state design: the contract stores only
 // keccak256(abi.encode(ConsensusState)) per height, so every update and every
 // membership proof carries the consensus state preimage it relies on.

@@ -369,3 +369,6 @@ replace (
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )
+
+// Temporary: consume the Besu generators from the sibling contracts checkout.
+replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => ../../ibc-contracts/packages/go-abigen

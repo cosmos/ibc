@@ -97,3 +97,10 @@ run-all-checks: ## Run "all-in-one" code validation step.
 .PHONY: help build install docker-build lint lint-fix test
 .PHONY: codegen codegen-sql codegen-proto codegen-abi codegen-mocks
 .PHONY: check-stale run-all-checks
+
+# Override to copy a fixture from a different contracts checkout.
+BESU_FIXTURE ?= ../../ibc-contracts/ibc-solidity/test/besu-bft/fixtures/qbft.json
+
+.PHONY: sync-besu-fixture
+sync-besu-fixture: ## Copy the canonical QBFT fixture from the contracts checkout
+	cp "$(BESU_FIXTURE)" besu/besutest/testdata/qbft.json

@@ -5,10 +5,12 @@ package evm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
@@ -273,7 +275,7 @@ func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	require.ErrorContains(t, err, "not a Besu QBFT header")
 }
 
-type fakeDataError struct{ data string }
+type fakeDataError struct{ data any }
 
 func (e fakeDataError) Error() string  { return "execution reverted" }
 func (e fakeDataError) ErrorData() any { return e.data }
@@ -298,7 +300,12 @@ func TestBesuQBFTReads(t *testing.T) {
 	t.Run("client state", func(t *testing.T) {
 		client, eth := newTestClient(t)
 
-		state := besu.ClientState{IBCRouter: routerAddr, LatestHeight: 112, TrustingPeriod: 10, MaxClockDrift: 15}
+		state := besumsgs.IBesuLightClientMsgsClientState{
+			IbcRouter:      routerAddr,
+			LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: 112},
+			TrustingPeriod: 10,
+			MaxClockDrift:  15,
+		}
 		encoded, err := besutest.EncodeClientState(state)
 		require.NoError(t, err)
 
@@ -373,4 +380,45 @@ func TestBesuQBFTReads(t *testing.T) {
 		require.Error(t, err)
 		require.NotErrorIs(t, err, ErrConsensusStateNotFound)
 	})
+}
+
+// Test against the deployed contract ABI, independently of the error bindings.
+func TestIsConsensusStateNotFound(t *testing.T) {
+	contractABI, err := besuqbft.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	encodeError := func(name string, args ...any) []byte {
+		t.Helper()
+		definition := contractABI.Errors[name]
+		arguments, packErr := definition.Inputs.Pack(args...)
+		require.NoError(t, packErr)
+		return append(definition.ID.Bytes()[:4], arguments...)
+	}
+	missing := encodeError("ConsensusStateNotFound", uint64(999))
+	unrelated := encodeError("InvalidRevisionNumber", uint64(1))
+	overflow := append([]byte(nil), missing...)
+	overflow[4] = 1
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"valid", fakeDataError{data: hexutil.Encode(missing)}, true},
+		{"wrapped", fmt.Errorf("RPC call: %w", fakeDataError{data: hexutil.Encode(missing)}), true},
+		{"nil", nil, false},
+		{"no error data", errors.New("execution reverted"), false},
+		{"non-string data", fakeDataError{data: 123}, false},
+		{"invalid hex", fakeDataError{data: "0xzz"}, false},
+		{"empty", fakeDataError{data: "0x"}, false},
+		{"short selector", fakeDataError{data: hexutil.Encode(missing[:3])}, false},
+		{"selector only", fakeDataError{data: hexutil.Encode(missing[:4])}, false},
+		{"truncated argument", fakeDataError{data: hexutil.Encode(missing[:len(missing)-1])}, false},
+		{"uint64 overflow", fakeDataError{data: hexutil.Encode(overflow)}, false},
+		{"unrelated error", fakeDataError{data: hexutil.Encode(unrelated)}, false},
+		{"unknown selector", fakeDataError{data: "0xffffffff"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isConsensusStateNotFound(tc.err))
+		})
+	}
 }

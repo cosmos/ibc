@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -333,11 +334,11 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	raw, err := lightClient.GetClientState(&bind.CallOpts{Context: ctx})
 	require.NoError(t, err)
 
-	state, err := besu.DecodeClientState(raw)
+	state, err := besumsgs.NewBindings().UnpackClientState(raw)
 	require.NoError(t, err)
-	require.Equal(t, besu.ClientState{
-		IBCRouter:      fixture.RouterAddress,
-		LatestHeight:   fixture.InitialTrustedHeight,
+	require.Equal(t, besumsgs.IBesuLightClientMsgsClientState{
+		IbcRouter:      fixture.RouterAddress,
+		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
 		TrustingPeriod: fixture.TrustingPeriod,
 		MaxClockDrift:  fixture.MaxClockDrift,
 	}, state)
@@ -345,7 +346,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
 	require.NoError(t, err)
 
-	want, err := fixture.InitialConsensusState().Hash()
+	want, err := besu.HashConsensusState(fixture.InitialConsensusState())
 	require.NoError(t, err)
 	require.Equal(t, want, common.Hash(hash))
 

@@ -5,6 +5,7 @@ package besu_test
 import (
 	"testing"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func TestCheckUpdateThresholds(t *testing.T) {
 	addrs := besutest.Addresses(besutest.Keys(7))
 	six := addrs[:6]
 	header := &besu.Header{Validators: six}
-	trusted := besu.ConsensusState{Validators: six}
+	trusted := besumsgs.IBesuLightClientMsgsConsensusState{Validators: six}
 
 	// Four of six meets quorum; a signer outside the set contributes nothing.
 	require.NoError(t, besu.CheckUpdate(header, append([]common.Address{addrs[6]}, six[:4]...), trusted))

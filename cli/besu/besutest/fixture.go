@@ -10,10 +10,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
-	"github.com/cosmos/ibc/cli/besu"
 
 	_ "embed"
 )
@@ -90,8 +89,8 @@ func MustFixture(tb testing.TB) Fixture {
 }
 
 // InitialConsensusState is the consensus state the fixture client is deployed with.
-func (f Fixture) InitialConsensusState() besu.ConsensusState {
-	return besu.ConsensusState{
+func (f Fixture) InitialConsensusState() besumsgs.IBesuLightClientMsgsConsensusState {
+	return besumsgs.IBesuLightClientMsgsConsensusState{
 		Timestamp:  f.InitialTrustedTimestamp,
 		StateRoot:  f.InitialTrustedStateRoot,
 		Validators: f.InitialTrustedValidators,
@@ -99,8 +98,8 @@ func (f Fixture) InitialConsensusState() besu.ConsensusState {
 }
 
 // ExpectedConsensusState is the consensus state the update installs.
-func (u UpdateFixture) ExpectedConsensusState() besu.ConsensusState {
-	return besu.ConsensusState{
+func (u UpdateFixture) ExpectedConsensusState() besumsgs.IBesuLightClientMsgsConsensusState {
+	return besumsgs.IBesuLightClientMsgsConsensusState{
 		Timestamp:  u.ExpectedTimestamp,
 		StateRoot:  u.ExpectedStateRoot,
 		Validators: u.ExpectedValidators,
@@ -109,10 +108,10 @@ func (u UpdateFixture) ExpectedConsensusState() besu.ConsensusState {
 
 // ProofNodes unwraps the abi.encode(bytes[]) storage proof.
 func (m MembershipFixture) ProofNodes() ([][]byte, error) {
-	return DecodeProofNodes(m.Proof)
+	return messageBindings.UnpackProofNodes(m.Proof)
 }
 
 // AccountProofNodes unwraps the abi.encode(bytes[]) account proof.
 func (m MembershipFixture) AccountProofNodes() ([][]byte, error) {
-	return DecodeProofNodes(m.AccountProof)
+	return messageBindings.UnpackProofNodes(m.AccountProof)
 }

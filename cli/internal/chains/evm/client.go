@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuerrors"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
@@ -396,7 +398,7 @@ func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) 
 		}
 
 		if _, dup := byKey[key]; dup {
-			return AccountProof{}, errors.Errorf("duplicate storage proof for slot %s", common.Hash(key))
+			return AccountProof{}, errors.Errorf("duplicate storage proof for slot %s", key)
 		}
 
 		byKey[key] = StorageProof{Key: key, Value: storage.Value, Proof: decodeProofNodes(storage.Proof)}
@@ -428,17 +430,20 @@ func decodeProofNodes(nodes []string) [][]byte {
 	return out
 }
 
-// GetBesuQBFTClientState reads and strictly decodes clientID's Besu QBFT light
+// GetBesuQBFTClientState reads and decodes clientID's Besu QBFT light
 // client state.
-func (c *Client) GetBesuQBFTClientState(ctx context.Context, clientID string) (besu.ClientState, error) {
+func (c *Client) GetBesuQBFTClientState(
+	ctx context.Context,
+	clientID string,
+) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	lightClient, err := c.besuQBFTClient(ctx, clientID)
 	if err != nil {
-		return besu.ClientState{}, err
+		return besumsgs.IBesuLightClientMsgsClientState{}, err
 	}
 
 	raw, err := lightClient.GetClientState(&bind.CallOpts{Context: ctx})
 	if err != nil {
-		return besu.ClientState{}, errors.Wrapf(
+		return besumsgs.IBesuLightClientMsgsClientState{}, errors.Wrapf(
 			err,
 			"querying client state for client %q on chain %s",
 			clientID,
@@ -446,9 +451,14 @@ func (c *Client) GetBesuQBFTClientState(ctx context.Context, clientID string) (b
 		)
 	}
 
-	state, err := besu.DecodeClientState(raw)
+	state, err := besumsgs.NewBindings().UnpackClientState(raw)
 	if err != nil {
-		return besu.ClientState{}, errors.Wrapf(err, "client %q on chain %s", clientID, c.chainID)
+		return besumsgs.IBesuLightClientMsgsClientState{}, errors.Wrapf(
+			err,
+			"client %q on chain %s",
+			clientID,
+			c.chainID,
+		)
 	}
 
 	return state, nil
@@ -496,16 +506,7 @@ func (c *Client) besuQBFTClient(ctx context.Context, clientID string) (*besuqbft
 	return lightClient, nil
 }
 
-var consensusStateNotFoundSelector = mustErrorSelector("ConsensusStateNotFound")
-
-func mustErrorSelector(name string) []byte {
-	parsed, err := besuqbft.ContractMetaData.GetAbi()
-	if err != nil {
-		panic(err)
-	}
-
-	return parsed.Errors[name].ID.Bytes()[:4]
-}
+var besuErrorBindings = besuerrors.NewBindings()
 
 // isConsensusStateNotFound recognizes the light client's
 // ConsensusStateNotFound(uint64) revert in a JSON-RPC error's data.
@@ -521,11 +522,16 @@ func isConsensusStateNotFound(err error) bool {
 	}
 
 	revert, decodeErr := hexutil.Decode(data)
-	if decodeErr != nil {
+	if decodeErr != nil || len(revert) < 4 {
 		return false
 	}
 
-	return len(revert) >= 4 && bytes.Equal(revert[:4], consensusStateNotFoundSelector)
+	decoded, decodeErr := besuErrorBindings.UnpackError(revert)
+	if decodeErr != nil {
+		return false
+	}
+	_, ok = decoded.(*besuerrors.BindingsConsensusStateNotFound)
+	return ok
 }
 
 func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {

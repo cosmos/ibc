@@ -83,7 +83,13 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	require.Equal(t, []common.Address{attestor.Address(), secondAttestor.Address()}, client.Attestors)
 	require.Equal(t, uint8(2), client.MinRequiredSignatures)
 
-	attachedClient, err := setup.AttachClient(ctx, instance.Router, client.ID, client.CounterpartyClientID, "attestation")
+	attachedClient, err := setup.AttachClient(
+		ctx,
+		instance.Router,
+		client.ID,
+		client.CounterpartyClientID,
+		"attestation",
+	)
 	require.NoError(t, err)
 	require.Equal(t, client, attachedClient)
 
@@ -92,13 +98,19 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 
 	qbft, err := setup.PrepareBesuQBFTClient(ctx, clientAuthority, instance.Router, BesuQBFTClientConfig{
 		ID: "qbft-b", CounterpartyClientID: "qbft-a", CounterpartyRouter: instance.Router,
-		InitialHeight: 1, InitialTimestamp: 1_700_000_000,
+		InitialHeight: 1, InitialTimestamp: 1_700_000_000, TrustingPeriod: 14 * 24 * 60 * 60,
 		InitialValidators: []common.Address{attestor.Address()},
 	})
 	require.NoError(t, err)
 	qbftClient, err := qbft.Deploy(ctx)
 	require.NoError(t, err)
-	attachedQBFT, err := setup.AttachClient(ctx, instance.Router, qbftClient.ID, qbftClient.CounterpartyClientID, "besu-qbft")
+	attachedQBFT, err := setup.AttachClient(
+		ctx,
+		instance.Router,
+		qbftClient.ID,
+		qbftClient.CounterpartyClientID,
+		"besu-qbft",
+	)
 	require.NoError(t, err)
 	require.Equal(t, qbftClient, attachedQBFT)
 	_, err = setup.AttachClient(ctx, instance.Router, qbftClient.ID, qbftClient.CounterpartyClientID, "attestation")

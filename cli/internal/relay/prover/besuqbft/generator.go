@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
@@ -44,7 +45,7 @@ type chain interface {
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	SealedHeader(ctx context.Context, height uint64) (*besu.Header, error)
 	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.AccountProof, error)
-	GetBesuQBFTClientState(ctx context.Context, clientID string) (besu.ClientState, error)
+	GetBesuQBFTClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
 	GetBesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error)
 }
 
@@ -61,13 +62,17 @@ type Generator struct {
 type snapshot struct {
 	header    *besu.Header
 	proof     evm.AccountProof
-	consensus besu.ConsensusState
+	consensus besumsgs.IBesuLightClientMsgsConsensusState
 }
 
 // consensusOf is the consensus state an update to header installs. Every
 // field comes from the header, so no historical state is needed.
-func consensusOf(header *besu.Header) besu.ConsensusState {
-	return besu.ConsensusState{Timestamp: header.Timestamp, StateRoot: header.StateRoot, Validators: header.Validators}
+func consensusOf(header *besu.Header) besumsgs.IBesuLightClientMsgsConsensusState {
+	return besumsgs.IBesuLightClientMsgsConsensusState{
+		Timestamp:  header.Timestamp,
+		StateRoot:  header.StateRoot,
+		Validators: header.Validators,
+	}
 }
 
 // New builds a Generator without touching either chain; ResolveGenerator is
@@ -103,14 +108,14 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 		return fmt.Errorf("client %q: invalid counterparty router address %q", g.clientID, counterpartyRouter)
 	}
 
-	if state.IBCRouter != common.HexToAddress(counterpartyRouter) {
+	if state.IbcRouter != common.HexToAddress(counterpartyRouter) {
 		return fmt.Errorf(
 			"client %q proves router %s but chain %s is configured with router %s",
-			g.clientID, state.IBCRouter, g.counterparty.ChainID(), counterpartyRouter,
+			g.clientID, state.IbcRouter, g.counterparty.ChainID(), counterpartyRouter,
 		)
 	}
 
-	if _, err := g.preimage(ctx, state.LatestHeight); err != nil {
+	if _, err := g.preimage(ctx, state.LatestHeight.RevisionHeight); err != nil {
 		return fmt.Errorf("client %q: verifying trusted consensus state: %w", g.clientID, err)
 	}
 
@@ -128,7 +133,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		return 0, time.Time{}, err
 	}
 
-	trusted, err := g.preimage(ctx, state.LatestHeight)
+	trusted, err := g.preimage(ctx, state.LatestHeight.RevisionHeight)
 	if err != nil {
 		return 0, time.Time{}, err
 	}
@@ -138,7 +143,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
 	}
 	if expiredErr := checkTrustingPeriod(state, trusted, hostHead.Timestamp); expiredErr != nil {
-		return state.LatestHeight, time.Unix(int64(trusted.Timestamp), 0).UTC(), nil
+		return state.LatestHeight.RevisionHeight, time.Unix(int64(trusted.Timestamp), 0).UTC(), nil
 	}
 
 	head, err := g.counterparty.GetBlockHeader(ctx, v2.LatestBlock)
@@ -150,7 +155,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	height, timestamp := head.Height, head.Timestamp
 
 	if timestamp.After(maxTimestamp) {
-		low, high := state.LatestHeight, height
+		low, high := state.LatestHeight.RevisionHeight, height
 		timestamp = time.Unix(int64(trusted.Timestamp), 0).UTC()
 		for low < high {
 			mid := low + (high-low)/2 + 1
@@ -171,7 +176,11 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	return height, timestamp, nil
 }
 
-func checkTrustingPeriod(state besu.ClientState, trusted besu.ConsensusState, hostTime time.Time) error {
+func checkTrustingPeriod(
+	state besumsgs.IBesuLightClientMsgsClientState,
+	trusted besumsgs.IBesuLightClientMsgsConsensusState,
+	hostTime time.Time,
+) error {
 	if state.TrustingPeriod == 0 {
 		return nil
 	}
@@ -180,7 +189,7 @@ func checkTrustingPeriod(state besu.ClientState, trusted besu.ConsensusState, ho
 	if trusted.Timestamp+state.TrustingPeriod <= uint64(hostTime.Unix()) { //nolint:gosec // seconds since epoch
 		return fmt.Errorf(
 			"%w: trusted height %d timestamp %d, trusting period %ds",
-			ErrClientExpired, state.LatestHeight, trusted.Timestamp, state.TrustingPeriod,
+			ErrClientExpired, state.LatestHeight.RevisionHeight, trusted.Timestamp, state.TrustingPeriod,
 		)
 	}
 
@@ -198,24 +207,24 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if err != nil {
 		return nil, err
 	}
-	if target <= state.LatestHeight {
-		stored, err := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, target)
+	if target <= state.LatestHeight.RevisionHeight {
+		stored, storedErr := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, target)
 		switch {
-		case err == nil:
-			hash, err := consensusOf(targetHeader).Hash()
-			if err != nil {
-				return nil, err
+		case storedErr == nil:
+			hash, hashErr := besu.HashConsensusState(consensusOf(targetHeader))
+			if hashErr != nil {
+				return nil, hashErr
 			}
 			if hash != common.Hash(stored) {
 				return nil, fmt.Errorf("%w: height %d stores %s, counterparty state hashes to %s",
 					ErrConflictingConsensusState, target, common.Hash(stored), hash)
 			}
 			return nil, nil
-		case !errors.Is(err, evm.ErrConsensusStateNotFound):
-			return nil, err
+		case !errors.Is(storedErr, evm.ErrConsensusStateNotFound):
+			return nil, storedErr
 		}
 	}
-	trusted, err := g.preimage(ctx, state.LatestHeight)
+	trusted, err := g.preimage(ctx, state.LatestHeight.RevisionHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -238,10 +247,10 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if checkErr := besu.CheckUpdate(targetHeader, signers, trusted); checkErr != nil {
 		return nil, fmt.Errorf(
 			"direct update from trusted height %d to %d failed (intermediate updates are not supported): %w",
-			state.LatestHeight, target, checkErr,
+			state.LatestHeight.RevisionHeight, target, checkErr,
 		)
 	}
-	update, err := besu.EncodeUpdateClient(targetHeader.RLP, state.LatestHeight, trusted)
+	update, err := besu.EncodeUpdateClient(targetHeader.RLP, state.LatestHeight.RevisionHeight, trusted)
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
@@ -383,25 +392,29 @@ func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byt
 
 // preimage returns the consensus state the light client stores at height,
 // rebuilt from the counterparty header and checked against the stored hash.
-func (g *Generator) preimage(ctx context.Context, height uint64) (besu.ConsensusState, error) {
+func (g *Generator) preimage(ctx context.Context, height uint64) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
 	header, err := g.header(ctx, height)
 	if err != nil {
-		return besu.ConsensusState{}, fmt.Errorf("rebuilding trusted consensus state at height %d: %w", height, err)
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
+			"rebuilding trusted consensus state at height %d: %w",
+			height,
+			err,
+		)
 	}
 
 	state := consensusOf(header)
 	stored, err := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, height)
 	if err != nil {
-		return besu.ConsensusState{}, err
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
 	}
 
-	hash, err := state.Hash()
+	hash, err := besu.HashConsensusState(state)
 	if err != nil {
-		return besu.ConsensusState{}, err
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
 	}
 
 	if hash != common.Hash(stored) {
-		return besu.ConsensusState{}, fmt.Errorf(
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
 			"consensus state rebuilt for height %d hashes to %s but the light client stores %s",
 			height, hash, common.Hash(stored),
 		)

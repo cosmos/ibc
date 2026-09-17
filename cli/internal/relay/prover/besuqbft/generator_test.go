@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +36,7 @@ type fakeChain struct {
 	latest         *v2.BlockHeader
 	headers        map[uint64]v2.BlockHeader
 	sealed         map[uint64]*besu.Header
-	clientState    besu.ClientState
+	clientState    besumsgs.IBesuLightClientMsgsClientState
 	clientStateErr error
 	hashes         map[uint64]hashResult
 	proof          func(height uint64, slots [][32]byte) (evm.AccountProof, error)
@@ -74,7 +75,7 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots [][32
 	return f.proof(height, slots)
 }
 
-func (f *fakeChain) GetBesuQBFTClientState(context.Context, string) (besu.ClientState, error) {
+func (f *fakeChain) GetBesuQBFTClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	return f.clientState, f.clientStateErr
 }
 
@@ -105,18 +106,18 @@ func newFixtureEnv(t *testing.T) *fixtureEnv {
 	return env
 }
 
-func (e *fixtureEnv) clientState(latest uint64) besu.ClientState {
-	return besu.ClientState{
-		IBCRouter:      e.fixture.RouterAddress,
-		LatestHeight:   latest,
+func (e *fixtureEnv) clientState(latest uint64) besumsgs.IBesuLightClientMsgsClientState {
+	return besumsgs.IBesuLightClientMsgsClientState{
+		IbcRouter:      e.fixture.RouterAddress,
+		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: latest},
 		TrustingPeriod: e.fixture.TrustingPeriod,
 		MaxClockDrift:  e.fixture.MaxClockDrift,
 	}
 }
 
-func mustHash(t *testing.T, state besu.ConsensusState) [32]byte {
+func mustHash(t *testing.T, state besumsgs.IBesuLightClientMsgsConsensusState) [32]byte {
 	t.Helper()
-	hash, err := state.Hash()
+	hash, err := besu.HashConsensusState(state)
 	require.NoError(t, err)
 	return hash
 }
@@ -135,7 +136,7 @@ func proofNodes(t *testing.T, m besutest.MembershipFixture) [][]byte {
 	return nodes
 }
 
-func consensusHeader(height uint64, state besu.ConsensusState) *besu.Header {
+func consensusHeader(height uint64, state besumsgs.IBesuLightClientMsgsConsensusState) *besu.Header {
 	return &besu.Header{
 		Height:     height,
 		Timestamp:  state.Timestamp,
@@ -151,7 +152,7 @@ func parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.Header {
 	return header
 }
 
-func (e *fixtureEnv) setAnchor(t *testing.T, height uint64, state besu.ConsensusState) {
+func (e *fixtureEnv) setAnchor(t *testing.T, height uint64, state besumsgs.IBesuLightClientMsgsConsensusState) {
 	t.Helper()
 	e.host.clientState = e.clientState(height)
 	e.counterparty.sealed[height] = consensusHeader(height, state)
@@ -174,10 +175,14 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, proof)
 
-	decoded, err := besutest.DecodeUpdateClient(proof)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(proof)
 	require.NoError(t, err)
-	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRLP)
-	assert.Equal(t, env.fixture.InitialTrustedHeight, decoded.TrustedHeight)
+	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
+	assert.Equal(
+		t,
+		besumsgs.IICS02ClientMsgsHeight{RevisionHeight: env.fixture.InitialTrustedHeight},
+		decoded.TrustedHeight,
+	)
 	assert.Equal(t, env.fixture.InitialConsensusState(), decoded.ConsensusStatePreimage)
 }
 
@@ -195,7 +200,10 @@ func sealedHeader(t *testing.T, template []byte, height uint64, keys []*ecdsa.Pr
 func TestClientUpdatePayloadRejectsValidatorTurnoverRequiringIntermediateUpdates(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
-	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
+	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
+		Timestamp:  1700000010,
+		Validators: besutest.Addresses(keys[:4]),
+	}
 	env.setAnchor(t, 10, trusted)
 	env.counterparty.sealed[12] = sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[4:])
 
@@ -208,18 +216,21 @@ func TestClientUpdatePayloadRejectsValidatorTurnoverRequiringIntermediateUpdates
 func TestClientUpdatePayloadValidatorTurnoverWithSufficientOverlap(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(6)
-	trusted := besu.ConsensusState{Timestamp: 1700000010, Validators: besutest.Addresses(keys[:4])}
+	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
+		Timestamp:  1700000010,
+		Validators: besutest.Addresses(keys[:4]),
+	}
 	env.setAnchor(t, 10, trusted)
 	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[2:])
 	env.counterparty.sealed[12] = header
 
 	proof, err := env.prepareUpdate(t.Context(), 12)
 	require.NoError(t, err)
-	update, err := besutest.DecodeUpdateClient(proof)
+	update, err := besumsgs.NewBindings().UnpackUpdateClient(proof)
 	require.NoError(t, err)
-	require.Equal(t, uint64(10), update.TrustedHeight)
+	require.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: uint64(10)}, update.TrustedHeight)
 	require.Equal(t, trusted, update.ConsensusStatePreimage)
-	require.Equal(t, header.RLP, update.HeaderRLP)
+	require.Equal(t, header.RLP, update.HeaderRlp)
 }
 
 func TestClientUpdatePayloadTargetAlreadyStored(t *testing.T) {
@@ -258,9 +269,9 @@ func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, proof)
 
-	decoded, err := besutest.DecodeUpdateClient(proof)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(proof)
 	require.NoError(t, err)
-	assert.Equal(t, anchor, decoded.TrustedHeight)
+	assert.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: anchor}, decoded.TrustedHeight)
 }
 
 func TestPreimageRejectsMismatch(t *testing.T) {
@@ -322,11 +333,16 @@ func TestPacketProofs(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return commitment, membershipNodes })
 
-		proofs, err := env.gen.PacketProofs(ctx, update.Height, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{sent})
+		proofs, err := env.gen.PacketProofs(
+			ctx,
+			update.Height,
+			v2.ProofKindPacketCommitment,
+			[]channeltypesv2.Packet{sent},
+		)
 		require.NoError(t, err)
 		require.Len(t, proofs, 1)
 
-		decoded, err := besutest.DecodeMembershipProof(proofs[0])
+		decoded, err := besumsgs.NewBindings().UnpackMembershipProof(proofs[0])
 		require.NoError(t, err)
 		assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
 		assert.Equal(t, accountNodes(t, fixture.Membership), decoded.AccountProofNodes)
@@ -348,11 +364,16 @@ func TestPacketProofs(t *testing.T) {
 			return big.NewInt(0), nonMembershipNodes
 		})
 
-		proofs, err := env.gen.PacketProofs(ctx, update.Height, v2.ProofKindReceiptAbsence, []channeltypesv2.Packet{received})
+		proofs, err := env.gen.PacketProofs(
+			ctx,
+			update.Height,
+			v2.ProofKindReceiptAbsence,
+			[]channeltypesv2.Packet{received},
+		)
 		require.NoError(t, err)
 		require.Len(t, proofs, 1)
 
-		decoded, err := besutest.DecodeMembershipProof(proofs[0])
+		decoded, err := besumsgs.NewBindings().UnpackMembershipProof(proofs[0])
 		require.NoError(t, err)
 		assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
 		assert.Equal(t, nonMembershipNodes, decoded.ProofNodes)
@@ -362,7 +383,12 @@ func TestPacketProofs(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(1), [][]byte{{0x01}} })
 
-		_, err := env.gen.PacketProofs(ctx, update.Height, v2.ProofKindReceiptAbsence, []channeltypesv2.Packet{received})
+		_, err := env.gen.PacketProofs(
+			ctx,
+			update.Height,
+			v2.ProofKindReceiptAbsence,
+			[]channeltypesv2.Packet{received},
+		)
 		require.ErrorIs(t, err, ErrReceiptExists)
 	})
 
@@ -370,7 +396,12 @@ func TestPacketProofs(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.expectProofAt(t, update, func([32]byte) (*big.Int, [][]byte) { return big.NewInt(0), nil })
 
-		_, err := env.gen.PacketProofs(ctx, update.Height, v2.ProofKindAcknowledgement, []channeltypesv2.Packet{received})
+		_, err := env.gen.PacketProofs(
+			ctx,
+			update.Height,
+			v2.ProofKindAcknowledgement,
+			[]channeltypesv2.Packet{received},
+		)
 		require.ErrorIs(t, err, ErrAckMissing)
 	})
 }
@@ -431,7 +462,7 @@ func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
 			state.TrustingPeriod = tc.period
 			trusted := env.fixture.InitialConsensusState()
 			trusted.Timestamp = uint64(hostTime.Unix()) - tc.age //nolint:gosec // current epoch seconds
-			env.setAnchor(t, state.LatestHeight, trusted)
+			env.setAnchor(t, state.LatestHeight.RevisionHeight, trusted)
 			env.host.clientState = state
 			env.host.latest = &v2.BlockHeader{Height: 500, Timestamp: hostTime}
 			if !tc.expired {
@@ -440,7 +471,7 @@ func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
 			height, timestamp, err := env.gen.LatestProvableHeight(context.Background())
 			if tc.expired {
 				require.NoError(t, err)
-				assert.Equal(t, state.LatestHeight, height)
+				assert.Equal(t, state.LatestHeight.RevisionHeight, height)
 				assert.Equal(t, time.Unix(int64(trusted.Timestamp), 0).UTC(), timestamp)
 				return
 			}
@@ -484,7 +515,7 @@ func splitPath(t *testing.T, path []byte, kind byte) (string, uint64) {
 
 func (e *fixtureEnv) prepareUpdate(ctx context.Context, height uint64) ([]byte, error) {
 	timestamp := e.fixture.InitialTrustedTimestamp
-	if sealed, ok := e.counterparty.sealed[e.host.clientState.LatestHeight]; ok {
+	if sealed, ok := e.counterparty.sealed[e.host.clientState.LatestHeight.RevisionHeight]; ok {
 		timestamp = sealed.Timestamp
 	}
 	e.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(timestamp+15000), 0)} //nolint:gosec // test offset
@@ -514,9 +545,9 @@ func TestPacketProofsShareSlot(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Len(t, proofs, 2)
-	first, err := besutest.DecodeMembershipProof(proofs[0])
+	first, err := besumsgs.NewBindings().UnpackMembershipProof(proofs[0])
 	require.NoError(t, err)
-	second, err := besutest.DecodeMembershipProof(proofs[1])
+	second, err := besumsgs.NewBindings().UnpackMembershipProof(proofs[1])
 	require.NoError(t, err)
 	require.Equal(t, accountNodes(t, env.fixture.NonMembership), first.AccountProofNodes)
 	require.Empty(t, second.AccountProofNodes)
@@ -529,11 +560,13 @@ func TestExpiredClientStoredTargets(t *testing.T) {
 		t.Run(fmt.Sprint(target), func(t *testing.T) {
 			env := newFixtureEnv(t)
 			env.setAnchor(t, 112, env.fixture.InitialConsensusState())
-			env.host.clientState.LatestHeight = 113
+			env.host.clientState.LatestHeight.RevisionHeight = 113
 			env.counterparty.sealed[113] = consensusHeader(113, env.fixture.InitialConsensusState())
 			env.host.hashes[113] = env.host.hashes[112]
 			env.counterparty.sealed[114] = consensusHeader(114, env.fixture.InitialConsensusState())
-			env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(env.fixture.InitialTrustedTimestamp+env.fixture.TrustingPeriod), 0)}
+			env.host.latest = &v2.BlockHeader{
+				Timestamp: time.Unix(int64(env.fixture.InitialTrustedTimestamp+env.fixture.TrustingPeriod), 0),
+			}
 			proof, err := env.gen.ClientUpdatePayload(t.Context(), target)
 			if target == 114 {
 				require.ErrorIs(t, err, ErrClientExpired)

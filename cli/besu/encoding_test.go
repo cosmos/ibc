@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,10 +24,10 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 	encoded, err := besu.EncodeUpdateClient(update.HeaderRLP, update.TrustedHeight, preimage)
 	require.NoError(t, err)
 
-	decoded, err := besutest.DecodeUpdateClient(encoded)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(encoded)
 	require.NoError(t, err)
-	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRLP)
-	assert.Equal(t, update.TrustedHeight, decoded.TrustedHeight)
+	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
+	assert.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: update.TrustedHeight}, decoded.TrustedHeight)
 	assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
 }
 
@@ -43,7 +44,7 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 		encoded, err := besu.EncodeMembershipProof(preimage, accountNodes, nodes)
 		require.NoError(t, err)
 
-		decoded, err := besutest.DecodeMembershipProof(encoded)
+		decoded, err := besumsgs.NewBindings().UnpackMembershipProof(encoded)
 		require.NoError(t, err)
 		assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
 		assert.Equal(t, accountNodes, decoded.AccountProofNodes)
@@ -51,16 +52,16 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 
 		cached, err := besu.EncodeMembershipProof(preimage, nil, nodes)
 		require.NoError(t, err)
-		decoded, err = besutest.DecodeMembershipProof(cached)
+		decoded, err = besumsgs.NewBindings().UnpackMembershipProof(cached)
 		require.NoError(t, err)
 		assert.Empty(t, decoded.AccountProofNodes)
 	}
 }
 
-func TestClientStateRoundTripAndStrictness(t *testing.T) {
-	state := besu.ClientState{
-		IBCRouter:      common.HexToAddress("0xe2beCC7d4F673682BedA1AD6D7186784C3D43b2F"),
-		LatestHeight:   114,
+func TestClientStateRoundTrip(t *testing.T) {
+	state := besumsgs.IBesuLightClientMsgsClientState{
+		IbcRouter:      common.HexToAddress("0xe2beCC7d4F673682BedA1AD6D7186784C3D43b2F"),
+		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: 114},
 		TrustingPeriod: 1209600,
 		MaxClockDrift:  15,
 	}
@@ -69,44 +70,31 @@ func TestClientStateRoundTripAndStrictness(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, encoded, 5*32, "ClientState is fully static")
 
-	decoded, err := besu.DecodeClientState(encoded)
+	decoded, err := besumsgs.NewBindings().UnpackClientState(encoded)
 	require.NoError(t, err)
 	assert.Equal(t, state, decoded)
-
-	_, err = besu.DecodeClientState(encoded[:len(encoded)-1])
-	require.ErrorIs(t, err, besu.ErrInvalidClientState)
-
-	revision := append([]byte(nil), encoded...)
-	revision[63] = 1 // revisionNumber word
-	_, err = besu.DecodeClientState(revision)
-	require.ErrorIs(t, err, besu.ErrInvalidClientState)
-
-	zeroHeight, err := besutest.EncodeClientState(besu.ClientState{IBCRouter: state.IBCRouter})
-	require.NoError(t, err)
-	_, err = besu.DecodeClientState(zeroHeight)
-	require.ErrorIs(t, err, besu.ErrInvalidClientState)
 }
 
 func TestConsensusStateHashChangesWithEveryField(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	base := fixture.InitialConsensusState()
 
-	h0, err := base.Hash()
+	h0, err := besu.HashConsensusState(base)
 	require.NoError(t, err)
 
 	ts := base
 	ts.Timestamp++
-	h1, err := ts.Hash()
+	h1, err := besu.HashConsensusState(ts)
 	require.NoError(t, err)
 
 	root := base
 	root.StateRoot[0] ^= 1
-	h2, err := root.Hash()
+	h2, err := besu.HashConsensusState(root)
 	require.NoError(t, err)
 
 	vals := base
 	vals.Validators = base.Validators[:3]
-	h3, err := vals.Hash()
+	h3, err := besu.HashConsensusState(vals)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, h0, h1)
@@ -121,11 +109,11 @@ func TestPayloadDecodersRejectMalformedData(t *testing.T) {
 		"invalid offset": bytes.Repeat([]byte{0xff}, 32),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := besutest.DecodeProofNodes(data)
+			_, err := besumsgs.NewBindings().UnpackProofNodes(data)
 			require.Error(t, err)
-			_, err = besutest.DecodeUpdateClient(data)
+			_, err = besumsgs.NewBindings().UnpackUpdateClient(data)
 			require.Error(t, err)
-			_, err = besutest.DecodeMembershipProof(data)
+			_, err = besumsgs.NewBindings().UnpackMembershipProof(data)
 			require.Error(t, err)
 		})
 	}
@@ -135,7 +123,7 @@ func TestConsensusStateHashMatchesSolidity(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	// keccak256(abi.encode(ConsensusState)) for qbft.json's initial trusted state,
 	// computed independently with `cast abi-encode ... | cast keccak`.
-	got, err := fixture.InitialConsensusState().Hash()
+	got, err := besu.HashConsensusState(fixture.InitialConsensusState())
 	require.NoError(t, err)
 	assert.Equal(t, common.HexToHash("0x6ad73b19daaa61fcfc6d16fb89695b52ab719cc0348d014fd7cac8c1fd102bda"), got)
 }
@@ -149,11 +137,22 @@ func TestCommitmentSlotMatchesSolidity(t *testing.T) {
 	)
 }
 
-func TestUpdateClientRejectsNonzeroRevision(t *testing.T) {
-	encoded, err := besu.EncodeUpdateClient(nil, 1, besu.ConsensusState{})
+func TestGeneratedEncodingSchema(t *testing.T) {
+	bindings := besumsgs.NewBindings()
+	for name, method := range bindings.GetABI().Methods {
+		t.Run(name, func(t *testing.T) {
+			require.Len(t, method.Inputs, 1)
+			require.Len(t, method.Outputs, 1)
+			assert.Equal(t, method.Inputs[0].Type.String(), method.Outputs[0].Type.String())
+		})
+	}
+	state := besutest.MustFixture(t).InitialConsensusState()
+	encoded, err := bindings.TryPackConsensusState(state)
 	require.NoError(t, err)
-	// The tuple offset and header offset precede trustedHeight.revisionNumber.
-	encoded[3*32-1] = 1
-	_, err = besutest.DecodeUpdateClient(encoded)
-	require.ErrorContains(t, err, "trusted revision number 1, want 0")
+	decoded, err := bindings.UnpackConsensusState(encoded[4:])
+	require.NoError(t, err)
+	assert.Equal(t, state, decoded)
+
+	_, err = bindings.UnpackConsensusState(nil)
+	require.Error(t, err)
 }

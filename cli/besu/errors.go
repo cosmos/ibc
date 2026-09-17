@@ -11,5 +11,4 @@ var (
 	ErrDuplicateSigner     = errors.New("duplicate commit seal signer")
 	ErrInsufficientOverlap = errors.New("insufficient trusted validator overlap")
 	ErrInsufficientQuorum  = errors.New("insufficient validator quorum")
-	ErrInvalidClientState  = errors.New("invalid besu client state")
 )
