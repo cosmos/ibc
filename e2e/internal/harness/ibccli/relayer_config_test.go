@@ -93,6 +93,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg.SignerKeyFile = ""
 	cfg.SignerGRPC = "kms:9090"
 	cfg.SignerRemoteKeyID = "relay-key"
+	cfg.ClearInterval = 2 * time.Second
 	cfg.Chains[0].PacketBatchSize = 7
 	cfg.Chains[0].PacketBatchTimeout = 250 * time.Millisecond
 	cfg.Attestors = []RelayerAttestor{
@@ -103,6 +104,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
+	require.Equal(t, "2s", file.Relayer.ClearInterval)
 	require.Equal(t, chainOverrideFileConfig{
 		ChainID: "1", TxSubmissionDelay: "10ms", PacketBatchSize: 7,
 		PacketBatchTimeout: 250 * time.Millisecond,
