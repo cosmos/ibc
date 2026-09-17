@@ -63,10 +63,17 @@ type Route struct {
 	SkipDestinationIFTBridge bool
 }
 
-const routeAtoB RouteID = "route-a-to-b"
+const (
+	routeAtoB RouteID = "route-a-to-b"
+	routeBtoA RouteID = "route-b-to-a"
+)
 
 func AtoB(a, b environment.ChainID) Route {
 	return Route{ID: routeAtoB, Source: a, Destination: b}
+}
+
+func BtoA(b, a environment.ChainID) Route {
+	return Route{ID: routeBtoA, Source: b, Destination: a}
 }
 
 func ManualAtoB(a, b environment.ChainID) Route {
@@ -175,7 +182,7 @@ func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environm
 
 	// opt-on dump for debugging
 	dumpRelayer := func() {
-		if !environment.DumpEnabled() {
+		if environment.DumpEnabled() {
 			environment.DumpTestDirectory(t, env.RunID(), driver.ConfigHome())
 		}
 	}
@@ -367,6 +374,8 @@ func buildConfig(
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
 		FinalityOffset: ibccli.HarnessFinalityOffset,
+		ClearOnStart:   false,
+		ClearInterval:  5 * time.Second,
 	}
 	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
