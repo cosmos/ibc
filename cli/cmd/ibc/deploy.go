@@ -376,6 +376,9 @@ func besuQBFTParams(
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
 	}
+	if flags.Changed(flagNameTrustingPeriod) && trustingPeriod == 0 {
+		return deploy.BesuQBFTParams{}, errors.New("--trusting-period must be positive")
+	}
 	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift, flagNameMaxClockDrift)
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
@@ -399,7 +402,7 @@ func besuQBFTParams(
 	}
 	if !flags.Changed(flagNameTrustingPeriod) {
 		return deploy.BesuQBFTParams{}, errors.New(
-			"--trusting-period is required for a new besu-qbft client: choose a duration based on validator governance, or explicitly use 0 to never expire",
+			"--trusting-period is required for a new besu-qbft client: choose a positive duration based on validator governance",
 		)
 	}
 	source, ok := counterpartyTarget.(deploy.BesuQBFTSource)

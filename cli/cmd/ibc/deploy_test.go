@@ -248,14 +248,14 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	a.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(0), "maxClockDrift": float64(60)},
+		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(0), "maxClockDrift": float64(60)},
+		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
@@ -285,10 +285,10 @@ func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) 
 		name       string
 		args       []string
 		wantPeriod uint64
-		wantErr    bool
+		wantErr    string
 	}{
-		{name: "omitted", wantErr: true},
-		{name: "explicit never expires", args: []string{"--trusting-period=0"}},
+		{name: "omitted", wantErr: "--trusting-period is required for a new besu-qbft client"},
+		{name: "explicit zero", args: []string{"--trusting-period=0"}, wantErr: "--trusting-period must be positive"},
 		{name: "finite", args: []string{"--trusting-period=2h"}, wantPeriod: 7200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -298,8 +298,8 @@ func TestBesuQBFTParamsRequiresExplicitTrustingPeriodForNewClient(t *testing.T) 
 			require.NoError(t, flags.Parse(tc.args))
 			source := &bootstrapTarget{}
 			params, err := besuQBFTParams(t.Context(), flags, source, "1", "2", "new-client")
-			if tc.wantErr {
-				require.ErrorContains(t, err, "--trusting-period is required for a new besu-qbft client")
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
 				return
 			}
@@ -380,7 +380,8 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 		{name: "defaults preserve recorded settings"},
 		{name: "matching settings", args: []string{"--trusting-period=2h", "--max-clock-drift=15s"}},
 		{name: "changed period", args: []string{"--trusting-period=1h"}, wantConflict: "trustingPeriod"},
-		{name: "explicit zero period", args: []string{"--trusting-period=0s"}, wantConflict: "trustingPeriod"},
+		{name: "explicit zero period", args: []string{"--trusting-period=0s"}, wantParamErr: "must be positive"},
+		{name: "zero drift", args: []string{"--max-clock-drift=0s"}, wantConflict: "maxClockDrift"},
 		{name: "explicit default drift", args: []string{"--max-clock-drift=60s"}, wantConflict: "maxClockDrift"},
 		{name: "negative period", args: []string{"--trusting-period=-1s"}, wantParamErr: "must not be negative"},
 		{name: "fractional period", args: []string{"--trusting-period=500ms"}, wantParamErr: "must be whole seconds"},

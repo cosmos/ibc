@@ -59,7 +59,10 @@ func TestInstrumentation(t *testing.T) {
 		ctx := context.Background()
 		reader := setTestMetrics(t)
 		prover := mocks.NewMockProver(t)
-		prover.EXPECT().ClientUpdatePayload(ctx, uint64(7)).Return(nil, errors.New("client update payload unavailable")).Once()
+		prover.EXPECT().
+			ClientUpdatePayload(ctx, uint64(7)).
+			Return(nil, errors.New("client update payload unavailable")).
+			Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT

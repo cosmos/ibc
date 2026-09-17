@@ -397,11 +397,6 @@ func (c Observability) Validate() error {
 	return nil
 }
 
-func (c Observability) Enabled() bool {
-	// might become more complex in the future
-	return c.Metrics
-}
-
 // ConfigFile resolves the OTEL configuration file. Supports loading from OTEL_CONFIG_FILE env.
 func (c Observability) ConfigFile() (string, error) {
 	if c.Type != ObservabilityOTEL {

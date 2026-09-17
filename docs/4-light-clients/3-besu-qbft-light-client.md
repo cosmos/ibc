@@ -15,7 +15,7 @@ The client state fixes what it verifies against for its whole life:
 struct ClientState {
     address ibcRouter;      // the counterparty ICS26Router whose storage is proven
     Height latestHeight;    // the highest Besu height accepted so far
-    uint64 trustingPeriod;  // seconds a trusted state stays usable; 0 never expires
+    uint64 trustingPeriod;  // positive lifetime of a trusted state, in seconds
     uint64 maxClockDrift;   // seconds a header may lead this chain's clock
 }
 ```
@@ -45,7 +45,7 @@ Besu validators seal a block by signing a digest of its header, with the seals t
 - **Trusted overlap.** More than one third of the validators trusted at the trusted height must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers.
 - **Quorum.** At least two thirds of the header's own validator set must be among the signers, which is the same threshold Besu needs to produce the block.
 
-The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. A trusted state that has expired can no longer anchor an update, but stored consensus states remain usable for packet proofs. Advancing an expired client requires redeployment.
+The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. An expired consensus state can no longer anchor an update or be used for packet proofs. Advancing an expired client requires redeployment.
 
 Heights need not be consecutive. Every QBFT block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state. If validator turnover prevents a direct update, proof generation fails; automatic catch-up through intermediate updates is not supported.
 
@@ -66,7 +66,7 @@ Both take the consensus state for the proof height, the account proof nodes and 
 ibc deploy client --chain 1 --counterparty-chain 2 --type besu-qbft [--height N] --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
 ```
 
-The CLI reads the counterparty's header at `--height` (default: its head) and deploys the client with that header's timestamp, state root and validators as its first trusted state. The counterparty core stack must already be deployed, because its router address is read from the manifest. `--trusting-period` is required for new clients. Set `TRUSTING_PERIOD` to a duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. Explicit `--trusting-period 0` disables expiry and requires trusting historical validator keys indefinitely. `--max-clock-drift` defaults to one minute; both durations must be whole seconds. The attestation-only flags do not apply.
+The CLI reads the counterparty's header at `--height` (default: its head) and deploys the client with that header's timestamp, state root and validators as its first trusted state. The counterparty core stack must already be deployed, because its router address is read from the manifest. `--trusting-period` is required for new clients. Set `TRUSTING_PERIOD` to a duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. The trusting period must be positive; zero is rejected. `--max-clock-drift` defaults to one minute; both durations must be whole seconds. The attestation-only flags do not apply.
 
 The client's role manager is this chain's router, so only calls routed through `ICS26Router` reach it. Rerunning the command without trust flags reuses the recorded parameters and reports the client as already deployed. Explicitly supplying different trust settings reports a conflict; use a new client ID to deploy with different settings.
 

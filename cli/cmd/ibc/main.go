@@ -169,7 +169,7 @@ func init() {
 			"attestation: initial trusted timestamp seconds (default: counterparty head; besu-qbft reads it from the header)")
 	cmdDeployClient.Flags().
 		DurationVar(&flagDeployTrustingPeriod, "trusting-period", 0,
-			"besu-qbft: required for new clients; trusted state lifetime in whole seconds (explicit 0 = never expires; omitted on reruns preserves recorded value)")
+			"besu-qbft: required for new clients; positive trusted state lifetime in whole seconds (omitted on reruns preserves recorded value)")
 	cmdDeployClient.Flags().
 		DurationVar(&flagDeployMaxClockDrift, "max-clock-drift", 60*time.Second,
 			"besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds")
