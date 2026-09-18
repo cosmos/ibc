@@ -11,7 +11,7 @@ RELAYER_HOME_DIR="$LOCAL_DIR/relayer"
 
 IBC_SERVICES=(kms attestor-a attestor-b relayer)
 CLIENT_ID="ibc-$A_CHAIN_ID-$B_CHAIN_ID"
-WATCHER_READY_TIMEOUT="${WATCHER_READY_TIMEOUT:-60}"
+PACKET_DISCOVERY_TIMEOUT="${PACKET_DISCOVERY_TIMEOUT:-30}"
 
 export DEPLOY_UID="${DEPLOY_UID:-$(id -u)}"
 export DEPLOY_GID="${DEPLOY_GID:-$(id -g)}"
@@ -172,6 +172,13 @@ _balance() {
     || true
 }
 
+_relayer_saw() {
+  local out
+  out=$(docker compose --progress quiet exec -T relayer /opt/ibc relayer packets \
+          --tx-hash "$1" --home /home/ibc 2>/dev/null) || return 1
+  [[ "$out" == *"$1"* ]]
+}
+
 # Deploys one IFT token per chain and bridges them over the client registered by
 # deploy_contracts.
 #
@@ -245,12 +252,22 @@ _leg() {
   [[ -n "$hash" ]] || die "'ibc tx ift send' on chain $src returned no transaction hash"
   log "      sent in $hash"
 
-  # Nothing hands the packet over. Both connection ends in config/ibc.yml set
-  # autoRelay.enabled, so the relayer's watcher for chain $src already saw this
-  # SendPacket on its websocket subscription and wrote a pending row; the
-  # dispatcher picks it up within dispatchPollInterval. The wait below is the
-  # assertion that the whole chain of that actually happened.
-  log "      waiting for the relayer to deliver it — chain $dst's balance $before -> $expected..."
+  log "      waiting for the relayer to notice the packet..."
+  waited=0
+  until _relayer_saw "$hash"; do
+    (( waited += IFT_POLL_INTERVAL ))
+    (( waited < PACKET_DISCOVERY_TIMEOUT )) || die \
+      "the relayer recorded no packet for $hash after ${PACKET_DISCOVERY_TIMEOUT}s." \
+      "Its watcher for chain $src did not see the SendPacket, so auto-relay never started" \
+      "— subscriptions do not look backwards, so this packet cannot be recovered." \
+      "Check 'docker compose logs relayer' for a websocket failure against chain $src" \
+      "(chains[].evm.ws), then re-run"
+    sleep "$IFT_POLL_INTERVAL"
+  done
+  log "      relayer picked it up on its own subscription"
+
+  log "      waiting for delivery — chain $dst's balance $before -> $expected..."
+  waited=0
   while (( waited < IFT_RELAY_TIMEOUT )); do
     # A failed query is a retry, not a fatal: the poll outlives one transient
     # RPC hiccup and only the timeout below ends the wait.
@@ -263,29 +280,12 @@ _leg() {
     (( waited += IFT_POLL_INTERVAL ))
   done
 
-  die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected" \
-      "— check whether the relayer ever saw the packet with" \
-      "'docker compose exec relayer /opt/ibc relayer packets --tx-hash $hash --home /home/ibc'," \
-      "then 'docker compose logs relayer attestor-a attestor-b'"
-}
-
-wait_for_watchers() {
-  local want="${#CHAINS[@]}" waited=0 seen
-  log "Waiting for the relayer to subscribe to SendPacket on both chains..."
-  while (( waited < WATCHER_READY_TIMEOUT )); do
-    seen=$(docker compose logs relayer 2>/dev/null \
-           | grep -c 'Subscribed to send packets' || true)
-    if (( ${seen:-0} >= want )); then
-      log "Relayer is watching chain A and chain B."
-      return 0
-    fi
-    sleep 1
-    (( waited += 1 ))
-  done
-
-  die "the relayer did not subscribe on both chains within ${WATCHER_READY_TIMEOUT}s" \
-      "— check 'docker compose logs relayer' for a websocket error against" \
-      "besu-a:8546 / besu-b:8546, which is what chains[].evm.ws points at"
+  die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected." \
+      "The relayer did record the packet, so this is delivery, not discovery" \
+      "— check 'docker compose logs relayer attestor-a attestor-b' for an attestor that" \
+      "cannot reach kms or a client authorizing the wrong attestor address, and" \
+      "'docker compose exec relayer /opt/ibc relayer packets --tx-hash $hash --home /home/ibc'" \
+      "for the packet's state"
 }
 
 # Top up chain A's deployer so there is something to send.
@@ -306,7 +306,6 @@ _print_balances() {
 }
 
 relay_ift_transfer() {
-  wait_for_watchers
   _mint_on_a
   _leg A B
   _print_balances
@@ -316,7 +315,6 @@ relay_ift_transfer() {
 # what the A -> B leg just delivered — so chain B ends where it started and
 # chain A ends holding everything it minted.
 relay_ift_roundtrip() {
-  wait_for_watchers
   _mint_on_a
   _leg A B
   _leg B A

@@ -41,11 +41,11 @@
 #                chains/local/ibc.env), then an IFT token per chain and the
 #                bridge between them
 #   3. services  docker compose up kms, both attestors, relayer
-#   4. transfer  mint IFT on chain A, send it to chain B, and wait for the
-#                relayer to pick the packet up off its own SendPacket
-#                subscription and deliver it — the end-to-end assertion.
-#                Nothing hands the relayer a transaction hash: both ends of the
-#                connection in config/ibc.yml set autoRelay.enabled.
+#   4. transfer  mint IFT on chain A, send it to chain B, confirm the relayer
+#                discovered the packet on its own SendPacket subscription, and
+#                wait for delivery — the end-to-end assertion. Nothing hands
+#                the relayer a transaction hash: both ends of the connection in
+#                config/ibc.yml set autoRelay.enabled.
 #
 # Usage:
 #   ./setup.sh              — run all four (the demo)
@@ -144,7 +144,7 @@ source "$LIB_DIR/ibc.sh"
 # a unit suffix — IFT_POLL_INTERVAL=3s — is a message here rather than an
 # arithmetic syntax error four phases in.
 for var in IFT_RELAY_TIMEOUT IFT_POLL_INTERVAL IFT_MINT_AMOUNT IFT_SEND_AMOUNT \
-           WATCHER_READY_TIMEOUT; do
+           PACKET_DISCOVERY_TIMEOUT; do
   [[ "${!var}" =~ ^[0-9]+$ ]] \
     || die "$var must be a whole number with no unit suffix, got '${!var}'"
 done

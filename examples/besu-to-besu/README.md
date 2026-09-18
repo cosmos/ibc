@@ -65,12 +65,12 @@ cd examples/besu-to-besu
 Takes about two minutes on a warm cache, and ends with:
 
 ```
-[14:14:15] Waiting for the relayer to subscribe to SendPacket on both chains...
-[14:14:15] Relayer is watching chain A and chain B.
 [14:14:17] [A] minting 1000000000000000000 DEMO to 0x58A57ed9...
 [14:14:20] [A] sending 500000000000000000 DEMO to 0x58A57ed9... on chain B over ibc-41001-41002...
 [14:14:22]       sent in 0xbc60671b3e081d770e8704f0e6c4c25ba9fe0bfeae0a1d99418dd17dc1a5f146
-[14:14:22]       waiting for the relayer to deliver it — chain B's balance 0 -> 500000000000000000...
+[14:14:22]       waiting for the relayer to notice the packet...
+[14:14:25]       relayer picked it up on its own subscription
+[14:14:25]       waiting for delivery — chain B's balance 0 -> 500000000000000000...
 [14:14:38]       relayed A -> B: 0x58A57ed9... holds 500000000000000000 DEMO on chain B
 [14:14:40] DEMO held by the deployer: chain A 1500000000000000000, chain B 500000000000000000
 ```
@@ -132,7 +132,7 @@ They always run together; the names are internal, not subcommands.
 | `start`    | derive every key, render the chain configs into `chains/local/`, `docker compose up` both chains, wait for RPC |
 | `deploy`   | `ibc deploy core` + `client` on each chain (writing `ibc.env`), then GMP, an IFT token per chain, and the bridge |
 | `services` | `docker compose up` kms, both attestors, relayer                 |
-| `transfer` | wait until the relayer is subscribed on both chains, mint IFT on A, send it to B, assert the balance moved — and with `roundtrip`, send it back |
+| `transfer` | mint IFT on A, send it to B, confirm the relayer discovered the packet, assert the balance moved — and with `roundtrip`, send it back |
 
 ## What makes this example different
 
@@ -278,11 +278,31 @@ relayer.connections[0].clientA.autoRelay: requires chains[41001].evm.ws
 
 **The relayer has to already be listening when the packet is sent.** A watcher
 subscribes from wherever its chain is at that moment and never looks backwards,
-so a packet emitted while the relayer was down is not discovered at all. The
-transfer phase therefore waits for both subscriptions — the two `Subscribed to
-send packets` lines in the relayer's log — before it mints anything. It does
-not just trust the compose healthcheck, which only proves port 3000 is open,
-and the relayer opens that port before it starts its watchers.
+so a packet emitted while its chain's watcher was down is not discovered at
+all — and cannot be recovered afterwards. The compose healthcheck does not rule
+this out: it only proves port 3000 is open, and the relayer opens that port
+before it starts its watchers.
+
+So each leg checks discovery explicitly, right after the send and before it
+waits on any balance:
+
+```bash
+ibc relayer packets --tx-hash <the send tx>
+```
+
+A row for that transaction exists only because a live subscription delivered
+its `SendPacket`, which makes this a statement about *this packet, now*. The
+relayer's log cannot answer the same question — it accumulates across every
+restart, a `Subscribed to send packets` line stays behind after its
+subscription has ended, and two lines for one chain are indistinguishable from
+one line for each. Getting that wrong is worse than not checking: a false pass
+means the send goes out into a dead subscription and the packet is gone.
+
+The payoff is that a missed packet fails in `PACKET_DISCOVERY_TIMEOUT` (30s)
+with the reason, instead of looking like a broken relay for the full
+`IFT_RELAY_TIMEOUT`. It also splits the two failures that otherwise look
+identical: no row means discovery broke (websocket), a row that never advances
+means delivery broke (attestors, kms, client authorization).
 
 `ibc relayer relay` has not gone away; it is now the escape hatch rather than
 the happy path, for a packet that predates the subscription or one on a route
@@ -309,7 +329,7 @@ tokens — so the return leg needs no extra setup.
 `deployer` service against `config/deploy.yml`. The transfer defaults are
 overridable: `IFT_NAME`, `IFT_SYMBOL`, `IFT_MINT_AMOUNT`, `IFT_SEND_AMOUNT`,
 `IFT_RELAY_TIMEOUT` (120), `IFT_POLL_INTERVAL` (3), and
-`WATCHER_READY_TIMEOUT` (60) for the subscription wait. The last three are
+`PACKET_DISCOVERY_TIMEOUT` (30) for the discovery check. The last three are
 whole seconds with no unit suffix — `3`, not `3s`. Changing `IFT_NAME` or
 `IFT_SYMBOL` against a stack that already has a token mints a second one rather
 than replacing the first; run `./setup.sh clean` first.
@@ -367,7 +387,7 @@ only; use `docker compose exec kms ...` to inspect it. A real deployment sets
 | `FUNDED_ACCOUNTS` | `5` | accounts pre-funded in each genesis |
 | `GENESIS_BALANCE` | 1 000 000 ETH | hex wei per funded account |
 | `IFT_*` | see above | the token and the transfer |
-| `WATCHER_READY_TIMEOUT` | `60` | seconds to wait for the relayer's subscriptions |
+| `PACKET_DISCOVERY_TIMEOUT` | `30` | seconds to wait for the relayer to record a sent packet |
 | `QBFT_BLOCK_PERIOD_SECONDS` etc. | `2` | consensus tunables |
 
 Changing any chain-shaping variable invalidates the on-disk chain data: run
@@ -406,24 +426,25 @@ chains[41001].evm.ws`.** An `autoRelay` end whose chain has no websocket
 endpoint. Both chains in `config/ibc.yml` need `evm.ws` alongside `evm.rpc`;
 auto-relay has no polling fallback.
 
-**`the relayer did not subscribe on both chains within 60s`.** The container is
-healthy but its watchers never came up, so `docker compose logs relayer` and
-look for a websocket dial failure against `besu-a:8546` / `besu-b:8546`. A
-chain that is up on RPC can still be refusing WS if `besu.toml` was edited.
+**`the relayer recorded no packet for 0x… after 30s`.** Discovery failed: the
+watcher for that leg's source chain never delivered the `SendPacket`, so
+auto-relay never started. `docker compose logs relayer` and look for a
+websocket dial failure against `besu-a:8546` / `besu-b:8546` — a chain that is
+up on RPC can still be refusing WS if `besu.toml` was edited. That packet is
+not recoverable once missed, so fix the endpoint and re-run rather than waiting.
 
-**The transfer times out.** First ask whether the relayer ever saw the packet:
+**The transfer times out after discovery succeeded.** The relayer has the
+packet and cannot land it, so the fault is downstream of the subscription.
+Check the packet's state and then the signing path:
 
 ```bash
 docker compose exec relayer /opt/ibc relayer packets --tx-hash <hash> --home /home/ibc
+docker compose logs relayer attestor-a attestor-b
 ```
 
-No row at all means the watcher missed the `SendPacket` — most likely the
-packet was emitted before the subscription was live, which is exactly what the
-`WATCHER_READY_TIMEOUT` wait exists to prevent. A `pending` row means discovery
-worked and delivery did not, so the problem is downstream:
-`docker compose logs relayer attestor-a attestor-b`. An attestor that cannot
-reach kms, or a client authorizing the wrong attestor address, both surface
-there.
+An attestor that cannot reach kms, or a client authorizing the wrong attestor
+address, both surface there. Remember which attestor to suspect: A → B rests on
+attestor-a, B → A on attestor-b.
 
 
 ## Layout
@@ -440,7 +461,7 @@ examples/besu-to-besu/
 │   ├── chains.sh               — derivation, QBFT extraData, rendering, start /
 │   │                             wait / status / clean
 │   └── ibc.sh                  — kms key derivation, deployment, ibc.env,
-│                                 the watcher wait, the IFT transfer
+│                                 the IFT transfer + its discovery check
 ├── config/                     — committed, no secrets. Bind-mounted verbatim:
 │   ├── kms.yaml                — gRPC-only remote signer, 4 secp256k1eth keys
 │   ├── attestor-a.yml          — standalone attestor for chain A
