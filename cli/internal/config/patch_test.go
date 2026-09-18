@@ -172,6 +172,32 @@ func TestReconcileDeploymentSeparatesLocalAndRemoteOfTheSameName(t *testing.T) {
 	require.Len(t, merged.Attestors, 2)
 }
 
+func TestReconcileDeploymentRejectsClientTypeChange(t *testing.T) {
+	for _, routerChanged := range []bool{false, true} {
+		name := "same router"
+		if routerChanged {
+			name = "replacement router"
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg, _, err := DefaultConfig().ReconcileDeployment(deploymentConfig())
+			require.NoError(t, err)
+			incoming := deploymentConfig()
+			if routerChanged {
+				incoming.Chains[0].EVM.ICS26Router = "0xreplacement"
+			}
+			// Exercise the transition policy without claiming another on-chain
+			// client type is currently supported by deployment tooling.
+			incoming.Connections[0].ClientA.Type = ClientType("future-client-type")
+			_, _, err = cfg.ReconcileDeployment(incoming)
+			require.ErrorContains(t, err, `client "cli-1-2" on chain "1" has type "attestation", manifest has "future-client-type"`)
+			require.ErrorContains(t, err, "automatic client-type changes are not supported")
+			require.ErrorContains(t, err, "explicitly update the client's type and compatible params")
+			require.Equal(t, "0xrouter1", cfg.Chains[0].EVM.ICS26Router)
+			require.Equal(t, ClientTypeAttestation, cfg.Relayer.Connections[0].ClientA.Type)
+		})
+	}
+}
+
 func TestReconcileDeploymentPreservesRemoteProver(t *testing.T) {
 	cfg, _, err := DefaultConfig().ReconcileDeployment(deploymentConfig())
 	require.NoError(t, err)

@@ -111,7 +111,7 @@ func mergeConnections(existing, incoming []ConnectionConfig, conflicts *[]Confli
 			}
 			// A remote prover is an operational choice, not an on-chain client type.
 			if end.Type != ClientTypeRemote && end.Type != incomingEnd.Type {
-				return nil, fmt.Errorf("connection %q: client %q on chain %q has type %q, manifest has %q",
+				return nil, fmt.Errorf("connection %q: client %q on chain %q has type %q, manifest has %q; automatic client-type changes are not supported, even when the router changes: explicitly update the client's type and compatible params in the config before rerunning",
 					merged.Alias, end.ClientID, end.ChainID, end.Type, incomingEnd.Type)
 			}
 			if incomingEnd.Signer != "" && incomingEnd.Signer != end.Signer {

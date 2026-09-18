@@ -321,6 +321,12 @@ settings you have changed are kept. `--signer-a` and `--signer-b` replace the
 relay signers only when passed. An incomplete config is still written, with a
 warning listing what is missing.
 
+Automatic client-type changes are not supported, even when replacing a router.
+If a manifest's client type differs from an existing non-remote client, rendering
+fails without writing. Explicitly update that client's type and compatible
+`params` in the config before rerunning. Existing remote-prover settings are
+preserved rather than compared to the manifest's on-chain client type.
+
 ### `ibc deploy show`
 
 <!-- GEN:cli:cmd:deploy-show START -->
