@@ -110,6 +110,8 @@ func mergeConnections(existing, incoming []ConnectionConfig, conflicts *[]Confli
 				end = &merged.ClientB
 			}
 			// A remote prover is an operational choice, not an on-chain client type.
+			// TODO(FOU-1404): When deployment tooling supports Besu clients, revisit type changes
+			// on router replacement, including how existing client params are handled.
 			if end.Type != ClientTypeRemote && end.Type != incomingEnd.Type {
 				return nil, fmt.Errorf("connection %q: client %q on chain %q has type %q, manifest has %q; automatic client-type changes are not supported, even when the router changes: explicitly update the client's type and compatible params in the config before rerunning",
 					merged.Alias, end.ClientID, end.ChainID, end.Type, incomingEnd.Type)
