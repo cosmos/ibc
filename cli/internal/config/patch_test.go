@@ -189,7 +189,11 @@ func TestReconcileDeploymentRejectsClientTypeChange(t *testing.T) {
 			// client type is currently supported by deployment tooling.
 			incoming.Connections[0].ClientA.Type = ClientType("future-client-type")
 			_, _, err = cfg.ReconcileDeployment(incoming)
-			require.ErrorContains(t, err, `client "cli-1-2" on chain "1" has type "attestation", manifest has "future-client-type"`)
+			require.ErrorContains(
+				t,
+				err,
+				`client "cli-1-2" on chain "1" has type "attestation", manifest has "future-client-type"`,
+			)
 			require.ErrorContains(t, err, "automatic client-type changes are not supported")
 			require.ErrorContains(t, err, "explicitly update the client's type and compatible params")
 			require.Equal(t, "0xrouter1", cfg.Chains[0].EVM.ICS26Router)
