@@ -38,9 +38,8 @@ var (
 
 const historyHint = "the counterparty node may not serve state this old: raise its Bonsai history limit or use an archive node"
 
-// chain is the EVM reads the prover needs. *evm.Client is the production
-// implementation; tests use a fake.
-type chain interface {
+// Chain provides the EVM reads the Besu QBFT prover needs.
+type Chain interface {
 	ChainID() string
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	SealedHeader(ctx context.Context, height uint64) (*besu.Header, error)
@@ -52,8 +51,8 @@ type chain interface {
 // Generator implements prover.Prover for one Besu QBFT light client. host is
 // the chain the client lives on; counterparty is the Besu chain it tracks.
 type Generator struct {
-	host         chain
-	counterparty chain
+	host         Chain
+	counterparty Chain
 	clientID     string
 }
 
@@ -77,7 +76,7 @@ func consensusOf(header *besu.Header) besumsgs.IBesuLightClientMsgsConsensusStat
 
 // New builds a Generator without touching either chain; ResolveGenerator is
 // the production entry point.
-func New(host, counterparty chain, clientID string) *Generator {
+func New(host, counterparty Chain, clientID string) *Generator {
 	return &Generator{host: host, counterparty: counterparty, clientID: clientID}
 }
 
@@ -88,7 +87,7 @@ func ResolveGenerator(
 	ctx context.Context,
 	self config.ClientEnd,
 	counterpartyRouter string,
-	host, counterpartyChain *evm.Client,
+	host, counterpartyChain Chain,
 ) (*Generator, error) {
 	gen := New(host, counterpartyChain, self.ClientID)
 	if err := gen.resolve(ctx, counterpartyRouter); err != nil {

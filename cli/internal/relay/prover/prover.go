@@ -151,14 +151,16 @@ func addGenerator(
 			)
 		}
 
-		host, ok := clientSet.EVM(client.ChainID)
+		host, ok := qbftChain(clientSet, client.ChainID)
 		if !ok {
-			return errors.Errorf("connection %q: no EVM client for chain %q", connAlias, client.ChainID)
+			return errors.Errorf("connection %q: no Besu QBFT-capable client for chain %q", connAlias, client.ChainID)
 		}
-		counterparty, ok := clientSet.EVM(clientCounterparty.ChainID)
+		counterparty, ok := qbftChain(clientSet, clientCounterparty.ChainID)
 		if !ok {
 			return errors.Errorf(
-				"connection %q: no EVM client for counterparty chain %q", connAlias, clientCounterparty.ChainID,
+				"connection %q: no Besu QBFT-capable client for counterparty chain %q",
+				connAlias,
+				clientCounterparty.ChainID,
 			)
 		}
 
@@ -196,4 +198,10 @@ func addGenerator(
 	default:
 		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
 	}
+}
+
+func qbftChain(clients *chains.ClientSet, chainID string) (besuqbft.Chain, bool) {
+	client, _ := clients.Get(chainID)
+	chain, ok := client.(besuqbft.Chain)
+	return chain, ok
 }

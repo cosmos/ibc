@@ -42,10 +42,7 @@ type meteredClient struct {
 	metrics *instrumentation
 }
 
-var (
-	_ ETHClient   = (*meteredClient)(nil)
-	_ proofClient = (*meteredClient)(nil)
-)
+var _ ETHClient = (*meteredClient)(nil)
 
 func newMeteredClient(chainID string, eth ETHClient) *meteredClient {
 	return &meteredClient{eth: eth, chainID: chainID, metrics: metrics}
@@ -115,7 +112,7 @@ func (c *meteredClient) GetProof(
 	blockNumber *big.Int,
 ) (*gethclient.AccountResult, error) {
 	started := time.Now()
-	proof, err := ethGetProof(ctx, c.eth, account, keys, blockNumber)
+	proof, err := c.eth.GetProof(ctx, account, keys, blockNumber)
 	c.record(ctx, "eth_getProof", started, err)
 
 	return proof, err

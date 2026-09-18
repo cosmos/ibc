@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
@@ -109,7 +108,7 @@ func clientWithProofAPI(t *testing.T, api *ethProofAPI) *Client {
 	t.Cleanup(srv.Stop)
 	require.NoError(t, srv.RegisterName("eth", api))
 
-	client, err := NewWithClient(chainIDEth, ethclient.NewClient(rpc.DialInProc(srv)), routerAddress)
+	client, err := NewWithClient(chainIDEth, newRPCClient(rpc.DialInProc(srv)), routerAddress)
 	require.NoError(t, err)
 
 	return client
@@ -119,10 +118,14 @@ func TestGetRouterProof(t *testing.T) {
 	ctx := context.Background()
 	result, accountNodes, slot, value := fixtureAccountResult(t)
 
-	t.Run("requires RPC client", func(t *testing.T) {
-		client, _ := newTestClient(t)
+	t.Run("propagates client error", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		eth.EXPECT().
+			GetProof(ctx, common.HexToAddress(routerAddress), []string{common.Hash(slot).Hex()}, big.NewInt(114)).
+			Return(nil, assert.AnError).
+			Once()
 		_, err := client.GetRouterProof(ctx, 114, [][32]byte{slot})
-		require.ErrorContains(t, err, "eth_getProof")
+		require.ErrorIs(t, err, assert.AnError)
 	})
 
 	t.Run("converts by key", func(t *testing.T) {

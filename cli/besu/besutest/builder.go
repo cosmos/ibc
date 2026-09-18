@@ -13,17 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/cosmos/ibc/cli/besu"
-)
-
-// Header field indices, mirroring besu.ParseHeader.
-const (
-	idxNumber           = 8
-	idxTimestamp        = 11
-	idxExtraData        = 12
-	extraIdxValidators  = 1
-	extraIdxCommitSeals = 4
-	minHeaderItems      = 15
-	extraDataItemCount  = 5
+	"github.com/cosmos/ibc/cli/besu/internal/headerlayout"
 )
 
 // Builder mutates a real Besu QBFT header and re-seals it with test keys, so
@@ -41,12 +31,12 @@ func NewBuilder(headerRLP []byte) (*Builder, error) {
 		return nil, fmt.Errorf("decode header: %w", err)
 	}
 
-	if len(items) < minHeaderItems {
-		return nil, fmt.Errorf("header has %d items, want at least %d", len(items), minHeaderItems)
+	if len(items) < headerlayout.MinHeaderItems {
+		return nil, fmt.Errorf("header has %d items, want at least %d", len(items), headerlayout.MinHeaderItems)
 	}
 
 	var extraData []byte
-	if err := rlp.DecodeBytes(items[idxExtraData], &extraData); err != nil {
+	if err := rlp.DecodeBytes(items[headerlayout.IdxExtraData], &extraData); err != nil {
 		return nil, fmt.Errorf("decode extra data: %w", err)
 	}
 
@@ -55,8 +45,8 @@ func NewBuilder(headerRLP []byte) (*Builder, error) {
 		return nil, fmt.Errorf("decode extra data list: %w", err)
 	}
 
-	if len(extraItems) != extraDataItemCount {
-		return nil, fmt.Errorf("extra data has %d items, want %d", len(extraItems), extraDataItemCount)
+	if len(extraItems) != headerlayout.ExtraDataItemCount {
+		return nil, fmt.Errorf("extra data has %d items, want %d", len(extraItems), headerlayout.ExtraDataItemCount)
 	}
 
 	return &Builder{items: items, extraItems: extraItems}, nil
@@ -73,12 +63,12 @@ func MustBuilder(headerRLP []byte) *Builder {
 }
 
 func (b *Builder) SetHeight(height uint64) *Builder {
-	b.items[idxNumber] = mustRLP(height)
+	b.items[headerlayout.IdxNumber] = mustRLP(height)
 	return b
 }
 
 func (b *Builder) SetTimestamp(timestamp uint64) *Builder {
-	b.items[idxTimestamp] = mustRLP(timestamp)
+	b.items[headerlayout.IdxTimestamp] = mustRLP(timestamp)
 	return b
 }
 
@@ -86,12 +76,12 @@ func (b *Builder) SetTimestamp(timestamp uint64) *Builder {
 func (b *Builder) SetValidators(validators []common.Address) *Builder {
 	sorted := slices.Clone(validators)
 	slices.SortFunc(sorted, func(a, b common.Address) int { return a.Cmp(b) })
-	b.extraItems[extraIdxValidators] = mustRLP(sorted)
+	b.extraItems[headerlayout.ExtraIdxValidators] = mustRLP(sorted)
 	return b
 }
 
 func (b *Builder) SetCommitSeals(seals [][]byte) *Builder {
-	b.extraItems[extraIdxCommitSeals] = mustRLP(seals)
+	b.extraItems[headerlayout.ExtraIdxCommitSeals] = mustRLP(seals)
 	return b
 }
 
@@ -139,7 +129,7 @@ func (b *Builder) Encode() ([]byte, error) {
 	items := make([]rlp.RawValue, len(b.items))
 	copy(items, b.items)
 
-	items[idxExtraData], err = rlp.EncodeToBytes(extraData)
+	items[headerlayout.IdxExtraData], err = rlp.EncodeToBytes(extraData)
 	if err != nil {
 		return nil, fmt.Errorf("encode extra data field: %w", err)
 	}

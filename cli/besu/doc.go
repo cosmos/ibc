@@ -6,6 +6,8 @@
 // consensus state hashing, storage slot derivation and the ABI encoders for
 // the BesuQBFTLightClient wire formats.
 //
+// Header parsing retains raw fields for the sealing digest.
+//
 // Wire types and codecs are generated upstream.
 // The Go consensus algorithms follow ibc-contracts/ibc-solidity/contracts/light-clients/besu on the
 // hashed-consensus-state design: the contract stores only

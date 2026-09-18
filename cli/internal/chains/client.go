@@ -109,13 +109,3 @@ func (s *ClientSet) Get(chainID string) (Client, bool) {
 	client, ok := s.clients[chainID]
 	return client, ok
 }
-
-// EVM returns the EVM client for chainID. Every configured chain is EVM.
-func (s *ClientSet) EVM(chainID string) (*evm.Client, bool) {
-	client, ok := s.Get(chainID)
-	if !ok {
-		return nil, false
-	}
-	evmClient, ok := client.(*evm.Client)
-	return evmClient, ok
-}

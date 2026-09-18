@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/chains"
+	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
@@ -150,7 +151,7 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 			"2": mocks.NewMockClient(t),
 		})
 		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
-		require.ErrorContains(t, err, "no EVM client")
+		require.ErrorContains(t, err, "no Besu QBFT-capable client")
 	})
 
 	t.Run("missing counterparty chain config", func(t *testing.T) {
@@ -160,4 +161,25 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 		_, err := NewSetFromConfig(ctx, broken, chains.NewClientSet(nil), nil, slog.Default())
 		require.ErrorContains(t, err, "no EVM chain config")
 	})
+}
+
+func TestQBFTChainLookup(t *testing.T) {
+	want := new(evm.Client)
+	wrapped := &struct{ *evm.Client }{want}
+	clients := chains.NewClientSet(map[string]chains.Client{
+		"evm":     want,
+		"wrapped": wrapped,
+		"generic": mocks.NewMockClient(t),
+	})
+	got, ok := qbftChain(clients, "evm")
+	require.True(t, ok)
+	require.Same(t, want, got)
+	got, ok = qbftChain(clients, "wrapped")
+	require.True(t, ok)
+	require.Same(t, wrapped, got)
+	for _, id := range []string{"missing", "generic"} {
+		got, ok := qbftChain(clients, id)
+		require.False(t, ok)
+		require.Nil(t, got)
+	}
 }
