@@ -167,21 +167,30 @@ func DeployWithRelayerConfig(
 }
 
 // StartRelayer starts the test relayer and registers idempotent teardown.
-func StartRelayer(
-	t testing.TB,
-	driver *ibccli.Driver,
-	env *environment.Environment,
-) *ibccli.Relayer {
+func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environment) *ibccli.Relayer {
 	t.Helper()
+
 	require.NotNil(t, driver, "e2etest: driver is required")
 	require.NotNil(t, env, "e2etest: Environment is required")
 
+	// opt-on dump for debugging
+	dumpRelayer := func() {
+		if environment.DumpEnabled() {
+			environment.DumpTestDirectory(t, env.RunID(), driver.ConfigHome())
+		}
+	}
+
 	relayer, err := driver.StartRelayer(t.Context())
-	require.NoError(t, err, "e2etest: start relayer")
+	if err != nil {
+		dumpRelayer()
+		t.Fatalf("e2etest: start relayer: %v", err)
+	}
+
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), relayerStopTimeout)
 		defer cancel()
 		assert.NoError(t, relayer.Stop(ctx), "e2etest: stop relayer")
+		dumpRelayer()
 	})
 
 	connected := make(map[string]struct{}, len(relayer.Ready().ChainsConnected))
