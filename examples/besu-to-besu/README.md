@@ -11,19 +11,19 @@ to B.
         chain A (41001)                     chain B (41002)
 
         ┌────────────┐                      ┌────────────┐
-        │   besu-a   │                      │   besu-b   │
-        └─────┬──────┘                      └─────┬──────┘
-              │ watches                   watches │
-              ▼                                   ▼
-        ┌────────────┐                      ┌────────────┐
-        │ attestor-a │                      │ attestor-b │
-        └─────┬──────┘                      └─────┬──────┘
-              │                                   │
-              └──────────▶┌───────────┐◀──────────┘
-                          │  relayer  │
-                          └─────┬─────┘
-                                │
-              ┌─────────────────┴─────────────────┐
+   ┌───▶│   besu-a   │                      │   besu-b   │◀───┐
+   │    └─────┬──────┘                      └─────┬──────┘    │
+   │          │ watches                   watches │           │
+   │          ▼                                   ▼           │
+   │    ┌────────────┐                      ┌────────────┐    │
+   │    │ attestor-a │                      │ attestor-b │    │
+   │    └─────┬──────┘                      └─────┬──────┘    │
+   │          │ attestation       attestation     │           │
+   │          └─────────▶┌───────────┐◀───────────┘           │
+   └─────────────────────┤  relayer  ├────────────────────────┘
+     ws:  SendPacket     └─────┬─────┘        ws:  SendPacket
+     rpc: submit packet        │              rpc: submit packet
+              ┌────────────────┴──────────────────┐
               │  Sign (gRPC)                      │
               ▼                                   │
         ┌───────────┐                             │
@@ -59,8 +59,13 @@ inside `$FOUNDRY_IMAGE` instead, so a host install is optional.
 
 ```bash
 cd examples/besu-to-besu
-./setup.sh
+./setup.sh demo
 ```
+
+`demo`, not a bare `./setup.sh`: the bare form starts the two chains and stops
+there, because that is the contract the
+[CLI tutorial](../../docs/6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)
+depends on. See [Commands](#commands).
 
 Takes about two minutes on a warm cache, and ends with:
 
@@ -110,9 +115,27 @@ containers are stopped, it brings the stack up first.
 ./setup.sh clean        # stop containers and remove chains/local/
 ```
 
-Three commands, on purpose. Re-running any of them against a live stack is safe
-and idempotent — every deploy step re-checks on-chain state and reports
-`skipped` — so it relays another transfer rather than rebuilding anything.
+## Commands
+
+```bash
+./setup.sh              # phase 1 only: two live chains, no IBC deployed on them
+./setup.sh demo         # all four phases: the stack, and one transfer A -> B
+./setup.sh roundtrip    # A -> B -> A; phase 4 alone when the stack is already up
+./setup.sh chains       # explicit form of the bare invocation
+./setup.sh accounts     # print the funded accounts and their keys, start nothing
+./setup.sh clean        # stop containers and remove chains/local/
+```
+
+The bare form is deliberately *not* the demo. The
+[CLI tutorial](../../docs/6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)
+runs `setup.sh` and then deploys IBC by hand with the `ibc` binary, so the bare
+form has to leave the chains empty — run the demo first and every step that
+tutorial teaches is already done and reports `skipped`. It also pulls only the
+Besu image, not the ibc and kms images it never starts.
+
+Re-running `demo` or `roundtrip` against a live stack is safe and idempotent —
+every deploy step re-checks on-chain state and reports `skipped` — so it relays
+another transfer rather than rebuilding anything.
 
 Each invocation writes a timestamped log to `logs/`. Use `docker compose`
 directly to poke at a running stack:
@@ -125,7 +148,8 @@ docker compose exec attestor-a /opt/ibc attestor info attestor-a --home /home/ib
 
 ## The four phases
 
-They always run together; the names are internal, not subcommands.
+`demo` runs all four together. The names are internal rather than subcommands —
+phase 1 is the only one reachable on its own, as a bare `./setup.sh`.
 
 | Phase      | What it does                                                     |
 |------------|------------------------------------------------------------------|
@@ -399,7 +423,7 @@ at it:
 
 ```bash
 docker build -t ibc:local --target target-builder ../../cli
-IBC_IMAGE=ibc:local ./setup.sh
+IBC_IMAGE=ibc:local ./setup.sh demo
 ```
 
 ## Troubleshooting
@@ -452,7 +476,8 @@ attestor-a, B → A on attestor-b.
 ```
 examples/besu-to-besu/
 ├── README.md
-├── setup.sh                    — entrypoint: the demo, or `clean`
+├── setup.sh                    — entrypoint: chains only when bare, plus
+│                                 `demo`, `roundtrip`, `accounts`, `clean`
 ├── docker-compose.yml          — besu-a, besu-b, kms, attestor-a, attestor-b,
 │                                 relayer, deployer (profile: tools)
 ├── lib/

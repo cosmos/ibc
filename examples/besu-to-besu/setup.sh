@@ -34,7 +34,7 @@
 #       A  ◀──IBC──▶  B
 #
 #
-# Four phases, always run together:
+# Four phases. `demo` runs all four; the bare form runs phase 1 and stops:
 #   1. start     derive every key, render the chain configs into chains/local/,
 #                docker compose up both chains, wait for RPC
 #   2. deploy    ibc deploy core + client on each chain (writing
@@ -48,10 +48,16 @@
 #                config/ibc.yml set autoRelay.enabled.
 #
 # Usage:
-#   ./setup.sh              — run all four (the demo)
+#   ./setup.sh              — phase 1 only: two live chains, no IBC on them.
+#                             Same as 'chains'. The CLI tutorial runs this and
+#                             then deploys IBC by hand, so the bare form must
+#                             stop here — see docs/6-ibc-cli/2-tutorial-*.md.
+#   ./setup.sh demo         — run all four phases (the demo)
 #   ./setup.sh roundtrip    — relay A -> B -> A. The return leg is what
 #                             exercises attestor-b. Skips phases 1-3 when the
 #                             stack is already up and deployed.
+#   ./setup.sh chains       — explicit form of the no-argument behaviour
+#   ./setup.sh accounts     — print the funded accounts and keys, start nothing
 #   ./setup.sh clean        — stop containers and remove chains/local/
 #
 # Environment (optional):
@@ -165,6 +171,16 @@ cmd_start() {
   log "Chains are live and producing blocks."
 }
 
+cmd_chains() {
+  check_prerequisites besu-a besu-b
+  log "--- Derive keys + render chain configs ---"
+  init_chains
+  run_phase "Start chains" start_chains
+  run_phase "Wait for RPC" wait_for_chains
+  print_status
+  log "Chains are live and producing blocks."
+}
+
 cmd_deploy() {
   run_phase "Phase 2A: Deploy IBC on both chains" deploy_contracts
   run_phase "Phase 2B: Deploy the IFT token and bridge" deploy_ift
@@ -196,8 +212,10 @@ bring_up() {
 
 main() {
   case "${1:-}" in
-    clean) clean;                      exit 0 ;;
-    "")    bring_up; cmd_transfer;     exit 0 ;;
+    clean)    clean;           exit 0 ;;
+    accounts) print_accounts;  exit 0 ;;
+    ""|chains) cmd_chains;     exit 0 ;;
+    demo)  bring_up; cmd_transfer;     exit 0 ;;
     roundtrip)
       # Phase 4 on its own against a stack that is already up — this is the
       # command to reach for when iterating on the relay itself. Phases 1-3 run
@@ -212,11 +230,15 @@ main() {
       ;;
     *)
       cat >&2 <<EOF
-Usage: $0 [roundtrip|clean]
+Usage: $0 [demo|roundtrip|chains|accounts|clean]
 
-  (no argument)  bring the stack up and relay one transfer, A -> B
+  (no argument)  start both chains and stop there — no IBC deployed on them.
+                 Same as 'chains'. This is what the CLI tutorial builds on.
+  demo           the full demo: bring the stack up and relay one transfer, A -> B
   roundtrip      relay A -> B -> A. Runs phase 4 alone against a stack that is
                  already up and deployed, and brings one up first if not.
+  chains         explicit form of the no-argument behaviour
+  accounts       print the funded accounts and their keys, starting nothing
   clean          stop containers and remove chains/local/
 EOF
       exit 1

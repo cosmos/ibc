@@ -22,7 +22,7 @@ check_prerequisites() {
   command -v cast      >/dev/null \
     || info "cast not on PATH — falling back to $FOUNDRY_IMAGE for key derivation"
 
-  pull_images
+  pull_images "$@"
 }
 
 # Pull anything not already local, up front and with docker's progress bars —
@@ -34,12 +34,12 @@ pull_images() {
   local img missing=()
   while read -r img; do
     docker image inspect "$img" >/dev/null 2>&1 || missing+=("$img")
-  done < <(COMPOSE_PROFILES=tools docker compose config --images | sort -u)
+  done < <(COMPOSE_PROFILES=tools docker compose config --images "$@" | sort -u)
 
   (( ${#missing[@]} )) || return 0
   log "Pulling ${#missing[@]} image(s), first run only:"
   printf '             %s\n' "${missing[@]}"
-  COMPOSE_PROFILES=tools docker compose pull --policy missing \
+  COMPOSE_PROFILES=tools docker compose pull --policy missing "$@" \
     || die "could not pull the images — check network access"
 }
 

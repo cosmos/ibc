@@ -336,6 +336,31 @@ wait_for_chains() {
   done
 }
 
+print_accounts() {
+  local name i index deployer role shared=""
+  [[ "$(_chain_mnemonic A)" == "$(_chain_mnemonic B)" ]] && shared=1
+
+  for name in "${CHAINS[@]}"; do
+    derive_chain_accounts "$name"
+    index=$(_chain_attr "$name" VALIDATOR_INDEX)
+    deployer=$(_chain_attr "$name" DEPLOYER_INDEX)
+    log "chain $name — $FUNDED_ACCOUNTS accounts from ${name}_MNEMONIC," \
+        "each funded with $(_genesis_balance_eth):"
+    for (( i = 0; i < ${#CHAIN_ACCT_ADDRS[@]}; i++ )); do
+      role=""
+      [[ $i -eq "$deployer" ]] && role+=" [deployer]"
+      [[ $i -eq "$index" ]] && role+=" [validator]"
+      log "  index $i  ${CHAIN_ACCT_ADDRS[$i]}${role}  privkey=0x${CHAIN_ACCT_KEYS[$i]}"
+    done
+
+    if [[ -n "$shared" ]]; then
+      log "A_MNEMONIC and B_MNEMONIC are the same phrase, so these accounts are" \
+          "funded on both chains and one key works on either side."
+      return 0
+    fi
+  done
+}
+
 print_status() {
   local name block
   log "Chain status:"
