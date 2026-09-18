@@ -10,8 +10,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestBuildRelayerConfigPreservesDefaultYAML(t *testing.T) {
-	file, err := buildRelayerFileConfig(testRelayerConfig())
+func TestBuildRelayerConfigYAML(t *testing.T) {
+	cfg := testRelayerConfig()
+	for _, chain := range cfg.Chains {
+		cfg.Attestors = append(cfg.Attestors, RelayerAttestor{
+			Name: "local-attestor-" + chain.ChainID, Type: RelayerAttestorLocal,
+			ChainID: chain.ChainID, KeyFile: cfg.SignerKeyFile,
+		})
+	}
+	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
 	data, err := yaml.Marshal(file)
 	require.NoError(t, err)
@@ -79,7 +86,7 @@ signers:
 
 func TestClientEndsOptOutOfAutoRelay(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].AutoRelayA = false
+	cfg.Connections[0].A.AutoRelay = false
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
@@ -120,49 +127,22 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	require.Equal(t, cfg.SignerAlias, file.Relayer.Connections[0].ClientB.Signer)
 }
 
-func TestRemoteSignerBacksDefaultLocalAttestors(t *testing.T) {
-	cfg := testRelayerConfig()
-	cfg.SignerType = RelayerSignerRemote
-	cfg.SignerKeyFile = ""
-	cfg.SignerGRPC = "kms:9090"
-	cfg.SignerRemoteKeyID = "relay-key"
-
-	file, err := buildRelayerFileConfig(cfg)
-	require.NoError(t, err)
-	require.Equal(t, []signerConfig{
-		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},
-		{
-			Alias: "local-attestor-1-signer", Type: RelayerSignerRemote,
-			GRPC: "kms:9090", RemoteKeyID: "relay-key",
-		},
-		{
-			Alias: "local-attestor-2-signer", Type: RelayerSignerRemote,
-			GRPC: "kms:9090", RemoteKeyID: "relay-key",
-		},
-	}, file.Signers)
-}
-
-func TestExplicitAttestorsSuppressDefaultLocalAttestors(t *testing.T) {
-	cfg := testRelayerConfig()
-	cfg.Attestors = []RelayerAttestor{{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"}}
-
-	file, err := buildRelayerFileConfig(cfg)
-	require.NoError(t, err)
-	// Explicit attestors suppress defaults for every chain, not just the ones referenced.
-	require.Equal(t, []attestorFileConfig{
-		{Name: "remote", Type: RelayerAttestorRemote, GRPC: "attestor:8080"},
-	}, file.Attestors)
-	require.Equal(t, []signerConfig{
-		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
-	}, file.Signers)
-}
-
 func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name string
 		edit func(*RelayerConfig)
 		err  string
 	}{
+		{
+			"missing client type A",
+			func(c *RelayerConfig) { c.Connections[0].A.ClientType = "" },
+			`end A: unsupported client type ""`,
+		},
+		{
+			"missing client type B",
+			func(c *RelayerConfig) { c.Connections[0].B.ClientType = "" },
+			`end B: unsupported client type ""`,
+		},
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
 		{"attestor key required", func(c *RelayerConfig) {
 			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, ChainID: "1"}}
@@ -191,9 +171,51 @@ func testRelayerConfig() RelayerConfig {
 			{ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1", ICS26Router: "router-1"},
 			{ChainID: "2", RPC: "http://chain-2", ICS26Router: "router-2"},
 		},
-		Connections: []RelayerConnection{{
-			ChainA: "1", ClientA: "client-1", ChainB: "2", ClientB: "client-2",
-			AutoRelayA: true,
-		}},
+		Connections: []RelayerConnection{
+			{
+				A: RelayerClientEnd{
+					ChainID:    "1",
+					ClientID:   "client-1",
+					ClientType: RelayerClientAttestation,
+					AutoRelay:  true,
+				},
+				B: RelayerClientEnd{ChainID: "2", ClientID: "client-2", ClientType: RelayerClientAttestation},
+			},
+		},
 	}
+}
+
+func TestClientTypesPerEnd(t *testing.T) {
+	cfg := testRelayerConfig()
+	cfg.Connections[0].A.ClientType = RelayerClientBesuQBFT
+	cfg.Connections[0].B.ClientType = RelayerClientBesuQBFT
+
+	file, err := buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientB.Type)
+	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
+	require.Empty(t, file.Attestors)
+	require.Equal(t, []signerConfig{
+		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
+	}, file.Signers)
+
+	// ends may differ
+	cfg.Connections[0].B.ClientType = RelayerClientAttestation
+	file, err = buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, RelayerClientAttestation, file.Relayer.Connections[0].ClientB.Type)
+
+	// a prover URL overrides both ends
+	cfg.Connections[0].ProverURL = "http://prover:9090"
+	file, err = buildRelayerFileConfig(cfg)
+	require.NoError(t, err)
+	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientB.Type)
+
+	cfg.Connections[0].ProverURL = ""
+	cfg.Connections[0].A.ClientType = "unknown"
+	_, err = buildRelayerFileConfig(cfg)
+	require.ErrorContains(t, err, "unsupported client type")
 }

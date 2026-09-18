@@ -31,5 +31,5 @@ func Validate(ctx context.Context, cfg config.Config) error {
 		return errors.Wrap(err, "connections")
 	}
 
-	return checkAttestorQuorum(ctx, cfg, clientSet)
+	return checkProvers(ctx, cfg, clientSet)
 }

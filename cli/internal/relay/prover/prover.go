@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package prover generates packet membership/non-membership proofs and
-// light-client state proofs. There is one implementation per light-client
+// light-client update payloads. There is one implementation per light-client
 // type.
 package prover
 
@@ -16,21 +16,23 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/besuqbft"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// Prover generates packet membership/non-membership proofs and state
-// proofs for one configured light client.
+// Prover generates packet membership/non-membership proofs and update
+// payloads for one configured light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent StateProof
+	// LatestProvableHeight resolves the highest height a subsequent ClientUpdatePayload
 	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof proves the light client's counterparty state at height.
-	StateProof(ctx context.Context, height uint64) ([]byte, error)
+	// ClientUpdatePayload returns the encoded updateMsg for the counterparty state at height.
+	// Empty when the client already stores that height.
+	ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
@@ -43,7 +45,10 @@ type Prover interface {
 	) ([][]byte, error)
 }
 
-var _ Prover = (*attestation.Generator)(nil)
+var (
+	_ Prover = (*attestation.Generator)(nil)
+	_ Prover = (*besuqbft.Generator)(nil)
+)
 
 // Key identifies one configured light client by the chain it lives on and
 // its client id, the composite key Prover instances are scoped by.
@@ -82,7 +87,7 @@ func NewSetFromConfig(
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		return addGenerator(ctx, cfg, generators, connAlias, self, counterparty, clientSet, attestors, logger)
 	})
 	if err != nil {
 		return nil, err
@@ -112,6 +117,7 @@ func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counter
 
 func addGenerator(
 	ctx context.Context,
+	cfg config.Config,
 	generators map[string]Prover,
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
@@ -137,6 +143,42 @@ func addGenerator(
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
+	case config.ClientTypeBesuQBFT:
+		counterpartyChain, ok := cfg.Chain(clientCounterparty.ChainID)
+		if !ok || counterpartyChain.EVM == nil {
+			return errors.Errorf(
+				"connection %q: no EVM chain config for counterparty chain %q", connAlias, clientCounterparty.ChainID,
+			)
+		}
+
+		host, ok := qbftChain(clientSet, client.ChainID)
+		if !ok {
+			return errors.Errorf("connection %q: no Besu QBFT-capable client for chain %q", connAlias, client.ChainID)
+		}
+		counterparty, ok := qbftChain(clientSet, clientCounterparty.ChainID)
+		if !ok {
+			return errors.Errorf(
+				"connection %q: no Besu QBFT-capable client for counterparty chain %q",
+				connAlias,
+				clientCounterparty.ChainID,
+			)
+		}
+
+		gen, err := besuqbft.ResolveGenerator(
+			ctx, client, counterpartyChain.EVM.ICS26Router, host, counterparty,
+		)
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
+		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
+			gen,
+			client.ChainID,
+			client.ClientID,
+			client.Type,
+		)
+
+		return nil
 	case config.ClientTypeRemote:
 		params, err := client.ClientParams()
 		if err != nil {
@@ -156,4 +198,10 @@ func addGenerator(
 	default:
 		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
 	}
+}
+
+func qbftChain(clients *chains.ClientSet, chainID string) (besuqbft.Chain, bool) {
+	client, _ := clients.Get(chainID)
+	chain, ok := client.(besuqbft.Chain)
+	return chain, ok
 }

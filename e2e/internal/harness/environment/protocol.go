@@ -48,10 +48,20 @@ func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
 
 // IBCClient is one resolved end of an IBC Connection. ID is the protocol
 // identifier registered in the host IBC Instance.
+// ClientKind names a light client implementation as the relayer configures it.
+type ClientKind string
+
+// Light client kinds the harness can realize.
+const (
+	ClientKindAttestation ClientKind = "attestation"
+	ClientKindBesuQBFT    ClientKind = "besu-qbft"
+)
+
 type IBCClient struct {
 	label                 string
 	instance              *IBCInstance
 	id                    string
+	kind                  ClientKind
 	lightClient           EVMAddress
 	counterpartyID        string
 	attestors             []EVMAddress
@@ -59,6 +69,7 @@ type IBCClient struct {
 }
 
 func (c *IBCClient) ID() string                      { return c.id }
+func (c *IBCClient) Kind() ClientKind                { return c.kind }
 func (c *IBCClient) IBCInstance() *IBCInstance       { return c.instance }
 func (c *IBCClient) LightClientAddress() EVMAddress  { return c.lightClient }
 func (c *IBCClient) CounterpartyID() string          { return c.counterpartyID }

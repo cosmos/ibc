@@ -12,6 +12,7 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.opentelemetry.io/otel/metric"
 
@@ -102,6 +103,19 @@ func (c *meteredClient) HeaderByNumber(ctx context.Context, number *big.Int) (*t
 	c.record(ctx, "eth_getBlockByNumber", started, err)
 
 	return header, err
+}
+
+func (c *meteredClient) GetProof(
+	ctx context.Context,
+	account common.Address,
+	keys []string,
+	blockNumber *big.Int,
+) (*gethclient.AccountResult, error) {
+	started := time.Now()
+	proof, err := c.eth.GetProof(ctx, account, keys, blockNumber)
+	c.record(ctx, "eth_getProof", started, err)
+
+	return proof, err
 }
 
 func (c *meteredClient) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {

@@ -2,7 +2,7 @@
 
 module github.com/cosmos/ibc/cli
 
-go 1.26.4
+go 1.26.5
 
 require (
 	connectrpc.com/connect v1.20.0
@@ -12,7 +12,7 @@ require (
 	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260810020832-a40957eaf878
+	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260916093832-ec6bd74ff3c3
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
@@ -328,7 +328,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/supranational/blst v0.3.16 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d // indirect
@@ -369,3 +369,6 @@ replace (
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )
+
+// Consume the Besu generators from cosmos/ibc-contracts#1138.
+replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260917161050-aafbb70223e2

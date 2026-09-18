@@ -278,13 +278,13 @@ func TestSpecValidateClientIDUniquenessIsInstanceScoped(t *testing.T) {
 		Connections: []ConnectionSpec{
 			{
 				ID: "ab",
-				A:  ExistingClient{IBCInstance: "ibc-a", ID: "shared"},
-				B:  ExistingClient{IBCInstance: "ibc-b", ID: "b"},
+				A:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "shared"},
+				B:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-b", ID: "b"},
 			},
 			{
 				ID: "ac",
-				A:  ExistingClient{IBCInstance: "ibc-a", ID: "shared"},
-				B:  ExistingClient{IBCInstance: "ibc-c", ID: "c"},
+				A:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "shared"},
+				B:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-c", ID: "c"},
 			},
 		},
 	}
@@ -294,8 +294,8 @@ func TestSpecValidateClientIDUniquenessIsInstanceScoped(t *testing.T) {
 		`IBC Clients "ab/A" and "ac/A" on IBC Instance "ibc-a" resolve to duplicate id "shared"`,
 	)
 
-	spec.Connections[1].A = ExistingClient{IBCInstance: "ibc-c", ID: "shared"}
-	spec.Connections[1].B = ExistingClient{IBCInstance: "ibc-a", ID: "a-second"}
+	spec.Connections[1].A = ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-c", ID: "shared"}
+	spec.Connections[1].B = ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "a-second"}
 	require.NoError(t, spec.validate(), "the same client id is legal on distinct IBC Instances")
 }
 
@@ -390,8 +390,8 @@ func validSpec() Spec {
 func existingConnectionSpec() ConnectionSpec {
 	return ConnectionSpec{
 		ID: "connection-ab",
-		A:  ExistingClient{IBCInstance: "ibc-a", ID: "client-7"},
-		B:  ExistingClient{IBCInstance: "ibc-b", ID: "client-9"},
+		A:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "client-7"},
+		B:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-b", ID: "client-9"},
 	}
 }
 
@@ -402,4 +402,29 @@ func makeChainAAttached(spec *Spec) {
 		Endpoint:   "chain-a-rpc",
 		Timing:     spec.Chains[1].(AttachedEVM).Timing,
 	}
+}
+
+func TestExistingClientKind(t *testing.T) {
+	for _, kind := range []ClientKind{"", "unknown", ClientKindAttestation, ClientKindBesuQBFT} {
+		client := ExistingClient{Kind: kind, IBCInstance: "ibc-a", ID: "client-a"}
+		_, err := validateClientSpec("connection", "A", client)
+		if kind == ClientKindAttestation || kind == ClientKindBesuQBFT {
+			require.NoError(t, err)
+		} else {
+			require.ErrorContains(t, err, "unsupported kind")
+		}
+	}
+	_, err := validateClientSpec("connection", "A", ExistingClient{
+		Kind: ClientKindBesuQBFT, Attestors: []AttestorSpec{{ID: "attestor"}},
+	})
+	require.ErrorContains(t, err, "does not use attestors")
+}
+
+func TestBesuQBFTClientTrustingPeriod(t *testing.T) {
+	client := NewBesuQBFTClient{IBCInstance: "ibc-a", Authority: "signer", TrustingPeriod: 1}
+	_, err := validateClientSpec("connection", "A", client)
+	require.NoError(t, err)
+	client.TrustingPeriod = 0
+	_, err = validateClientSpec("connection", "A", client)
+	require.ErrorContains(t, err, "trusting period must be positive")
 }

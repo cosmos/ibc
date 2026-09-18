@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
@@ -23,10 +24,12 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
@@ -38,7 +41,10 @@ type backend interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
-var _ deploy.Target = (*Driver)(nil)
+var (
+	_ deploy.Target         = (*Driver)(nil)
+	_ deploy.BesuQBFTSource = (*Driver)(nil)
+)
 
 // Driver implements deploy.Target for EVM chains.
 type Driver struct {
@@ -80,7 +86,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 }
 
 func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation}
+	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesuQBFT}
 }
 
 // requireSigner errors if called on a driver built without a deployer
@@ -174,13 +180,23 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 	if err := d.requireSigner(); err != nil {
 		return deploy.ClientRef{}, err
 	}
-	if spec.Type != deploy.ClientTypeAttestation {
+	switch spec.Type {
+	case deploy.ClientTypeAttestation:
+		return d.provisionAttestation(ctx, router, spec)
+	case deploy.ClientTypeBesuQBFT:
+		return d.provisionBesuQBFT(ctx, router, spec)
+	default:
 		return deploy.ClientRef{}, fmt.Errorf(
 			"client type %q not supported (supported: %v)",
 			spec.Type,
 			d.SupportedClientTypes(),
 		)
 	}
+}
+
+func (d *Driver) provisionAttestation(
+	ctx context.Context, router string, spec deploy.ClientSpec,
+) (deploy.ClientRef, error) {
 	params, ok := spec.Params.(deploy.AttestationParams)
 	if !ok {
 		return deploy.ClientRef{}, fmt.Errorf("client %q: params must be deploy.AttestationParams", spec.ClientID)
@@ -209,6 +225,108 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 		return deploy.ClientRef{}, err
 	}
 	return deploy.ClientRef{Address: addr.Hex()}, nil
+}
+
+// provisionBesuQBFT deploys a Besu QBFT light client with this chain's router
+// as its role manager, so only router calls may update or query it.
+func (d *Driver) provisionBesuQBFT(
+	ctx context.Context,
+	router string,
+	spec deploy.ClientSpec,
+) (deploy.ClientRef, error) {
+	params, ok := spec.Params.(deploy.BesuQBFTParams)
+	if !ok {
+		return deploy.ClientRef{}, fmt.Errorf("client %q: params must be deploy.BesuQBFTParams", spec.ClientID)
+	}
+	args, err := besuQBFTArgs(params)
+	if err != nil {
+		return deploy.ClientRef{}, fmt.Errorf("client %q: %w", spec.ClientID, err)
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return deploy.ClientRef{}, err
+	}
+	addr, tx, _, err := besuqbft.DeployContract(
+		opts,
+		d.backend,
+		args.router,
+		params.InitialHeight,
+		params.InitialTimestamp,
+		args.stateRoot,
+		args.validators,
+		params.TrustingPeriod,
+		params.MaxClockDrift,
+		common.HexToAddress(router),
+	)
+	if err != nil {
+		return deploy.ClientRef{}, fmt.Errorf("deploy besu-qbft client: %w", err)
+	}
+	if err := d.awaitMined(ctx, "deploy besu-qbft client", tx); err != nil {
+		return deploy.ClientRef{}, err
+	}
+	return deploy.ClientRef{Address: addr.Hex()}, nil
+}
+
+type besuQBFTConstructorArgs struct {
+	router     common.Address
+	stateRoot  [32]byte
+	validators []common.Address
+}
+
+// besuQBFTArgs validates besu-qbft params and converts them for the contract
+// constructor.
+func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
+	if !common.IsHexAddress(p.IBCRouter) {
+		return besuQBFTConstructorArgs{}, fmt.Errorf("invalid counterparty router address %q", p.IBCRouter)
+	}
+	if p.InitialHeight == 0 || p.InitialTimestamp == 0 {
+		return besuQBFTConstructorArgs{}, fmt.Errorf("initial height and timestamp required")
+	}
+	root, err := hexutil.Decode(p.InitialStateRoot)
+	if err != nil || len(root) != common.HashLength {
+		return besuQBFTConstructorArgs{}, fmt.Errorf(
+			"initial state root %q must be 32 hex bytes",
+			p.InitialStateRoot,
+		)
+	}
+	validators := make([]common.Address, len(p.InitialValidators))
+	for i, v := range p.InitialValidators {
+		if !common.IsHexAddress(v) {
+			return besuQBFTConstructorArgs{}, fmt.Errorf("invalid validator address %q", v)
+		}
+		validators[i] = common.HexToAddress(v)
+	}
+	return besuQBFTConstructorArgs{
+		router:     common.HexToAddress(p.IBCRouter),
+		stateRoot:  common.BytesToHash(root),
+		validators: validators,
+	}, nil
+}
+
+// BesuQBFTTrustedState reads the sealed header at height on this driver's
+// chain.
+func (d *Driver) BesuQBFTTrustedState(
+	ctx context.Context, height uint64,
+) (deploy.BesuQBFTTrustedState, error) {
+	number := new(big.Int).SetUint64(height)
+	header, err := d.backend.HeaderByNumber(ctx, number)
+	if err != nil {
+		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("fetch header %d: %w", height, err)
+	}
+	parsed, err := besu.ParseSealedHeader(header)
+	if err != nil {
+		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("header %d is not a Besu QBFT header: %w", height, err)
+	}
+	validators := make([]string, len(parsed.Validators))
+	for i, v := range parsed.Validators {
+		validators[i] = v.Hex()
+	}
+	return deploy.BesuQBFTTrustedState{
+		Height:     parsed.Height,
+		Timestamp:  parsed.Timestamp,
+		StateRoot:  parsed.StateRoot.Hex(),
+		Validators: validators,
+	}, nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

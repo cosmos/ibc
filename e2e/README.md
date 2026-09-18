@@ -105,6 +105,9 @@ interval-only, so a transaction may wait up to one second for inclusion.
 `Environment` owns and cleans up only managed resources. An attached EVM remains caller-owned even
 when the harness can connect to it, and connectivity does not grant mining or node-lifecycle control.
 
+Bootstrapping a Besu QBFT light client reads validators from the sealed block header through
+the `ETH` RPC API; it does not require the `QBFT` RPC API.
+
 ## Provider and topology matrix
 
 [`test-matrix.md`](./test-matrix.md) is generated from real requirement resolution and environment

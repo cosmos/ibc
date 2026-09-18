@@ -476,7 +476,7 @@ Every request carries one, identifying the light client the call is scoped to.
 
 <!-- GEN:api:rpc:LatestProvableHeight START -->
 
-Returns the highest height a subsequent StateProof and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
+Returns the highest height a subsequent ClientUpdatePayload and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
 
 <!-- [prover.proto:L19](proto/cli/prover.proto#L19) -->
 
@@ -506,17 +506,17 @@ Returns the highest height a subsequent StateProof and PacketProofs call sharing
 The relayer calls this first and proves at the height it returns, so a prover
 paces the relayer by holding the height back until it can prove at it.
 
-### `StateProof`
+### `ClientUpdatePayload`
 
-<!-- GEN:api:rpc:StateProof START -->
+<!-- GEN:api:rpc:ClientUpdatePayload START -->
 
-Proves the light client's counterparty state at a height.
+Returns the encoded light-client update payload at a height.
 
 <!-- [prover.proto:L22](proto/cli/prover.proto#L22) -->
 
-<!-- GEN:api:rpc:StateProof END -->
+<!-- GEN:api:rpc:ClientUpdatePayload END -->
 
-<!-- GEN:api:msg:StateProofRequest START -->
+<!-- GEN:api:msg:ClientUpdatePayloadRequest START -->
 
 | Field | Type | Description |
 |---|---|---|
@@ -525,19 +525,19 @@ Proves the light client's counterparty state at a height.
 
 <!-- [prover.proto:L50](proto/cli/prover.proto#L50) -->
 
-<!-- GEN:api:msg:StateProofRequest END -->
+<!-- GEN:api:msg:ClientUpdatePayloadRequest END -->
 
-<!-- GEN:api:msg:StateProofResponse START -->
+<!-- GEN:api:msg:ClientUpdatePayloadResponse START -->
 
 | Field | Type | Description |
 |---|---|---|
-| `proof` | `bytes` | The proof, opaque to the relayer and passed to the light client unchanged. |
+| `payload` | `bytes` | The encoded update payload, passed unchanged as updateMsg. Empty when no update is needed. |
 
 <!-- [prover.proto:L57](proto/cli/prover.proto#L57) -->
 
-<!-- GEN:api:msg:StateProofResponse END -->
+<!-- GEN:api:msg:ClientUpdatePayloadResponse END -->
 
-`proof` is opaque to the relayer, which passes it to the light client unchanged.
+`payload` is opaque to the relayer, which passes it unchanged as `updateMsg` in the router’s `updateClient` call.
 
 ### `PacketProofs`
 

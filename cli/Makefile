@@ -97,3 +97,11 @@ run-all-checks: ## Run "all-in-one" code validation step.
 .PHONY: help build install docker-build lint lint-fix test
 .PHONY: codegen codegen-sql codegen-proto codegen-abi codegen-mocks
 .PHONY: check-stale run-all-checks
+
+# TODO(FOU-1406): Move fixture generation from ibc-contracts into this repo's
+# e2e flow and share the fixture types with the generator.
+
+.PHONY: sync-besu-fixture
+sync-besu-fixture: ## Copy the canonical QBFT fixture from the contracts checkout
+	@test -n "$(strip $(IBC_CONTRACTS))" || { echo "Set IBC_CONTRACTS to the ibc-contracts checkout path" >&2; exit 1; }
+	cp "$(IBC_CONTRACTS)/ibc-solidity/test/besu-bft/fixtures/qbft.json" besu/besutest/testdata/qbft.json

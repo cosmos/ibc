@@ -68,10 +68,12 @@ func TestStartRejectsAttestorSignerReuseAcrossClientsBeforeAcquisition(t *testin
 		Connections: []ConnectionSpec{{
 			ID: "connection-ab",
 			A: ExistingClient{
+				Kind:        ClientKindAttestation,
 				IBCInstance: "ibc-a", ID: "existing-a",
 				Attestors: []AttestorSpec{{ID: "attestor-a", Authority: "signer-a"}},
 			},
 			B: ExistingClient{
+				Kind:        ClientKindAttestation,
 				IBCInstance: "ibc-b", ID: "existing-b",
 				Attestors: []AttestorSpec{{ID: "attestor-b", Authority: "signer-b"}},
 			},
@@ -147,7 +149,7 @@ func TestValidateChecksSpecAndRuntime(t *testing.T) {
 
 func TestProductionPrerequisitesRequireExecutableAttestorBinary(t *testing.T) {
 	spec := Spec{Connections: []ConnectionSpec{{
-		A: ExistingClient{Attestors: []AttestorSpec{{ID: "attestor-a"}}},
+		A: ExistingClient{Kind: ClientKindAttestation, Attestors: []AttestorSpec{{ID: "attestor-a"}}},
 	}}}
 	path := filepath.Join(t.TempDir(), "ibc")
 	t.Setenv("IBC_BIN", path)

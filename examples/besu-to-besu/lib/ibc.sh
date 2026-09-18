@@ -41,12 +41,35 @@ _ibc() {
   docker compose --progress quiet run --rm -T deployer "$@" --home /home/ibc
 }
 
-# _steps <ibc-deploy-stdout> — one indented line per step, in place of the raw
-# JSON array `ibc deploy` prints. "executed" on a first run, "skipped" on a
-# re-run, which is the idempotency of the deploy path made visible.
+# Read a nonempty scalar at a JSON object path from stdin.
+_json_field() {
+  perl -MJSON::PP -0777 -e '
+    my $value = decode_json(<STDIN>);
+    for my $key (@ARGV) {
+      exit 1 unless ref($value) eq "HASH";
+      $value = $value->{$key};
+    }
+    exit 1 unless defined($value) && !ref($value) && length($value);
+    binmode STDOUT, ":utf8";
+    print $value;
+  ' "$@"
+}
+
+# _steps <ibc-deploy-stdout> — one indented line per deployment step.
 _steps() {
-  printf '%s' "$1" | perl -0777 -ne \
-    'print "    $1: $2\n" while /"name"\s*:\s*"([^"]+)"\s*,\s*"action"\s*:\s*"([^"]+)"/gs'
+  printf '%s' "$1" | perl -MJSON::PP -0777 -e '
+    my $steps = decode_json(<STDIN>);
+    die "expected deployment steps array\n" unless ref($steps) eq "ARRAY";
+    my @lines;
+    for my $step (@$steps) {
+      die "invalid deployment step\n" unless ref($step) eq "HASH"
+        && defined($step->{name}) && !ref($step->{name})
+        && defined($step->{action}) && !ref($step->{action});
+      push @lines, "    $step->{name}: $step->{action}\n";
+    }
+    binmode STDOUT, ":utf8";
+    print @lines;
+  ' || die "could not parse deployment steps"
 }
 
 init_ibc() {
@@ -98,7 +121,7 @@ EOF
 _router() {
   local file router
   file="$DEPLOY_DIR/deployments/$1.json"
-  router=$(perl -0777 -ne 'print $1 if /"router"\s*:\s*"([^"]+)"/' "$file" 2>/dev/null)
+  router=$(_json_field core router 2>/dev/null < "$file") || router=""
   [[ -n "$router" ]] || die "no router address in $file — did 'ibc deploy core' run?"
   printf '%s' "$router"
 }
@@ -151,14 +174,23 @@ deploy_contracts() {
 
 # ── IFT transfer ────────────────────────────────────────────────────────────
 
-# _token <chain-id> — the address of the $IFT_SYMBOL token in that chain's
-# manifest. Anchored on the symbol rather than on the first "address" in the
-# file: clients[] carries an "address" too and comes first, and a manifest can
-# hold more than one token. "address" follows "symbol" inside the same object.
+# _token <chain-id> — the address of the $IFT_SYMBOL token in that chain's manifest.
 _token() {
-  IFT_SYMBOL="$IFT_SYMBOL" perl -0777 -ne \
-    'print $1 if /"symbol"\s*:\s*"\Q$ENV{IFT_SYMBOL}\E".*?"address"\s*:\s*"([^"]+)"/s' \
-    "$DEPLOY_DIR/deployments/$1.json" 2>/dev/null
+  IFT_SYMBOL="$IFT_SYMBOL" perl -MJSON::PP -MEncode=decode -0777 -ne '
+    my $symbol = decode("UTF-8", $ENV{IFT_SYMBOL});
+    my $manifest = decode_json($_);
+    exit 1 unless ref($manifest) eq "HASH";
+    my $tokens = $manifest->{tokens} // [];
+    exit 1 unless ref($tokens) eq "ARRAY";
+    for my $token (@$tokens) {
+      next unless ref($token) eq "HASH" && defined($token->{symbol})
+        && !ref($token->{symbol}) && $token->{symbol} eq $symbol;
+      exit 1 unless defined($token->{address}) && !ref($token->{address})
+        && length($token->{address});
+      print $token->{address};
+      last;
+    }
+  ' "$DEPLOY_DIR/deployments/$1.json" 2>/dev/null || true
 }
 
 # _balance <chain-id> <ift> <address> — IFT balance in base units, empty when
@@ -167,7 +199,7 @@ _token() {
 # message, pre-empting their own diagnostics.
 _balance() {
   _ibc query ift balance --chain "$1" --ift "$2" --address "$3" 2>/dev/null \
-    | perl -0777 -ne 'print $1 if /"balance"\s*:\s*"([^"]+)"/' \
+    | _json_field balance 2>/dev/null \
     || true
 }
 
@@ -220,7 +252,7 @@ deploy_ift() {
 _leg() {
   local src="$1" dst="$2"
   local src_id dst_id ift_src ift_dst sender receiver
-  local before expected balance hash waited=0
+  local before expected balance hash
 
   src_id=$(_chain_attr "$src" CHAIN_ID); dst_id=$(_chain_attr "$dst" CHAIN_ID)
   ift_src=$(_token "$src_id"); ift_dst=$(_token "$dst_id")
@@ -240,7 +272,7 @@ _leg() {
   log "[$src] sending $IFT_SEND_AMOUNT $IFT_SYMBOL to $receiver on chain $dst over $CLIENT_ID..."
   hash=$(_ibc tx ift send --chain "$src_id" --ift "$ift_src" --from "deployer-$(_lc "$src")" \
            --client-id "$CLIENT_ID" --to "$receiver" --amount "$IFT_SEND_AMOUNT" 2>/dev/null \
-         | perl -0777 -ne 'print $1 if /"txHash"\s*:\s*"([^"]+)"/')
+         | _json_field txHash 2>/dev/null) || hash=""
   [[ -n "$hash" ]] || die "'ibc tx ift send' on chain $src returned no transaction hash"
   log "      sent in $hash"
 
@@ -255,7 +287,8 @@ _leg() {
     || die "'ibc relayer relay' failed for the $src -> $dst leg"
 
   log "      waiting for chain $dst's balance to go $before -> $expected..."
-  while (( waited < IFT_RELAY_TIMEOUT )); do
+  local deadline=$((SECONDS + IFT_RELAY_TIMEOUT))
+  while (( SECONDS < deadline )); do
     # A failed query is a retry, not a fatal: the poll outlives one transient
     # RPC hiccup and only the timeout below ends the wait.
     balance=$(_balance "$dst_id" "$ift_dst" "$receiver")
@@ -264,7 +297,6 @@ _leg() {
       return 0
     fi
     sleep "$IFT_POLL_INTERVAL"
-    (( waited += IFT_POLL_INTERVAL ))
   done
 
   die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected" \

@@ -39,6 +39,74 @@ func (_m *MockProver) EXPECT() *MockProver_Expecter {
 	return &MockProver_Expecter{mock: &_m.Mock}
 }
 
+// ClientUpdatePayload provides a mock function for the type MockProver
+func (_mock *MockProver) ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error) {
+	ret := _mock.Called(ctx, height)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClientUpdatePayload")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([]byte, error)); ok {
+		return returnFunc(ctx, height)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) []byte); ok {
+		r0 = returnFunc(ctx, height)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
+		r1 = returnFunc(ctx, height)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockProver_ClientUpdatePayload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClientUpdatePayload'
+type MockProver_ClientUpdatePayload_Call struct {
+	*mock.Call
+}
+
+// ClientUpdatePayload is a helper method to define mock.On call
+//   - ctx context.Context
+//   - height uint64
+func (_e *MockProver_Expecter) ClientUpdatePayload(ctx any, height any) *MockProver_ClientUpdatePayload_Call {
+	return &MockProver_ClientUpdatePayload_Call{Call: _e.mock.On("ClientUpdatePayload", ctx, height)}
+}
+
+func (_c *MockProver_ClientUpdatePayload_Call) Run(run func(ctx context.Context, height uint64)) *MockProver_ClientUpdatePayload_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uint64
+		if args[1] != nil {
+			arg1 = args[1].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockProver_ClientUpdatePayload_Call) Return(bytes []byte, err error) *MockProver_ClientUpdatePayload_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockProver_ClientUpdatePayload_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([]byte, error)) *MockProver_ClientUpdatePayload_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LatestProvableHeight provides a mock function for the type MockProver
 func (_mock *MockProver) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	ret := _mock.Called(ctx)
@@ -181,74 +249,6 @@ func (_c *MockProver_PacketProofs_Call) Return(bytess [][]byte, err error) *Mock
 }
 
 func (_c *MockProver_PacketProofs_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error)) *MockProver_PacketProofs_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// StateProof provides a mock function for the type MockProver
-func (_mock *MockProver) StateProof(ctx context.Context, height uint64) ([]byte, error) {
-	ret := _mock.Called(ctx, height)
-
-	if len(ret) == 0 {
-		panic("no return value specified for StateProof")
-	}
-
-	var r0 []byte
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([]byte, error)); ok {
-		return returnFunc(ctx, height)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) []byte); ok {
-		r0 = returnFunc(ctx, height)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]byte)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
-		r1 = returnFunc(ctx, height)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockProver_StateProof_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StateProof'
-type MockProver_StateProof_Call struct {
-	*mock.Call
-}
-
-// StateProof is a helper method to define mock.On call
-//   - ctx context.Context
-//   - height uint64
-func (_e *MockProver_Expecter) StateProof(ctx any, height any) *MockProver_StateProof_Call {
-	return &MockProver_StateProof_Call{Call: _e.mock.On("StateProof", ctx, height)}
-}
-
-func (_c *MockProver_StateProof_Call) Run(run func(ctx context.Context, height uint64)) *MockProver_StateProof_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 uint64
-		if args[1] != nil {
-			arg1 = args[1].(uint64)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockProver_StateProof_Call) Return(bytes []byte, err error) *MockProver_StateProof_Call {
-	_c.Call.Return(bytes, err)
-	return _c
-}
-
-func (_c *MockProver_StateProof_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([]byte, error)) *MockProver_StateProof_Call {
 	_c.Call.Return(run)
 	return _c
 }

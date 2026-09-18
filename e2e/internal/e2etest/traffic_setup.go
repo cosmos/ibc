@@ -85,10 +85,13 @@ type ChainDeployment struct {
 	ICS26Router            common.Address
 }
 
-// RouteClients holds the protocol client IDs for one directed route.
+// RouteClients holds the protocol client IDs and light client kinds for one
+// directed route.
 type RouteClients struct {
-	SourceClientID string
-	DestClientID   string
+	SourceClientID   string
+	DestClientID     string
+	SourceClientKind environment.ClientKind
+	DestClientKind   environment.ClientKind
 }
 
 // Deployment is the e2e traffic-layer view of protocol apps and test tokens.
@@ -284,8 +287,10 @@ func deployApps(
 		sourceClient, destClient, err := resolveRouteClients(env, route)
 		require.NoError(t, err, "e2etest: resolve clients for route %q", route.ID)
 		deployment.routes[route.ID] = RouteClients{
-			SourceClientID: sourceClient,
-			DestClientID:   destClient,
+			SourceClientID:   sourceClient.ID(),
+			DestClientID:     destClient.ID(),
+			SourceClientKind: sourceClient.Kind(),
+			DestClientKind:   destClient.Kind(),
 		}
 	}
 
@@ -403,7 +408,7 @@ func buildConfig(
 		})
 	}
 
-	connections := map[string]int{}
+	connections := map[[4]string]int{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
 		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
@@ -421,34 +426,42 @@ func buildConfig(
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
 		connection := ibccli.RelayerConnection{
-			ChainA:  sourceChain,
-			ClientA: clients.SourceClientID,
-			ChainB:  destinationChain,
-			ClientB: clients.DestClientID,
+			A: ibccli.RelayerClientEnd{
+				ChainID:    sourceChain,
+				ClientID:   clients.SourceClientID,
+				ClientType: string(clients.SourceClientKind),
+				AutoRelay:  !route.Manual,
+			},
+			B: ibccli.RelayerClientEnd{
+				ChainID:    destinationChain,
+				ClientID:   clients.DestClientID,
+				ClientType: string(clients.DestClientKind),
+			},
 		}
-		if connection.ChainB+"/"+connection.ClientB < connection.ChainA+"/"+connection.ClientA {
-			connection.ChainA, connection.ClientA, connection.ChainB, connection.ClientB = connection.ChainB, connection.ClientB, connection.ChainA, connection.ClientA
-		}
-		key := connection.ChainA + "/" + connection.ClientA
-
-		index, seen := connections[key]
-		if !seen {
-			index = len(config.Connections)
-			connections[key] = index
-			config.Connections = append(config.Connections, connection)
-		}
-
-		// the reverse route shares this connection, so each direction turns on
-		// the end it is sent from rather than the whole connection
-		if !route.Manual {
-			if config.Connections[index].ClientA == clients.SourceClientID {
-				config.Connections[index].AutoRelayA = true
-			} else {
-				config.Connections[index].AutoRelayB = true
-			}
-		}
+		mergeRelayerConnection(&config, connections, connection)
 	}
 	return config, options
+}
+
+// mergeRelayerConnection combines directional routes into one reciprocal pair.
+func mergeRelayerConnection(
+	config *ibccli.RelayerConfig,
+	indices map[[4]string]int,
+	connection ibccli.RelayerConnection,
+) {
+	if connection.B.ChainID < connection.A.ChainID ||
+		(connection.B.ChainID == connection.A.ChainID && connection.B.ClientID < connection.A.ClientID) {
+		connection.A, connection.B = connection.B, connection.A
+	}
+	key := [4]string{connection.A.ChainID, connection.A.ClientID, connection.B.ChainID, connection.B.ClientID}
+	if index, seen := indices[key]; seen {
+		existing := &config.Connections[index]
+		existing.A.AutoRelay = existing.A.AutoRelay || connection.A.AutoRelay
+		existing.B.AutoRelay = existing.B.AutoRelay || connection.B.AutoRelay
+		return
+	}
+	indices[key] = len(config.Connections)
+	config.Connections = append(config.Connections, connection)
 }
 
 func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
@@ -466,22 +479,22 @@ func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
 func resolveRouteClients(
 	env *environment.Environment,
 	route Route,
-) (string, string, error) {
+) (*environment.IBCClient, *environment.IBCClient, error) {
 	for _, id := range env.Connections() {
 		connection, err := env.Connection(id)
 		if err != nil {
-			return "", "", err
+			return nil, nil, err
 		}
 		aChain := connection.A().IBCInstance().Chain().ID()
 		bChain := connection.B().IBCInstance().Chain().ID()
 		switch {
 		case aChain == route.Source && bChain == route.Destination:
-			return connection.A().ID(), connection.B().ID(), nil
+			return connection.A(), connection.B(), nil
 		case bChain == route.Source && aChain == route.Destination:
-			return connection.B().ID(), connection.A().ID(), nil
+			return connection.B(), connection.A(), nil
 		}
 	}
-	return "", "", fmt.Errorf(
+	return nil, nil, fmt.Errorf(
 		"no IBC Connection links Chain %q to Chain %q",
 		route.Source,
 		route.Destination,

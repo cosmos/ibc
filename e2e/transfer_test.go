@@ -114,3 +114,39 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
 }
+
+// Two Besu QBFT chains relay through besu-qbft light clients: header, account
+// and storage proofs instead of attestations. Besu is only available outside
+// fast mode, so this skips there.
+func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
+	t.Parallel()
+	spec, runtime := qbftMesh(e2etest.EVMChains(
+		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
+	))
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	relayer := e2etest.StartRelayer(t, driver, env)
+	ctx := t.Context()
+
+	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+		Amount: amount,
+		Memo:   "transfer-besu-qbft",
+	})
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyEscrowed(ctx))
+
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+	require.NoError(t, transfer.VerifyCommitmentCreated(ctx))
+	require.NoError(t, transfer.VerifyReceiptCreated(ctx))
+	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
+	require.NoError(t, transfer.VerifyAcknowledgementWritten(ctx, status.GetRecvTx().GetTxHash()))
+	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
+}

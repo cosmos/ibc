@@ -4,6 +4,7 @@ package deploy
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"testing"
 
@@ -54,7 +55,10 @@ func (f *fakeTarget) Head(context.Context) (uint64, uint64, error) { return 10, 
 func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error) {
 	return Report{}, nil
 }
-func (f *fakeTarget) SupportedClientTypes() []string { return []string{ClientTypeAttestation} }
+
+func (f *fakeTarget) SupportedClientTypes() []string {
+	return []string{ClientTypeAttestation, ClientTypeBesuQBFT}
+}
 
 // fakeBridge is the on-chain bridge state a fakeTarget records.
 type fakeBridge struct{ cp, ctor string }
@@ -617,4 +621,114 @@ func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
 	require.Empty(t, m.Tokens)
+}
+
+func besuQBFTSpec() ClientSpec {
+	return ClientSpec{
+		ClientID:             "cli-2",
+		Type:                 ClientTypeBesuQBFT,
+		CounterpartyChainID:  "2",
+		CounterpartyClientID: "cli-1",
+		Params: BesuQBFTParams{
+			IBCRouter:         "0x00000000000000000000000000000000000000cc",
+			InitialHeight:     112,
+			InitialTimestamp:  1788192445,
+			InitialStateRoot:  "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
+			InitialValidators: []string{"0x00000000000000000000000000000000000000aa"},
+			TrustingPeriod:    1209600,
+			MaxClockDrift:     15,
+		},
+	}
+}
+
+func TestSpecToClientBesuQBFTParams(t *testing.T) {
+	for _, noValidators := range []bool{false, true} {
+		spec := besuQBFTSpec()
+		params := spec.Params.(BesuQBFTParams)
+		params.InitialHeight = 1<<53 + 1 // Must not round through float64 before saving.
+		if noValidators {
+			params.InitialValidators = nil
+		}
+		spec.Params = params
+
+		client, err := specToClient(spec, "0xclient")
+		require.NoError(t, err)
+		want, err := json.Marshal(params)
+		require.NoError(t, err)
+		got, err := json.Marshal(client.Params)
+		require.NoError(t, err)
+		require.JSONEq(t, string(want), string(got))
+
+		decoded, err := BesuQBFTParamsFromClient(client)
+		require.NoError(t, err)
+		require.Equal(t, params, decoded)
+	}
+}
+
+func TestClientStepsBesuQBFT(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+	target.hasCode["0xrouter"] = true
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	require.NoError(t, m.Save(dir))
+
+	spec := besuQBFTSpec()
+
+	res, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+	require.Equal(t, "executed", res[0].Action)
+
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	recorded, ok := m.Client("cli-2")
+	require.True(t, ok)
+	require.Equal(t, ClientTypeBesuQBFT, recorded.Type)
+
+	// the manifest round-trips the constructor params
+	params, err := BesuQBFTParamsFromClient(recorded)
+	require.NoError(t, err)
+	require.Equal(t, spec.Params, params)
+
+	// rerun skips; initial trusted state drift is not an identity conflict
+	drifted := besuQBFTSpec()
+	p := drifted.Params.(BesuQBFTParams)
+	p.InitialHeight, p.InitialTimestamp = 200, 1788192600
+	drifted.Params = p
+	res, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", drifted))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, 1, target.registers)
+
+	// identity fields do conflict
+	for name, mutate := range map[string]func(*BesuQBFTParams){
+		"ibcRouter":      func(p *BesuQBFTParams) { p.IBCRouter = "0x00000000000000000000000000000000000000dd" },
+		"trustingPeriod": func(p *BesuQBFTParams) { p.TrustingPeriod = 1 },
+		"maxClockDrift":  func(p *BesuQBFTParams) { p.MaxClockDrift = 1 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			conflicting := besuQBFTSpec()
+			p := conflicting.Params.(BesuQBFTParams)
+			mutate(&p)
+			conflicting.Params = p
+			_, runErr := RunSteps(
+				context.Background(),
+				slog.Default(),
+				false,
+				ClientSteps(target, dir, "1", conflicting),
+			)
+			require.ErrorContains(t, runErr, name)
+		})
+	}
+
+	// wrong params type for the declared client type
+	bad := besuQBFTSpec()
+	bad.ClientID = "cli-3"
+	bad.Params = AttestationParams{}
+	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", bad))
+	require.ErrorContains(t, err, "does not match client type")
+
+	_, err = BesuQBFTParamsFromClient(manifest.Client{ClientID: "x", Type: ClientTypeAttestation})
+	require.ErrorContains(t, err, "not")
 }

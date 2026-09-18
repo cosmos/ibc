@@ -236,8 +236,37 @@ type NewClient struct {
 func (NewClient) clientSpec()                       {}
 func (c NewClient) clientAttestors() []AttestorSpec { return c.Attestors }
 
-// ExistingClient identifies an already-created IBC Client by its protocol ID.
+// NewBesuQBFTClient declares a Besu QBFT IBC Client to create on its host IBC
+// Instance. It verifies the counterparty end's sealed Besu headers, so it needs
+// no Attestors; the counterparty Chain must run Besu QBFT. Authority follows
+// the same rule as NewClient. Periods are seconds; TrustingPeriod must be positive.
+type NewBesuQBFTClient struct {
+	IBCInstance    IBCInstanceID
+	Authority      AuthorityID
+	TrustingPeriod uint64
+	MaxClockDrift  uint64
+}
+
+func (NewBesuQBFTClient) clientSpec()                     {}
+func (NewBesuQBFTClient) clientAttestors() []AttestorSpec { return nil }
+
+// newClientAuthority reports the host IBC Instance and Authority of a Client
+// declaration that creates a contract; existing Clients have neither.
+func newClientAuthority(spec ClientSpec) (IBCInstanceID, AuthorityID, bool) {
+	switch declaration := spec.(type) {
+	case NewClient:
+		return declaration.IBCInstance, declaration.Authority, true
+	case NewBesuQBFTClient:
+		return declaration.IBCInstance, declaration.Authority, true
+	default:
+		return "", "", false
+	}
+}
+
+// ExistingClient identifies an already-created IBC Client by its protocol ID
+// and explicit kind. Attestors are only valid for attestation clients.
 type ExistingClient struct {
+	Kind        ClientKind
 	IBCInstance IBCInstanceID
 	ID          string
 	Attestors   []AttestorSpec
@@ -319,8 +348,21 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 				clientLabel(connectionID, end),
 			)
 		}
+	case NewBesuQBFTClient:
+		if declaration.TrustingPeriod == 0 {
+			return "", errorsf("IBC Client %q trusting period must be positive", clientLabel(connectionID, end))
+		}
+		instance = declaration.IBCInstance
+		variantField = "authority"
+		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		instance = declaration.IBCInstance
+		if declaration.Kind != ClientKindAttestation && declaration.Kind != ClientKindBesuQBFT {
+			return "", errorsf("IBC Client %q: unsupported kind %q", clientLabel(connectionID, end), declaration.Kind)
+		}
+		if declaration.Kind == ClientKindBesuQBFT && len(declaration.Attestors) != 0 {
+			return "", errorsf("IBC Client %q: besu-qbft does not use attestors", clientLabel(connectionID, end))
+		}
 		variantField = "id"
 		variantValue = declaration.ID
 	default:
@@ -350,6 +392,8 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 func clientIBCInstance(spec ClientSpec) IBCInstanceID {
 	switch declaration := spec.(type) {
 	case NewClient:
+		return declaration.IBCInstance
+	case NewBesuQBFTClient:
 		return declaration.IBCInstance
 	case ExistingClient:
 		return declaration.IBCInstance

@@ -21,10 +21,10 @@ import (
 
 // stubProver records what it was asked, so the far side of the wire can assert it.
 type stubProver struct {
-	height     uint64
-	timestamp  time.Time
-	stateProof []byte
-	proofs     [][]byte
+	height              uint64
+	timestamp           time.Time
+	clientUpdatePayload []byte
+	proofs              [][]byte
 
 	gotHeight  uint64
 	gotKind    v2.ProofKind
@@ -35,9 +35,9 @@ func (s *stubProver) LatestProvableHeight(context.Context) (uint64, time.Time, e
 	return s.height, s.timestamp, nil
 }
 
-func (s *stubProver) StateProof(_ context.Context, height uint64) ([]byte, error) {
+func (s *stubProver) ClientUpdatePayload(_ context.Context, height uint64) ([]byte, error) {
 	s.gotHeight = height
-	return s.stateProof, nil
+	return s.clientUpdatePayload, nil
 }
 
 func (s *stubProver) PacketProofs(
@@ -66,10 +66,10 @@ func newClient(t *testing.T, set *prover.Set, chainID, clientID string) *remote.
 func TestProverServiceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	stub := &stubProver{
-		height:     4321,
-		timestamp:  time.Unix(1700000000, 0).UTC(),
-		stateProof: []byte("state-proof"),
-		proofs:     [][]byte{[]byte("proof-a"), []byte("proof-b")},
+		height:              4321,
+		timestamp:           time.Unix(1700000000, 0).UTC(),
+		clientUpdatePayload: []byte("client-update-payload"),
+		proofs:              [][]byte{[]byte("proof-a"), []byte("proof-b")},
 	}
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
 	client := newClient(t, set, "chain-a", "client-0")
@@ -81,10 +81,10 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		require.Equal(t, stub.timestamp, timestamp)
 	})
 
-	t.Run("state proof", func(t *testing.T) {
-		proof, err := client.StateProof(ctx, 99)
+	t.Run("client update payload", func(t *testing.T) {
+		payload, err := client.ClientUpdatePayload(ctx, 99)
 		require.NoError(t, err)
-		require.Equal(t, []byte("state-proof"), proof)
+		require.Equal(t, []byte("client-update-payload"), payload)
 		require.Equal(t, uint64(99), stub.gotHeight)
 	})
 

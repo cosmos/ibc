@@ -41,6 +41,10 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
+### Relayers
+
+- Adds the `besu-qbft` light client type to `ibc deploy client` and the relayer, proving packets with sealed Besu QBFT headers and `eth_getProof` results instead of attestations.
+
 ### API-Breaking
 
 - [\#873](https://github.com/cosmos/ibc/pull/873) Defines the connection `Version` datatype and adjusts the signature of `getCompatibleVersions()` and `pickVersion()` accordingly
