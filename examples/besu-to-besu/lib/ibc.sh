@@ -11,6 +11,7 @@ RELAYER_HOME_DIR="$LOCAL_DIR/relayer"
 
 IBC_SERVICES=(kms attestor-a attestor-b relayer)
 CLIENT_ID="ibc-$A_CHAIN_ID-$B_CHAIN_ID"
+PACKET_DISCOVERY_TIMEOUT="${PACKET_DISCOVERY_TIMEOUT:-30}"
 
 export DEPLOY_UID="${DEPLOY_UID:-$(id -u)}"
 export DEPLOY_GID="${DEPLOY_GID:-$(id -g)}"
@@ -171,6 +172,13 @@ _balance() {
     || true
 }
 
+_relayer_saw() {
+  local out
+  out=$(docker compose --progress quiet exec -T relayer /opt/ibc relayer packets \
+          --tx-hash "$1" --home /home/ibc 2>/dev/null) || return 1
+  [[ "$out" == *"$1"* ]]
+}
+
 # Deploys one IFT token per chain and bridges them over the client registered by
 # deploy_contracts.
 #
@@ -244,17 +252,22 @@ _leg() {
   [[ -n "$hash" ]] || die "'ibc tx ift send' on chain $src returned no transaction hash"
   log "      sent in $hash"
 
-  # The relay is explicit. `relayer.connections[].autoRelay` exists in the config
-  # schema but nothing in the relayer reads it yet, so a packet sits unrelayed until it
-  # is handed to the relayer by transaction hash. Run inside the relayer
-  # container: the command dials the relayer's own gRPC, which only its config
-  # describes.
-  log "      handing the packet to the relayer..."
-  docker compose --progress quiet exec -T relayer /opt/ibc relayer relay \
-    --tx-hash "$hash" --chain-id "$src_id" --home /home/ibc >/dev/null \
-    || die "'ibc relayer relay' failed for the $src -> $dst leg"
+  log "      waiting for the relayer to notice the packet..."
+  waited=0
+  until _relayer_saw "$hash"; do
+    (( waited += IFT_POLL_INTERVAL ))
+    (( waited < PACKET_DISCOVERY_TIMEOUT )) || die \
+      "the relayer recorded no packet for $hash after ${PACKET_DISCOVERY_TIMEOUT}s." \
+      "Its watcher for chain $src did not see the SendPacket, so auto-relay never started" \
+      "— subscriptions do not look backwards, so this packet cannot be recovered." \
+      "Check 'docker compose logs relayer' for a websocket failure against chain $src" \
+      "(chains[].evm.ws), then re-run"
+    sleep "$IFT_POLL_INTERVAL"
+  done
+  log "      relayer picked it up on its own subscription"
 
-  log "      waiting for chain $dst's balance to go $before -> $expected..."
+  log "      waiting for delivery — chain $dst's balance $before -> $expected..."
+  waited=0
   while (( waited < IFT_RELAY_TIMEOUT )); do
     # A failed query is a retry, not a fatal: the poll outlives one transient
     # RPC hiccup and only the timeout below ends the wait.
@@ -267,8 +280,12 @@ _leg() {
     (( waited += IFT_POLL_INTERVAL ))
   done
 
-  die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected" \
-      "— check 'docker compose logs relayer attestor-a attestor-b'"
+  die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected." \
+      "The relayer did record the packet, so this is delivery, not discovery" \
+      "— check 'docker compose logs relayer attestor-a attestor-b' for an attestor that" \
+      "cannot reach kms or a client authorizing the wrong attestor address, and" \
+      "'docker compose exec relayer /opt/ibc relayer packets --tx-hash $hash --home /home/ibc'" \
+      "for the packet's state"
 }
 
 # Top up chain A's deployer so there is something to send.

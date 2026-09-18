@@ -11,19 +11,19 @@ to B.
         chain A (41001)                     chain B (41002)
 
         ┌────────────┐                      ┌────────────┐
-        │   besu-a   │                      │   besu-b   │
-        └─────┬──────┘                      └─────┬──────┘
-              │ watches                   watches │
-              ▼                                   ▼
-        ┌────────────┐                      ┌────────────┐
-        │ attestor-a │                      │ attestor-b │
-        └─────┬──────┘                      └─────┬──────┘
-              │                                   │
-              └──────────▶┌───────────┐◀──────────┘
-                          │  relayer  │
-                          └─────┬─────┘
-                                │
-              ┌─────────────────┴─────────────────┐
+   ┌───▶│   besu-a   │                      │   besu-b   │◀───┐
+   │    └─────┬──────┘                      └─────┬──────┘    │
+   │          │ watches                   watches │           │
+   │          ▼                                   ▼           │
+   │    ┌────────────┐                      ┌────────────┐    │
+   │    │ attestor-a │                      │ attestor-b │    │
+   │    └─────┬──────┘                      └─────┬──────┘    │
+   │          │ attestation       attestation     │           │
+   │          └─────────▶┌───────────┐◀───────────┘           │
+   └─────────────────────┤  relayer  ├────────────────────────┘
+     ws:  SendPacket     └─────┬─────┘        ws:  SendPacket
+     rpc: submit packet        │              rpc: submit packet
+              ┌────────────────┴──────────────────┐
               │  Sign (gRPC)                      │
               ▼                                   │
         ┌───────────┐                             │
@@ -34,10 +34,12 @@ to B.
 
 Each attestor watches one chain and signs attestations about it, nothing else.
 The relayer is the only process wired to everything: both attestors over gRPC,
-and an RPC connection to both chains. A transfer from A to B goes:
+and an RPC *and* websocket connection to both chains. A transfer from A to B
+goes:
 
-1. `ift send` on chain A burns 0.5 DEMO and emits a packet. The send tx is
-   handed to the relayer by hash.
+1. `ift send` on chain A burns 0.5 DEMO and emits a packet. Nothing hands that
+   packet over — the relayer is subscribed to chain A's `SendPacket` logs and
+   picks it up itself.
 2. The relayer pulls an attestation over chain A's state from attestor-a.
 3. The relayer submits the packet to chain B with that attestation as its proof.
    Chain B's light client verifies it against the attestor it authorizes —
@@ -57,8 +59,13 @@ inside `$FOUNDRY_IMAGE` instead, so a host install is optional.
 
 ```bash
 cd examples/besu-to-besu
-./setup.sh
+./setup.sh demo
 ```
+
+`demo`, not a bare `./setup.sh`: the bare form starts the two chains and stops
+there, because that is the contract the
+[CLI tutorial](../../docs/6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)
+depends on. See [Commands](#commands).
 
 Takes about two minutes on a warm cache, and ends with:
 
@@ -66,15 +73,18 @@ Takes about two minutes on a warm cache, and ends with:
 [14:14:17] [A] minting 1000000000000000000 DEMO to 0x58A57ed9...
 [14:14:20] [A] sending 500000000000000000 DEMO to 0x58A57ed9... on chain B over ibc-41001-41002...
 [14:14:22]       sent in 0xbc60671b3e081d770e8704f0e6c4c25ba9fe0bfeae0a1d99418dd17dc1a5f146
-[14:14:22]       handing the packet to the relayer...
-[14:14:22]       waiting for chain B's balance to go 0 -> 500000000000000000...
+[14:14:22]       waiting for the relayer to notice the packet...
+[14:14:25]       relayer picked it up on its own subscription
+[14:14:25]       waiting for delivery — chain B's balance 0 -> 500000000000000000...
 [14:14:38]       relayed A -> B: 0x58A57ed9... holds 500000000000000000 DEMO on chain B
 [14:14:40] DEMO held by the deployer: chain A 1500000000000000000, chain B 500000000000000000
 ```
 
-That `relayed` line is the whole point: the balance on chain B only moves if
-attestor-a signed through kms and the relayer assembled that attestation into a
-proof chain B's light client accepted.
+That `relayed` line is the whole point, and nothing asked for it: the send
+returns a transaction hash the script only ever prints. The balance on chain B
+moves because the relayer saw the packet on its own subscription, attestor-a
+signed through kms, and the relayer assembled that attestation into a proof
+chain B's light client accepted.
 
 `roundtrip` sends the same tokens straight back afterwards. The return leg needs
 no mint — it spends what the first leg delivered — so chain B ends where it
@@ -105,9 +115,27 @@ containers are stopped, it brings the stack up first.
 ./setup.sh clean        # stop containers and remove chains/local/
 ```
 
-Three commands, on purpose. Re-running any of them against a live stack is safe
-and idempotent — every deploy step re-checks on-chain state and reports
-`skipped` — so it relays another transfer rather than rebuilding anything.
+## Commands
+
+```bash
+./setup.sh              # phase 1 only: two live chains, no IBC deployed on them
+./setup.sh demo         # all four phases: the stack, and one transfer A -> B
+./setup.sh roundtrip    # A -> B -> A; phase 4 alone when the stack is already up
+./setup.sh chains       # explicit form of the bare invocation
+./setup.sh accounts     # print the funded accounts and their keys, start nothing
+./setup.sh clean        # stop containers and remove chains/local/
+```
+
+The bare form is deliberately *not* the demo. The
+[CLI tutorial](../../docs/6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md)
+runs `setup.sh` and then deploys IBC by hand with the `ibc` binary, so the bare
+form has to leave the chains empty — run the demo first and every step that
+tutorial teaches is already done and reports `skipped`. It also pulls only the
+Besu image, not the ibc and kms images it never starts.
+
+Re-running `demo` or `roundtrip` against a live stack is safe and idempotent —
+every deploy step re-checks on-chain state and reports `skipped` — so it relays
+another transfer rather than rebuilding anything.
 
 Each invocation writes a timestamped log to `logs/`. Use `docker compose`
 directly to poke at a running stack:
@@ -120,14 +148,15 @@ docker compose exec attestor-a /opt/ibc attestor info attestor-a --home /home/ib
 
 ## The four phases
 
-They always run together; the names are internal, not subcommands.
+`demo` runs all four together. The names are internal rather than subcommands —
+phase 1 is the only one reachable on its own, as a bare `./setup.sh`.
 
 | Phase      | What it does                                                     |
 |------------|------------------------------------------------------------------|
 | `start`    | derive every key, render the chain configs into `chains/local/`, `docker compose up` both chains, wait for RPC |
 | `deploy`   | `ibc deploy core` + `client` on each chain (writing `ibc.env`), then GMP, an IFT token per chain, and the bridge |
 | `services` | `docker compose up` kms, both attestors, relayer                 |
-| `transfer` | mint IFT on A, send it to B, relay it, assert the balance moved — and with `roundtrip`, send it back |
+| `transfer` | mint IFT on A, send it to B, confirm the relayer discovered the packet, assert the balance moved — and with `roundtrip`, send it back |
 
 ## What makes this example different
 
@@ -142,6 +171,12 @@ No signing key is on disk in any attestor or relayer container.
 no validators, no privval dial-out — and serves all four keys over its
 SignerService. Each service addresses the key it is allowed to use by id
 (`type: remote`, `remoteKeyId:`), and the private key never leaves kms.
+
+Relaying is **hands-off**. Both ends of the connection set
+`autoRelay.enabled: true`, so the relayer discovers packets on its own
+`SendPacket` websocket subscription rather than being handed a transaction
+hash. The demo never calls `ibc relayer relay`; see
+[Relaying an IFT transfer](#relaying-an-ift-transfer).
 
 ## Chains and accounts
 
@@ -211,10 +246,12 @@ private key and rejects a `type: remote` signer outright (`deployer signer %q
 must be a local key`).
 
 Deployment writes a manifest per chain to `chains/local/deploy/deployments/`,
-and `deploy` then writes `chains/local/ibc.env`. Only the router addresses are
-read back out of the manifests (`.core.router`); the client id is passed to
-`deploy client` explicitly, so it is known before anything runs and needs no
-parsing.
+and `deploy` then writes `chains/local/ibc.env`. Two things are read back out of
+those manifests: the router address (`.core.router`), which goes into `ibc.env`,
+and each chain's IFT address (the `.tokens[]` entry matching `IFT_SYMBOL`),
+which every command in the transfer phase needs for `--ift`. The client id is
+not among them — it is passed to `deploy client` explicitly, so it is known
+before anything runs and needs no parsing.
 
 To run an `ibc` command by hand against the same config, pass the uid and gid
 `setup.sh` exports — the service writes to host-owned bind mounts, and the
@@ -238,26 +275,72 @@ ibc deploy ift-bridge --chain-a A --ift-a … --chain-b B --ift-b … --client-i
 ibc tx ift mint   --chain A --ift … --from deployer-a --to <sender>   --amount 1e18
 ibc tx ift send   --chain A --ift … --from deployer-a --to <receiver> --amount 5e17 \
                   --client-id ibc-41001-41002
-ibc relayer relay --tx-hash <the send tx> --chain-id A
 ibc query ift balance --chain B --ift … --address <receiver>
 ```
 
-`roundtrip` then repeats the last three with A and B swapped, and no mint.
+`roundtrip` then repeats the last two with A and B swapped, and no mint.
 
 `deploy gmp` is not optional — `deploy ift` refuses without it (`no gmp
 deployment recorded for chain <id>`).
 
-**The relay step is explicit.** `relayer.connections[].autoRelay` exists in the
-config schema and validates, but nothing in the relayer reads `.Enabled` or
-`.Lookback` yet, so a packet sits unrelayed until it is handed to the relayer by
-transaction hash. That is why `config/ibc.yml` carries no `autoRelay` block: it
-would only imply a behaviour that is not wired up. `relayer relay` runs inside
-the `relayer` container, since the command dials the relayer's own gRPC and only
-its config describes it.
+**There is no relay step.** That list has no `relayer relay` in it because both
+ends of the connection in [config/ibc.yml](config/ibc.yml) set
+`autoRelay.enabled: true`. That is what puts a packet watcher on the chain: it
+subscribes to `SendPacket` logs for the client ids it relays, records every
+matching packet, and the dispatch loop collects them within
+`dispatchPollInterval` (3s here). `autoRelay` is set per *end* and covers
+packets flowing **from** that end's chain, so enabling it on both ends is what
+makes A → B and B → A both automatic.
 
-The wait is on a *delta*, not an absolute balance — a second run starts with the
-first run's tokens already in place, and an absolute check would pass before the
-new packet ever landed.
+That subscription is why each chain carries `evm.ws` next to `evm.rpc`.
+Enabling `autoRelay` without a websocket endpoint is a config error rather than
+a silent fallback to polling:
+
+```
+relayer.connections[0].clientA.autoRelay: requires chains[41001].evm.ws
+```
+
+**The relayer has to already be listening when the packet is sent.** A watcher
+subscribes from wherever its chain is at that moment and never looks backwards,
+so a packet emitted while its chain's watcher was down is not discovered at
+all — and cannot be recovered afterwards. The compose healthcheck does not rule
+this out: it only proves port 3000 is open, and the relayer opens that port
+before it starts its watchers.
+
+So each leg checks discovery explicitly, right after the send and before it
+waits on any balance:
+
+```bash
+ibc relayer packets --tx-hash <the send tx>
+```
+
+A row for that transaction exists only because a live subscription delivered
+its `SendPacket`, which makes this a statement about *this packet, now*. The
+relayer's log cannot answer the same question — it accumulates across every
+restart, a `Subscribed to send packets` line stays behind after its
+subscription has ended, and two lines for one chain are indistinguishable from
+one line for each. Getting that wrong is worse than not checking: a false pass
+means the send goes out into a dead subscription and the packet is gone.
+
+The payoff is that a missed packet fails in `PACKET_DISCOVERY_TIMEOUT` (30s)
+with the reason, instead of looking like a broken relay for the full
+`IFT_RELAY_TIMEOUT`. It also splits the two failures that otherwise look
+identical: no row means discovery broke (websocket), a row that never advances
+means delivery broke (attestors, kms, client authorization).
+
+`ibc relayer relay` has not gone away; it is now the escape hatch rather than
+the happy path, for a packet that predates the subscription or one on a route
+with `autoRelay` off. It runs inside the `relayer` container, since the command
+dials the relayer's own gRPC and only its config describes it:
+
+```bash
+docker compose exec relayer /opt/ibc relayer relay \
+  --tx-hash <the send tx> --chain-id 41001 --home /home/ibc
+```
+
+The balance wait is on a *delta*, not an absolute value — a second run starts
+with the first run's tokens already in place, and an absolute check would pass
+before the new packet ever landed.
 
 Direction is a parameter to the same helper, because the two legs prove
 different halves of the stack: A → B rests on attestor-a and chain B's client,
@@ -269,8 +352,9 @@ tokens — so the return leg needs no extra setup.
 `tx ift` and `deploy` both need the raw private key, so both run as the
 `deployer` service against `config/deploy.yml`. The transfer defaults are
 overridable: `IFT_NAME`, `IFT_SYMBOL`, `IFT_MINT_AMOUNT`, `IFT_SEND_AMOUNT`,
-`IFT_RELAY_TIMEOUT` (120), `IFT_POLL_INTERVAL` (3). The last two are whole
-seconds with no unit suffix — `3`, not `3s`. Changing `IFT_NAME` or
+`IFT_RELAY_TIMEOUT` (120), `IFT_POLL_INTERVAL` (3), and
+`PACKET_DISCOVERY_TIMEOUT` (30) for the discovery check. The last three are
+whole seconds with no unit suffix — `3`, not `3s`. Changing `IFT_NAME` or
 `IFT_SYMBOL` against a stack that already has a token mints a second one rather
 than replacing the first; run `./setup.sh clean` first.
 
@@ -289,6 +373,12 @@ curl -s -X POST -H 'Content-Type: application/json' \
   --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
   http://localhost:8745   # → 0xa02a  (= 41002, chain B)
 ```
+
+Those WS mappings are for host-side tooling; the relayer never uses them. It
+reaches the same endpoints across the compose network as `ws://besu-a:8546` and
+`ws://besu-b:8546`, which is what `chains[].evm.ws` in `config/ibc.yml` points
+at and what auto-relay needs. Both are already enabled in `besu.toml.tmpl`
+(`rpc-ws-enabled = true`), so nothing extra has to be turned on.
 
 The IBC services all listen on 3000 internally:
 
@@ -321,6 +411,7 @@ only; use `docker compose exec kms ...` to inspect it. A real deployment sets
 | `FUNDED_ACCOUNTS` | `5` | accounts pre-funded in each genesis |
 | `GENESIS_BALANCE` | 1 000 000 ETH | hex wei per funded account |
 | `IFT_*` | see above | the token and the transfer |
+| `PACKET_DISCOVERY_TIMEOUT` | `30` | seconds to wait for the relayer to record a sent packet |
 | `QBFT_BLOCK_PERIOD_SECONDS` etc. | `2` | consensus tunables |
 
 Changing any chain-shaping variable invalidates the on-disk chain data: run
@@ -332,7 +423,7 @@ at it:
 
 ```bash
 docker build -t ibc:local --target target-builder ../../cli
-IBC_IMAGE=ibc:local ./setup.sh
+IBC_IMAGE=ibc:local ./setup.sh demo
 ```
 
 ## Troubleshooting
@@ -354,9 +445,30 @@ are required, and each is missed at a different stage:
 | `invalid ics26 router address "" for chain <id>` | `*_ICS26_ROUTER` empty      |
 | `no contract code at given address`              | router set but not deployed |
 
-**The transfer times out.** `docker compose logs relayer attestor-a attestor-b`.
+**The relayer exits with `relayer.connections[0].clientA.autoRelay: requires
+chains[41001].evm.ws`.** An `autoRelay` end whose chain has no websocket
+endpoint. Both chains in `config/ibc.yml` need `evm.ws` alongside `evm.rpc`;
+auto-relay has no polling fallback.
+
+**`the relayer recorded no packet for 0x… after 30s`.** Discovery failed: the
+watcher for that leg's source chain never delivered the `SendPacket`, so
+auto-relay never started. `docker compose logs relayer` and look for a
+websocket dial failure against `besu-a:8546` / `besu-b:8546` — a chain that is
+up on RPC can still be refusing WS if `besu.toml` was edited. That packet is
+not recoverable once missed, so fix the endpoint and re-run rather than waiting.
+
+**The transfer times out after discovery succeeded.** The relayer has the
+packet and cannot land it, so the fault is downstream of the subscription.
+Check the packet's state and then the signing path:
+
+```bash
+docker compose exec relayer /opt/ibc relayer packets --tx-hash <hash> --home /home/ibc
+docker compose logs relayer attestor-a attestor-b
+```
+
 An attestor that cannot reach kms, or a client authorizing the wrong attestor
-address, both surface here.
+address, both surface there. Remember which attestor to suspect: A → B rests on
+attestor-a, B → A on attestor-b.
 
 
 ## Layout
@@ -364,7 +476,8 @@ address, both surface here.
 ```
 examples/besu-to-besu/
 ├── README.md
-├── setup.sh                    — entrypoint: the demo, or `clean`
+├── setup.sh                    — entrypoint: chains only when bare, plus
+│                                 `demo`, `roundtrip`, `accounts`, `clean`
 ├── docker-compose.yml          — besu-a, besu-b, kms, attestor-a, attestor-b,
 │                                 relayer, deployer (profile: tools)
 ├── lib/
@@ -373,12 +486,13 @@ examples/besu-to-besu/
 │   ├── chains.sh               — derivation, QBFT extraData, rendering, start /
 │   │                             wait / status / clean
 │   └── ibc.sh                  — kms key derivation, deployment, ibc.env,
-│                                 the IFT transfer
+│                                 the IFT transfer + its discovery check
 ├── config/                     — committed, no secrets. Bind-mounted verbatim:
 │   ├── kms.yaml                — gRPC-only remote signer, 4 secp256k1eth keys
 │   ├── attestor-a.yml          — standalone attestor for chain A
 │   ├── attestor-b.yml          — standalone attestor for chain B
-│   ├── ibc.yml                 — relayer: both attestors as type: remote
+│   ├── ibc.yml                 — relayer: both attestors as type: remote,
+│   │                             autoRelay + evm.ws on both connection ends
 │   └── deploy.yml              — one-shot deployer, the only local key
 └── chains/
     ├── besu.toml.tmpl          — rendered once per chain

@@ -18,11 +18,16 @@
 # genesis extraData, genesis allocs — moves with it.
 #
 # Each chain owns a mnemonic (A_MNEMONIC / B_MNEMONIC) and every account on that
-# chain comes out of it: FUNDED_ACCOUNTS addresses are
-# derived per chain and funded in that chain's genesis. By convention index 0 is
-# the chain's deployer and index 1 its validator, so the two chains share no
-# accounts at all — separate funded sets, separate deployers, separate
-# validators.
+# chain comes out of it: FUNDED_ACCOUNTS addresses are derived per chain and
+# funded in that chain's genesis. By convention index 0 is the chain's deployer
+# and index 1 its validator.
+#
+# B_MNEMONIC defaults to A_MNEMONIC, so out of the box the two chains derive the
+# *same* account set — one deployer address, one validator address, funded in
+# both genesis files. Set the two to different phrases for fully independent
+# sets. This is also why the attestor keys sit at different indices (see
+# ibc.sh): a shared index would give two supposedly independent attestors one
+# address.
 
 CHAINS=(A B)
 
@@ -328,6 +333,31 @@ wait_for_chains() {
   for name in "${CHAINS[@]}"; do
     wait_for_rpc "$(_chain_attr "$name" SERVICE)" \
                  "http://localhost:$(_chain_attr "$name" RPC_PORT)"
+  done
+}
+
+print_accounts() {
+  local name i index deployer role shared=""
+  [[ "$(_chain_mnemonic A)" == "$(_chain_mnemonic B)" ]] && shared=1
+
+  for name in "${CHAINS[@]}"; do
+    derive_chain_accounts "$name"
+    index=$(_chain_attr "$name" VALIDATOR_INDEX)
+    deployer=$(_chain_attr "$name" DEPLOYER_INDEX)
+    log "chain $name — $FUNDED_ACCOUNTS accounts from ${name}_MNEMONIC," \
+        "each funded with $(_genesis_balance_eth):"
+    for (( i = 0; i < ${#CHAIN_ACCT_ADDRS[@]}; i++ )); do
+      role=""
+      [[ $i -eq "$deployer" ]] && role+=" [deployer]"
+      [[ $i -eq "$index" ]] && role+=" [validator]"
+      log "  index $i  ${CHAIN_ACCT_ADDRS[$i]}${role}  privkey=0x${CHAIN_ACCT_KEYS[$i]}"
+    done
+
+    if [[ -n "$shared" ]]; then
+      log "A_MNEMONIC and B_MNEMONIC are the same phrase, so these accounts are" \
+          "funded on both chains and one key works on either side."
+      return 0
+    fi
   done
 }
 

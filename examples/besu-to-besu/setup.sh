@@ -34,21 +34,30 @@
 #       A  ◀──IBC──▶  B
 #
 #
-# Four phases, always run together:
+# Four phases. `demo` runs all four; the bare form runs phase 1 and stops:
 #   1. start     derive every key, render the chain configs into chains/local/,
 #                docker compose up both chains, wait for RPC
 #   2. deploy    ibc deploy core + client on each chain (writing
 #                chains/local/ibc.env), then an IFT token per chain and the
 #                bridge between them
 #   3. services  docker compose up kms, both attestors, relayer
-#   4. transfer  mint IFT on chain A, send it to chain B, and wait for the
-#                relayer to deliver it — the end-to-end assertion
+#   4. transfer  mint IFT on chain A, send it to chain B, confirm the relayer
+#                discovered the packet on its own SendPacket subscription, and
+#                wait for delivery — the end-to-end assertion. Nothing hands
+#                the relayer a transaction hash: both ends of the connection in
+#                config/ibc.yml set autoRelay.enabled.
 #
 # Usage:
-#   ./setup.sh              — run all four (the demo)
+#   ./setup.sh              — phase 1 only: two live chains, no IBC on them.
+#                             Same as 'chains'. The CLI tutorial runs this and
+#                             then deploys IBC by hand, so the bare form must
+#                             stop here — see docs/6-ibc-cli/2-tutorial-*.md.
+#   ./setup.sh demo         — run all four phases (the demo)
 #   ./setup.sh roundtrip    — relay A -> B -> A. The return leg is what
 #                             exercises attestor-b. Skips phases 1-3 when the
 #                             stack is already up and deployed.
+#   ./setup.sh chains       — explicit form of the no-argument behaviour
+#   ./setup.sh accounts     — print the funded accounts and keys, start nothing
 #   ./setup.sh clean        — stop containers and remove chains/local/
 #
 # Environment (optional):
@@ -140,7 +149,8 @@ source "$LIB_DIR/ibc.sh"
 # The transfer phase feeds these to `(( ))` and to `sleep`. Checked up front so
 # a unit suffix — IFT_POLL_INTERVAL=3s — is a message here rather than an
 # arithmetic syntax error four phases in.
-for var in IFT_RELAY_TIMEOUT IFT_POLL_INTERVAL IFT_MINT_AMOUNT IFT_SEND_AMOUNT; do
+for var in IFT_RELAY_TIMEOUT IFT_POLL_INTERVAL IFT_MINT_AMOUNT IFT_SEND_AMOUNT \
+           PACKET_DISCOVERY_TIMEOUT; do
   [[ "${!var}" =~ ^[0-9]+$ ]] \
     || die "$var must be a whole number with no unit suffix, got '${!var}'"
 done
@@ -157,6 +167,16 @@ cmd_start() {
   init_ibc
   run_phase "Phase 1C: Start chains"  start_chains
   run_phase "Phase 1D: Wait for RPC"  wait_for_chains
+  print_status
+  log "Chains are live and producing blocks."
+}
+
+cmd_chains() {
+  check_prerequisites besu-a besu-b
+  log "--- Derive keys + render chain configs ---"
+  init_chains
+  run_phase "Start chains" start_chains
+  run_phase "Wait for RPC" wait_for_chains
   print_status
   log "Chains are live and producing blocks."
 }
@@ -192,8 +212,10 @@ bring_up() {
 
 main() {
   case "${1:-}" in
-    clean) clean;                      exit 0 ;;
-    "")    bring_up; cmd_transfer;     exit 0 ;;
+    clean)    clean;           exit 0 ;;
+    accounts) print_accounts;  exit 0 ;;
+    ""|chains) cmd_chains;     exit 0 ;;
+    demo)  bring_up; cmd_transfer;     exit 0 ;;
     roundtrip)
       # Phase 4 on its own against a stack that is already up — this is the
       # command to reach for when iterating on the relay itself. Phases 1-3 run
@@ -208,11 +230,15 @@ main() {
       ;;
     *)
       cat >&2 <<EOF
-Usage: $0 [roundtrip|clean]
+Usage: $0 [demo|roundtrip|chains|accounts|clean]
 
-  (no argument)  bring the stack up and relay one transfer, A -> B
+  (no argument)  start both chains and stop there — no IBC deployed on them.
+                 Same as 'chains'. This is what the CLI tutorial builds on.
+  demo           the full demo: bring the stack up and relay one transfer, A -> B
   roundtrip      relay A -> B -> A. Runs phase 4 alone against a stack that is
                  already up and deployed, and brings one up first if not.
+  chains         explicit form of the no-argument behaviour
+  accounts       print the funded accounts and their keys, starting nothing
   clean          stop containers and remove chains/local/
 EOF
       exit 1
