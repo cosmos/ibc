@@ -47,7 +47,7 @@ Besu validators seal a block by signing a digest of its header, with the seals t
 
 The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. An expired consensus state can no longer anchor an update or be used for packet proofs. Advancing an expired client requires redeployment. Updates are submitted only alongside packets: keeping the relayer online does not refresh an idle client or prevent its expiry.
 
-Heights need not be consecutive. Every QBFT block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state. If validator turnover prevents a direct update, proof generation fails; automatic catch-up through intermediate updates is not supported.
+Heights need not be consecutive. Every QBFT block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state; the light client enforces those rules when the transaction is simulated or mined. If validator turnover prevents a direct update, submission fails; automatic catch-up through intermediate updates is not supported.
 
 ## Membership and non-membership
 

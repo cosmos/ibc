@@ -219,26 +219,6 @@ func TestClientUpdatePayloadDefersOverlapValidationToContract(t *testing.T) {
 	require.Equal(t, env.counterparty.sealed[12].RLP, decoded.HeaderRlp)
 }
 
-func TestClientUpdatePayloadValidatorTurnoverWithSufficientOverlap(t *testing.T) {
-	env := newFixtureEnv(t)
-	keys := besutest.Keys(6)
-	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
-		Timestamp:  1700000010,
-		Validators: besutest.Addresses(keys[:4]),
-	}
-	env.setAnchor(t, 10, trusted)
-	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[2:])
-	env.counterparty.sealed[12] = header
-
-	payload, err := env.prepareUpdate(t.Context(), 12)
-	require.NoError(t, err)
-	update, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
-	require.NoError(t, err)
-	require.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: uint64(10)}, update.TrustedHeight)
-	require.Equal(t, trusted, update.ConsensusStatePreimage)
-	require.Equal(t, header.RLP, update.HeaderRlp)
-}
-
 func TestClientUpdatePayloadTargetAlreadyStored(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate

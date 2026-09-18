@@ -39,16 +39,14 @@ type Fixture struct {
 
 	AdjacentUpdate    UpdateFixture `json:"adjacentUpdate"`
 	NonAdjacentUpdate UpdateFixture `json:"nonAdjacentUpdate"`
-	LowQuorumUpdate   UpdateFixture `json:"lowQuorumUpdate"`
-	ConflictingUpdate UpdateFixture `json:"conflictingUpdate"`
-	LowOverlapUpdate  UpdateFixture `json:"lowOverlapUpdate"`
 
 	Membership    MembershipFixture `json:"membership"`
 	NonMembership MembershipFixture `json:"nonMembership"`
 }
 
-// UpdateFixture is one header update. The negative cases carry no expected
-// state.
+// UpdateFixture is one header update used by Go tests. Negative Solidity
+// cases (lowQuorum/lowOverlap/conflicting) remain in qbft.json but are not
+// decoded here.
 type UpdateFixture struct {
 	Height             uint64           `json:"height"`
 	HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
