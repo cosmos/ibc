@@ -378,7 +378,11 @@ func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) 
 			return AccountProof{}, errors.Errorf("duplicate storage proof for slot %s", key)
 		}
 
-		byKey[key] = StorageProof{Key: key, Value: storage.Value, Proof: decodeProofNodes(storage.Proof)}
+		nodes, err := decodeProofNodes(storage.Proof)
+		if err != nil {
+			return AccountProof{}, errors.Wrapf(err, "storage proof for slot %s", key)
+		}
+		byKey[key] = StorageProof{Key: key, Value: storage.Value, Proof: nodes}
 	}
 
 	proofs := make([]StorageProof, len(slots))
@@ -392,19 +396,31 @@ func accountProofFromResult(result *gethclient.AccountResult, slots [][32]byte) 
 		proofs[i] = proof
 	}
 
+	accountNodes, err := decodeProofNodes(result.AccountProof)
+	if err != nil {
+		return AccountProof{}, errors.Wrap(err, "account proof")
+	}
+
 	return AccountProof{
-		AccountProof:  decodeProofNodes(result.AccountProof),
+		AccountProof:  accountNodes,
 		StorageProofs: proofs,
 	}, nil
 }
 
-func decodeProofNodes(nodes []string) [][]byte {
+func decodeProofNodes(nodes []string) ([][]byte, error) {
 	out := make([][]byte, len(nodes))
 	for i, node := range nodes {
-		out[i] = common.FromHex(node)
+		decoded, err := hexutil.Decode(node)
+		if err != nil {
+			return nil, errors.Wrapf(err, "node %d", i)
+		}
+		if len(decoded) == 0 {
+			return nil, errors.Errorf("node %d is empty", i)
+		}
+		out[i] = decoded
 	}
 
-	return out
+	return out, nil
 }
 
 // GetBesuQBFTClientState reads and decodes clientID's Besu QBFT light

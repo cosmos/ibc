@@ -190,7 +190,7 @@ func TestNewGetRouterProofRecordsRealResponses(t *testing.T) {
 				require.Len(t, proof.StorageProofs, 1)
 				assert.Equal(t, slot, proof.StorageProofs[0].Key)
 				assert.Equal(t, value, proof.StorageProofs[0].Value)
-				assert.Equal(t, decodeProofNodes(result.StorageProof[0].Proof), proof.StorageProofs[0].Proof)
+				assert.Equal(t, result.StorageProof[0].Proof, hexNodes(proof.StorageProofs[0].Proof))
 			}
 			assert.Equal(t, common.HexToAddress(routerAddress), api.account)
 			assert.Equal(t, []string{common.Hash(slot).Hex()}, api.keys)
@@ -265,6 +265,51 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
+}
+
+func TestGetRouterProofRejectsMalformedNodes(t *testing.T) {
+	for _, proofType := range []string{"account", "storage"} {
+		for _, tc := range []struct {
+			name string
+			node string
+		}{
+			{"empty string", ""},
+			{"empty bytes", "0x"},
+			{"invalid hex", "0xzz"},
+			{"valid prefix then invalid hex", "0xc0zz"},
+			{"odd length", "0xc"},
+			{"missing prefix", "c0"},
+		} {
+			t.Run(proofType+"/"+tc.name, func(t *testing.T) {
+				result, _, slot, _ := fixtureAccountResult(t)
+				nodes := []string{"0xc0", tc.node}
+				if proofType == "account" {
+					result.AccountProof = nodes
+				} else {
+					result.StorageProof[0].Proof = nodes
+				}
+				client := clientWithProofAPI(t, &ethProofAPI{result: result})
+				proof, err := client.GetRouterProof(t.Context(), 114, [][32]byte{slot})
+				require.ErrorContains(t, err, proofType+" proof")
+				require.ErrorContains(t, err, "node 1")
+				require.ErrorContains(t, err, "height 114")
+				assert.Empty(t, proof)
+			})
+		}
+	}
+}
+
+func TestAccountProofFromResultAllowsEmptyProofArrays(t *testing.T) {
+	result, _, slot, _ := fixtureAccountResult(t)
+	result.AccountProof = nil
+	result.StorageProof[0].Proof = []string{}
+	result.StorageProof[0].Value = big.NewInt(0)
+
+	proof, err := accountProofFromResult(result, [][32]byte{slot})
+	require.NoError(t, err)
+	assert.Empty(t, proof.AccountProof)
+	require.Len(t, proof.StorageProofs, 1)
+	assert.Empty(t, proof.StorageProofs[0].Proof)
 }
 
 func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
