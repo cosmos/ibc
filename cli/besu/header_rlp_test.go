@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,14 +26,6 @@ func TestParseHeaderFixture(t *testing.T) {
 		assert.Equal(t, update.ExpectedTimestamp, header.Timestamp)
 		assert.Equal(t, update.ExpectedValidators, header.Validators)
 		assert.Equal(t, []byte(update.HeaderRLP), header.RLP)
-
-		// QBFT blocks carry the committing quorum, not every validator's seal.
-		signers, err := header.Signers()
-		require.NoError(t, err)
-		assert.Subset(t, update.ExpectedValidators, signers, "real seals recover to validators")
-		assert.GreaterOrEqual(t, len(signers), besu.QuorumRequired(len(update.ExpectedValidators)))
-
-		require.NoError(t, besu.CheckUpdate(header, signers, fixture.InitialConsensusState()))
 	}
 }
 
@@ -61,44 +52,6 @@ func TestParseHeaderRejectsMalformed(t *testing.T) {
 			require.ErrorContains(t, err, "state root")
 		}
 	})
-
-	t.Run("zero validator", func(t *testing.T) {
-		validators := append([]common.Address{{}}, fixture.InitialTrustedValidators[1:]...)
-		_, err := besu.ParseHeader(besutest.MustBuilder(template).SetValidators(validators).MustEncode())
-		require.ErrorIs(t, err, besu.ErrInvalidHeader)
-		assert.ErrorContains(t, err, "zero validator")
-	})
-
-	t.Run("duplicate validator", func(t *testing.T) {
-		v := fixture.InitialTrustedValidators
-		_, err := besu.ParseHeader(
-			besutest.MustBuilder(template).SetValidators([]common.Address{v[0], v[0], v[1]}).MustEncode(),
-		)
-		require.ErrorIs(t, err, besu.ErrInvalidHeader)
-		assert.ErrorContains(t, err, "duplicate validator")
-	})
-
-	t.Run("empty validator set", func(t *testing.T) {
-		_, err := besu.ParseHeader(besutest.MustBuilder(template).SetValidators(nil).MustEncode())
-		require.ErrorIs(t, err, besu.ErrInvalidHeader)
-	})
-}
-
-func TestCommitSealDigestIgnoresSeals(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-	builder := besutest.MustBuilder(fixture.AdjacentUpdate.HeaderRLP)
-
-	original, err := builder.Header()
-	require.NoError(t, err)
-
-	stripped, err := builder.SetCommitSeals(nil).Header()
-	require.NoError(t, err)
-
-	d1, err := original.CommitSealDigest()
-	require.NoError(t, err)
-	d2, err := stripped.CommitSealDigest()
-	require.NoError(t, err)
-	assert.Equal(t, d1, d2)
 }
 
 func TestEncodeHeaderRejectsNil(t *testing.T) {
@@ -128,7 +81,7 @@ func TestHeaderRLPPreservesTrailingFields(t *testing.T) {
 	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
 	var items []rlp.RawValue
 	require.NoError(t, rlp.DecodeBytes(template, &items))
-	// A future fork's fields must survive parsing, mutation and digest encoding.
+	// A future fork's fields must survive parsing and encoding.
 	tail, err := rlp.EncodeToBytes([]byte("unknown fork field"))
 	require.NoError(t, err)
 	items = append(items, tail)
@@ -139,18 +92,9 @@ func TestHeaderRLPPreservesTrailingFields(t *testing.T) {
 	header, err := builder.Header()
 	require.NoError(t, err)
 	assert.Equal(t, raw, header.RLP)
-	digest, err := header.CommitSealDigest()
-	require.NoError(t, err)
-	original, err := besu.ParseHeader(template)
-	require.NoError(t, err)
-	originalDigest, err := original.CommitSealDigest()
-	require.NoError(t, err)
-	assert.NotEqual(t, originalDigest, digest, "digest must include trailing fields")
-	stripped := builder.SetCommitSeals(nil).MustEncode()
-	assert.Equal(t, crypto.Keccak256Hash(stripped), digest)
 }
 
-func TestParseHeaderRejectsInvalidBFTFields(t *testing.T) {
+func TestParseHeaderDefersBFTValidationToContract(t *testing.T) {
 	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
 	for _, tc := range []struct {
 		name  string
@@ -170,9 +114,46 @@ func TestParseHeaderRejectsInvalidBFTFields(t *testing.T) {
 			require.NoError(t, err)
 			raw, err := rlp.EncodeToBytes(items)
 			require.NoError(t, err)
-			_, err = besu.ParseHeader(raw)
-			require.ErrorIs(t, err, besu.ErrInvalidHeader)
-			require.ErrorContains(t, err, tc.name)
+			header, err := besu.ParseHeader(raw)
+			require.NoError(t, err)
+			require.Equal(t, raw, header.RLP)
+		})
+	}
+}
+
+// The parser extracts validator addresses without imposing consensus rules.
+func TestParseHeaderDefersValidatorValidationToContract(t *testing.T) {
+	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
+	a, b := common.HexToAddress("0x01"), common.HexToAddress("0x02")
+	for name, validators := range map[string][]common.Address{
+		"empty":     nil,
+		"zero":      {{}},
+		"duplicate": {a, a},
+		"unsorted":  {b, a},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var items []rlp.RawValue
+			require.NoError(t, rlp.DecodeBytes(template, &items))
+			var extra []byte
+			require.NoError(t, rlp.DecodeBytes(items[12], &extra))
+			var fields []rlp.RawValue
+			require.NoError(t, rlp.DecodeBytes(extra, &fields))
+			var err error
+			fields[1], err = rlp.EncodeToBytes(validators)
+			require.NoError(t, err)
+			extra, err = rlp.EncodeToBytes(fields)
+			require.NoError(t, err)
+			items[12], err = rlp.EncodeToBytes(extra)
+			require.NoError(t, err)
+			raw, err := rlp.EncodeToBytes(items)
+			require.NoError(t, err)
+			header, err := besu.ParseHeader(raw)
+			require.NoError(t, err)
+			require.Equal(t, raw, header.RLP)
+			require.Len(t, header.Validators, len(validators))
+			for i, validator := range validators {
+				require.Equal(t, validator, header.Validators[i])
+			}
 		})
 	}
 }

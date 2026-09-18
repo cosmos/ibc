@@ -296,9 +296,6 @@ func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
 		}
 		validators[i] = common.HexToAddress(v)
 	}
-	if err := besu.ValidateValidators(validators); err != nil {
-		return besuQBFTConstructorArgs{}, fmt.Errorf("initial validators: %w", err)
-	}
 	return besuQBFTConstructorArgs{
 		router:     common.HexToAddress(p.IBCRouter),
 		stateRoot:  common.BytesToHash(root),

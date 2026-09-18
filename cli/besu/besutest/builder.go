@@ -88,15 +88,12 @@ func (b *Builder) SetCommitSeals(seals [][]byte) *Builder {
 // Sign replaces the commit seals with one seal per key over the header's QBFT
 // digest, in key order.
 func (b *Builder) Sign(keys ...*ecdsa.PrivateKey) (*Builder, error) {
-	header, err := b.Header()
+	unsigned := &Builder{items: slices.Clone(b.items), extraItems: slices.Clone(b.extraItems)}
+	encoded, err := unsigned.SetCommitSeals(nil).Encode()
 	if err != nil {
 		return nil, err
 	}
-
-	digest, err := header.CommitSealDigest()
-	if err != nil {
-		return nil, err
-	}
+	digest := crypto.Keccak256Hash(encoded)
 
 	seals := make([][]byte, len(keys))
 	for i, key := range keys {

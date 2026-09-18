@@ -202,7 +202,7 @@ func sealedHeader(t *testing.T, template []byte, height uint64, keys []*ecdsa.Pr
 	return header
 }
 
-func TestClientUpdatePayloadRejectsDirectUpdateWithInsufficientOverlap(t *testing.T) {
+func TestClientUpdatePayloadDefersOverlapValidationToContract(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
@@ -213,9 +213,10 @@ func TestClientUpdatePayloadRejectsDirectUpdateWithInsufficientOverlap(t *testin
 	env.counterparty.sealed[12] = sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[4:])
 
 	update, err := env.prepareUpdate(t.Context(), 12)
-	require.ErrorIs(t, err, besu.ErrInsufficientOverlap)
-	require.ErrorContains(t, err, "intermediate updates are not supported")
-	require.Empty(t, update)
+	require.NoError(t, err)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(update)
+	require.NoError(t, err)
+	require.Equal(t, env.counterparty.sealed[12].RLP, decoded.HeaderRlp)
 }
 
 func TestClientUpdatePayloadValidatorTurnoverWithSufficientOverlap(t *testing.T) {
@@ -640,7 +641,7 @@ func TestRejectZeroTrustingPeriod(t *testing.T) {
 	require.ErrorContains(t, err, "trusting period must be nonzero")
 }
 
-func TestLatestProvableHeightRejectsInsufficientOverlap(t *testing.T) {
+func TestLatestProvableHeightDefersOverlapValidationToContract(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)
 	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
@@ -653,8 +654,8 @@ func TestLatestProvableHeightRejectsInsufficientOverlap(t *testing.T) {
 	env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(1700000012, 0)}
 	env.counterparty.latest = &v2.BlockHeader{Height: 12, Timestamp: env.host.latest.Timestamp}
 	height, _, err := env.gen.LatestProvableHeight(t.Context())
-	require.ErrorIs(t, err, besu.ErrInsufficientOverlap)
-	require.Zero(t, height)
+	require.NoError(t, err)
+	require.Equal(t, uint64(12), height)
 }
 
 func TestExpiredHistoricalTargetWithLiveAnchor(t *testing.T) {
@@ -711,4 +712,26 @@ func TestLiveTargetCannotUpdateFromExpiredAnchor(t *testing.T) {
 	env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(header.Timestamp), 0)}
 	_, err := env.gen.ClientUpdatePayload(t.Context(), header.Height)
 	require.ErrorIs(t, err, ErrClientExpired)
+}
+
+func TestClientUpdatePayloadDefersSealValidationToContract(t *testing.T) {
+	for name, seals := range map[string][][]byte{
+		"missing":   nil,
+		"malformed": {{1}},
+		"duplicate": {{1}, {1}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := newFixtureEnv(t)
+			env.expectInitialAnchor(t)
+			update := env.fixture.NonAdjacentUpdate
+			header, err := besutest.MustBuilder(update.HeaderRLP).SetCommitSeals(seals).Header()
+			require.NoError(t, err)
+			env.counterparty.sealed[update.Height] = header
+			payload, err := env.prepareUpdate(t.Context(), update.Height)
+			require.NoError(t, err)
+			decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
+			require.NoError(t, err)
+			require.Equal(t, header.RLP, decoded.HeaderRlp)
+		})
+	}
 }

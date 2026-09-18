@@ -11,14 +11,10 @@ const (
 	MinHeaderItems     = 15
 	ExtraDataItemCount = 5
 
-	IdxOmmersHash = 1
-	IdxStateRoot  = 3
-	IdxDifficulty = 7
-	IdxNumber     = 8
-	IdxTimestamp  = 11
-	IdxExtraData  = 12
-	IdxMixHash    = 13
-	IdxNonce      = 14
+	IdxStateRoot = 3
+	IdxNumber    = 8
+	IdxTimestamp = 11
+	IdxExtraData = 12
 
 	ExtraIdxValidators  = 1
 	ExtraIdxCommitSeals = 4

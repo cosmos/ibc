@@ -2,8 +2,8 @@
 
 // Package besuqbft implements prover.Prover for a Besu QBFT light client: it
 // reads the client's trusted state from the host chain, fetches sealed headers
-// and eth_getProof results from the Besu chain it tracks, checks the client's
-// threshold rules off-chain and encodes update and membership payloads.
+// and eth_getProof results from the Besu chain it tracks and encodes update
+// and membership payloads. Contract simulation at submission verifies consensus.
 package besuqbft
 
 import (
@@ -144,8 +144,8 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 	return nil
 }
 
-// LatestProvableHeight selects the newest clock-admissible height and checks
-// direct-update readiness. It does not search for intermediate validator updates.
+// LatestProvableHeight selects the newest clock-admissible height. Consensus
+// validity is left to contract simulation; intermediate updates are not supported.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	state, err := g.clientState(ctx)
 	if err != nil {
@@ -208,7 +208,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		if headerErr != nil {
 			return 0, time.Time{}, headerErr
 		}
-		if checkErr := checkDirectUpdate(header, trusted, state, hostSeconds); checkErr != nil {
+		if checkErr := checkUpdateTime(header, state, hostSeconds); checkErr != nil {
 			return 0, time.Time{}, checkErr
 		}
 	}
@@ -273,7 +273,7 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if trustErr := checkTrustingPeriod(state.TrustingPeriod, trusted.Timestamp, hostSeconds); trustErr != nil {
 		return nil, trustErr
 	}
-	if checkErr := checkDirectUpdate(targetHeader, trusted, state, hostSeconds); checkErr != nil {
+	if checkErr := checkUpdateTime(targetHeader, state, hostSeconds); checkErr != nil {
 		return nil, checkErr
 	}
 	update, err := besu.EncodeUpdateClient(targetHeader.RLP, state.LatestHeight.RevisionHeight, trusted)
@@ -283,10 +283,9 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	return update, nil
 }
 
-// checkDirectUpdate validates a target against an already verified, unexpired anchor.
-func checkDirectUpdate(
+// checkUpdateTime checks whether a target is usable at the host time.
+func checkUpdateTime(
 	target *besu.Header,
-	trusted besumsgs.IBesuLightClientMsgsConsensusState,
 	state besumsgs.IBesuLightClientMsgsClientState,
 	hostSeconds uint64,
 ) error {
@@ -297,16 +296,6 @@ func checkDirectUpdate(
 		return fmt.Errorf("target height %d exceeds host clock drift", target.Height)
 	}
 
-	signers, err := target.Signers()
-	if err != nil {
-		return fmt.Errorf("header %d: %w", target.Height, err)
-	}
-	if checkErr := besu.CheckUpdate(target, signers, trusted); checkErr != nil {
-		return fmt.Errorf(
-			"direct update from trusted height %d to %d failed (intermediate updates are not supported): %w",
-			state.LatestHeight.RevisionHeight, target.Height, checkErr,
-		)
-	}
 	return nil
 }
 

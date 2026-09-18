@@ -95,13 +95,6 @@ func TestBesuQBFTArgs(t *testing.T) {
 		"timestamp":     {func(p *deploy.BesuQBFTParams) { p.InitialTimestamp = 0 }, "initial height and timestamp"},
 		"short root":    {func(p *deploy.BesuQBFTParams) { p.InitialStateRoot = "0x1234" }, "32 hex bytes"},
 		"bad validator": {func(p *deploy.BesuQBFTParams) { p.InitialValidators = []string{"zz"} }, "validator address"},
-		"no validators": {func(p *deploy.BesuQBFTParams) { p.InitialValidators = nil }, "empty validator set"},
-		"dup validators": {func(p *deploy.BesuQBFTParams) {
-			p.InitialValidators = []string{p.InitialValidators[0], p.InitialValidators[0]}
-		}, "duplicate"},
-		"zero validator": {func(p *deploy.BesuQBFTParams) {
-			p.InitialValidators = []string{"0x0000000000000000000000000000000000000000"}
-		}, "zero"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			p := valid

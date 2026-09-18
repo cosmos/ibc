@@ -4,11 +4,5 @@ package besu
 
 import "errors"
 
-// Sentinel errors.
-var (
-	ErrInvalidHeader       = errors.New("invalid besu header")
-	ErrInvalidSeal         = errors.New("invalid commit seal")
-	ErrDuplicateSigner     = errors.New("duplicate commit seal signer")
-	ErrInsufficientOverlap = errors.New("insufficient trusted validator overlap")
-	ErrInsufficientQuorum  = errors.New("insufficient validator quorum")
-)
+// ErrInvalidHeader indicates a header cannot be decoded for payload construction.
+var ErrInvalidHeader = errors.New("invalid besu header")

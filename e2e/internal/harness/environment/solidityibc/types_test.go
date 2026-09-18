@@ -19,21 +19,16 @@ func TestBesuQBFTClientConfigValidation(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		validators []common.Address
-		valid      bool
 	}{
-		{"empty", nil, false},
-		{"zero", []common.Address{{}}, false},
-		{"duplicate", []common.Address{validator, validator}, false},
-		{"one validator", []common.Address{validator}, true},
-		{"distinct validators", []common.Address{validator, common.HexToAddress("0x03")}, true},
+		{"empty", nil},
+		{"zero", []common.Address{{}}},
+		{"duplicate", []common.Address{validator, validator}},
+		{"one validator", []common.Address{validator}},
+		{"distinct validators", []common.Address{validator, common.HexToAddress("0x03")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config.InitialValidators = tc.validators
-			if tc.valid {
-				require.NoError(t, config.validate())
-			} else {
-				require.Error(t, config.validate())
-			}
+			require.NoError(t, config.validate())
 		})
 	}
 	config.InitialValidators = []common.Address{validator}

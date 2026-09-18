@@ -188,6 +188,7 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 		return nil, errors.Errorf("no contract code at %s", to)
 	}
 
+	// Simulate the full intent, including light-client verification, before signing.
 	gasLimit, err := c.eth.EstimateGas(
 		ctx,
 		ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data, Gas: head.GasLimit},

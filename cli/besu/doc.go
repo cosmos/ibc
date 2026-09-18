@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package besu holds the pure helpers the relayer, the deploy driver and the
-// e2e harness share for Besu BFT light clients: header parsing, QBFT commit
-// seal digests and signer recovery, the light client's threshold rules,
-// consensus state hashing, storage slot derivation and the ABI encoders for
-// the BesuQBFTLightClient wire formats.
+// Package besu provides header parsing, consensus state hashing, storage slot
+// derivation and ABI encoding for Besu light-client payloads. Consensus
+// verification belongs to the contract, simulated by the transaction submitter.
 //
-// Header parsing retains raw fields for the sealing digest.
-//
-// Wire types and codecs are generated upstream.
-// The Go consensus algorithms follow ibc-contracts/ibc-solidity/contracts/light-clients/besu on the
-// hashed-consensus-state design: the contract stores only
-// keccak256(abi.encode(ConsensusState)) per height, so every update and every
-// membership proof carries the consensus state preimage it relies on.
+// Wire types and codecs are generated upstream. The contract stores only
+// keccak256(abi.encode(ConsensusState)) per height, so updates and membership
+// proofs carry the consensus state preimage they rely on.
 package besu

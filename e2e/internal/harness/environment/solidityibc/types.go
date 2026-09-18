@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Instance is one initialized ICS26 router installation. The router address is
@@ -86,9 +84,6 @@ func (c BesuQBFTClientConfig) validate() error {
 	}
 	if c.TrustingPeriod == 0 {
 		return fmt.Errorf("client %q trusting period must be positive", c.ID)
-	}
-	if err := besu.ValidateValidators(c.InitialValidators); err != nil {
-		return fmt.Errorf("client %q initial validators: %w", c.ID, err)
 	}
 	return nil
 }
