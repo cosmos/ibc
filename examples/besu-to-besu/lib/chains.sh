@@ -18,11 +18,16 @@
 # genesis extraData, genesis allocs — moves with it.
 #
 # Each chain owns a mnemonic (A_MNEMONIC / B_MNEMONIC) and every account on that
-# chain comes out of it: FUNDED_ACCOUNTS addresses are
-# derived per chain and funded in that chain's genesis. By convention index 0 is
-# the chain's deployer and index 1 its validator, so the two chains share no
-# accounts at all — separate funded sets, separate deployers, separate
-# validators.
+# chain comes out of it: FUNDED_ACCOUNTS addresses are derived per chain and
+# funded in that chain's genesis. By convention index 0 is the chain's deployer
+# and index 1 its validator.
+#
+# B_MNEMONIC defaults to A_MNEMONIC, so out of the box the two chains derive the
+# *same* account set — one deployer address, one validator address, funded in
+# both genesis files. Set the two to different phrases for fully independent
+# sets. This is also why the attestor keys sit at different indices (see
+# ibc.sh): a shared index would give two supposedly independent attestors one
+# address.
 
 CHAINS=(A B)
 

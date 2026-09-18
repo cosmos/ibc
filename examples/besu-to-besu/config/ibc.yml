@@ -22,11 +22,13 @@ chains:
   - chainId: "41001"
     evm:
       rpc: http://besu-a:8545
+      ws: ws://besu-a:8546
       ics26Router: "${A_ICS26_ROUTER}"
 
   - chainId: "41002"
     evm:
       rpc: http://besu-b:8545
+      ws: ws://besu-b:8546
       ics26Router: "${B_ICS26_ROUTER}"
 
 relayer:
@@ -38,11 +40,15 @@ relayer:
         signer: relayer-a
         clientId: "${A_CLIENT_ID}"
         type: attestation
+        autoRelay:
+          enabled: true
       clientB:
         chainId: "41002"
         signer: relayer-b
         clientId: "${B_CLIENT_ID}"
         type: attestation
+        autoRelay:
+          enabled: true
 
 attestors:
   - name: attestor-a

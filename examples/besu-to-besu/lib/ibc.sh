@@ -11,6 +11,7 @@ RELAYER_HOME_DIR="$LOCAL_DIR/relayer"
 
 IBC_SERVICES=(kms attestor-a attestor-b relayer)
 CLIENT_ID="ibc-$A_CHAIN_ID-$B_CHAIN_ID"
+WATCHER_READY_TIMEOUT="${WATCHER_READY_TIMEOUT:-60}"
 
 export DEPLOY_UID="${DEPLOY_UID:-$(id -u)}"
 export DEPLOY_GID="${DEPLOY_GID:-$(id -g)}"
@@ -244,17 +245,12 @@ _leg() {
   [[ -n "$hash" ]] || die "'ibc tx ift send' on chain $src returned no transaction hash"
   log "      sent in $hash"
 
-  # The relay is explicit. `relayer.connections[].autoRelay` exists in the config
-  # schema but nothing in the relayer reads it yet, so a packet sits unrelayed until it
-  # is handed to the relayer by transaction hash. Run inside the relayer
-  # container: the command dials the relayer's own gRPC, which only its config
-  # describes.
-  log "      handing the packet to the relayer..."
-  docker compose --progress quiet exec -T relayer /opt/ibc relayer relay \
-    --tx-hash "$hash" --chain-id "$src_id" --home /home/ibc >/dev/null \
-    || die "'ibc relayer relay' failed for the $src -> $dst leg"
-
-  log "      waiting for chain $dst's balance to go $before -> $expected..."
+  # Nothing hands the packet over. Both connection ends in config/ibc.yml set
+  # autoRelay.enabled, so the relayer's watcher for chain $src already saw this
+  # SendPacket on its websocket subscription and wrote a pending row; the
+  # dispatcher picks it up within dispatchPollInterval. The wait below is the
+  # assertion that the whole chain of that actually happened.
+  log "      waiting for the relayer to deliver it — chain $dst's balance $before -> $expected..."
   while (( waited < IFT_RELAY_TIMEOUT )); do
     # A failed query is a retry, not a fatal: the poll outlives one transient
     # RPC hiccup and only the timeout below ends the wait.
@@ -268,7 +264,28 @@ _leg() {
   done
 
   die "chain $dst balance is '${balance:-unset}' after ${IFT_RELAY_TIMEOUT}s, expected $expected" \
-      "— check 'docker compose logs relayer attestor-a attestor-b'"
+      "— check whether the relayer ever saw the packet with" \
+      "'docker compose exec relayer /opt/ibc relayer packets --tx-hash $hash --home /home/ibc'," \
+      "then 'docker compose logs relayer attestor-a attestor-b'"
+}
+
+wait_for_watchers() {
+  local want="${#CHAINS[@]}" waited=0 seen
+  log "Waiting for the relayer to subscribe to SendPacket on both chains..."
+  while (( waited < WATCHER_READY_TIMEOUT )); do
+    seen=$(docker compose logs relayer 2>/dev/null \
+           | grep -c 'Subscribed to send packets' || true)
+    if (( ${seen:-0} >= want )); then
+      log "Relayer is watching chain A and chain B."
+      return 0
+    fi
+    sleep 1
+    (( waited += 1 ))
+  done
+
+  die "the relayer did not subscribe on both chains within ${WATCHER_READY_TIMEOUT}s" \
+      "— check 'docker compose logs relayer' for a websocket error against" \
+      "besu-a:8546 / besu-b:8546, which is what chains[].evm.ws points at"
 }
 
 # Top up chain A's deployer so there is something to send.
@@ -289,6 +306,7 @@ _print_balances() {
 }
 
 relay_ift_transfer() {
+  wait_for_watchers
   _mint_on_a
   _leg A B
   _print_balances
@@ -298,6 +316,7 @@ relay_ift_transfer() {
 # what the A -> B leg just delivered — so chain B ends where it started and
 # chain A ends holding everything it minted.
 relay_ift_roundtrip() {
+  wait_for_watchers
   _mint_on_a
   _leg A B
   _leg B A
