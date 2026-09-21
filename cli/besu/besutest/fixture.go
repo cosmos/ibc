@@ -45,8 +45,7 @@ type Fixture struct {
 }
 
 // UpdateFixture is one header update used by Go tests. Negative Solidity
-// cases (lowQuorum/lowOverlap/conflicting) remain in qbft.json but are not
-// decoded here.
+// cases (lowOverlap/conflicting) remain in qbft.json but are not decoded here.
 type UpdateFixture struct {
 	Height             uint64           `json:"height"`
 	HeaderRLP          hexutil.Bytes    `json:"headerRlp"`

@@ -90,7 +90,7 @@ func TestConsensusStateHashMatchesSolidity(t *testing.T) {
 	// computed independently with `cast abi-encode ... | cast keccak`.
 	got, err := besu.HashConsensusState(fixture.InitialConsensusState())
 	require.NoError(t, err)
-	assert.Equal(t, common.HexToHash("0x6ad73b19daaa61fcfc6d16fb89695b52ab719cc0348d014fd7cac8c1fd102bda"), got)
+	assert.Equal(t, common.HexToHash("0x91c4debaf593d0d6251ab85a28ff33ffdbb5cda3a070ab011402ba4599a2b66f"), got)
 }
 
 func TestCommitmentSlotMatchesSolidity(t *testing.T) {
