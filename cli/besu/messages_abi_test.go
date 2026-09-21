@@ -20,7 +20,11 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 
 	preimage := fixture.InitialConsensusState()
 
-	encoded, err := besu.EncodeUpdateClient(update.HeaderRLP, update.TrustedHeight, preimage)
+	encoded, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
+		HeaderRlp:              update.HeaderRLP,
+		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: update.TrustedHeight},
+		ConsensusStatePreimage: preimage,
+	})
 	require.NoError(t, err)
 
 	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(encoded)
@@ -40,7 +44,11 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 		accountNodes, err := m.AccountProofNodes()
 		require.NoError(t, err)
 
-		encoded, err := besu.EncodeMembershipProof(preimage, accountNodes, nodes)
+		encoded, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
+			ConsensusStatePreimage: preimage,
+			AccountProofNodes:      accountNodes,
+			ProofNodes:             nodes,
+		})
 		require.NoError(t, err)
 
 		decoded, err := besumsgs.NewBindings().UnpackMembershipProof(encoded)
@@ -49,7 +57,10 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 		assert.Equal(t, accountNodes, decoded.AccountProofNodes)
 		assert.Equal(t, nodes, decoded.ProofNodes)
 
-		cached, err := besu.EncodeMembershipProof(preimage, nil, nodes)
+		cached, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
+			ConsensusStatePreimage: preimage,
+			ProofNodes:             nodes,
+		})
 		require.NoError(t, err)
 		decoded, err = besumsgs.NewBindings().UnpackMembershipProof(cached)
 		require.NoError(t, err)

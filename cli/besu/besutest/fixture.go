@@ -106,6 +106,8 @@ func (u UpdateFixture) ExpectedConsensusState() besumsgs.IBesuLightClientMsgsCon
 	}
 }
 
+var messageBindings = besumsgs.NewBindings()
+
 // ProofNodes unwraps the abi.encode(bytes[]) storage proof.
 func (m MembershipFixture) ProofNodes() ([][]byte, error) {
 	return messageBindings.UnpackProofNodes(m.Proof)

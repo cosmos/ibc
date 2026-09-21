@@ -29,7 +29,7 @@ func EncodeHeader(h *types.Header) ([]byte, error) {
 }
 
 // ParseSealedHeader encodes a node-supplied header the way Besu sealed it
-// and parses the fields needed for payloads. Deploy and the prover
+// and reads the fields needed for payloads. Deploy and the prover
 // both start from this: validators come from extraData, not a QBFT RPC.
 func ParseSealedHeader(h *types.Header) (*Header, error) {
 	encoded, err := EncodeHeader(h)
@@ -37,71 +37,39 @@ func ParseSealedHeader(h *types.Header) (*Header, error) {
 		return nil, err
 	}
 
-	return ParseHeader(encoded)
+	return newHeader(h, encoded)
 }
 
 // ParseHeader decodes the fields needed for payloads without verifying consensus.
 func ParseHeader(headerRLP []byte) (*Header, error) {
-	var items []rlp.RawValue
-	if err := rlp.DecodeBytes(headerRLP, &items); err != nil {
-		return nil, fmt.Errorf("%w: decode header list: %w", ErrInvalidHeader, err)
+	var h types.Header
+	if err := rlp.DecodeBytes(headerRLP, &h); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidHeader, err)
 	}
 
-	if len(items) < headerlayout.MinHeaderItems {
-		return nil, fmt.Errorf(
-			"%w: %d header items, need at least %d",
-			ErrInvalidHeader,
-			len(items),
-			headerlayout.MinHeaderItems,
-		)
-	}
-
-	header := &Header{RLP: slices.Clone(headerRLP)}
-
-	if err := header.decodeFixedFields(items); err != nil {
-		return nil, err
-	}
-
-	if err := header.decodeExtraData(items); err != nil {
-		return nil, err
-	}
-
-	return header, nil
+	return newHeader(&h, slices.Clone(headerRLP))
 }
 
-func (h *Header) decodeFixedFields(items []rlp.RawValue) error {
-	if err := rlp.DecodeBytes(items[headerlayout.IdxStateRoot], &h.StateRoot); err != nil {
-		return fmt.Errorf("%w: state root: %w", ErrInvalidHeader, err)
-	}
-	if err := rlp.DecodeBytes(items[headerlayout.IdxNumber], &h.Height); err != nil {
-		return fmt.Errorf("%w: number: %w", ErrInvalidHeader, err)
-	}
-	if err := rlp.DecodeBytes(items[headerlayout.IdxTimestamp], &h.Timestamp); err != nil {
-		return fmt.Errorf("%w: timestamp: %w", ErrInvalidHeader, err)
-	}
-	return nil
-}
-
-func (h *Header) decodeExtraData(items []rlp.RawValue) error {
-	var extraData []byte
-	if err := rlp.DecodeBytes(items[headerlayout.IdxExtraData], &extraData); err != nil {
-		return fmt.Errorf("%w: extra data: %w", ErrInvalidHeader, err)
+func newHeader(h *types.Header, encoded []byte) (*Header, error) {
+	if h.Number == nil || !h.Number.IsUint64() {
+		return nil, fmt.Errorf("%w: number %v", ErrInvalidHeader, h.Number)
 	}
 
 	var extraItems []rlp.RawValue
-	if err := rlp.DecodeBytes(extraData, &extraItems); err != nil {
-		return fmt.Errorf("%w: extra data list: %w", ErrInvalidHeader, err)
+	if err := rlp.DecodeBytes(h.Extra, &extraItems); err != nil {
+		return nil, fmt.Errorf("%w: extra data list: %w", ErrInvalidHeader, err)
 	}
 
 	if len(extraItems) != headerlayout.ExtraDataItemCount {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%w: %d extra data items, want %d", ErrInvalidHeader, len(extraItems), headerlayout.ExtraDataItemCount,
 		)
 	}
 
-	if err := rlp.DecodeBytes(extraItems[headerlayout.ExtraIdxValidators], &h.Validators); err != nil {
-		return fmt.Errorf("%w: validators: %w", ErrInvalidHeader, err)
+	header := &Header{RLP: encoded, Height: h.Number.Uint64(), Timestamp: h.Time, StateRoot: h.Root}
+	if err := rlp.DecodeBytes(extraItems[headerlayout.ExtraIdxValidators], &header.Validators); err != nil {
+		return nil, fmt.Errorf("%w: validators: %w", ErrInvalidHeader, err)
 	}
 
-	return nil
+	return header, nil
 }

@@ -11,7 +11,6 @@ const (
 	MinHeaderItems     = 15
 	ExtraDataItemCount = 5
 
-	IdxStateRoot = 3
 	IdxNumber    = 8
 	IdxTimestamp = 11
 	IdxExtraData = 12

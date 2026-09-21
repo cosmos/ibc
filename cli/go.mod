@@ -12,7 +12,7 @@ require (
 	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260916093832-ec6bd74ff3c3
+	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260921123034-4740b6d25783
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
@@ -369,6 +369,3 @@ replace (
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )
-
-// Consume the Besu generators from cosmos/ibc-contracts#1138.
-replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260921123034-4740b6d25783

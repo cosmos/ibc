@@ -293,7 +293,7 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cosmos/ibc/cli v0.0.0
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260916093832-ec6bd74ff3c3
+	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20260921123034-4740b6d25783
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -354,6 +354,4 @@ replace (
 	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/ibc/cli => ../cli
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
-	// Match the CLI's Besu bindings from cosmos/ibc-contracts#1138.
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260921123034-4740b6d25783
 )

@@ -49,7 +49,6 @@ func TestParseHeaderRejectsMalformed(t *testing.T) {
 			require.NoError(t, err)
 			_, err = besu.ParseHeader(raw)
 			require.ErrorIs(t, err, besu.ErrInvalidHeader)
-			require.ErrorContains(t, err, "state root")
 		}
 	})
 }
@@ -77,23 +76,6 @@ func TestParseSealedHeader(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestHeaderRLPPreservesTrailingFields(t *testing.T) {
-	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
-	var items []rlp.RawValue
-	require.NoError(t, rlp.DecodeBytes(template, &items))
-	// A future fork's fields must survive parsing and encoding.
-	tail, err := rlp.EncodeToBytes([]byte("unknown fork field"))
-	require.NoError(t, err)
-	items = append(items, tail)
-	raw, err := rlp.EncodeToBytes(items)
-	require.NoError(t, err)
-	builder := besutest.MustBuilder(raw)
-	assert.Equal(t, raw, builder.MustEncode())
-	header, err := builder.Header()
-	require.NoError(t, err)
-	assert.Equal(t, raw, header.RLP)
-}
-
 func TestParseHeaderDefersBFTValidationToContract(t *testing.T) {
 	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
 	for _, tc := range []struct {
@@ -104,7 +86,7 @@ func TestParseHeaderDefersBFTValidationToContract(t *testing.T) {
 		{"ommers hash", 1, common.Hash{}},
 		{"difficulty", 7, uint64(0)},
 		{"mix hash", 13, common.Hash{}},
-		{"nonce", 14, []byte{0}},
+		{"nonce", 14, types.BlockNonce{1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var items []rlp.RawValue

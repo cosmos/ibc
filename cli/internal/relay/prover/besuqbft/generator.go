@@ -276,7 +276,11 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if checkErr := checkUpdateTime(targetHeader, state, hostSeconds); checkErr != nil {
 		return nil, checkErr
 	}
-	update, err := besu.EncodeUpdateClient(targetHeader.RLP, state.LatestHeight.RevisionHeight, trusted)
+	update, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
+		HeaderRlp:              targetHeader.RLP,
+		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: state.LatestHeight.RevisionHeight},
+		ConsensusStatePreimage: trusted,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
@@ -355,7 +359,11 @@ func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Pa
 		if i > 0 {
 			accountProof = nil
 		}
-		proof, err := besu.EncodeMembershipProof(snap.consensus, accountProof, storage.Proof)
+		proof, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
+			ConsensusStatePreimage: snap.consensus,
+			AccountProofNodes:      accountProof,
+			ProofNodes:             storage.Proof,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("packet sequence %d: %w", packet.Sequence, err)
 		}

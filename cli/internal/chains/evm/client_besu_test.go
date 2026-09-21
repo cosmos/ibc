@@ -354,8 +354,7 @@ func TestBesuQBFTReads(t *testing.T) {
 			TrustingPeriod: 10,
 			MaxClockDrift:  15,
 		}
-		encoded, err := besutest.EncodeClientState(state)
-		require.NoError(t, err)
+		encoded := besumsgs.NewBindings().PackClientState(state)[4:]
 
 		getClientStateCallData, err := clientABI.Pack("getClientState")
 		require.NoError(t, err)
