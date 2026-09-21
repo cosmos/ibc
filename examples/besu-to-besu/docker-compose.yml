@@ -69,6 +69,80 @@ services:
       retries: 60
       start_period: 10s
 
+  kms:
+    image: ${KMS_IMAGE:-ghcr.io/cosmos/kms:latest}
+    container_name: kms
+    volumes:
+      - ./config/kms.yaml:/home/kms/kms.yaml:ro
+      - ./chains/local/kms/keys:/home/kms/keys:ro
+    networks: [ besu-besu-net ]
+    restart: on-failure
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9090" ]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  attestor-41001: &attestor
+    image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
+    container_name: attestor-41001
+    command: [ "attestor", "run", "--home", "/home/ibc" ]
+    env_file:
+      - path: ./chains/local/ibc.env
+        required: false
+    volumes:
+      - ./config/attestor-41001.yml:/home/ibc/ibc.yml:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [ besu-besu-net ]
+    restart: on-failure
+    depends_on:
+      besu-a:
+        condition: service_healthy
+      kms:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "/opt/ibc", "attestor", "info", "attestor-41001", "--home", "/home/ibc" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  attestor-41002:
+    <<: *attestor
+    container_name: attestor-41002
+    volumes:
+      - ./config/attestor-41002.yml:/home/ibc/ibc.yml:ro
+    ports:
+      - "127.0.0.1:3002:3000"
+    depends_on:
+      besu-b:
+        condition: service_healthy
+      kms:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "/opt/ibc", "attestor", "info", "attestor-41002", "--home", "/home/ibc" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  deployer:
+    image: ${IBC_IMAGE:-ghcr.io/cosmos/ibc:main}
+    user: "${DEPLOY_UID:-65532}:${DEPLOY_GID:-65532}"
+    profiles: [ tools ]
+    volumes:
+      - ./config/deploy.yml:/home/ibc/ibc.yml:ro
+      - ./chains/local/deploy/keys:/home/ibc/keys
+      - ./chains/local/deploy/deployments:/home/ibc/deployments
+    networks: [ besu-besu-net ]
+    depends_on:
+      besu-a:
+        condition: service_healthy
+      besu-b:
+        condition: service_healthy
+
 
 volumes:
   besu-a-data:
