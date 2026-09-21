@@ -303,12 +303,6 @@ func TestWatcherStart(t *testing.T) {
 
 			require.NoError(t, w.Stop())
 
-			select {
-			case <-w.stopped:
-			default:
-				t.Fatal("Stop returned before the loop exited")
-			}
-
 			// canceling the subscription context is what releases the
 			// subscription's goroutine; unsubscribing alone leaves it running
 			assert.True(t, chain.latestSub().unsubscribed)

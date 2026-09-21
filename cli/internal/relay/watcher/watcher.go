@@ -4,6 +4,7 @@ package watcher
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -53,26 +54,24 @@ type Config struct {
 	AbandonUnrecoverablePackets bool
 }
 
-// Watcher records a packet row for every SendPacket event one chain emits on
-// the clients it watches, resubscribing with backoff whenever the subscription
-// ends. The subscription starts where the chain is and never looks backwards;
-// recovering anything it missed is the clearing pass's job.
+// Watcher watches live chain events + runs a periodic clearing pass to fetch missed packets.
+// All discovered packets are written to the storage.
 type Watcher struct {
 	chainID   string
 	clientIDs []string
 	routes    map[string]config.ClientEnd
+	cfg       Config
 
 	chain   Chain
 	storage PacketStore
 
-	clearer *Clearer
-
-	cfg Config
+	clearer  *Clearer
+	clearNow chan struct{}
 
 	logger *slog.Logger
 
-	cancel  context.CancelFunc
-	stopped chan struct{}
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // stream is one open subscription and the events it feeds. The zero value is
@@ -83,9 +82,7 @@ type stream struct {
 	cancel context.CancelFunc
 }
 
-// New builds the watcher for one chain. The subscriber and the querier are the
-// two halves of discovery and are kept apart on purpose: the clearing pass has
-// to run when the subscription cannot.
+// New Watcher constructor.
 func New(
 	chainID string,
 	connections []config.ConnectionConfig,
@@ -112,16 +109,19 @@ func New(
 		chainID:   chainID,
 		clientIDs: clientIDs,
 		routes:    routesOf(chainID, connections),
-		chain:     chain,
-		storage:   storage,
-		clearer:   clearer,
 		cfg:       cfg,
-		logger:    logger.With("module", "watcher", "chainID", chainID),
+
+		chain:   chain,
+		storage: storage,
+
+		// buf of 1 allows instant clearance after wss reconnect
+		clearNow: make(chan struct{}, 1),
+		clearer:  clearer,
+
+		logger: logger.With("module", "watcher", "chainID", chainID),
 	}
 }
 
-// Start subscribes and begins the event loop in its own goroutine, failing if
-// the subscription cannot be opened.
 func (w *Watcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -135,28 +135,35 @@ func (w *Watcher) Start() error {
 	}
 
 	w.cancel = cancel
-	w.stopped = make(chan struct{})
+	w.wg.Add(2)
 
-	go w.run(ctx, eventStream)
+	go func() {
+		defer w.wg.Done()
+		w.runClearer(ctx)
+	}()
+
+	go func() {
+		defer w.wg.Done()
+		w.runSubscription(ctx, eventStream)
+	}()
 
 	return nil
 }
 
-// Stop cancels the subscription loop and blocks until it has exited.
 func (w *Watcher) Stop() error {
 	if w.cancel == nil {
 		return nil
 	}
 
 	w.cancel()
-	<-w.stopped
+	w.wg.Wait()
 	w.cancel = nil
 
 	return nil
 }
 
-// HandleEvent records the packet a send event carries. Events of another kind
-// and reorged-out logs write nothing.
+// HandleEvent records the packet a send event carries.
+// Events of another kind and reorged-out logs write nothing.
 func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 	if event.Kind != v2.KindSendPacket {
 		return nil
@@ -232,123 +239,97 @@ func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (st
 	return stream{sub, events, cancel}, nil
 }
 
-func (w *Watcher) run(ctx context.Context, eventStream stream) {
+// connects to live events and recovers broken subscriptions.
+func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 	defer func() {
-		if err := recover(); err != nil {
-			w.logger.Error("Panic recovery in running watcher", "panic", err)
+		if p := recover(); p != nil {
+			w.logger.Error("Panic recovery in running live subscription", "panic", p)
 		}
 	}()
 
 	defer func() {
 		eventStream.close(true)
-		close(w.stopped)
 	}()
 
-	var (
-		// a signal non-nil chan if a pass is in-flight or nil if no pass is in-flight
-		// "(we should?) wait for the iteration to complete"
-		clearDone chan struct{}
-		// shouldClearAgain holds a pass asked for while one was running, so a flapping
-		// endpoint coalesces into one follow-up rather than one per reconnect
-		shouldClearAgain bool
-	)
+	// nil by default, non-nil when it's time to reconnect
+	var reconnectChan <-chan time.Time
 
-	// a pass reads the whole sequence space of every watched client, so it runs
-	// beside the loop rather than inside it, where it would stall event handling
-	triggerClear := func() {
-		// no-nop if a pass is already in-flight
-		if clearDone != nil {
-			return
-		}
-
-		done := make(chan struct{})
-		clearDone = done
-		shouldClearAgain = false
-
-		go func() {
-			w.clear(ctx)
-			close(done)
-		}()
+	backoff := w.cfg.MinBackoff
+	triggerReconnect := func(msg string, err error) {
+		w.logger.Warn(msg, "backoff", backoff.String(), "err", err)
+		reconnectChan = time.After(backoff)
+		backoff = min(backoff*2, w.cfg.MaxBackoff)
 	}
 
-	// Start opened the first subscription, so clearing on start belongs here;
-	// every subscribe the loop makes follows a gap, which clearing covers
-	if w.cfg.CleanOnStart {
-		triggerClear()
-	}
+	// eventsChan *outlives* each subscription, so a reconnect
+	// keeps whatever the dropped one had already buffered.
+	eventsChan := eventStream.events
 
-	var (
-		// nil by default, non-nil when it's time to reconnect
-		resubscribeChan <-chan time.Time
-
-		backoff               = w.cfg.MinBackoff
-		triggerResubscription = func(msg string, err error) {
-			w.logger.Warn(msg, "err", err, "backoff", backoff)
-
-			resubscribeChan = time.After(backoff)
-			backoff = min(backoff*2, w.cfg.MaxBackoff)
-		}
-
-		// eventsChan *outlives* each subscription, so a reconnect keeps
-		// whatever the dropped one had already buffered
-		eventsChan = eventStream.events
-	)
-
-	clearTick := time.NewTicker(w.cfg.ClearInterval)
-	defer clearTick.Stop()
-
-	// combines live events with periodically triggered clearing
-	// handles errors, re-subscriptions, and context cancellation
 	for {
 		select {
 		case event := <-eventsChan:
-			// basic case A: events come from live subscription
 			if err := w.HandleEvent(ctx, event); err != nil {
 				w.logger.Error("Recording send packet", "err", err)
 			}
-		case <-clearTick.C:
-			// basic case B: retroactive clearing
-			triggerClear()
 		case <-ctx.Done():
-			// wait for the final iteration to complete
-			if clearDone != nil {
-				<-clearDone
-			}
-
 			return
-		case <-clearDone:
-			// iteration completed
-			clearDone = nil
-
-			if shouldClearAgain {
-				triggerClear()
-			}
 		case err := <-eventStream.errs():
-			// close stream and trigger async resubscription (for the next select{} loop)
 			eventStream.close(false)
 			eventStream = stream{}
-
-			triggerResubscription("Send packet subscription ended, reconnecting", err)
-		case <-resubscribeChan:
+			triggerReconnect("Send packet subscription ended, reconnecting", err)
+		case <-reconnectChan:
 			newStream, err := w.subscribe(ctx, eventsChan)
 			if err != nil {
-				triggerResubscription("Subscribing to send packets failed, retrying", err)
+				triggerReconnect("Subscribing to send packets failed, retrying", err)
 				continue
 			}
 
 			eventStream = newStream
-			resubscribeChan = nil
+			reconnectChan = nil
 
 			// future: consider gradual backoff decrease
 			backoff = w.cfg.MinBackoff
 
-			// it will either instantly triggerClear() or act as marker to triggerClear() as soon
-			// as the current pass completes (`case <-clearDone`)
-			shouldClearAgain = true
-			triggerClear()
-
 			w.logger.Info("Resubscribed to send packets", "clientIDs", w.clientIDs)
+
+			// trigger clearer
+			w.clearRequest()
 		}
+	}
+}
+
+func (w *Watcher) runClearer(ctx context.Context) {
+	defer func() {
+		if p := recover(); p != nil {
+			w.logger.Error("Panic recovery in running clearer", "panic", p)
+		}
+	}()
+
+	// optional first iteration
+	if w.cfg.CleanOnStart {
+		w.clear(ctx)
+	}
+
+	ticker := time.NewTicker(w.cfg.ClearInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			w.clear(ctx)
+		case <-w.clearNow:
+			w.clear(ctx)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (w *Watcher) clearRequest() {
+	select {
+	case w.clearNow <- struct{}{}:
+	default:
+		// already running
 	}
 }
 
