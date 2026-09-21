@@ -163,12 +163,16 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 	chainWSProxy.Kill()
 	time.Sleep(time.Second)
 
-	// ACT #2: restore the proxy; the relayer resubscribes and triggers ws reconnection + clearing pass.
-	chainWSProxy.Revive()
-
-	// ACT/ASSERT #3: send packet2 after reconnect; the resubscribed watcher
-	// should pick it up.
+	// ACT #2: send packet while relayer is disconnected.
 	transfer2 := mustSend(t, transferApp, big.NewInt(200_000))
+
+	// ACT #3: restore the proxy; the relayer resubscribes and triggers ws reconnection + clearing pass.
+	chainWSProxy.Revive()
+	time.Sleep(time.Second)
+
+	// ACT/ASSERT #3: send packet2 after reconnect; the resubscribed watcher should pick it up.
+	transfer3 := mustSend(t, transferApp, big.NewInt(300_000))
+	mustDeliver(t, relayer, transfer3)
 	mustDeliver(t, relayer, transfer2)
 }
 
