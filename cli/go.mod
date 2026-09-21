@@ -371,4 +371,4 @@ replace (
 )
 
 // Consume the Besu generators from cosmos/ibc-contracts#1138.
-replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260917161050-aafbb70223e2
+replace github.com/cosmos/solidity-ibc-eureka/packages/go-abigen => github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20260921123034-4740b6d25783
