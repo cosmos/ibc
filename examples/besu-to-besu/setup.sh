@@ -39,18 +39,11 @@
 # into chains/local/<chain>/, which is what docker-compose bind-mounts.
 #
 # Usage:
-#   ./setup.sh              — init + start + wait for RPC (default end-to-end).
-#                             Chains only, with no IBC deployed on them: this
-#                             is what docs/6-ibc-cli/2-tutorial-*.md builds on,
-#                             so the bare form must not deploy anything.
+#   ./setup.sh              — init + start + wait for RPC (default end-to-end)
 #   ./setup.sh init         — derive validator keys and render chain configs
 #                             into chains/local/. Touches no containers.
 #   ./setup.sh start        — docker compose up both chains, wait for RPC
 #                             (init must have run)
-#   ./setup.sh attestors    — the above, then the IBC half: kms holding both
-#                             attestor keys, `ibc deploy core` on each chain,
-#                             and a standalone attestor process per chain
-#                             signing through kms. No relayer.
 #   ./setup.sh accounts     — print the derived accounts and their roles
 #   ./setup.sh status       — RPC endpoints, chain IDs, block heights
 #   ./setup.sh clean        — stop containers, remove volumes and chains/local/
@@ -116,16 +109,6 @@ export B_MNEMONIC="${B_MNEMONIC:-$A_MNEMONIC}"
 # an identical tx cost the deployer less on its own chain than on the other.
 export A_VALIDATOR_INDEX="${A_VALIDATOR_INDEX:-1}"
 export B_VALIDATOR_INDEX="${B_VALIDATOR_INDEX:-1}"
-# Index 0 of each phrase deploys the contracts. It is the one key kms does not
-# hold: `ibc deploy` needs the raw private key and rejects a remote signer.
-export A_DEPLOYER_INDEX="${A_DEPLOYER_INDEX:-0}"
-export B_DEPLOYER_INDEX="${B_DEPLOYER_INDEX:-0}"
-# The attestors sit at *different* indices on purpose: A_MNEMONIC and
-# B_MNEMONIC default to the same phrase, and a shared index would give two
-# supposedly independent attestors one address. They sign attestations only and
-# never need a balance, so neither has to be inside the funded range.
-export A_ATTESTOR_INDEX="${A_ATTESTOR_INDEX:-3}"
-export B_ATTESTOR_INDEX="${B_ATTESTOR_INDEX:-4}"
 export FUNDED_ACCOUNTS="${FUNDED_ACCOUNTS:-5}"
 export GENESIS_BALANCE="${GENESIS_BALANCE:-0xd3c21bcecceda1000000}"  # 1e24 wei = 1M ETH
 
@@ -138,8 +121,6 @@ export QBFT_REQUEST_TIMEOUT_SECONDS="${QBFT_REQUEST_TIMEOUT_SECONDS:-4}"
 source "$LIB_DIR/common.sh"
 # shellcheck source=lib/chains.sh
 source "$LIB_DIR/chains.sh"
-# shellcheck source=lib/ibc.sh
-source "$LIB_DIR/ibc.sh"
 
 cmd_init() {
   check_prerequisites
@@ -156,28 +137,10 @@ cmd_start() {
   log "Chains are live and producing blocks."
 }
 
-# The IBC half: kms holding both attestor keys, `ibc deploy core` on each
-# chain, and a standalone attestor process per chain signing through kms.
-#
-# Phases 1 and 2 run first and are idempotent, so this works against a cold
-# checkout or a stack that is already up.
-cmd_attestors() {
-  cmd_init
-  cmd_start
-  pull_ibc_images
-  log "--- Phase 3A: Derive the kms attestor keys ---"
-  init_kms_keys
-  run_phase "Phase 3B: Deploy IBC core on both chains"  deploy_core
-  run_phase "Phase 3C: Start kms and the attestors"     start_attestors
-  print_attestor_status
-  log "kms and both standalone attestors are up."
-}
-
 main() {
   case "${1:-}" in
-    init)      cmd_init;      exit 0 ;;
-    start)     cmd_start;     exit 0 ;;
-    attestors) cmd_attestors; exit 0 ;;
+    init)     cmd_init;       exit 0 ;;
+    start)    cmd_start;      exit 0 ;;
     accounts) print_accounts; exit 0 ;;
     status)   print_status;   exit 0 ;;
     clean)    clean;          exit 0 ;;
@@ -190,18 +153,7 @@ main() {
       exit 0
       ;;
     *)
-      cat >&2 <<EOF
-Usage: $0 [init|start|attestors|accounts|status|clean]
-
-  (no argument)  init + start: two live chains, no IBC deployed on them
-  init           derive keys and render chain configs into chains/local/
-  start          docker compose up both chains, wait for RPC
-  attestors      the above, then kms + 'ibc deploy core' + a standalone
-                 attestor per chain, each signing through kms
-  accounts       print the derived accounts and their roles
-  status         RPC endpoints, chain IDs, block heights
-  clean          stop containers, remove volumes and chains/local/
-EOF
+      echo "Usage: $0 [init|start|accounts|status|clean]" >&2
       exit 1
       ;;
   esac

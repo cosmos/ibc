@@ -148,5 +148,5 @@ The [configuration reference](5-configuration.md) carries every key and its defa
 ## Next steps
 
 - [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) brings up two chains and moves a token between them.
-- [Run a standalone attestor](3-run-a-standalone-attestor.md) takes an attestor out of the relayer's process and into its own.
+- [Run a standalone attestor](3-run-a-standalone-attestor.md) takes an attestor out of the relayer's process and into its own, and moves its signing key into a remote signer.
 - [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer against a connection someone else deployed.

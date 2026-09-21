@@ -3,7 +3,7 @@ title: "Run a standalone attestor"
 description: "Run an attestor in its own process, separate from any relayer, so a relayer can query it and count its signatures toward a light client's quorum."
 ---
 
-This guide runs an attestor as its own process, serving one chain. A relayer can then query it and count its signatures toward a light client's quorum.
+This guide runs an attestor as its own process, serving one chain. A relayer can then query it and count its signatures toward a light client's quorum. The last section optionally moves the signing key off the attestor host and into a remote signer.
 
 In order to run a standalone attestor, your signing address must already be in the light client's attestation set, which is fixed when the client is deployed and read from the chain.
 
@@ -175,6 +175,134 @@ level=INFO msg=Readiness module=bootstrap readiness="{Event:ready HTTP:[::]:3003
 ```
 
 Both attestors now run in processes of their own, and no relayer is running.
+
+## 5. Move the signing key into a remote signer
+
+Both attestors above sign with a `type: local` signer: a key file on the same host as the process. A `type: remote` signer holds the key material in [cosmos/kms](https://github.com/cosmos/kms) instead, and the attestor asks it for each signature over gRPC. The attestor host then holds no key at all.
+
+This moves the keys you already generated, rather than making new ones. A client's attestation set is fixed on chain when the client is deployed, so a new key means a new address, and an address outside the attestation set has every attestation it signs rejected.
+
+1. Build kms. It needs Go 1.25 or later:
+
+```bash
+git clone https://github.com/cosmos/kms.git ~/kms && make -C ~/kms build
+```
+
+The binary is at `~/kms/build/kms`.
+
+2. Export both attestor keys from the IBC keystore into the files kms reads:
+
+```bash
+mkdir -p ~/.kms/keys
+./bin/ibc keys show attestor-41001 --private | jq -r '.privateKey' > ~/.kms/keys/attestor-41001.hex
+./bin/ibc keys show attestor-41002 --private | jq -r '.privateKey' > ~/.kms/keys/attestor-41002.hex
+chmod 600 ~/.kms/keys/*.hex
+```
+
+`keys show` prints the key `0x`-prefixed, and kms strips the prefix as it loads the file.
+
+> **Warning:** Do not run `keys show --private` on a shared or recorded terminal. The private key it prints controls every asset its address holds.
+
+3. Write the kms configuration. A `grpc` block on its own runs kms in SignerService mode, with no validator signing alongside it:
+
+```bash
+cat > ~/.kms/kms.yaml <<EOF
+grpc:
+  listen: 127.0.0.1:9090
+
+  keys:
+    - id: attestor-41001
+      backend: file
+      algorithm: secp256k1eth
+      key_file: keys/attestor-41001.hex
+
+    - id: attestor-41002
+      backend: file
+      algorithm: secp256k1eth
+      key_file: keys/attestor-41002.hex
+EOF
+```
+
+Each `key_file` resolves against the kms home directory. The `id` is what an attestor names in `remoteKeyId`.
+
+> **Warning:** The algorithm has to be `secp256k1eth`, not `secp256k1`. Only that scheme signs the pre-hashed 32-byte digest and returns the 65-byte recoverable signature an attestation light client recovers an address from. Any other scheme fails at attestor startup with `unsupported remote key scheme`.
+
+4. Start kms in a new terminal, and leave it running:
+
+```bash
+~/kms/build/kms start --home ~/.kms
+```
+
+> **Warning:** kms performs no caller authentication or authorization. Any client that can reach the listener may sign with any key it holds. Binding to `127.0.0.1` is what keeps this local setup contained; a real deployment needs network controls in front of it.
+
+5. Point each attestor at kms. In `~/.ibc/ibc-attestor-41002.yml`, replace the `signers:` block with:
+
+```yaml
+signers:
+- alias: attestor-41002
+  type: remote
+  grpc: 127.0.0.1:9090
+  remoteKeyId: attestor-41002
+```
+
+And in `~/.ibc/ibc-attestor-41001.yml`:
+
+```yaml
+signers:
+- alias: attestor-41001
+  type: remote
+  grpc: 127.0.0.1:9090
+  remoteKeyId: attestor-41001
+```
+
+The alias does not change, so the `attestors[].signer` line in each file still resolves. A `remote` signer sets `grpc` and `remoteKeyId` and drops `file`.
+
+6. Restart both attestors:
+
+```bash
+./bin/ibc attestor run --config ibc-attestor-41002.yml
+```
+
+```bash
+./bin/ibc attestor run --config ibc-attestor-41001.yml
+```
+
+An attestor fetches its key from kms while starting up, so kms has to be running first. If it is not, startup fails on the key lookup rather than on the first signature.
+
+7. Confirm the address did not change:
+
+```bash
+./bin/ibc attestor info attestor-41002 --host 127.0.0.1:3001
+```
+
+```json
+{
+  "chainId": "41002",
+  "address": "0xc7f148Da846781a9a1D9d22F699A7A88c592CCee"
+}
+```
+
+This is the same address the attestor reported in step 3, and the same one in the client's attestation set — now recovered from a signature made inside kms. Ask for an attestation to prove the signing path end to end:
+
+```bash
+./bin/ibc attestor state-attestation attestor-41002 --height <height> --host 127.0.0.1:3001
+```
+
+Use a height from `attestor latest-height`, which returns one that is attestable under the configured `finalityOffset`. The `signature` that comes back was produced by kms.
+
+8. Nothing reads the attestor key files from the keystore any more. Removing them from the attestor host is the point of the exercise:
+
+```bash
+rm ~/.ibc/keys/attestor-41001.json ~/.ibc/keys/attestor-41002.json
+```
+
+> **Warning:** The hex files under `~/.kms/keys/` then hold the only copy of these keys, and their addresses are fixed in an attestation set on chain. Losing them means redeploying the clients with a new set. The tutorial's own `~/.ibc/ibc.yml` also still names these keys as local signers, so leave its relayer stopped.
+
+### What a remote signer cannot do yet
+
+- **The connection is plaintext.** kms treats TLS as mandatory and its `grpc` block takes `tls_cert` and `tls_key`, but the CLI dials a remote signer with insecure transport credentials and offers no way to configure otherwise. A remote signer therefore has to serve plaintext to be reachable from the CLI, which makes network isolation the only control available today.
+- **Deployment keys cannot be remote.** `ibc deploy` needs the raw private key and rejects a remote signer with `deployer signer "<alias>" must be a local key (deployment tooling needs the raw key)`. The deployer key has to stay a local file even when every other key is in kms.
+- **`--attestors` needs an address, not an alias.** Deploying a client against an attestor whose key lives in kms fails with `cannot derive an address for remote signer "<alias>"`, because the CLI cannot derive an address offline for a key it does not hold. Pass the hex address instead, and read it from `attestor info` or from the key before you move it.
 
 ## Connect a relayer
 
