@@ -16,32 +16,11 @@ die()  { echo -e "${RED}[$(date '+%H:%M:%S')] ERROR${NC} $*" >&2; exit 1; }
 check_prerequisites() {
   log "Checking prerequisites..."
   command -v docker    >/dev/null || die "docker is required"
-  command -v perl      >/dev/null || die "perl is required"
-  perl -MJSON::PP -e 1 2>/dev/null || die "Perl JSON::PP is required (bundled with Perl 5.14+)"
+  command -v perl      >/dev/null || die "perl is required (used to strip ANSI codes from the log file)"
   docker compose version >/dev/null 2>&1 || die "'docker compose' plugin required"
   command -v curl      >/dev/null || die "curl is required"
   command -v cast      >/dev/null \
     || info "cast not on PATH — falling back to $FOUNDRY_IMAGE for key derivation"
-
-  pull_images
-}
-
-# Pull anything not already local, up front and with docker's progress bars —
-# the only place they appear. Every later `compose up` and `compose run` is
-# `--progress quiet`, where a first-run pull would look like a hang instead.
-# Silent when there is nothing to fetch, so a re-run says nothing at all.
-# COMPOSE_PROFILES reaches `deployer`, otherwise skipped as an inactive profile.
-pull_images() {
-  local img missing=()
-  while read -r img; do
-    docker image inspect "$img" >/dev/null 2>&1 || missing+=("$img")
-  done < <(COMPOSE_PROFILES=tools docker compose config --images | sort -u)
-
-  (( ${#missing[@]} )) || return 0
-  log "Pulling ${#missing[@]} image(s), first run only:"
-  printf '             %s\n' "${missing[@]}"
-  COMPOSE_PROFILES=tools docker compose pull --policy missing \
-    || die "could not pull the images — check network access"
 }
 
 # Run `cast`, preferring a host binary and falling back to the pinned foundry
