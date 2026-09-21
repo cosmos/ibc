@@ -405,19 +405,6 @@ func (q *Queries) ListUnresolvedSequences(ctx context.Context, chainID string, c
 	return items, nil
 }
 
-const maxPacketSequence = `-- name: MaxPacketSequence :one
-SELECT CAST(COALESCE(MAX(packet_sequence_number), 0) AS bigint) FROM packets
-WHERE source_chain_id = $1 AND packet_source_client_id = $2
-`
-
-// the CAST is load-bearing: without it sqlc types the COALESCE as interface{} on sqlite
-func (q *Queries) MaxPacketSequence(ctx context.Context, chainID string, clientID string) (int64, error) {
-	row := q.db.QueryRow(ctx, maxPacketSequence, chainID, clientID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const setClearingState = `-- name: SetClearingState :exec
 INSERT INTO packet_clearing_state (
     source_chain_id,

@@ -14,22 +14,12 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-const (
-	// probeChunk bounds the range this pass materializes at once, so a client
-	// with a long history costs one chunk rather than its whole sequence space.
-	// How many probes fit in one call is the chain client's business.
-	probeChunk = 1000
-
-	// sendLogChunk bounds the sequences in one FindSendPackets query, since
-	// providers differ on how long a topic OR-list they accept.
-	sendLogChunk = 200
-)
+const chunkSizeSendEvents = 200
 
 // ClearStore the persistence a clearing pass reads and writes.
 type ClearStore interface {
 	PacketStore
 
-	MaxPacketSequence(ctx context.Context, chainID string, clientID string) (uint64, error)
 	ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)
 	GetClearingState(ctx context.Context, chainID string, clientID string) (store.ClearingState, error)
 
@@ -63,6 +53,14 @@ type Result struct {
 	Abandoned int
 }
 
+// client-specific clearer with fixed rpc latest block height
+type clientClearer struct {
+	*Clearer
+
+	clientID          string
+	latestBlockHeight uint64
+}
+
 func NewClearer(
 	chainID string,
 	connections []config.ConnectionConfig,
@@ -81,96 +79,98 @@ func NewClearer(
 	}
 }
 
-// Clear writes a packet row for every outstanding commitment on clientID we
-// hold no row for, probing the sequences above the watermark plus whatever the
-// last pass could not resolve. Sequences we already know about are skipped
-// whatever state they are in, terminal and deselected ones included: clearing
-// discovers packets, it does not reopen decisions the pipeline or an operator
-// has already made.
+// Clear clears packets for a client. Flow:
+// 1. Take clientID and latest block height
+// 2. Get existing rows from DB + the latest sequence from the chain
+// 3. Based on sequence ranges and diffs, try to query commitments and rpc events
+// 4. for outstanding (live onchain) sequences, store them in DB + update clearer state
+//
+// Note that websocket subscription runs concurrent to Clear() and pinning to a fixed RPC height is OK
+// as packets/heights that are created in-flight, will be picked up by ws subscription.
 func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
-	var result Result
+	// pin RPC queries to the same block height
+	latestBlockHeight, err := c.getLatestBlockHeight(ctx)
+	if err != nil {
+		return Result{}, errors.Wrapf(err, "reading the latest block height")
+	}
 
-	// every read this pass makes names a block number rather than the latest tag:
-	// behind a load-balanced endpoint the tag resolves on whichever node serves
-	// the call, and a node that has not caught up reads a live commitment as
-	// absent, which the pass would take for settled
+	// clientID-specific clearer
+	clientClearer := &clientClearer{
+		Clearer:           c,
+		clientID:          clientID,
+		latestBlockHeight: latestBlockHeight,
+	}
+
+	r, err := clientClearer.clear(ctx)
+	if err != nil {
+		return Result{}, errors.Wrapf(err, "clientID %s", clientID)
+	}
+
+	return r, nil
+}
+
+func (c *Clearer) getLatestBlockHeight(ctx context.Context) (uint64, error) {
 	head, err := c.chain.GetBlockHeader(ctx, v2.LatestBlock)
 	if err != nil {
-		return result, errors.Wrapf(err, "reading the latest header for client %s", clientID)
+		return 0, errors.Wrapf(err, "reading the latest header")
 	}
 
-	latest, err := c.chain.LatestPacketSequence(ctx, clientID, head.Height)
+	return head.Height, nil
+}
+
+func (c *clientClearer) clear(ctx context.Context) (Result, error) {
+	state, err := c.storage.GetClearingState(ctx, c.chainID, c.clientID)
 	if err != nil {
-		return result, errors.Wrapf(err, "reading the latest sequence for client %s", clientID)
+		return Result{}, errors.Wrapf(err, "reading the clearing state")
 	}
 
-	recorded, err := c.storage.MaxPacketSequence(ctx, c.chainID, clientID)
+	// we start clearing from this sequence
+	seqFrom := state.LastProbed + 1
+
+	// latest sequence on the chain
+	seqLatest, err := c.chain.LatestPacketSequence(ctx, c.clientID, c.latestBlockHeight)
 	if err != nil {
-		return result, errors.Wrapf(err, "reading the highest recorded sequence for client %s", clientID)
+		return Result{}, errors.Wrapf(err, "reading the latest sequence")
 	}
 
-	// the chain cannot have sent fewer packets than we hold rows for, but the
-	// subscription reads a different endpoint than this pass does, so an rpc node
-	// a block behind the websocket one produces this too. The pass carries on
-	// either way: a sequence this low probes no new range, and the watermark
-	// upsert refuses to move backwards
-	if latest < recorded {
-		c.logger.Warn(
-			"The chain reports fewer sends than we hold packets for. Either the rpc endpoint is "+
-				"behind the one the subscription reads, the client was reset, or the IBCStore "+
-				"storage layout has moved",
-			"clientID", clientID,
-			"chainSequence", latest,
-			"recordedSequence", recorded,
-		)
-	}
-
-	state, err := c.storage.GetClearingState(ctx, c.chainID, clientID)
-	if err != nil {
-		return result, errors.Wrapf(err, "reading the clearing state for client %s", clientID)
-	}
-
-	from := state.LastProbed + 1
-
-	// abandoned sequences are carried rather than probed: dropping them from the
-	// probe is what bounds the pass, and keeping them on record is what lets an
-	// operator who later has an archive endpoint recover them by turning the
-	// setting back off.
-	// ponytail: the abandoned set is read every pass and thrown away; make the
-	// query aware of the setting if anyone parks enough of them to notice.
+	// query unresolved packages one more time. This might succeed ONLY
+	// if an operator changes RPC to an archival one
 	reprobe := state.Unresolved
 	if c.abandon {
 		reprobe = nil
 	}
 
-	outstanding, probed, probeHeight, err := c.calcOutstanding(ctx, clientID, reprobe, from, latest, head.Height)
+	seqsOutstanding, seqsQueried, err := c.queryLiveSequences(ctx, seqFrom, seqLatest, reprobe)
 	if err != nil {
-		return result, err
+		return Result{}, err
 	}
 
-	result.Probed, result.Outstanding = probed, len(outstanding)
-
-	unrecorded, err := c.calcUnrecorded(ctx, clientID, from, outstanding)
+	unrecorded, err := c.buildUnrecorded(ctx, seqFrom, seqsOutstanding)
 	if err != nil {
-		return result, err
+		return Result{}, err
 	}
 
-	result.AlreadyHeld = len(outstanding) - len(unrecorded)
-
-	rows, unresolved, err := c.sends(ctx, clientID, unrecorded)
+	toBeInserted, unresolved, err := c.querySendEventsAndBuildRows(ctx, unrecorded)
 	if err != nil {
-		return result, err
+		return Result{}, err
 	}
-
-	result.Recovered = len(rows)
 
 	if len(unresolved) > 0 {
-		c.warnUnservable(clientID, unresolved)
+		c.warnUnservable(unresolved)
 	}
 
 	// measured against what the pass actually probed: a sequence it carried
 	// rather than probed had nothing learned about it, so it stays untouched
-	delta := unresolvedDelta(reprobe, unresolved, probeHeight)
+	delta := unresolvedDelta(reprobe, unresolved, c.latestBlockHeight)
+
+	result := Result{
+		Probed:      seqsQueried,
+		Outstanding: len(seqsOutstanding),
+		AlreadyHeld: len(seqsOutstanding) - len(unrecorded),
+		Recovered:   len(toBeInserted),
+		Unresolved:  0,
+		Abandoned:   0,
+	}
 
 	if c.abandon {
 		result.Abandoned = len(state.Unresolved) + len(delta.Add)
@@ -178,15 +178,19 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 		result.Unresolved = len(unresolved)
 	}
 
-	return result, c.persist(ctx, clientID, rows, latest, delta)
+	if err := c.persist(ctx, toBeInserted, seqLatest, delta); err != nil {
+		return Result{}, err
+	}
+
+	return result, nil
 }
 
-func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
+func (c *clientClearer) warnUnservable(sequences []uint64) {
 	if c.abandon {
 		c.logger.Warn(
 			"Abandoning packets whose send log no endpoint would serve: their escrow stays locked "+
 				"and no pass will look at them again until abandonUnrecoverablePackets is turned off",
-			"clientID", clientID,
+			"clientID", c.clientID,
 			"sequences", sequences,
 		)
 
@@ -199,100 +203,78 @@ func (c *Clearer) warnUnservable(clientID string, sequences []uint64) {
 	c.logger.Warn(
 		"Outstanding packets whose send log no endpoint would serve: their escrow stays locked "+
 			"and every pass will retry them",
-		"clientID", clientID,
+		"clientID", c.clientID,
 		"sequences", sequences,
 	)
 }
 
-// calcOutstanding probes the sequences the watermark has not settled and returns
-// those whose commitment is still live, with the number probed and the height
-// the pass ended at. The reads stay at the head: a commitment written above the
-// finalized head reads absent there, and absent means settled.
-//
-// The height it returns is the one the carried set was read at, which is what
-// the store weighs a resolve against: resolving a sequence read absent at a
-// stale height on the strength of a height a later chunk raised would forget a
-// packet that is still live.
-func (c *Clearer) calcOutstanding(
+// queryLiveSequences convert from+to into a range, and query their commitments on-chain.
+// optionally query unresolved sequences -- maybe they'll be found live?
+func (c *clientClearer) queryLiveSequences(
 	ctx context.Context,
-	clientID string,
-	unresolved []uint64,
-	from, latest, height uint64,
-) ([]uint64, int, uint64, error) {
-	var (
-		live   []uint64
-		probed int
-	)
-
-	probe := func(chunk []uint64) error {
-		// a cold pass runs longer than the ~128 blocks of state a non-archive
-		// node keeps, so the height moves up with the chain rather than aging
-		// out from under the later chunks. max, because a head read served by a
-		// lagging node must not drag it back below where the sequence was read
-		head, err := c.chain.GetBlockHeader(ctx, v2.LatestBlock)
-		if err != nil {
-			return errors.Wrapf(err, "refreshing the probe height for client %s", clientID)
+	seqFrom, seqTo uint64,
+	unresolvedSequences []uint64,
+) (liveSequences []uint64, queried int, err error) {
+	queryCommitments := func(sequences []uint64) error {
+		if len(sequences) == 0 {
+			return nil
 		}
 
-		height = max(height, head.Height)
-
-		found, err := c.chain.PacketCommitments(ctx, clientID, chunk, height)
+		// len(found) <= len(chunk) because some seqs might be missing
+		// note: evm client chunks queries automatically
+		found, err := c.chain.PacketCommitments(ctx, c.clientID, sequences, c.latestBlockHeight)
 		if err != nil {
-			return errors.Wrapf(err, "probing packet commitments for client %s", clientID)
+			return errors.Wrapf(err, "probing packet commitments")
 		}
 
-		probed += len(chunk)
-		live = append(live, found...)
+		queried += len(sequences)
+		liveSequences = append(liveSequences, found...)
 
 		return nil
 	}
 
-	for lo := from; lo <= latest; lo += probeChunk {
-		if err := probe(sequenceRange(lo, min(lo+probeChunk-1, latest))); err != nil {
-			return nil, 0, 0, err
+	if err := queryCommitments(sequenceRange(seqFrom, seqTo)); err != nil {
+		return nil, 0, err
+	}
+
+	if len(unresolvedSequences) > 0 {
+		c.logger.Info(
+			"Querying unresolved sequences",
+			"clientID", c.clientID,
+			"unresolved.length", len(unresolvedSequences),
+			"unresolved.min", unresolvedSequences[0],
+			"unresolved.max", unresolvedSequences[len(unresolvedSequences)-1],
+		)
+
+		if err := queryCommitments(unresolvedSequences); err != nil {
+			return nil, 0, err
 		}
 	}
 
-	// the carried set is probed last so that height cannot move above it: a
-	// resolve is only ever weighed against the height the sequence it resolves
-	// was actually read at
-	if len(unresolved) > 0 {
-		if err := probe(unresolved); err != nil {
-			return nil, 0, 0, err
-		}
-	}
-
-	return live, probed, height, nil
+	return liveSequences, queried, nil
 }
 
-// calcUnrecorded drops the sequences we already hold a row for. The query is bounded
-// by the probe's own floor, so an unresolved sequence below it goes unchecked: it
-// normally has no row, and where another instance recorded one first UpsertPacket
-// leaves that row standing rather than duplicating it.
-func (c *Clearer) calcUnrecorded(
-	ctx context.Context,
-	clientID string,
-	from uint64,
-	outstanding []uint64,
-) ([]uint64, error) {
+// buildUnrecorded constructs unrecorded seqs: outstanding (live onchain) minus already recorded in DB
+func (c *clientClearer) buildUnrecorded(ctx context.Context, seqFrom uint64, outstanding []uint64) ([]uint64, error) {
 	if len(outstanding) == 0 {
 		return nil, nil
 	}
 
-	recorded, err := c.storage.ListPacketSequencesFrom(ctx, c.chainID, clientID, from)
+	// todo pagination?
+	recorded, err := c.storage.ListPacketSequencesFrom(ctx, c.chainID, c.clientID, seqFrom)
 	if err != nil {
-		return nil, errors.Wrapf(err, "listing recorded sequences for client %s", clientID)
+		return nil, errors.Wrapf(err, "listing recorded sequences")
 	}
 
-	known := make(map[uint64]struct{}, len(recorded))
+	set := make(map[uint64]struct{}, len(recorded))
 	for _, sequence := range recorded {
-		known[sequence] = struct{}{}
+		set[sequence] = struct{}{}
 	}
 
 	unrecorded := make([]uint64, 0, len(outstanding))
 
 	for _, sequence := range outstanding {
-		if _, ok := known[sequence]; !ok {
+		if _, ok := set[sequence]; !ok {
 			unrecorded = append(unrecorded, sequence)
 		}
 	}
@@ -300,18 +282,17 @@ func (c *Clearer) calcUnrecorded(
 	return unrecorded, nil
 }
 
-// sends looks up the send of every sequence and returns the rows to write,
-// along with the sequences whose send log the endpoint would not serve. Those
-// carry no row, so the watermark cannot be allowed to swallow them.
-func (c *Clearer) sends(
-	ctx context.Context,
-	clientID string,
-	sequences []uint64,
-) (rows []store.UpsertPacket, unresolved []uint64, err error) {
-	for chunk := range slices.Chunk(sequences, sendLogChunk) {
-		events, errFind := c.chain.FindSendPackets(ctx, clientID, chunk)
-		if errFind != nil {
-			return nil, nil, errors.Wrapf(errFind, "finding sends for client %s", clientID)
+// takes list of seqs, resolves onchain packet events and constructs rows to write.
+// return rows and list of unresolved seqs (i.e. a seq has NO rpc event to resolve it)
+func (c *clientClearer) querySendEventsAndBuildRows(ctx context.Context, sequences []uint64) (
+	rows []store.UpsertPacket,
+	unresolved []uint64,
+	err error,
+) {
+	for chunk := range slices.Chunk(sequences, chunkSizeSendEvents) {
+		events, err := c.chain.FindSendPackets(ctx, c.clientID, chunk)
+		if err != nil {
+			return nil, nil, errors.Wrapf(err, "finding sends")
 		}
 
 		found := make(map[uint64]struct{}, len(events))
@@ -351,32 +332,22 @@ func (c *Clearer) sends(
 	return rows, unresolved, nil
 }
 
-// persist writes the pass's rows and its watermark together, so a watermark
-// never outlives the rows it was earned by.
-func (c *Clearer) persist(
+// update DB (clearer state + packet rows)
+func (c *clientClearer) persist(
 	ctx context.Context,
-	clientID string,
 	rows []store.UpsertPacket,
-	watermark uint64,
+	seqLastProbed uint64,
 	delta store.UnresolvedDelta,
 ) error {
 	return c.storage.Transact(ctx, func(repo store.Repository) error {
 		for _, row := range rows {
 			if err := repo.UpsertPacket(ctx, row); err != nil {
-				return errors.Wrapf(
-					err,
-					"creating packet %d for client %s",
-					row.PacketSequenceNumber, clientID,
-				)
+				return errors.Wrapf(err, "creating packet %d", row.PacketSequenceNumber)
 			}
 		}
 
-		if err := repo.SetClearingState(ctx, c.chainID, clientID, watermark, delta); err != nil {
-			return errors.Wrapf(
-				err,
-				"recording the clearing state for client %s",
-				clientID,
-			)
+		if err := repo.SetClearingState(ctx, c.chainID, c.clientID, seqLastProbed, delta); err != nil {
+			return errors.Wrapf(err, "recording the clearing state")
 		}
 		return nil
 	})
@@ -385,26 +356,29 @@ func (c *Clearer) persist(
 // unresolvedDelta is the change a pass makes to the unresolved set: what it
 // found outstanding with no send log, and what it probed and no longer needs to
 // remember. Sequences absent from both are left alone.
-func unresolvedDelta(probed, unresolved []uint64, height uint64) store.UnresolvedDelta {
-	delta := store.UnresolvedDelta{Height: height}
+func unresolvedDelta(previousUnresolved, currentUnresolved []uint64, height uint64) store.UnresolvedDelta {
+	var (
+		delta       = store.UnresolvedDelta{Height: height}
+		previousSet = make(map[uint64]struct{}, len(previousUnresolved))
+		currentSet  = make(map[uint64]struct{}, len(currentUnresolved))
+	)
 
-	held := make(map[uint64]struct{}, len(probed))
-	for _, sequence := range probed {
-		held[sequence] = struct{}{}
+	for _, sequence := range previousUnresolved {
+		previousSet[sequence] = struct{}{}
 	}
 
-	stuck := make(map[uint64]struct{}, len(unresolved))
+	for _, sequence := range currentUnresolved {
+		currentSet[sequence] = struct{}{}
 
-	for _, sequence := range unresolved {
-		stuck[sequence] = struct{}{}
-
-		if _, ok := held[sequence]; !ok {
+		// net-new sequence is considered "unresolved"
+		if _, ok := previousSet[sequence]; !ok {
 			delta.Add = append(delta.Add, sequence)
 		}
 	}
 
-	for _, sequence := range probed {
-		if _, ok := stuck[sequence]; !ok {
+	for _, sequence := range previousUnresolved {
+		// sequence is no longer "unresolved"
+		if _, ok := currentSet[sequence]; !ok {
 			delta.Resolve = append(delta.Resolve, sequence)
 		}
 	}
@@ -413,6 +387,10 @@ func unresolvedDelta(probed, unresolved []uint64, height uint64) store.Unresolve
 }
 
 func sequenceRange(from, to uint64) []uint64 {
+	if from > to {
+		return []uint64{}
+	}
+
 	sequences := make([]uint64, 0, to-from+1)
 	for sequence := from; sequence <= to; sequence++ {
 		sequences = append(sequences, sequence)

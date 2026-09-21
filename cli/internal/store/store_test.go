@@ -465,11 +465,6 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			}
 		}
 
-		// A client we hold no rows for has no maximum
-		highest, err := s.MaxPacketSequence(ctx, chainIDEth, clientID)
-		require.NoError(t, err)
-		assert.Zero(t, highest)
-
 		sequences, err := s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 1)
 		require.NoError(t, err)
 		assert.Empty(t, sequences)
@@ -483,14 +478,6 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		// Neither another client on the same chain nor the same client on another chain moves the maximum
 		insert(chainIDEth, otherClientID, 500, RelayStatusPending)
 		insert(chainIDBase, clientID, 900, RelayStatusPending)
-
-		highest, err = s.MaxPacketSequence(ctx, chainIDEth, clientID)
-		require.NoError(t, err)
-		assert.Equal(t, uint64(12), highest)
-
-		highest, err = s.MaxPacketSequence(ctx, chainIDBase, clientID)
-		require.NoError(t, err)
-		assert.Equal(t, uint64(900), highest)
 
 		// 9 and 12 really did reach a terminal status, so their inclusion below is meaningful
 		unfinished, err := s.ListDispatchablePackets(ctx)

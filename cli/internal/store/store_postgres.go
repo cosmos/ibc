@@ -272,21 +272,6 @@ func (db *PostgresDB) ListDispatchablePackets(ctx context.Context) ([]Packet, er
 	return packets, nil
 }
 
-func (db *PostgresDB) MaxPacketSequence(ctx context.Context, chainID string, clientID string) (uint64, error) {
-	db.logger.Debug("MaxPacketSequence", "chainID", chainID, "clientID", clientID)
-
-	if chainID == "" || clientID == "" {
-		return 0, errors.New("chainID and clientID are required")
-	}
-
-	highest, err := db.repo.MaxPacketSequence(ctx, chainID, clientID)
-	if err != nil {
-		return 0, errNormalize(err)
-	}
-
-	return uint64(highest), nil //nolint:gosec // sequences fit in int64
-}
-
 func (db *PostgresDB) ListPacketSequencesFrom(
 	ctx context.Context,
 	chainID string,
