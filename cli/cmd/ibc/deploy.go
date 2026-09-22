@@ -466,6 +466,19 @@ func besuQBFTParams(
 			counterpartyChainID,
 		)
 	}
+	// the contract measures expiry against this chain's block time, so a
+	// trusted state that is already expired here can never be updated
+	_, hostTime, err := target.Head(ctx)
+	if err != nil {
+		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "fetch chain %s head", chainID)
+	}
+	if hostTime >= state.Timestamp && hostTime-state.Timestamp >= trustingPeriod {
+		return deploy.BesuQBFTParams{}, errors.Errorf(
+			"counterparty chain %s trusted state at height %d (timestamp %d) is already older than the "+
+				"trusting period (%ds) on chain %s (timestamp %d): pick a newer --height or a longer --trusting-period",
+			counterpartyChainID, state.Height, state.Timestamp, trustingPeriod, chainID, hostTime,
+		)
+	}
 	return deploy.BesuQBFTParams{
 		IBCRouter:         counterpartyRouter,
 		InitialHeight:     state.Height,

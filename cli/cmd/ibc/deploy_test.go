@@ -283,7 +283,9 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 		args       []string
 		wantPeriod uint64
 		router     string
+		hostTime   uint64
 		wantErr    string
+		readsState bool // the error comes after the counterparty read
 	}{
 		{
 			name: "omitted", router: "0x00000000000000000000000000000000000000bb",
@@ -297,6 +299,15 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 		{name: "missing router", args: []string{"--trusting-period=2h"}, router: "", wantErr: "evm.ics26Router"},
 		{name: "malformed router", args: []string{"--trusting-period=2h"}, router: "bad", wantErr: "evm.ics26Router"},
 		{name: "zero router", args: []string{"--trusting-period=2h"}, router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router"},
+		{
+			name: "expired on this chain", args: []string{"--trusting-period=1h"},
+			router: "0x00000000000000000000000000000000000000bb", hostTime: liveTimestamp + 3600,
+			wantErr: "already older than the trusting period", readsState: true,
+		},
+		{
+			name: "one second from expiry", args: []string{"--trusting-period=1h"}, wantPeriod: 3600,
+			router: "0x00000000000000000000000000000000000000bb", hostTime: liveTimestamp + 3599,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
@@ -304,10 +315,14 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 			flags.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, time.Minute, "")
 			require.NoError(t, flags.Parse(tc.args))
 			source := &bootstrapTarget{}
-			params, err := besuQBFTParams(t.Context(), tc.router, flags, nil, source, "1", "2", "new-client")
+			host := &hostTarget{timestamp: liveTimestamp + 100}
+			if tc.hostTime != 0 {
+				host.timestamp = tc.hostTime
+			}
+			params, err := besuQBFTParams(t.Context(), tc.router, flags, host, source, "1", "2", "new-client")
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
-				require.False(t, source.called)
+				require.Equal(t, tc.readsState, source.called)
 				return
 			}
 			require.NoError(t, err)
@@ -332,7 +347,7 @@ func (t *bootstrapTarget) BesuQBFTTrustedState(
 	t.called = true
 	return deploy.BesuQBFTTrustedState{
 		Height:     height,
-		Timestamp:  1788200000,
+		Timestamp:  liveTimestamp,
 		StateRoot:  "0x1111111111111111111111111111111111111111111111111111111111111111",
 		Validators: []string{"0x00000000000000000000000000000000000000ee"},
 	}, nil
@@ -465,7 +480,7 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 					context.Background(),
 					recorded.IBCRouter,
 					flags,
-					&unregisteredClientTarget{},
+					&hostTarget{timestamp: liveTimestamp + 100},
 					source,
 					"1",
 					"2",
@@ -498,12 +513,22 @@ func (*registeredClientTarget) ClientRegistered(context.Context, string, string)
 	return "0xca", true, nil
 }
 
-// unregisteredClientTarget is a host chain that has lost its clients (reset).
-type unregisteredClientTarget struct{ deploy.Target }
+// hostTarget is a host chain without the client, whose head sits at timestamp.
+type hostTarget struct {
+	deploy.Target
+	timestamp uint64
+}
 
-func (*unregisteredClientTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
+func (*hostTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
 	return "", false, nil
 }
+
+func (h *hostTarget) Head(context.Context) (uint64, uint64, error) {
+	return 0, h.timestamp, nil
+}
+
+// liveTimestamp is the trusted-state timestamp bootstrapTarget serves.
+const liveTimestamp = 1788200000
 
 func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
 	previous := flagDeployManifestDir
