@@ -90,6 +90,24 @@ function is_ignored(id,    i, n, parts) {
 function display_library(lib) { return lib == "stdlib" ? "Go standard library" : lib }
 # gsub on a local copy: gensub is a GNU extension and this has to run under mawk too.
 function commas(s) { gsub(/ /, ", ", s); return s }
+
+# Group metadata is unioned, never assigned: our modules are separate go.mod files, so two
+# advisories for the same library can legitimately report different versions in use, and
+# each advisory reaches a different set of our modules.
+function add_unique(cur, item,    n, parts, i) {
+  if (item == "") return cur
+  if (cur == "") return item
+  n = split(cur, parts, ", ")
+  for (i = 1; i <= n; i++)
+    if (parts[i] == item) return cur
+  return cur ", " item
+}
+function merge_list(cur, list,    n, parts, i) {
+  n = split(list, parts, ", ")
+  for (i = 1; i <= n; i++)
+    cur = add_unique(cur, parts[i])
+  return cur
+}
 function display_version(lib, v) {
   if (lib != "stdlib") return v
   sub(/^v/, "", v)
@@ -105,8 +123,8 @@ NF >= 3 {
   if (!(key in seen_key)) { seen_key[key] = 1; keys[++n_keys] = key }
   n_rows[key]++
   rows[key, n_rows[key]] = id "\t" cves "\t" fixed "\t" summary
-  version[key] = ver
-  affects[key] = ours
+  version[key] = add_unique(version[key], "`" display_version(lib, ver) "`")
+  affects[key] = merge_list(affects[key], ours)
   n_tier[tier]++
   if (!(tier SUBSEP lib in seen_lib)) { seen_lib[tier SUBSEP lib] = 1; n_libs[tier]++ }
   total++
@@ -155,7 +173,7 @@ function emit(tier, heading,    i, j, key, parts, lib, r, cells) {
       if (parts[1] != tier || parts[2] + 0 != pass) continue
       lib = parts[3]
       printf "#### `%s`\n\n", display_library(lib)
-      printf "In use: `%s`", display_version(lib, version[key])
+      printf "In use: %s", version[key]
       if (affects[key] != "") printf " — reached from %s", affects[key]
       printf "\n\n"
       print "| Advisory | CVE | Fixed in | Summary |"

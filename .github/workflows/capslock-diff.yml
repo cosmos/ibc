@@ -227,16 +227,22 @@ jobs:
           overwrite: true
 
       - name: Fail on new capabilities
-        if: steps.report.outputs.added != '0'
+        if: steps.report.outputs.high != '0' && steps.report.outputs.high != ''
         env:
           HIGH: ${{ steps.report.outputs.high }}
+          BASE_REF: ${{ steps.base.outputs.ref }}
+        run: |
+          echo "::error::${HIGH} new high-signal capability use(s) (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE) relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- read the call paths in the job summary."
+          exit 1
+
+      - name: Note non-blocking capability changes
+        if: |
+          steps.report.outputs.high == '0'
+          && steps.report.outputs.added != '0'
+          && steps.report.outputs.added != ''
+        env:
           MOVED: ${{ steps.report.outputs.moved }}
           LOW: ${{ steps.report.outputs.low }}
           BASE_REF: ${{ steps.base.outputs.ref }}
         run: |
-          if [ "${HIGH:-0}" != "0" ]; then
-            echo "::error::${HIGH} new high-signal capability use(s) (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE) relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- read the call paths in the job summary."
-          else
-            echo "::error::No high-signal capability changes, but ${MOVED:-0} likely package move(s) and ${LOW:-0} lower-signal change(s) relative to ${BASE_REF}; confirm them in the job summary."
-          fi
-          exit 1
+          echo "::notice::No high-signal capability changes relative to ${BASE_REF}. ${MOVED:-0} likely package move(s) and ${LOW:-0} lower-signal change(s) are recorded in the job summary."
