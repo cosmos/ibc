@@ -280,9 +280,14 @@ def _():
     # optional while the binary refused to run without one.
     for line in ("Error: at least one of the flags in the group [alpha beta] is required",
                  "Error: if any flags in the group [alpha beta] are set they must all be set"):
+        # the assertion that matters: no pattern the probe actually uses
+        # reads this line as a flag. There used to be a second assertion here,
+        # that a `_FLAG_GROUP` list matched the message -- but nothing in the
+        # generator consulted that list, so it tested only itself. The list is
+        # gone and this is what is left, which is the real behaviour.
         hits = [rx.search(line) for rx in refgen._REQUIRED_ALSO]
         assert not any(hits), (line, hits)
-        assert any(rx.search(line) for rx in refgen._FLAG_GROUP), line
+        assert not refgen._REQUIRED.search(line), line
     # a genuine single-flag message is still read
     assert refgen._REQUIRED_ALSO[0].search("Error: --chain is required")
 
@@ -464,11 +469,15 @@ def _():
     assert "`uint64` (optional)" in b["api:msg:Attestation"]
 
 
-@case("api: a description does not repeat the name of its own row")
+@case("api: a description is the schema comment, unedited")
 def _():
+    # This case used to assert the opposite -- that the leading identifier was
+    # dropped. That transformation worked on `Relay tracks` and mangled every
+    # other shape, so it is gone, and the page now carries what the schema
+    # says. If a row stutters, the comment in the .proto is what to reword.
     b = refgen.gen_api()
-    assert b["api:rpc:Relay"].startswith("Tracks the packets")
-    assert "Relay tracks" not in b["api:rpc:Relay"]
+    assert b["api:rpc:Relay"].startswith("Relay tracks the packets"), \
+        b["api:rpc:Relay"][:80]
 
 
 @case("api: a sibling field named in a description is fenced")
@@ -515,6 +524,49 @@ def _():
     finally:
         refgen.FALLBACK_DOCS.clear()
         refgen.FALLBACK_DOCS.update(saved)
+
+
+@case("config: a variant clause survives in a table that is not about that variant")
+def _():
+    # The clause is the only statement of the condition when the required
+    # column cannot see it -- a rule that lives in a helper renders `optional`,
+    # and stripping this left a row reading as unconditional.
+    field = {"go": "Signer", "doc": "Signer required for type: local only -- "
+                                    "the signer used to sign attestations."}
+    kept = refgen._clean_doc(field, variant=None)
+    assert "required for type: local" in kept.lower(), kept
+    other = refgen._clean_doc(field, variant="remote")
+    assert "required for type: local" in other.lower(), other
+
+
+@case("config: a variant clause comes off in the table already about that variant")
+def _():
+    field = {"go": "Signer", "doc": "Signer required for type: local only -- "
+                                    "the signer used to sign attestations."}
+    got = refgen._clean_doc(field, variant="local")
+    assert got == "The signer used to sign attestations.", got
+
+
+@case("config: 'local only.' is kept unless the table is the local one")
+def _():
+    field = {"go": "FinalityOffset", "doc": "FinalityOffset local only. Zero attests "
+                                            "up to the chain's finalized tag."}
+    assert refgen._clean_doc(field, variant=None).startswith("Local only."), \
+        refgen._clean_doc(field, variant=None)
+    assert refgen._clean_doc(field, variant="local").startswith("Zero attests"), \
+        refgen._clean_doc(field, variant="local")
+
+
+@case("api: a proto comment is published as its author wrote it")
+def _():
+    # This used to drop the leading identifier, which worked for `Relay tracks`
+    # and mangled `Labels are forwarded` into `Are forwarded` and `State of the
+    # packet` into `Of the packet`. Each repair was another word on a list.
+    for name, doc in (("labels", "Labels are forwarded to the receipt."),
+                      ("state", "State of the packet."),
+                      ("Relay", "Relay tracks the packets.")):
+        assert refgen._lead_strip(name, doc) == doc, refgen._lead_strip(name, doc)
+    assert refgen._lead_strip("x", "lowercase start.") == "Lowercase start."
 
 
 @case("config: the canary fires when no validation message is recognised any more")

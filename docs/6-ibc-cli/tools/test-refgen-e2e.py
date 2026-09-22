@@ -567,29 +567,54 @@ def _():
         raises(box, "api", "TransactionInfo.chain_id", "dead_field_doc")
 
 
-@case("a removed proto message raises, and the message says what to do")
+@case("a removed proto message stops the page, because the schema stops compiling")
 def _():
     with Sandbox() as box:
+        # An rpc still names it, so this is not a documentation problem before
+        # it is a schema problem. The compiler says so first, and says it
+        # better than a text scan could.
         box.edit("proto/cli/attestor.proto",
                  "message InfoRequest { string attestor = 1; }", "")
-        raises(box, "api", "InfoRequest", "dead_field_doc")
+        raises(box, "api", "buf build failed", "proto_build_failed")
 
 
-@case("a streaming rpc raises rather than vanishing from the page")
+@case("a streaming rpc refuses rather than rendering as a unary call")
 def _():
     with Sandbox() as box:
+        # Valid schema this time -- the descriptor reads streaming fine. The
+        # refusal is the page's, not the parser's: its rows hold one request
+        # body and one response body, and a stream has neither.
+        box.edit("proto/cli/relayer.proto", "message RelayRequest {",
+                 "message WatchRequest { string chain_id = 1; }\n"
+                 "message WatchResponse { string chain_id = 1; }\n"
+                 "message RelayRequest {")
         box.edit("proto/cli/relayer.proto", "  rpc Relay(",
+                 "  // Watch follows packets as they arrive.\n"
                  "  rpc Watch(stream WatchRequest) returns (stream WatchResponse);\n"
                  "  rpc Relay(")
-        raises(box, "api", "does not read", "unreadable_declaration")
+        raises(box, "api", "streams", "streaming_rpc")
 
 
-@case("a map field raises rather than vanishing from its table")
+@case("a map field is read, and is described like any other field")
 def _():
     with Sandbox() as box:
+        # This used to refuse, because a text scan could not read `map<>`. The
+        # compiler can, so the only thing left to ask for is a description --
+        # and the synthetic entry type protobuf generates behind a map must not
+        # surface as a message of its own.
         box.edit("proto/cli/relayer.proto", "message RelayRequest {",
-                 "message RelayRequest {\n  map<string, string> labels = 99;")
-        raises(box, "api", "does not read", "unreadable_declaration")
+                 "message RelayRequest {\n"
+                 "  // Labels are forwarded to the receipt.\n"
+                 "  map<string, string> labels = 99;")
+        blocks = refgen.GENERATORS["api"]()
+        body = blocks["api:msg:RelayRequest"]
+        assert "`labels`" in body, f"the map field is missing:\n{body}"
+        assert "map<string, string>" in body, \
+            f"a map must not publish protobuf's internal entry type:\n{body}"
+        assert "Labels are forwarded to the receipt." in body, \
+            f"description lost:\n{body}"
+        assert not [r for r in blocks if "LabelsEntry" in r], \
+            f"protobuf's synthetic map entry surfaced as a message: {sorted(blocks)}"
 
 
 # --------------------------------------- source a reader's table depends on
@@ -684,6 +709,106 @@ def _():
         refgen._REQUIRED = saved
         refgen._REQUIRED_ALSO[:] = saved_also
     raise AssertionError("expected the canary to refuse")
+
+
+def _claimed_requiredness():
+    """{key: True/False} from the page, for key names that mean one thing.
+
+    A name used by two tables with different answers -- `type` has a default
+    under `db` and is required under `signers` -- cannot be checked by name
+    alone, so it is reported uncovered rather than guessed at.
+    """
+    claims, seen = {}, {}
+    for body in refgen.GENERATORS["config"]().values():
+        for line in body.split("\n"):
+            if not line.startswith("| `"):
+                continue
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) < 5:
+                continue
+            # the third cell is a default, or `optional`, or `**required**`.
+            # A key with a default is not "optional": removing it is allowed to
+            # fail for reasons that have nothing to do with the column, so only
+            # the two cells that actually make a claim are judged.
+            cell = cells[3]
+            kind = ("required" if "required" in cell
+                    else "optional" if cell == "optional" else "default")
+            for key in cells[1].split(","):
+                key = key.strip().strip("`").split(".")[-1].split("[")[0]
+                if not key:
+                    continue
+                # every occurrence counts, including the ones carrying a
+                # default: `type` is required under `signers` and defaulted
+                # under `db`, and judging it by name alone read the defaulted
+                # one as a disagreement
+                seen.setdefault(key, set()).add(kind)
+                claims[key] = kind == "required"
+    usable = {k: v for k, v in claims.items()
+              if seen[k] in ({"required"}, {"optional"})}
+    return usable, sorted(k for k in seen if k not in usable)
+
+
+@case("every key the page calls required is one the binary refuses to run without")
+def _():
+    # The requiredness column is read from words in the Go validation messages
+    # (REQUIREMENT_VOCABULARY). Reword one and a key silently flips to
+    # optional. The generator is not what fixes that here -- this is: blank a
+    # key in the fixture the tests already keep valid, and ask the binary. A
+    # reworded message now fails a test instead of changing a page.
+    with Sandbox() as box:
+        binary = refgen.build_cli()
+        claims, ambiguous = _claimed_requiredness()
+        fixture = os.path.join(box.dir, "cli/internal/config/testdata/sample.yml")
+        original = open(fixture).read()
+        lines = original.split("\n")
+
+        checked, wrong, uncovered = 0, [], set(ambiguous)
+        for i, line in enumerate(lines):
+            m = re.match(r"^(\s*)(?:- )?([A-Za-z]\w*): +(\S.*)$", line)
+            if not m or m.group(3).strip() in ("|", ">"):
+                continue
+            key = m.group(2)
+            if key not in claims:
+                uncovered.add(key)
+                continue
+            # removed, not emptied: "required" means absent, and an empty
+            # string in an int or bool field fails as a type error, which is a
+            # different refusal that would read as a disagreement
+            kept = lines[:i] + lines[i + 1:]
+            if line.lstrip().startswith("- "):
+                # this key opens a list item, so it carries the `- `. Dropping
+                # the line alone would orphan the rest of the item; the next
+                # line at the same depth inherits the dash instead. Without
+                # this, every list-opening key went untested -- which on this
+                # fixture is most of the required ones.
+                indent = len(line) - len(line.lstrip())
+                sibling = indent + 2
+                if i >= len(kept) or (len(kept[i]) - len(kept[i].lstrip())) != sibling:
+                    uncovered.add(key)
+                    continue
+                kept[i] = " " * indent + "- " + kept[i].lstrip()
+            open(fixture, "w").write("\n".join(kept))
+            home = tempfile.mkdtemp(prefix="refgen-req-")
+            try:
+                shutil.copyfile(fixture, os.path.join(home, "ibc.yml"))
+                r = subprocess.run([binary, "config", "validate", "--home", home],
+                                   capture_output=True, text=True, timeout=30)
+                complained = key in (r.stdout + r.stderr) and r.returncode != 0
+            finally:
+                shutil.rmtree(home, ignore_errors=True)
+            checked += 1
+            if complained != claims[key]:
+                wrong.append(
+                    f"line {i + 1}: the page calls `{key}` "
+                    f"{'required' if claims[key] else 'optional'}, "
+                    f"but removing it {'is accepted' if not complained else 'is refused'}")
+        open(fixture, "w").write(original)
+
+        assert checked >= 15, f"only {checked} keys were exercised; the fixture shrank?"
+        assert not wrong, ("the page and the binary disagree about what is required:\n  "
+                           + "\n  ".join(wrong))
+        print(f"      [{checked} keys verified against the binary; "
+              f"{len(uncovered)} not covered by the fixture: {sorted(uncovered)}]")
 
 
 @case("the example config tracks the fixture the Go tests validate")

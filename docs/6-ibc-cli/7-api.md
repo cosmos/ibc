@@ -46,7 +46,7 @@ ibc.v2.relayer.RelayerApiService
 
 <!-- GEN:api:rpc:Relay START -->
 
-Tracks the packets emitted by a source transaction and submits the transactions required to complete them.
+Relay tracks the packets emitted by a source transaction and submits the transactions required to complete them.
 
 <!-- [relayer.proto:L12](proto/cli/relayer.proto#L12) -->
 
@@ -60,7 +60,7 @@ Tracks the packets emitted by a source transaction and submits the transactions 
 |---|---|---|
 | `tx_hash` | `string` | The transaction that sent the packets, on the source chain. |
 | `source_chain_id` | `string` | The chain that transaction was sent on. |
-| `selection` | oneof: `all_packets` or `selected_packets` | Required and controls only this relayer instance; IBC relaying remains permissionless. |
+| `selection` | oneof: `all_packets` or `selected_packets` | Selection is required and controls only this relayer instance; IBC relaying remains permissionless. |
 
 <!-- [relayer.proto:L18](proto/cli/relayer.proto#L18) -->
 
@@ -150,7 +150,7 @@ grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPack
 
 <!-- GEN:api:rpc:Packets START -->
 
-Lists the packets this relayer is aware of, most recent first.
+Packets lists the packets this relayer is aware of, most recent first.
 
 <!-- [relayer.proto:L15](proto/cli/relayer.proto#L15) -->
 
@@ -490,7 +490,7 @@ Every request carries one, identifying the light client the call is scoped to.
 
 <!-- GEN:api:rpc:LatestProvableHeight START -->
 
-Returns the highest height a subsequent StateProof and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
+LatestProvableHeight returns the highest height a subsequent StateProof and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
 
 <!-- [prover.proto:L19](proto/cli/prover.proto#L19) -->
 
@@ -524,7 +524,7 @@ paces the relayer by holding the height back until it can prove at it.
 
 <!-- GEN:api:rpc:StateProof START -->
 
-Proves the light client's counterparty state at a height.
+StateProof proves the light client's counterparty state at a height.
 
 <!-- [prover.proto:L22](proto/cli/prover.proto#L22) -->
 
@@ -557,7 +557,7 @@ Proves the light client's counterparty state at a height.
 
 <!-- GEN:api:rpc:PacketProofs START -->
 
-Proves each packet's membership or non-membership at a height, one proof per packet with indices aligned to the request.
+PacketProofs proves each packet's membership or non-membership at a height, one proof per packet with indices aligned to the request.
 
 <!-- [prover.proto:L26](proto/cli/prover.proto#L26) -->
 
