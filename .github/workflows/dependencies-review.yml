@@ -21,15 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
 
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           base-ref: ${{ github.event.pull_request.base.sha || 'main' }}
           head-ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fail-on-severity: high
+          comment-summary-in-pr: on-failure
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
@@ -55,41 +58,66 @@ jobs:
             echo "::error::govulncheck could not scan every module (make exit $status); see the step log"
             exit 1
           fi
+          printf 'ok=true\n' >> "$GITHUB_OUTPUT"
 
-          # By default govulncheck only details advisories it found reachable from our
-          # code; ones it merely finds in the module graph are summarised without an ID.
-          vulns="$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck-output.txt | sort -u || true)"
-          echo "Reachable advisories: ${vulns:-none}"
+      - name: Build vulnerability report
+        id: report
+        if: always() && steps.govuln.outputs.ok == 'true'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          LIMIT=60000
+          body="$RUNNER_TEMP/vuln-comment.md"
+          counts="$RUNNER_TEMP/vuln-counts.env"
 
-          # Accepted for now, because no fixed release exists to upgrade to. Anything with
-          # an available fix belongs in a dependency bump, not in this list. Add an ID only
-          # with a comment saying why it is accepted and what would let us drop it.
-          # - GO-2026-4479: pion/dtls/v2 AES-GCM nonce reuse. No fix on the v2 branch.
-          #                 Pulled in via libp2p -> pion/stun.
-          #                 Tracking: https://github.com/libp2p/go-libp2p/issues/3464
-          # - GO-2026-5932: golang.org/x/crypto/openpgp is unmaintained by design, so it
-          #                 has no fixed release. Reachable through cli/internal/types.
-          IGNORED_VULNS="GO-2026-4479 GO-2026-5932"
+          ./scripts/vulncheck-report.sh govulncheck-output.txt --counts "$counts" > "$body.full"
+          cat "$counts" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC1090
+          . "$counts"
 
-          unexpected=""
-          for vuln in ${vulns}; do
-            # -x so a prefix of a longer ID cannot match by accident.
-            if ! printf '%s\n' ${IGNORED_VULNS} | grep -qx "${vuln}"; then
-              unexpected="${unexpected} ${vuln}"
-            fi
-          done
+          size="$(wc -c < "$body.full" | tr -d '[:space:]')"
+          head -c "$LIMIT" "$body.full" > "$body"
+          if [ "$size" -gt "$LIMIT" ]; then
+            printf '\n\nTruncated; see the [run](%s) for the full report.\n' "$RUN_URL" >> "$body"
+          fi
+          printf '\n<sub>From `make vulncheck` on this run: [logs](%s).</sub>\n' "$RUN_URL" >> "$body"
 
-          if [ -n "${unexpected}" ]; then
-            {
-              printf '## Unexpected reachable vulnerabilities\n\n'
-              for vuln in ${unexpected}; do
-                printf -- '- [%s](https://pkg.go.dev/vuln/%s)\n' "${vuln}" "${vuln}"
-              done
-              printf '\nRun `make vulncheck` locally for the call paths. Either upgrade the\n'
-              printf 'dependency, or add the ID to IGNORED_VULNS in this workflow with a reason.\n'
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Unexpected reachable vulnerabilities:${unexpected}"
-            exit 1
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"
+          printf 'body=%s\n' "$body" >> "$GITHUB_OUTPUT"
+          echo "unexpected=$unexpected accepted=$accepted total=$total"
+
+      - name: Post or update PR comment
+        if: |
+          always() && steps.report.outcome == 'success'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          MARKER: '<!-- dependency-review:govulncheck -->'
+          BODY: ${{ steps.report.outputs.body }}
+          UNEXPECTED: ${{ steps.report.outputs.unexpected }}
+        run: |
+          set -euo pipefail
+          ids="$(gh api "repos/$REPO/issues/$PR/comments?per_page=100" --paginate \
+            --jq '.[] | select(.user.type == "Bot") | select(.body | startswith(env.MARKER)) | .id' || true)"
+          id="$(printf '%s' "$ids" | tail -n 1)"
+          if [ -n "$id" ]; then
+            jq -n --rawfile body "$BODY" '{body: $body}' \
+              | gh api --method PATCH "repos/$REPO/issues/comments/$id" --input - --silent
+            echo "Updated comment $id"
+          elif [ "${UNEXPECTED:-0}" != "0" ]; then
+            gh pr comment "$PR" --repo "$REPO" --body-file "$BODY"
+          else
+            echo "Nothing needs attention and no existing comment; not posting one."
           fi
 
-          echo "Only known and accepted vulnerabilities present. Continuing."
+      - name: Fail on unexpected vulnerabilities
+        if: steps.report.outputs.unexpected != '0'
+        env:
+          UNEXPECTED: ${{ steps.report.outputs.unexpected }}
+        run: |
+          echo "::error::${UNEXPECTED} reachable advisory/advisories without an accepted exception; see the PR comment or job summary"
+          exit 1
