@@ -2,7 +2,7 @@
 
 module github.com/cosmos/ibc/e2e
 
-go 1.26.4
+go 1.26.6
 
 // The bun-managed contracts workspace vendors the eureka repo, which ships Go
 // sources that do not belong to this module.

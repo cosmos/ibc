@@ -2,7 +2,7 @@
 
 module github.com/cosmos/ibc/gen/go/solidity-abi
 
-go 1.26.4
+go 1.26.6
 
 require github.com/ethereum/go-ethereum v1.17.5
 
