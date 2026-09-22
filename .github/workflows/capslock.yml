@@ -20,7 +20,7 @@ env:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
@@ -41,7 +41,7 @@ jobs:
     name: Baseline ${{ matrix.name }}
     needs: changes
     if: needs.changes.outputs.go == 'true'
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 30
