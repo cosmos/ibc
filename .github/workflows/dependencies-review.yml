@@ -26,6 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Resolve accepted advisories
+        id: allowlist
+        run: |
+          set -euo pipefail
+          ghsas="$(./scripts/govulncheck-ignore-ghsas.sh)"
+          echo "Accepted GHSAs: ${ghsas:-none}"
+          printf 'ghsas=%s\n' "$ghsas" >> "$GITHUB_OUTPUT"
 
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
@@ -33,6 +40,7 @@ jobs:
           head-ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fail-on-severity: high
           comment-summary-in-pr: on-failure
+          allow-ghsas: ${{ steps.allowlist.outputs.ghsas }}
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
