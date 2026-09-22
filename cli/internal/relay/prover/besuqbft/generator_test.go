@@ -21,6 +21,7 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
+	chainsbesu "github.com/cosmos/ibc/cli/internal/chains/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -79,11 +80,11 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots [][32
 	return f.proof(height, slots)
 }
 
-func (f *fakeChain) GetBesuQBFTClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
+func (f *fakeChain) ClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	return f.clientState, f.clientStateErr
 }
 
-func (f *fakeChain) GetBesuQBFTConsensusStateHash(_ context.Context, _ string, height uint64) ([32]byte, error) {
+func (f *fakeChain) ConsensusStateHash(_ context.Context, _ string, height uint64) ([32]byte, error) {
 	f.hashReads = append(f.hashReads, height)
 	r, ok := f.hashes[height]
 	if !ok {
@@ -249,7 +250,7 @@ func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 	anchor := update.Height + 5
 	env.setAnchor(t, anchor, env.fixture.InitialConsensusState())
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
-	env.host.hashes[update.Height] = hashResult{err: evm.ErrConsensusStateNotFound}
+	env.host.hashes[update.Height] = hashResult{err: chainsbesu.ErrConsensusStateNotFound}
 
 	payload, err := env.prepareUpdate(t.Context(), update.Height)
 	require.NoError(t, err)
@@ -281,7 +282,7 @@ func (e *fixtureEnv) expectProofAt(
 		proof := evm.AccountProof{AccountProof: accountNodes(t, e.fixture.Membership)}
 		for _, slot := range slots {
 			value, nodes := valueFor(slot)
-			proof.StorageProofs = append(proof.StorageProofs, evm.StorageProof{Key: slot, Value: value, Proof: nodes})
+			proof.StorageProofs = append(proof.StorageProofs, evm.StorageProof{Value: value, Proof: nodes})
 		}
 		return proof, nil
 	}
@@ -527,7 +528,7 @@ func TestPacketProofsShareSlot(t *testing.T) {
 		return evm.AccountProof{
 			AccountProof: accountNodes(t, env.fixture.NonMembership),
 			StorageProofs: []evm.StorageProof{
-				{Key: slots[0], Value: big.NewInt(0), Proof: proofNodes(t, env.fixture.NonMembership)},
+				{Value: big.NewInt(0), Proof: proofNodes(t, env.fixture.NonMembership)},
 			},
 		}, nil
 	}
@@ -652,7 +653,7 @@ func TestExpiredHistoricalTargetWithLiveAnchor(t *testing.T) {
 			if stored {
 				env.host.hashes[10] = hashResult{hash: mustHash(t, historical)}
 			} else {
-				env.host.hashes[10] = hashResult{err: evm.ErrConsensusStateNotFound}
+				env.host.hashes[10] = hashResult{err: chainsbesu.ErrConsensusStateNotFound}
 			}
 			env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(200, 0)}
 			_, err := env.gen.ClientUpdatePayload(t.Context(), 10)

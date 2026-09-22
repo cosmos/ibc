@@ -68,10 +68,6 @@ type Client struct {
 	logger        *slog.Logger
 }
 
-// ErrConsensusStateNotFound reports that a light client stores nothing at the
-// requested height.
-var ErrConsensusStateNotFound = errors.New("consensus state not found")
-
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
 	rpcClient, err := rpc.Dial(rpcURL)
@@ -144,6 +140,16 @@ func NewWithClients(chainID string, eth, ws ETHClient, ics26RouterAddress string
 
 func (c *Client) ChainID() string {
 	return c.chainID
+}
+
+// ETH returns the chain's HTTP JSON-RPC client.
+func (c *Client) ETH() ETHClient {
+	return c.eth
+}
+
+// RouterAddress returns the ICS26 router address.
+func (c *Client) RouterAddress() common.Address {
+	return c.routerAddress
 }
 
 func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.PacketEvent, error) {

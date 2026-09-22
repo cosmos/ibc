@@ -14,6 +14,8 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/chains"
+	chainsbesu "github.com/cosmos/ibc/cli/internal/chains/besu"
+	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/besuqbft"
@@ -87,7 +89,7 @@ func NewSetFromConfig(
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, cfg, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
 	})
 	if err != nil {
 		return nil, err
@@ -117,7 +119,6 @@ func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counter
 
 func addGenerator(
 	ctx context.Context,
-	cfg config.Config,
 	generators map[string]Prover,
 	connAlias string,
 	client, clientCounterparty config.ClientEnd,
@@ -144,29 +145,7 @@ func addGenerator(
 
 		return nil
 	case config.ClientTypeBesuQBFT:
-		counterpartyChain, ok := cfg.Chain(clientCounterparty.ChainID)
-		if !ok || counterpartyChain.EVM == nil {
-			return errors.Errorf(
-				"connection %q: no EVM chain config for counterparty chain %q", connAlias, clientCounterparty.ChainID,
-			)
-		}
-
-		host, ok := qbftChain(clientSet, client.ChainID)
-		if !ok {
-			return errors.Errorf("connection %q: no Besu QBFT-capable client for chain %q", connAlias, client.ChainID)
-		}
-		counterparty, ok := qbftChain(clientSet, clientCounterparty.ChainID)
-		if !ok {
-			return errors.Errorf(
-				"connection %q: no Besu QBFT-capable client for counterparty chain %q",
-				connAlias,
-				clientCounterparty.ChainID,
-			)
-		}
-
-		gen, err := besuqbft.ResolveGenerator(
-			ctx, client, counterpartyChain.EVM.ICS26Router, host, counterparty,
-		)
+		gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)
 		}
@@ -200,8 +179,35 @@ func addGenerator(
 	}
 }
 
-func qbftChain(clients *chains.ClientSet, chainID string) (besuqbft.Chain, bool) {
-	client, _ := clients.Get(chainID)
-	chain, ok := client.(besuqbft.Chain)
-	return chain, ok
+func besuQBFTGenerator(
+	ctx context.Context,
+	self, counterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+) (*besuqbft.Generator, error) {
+	host, err := besuClient(clientSet, self.ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	counterpartyClient, err := besuClient(clientSet, counterparty.ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	return besuqbft.ResolveGenerator(ctx, self, counterpartyClient.RouterAddress().Hex(), host, counterpartyClient)
+}
+
+// besuClient wraps chainID's EVM client from clientSet for Besu reads.
+func besuClient(clientSet *chains.ClientSet, chainID string) (*chainsbesu.Client, error) {
+	client, ok := clientSet.Get(chainID)
+	if !ok {
+		return nil, errors.Errorf("no client for chain %q", chainID)
+	}
+
+	evmClient, ok := client.(*evm.Client)
+	if !ok {
+		return nil, errors.Errorf("chain %q is not an EVM chain", chainID)
+	}
+
+	return chainsbesu.New(evmClient)
 }

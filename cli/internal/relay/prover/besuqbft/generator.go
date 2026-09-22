@@ -18,6 +18,7 @@ import (
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/cli/besu"
+	chainsbesu "github.com/cosmos/ibc/cli/internal/chains/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -38,21 +39,26 @@ var (
 
 const historyHint = "the counterparty node may not serve state this old: raise its Bonsai history limit or use an archive node"
 
-// Chain provides the EVM reads the Besu QBFT prover needs.
-type Chain interface {
+// Host is the chain the light client lives on. It needs no Besu consensus:
+// any EVM chain hosting the contract qualifies.
+type Host interface {
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+	ClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
+	ConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error)
+}
+
+// Counterparty is the Besu chain the light client tracks.
+type Counterparty interface {
 	ChainID() string
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	SealedHeader(ctx context.Context, height uint64) (*besu.Header, error)
 	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.AccountProof, error)
-	GetBesuQBFTClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
-	GetBesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error)
 }
 
-// Generator implements prover.Prover for one Besu QBFT light client. host is
-// the chain the client lives on; counterparty is the Besu chain it tracks.
+// Generator implements prover.Prover for one Besu QBFT light client.
 type Generator struct {
-	host         Chain
-	counterparty Chain
+	host         Host
+	counterparty Counterparty
 	clientID     string
 }
 
@@ -76,7 +82,7 @@ func consensusOf(header *besu.Header) besumsgs.IBesuLightClientMsgsConsensusStat
 
 // New builds a Generator without touching either chain; ResolveGenerator is
 // the production entry point.
-func New(host, counterparty Chain, clientID string) *Generator {
+func New(host Host, counterparty Counterparty, clientID string) *Generator {
 	return &Generator{host: host, counterparty: counterparty, clientID: clientID}
 }
 
@@ -87,7 +93,8 @@ func ResolveGenerator(
 	ctx context.Context,
 	self config.ClientEnd,
 	counterpartyRouter string,
-	host, counterpartyChain Chain,
+	host Host,
+	counterpartyChain Counterparty,
 ) (*Generator, error) {
 	gen := New(host, counterpartyChain, self.ClientID)
 	if err := gen.resolve(ctx, counterpartyRouter); err != nil {
@@ -98,7 +105,7 @@ func ResolveGenerator(
 }
 
 func (g *Generator) clientState(ctx context.Context) (besumsgs.IBesuLightClientMsgsClientState, error) {
-	state, err := g.host.GetBesuQBFTClientState(ctx, g.clientID)
+	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return state, err
 	}
@@ -243,7 +250,7 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 		return nil, err
 	}
 	if target <= state.LatestHeight.RevisionHeight {
-		stored, storedErr := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, target)
+		stored, storedErr := g.host.ConsensusStateHash(ctx, g.clientID, target)
 		switch {
 		case storedErr == nil:
 			if trustErr := checkTrustingPeriod(
@@ -262,7 +269,7 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 					ErrConflictingConsensusState, target, common.Hash(stored), hash)
 			}
 			return nil, nil
-		case !errors.Is(storedErr, evm.ErrConsensusStateNotFound):
+		case !errors.Is(storedErr, chainsbesu.ErrConsensusStateNotFound):
 			return nil, storedErr
 		}
 	}
@@ -453,7 +460,7 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besumsgs.IBesu
 	}
 
 	state := consensusOf(header)
-	stored, err := g.host.GetBesuQBFTConsensusStateHash(ctx, g.clientID, height)
+	stored, err := g.host.ConsensusStateHash(ctx, g.clientID, height)
 	if err != nil {
 		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
 	}
