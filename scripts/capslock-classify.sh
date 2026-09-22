@@ -17,8 +17,9 @@
 #
 # The tiers order the report; nothing is dropped. `moved` requires the added and removed
 # packages to share a final path element, so an unrelated removal elsewhere in the diff
-# cannot explain away a real finding. It still takes precedence over `high`, so its entries
-# name both the capability and the package the capability left -- read that section too.
+# cannot explain away a real finding. A high-signal capability stays in `high` even when a
+# move pairing is found: the pairing is a heuristic and `high` is the count the CI gate
+# reads, so the entry names the package the capability left and a reviewer decides.
 #
 # With --counts, writes `key=value` lines (high, moved, low, added, removed) suitable for
 # sourcing or for appending to $GITHUB_OUTPUT.
@@ -37,11 +38,24 @@ die() {
   exit 2
 }
 
+# The header comment is the help text. Printing it up to the first non-comment line, rather
+# than to a hardcoded line number, keeps the two from drifting apart as the comment is
+# edited -- a stale range silently spills the script's own code into `--help`.
+usage() {
+  sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"
+}
+
+# `shift 2` past the end of the arguments fails under `set -e`, which would exit 1 with no
+# message at all, so a flag's value is checked before it is consumed.
+need_value() {
+  [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
+}
+
 while (($# > 0)); do
   case "$1" in
-    --counts) COUNTS="${2:-}"; shift 2 ;;
-    --high-signal) HIGH_SIGNAL="${2:-}"; shift 2 ;;
-    -h | --help) sed -n '3,26p' "${BASH_SOURCE[0]}" | sed 's|^# \{0,1\}||'; exit 0 ;;
+    --counts) need_value "$@"; COUNTS="$2"; shift 2 ;;
+    --high-signal) need_value "$@"; HIGH_SIGNAL="$2"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
     -*) die "unknown argument '$1'" ;;
     *) REPORT="$1"; shift ;;
   esac
@@ -134,8 +148,12 @@ END {
   for (i = 1; i <= n_add; i++) {
     cap = add_cap[i]
     moved_from[i] = find_move(cap, add_pkg[i])
-    if (moved_from[i] != "") tier[i] = "moved"
-    else if (is_high(cap)) tier[i] = "high"
+    # A high-signal capability is never demoted by the move heuristic: pairing on a shared
+    # final path element is a guess, and `high` is the count CI blocks on, so letting an
+    # unrelated removal produce a pairing would silently disarm the gate. The pairing is
+    # reported alongside the finding instead, for a reviewer to dismiss.
+    if (is_high(cap)) tier[i] = "high"
+    else if (moved_from[i] != "") tier[i] = "moved"
     else tier[i] = "low"
     n_tier[tier[i]]++
   }
@@ -146,7 +164,12 @@ END {
     print "signature of a compromised release. Read each call path before merging.\n"
     for (i = 1; i <= n_add; i++)
       if (tier[i] == "high") {
-        printf "- `%s` gained **%s**\n\n```\n%s```\n\n", add_pkg[i], add_cap[i], add_path[i]
+        printf "- `%s` gained **%s**", add_pkg[i], add_cap[i]
+        # Noted, not acted on: the same capability leaving a like-named package often means
+        # a move, but only a reviewer can confirm the two packages are the same code.
+        if (moved_from[i] != "")
+          printf " (the same capability left `%s` in this diff, so this may be a package move -- confirm the pairing)", moved_from[i]
+        printf "\n\n```\n%s```\n\n", add_path[i]
       }
   }
 

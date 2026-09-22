@@ -33,11 +33,24 @@ die() {
   exit 2
 }
 
+# The header comment is the help text. Printing it up to the first non-comment line, rather
+# than to a hardcoded line number, keeps the two from drifting apart as the comment is
+# edited -- a stale range silently spills the script's own code into `--help`.
+usage() {
+  sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"
+}
+
+# `shift 2` past the end of the arguments fails under `set -e`, which would exit 1 with no
+# message at all, so a flag's value is checked before it is consumed.
+need_value() {
+  [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
+}
+
 while (($# > 0)); do
   case "$1" in
-    --counts) COUNTS="${2:-}"; shift 2 ;;
-    --ignore-file) IGNORE_FILE="${2:-}"; shift 2 ;;
-    -h | --help) sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's|^# \{0,1\}||'; exit 0 ;;
+    --counts) need_value "$@"; COUNTS="$2"; shift 2 ;;
+    --ignore-file) need_value "$@"; IGNORE_FILE="$2"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
     -*) die "unknown argument '$1'" ;;
     *) REPORT="$1"; shift ;;
   esac
@@ -71,9 +84,15 @@ rows="$(jq -rs --arg prefix "${OUR_PREFIX}" '
       summary: (($osvs[.osv].summary // "") | gsub("[|\n]"; " "))
     })
   | group_by(.id)
-  | map(.[0] + {ours: (map(.ours) | unique | join(", "))})
+  # One row per advisory, but our modules are separate go.mod files: the same advisory can
+  # be reached at a different version from each, so versions are unioned rather than taken
+  # from an arbitrary finding in the group.
+  | map(.[0] + {
+      versions: (map(.version) | map(select(. != "")) | unique | join(", ")),
+      ours: (map(.ours) | unique | join(", "))
+    })
   | .[]
-  | [.library, .version, .id, .cves, .fixed, .ours, .summary]
+  | [.library, .versions, .id, .cves, .fixed, .ours, .summary]
   | @tsv
 ' "${REPORT}")"
 
@@ -91,9 +110,9 @@ function display_library(lib) { return lib == "stdlib" ? "Go standard library" :
 # gsub on a local copy: gensub is a GNU extension and this has to run under mawk too.
 function commas(s) { gsub(/ /, ", ", s); return s }
 
-# Group metadata is unioned, never assigned: our modules are separate go.mod files, so two
-# advisories for the same library can legitimately report different versions in use, and
-# each advisory reaches a different set of our modules.
+# Group metadata is unioned, never assigned: our modules are separate go.mod files, so one
+# library can legitimately be in use at several versions -- across two advisories or within
+# a single one -- and each advisory reaches a different set of our modules.
 function add_unique(cur, item,    n, parts, i) {
   if (item == "") return cur
   if (cur == "") return item
@@ -113,9 +132,17 @@ function display_version(lib, v) {
   sub(/^v/, "", v)
   return "go" v
 }
+# The version column is a list, one entry per version of the library an advisory was reached
+# at, so each entry is labelled and quoted before being unioned into the heading.
+function display_versions(lib, list,    n, parts, i, out) {
+  n = split(list, parts, ", ")
+  for (i = 1; i <= n; i++)
+    if (parts[i] != "") out = add_unique(out, "`" display_version(lib, parts[i]) "`")
+  return out
+}
 
 NF >= 3 {
-  lib = $1; ver = $2; id = $3; cves = $4; fixed = $5; ours = $6; summary = $7
+  lib = $1; vers = $2; id = $3; cves = $4; fixed = $5; ours = $6; summary = $7
   tier = is_ignored(id) ? "accepted" : "unexpected"
   # stdlib sorts after third-party libraries: it is the least likely to be a supply-chain
   # problem and is fixed in one place.
@@ -123,7 +150,7 @@ NF >= 3 {
   if (!(key in seen_key)) { seen_key[key] = 1; keys[++n_keys] = key }
   n_rows[key]++
   rows[key, n_rows[key]] = id "\t" cves "\t" fixed "\t" summary
-  version[key] = add_unique(version[key], "`" display_version(lib, ver) "`")
+  version[key] = merge_list(version[key], display_versions(lib, vers))
   affects[key] = merge_list(affects[key], ours)
   n_tier[tier]++
   if (!(tier SUBSEP lib in seen_lib)) { seen_lib[tier SUBSEP lib] = 1; n_libs[tier]++ }
@@ -144,12 +171,13 @@ END {
   }
 
   emit("unexpected", "### :rotating_light: Needs attention")
-  emit("accepted", "### Accepted")
-
+  # Printed before the accepted section: this advice is about the advisories that still need
+  # a fix, and under a later heading it would read as applying to the accepted ones.
   if (n_tier["unexpected"] > 0) {
     print "Run `make vulncheck` for the call paths. Either upgrade the library, or add the"
     print "advisory to `.govulncheck-ignore` with a reason if no fix exists yet."
   }
+  emit("accepted", "### Accepted")
 
   if (counts_file != "") {
     printf "unexpected=%d\n", n_tier["unexpected"] + 0 > counts_file

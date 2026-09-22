@@ -28,10 +28,23 @@ die() {
   exit 2
 }
 
+# The header comment is the help text. Printing it up to the first non-comment line, rather
+# than to a hardcoded line number, keeps the two from drifting apart as the comment is
+# edited -- a stale range silently spills the script's own code into `--help`.
+usage() {
+  sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"
+}
+
+# `shift 2` past the end of the arguments fails under `set -e`, which would exit 1 with no
+# message at all, so a flag's value is checked before it is consumed.
+need_value() {
+  [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
+}
+
 while (($# > 0)); do
   case "$1" in
-    --ignore-file) IGNORE_FILE="${2:-}"; shift 2 ;;
-    -h | --help) sed -n '3,19p' "${BASH_SOURCE[0]}" | sed 's|^# \{0,1\}||'; exit 0 ;;
+    --ignore-file) need_value "$@"; IGNORE_FILE="$2"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
     *) die "unknown argument '$1'" ;;
   esac
 done
