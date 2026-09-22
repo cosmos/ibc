@@ -46,11 +46,14 @@ jobs:
         id: govuln
         env:
           GOVULNCHECK_VERSION: ${{ env.GOVULNCHECK_VERSION }}
+          VULNCHECK_JSON: ${{ runner.temp }}/govulncheck.json
         run: |
           set -uo pipefail
+          # JSON rather than the text target: only the JSON output carries the advisory
+          # aliases, which is where the CVE identifiers come from.
           # Guarded so the -e this step runs under cannot abort before the message below.
           status=0
-          make vulncheck 2>&1 | tee govulncheck-output.txt || status=$?
+          make vulncheck-json || status=$?
 
           # The target reports findings without failing, so a non-zero status here means a
           # module could not be scanned and this run tells us nothing about it.
@@ -65,13 +68,14 @@ jobs:
         if: always() && steps.govuln.outputs.ok == 'true'
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VULNCHECK_JSON: ${{ runner.temp }}/govulncheck.json
         run: |
           set -euo pipefail
           LIMIT=60000
           body="$RUNNER_TEMP/vuln-comment.md"
           counts="$RUNNER_TEMP/vuln-counts.env"
 
-          ./scripts/vulncheck-report.sh govulncheck-output.txt --counts "$counts" > "$body.full"
+          ./scripts/vulncheck-report.sh "$VULNCHECK_JSON" --counts "$counts" > "$body.full"
           cat "$counts" >> "$GITHUB_OUTPUT"
           # shellcheck disable=SC1090
           . "$counts"
@@ -81,7 +85,7 @@ jobs:
           if [ "$size" -gt "$LIMIT" ]; then
             printf '\n\nTruncated; see the [run](%s) for the full report.\n' "$RUN_URL" >> "$body"
           fi
-          printf '\n<sub>From `make vulncheck` on this run: [logs](%s).</sub>\n' "$RUN_URL" >> "$body"
+          printf '\n<sub>From `make vulncheck-json` on this run: [logs](%s).</sub>\n' "$RUN_URL" >> "$body"
 
           cat "$body" >> "$GITHUB_STEP_SUMMARY"
           printf 'body=%s\n' "$body" >> "$GITHUB_OUTPUT"
@@ -118,6 +122,7 @@ jobs:
         if: steps.report.outputs.unexpected != '0'
         env:
           UNEXPECTED: ${{ steps.report.outputs.unexpected }}
+          LIBRARIES: ${{ steps.report.outputs.libraries }}
         run: |
-          echo "::error::${UNEXPECTED} reachable advisory/advisories without an accepted exception; see the PR comment or job summary"
+          echo "::error::${UNEXPECTED} reachable advisories across ${LIBRARIES} librar(y/ies) with no accepted exception; see the PR comment or job summary"
           exit 1
