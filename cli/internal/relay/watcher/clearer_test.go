@@ -128,7 +128,7 @@ func TestClearerClear(t *testing.T) {
 		result, err := newClearer(chain, db, Config{}).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
-		assert.Equal(t, Result{Probed: 5, Outstanding: 2, Recovered: 2}, result)
+		assert.Equal(t, Result{CommitmentsQueried: 5, CommitmentsLive: 2, PacketsRecovered: 2}, result)
 		assert.Equal(t, []uint64{3, 5}, recorded(t, db))
 		assert.Equal(t, store.ClearingState{LastProbed: 5}, clearingState(t, db))
 
@@ -156,7 +156,7 @@ func TestClearerClear(t *testing.T) {
 		result, err := newClearer(chain, db, Config{}).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
-		assert.Equal(t, Result{Probed: 3}, result)
+		assert.Equal(t, Result{CommitmentsQueried: 3}, result)
 		assert.Empty(t, recorded(t, db))
 		assert.Empty(t, chain.findCalls())
 	})
@@ -174,7 +174,7 @@ func TestClearerClear(t *testing.T) {
 
 		// the endpoint served the send, so declining to record it resolves it:
 		// carrying it would re-probe a packet no pass can ever relay
-		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1}, result)
+		assert.Equal(t, Result{CommitmentsQueried: 2, CommitmentsLive: 2, PacketsRecovered: 1}, result)
 		assert.Equal(t, []uint64{2}, recorded(t, db))
 		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 
@@ -206,11 +206,36 @@ func TestClearerClear(t *testing.T) {
 				result, err := newClearer(chain, db, Config{}).Clear(ctx, sourceClientID)
 				require.NoError(t, err)
 
-				assert.Equal(t, Result{Probed: 2, Outstanding: 2, AlreadyHeld: 1, Recovered: 1}, result)
+				assert.Equal(
+					t,
+					Result{CommitmentsQueried: 1, CommitmentsLive: 1, PacketsAlreadyStored: 1, PacketsRecovered: 1},
+					result,
+				)
 				assert.Equal(t, []uint64{1, 2}, recorded(t, db))
+				assert.Equal(t, [][]uint64{{2}}, chain.probeCalls())
 				assert.Equal(t, [][]uint64{{2}}, chain.findCalls())
 			})
 		}
+	})
+
+	t.Run("onlyMissingSequencesHaveTheirCommitmentsQueried", func(t *testing.T) {
+		// ARRANGE
+		chain := newFakeChain(t)
+		chain.sendSequences(1, 2, 3, 4, 5)
+
+		db := watcherStore(t)
+		hold(t, db, 2, store.RelayStatusPending)
+		hold(t, db, 4, store.RelayStatusPending)
+
+		// ACT
+		result, err := newClearer(chain, db, Config{}).Clear(ctx, sourceClientID)
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, 3, result.CommitmentsQueried)
+		assert.Equal(t, 2, result.PacketsAlreadyStored)
+		assert.Equal(t, [][]uint64{{1, 3, 5}}, chain.probeCalls())
+		assert.Equal(t, []uint64{1, 2, 3, 4, 5}, recorded(t, db))
 	})
 
 	t.Run("theSkipQueryIsBoundedByTheWatermark", func(t *testing.T) {
@@ -241,7 +266,7 @@ func TestClearerClear(t *testing.T) {
 		result, err := newClearer(chain, db, Config{}).Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
-		assert.Equal(t, 2, result.Probed)
+		assert.Equal(t, 2, result.CommitmentsQueried)
 		assert.Equal(t, []uint64{1, 2}, chain.probeCalls()[0])
 		assert.Equal(t, uint64(2), clearingState(t, db).LastProbed)
 	})
@@ -300,8 +325,8 @@ func TestClearerClear(t *testing.T) {
 
 		// ASSERT
 		require.NoError(t, err)
-		assert.Equal(t, sent, result.Probed)
-		assert.Equal(t, sent, result.Recovered)
+		assert.Equal(t, sent, result.CommitmentsQueried)
+		assert.Equal(t, sent, result.PacketsRecovered)
 		assert.Equal(t, [][]uint64{sequenceRange(1, sent)}, chain.probeCalls())
 		assert.Equal(t, [][]uint64{
 			sequenceRange(1, chunkSizeSendEvents),
@@ -332,7 +357,7 @@ func TestClearerClear(t *testing.T) {
 
 		release()
 
-		assert.Equal(t, 2, (<-done).Probed)
+		assert.Equal(t, 2, (<-done).CommitmentsQueried)
 	})
 
 	t.Run("aWarmPassProbesOnlyWhatTheWatermarkHasNotSettled", func(t *testing.T) {
@@ -355,7 +380,7 @@ func TestClearerClear(t *testing.T) {
 
 		// ASSERT #1
 		require.NoError(t, err)
-		assert.Equal(t, int(sent), cold.Probed)
+		assert.Equal(t, int(sent), cold.CommitmentsQueried)
 		assert.Equal(t, [][]uint64{sequenceRange(1, sent)}, chain.probeCalls())
 
 		// ARRANGE #2
@@ -367,7 +392,7 @@ func TestClearerClear(t *testing.T) {
 
 		// ASSERT #2
 		require.NoError(t, err)
-		assert.Equal(t, 1, warm.Probed)
+		assert.Equal(t, 1, warm.CommitmentsQueried)
 		assert.Equal(t, [][]uint64{{sent + 1}}, chain.probeCalls()[coldCalls:])
 	})
 
@@ -384,7 +409,11 @@ func TestClearerClear(t *testing.T) {
 
 		// the pruned send has no row and sits below the watermark, so only the
 		// unresolved set keeps it in the probe
-		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1, Unresolved: 1}, result)
+		assert.Equal(
+			t,
+			Result{CommitmentsQueried: 2, CommitmentsLive: 2, PacketsRecovered: 1, SeqsUnresolved: 1},
+			result,
+		)
 		assert.Equal(t, []uint64{2}, recorded(t, db))
 		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
 
@@ -394,7 +423,7 @@ func TestClearerClear(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, [][]uint64{{1}}, chain.probeCalls()[before:])
-		assert.Equal(t, 1, result.Unresolved)
+		assert.Equal(t, 1, result.SeqsUnresolved)
 
 		// an ack or a timeout deletes the commitment, which is the only thing
 		// that drains the set
@@ -403,7 +432,7 @@ func TestClearerClear(t *testing.T) {
 		result, err = clearer.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
-		assert.Zero(t, result.Unresolved)
+		assert.Zero(t, result.SeqsUnresolved)
 		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 	})
 
@@ -468,7 +497,7 @@ func TestClearerClear(t *testing.T) {
 		require.NoError(t, err)
 		// not outstanding at the pinned height, so this pass does not look up
 		// its send log. the store keeps it: delete is gated on last_seen
-		assert.Equal(t, Result{Probed: 2, Outstanding: 1, Recovered: 1}, result)
+		assert.Equal(t, Result{CommitmentsQueried: 2, CommitmentsLive: 1, PacketsRecovered: 1}, result)
 		assert.Equal(t, []uint64{3}, recorded(t, db))
 		assert.Equal(t, store.ClearingState{LastProbed: 3, Unresolved: []uint64{1}}, clearingState(t, db))
 		assert.Equal(t, [][]uint64{{3}, {1}}, chain.probeCalls())
@@ -486,7 +515,11 @@ func TestClearerClear(t *testing.T) {
 		result, err := abandoning.Clear(ctx, sourceClientID)
 		require.NoError(t, err)
 
-		assert.Equal(t, Result{Probed: 2, Outstanding: 2, Recovered: 1, Abandoned: 1}, result)
+		assert.Equal(
+			t,
+			Result{CommitmentsQueried: 2, CommitmentsLive: 2, PacketsRecovered: 1, SeqsAbandoned: 1},
+			result,
+		)
 		assert.Equal(t, []uint64{2}, recorded(t, db))
 		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
 
@@ -497,7 +530,7 @@ func TestClearerClear(t *testing.T) {
 
 		// on record but out of the probe, so it costs the pass nothing
 		assert.Empty(t, chain.probeCalls()[before:])
-		assert.Equal(t, 1, result.Abandoned)
+		assert.Equal(t, 1, result.SeqsAbandoned)
 		assert.Equal(t, store.ClearingState{LastProbed: 2, Unresolved: []uint64{1}}, clearingState(t, db))
 
 		// an archive endpoint turns up later: turning the setting off is the
@@ -508,7 +541,7 @@ func TestClearerClear(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, [][]uint64{{1}}, chain.probeCalls()[before:])
-		assert.Equal(t, Result{Probed: 1, Outstanding: 1, Recovered: 1}, result)
+		assert.Equal(t, Result{CommitmentsQueried: 1, CommitmentsLive: 1, PacketsRecovered: 1}, result)
 		assert.Equal(t, []uint64{1, 2}, recorded(t, db))
 		assert.Equal(t, store.ClearingState{LastProbed: 2}, clearingState(t, db))
 	})
@@ -563,7 +596,7 @@ func TestClearerClear(t *testing.T) {
 		// ASSERT
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{5}, chain.probeHeights())
-		assert.Equal(t, Result{Probed: 1, Outstanding: 1, Recovered: 1}, result)
+		assert.Equal(t, Result{CommitmentsQueried: 1, CommitmentsLive: 1, PacketsRecovered: 1}, result)
 		assert.Equal(t, []uint64{1}, recorded(t, db))
 	})
 
@@ -612,4 +645,13 @@ func TestUnresolvedDelta(t *testing.T) {
 			assert.Equal(t, uint64(42), delta.Height)
 		})
 	}
+}
+
+func sequenceRange(from, to uint64) []uint64 {
+	sequences := make([]uint64, 0, to-from+1)
+	for sequence := from; sequence <= to; sequence++ {
+		sequences = append(sequences, sequence)
+	}
+
+	return sequences
 }
