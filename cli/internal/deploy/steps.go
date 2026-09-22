@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
@@ -499,13 +501,44 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 	conflict("counterpartyChainId", existing.CounterpartyChainID, spec.CounterpartyChainID)
 	conflict("counterpartyClientId", existing.CounterpartyClientID, spec.CounterpartyClientID)
 	if p, ok := spec.Params.(AttestationParams); ok && spec.Type == ClientTypeAttestation {
-		conflict("attestors", existing.Params["attestors"], p.Attestors)
+		conflict("attestors", canonicalAddresses(existing.Params["attestors"]), canonicalAddresses(p.Attestors))
 		conflict("threshold", existing.Params["threshold"], p.Threshold)
 	}
 	if p, ok := spec.Params.(BesuQBFTParams); ok && spec.Type == ClientTypeBesuQBFT {
-		conflict("ibcRouter", existing.Params["ibcRouter"], p.IBCRouter)
+		conflict("ibcRouter", canonicalAddresses(existing.Params["ibcRouter"]), canonicalAddresses(p.IBCRouter))
 		conflict("trustingPeriod", existing.Params["trustingPeriod"], p.TrustingPeriod)
 		conflict("maxClockDrift", existing.Params["maxClockDrift"], p.MaxClockDrift)
 	}
 	return diffs
+}
+
+// canonicalAddresses rewrites hex addresses in v (a string or a list of
+// strings) to their checksummed form, so a respelled address is not a
+// conflict. Anything else is returned unchanged.
+func canonicalAddresses(v any) any {
+	switch value := v.(type) {
+	case string:
+		if common.IsHexAddress(value) {
+			return common.HexToAddress(value).Hex()
+		}
+	case []string:
+		if value == nil {
+			return nil
+		}
+		out := make([]any, len(value))
+		for i, s := range value {
+			out[i] = canonicalAddresses(s)
+		}
+		return out
+	case []any:
+		if value == nil {
+			return nil
+		}
+		out := make([]any, len(value))
+		for i, s := range value {
+			out[i] = canonicalAddresses(s)
+		}
+		return out
+	}
+	return v
 }

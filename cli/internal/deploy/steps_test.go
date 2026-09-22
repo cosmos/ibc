@@ -288,6 +288,24 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	require.Equal(t, []any{"0xa"}, c.Params["attestors"].([]any))
 }
 
+func TestClientConflictsIgnoreAddressSpelling(t *testing.T) {
+	existing := manifest.Client{
+		Type: ClientTypeAttestation,
+		Params: map[string]any{
+			"attestors": []any{"0x00000000000000000000000000000000000000aa"},
+			"threshold": float64(1),
+		},
+	}
+	spec := ClientSpec{
+		Type:   ClientTypeAttestation,
+		Params: AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000AA"}, Threshold: 1},
+	}
+	require.Empty(t, clientConflicts(existing, spec))
+
+	spec.Params = AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000bb"}, Threshold: 1}
+	require.Len(t, clientConflicts(existing, spec), 1)
+}
+
 // initialHeight/initialTimestamp default from the live counterparty head and
 // change every invocation; they are launch-time trusted state, not client
 // identity, so a rerun differing only in them skips cleanly and leaves the
@@ -700,6 +718,15 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
 	require.Equal(t, 1, target.registers)
+
+	// a respelled router is the same address, not a conflict
+	respelled := besuQBFTSpec()
+	p = respelled.Params.(BesuQBFTParams)
+	p.IBCRouter = "0x00000000000000000000000000000000000000CC"
+	respelled.Params = p
+	res, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", respelled))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
 
 	// identity fields do conflict
 	for name, mutate := range map[string]func(*BesuQBFTParams){

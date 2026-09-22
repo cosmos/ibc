@@ -285,7 +285,10 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 		router     string
 		wantErr    string
 	}{
-		{name: "omitted", wantErr: "--trusting-period is required for a new besu-qbft client"},
+		{
+			name: "omitted", router: "0x00000000000000000000000000000000000000bb",
+			wantErr: "--trusting-period is required for a new besu-qbft client",
+		},
 		{name: "explicit zero", args: []string{"--trusting-period=0"}, wantErr: "--trusting-period must be positive"},
 		{
 			name: "finite without manifest", args: []string{"--trusting-period=2h"}, wantPeriod: 7200,
@@ -373,18 +376,21 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 
 	flags := newFlags()
 	require.NoError(t, flags.Parse([]string{"--trusting-period=2h"}))
-	_, err := besuQBFTParams(context.Background(), "", flags, &sourcelessTarget{}, "1", "2", "cli-new")
+	_, err := besuQBFTParams(context.Background(), recorded.IBCRouter, flags, &sourcelessTarget{}, "1", "2", "cli-new")
 	require.ErrorContains(t, err, "cannot serve a besu-qbft trusted state")
 
 	for _, tc := range []struct {
 		name         string
 		args         []string
+		router       string
 		wantParamErr string
 		wantConflict string
 	}{
 		{name: "defaults preserve recorded settings"},
 		{name: "matching settings", args: []string{"--trusting-period=2h", "--max-clock-drift=15s"}},
 		{name: "changed period", args: []string{"--trusting-period=1h"}, wantConflict: "trustingPeriod"},
+		{name: "changed router", router: "0x00000000000000000000000000000000000000dd", wantConflict: "ibcRouter"},
+		{name: "missing router", router: "0x0000000000000000000000000000000000000000", wantParamErr: "evm.ics26Router"},
 		{name: "explicit zero period", args: []string{"--trusting-period=0s"}, wantParamErr: "must be positive"},
 		{name: "zero drift", args: []string{"--max-clock-drift=0s"}, wantConflict: "maxClockDrift"},
 		{name: "explicit default drift", args: []string{"--max-clock-drift=60s"}, wantConflict: "maxClockDrift"},
@@ -396,7 +402,11 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := newFlags()
 			require.NoError(t, flags.Parse(tc.args))
-			params, err := besuQBFTParams(context.Background(), "", flags, nil, "1", "2", "cli-1-2")
+			router := tc.router
+			if router == "" {
+				router = recorded.IBCRouter
+			}
+			params, err := besuQBFTParams(context.Background(), router, flags, nil, "1", "2", "cli-1-2")
 			if tc.wantParamErr != "" {
 				require.ErrorContains(t, err, tc.wantParamErr)
 				return
@@ -451,7 +461,7 @@ func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
 				require.ErrorContains(t, err, path)
 				_, err = besuQBFTParams(
 					t.Context(),
-					"",
+					"0x00000000000000000000000000000000000000cc",
 					pflag.NewFlagSet("test", pflag.ContinueOnError),
 					&sourcelessTarget{},
 					"1",

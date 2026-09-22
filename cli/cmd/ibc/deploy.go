@@ -388,6 +388,11 @@ func besuQBFTParams(
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
 	}
+	if !common.IsHexAddress(counterpartyRouter) || common.HexToAddress(counterpartyRouter) == (common.Address{}) {
+		return deploy.BesuQBFTParams{}, errors.Errorf(
+			"counterparty chain %s needs a valid nonzero evm.ics26Router in config", counterpartyChainID,
+		)
+	}
 	recorded, ok, err := recordedClient(chainID, clientID)
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
@@ -397,6 +402,9 @@ func besuQBFTParams(
 		if decodeErr != nil {
 			return deploy.BesuQBFTParams{}, decodeErr
 		}
+		// the configured router always wins so a redeployed counterparty core
+		// surfaces as a conflict in Done rather than at relayer startup
+		params.IBCRouter = counterpartyRouter
 		if flags.Changed(flagNameTrustingPeriod) {
 			params.TrustingPeriod = trustingPeriod
 		}
@@ -414,11 +422,6 @@ func besuQBFTParams(
 	if !ok {
 		return deploy.BesuQBFTParams{}, errors.Errorf(
 			"counterparty chain %s cannot serve a besu-qbft trusted state", counterpartyChainID,
-		)
-	}
-	if !common.IsHexAddress(counterpartyRouter) || common.HexToAddress(counterpartyRouter) == (common.Address{}) {
-		return deploy.BesuQBFTParams{}, errors.Errorf(
-			"counterparty chain %s needs a valid nonzero evm.ics26Router in config", counterpartyChainID,
 		)
 	}
 	height := flagDeployHeight
