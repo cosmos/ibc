@@ -137,6 +137,8 @@ func (w *Watcher) Start() error {
 	w.cancel = cancel
 	w.wg.Add(2)
 
+	// note that these routines have no panic recovery on purpose.
+	// panic in clearing/subscription routine explicitly crashes the program.
 	go func() {
 		defer w.wg.Done()
 		w.runClearer(ctx)
@@ -242,12 +244,6 @@ func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (st
 // connects to live events and recovers broken subscriptions.
 func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 	defer func() {
-		if p := recover(); p != nil {
-			w.logger.Error("Panic recovery in running live subscription", "panic", p)
-		}
-	}()
-
-	defer func() {
 		eventStream.close(true)
 	}()
 
@@ -299,12 +295,6 @@ func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 }
 
 func (w *Watcher) runClearer(ctx context.Context) {
-	defer func() {
-		if p := recover(); p != nil {
-			w.logger.Error("Panic recovery in running clearer", "panic", p)
-		}
-	}()
-
 	// optional first iteration
 	if w.cfg.CleanOnStart {
 		w.clear(ctx)
