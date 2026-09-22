@@ -40,22 +40,27 @@ func testClientSet(t *testing.T) *chains.ClientSet {
 
 func TestNewSetFromConfig(t *testing.T) {
 	t.Run("oneWatcherPerAutoRelayedChain", func(t *testing.T) {
-		set, err := NewSetFromConfig(testSetConfig(true), testClientSet(t), newPacketStore(nil), slog.Default())
+		set, err := NewSetFromConfig(testSetConfig(true), testClientSet(t), watcherStore(t), slog.Default())
 		require.NoError(t, err)
 		require.Len(t, set, 1)
 		assert.Equal(t, sourceChainID, set[0].chainID)
 		assert.Equal(t, []string{sourceClientID}, set[0].clientIDs)
+		assert.Equal(t, DefaultMinBackoff, set[0].cfg.MinBackoff)
+		assert.Equal(t, DefaultMaxBackoff, set[0].cfg.MaxBackoff)
+		assert.Equal(t, config.DefaultClearInterval, set[0].cfg.ClearInterval)
+		assert.True(t, set[0].cfg.CleanOnStart)
+		assert.False(t, set[0].cfg.AbandonUnrecoverablePackets)
 	})
 
 	t.Run("noAutoRelayedEndsWatchNothing", func(t *testing.T) {
-		set, err := NewSetFromConfig(testSetConfig(false), testClientSet(t), newPacketStore(nil), slog.Default())
+		set, err := NewSetFromConfig(testSetConfig(false), testClientSet(t), watcherStore(t), slog.Default())
 		require.NoError(t, err)
 		assert.Empty(t, set)
 	})
 
 	t.Run("missingChainClientErrors", func(t *testing.T) {
 		set, err := NewSetFromConfig(
-			testSetConfig(true), chains.NewClientSet(nil), newPacketStore(nil), slog.Default(),
+			testSetConfig(true), chains.NewClientSet(nil), watcherStore(t), slog.Default(),
 		)
 		require.ErrorContains(t, err, sourceChainID)
 		assert.Nil(t, set)
@@ -67,27 +72,30 @@ func TestNewSetFromConfig(t *testing.T) {
 // startup that failed.
 func TestSetStartUnwinds(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		running, failing := newChain(), newChain()
-		failing.failNext(errors.New("dial failed"))
+		running, failing := newFakeChain(t), newFakeChain(t)
+		failing.failNextSub(errors.New("dial failed"))
 
 		set := Set{
-			newTestWatcher(running, newPacketStore(nil)),
-			newTestWatcher(failing, newPacketStore(nil)),
+			newTestWatcher(running, watcherStore(t)),
+			newTestWatcher(failing, watcherStore(t)),
 		}
 
 		require.ErrorContains(t, set.Start(), sourceChainID)
 		synctest.Wait()
 
-		assert.True(t, running.unsubscribed)
+		assert.True(t, running.latestSub().unsubscribed)
 	})
 }
 
 func TestSetStartStop(t *testing.T) {
-	c := newChain()
-	set := Set{newTestWatcher(c, newPacketStore(nil))}
+	synctest.Test(t, func(t *testing.T) {
+		chain := newFakeChain(t)
+		set := Set{newTestWatcher(chain, watcherStore(t))}
 
-	require.NoError(t, set.Start())
-	require.NoError(t, set.Stop())
+		require.NoError(t, set.Start())
+		synctest.Wait()
 
-	assert.True(t, c.unsubscribed)
+		require.NoError(t, set.Stop())
+		assert.True(t, chain.latestSub().unsubscribed)
+	})
 }

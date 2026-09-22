@@ -209,3 +209,16 @@ func (c *meteredClient) TransactionByHash(ctx context.Context, hash common.Hash)
 
 	return tx, pending, err
 }
+
+func (c *meteredClient) StorageAt(
+	ctx context.Context,
+	account common.Address,
+	key common.Hash,
+	blockNumber *big.Int,
+) ([]byte, error) {
+	started := time.Now()
+	word, err := c.eth.StorageAt(ctx, account, key, blockNumber)
+	c.record(ctx, "eth_getStorageAt", started, err)
+
+	return word, err
+}
