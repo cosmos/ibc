@@ -271,7 +271,7 @@ func clientSpec(
 	ctx context.Context,
 	cfg config.Config,
 	flags *pflag.FlagSet,
-	counterpartyTarget deploy.Target,
+	target, counterpartyTarget deploy.Target,
 	chainID, counterpartyChainID string,
 ) (deploy.ClientSpec, error) {
 	// both ids default to one shared name: client ids are per-chain
@@ -306,7 +306,14 @@ func clientSpec(
 		// newTarget already checked that the counterparty is a configured EVM chain.
 		counterparty, _ := cfg.Chain(counterpartyChainID)
 		params, err := besuQBFTParams(
-			ctx, counterparty.EVM.ICS26Router, flags, counterpartyTarget, chainID, counterpartyChainID, clientID,
+			ctx,
+			counterparty.EVM.ICS26Router,
+			flags,
+			target,
+			counterpartyTarget,
+			chainID,
+			counterpartyChainID,
+			clientID,
 		)
 		if err != nil {
 			return deploy.ClientSpec{}, err
@@ -374,7 +381,7 @@ func besuQBFTParams(
 	ctx context.Context,
 	counterpartyRouter string,
 	flags *pflag.FlagSet,
-	counterpartyTarget deploy.Target,
+	target, counterpartyTarget deploy.Target,
 	chainID, counterpartyChainID, clientID string,
 ) (deploy.BesuQBFTParams, error) {
 	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod, flagNameTrustingPeriod)
@@ -393,16 +400,18 @@ func besuQBFTParams(
 			"counterparty chain %s needs a valid nonzero evm.ics26Router in config", counterpartyChainID,
 		)
 	}
-	recorded, ok, err := recordedClient(chainID, clientID)
+	recorded, router, ok, err := recordedClient(chainID, clientID)
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
 	}
+	haveTrustingPeriod := flags.Changed(flagNameTrustingPeriod)
 	if ok && recorded.Type == deploy.ClientTypeBesuQBFT {
 		params, decodeErr := deploy.BesuQBFTParamsFromClient(recorded)
 		if decodeErr != nil {
 			return deploy.BesuQBFTParams{}, decodeErr
 		}
-		// the configured router always wins so a redeployed counterparty core
+		// explicit flags override the recorded trust settings, and the
+		// configured router always wins so a redeployed counterparty core
 		// surfaces as a conflict in Done rather than at relayer startup
 		params.IBCRouter = counterpartyRouter
 		if flags.Changed(flagNameTrustingPeriod) {
@@ -411,9 +420,26 @@ func besuQBFTParams(
 		if flags.Changed(flagNameMaxClockDrift) {
 			params.MaxClockDrift = maxClockDrift
 		}
-		return params, nil
+		registered := false
+		if router != "" {
+			if _, registered, err = target.ClientRegistered(ctx, router, clientID); err != nil {
+				return deploy.BesuQBFTParams{}, errors.Wrapf(
+					err,
+					"check client %s registration on chain %s",
+					clientID,
+					chainID,
+				)
+			}
+		}
+		if registered {
+			return params, nil
+		}
+		// recorded but gone from the chain (reset or rollback): the client is
+		// provisioned again, so its trusted state must be read live
+		trustingPeriod, maxClockDrift = params.TrustingPeriod, params.MaxClockDrift
+		haveTrustingPeriod = true
 	}
-	if !flags.Changed(flagNameTrustingPeriod) {
+	if !haveTrustingPeriod {
 		return deploy.BesuQBFTParams{}, errors.New(
 			"--trusting-period is required for a new besu-qbft client: choose a positive duration based on validator governance",
 		)
@@ -451,21 +477,22 @@ func besuQBFTParams(
 	}, nil
 }
 
-// recordedClient returns clientID's manifest entry on chainID, if any.
-func recordedClient(chainID, clientID string) (manifest.Client, bool, error) {
+// recordedClient returns clientID's manifest entry on chainID, if any, along
+// with the recorded router.
+func recordedClient(chainID, clientID string) (manifest.Client, string, bool, error) {
 	m, err := manifest.Load(flagDeployManifestDir, chainID)
 	if err != nil {
-		return manifest.Client{}, false, errors.Wrapf(
+		return manifest.Client{}, "", false, errors.Wrapf(
 			err,
 			"load manifest %s",
 			manifest.Path(flagDeployManifestDir, chainID),
 		)
 	}
 	if m == nil {
-		return manifest.Client{}, false, nil
+		return manifest.Client{}, "", false, nil
 	}
 	c, ok := m.Client(clientID)
-	return c, ok, nil
+	return c, m.Core.Router, ok, nil
 }
 
 // wholeSeconds converts a duration flag into the contract's seconds, refusing
@@ -508,6 +535,7 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 		cmd.Context(),
 		cfg,
 		cmd.Flags(),
+		target,
 		counterpartyTarget,
 		flagDeployChain,
 		flagDeployCounterparty,

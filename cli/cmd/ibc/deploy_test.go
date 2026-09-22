@@ -304,7 +304,7 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 			flags.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, time.Minute, "")
 			require.NoError(t, flags.Parse(tc.args))
 			source := &bootstrapTarget{}
-			params, err := besuQBFTParams(t.Context(), tc.router, flags, source, "1", "2", "new-client")
+			params, err := besuQBFTParams(t.Context(), tc.router, flags, nil, source, "1", "2", "new-client")
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -330,7 +330,12 @@ func (t *bootstrapTarget) BesuQBFTTrustedState(
 	height uint64,
 ) (deploy.BesuQBFTTrustedState, error) {
 	t.called = true
-	return deploy.BesuQBFTTrustedState{Height: height, Timestamp: 1788192445}, nil
+	return deploy.BesuQBFTTrustedState{
+		Height:     height,
+		Timestamp:  1788200000,
+		StateRoot:  "0x1111111111111111111111111111111111111111111111111111111111111111",
+		Validators: []string{"0x00000000000000000000000000000000000000ee"},
+	}, nil
 }
 
 // A rerun rebuilds the constructor params from the manifest instead of the
@@ -376,7 +381,9 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 
 	flags := newFlags()
 	require.NoError(t, flags.Parse([]string{"--trusting-period=2h"}))
-	_, err := besuQBFTParams(context.Background(), recorded.IBCRouter, flags, &sourcelessTarget{}, "1", "2", "cli-new")
+	_, err := besuQBFTParams(
+		context.Background(), recorded.IBCRouter, flags, nil, &sourcelessTarget{}, "1", "2", "cli-new",
+	)
 	require.ErrorContains(t, err, "cannot serve a besu-qbft trusted state")
 
 	for _, tc := range []struct {
@@ -406,7 +413,9 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 			if router == "" {
 				router = recorded.IBCRouter
 			}
-			params, err := besuQBFTParams(context.Background(), router, flags, nil, "1", "2", "cli-1-2")
+			params, err := besuQBFTParams(
+				context.Background(), router, flags, &registeredClientTarget{}, nil, "1", "2", "cli-1-2",
+			)
 			if tc.wantParamErr != "" {
 				require.ErrorContains(t, err, tc.wantParamErr)
 				return
@@ -429,6 +438,55 @@ func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
 			require.Equal(t, recorded, params)
 		})
 	}
+
+	// the chain no longer knows the client (reset): the trusted state is read
+	// live again, with the recorded trust settings as defaults
+	t.Run("recorded but unregistered bootstraps live", func(t *testing.T) {
+		previousHeight := flagDeployHeight
+		flagDeployHeight = 1
+		t.Cleanup(func() { flagDeployHeight = previousHeight })
+
+		for _, tc := range []struct {
+			name              string
+			args              []string
+			wantPeriod, drift uint64
+		}{
+			{name: "recorded trust settings", wantPeriod: recorded.TrustingPeriod, drift: recorded.MaxClockDrift},
+			{
+				name: "overridden trust settings", args: []string{"--trusting-period=1h", "--max-clock-drift=30s"},
+				wantPeriod: 3600, drift: 30,
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				flags := newFlags()
+				require.NoError(t, flags.Parse(tc.args))
+				source := &bootstrapTarget{}
+				params, err := besuQBFTParams(
+					context.Background(),
+					recorded.IBCRouter,
+					flags,
+					&unregisteredClientTarget{},
+					source,
+					"1",
+					"2",
+					"cli-1-2",
+				)
+				require.NoError(t, err)
+				require.True(t, source.called)
+
+				live, _ := source.BesuQBFTTrustedState(context.Background(), 1)
+				require.Equal(t, deploy.BesuQBFTParams{
+					IBCRouter:         recorded.IBCRouter,
+					InitialHeight:     live.Height,
+					InitialTimestamp:  live.Timestamp,
+					InitialStateRoot:  live.StateRoot,
+					InitialValidators: live.Validators,
+					TrustingPeriod:    tc.wantPeriod,
+					MaxClockDrift:     tc.drift,
+				}, params)
+			})
+		}
+	})
 }
 
 // sourcelessTarget is a deploy.Target that is not a deploy.BesuQBFTSource.
@@ -438,6 +496,13 @@ type registeredClientTarget struct{ deploy.Target }
 
 func (*registeredClientTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
 	return "0xca", true, nil
+}
+
+// unregisteredClientTarget is a host chain that has lost its clients (reset).
+type unregisteredClientTarget struct{ deploy.Target }
+
+func (*unregisteredClientTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
 }
 
 func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
@@ -455,7 +520,7 @@ func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
 			case "missing-client":
 				require.NoError(t, manifest.New("1", "evm").Save(flagDeployManifestDir))
 			}
-			_, found, err := recordedClient("1", "client")
+			_, _, found, err := recordedClient("1", "client")
 			require.False(t, found)
 			if mode == "corrupt" || mode == "unreadable" {
 				require.ErrorContains(t, err, path)
@@ -463,6 +528,7 @@ func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
 					t.Context(),
 					"0x00000000000000000000000000000000000000cc",
 					pflag.NewFlagSet("test", pflag.ContinueOnError),
+					nil,
 					&sourcelessTarget{},
 					"1",
 					"2",
