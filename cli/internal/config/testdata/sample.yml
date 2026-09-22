@@ -26,6 +26,8 @@ chains:
       ics26Router: "0x0000000000000000000000000000000000000001"
 relayer:
   dispatchPollInterval: 3s
+  clearOnStart: false
+  clearInterval: 10m
   chainOverrides:
     - chainId: "1"
       evm:
@@ -34,6 +36,8 @@ relayer:
       txSubmissionDelay: 2s
       packetBatchSize: 20
       packetBatchTimeout: 10s
+      clearInterval: 15m
+      abandonUnrecoverablePackets: true
     - chainId: "8453"
   connections:
     - alias: "eth-base"

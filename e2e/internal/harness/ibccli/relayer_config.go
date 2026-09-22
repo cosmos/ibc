@@ -30,9 +30,15 @@ type RelayerConfig struct {
 	// checks: heights up to "latest" minus the offset count as final. The dev
 	// chains behind the harness never serve a moving "finalized" tag.
 	FinalityOffset uint64
-	Chains         []RelayerChain
-	Connections    []RelayerConnection
-	Attestors      []RelayerAttestor
+	// ClearOnStart controls whether the relayer runs a clearing pass at startup.
+	// Default is true.
+	ClearOnStart bool
+	// ClearInterval overrides the clearing cadence.
+	ClearInterval time.Duration
+
+	Chains      []RelayerChain
+	Connections []RelayerConnection
+	Attestors   []RelayerAttestor
 }
 
 // RelayerChain is one chain the relayer connects to. ChainID is the EVM
@@ -122,7 +128,11 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
 		Signers: []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
-		Relayer: &relayerFileConfig{DispatchPollInterval: "100ms"},
+		Relayer: &relayerFileConfig{
+			DispatchPollInterval: "100ms",
+			ClearOnStart:         cfg.ClearOnStart,
+			ClearInterval:        durationYAML(cfg.ClearInterval),
+		},
 	}
 
 	for _, chain := range cfg.Chains {
@@ -260,6 +270,8 @@ const (
 
 type relayerFileConfig struct {
 	DispatchPollInterval string                    `yaml:"dispatchPollInterval,omitempty"`
+	ClearOnStart         bool                      `yaml:"clearOnStart,omitempty"`
+	ClearInterval        string                    `yaml:"clearInterval,omitempty"`
 	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
 	Connections          []connectionFileConfig    `yaml:"connections"`
 }
@@ -288,6 +300,13 @@ type clientEndFileConfig struct {
 
 type autoRelayFileConfig struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+func durationYAML(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	return d.String()
 }
 
 func autoRelay(enabled bool) *autoRelayFileConfig {

@@ -21,6 +21,12 @@ make -C e2e test
 
 The test target builds `cli/bin/ibc`; `IBC_BIN` overrides that path. The real relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
 
+If tests fail to find the Docker socket (OrbStack, Colima, Desktop), set `DOCKER_HOST` from the active CLI context:
+
+```sh
+export DOCKER_HOST="$(docker context inspect | jq -r '.[0].Endpoints.docker.Host')"
+```
+
 Execution modes choose providers from each test's declared requirements:
 
 | Mode | Provider policy | Unresolved requirement |
