@@ -47,6 +47,26 @@ vulncheck: ## Report known vulnerabilities in Go dependencies
 	done; \
 	exit $$status
 
+vulncheck-json: ## Write govulncheck JSON for every Go module to VULNCHECK_JSON
+	@out="$(VULNCHECK_JSON)"; \
+	if [ -z "$$out" ]; then echo "set VULNCHECK_JSON=<file>" >&2; exit 2; fi; \
+	bindir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$bindir"' EXIT INT TERM; \
+	GOBIN="$$bindir" go install \
+		golang.org/x/vuln/cmd/govulncheck@v$(GOVULNCHECK_VERSION) || exit $$?; \
+	: > "$$out"; \
+	status=0; \
+	for dir in $(GO_MODULE_DIRS); do \
+		echo "==> govulncheck -format json $$dir" >&2; \
+		(cd $$dir && "$$bindir/govulncheck" -format json ./...) >> "$$out"; \
+		code=$$?; \
+		if [ $$code -ne 0 ] && [ $$code -ne 3 ]; then \
+			echo "govulncheck could not scan $$dir (exit $$code)" >&2; \
+			status=$$code; \
+		fi; \
+	done; \
+	exit $$status
+
 run-all-checks: ## Run "all-in-one" code validation step.
 	$(MAKE) -C cli run-all-checks
 	$(MAKE) -C e2e run-all-checks
@@ -54,4 +74,5 @@ run-all-checks: ## Run "all-in-one" code validation step.
 	$(MAKE) test-gen
 	$(MAKE) lint-license
 
-.PHONY: help lint-license lint-fix-license lint-gen lint-fix-gen test-gen vulncheck run-all-checks
+.PHONY: help lint-license lint-fix-license lint-gen lint-fix-gen test-gen vulncheck \
+	vulncheck-json run-all-checks
