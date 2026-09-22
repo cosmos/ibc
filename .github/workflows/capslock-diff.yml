@@ -75,11 +75,20 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          sha="$BASE_SHA"
-          if [ -z "$sha" ]; then
+          if [ -z "$BASE_SHA" ]; then
+            # workflow_dispatch: compare against the tip of the default branch.
             git fetch --no-tags origin "$BASE_REF"
             sha="$(git rev-parse FETCH_HEAD)"
+          elif git rev-parse -q --verify 'HEAD^2' >/dev/null; then
+            # On pull_request the checked-out ref is refs/pull/N/merge. Its first parent is
+            # the exact base commit this tree was merged onto, which is what the analysis
+            # must be compared against. The event payload's base.sha can be stale if the
+            # base branch advanced after the event was created.
+            sha="$(git rev-parse 'HEAD^1')"
+          else
+            sha="$BASE_SHA"
           fi
+          echo "Base revision: $sha (event payload reported '${BASE_SHA:-none}')"
           printf 'ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
           printf 'slug=%s\n' "$(printf '%s' "$BASE_REF" | tr '/' '-' | tr -c '[:alnum:]_.-' '-')" >> "$GITHUB_OUTPUT"
@@ -87,20 +96,15 @@ jobs:
       - name: Install Capslock
         run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
 
-      # Baselines are published by the "Capslock Capability Baseline" workflow on every
-      # push. Prefer the baseline recorded for this PR's base commit, falling back to the
-      # most recent baseline for the base branch.
       - name: Restore baseline from cache
         id: baseline-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: capslock-out/${{ matrix.name }}.json
           key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.slug }}-${{ steps.base.outputs.sha }}
-          restore-keys: |
-            capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.slug }}-
 
       - name: Generate baseline from base revision
-        if: steps.baseline-cache.outputs.cache-matched-key == ''
+        if: steps.baseline-cache.outputs.cache-hit != 'true'
         env:
           BASE_REF: ${{ steps.base.outputs.ref }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
@@ -130,14 +134,12 @@ jobs:
           capslock $CAPSLOCK_FLAGS -output=compare "$BASELINE" > "$REPORT" 2>&1 || status=$?
           cat "$REPORT"
           if [ "$status" -ge 2 ]; then
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
             echo "::error::capslock could not analyze the packages (exit $status)"
             exit 1
           fi
-          printf 'added=%s\n' "$(grep -c 'has new capability' "$REPORT" || true)" >> "$GITHUB_OUTPUT"
-          printf 'removed=%s\n' "$(grep -c 'no longer has capability' "$REPORT" || true)" >> "$GITHUB_OUTPUT"
+          printf 'ok=true\n' >> "$GITHUB_OUTPUT"
 
-      # Builds one markdown body used for both the job summary and the PR comment.
-      # The report is truncated because a PR comment body is limited to 65536 characters.
       - name: Build report
         id: report
         if: always() && steps.compare.outcome != 'skipped'
@@ -146,49 +148,49 @@ jobs:
           NAME: ${{ matrix.name }}
           BASE_REF: ${{ steps.base.outputs.ref }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
-          ADDED: ${{ steps.compare.outputs.added }}
-          REMOVED: ${{ steps.compare.outputs.removed }}
+          COMPARE_OK: ${{ steps.compare.outputs.ok }}
           SOURCE: ${{ steps.baseline-cache.outputs.cache-matched-key || 'generated from base revision' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ARTIFACT: capslock-diff-${{ matrix.name }}-pr${{ github.event.pull_request.number || github.run_id }}
         run: |
           set -euo pipefail
-          # Empty when the compare step failed before it recorded its outputs.
-          ADDED="${ADDED:-}"
-          REMOVED="${REMOVED:-}"
           LIMIT=50000
-          if [ -f "$REPORT" ]; then size="$(wc -c < "$REPORT" | tr -d '[:space:]')"; else size=0; fi
           body="$RUNNER_TEMP/comment-${NAME}.md"
+          counts="$RUNNER_TEMP/counts-${NAME}.env"
+          findings="$RUNNER_TEMP/findings-${NAME}.md"
+
+          if [ "${COMPARE_OK:-}" = "true" ]; then
+            ./scripts/capslock-classify.sh "$REPORT" --counts "$counts" > "$findings"
+            cat "$counts" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC1090
+            . "$counts"
+          else
+            printf ':x: capslock did not complete, see the [job log](%s).\n' "$RUN_URL" > "$findings"
+            : > "$counts"
+            high=""; moved=""; low=""; added=""; removed=""
+          fi
+
+          size="$(wc -c < "$findings" | tr -d '[:space:]')"
           {
             printf '<!-- capslock-diff:%s -->\n' "$NAME"
             printf '## Capslock capability diff: `%s`\n\n' "$NAME"
             printf -- '- Base: `%s` (`%s`)\n' "$BASE_REF" "$BASE_SHA"
             printf -- '- Baseline: `%s`\n' "$SOURCE"
-            if [ -z "$ADDED" ]; then
-              printf -- '- Result: :x: capslock did not complete, see the [job log](%s)\n' "$RUN_URL"
-            else
-              printf -- '- New capabilities: **%s**\n' "$ADDED"
-              printf -- '- Capabilities no longer present: %s\n' "$REMOVED"
+            if [ -n "$added" ]; then
+              # Lead with the high-signal count: it is the only number that should block.
+              printf -- '- New high-signal capabilities (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE): **%s**\n' "$high"
+              printf -- '- Likely package moves: %s, lower signal: %s, no longer present: %s\n' "$moved" "$low" "$removed"
             fi
             printf '\n'
-            if [ -n "$ADDED" ] && [ "$ADDED" = "0" ] && [ "$REMOVED" = "0" ]; then
-              printf ':white_check_mark: No capability changes compared to the baseline.\n'
-            else
-              printf '<details><summary>Report</summary>\n\n```\n'
-              head -c "$LIMIT" "$REPORT" || printf '(report unavailable)\n'
-              printf '\n```\n\n</details>\n'
-              if [ "$size" -gt "$LIMIT" ]; then
-                printf '\nReport truncated (%s of %s bytes shown). Full report: `%s` artifact on the [run](%s).\n' \
-                  "$LIMIT" "$size" "$ARTIFACT" "$RUN_URL"
-              fi
+            head -c "$LIMIT" "$findings" || printf '(findings unavailable)\n'
+            if [ "$size" -gt "$LIMIT" ]; then
+              printf '\n\nTruncated (%s of %s bytes shown). Full report: `%s` artifact on the [run](%s).\n' \
+                "$LIMIT" "$size" "$ARTIFACT" "$RUN_URL"
             fi
           } > "$body"
           cat "$body" >> "$GITHUB_STEP_SUMMARY"
           printf 'body=%s\n' "$body" >> "$GITHUB_OUTPUT"
 
-      # Same-repo PRs only: fork PRs get a read-only GITHUB_TOKEN and cannot be
-      # commented on from a pull_request-triggered job. They still get the job
-      # summary and the uploaded artifact.
       - name: Post or update PR comment
         if: |
           always() && steps.report.outcome == 'success'
@@ -224,14 +226,17 @@ jobs:
           retention-days: 30
           overwrite: true
 
-      # New capabilities are the supply-chain signal worth blocking on. Capabilities that
-      # disappeared are reported but do not fail the check, since removing code legitimately
-      # drops them.
       - name: Fail on new capabilities
-        if: steps.compare.outputs.added != '0'
+        if: steps.report.outputs.added != '0'
         env:
-          ADDED: ${{ steps.compare.outputs.added }}
+          HIGH: ${{ steps.report.outputs.high }}
+          MOVED: ${{ steps.report.outputs.moved }}
+          LOW: ${{ steps.report.outputs.low }}
           BASE_REF: ${{ steps.base.outputs.ref }}
         run: |
-          echo "::error::${ADDED} new capability use(s) introduced relative to ${BASE_REF}; review the job summary"
+          if [ "${HIGH:-0}" != "0" ]; then
+            echo "::error::${HIGH} new high-signal capability use(s) (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE) relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- read the call paths in the job summary."
+          else
+            echo "::error::No high-signal capability changes, but ${MOVED:-0} likely package move(s) and ${LOW:-0} lower-signal change(s) relative to ${BASE_REF}; confirm them in the job summary."
+          fi
           exit 1

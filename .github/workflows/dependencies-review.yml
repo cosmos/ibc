@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Dependency Review
+
+on:
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  GOVULNCHECK_VERSION: 1.8.0
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          base-ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          head-ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fail-on-severity: high
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+
+      - name: Go vulnerability check
+        id: govuln
+        env:
+          GOVULNCHECK_VERSION: ${{ env.GOVULNCHECK_VERSION }}
+        run: |
+          set -uo pipefail
+          # Guarded so the -e this step runs under cannot abort before the message below.
+          status=0
+          make vulncheck 2>&1 | tee govulncheck-output.txt || status=$?
+
+          # The target reports findings without failing, so a non-zero status here means a
+          # module could not be scanned and this run tells us nothing about it.
+          if [ "$status" -ne 0 ]; then
+            echo "::error::govulncheck could not scan every module (make exit $status); see the step log"
+            exit 1
+          fi
+
+          # By default govulncheck only details advisories it found reachable from our
+          # code; ones it merely finds in the module graph are summarised without an ID.
+          vulns="$(grep -oE 'GO-[0-9]{4}-[0-9]+' govulncheck-output.txt | sort -u || true)"
+          echo "Reachable advisories: ${vulns:-none}"
+
+          # Accepted for now, because no fixed release exists to upgrade to. Anything with
+          # an available fix belongs in a dependency bump, not in this list. Add an ID only
+          # with a comment saying why it is accepted and what would let us drop it.
+          # - GO-2026-4479: pion/dtls/v2 AES-GCM nonce reuse. No fix on the v2 branch.
+          #                 Pulled in via libp2p -> pion/stun.
+          #                 Tracking: https://github.com/libp2p/go-libp2p/issues/3464
+          # - GO-2026-5932: golang.org/x/crypto/openpgp is unmaintained by design, so it
+          #                 has no fixed release. Reachable through cli/internal/types.
+          IGNORED_VULNS="GO-2026-4479 GO-2026-5932"
+
+          unexpected=""
+          for vuln in ${vulns}; do
+            # -x so a prefix of a longer ID cannot match by accident.
+            if ! printf '%s\n' ${IGNORED_VULNS} | grep -qx "${vuln}"; then
+              unexpected="${unexpected} ${vuln}"
+            fi
+          done
+
+          if [ -n "${unexpected}" ]; then
+            {
+              printf '## Unexpected reachable vulnerabilities\n\n'
+              for vuln in ${unexpected}; do
+                printf -- '- [%s](https://pkg.go.dev/vuln/%s)\n' "${vuln}" "${vuln}"
+              done
+              printf '\nRun `make vulncheck` locally for the call paths. Either upgrade the\n'
+              printf 'dependency, or add the ID to IGNORED_VULNS in this workflow with a reason.\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Unexpected reachable vulnerabilities:${unexpected}"
+            exit 1
+          fi
+
+          echo "Only known and accepted vulnerabilities present. Continuing."
