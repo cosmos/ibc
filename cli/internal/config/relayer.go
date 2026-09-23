@@ -3,10 +3,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"time"
-
-	"github.com/goccy/go-yaml"
 )
 
 // Client types
@@ -216,7 +215,7 @@ func (c ConnectionConfig) Validate() error {
 	}
 
 	if c.ClientA.ChainID != "" && c.ClientA.ChainID == c.ClientB.ChainID {
-		return fmt.Errorf("clientA and clientB must be on different chains")
+		return errors.New("clientA and clientB must be on different chains")
 	}
 
 	return nil

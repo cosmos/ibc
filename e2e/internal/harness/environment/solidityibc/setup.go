@@ -4,6 +4,7 @@ package solidityibc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -45,7 +46,7 @@ type Setup struct {
 // The mining timeout bounds every setup transaction's mining observation.
 func NewSetup(ctx context.Context, client *ethclient.Client, miningTimeout time.Duration) (*Setup, error) {
 	if client == nil {
-		return nil, fmt.Errorf("solidity IBC setup: nil EVM client")
+		return nil, errors.New("solidity IBC setup: nil EVM client")
 	}
 	chainID, err := client.ChainID(ctx)
 	if err != nil {
@@ -56,13 +57,13 @@ func NewSetup(ctx context.Context, client *ethclient.Client, miningTimeout time.
 
 func newSetup(backend contractBackend, chainID *big.Int, miningTimeout time.Duration) (*Setup, error) {
 	if backend == nil {
-		return nil, fmt.Errorf("solidity IBC setup: nil contract backend")
+		return nil, errors.New("solidity IBC setup: nil contract backend")
 	}
 	if chainID == nil || chainID.Sign() <= 0 {
-		return nil, fmt.Errorf("solidity IBC setup: invalid EVM chain id")
+		return nil, errors.New("solidity IBC setup: invalid EVM chain id")
 	}
 	if miningTimeout <= 0 {
-		return nil, fmt.Errorf("solidity IBC setup: mining timeout must be positive")
+		return nil, errors.New("solidity IBC setup: mining timeout must be positive")
 	}
 	return &Setup{backend: backend, chainID: new(big.Int).Set(chainID), miningTimeout: miningTimeout}, nil
 }
@@ -107,7 +108,7 @@ func (s *Setup) DeployInstance(
 		return Instance{}, fmt.Errorf("solidity IBC encode ICS26Router initialization: %w", err)
 	}
 	if routerABI == nil {
-		return Instance{}, fmt.Errorf("solidity IBC encode ICS26Router initialization: upstream binding has no ABI")
+		return Instance{}, errors.New("solidity IBC encode ICS26Router initialization: upstream binding has no ABI")
 	}
 	initialization, err := routerABI.Pack("initialize", accessAddress)
 	if err != nil {
@@ -140,7 +141,7 @@ func (s *Setup) AttachInstance(
 	routerAddress common.Address,
 ) (Instance, error) {
 	if routerAddress == (common.Address{}) {
-		return Instance{}, fmt.Errorf("solidity IBC attach Instance: zero ICS26Router address")
+		return Instance{}, errors.New("solidity IBC attach Instance: zero ICS26Router address")
 	}
 	if err := s.requireCode(ctx, "ICS26Router", routerAddress); err != nil {
 		return Instance{}, err
@@ -154,7 +155,7 @@ func (s *Setup) AttachInstance(
 		return Instance{}, fmt.Errorf("solidity IBC attach Instance: query ICS26Router authority: %w", err)
 	}
 	if authority == (common.Address{}) {
-		return Instance{}, fmt.Errorf("solidity IBC attach Instance: ICS26Router has a zero authority")
+		return Instance{}, errors.New("solidity IBC attach Instance: ICS26Router has a zero authority")
 	}
 	if err := s.requireCode(ctx, "AccessManager", authority); err != nil {
 		return Instance{}, err
@@ -185,7 +186,7 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, fmt.Errorf("solidity IBC deploy AppStack: %w", authorityErr)
 	}
 	if instance.Router == (common.Address{}) || instance.AccessManager == (common.Address{}) {
-		return AppStack{}, fmt.Errorf("solidity IBC deploy AppStack: Instance is incomplete")
+		return AppStack{}, errors.New("solidity IBC deploy AppStack: Instance is incomplete")
 	}
 
 	escrowLogic, err := s.deployVerified(ctx, authority, "Escrow logic",
@@ -238,7 +239,7 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, fmt.Errorf("solidity IBC encode ICS20Transfer initialization: %w", err)
 	}
 	if ics20ABI == nil {
-		return AppStack{}, fmt.Errorf("solidity IBC encode ICS20Transfer initialization: upstream binding has no ABI")
+		return AppStack{}, errors.New("solidity IBC encode ICS20Transfer initialization: upstream binding has no ABI")
 	}
 	ics20Init, err := ics20ABI.Pack(
 		"initialize",
@@ -274,7 +275,7 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, fmt.Errorf("solidity IBC encode ICS27GMP initialization: %w", err)
 	}
 	if ics27ABI == nil {
-		return AppStack{}, fmt.Errorf("solidity IBC encode ICS27GMP initialization: upstream binding has no ABI")
+		return AppStack{}, errors.New("solidity IBC encode ICS27GMP initialization: upstream binding has no ABI")
 	}
 	ics27Init, err := ics27ABI.Pack("initialize", instance.Router, accountLogic, instance.AccessManager)
 	if err != nil {
@@ -328,7 +329,7 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: read ICS26Router ABI: %w", err)
 	}
 	if routerABI == nil {
-		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: upstream ICS26Router binding has no ABI")
+		return AppStack{}, errors.New("solidity IBC open public relaying: upstream ICS26Router binding has no ABI")
 	}
 	selectors, err := publicRelayingSelectors(*routerABI)
 	if err != nil {
@@ -560,7 +561,7 @@ func (s *Setup) verifyClient(
 	counterpartyClientID string,
 ) (Client, error) {
 	if clientID == "" {
-		return Client{}, fmt.Errorf("solidity IBC attach Client: empty client id")
+		return Client{}, errors.New("solidity IBC attach Client: empty client id")
 	}
 	if counterpartyClientID == "" {
 		return Client{}, fmt.Errorf("solidity IBC attach Client %q: empty counterparty client id", clientID)
@@ -646,7 +647,7 @@ func (s *Setup) send(
 		return common.Address{}, nil, err
 	}
 	if tx == nil {
-		return common.Address{}, nil, fmt.Errorf("transaction was not constructed")
+		return common.Address{}, nil, errors.New("transaction was not constructed")
 	}
 	if err := s.backend.SendTransaction(ctx, tx); err != nil {
 		return address, tx, fmt.Errorf("broadcast transaction %s: %w", tx.Hash(), err)
@@ -769,7 +770,7 @@ func (s *Setup) requireCanAddCustomClient(
 		return fmt.Errorf("read ICS26Router ABI: %w", err)
 	}
 	if routerABI == nil {
-		return fmt.Errorf("upstream ICS26Router binding has no ABI")
+		return errors.New("upstream ICS26Router binding has no ABI")
 	}
 	selector, err := customAddClientSelector(*routerABI)
 	if err != nil {
@@ -803,7 +804,7 @@ func customAddClientSelector(routerABI abi.ABI) ([4]byte, error) {
 			return selector, nil
 		}
 	}
-	return [4]byte{}, fmt.Errorf("upstream ICS26Router ABI has no custom addClient overload")
+	return [4]byte{}, errors.New("upstream ICS26Router ABI has no custom addClient overload")
 }
 
 func publicRelayingSelectors(routerABI abi.ABI) ([][4]byte, error) {
@@ -832,7 +833,7 @@ func methodSelector(contractABI abi.ABI, rawName string) ([4]byte, error) {
 
 func validateAuthority(authority evm.Account) error {
 	if authority.Address() == (common.Address{}) {
-		return fmt.Errorf("authority is required")
+		return errors.New("authority is required")
 	}
 	return nil
 }
