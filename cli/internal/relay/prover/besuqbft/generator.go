@@ -37,8 +37,6 @@ var (
 	ErrReceiptExists      = errors.New("packet receipt exists on the counterparty")
 )
 
-const historyHint = "the counterparty node may not serve state this old: raise its Bonsai history limit or use an archive node"
-
 // Host is the chain the light client lives on. It needs no Besu consensus:
 // any EVM chain hosting the contract qualifies.
 type Host interface {
@@ -434,7 +432,7 @@ func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byt
 
 	proof, err := g.counterparty.GetRouterProof(ctx, height, slots)
 	if err != nil {
-		return nil, fmt.Errorf("proving router at height %d: %w (%s)", height, err, historyHint)
+		return nil, fmt.Errorf("proving router at height %d: %w", height, err)
 	}
 
 	return &snapshot{header: header, proof: proof, consensus: consensusOf(header)}, nil
