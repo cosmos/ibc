@@ -193,7 +193,7 @@ is disabled.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `metrics` | `bool` | `false` | Whether the process exports metrics. When false, the rest of this block is ignored. |
-| `type` | `string` | `simple` | Which exporter serves the metrics. |
+| `type` | `simple` \| `otel` | `simple` | Which exporter serves the metrics. |
 | `simpleMetricsListenAddr` | `string` | `0.0.0.0:9090` | Address the `simple` exporter serves metrics on. |
 | `otelFile` | `string` | **required** for `otel` | OpenTelemetry configuration file, read when `type` is `otel`. `OTEL_CONFIG_FILE` overrides it, and one of the two is required. |
 

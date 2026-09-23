@@ -569,6 +569,19 @@ def _():
     assert refgen._lead_strip("x", "lowercase start.") == "Lowercase start."
 
 
+@case("config: accepted values are read however the rule is worded")
+def _():
+    # `db.type` published its two values and `observability.type` published
+    # `string`, because one author wrote "must be one of" and the other wrote
+    # "expected [...]". Same shape of key, and the difference was a phrase.
+    b = refgen.gen_config()
+    for region, expect in (("config:db", "`sqlite` \\| `postgres`"),
+                           ("config:observability", "`simple` \\| `otel`")):
+        row = [l for l in b[region].split("\n") if l.startswith("| `type`")]
+        assert row, f"no type row in {region}"
+        assert expect.replace("\\", "") in row[0].replace("\\", ""), row[0]
+
+
 @case("config: the canary fires when no validation message is recognised any more")
 def _():
     # The guard against the worst thing this tool can do: render a whole page

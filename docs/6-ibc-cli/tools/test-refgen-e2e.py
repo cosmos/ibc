@@ -410,7 +410,9 @@ def _():
         # a meaning change
         box.edit("cli/internal/config/config.go",
                  'ListenAddress string `yaml:"listenAddr"`',
-                 'ListenAddress []string `yaml:"listenAddr"`')
+                 'ListenAddress ListenAddr `yaml:"listenAddr"`')
+        box.edit("cli/internal/config/config.go", "type ServerConfig struct {",
+                 "type ListenAddr = string\n\ntype ServerConfig struct {")
         raises(box, "config", "fingerprint", "fingerprint_mismatch")
 
 
@@ -422,7 +424,7 @@ def _():
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {''',
                  '''func (c ServerConfig) Validate() error {
 	if c.ListenAddress == "" {
-		return errors.New(".listenAddr required")
+		return errPathf("listenAddr", "required")
 	}
 	if err := network.ValidateListenAddr(c.ListenAddress); err != nil {''')
         raises(box, "config", "fingerprint", "fingerprint_mismatch")
@@ -432,7 +434,8 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/relayer.go",
-                 '\tGasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`\n', "")
+                 'GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`',
+                 'GasTipCapMultiplier *float64 `yaml:"-"`')
         raises(box, "config", "FALLBACK_DOCS describes fields that are gone",
                "dead_description")
 
@@ -545,8 +548,12 @@ def _():
 @case("a removed config key disappears from its table")
 def _():
     with Sandbox() as box:
+        # `yaml:"-"` is how a key stops being part of the file while the Go
+        # that reads it keeps compiling -- deleting the field outright is a
+        # change to four other packages, not a documentation change.
         box.edit("cli/internal/config/config.go",
-                 '\tFinalityOffset uint `yaml:"finalityOffset"`', "")
+                 'FinalityOffset uint `yaml:"finalityOffset"`',
+                 'FinalityOffset uint `yaml:"-"`')
         page = box.page("config")
         assert refgen.run("config", page, check=True) == 1
         assert refgen.run("config", page, check=False) == 0
@@ -660,25 +667,24 @@ def _():
 @case("the config builder returning a pointer changes nothing")
 def _():
     with Sandbox() as box:
+        # the builder assembling into a local rather than returning the literal
+        # directly. Changing its return type instead would be a change to every
+        # caller in two packages -- a refactor of the CLI, not of the builder.
         box.edit("cli/internal/config/config.go",
-                 "func DefaultConfig() Config {", "func DefaultConfig() *Config {")
-        box.edit("cli/internal/config/config.go", "\treturn Config{", "\treturn &Config{")
+                 "\treturn Config{", "\tbuilt := Config{")
+        box.edit("cli/internal/config/config.go",
+                 "\t\tSigners:   Signers{},\n\t}\n}",
+                 "\t\tSigners:   Signers{},\n\t}\n\treturn built\n}")
         unchanged(box, "config")
 
 
-@case("splitting the root command into its own file changes nothing")
-def _():
-    with Sandbox() as box:
-        src = os.path.join(box.dir, "cli/cmd/ibc")
-        text = open(os.path.join(src, "main.go")).read()
-        at = text.index("var rootCmd")
-        with open(os.path.join(src, "root.go"), "w") as fh:
-            fh.write('package main\n\nimport (\n\t"github.com/spf13/cobra"\n)\n\n'
-                     + text[at:])
-        with open(os.path.join(src, "main.go"), "w") as fh:
-            fh.write(text[:at])
-        refgen._ANCHORS.clear()
-        unchanged(box, "config")
+# "splitting the root command into its own file changes nothing" was removed.
+# Its mutation wrote a root.go importing only cobra while the moved code needed
+# five more packages, so the tree never compiled -- and it asserted on the
+# config generator, which never built the binary and so never noticed. It
+# tested neither the split nor the generator it named. Path-independence is
+# covered by "renaming the CLI's entry point file changes nothing", which does
+# build.
 
 
 @case("a trailing comment on a config field changes nothing")
@@ -945,6 +951,160 @@ def _():
         assert "`tlscertfile`" in server, f"expected tlscertfile:\n{server}"
 
 
+def _cell(box, region, key):
+    for line in refgen.GENERATORS["config"]()[region].split("\n"):
+        if line.startswith(f"| `{key}`"):
+            return [c.strip() for c in line.split("|")][3]
+    raise AssertionError(f"no row for {key} in {region}")
+
+
+@case("a newly required config key does not blind the flag probe")
+def _():
+    with Sandbox() as box:
+        # `config add-chain` is probed like any other command, and it runs for
+        # real rather than being rejected. With one shared home it wrote a
+        # chain missing the new key, and every command sorting after it failed
+        # at config load before reaching its own flag checks -- five required
+        # flags published as `optional`. A home per command keeps one
+        # command's side effects out of the next one's answer.
+        box.edit("cli/internal/config/config.go",
+                 'Deployer string %syaml:"deployer,omitempty"%s' % (TICK, TICK),
+                 'Deployer string %syaml:"deployer,omitempty"%s\n\n'
+                 '\t// Region is the provider region, such as "us-east-1".\n'
+                 '\tRegion string %syaml:"region"%s' % (TICK, TICK, TICK, TICK))
+        box.edit("cli/internal/config/config.go", "\tchainType := c.Type()",
+                 '\tif c.Region == "" {\n'
+                 '\t\treturn errPathf("region", "required")\n'
+                 '\t}\n\tchainType := c.Type()')
+        blocks = refgen.GENERATORS["cli"]()
+        for region, flag in (("cli:cmd:deploy-core", "--chain"),
+                             ("cli:cmd:deploy-render-config", "--signer-a")):
+            row = [l for l in blocks[region].split("\n")
+                   if l.startswith(f"| `{flag} ")]
+            assert row, f"no {flag} row in {region}"
+            assert "required" in row[0].split("|")[2], \
+                f"{flag} lost its required mark in {region}: {row[0]}"
+
+
+@case("rewording a variant rule does not move a key into the wrong table")
+def _():
+    with Sandbox() as box:
+        # Before the membership probe this put `finalityOffset` into the remote
+        # attestor table, where the binary rejects it -- a key a reader would
+        # set and get an error for. The program refuses it either way, and
+        # refusing is what is asked now rather than the wording.
+        box.edit("cli/internal/config/config.go",
+                 '"must not be set for local attestors"',
+                 '"is not valid on a local attestor"')
+        box.edit("cli/internal/config/config.go",
+                 '"must not be set for remote attestors"',
+                 '"is not valid on a remote attestor"', count=99)
+        blocks = refgen.GENERATORS["config"]()
+        remote = blocks["config:attestors:remote"]
+        local = blocks["config:attestors:local"]
+        for key in ("finalityOffset", "chainId", "signer"):
+            assert f"`{key}`" not in remote, f"{key} reached the remote table:\n{remote}"
+        assert "`grpc`" not in local, f"grpc reached the local table:\n{local}"
+        assert "`grpc`" in remote and "`finalityOffset`" in local
+
+
+@case("a requirement moved into a helper is still read")
+def _():
+    with Sandbox() as box:
+        # The defect this replaced. `_requirement` read only what Validate
+        # itself returns, so a rule delegated to a helper vanished and the key
+        # rendered `optional` with nothing raising. The binary does not care
+        # which function the rule lives in.
+        box.edit("cli/internal/config/config.go",
+                 """	case c.RPC == "":
+		return errPathf("rpc", "required")
+""",
+                 """	case c.validateRPC() != nil:
+		return c.validateRPC()
+""")
+        box.edit("cli/internal/config/config.go",
+                 "func (c EVMChainConfig) Validate(validateICS26Router bool) error {",
+                 """func (c EVMChainConfig) validateRPC() error {
+	if c.RPC == "" {
+		return errPathf("rpc", "required")
+	}
+	return nil
+}
+
+func (c EVMChainConfig) Validate(validateICS26Router bool) error {""")
+        assert _cell(box, "config:chains", "evm.rpc") == "**required**", \
+            _cell(box, "config:chains", "evm.rpc")
+
+
+@case("a new required key stops the page until a fixture carries it")
+def _():
+    with Sandbox() as box:
+        # The other direction: the column has to follow the code, not just
+        # resist rewording. `deployer` carries no hand-written description, so
+        # nothing else intercepts this.
+        box.edit("cli/internal/config/config.go",
+                 "func (c ChainConfig) Validate(", """func (c ChainConfig) validateDeployer() error {
+	if c.Deployer == "" {
+		return errPathf("deployer", "required")
+	}
+	return nil
+}
+
+func (c ChainConfig) Validate(""")
+        box.edit("cli/internal/config/config.go",
+                 "	chainType := c.Type()", """	if err := c.validateDeployer(); err != nil {
+		return err
+	}
+	chainType := c.Type()""")
+        # The fixture predates the new key, so the config it holds is no longer
+        # one this CLI accepts, and nothing can be learned by removing keys
+        # from it. Inventing a value to fill the gap is the guess this whole
+        # mechanism exists to avoid, so it stops and names the key.
+        try:
+            refgen.GENERATORS["config"]()
+        except refgen.SourceError as e:
+            assert e.kind == "stale_probe_fixture", f"raised {e.kind!r}: {e}"
+            assert "deployer" in str(e), f"the refusal does not name the key: {e}"
+            return
+        raise AssertionError("expected a refusal naming the new required key")
+
+
+@case("a key no fixture contains reads as optional, because they validate without it")
+def _():
+    with Sandbox() as box:
+        # Absence is a proof here, not a gap: the probe fixtures load, and they
+        # do not carry this key, so the program runs without it. That is what
+        # keeps adding a config key from also being a fixture edit.
+        box.edit("cli/internal/config/config.go",
+                 'Deployer string %syaml:"deployer,omitempty"%s' % (TICK, TICK),
+                 'Deployer string %syaml:"deployer,omitempty"%s\n\n'
+                 '\t// Nickname is a label for this chain.\n'
+                 '\tNickname string %syaml:"nickname,omitempty"%s'
+                 % (TICK, TICK, TICK, TICK))
+        assert _cell(box, "config:chains", "nickname") == "optional", \
+            _cell(box, "config:chains", "nickname")
+
+
+@case("a probe fixture that no longer loads refuses instead of answering")
+def _():
+    saved = list(refgen.PROBE_FIXTURES)
+    broken = os.path.join(tempfile.mkdtemp(prefix="refgen-badfix-"), "probe.yml")
+    with open(broken, "w") as fh:
+        # a type the loader rejects, not an unknown key: an unknown key means
+        # the fixture is merely ahead of the schema and is healed by dropping
+        # it, which is a repair rather than a refusal
+        fh.write("server:\n  listenAddr:\n    - 0.0.0.0:3000\n")
+    refgen.PROBE_FIXTURES = [broken]
+    try:
+        refgen.GENERATORS["config"]()
+    except refgen.SourceError as e:
+        assert e.kind == "stale_probe_fixture", f"raised {e.kind!r}: {e}"
+        return
+    finally:
+        refgen.PROBE_FIXTURES = saved
+    raise AssertionError("expected a refusal about the fixture")
+
+
 @case("a trailing comment inside the defaults builder changes nothing")
 def _():
     with Sandbox() as box:
@@ -979,7 +1139,9 @@ def _():
         # package's own string types. Reading it as an enum member rendered
         # every string key in every table as a list of unrelated values.
         box.edit("cli/internal/config/errors.go", "package config",
-                 'package config\n\nconst DefaultListenAddr string = "127.0.0.1:9090"')
+                 "package config", count=1)
+        box.append("cli/internal/config/errors.go",
+                   '\n\nconst DefaultListenAddr string = "127.0.0.1:9090"\n')
         unchanged(box, "config", cites=False)
 
 
@@ -1023,7 +1185,8 @@ def _():
         # the key a reader writes is the yaml one; the Go spelling beside it is
         # the package's business. Keying the hand-written descriptions on the
         # Go name made this rename a refusal for about thirty fields.
-        for sub in ("cli/internal/config",):
+        for sub in ("cli/internal/config", "cli/cmd/ibc", "cli/internal/bootstrap",
+                    "cli/internal/otel"):
             box.rename(sub, "ListenAddress", "Listen")
         unchanged(box, "config")
 
@@ -1039,11 +1202,17 @@ def _():
 @case("renaming a Validate receiver changes nothing")
 def _():
     with Sandbox() as box:
-        box.edit("cli/internal/config/config.go",
-                 "func (c Observability) Validate() error {",
-                 "func (obs Observability) Validate() error {")
-        box.edit("cli/internal/config/config.go",
-                 "\tswitch {\n\tcase !c.Metrics:", "\tswitch {\n\tcase !obs.Metrics:")
+        # the whole function, receiver and every use of it: renaming only the
+        # signature left a body referring to a name that no longer existed, so
+        # the tree never compiled and the case proved nothing
+        before = open(os.path.join(
+            box.dir, "cli/internal/config/config.go")).read()
+        start = before.index("func (c Observability) Validate() error {")
+        end = before.index("\n}\n", start) + 3
+        body = before[start:end].replace("c.", "obs.").replace(
+            "func (c Observability)", "func (obs Observability)")
+        with open(os.path.join(box.dir, "cli/internal/config/config.go"), "w") as fh:
+            fh.write(before[:start] + body + before[end:])
         unchanged(box, "config")
 
 

@@ -56,6 +56,44 @@ gone, both suites pass, and the pages are unchanged except where you meant.
 Otherwise hand it back with a proposed patch — a parser change that reads the
 source wrongly fails silently, and no Go reviewer will catch it.
 
+## The probe fixtures
+
+`probe-config.yml` and `probe-config-otel.yml` are working configs the binary
+loads. They are not published and no reader sees them: they exist so the
+**Default or required** column can be asked rather than inferred. For each key,
+the generator removes exactly that key from one of them and runs
+`ibc config validate`. The key is required when the binary objects to the path
+that was removed — a path, not a phrase, so rewording a validation message
+changes nothing.
+
+Two files because `observability.type` cannot be `simple` and `otel` at once.
+
+Three things follow, and they are the only maintenance these carry:
+
+- **Adding a config key costs you nothing.** A key absent from a config that
+  loads is proof the program runs without it, so it reads `optional` without
+  anyone touching a fixture.
+- **Making a key required stops the page**, naming the key, because the fixture
+  is now a config the CLI rejects. Put a value for it in both fixtures and the
+  page generates again.
+
+  Take the value from the source, the way every other fact here is taken: the
+  key's doc comment, what its validation accepts, an existing example, or a
+  value the package's own tests use. Copy the shape the fixture already uses
+  for its neighbours -- these are two-chain configs with `example.com` hosts,
+  not real deployments.
+
+  If nothing in the tree says what a valid value looks like, that is a
+  hand-back and not a guess: a fixture value invented to get past a refusal can
+  make a required key read as optional, or make the whole page refuse for a
+  reason nobody can trace. Say which key, and that the declaration needs to say
+  what it accepts.
+- **Removing or renaming a key heals itself.** The binary calls the old key
+  unknown, and it is dropped from the fixture for that run.
+
+A fixture that fails to load for any other reason refuses
+(`stale_probe_fixture`) and quotes what the binary stopped at.
+
 ## Choices the source cannot make
 
 These live in `refgen.py`:

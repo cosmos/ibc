@@ -1432,16 +1432,36 @@ def _discriminator(struct, model):
                         if model["const_type"].get(c) == field["type"].lstrip("*"))
         if len(values) < 2:
             for msg, args in model["validations"].get(struct, []):
-                if msg.lstrip(".").split()[0] == field["yaml"] and "must be one of" in msg:
+                # the same rule the Type column uses: a rule about this key
+                # that names constants is stating the values it accepts,
+                # whatever words surround them
+                if msg.lstrip(".").split()[0] == field["yaml"]:
                     values = sorted(model["consts"][a] for a in args if a in model["consts"])
         if len(values) >= 2:
             return field, values
     return None, []
 
 
-def _applies(struct, field, model, value):
-    """Whether a key belongs in the table for one discriminator value."""
+def _applies(struct, field, model, value, membership=None):
+    """Whether a key belongs in the table for one discriminator value.
+
+    Two rules answering two different questions, not a rule and a fallback.
+
+    The probe answers "does the program refuse this key here": a proof, and the
+    one that matters, because a key in the wrong table is one a reader sets and
+    gets an error for. Rewording `must not be set for remote attestors` used to
+    move `finalityOffset` into the remote table, which is exactly that.
+
+    The validation text answers "is this key conventionally part of this
+    shape". The signer tables are split that way and the binary enforces none
+    of it -- it accepts `grpc` on a local signer -- so no probe can see it. If
+    that wording changes, the signer tables get keys that work but do not
+    belong, which a reader can shrug off. The canary still watches for the
+    whole vocabulary going at once.
+    """
     key = field["yaml"]
+    if membership is not None and membership.get((struct, key, value)) is False:
+        return False
     for msg, _a in model["validations"].get(struct, []):
         body = msg.lstrip(".")
         if not body.startswith(key + " "):
@@ -1455,7 +1475,7 @@ def _applies(struct, field, model, value):
     return True
 
 
-def discover_config_sections(model):
+def discover_config_sections(model, membership=None):
     """Every table the page needs, by three rules and no list.
 
     One table per top-level block. A nested struct flattens into its parent
@@ -1487,7 +1507,8 @@ def discover_config_sections(model):
 
         field, values = _discriminator(struct, model)
         if values:
-            per_value = {v: [r for r in rows if _applies(r[0], r[1], model, v)]
+            per_value = {v: [r for r in rows
+                             if _applies(r[0], r[1], model, v, membership)]
                          for v in values}
             # a two-valued key that gates nothing is not a discriminator: db.type
             # picks a backend, it does not change which keys exist
@@ -1614,8 +1635,14 @@ def _type_cell(go, field, model):
     values = [v for c, v in model["consts"].items() if named.get(c) == t]
     if values:
         return " | ".join(f"`{v}`" for v in sorted(values))
+    # A rule about this key that names constants is stating the values it
+    # accepts, whatever words surround them. This used to require the message
+    # to say "must be one of": `Observability.Validate` says "expected [...]"
+    # instead, so `observability.type` published as `string` while `db.type`
+    # -- same shape of key, different phrasing -- published its two values.
+    # Nobody noticed, because every guard here watches the required column.
     for msg, args in model["validations"].get(go, []):
-        if msg.lstrip(".").split()[0] == field["yaml"] and "must be one of" in msg:
+        if msg.lstrip(".").split()[0] == field["yaml"]:
             resolved = [model["consts"][a] for a in args if a in model["consts"]]
             if resolved:
                 return " | ".join(f"`{v}`" for v in resolved)
@@ -1721,6 +1748,53 @@ def _yaml_without(text, path):
     return "\n".join(kept)
 
 
+def _probe_unknown_key(binary, text):
+    """The fixture path the binary calls an unknown field, if that is its
+    complaint. Any other complaint is not this function's business."""
+    home = tempfile.mkdtemp(prefix="refgen-unk-")
+    try:
+        with open(os.path.join(home, "ibc.yml"), "w") as fh:
+            fh.write(text)
+        for name, body in PROBE_SIDECARS.items():
+            with open(os.path.join(home, name), "w") as fh:
+                fh.write(body)
+        r = subprocess.run([binary, "config", "validate", "--home", home],
+                           capture_output=True, text=True, timeout=PROBE_TIMEOUT)
+        m = re.search(r'unknown field "([^"]+)"', r.stdout + r.stderr)
+        if not m:
+            return None
+        name = m.group(1)
+        for _i, path, _ind, _item, _v in _yaml_paths(text):
+            if path.rsplit(".", 1)[-1] == name:
+                return path
+        return None
+    except subprocess.TimeoutExpired:
+        return None
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def _yaml_with(text, path, value):
+    """`text` with `path` added, carrying `value`. None when it cannot be placed.
+
+    Used to ask the other question the tables need: not "is this key required"
+    but "does this key belong here at all". A key the binary rejects when it is
+    added to a variant does not belong in that variant's table.
+    """
+    if any(p == path for _i, p, _n, _t, _v in _yaml_paths(text)):
+        return text
+    parent, _, leaf = path.rpartition(".")
+    lines = text.split("\n")
+    # a list element is not a key line of its own, so the block is located by
+    # a sibling already inside it, which also gives the indent to match
+    for i, p, indent, _item, _v in _yaml_paths(text):
+        if p.rpartition(".")[0] != parent:
+            continue
+        return "\n".join(lines[:i + 1] + [" " * indent + f"{leaf}: {value}"]
+                         + lines[i + 1:])
+    return None
+
+
 def _probe_validate(binary, text):
     """The key path the binary objects to, or None when it is content."""
     home = tempfile.mkdtemp(prefix="refgen-cfg-")
@@ -1780,7 +1854,115 @@ def _config_locations(model):
     return loc
 
 
-def probe_requiredness(model, binary):
+_FIXTURE_CACHE = {}
+
+
+def _probe_fixtures(binary):
+    """Every probe fixture, loaded once and proven to load at all."""
+    if _FIXTURE_CACHE.get("__binary__") == binary:
+        return _FIXTURE_CACHE["fixtures"]
+    fixtures = []
+    for full in PROBE_FIXTURES:
+        rel = os.path.basename(full)
+        if not os.path.exists(full):
+            raise SourceError(
+                f"the requiredness probe needs {rel}, and it is not there. It "
+                "is a config the binary validates, and the column is read by "
+                "removing one key from it at a time.", kind="missing_probe_fixture")
+        text = open(full).read()
+        # A key the schema dropped leaves the fixture ahead of the code, and
+        # the binary names it. Dropping it here is a repair, not a guess: the
+        # fixture is scaffolding for the probe, and a key that no longer exists
+        # cannot be probed anyway. An addition is different -- a value would
+        # have to be invented -- so that still refuses, below.
+        for _ in range(20):
+            problem = _probe_validate(binary, text)
+            if problem is None:
+                break
+            stale = _probe_unknown_key(binary, text)
+            if stale is None:
+                break
+            healed = _yaml_without(text, stale)
+            if healed is None or healed == text:
+                break
+            text = healed
+        problem = _probe_validate(binary, text)
+        if problem is not None:
+            raise SourceError(
+                f"{rel} no longer loads, so nothing can be learned by removing "
+                f"keys from it: the binary stops at `{problem}`. Put a value "
+                "for that key in the probe fixtures, taken from its doc "
+                "comment, its validation, or an existing example -- see "
+                "\"The probe fixtures\" in REFERENCE.md. If nothing in the "
+                "tree says what a valid value is, hand it back rather than "
+                "inventing one.",
+                kind="stale_probe_fixture")
+        fixtures.append((rel, text, _yaml_paths(text)))
+    _FIXTURE_CACHE.clear()
+    _FIXTURE_CACHE.update({"__binary__": binary, "fixtures": fixtures})
+    return fixtures
+
+
+def probe_membership(model, binary):
+    """{(struct, yaml key, variant): False} for keys a variant refuses.
+
+    The other question the variant tables ask. A block like `attestors` holds
+    two shapes, and a reader of the local shape should never meet a remote-only
+    key. That used to be read from the words `must not be set for remote
+    attestors`; rewording it put `finalityOffset` into the remote table, where
+    the binary rejects it and a reader would have acted on it.
+
+    So it is asked instead: put the key into an element of that variant and see
+    whether the program refuses it. The value is copied from an element that
+    already carries the key, never invented -- if no element has it, nothing is
+    claimed and the key stays where the tables already put it.
+    """
+    out = {}
+    fixtures = _probe_fixtures(binary)
+    for struct in sorted(model["structs"]):
+        field, values = _discriminator(struct, model)
+        if not field or len(values) < 2:
+            continue
+        for _rel, text, paths in fixtures:
+            known = {}
+            for _i, path, _n, _t, inline in paths:
+                leaf = path.rpartition(".")[2]
+                if inline:
+                    known.setdefault(leaf, inline)
+            for value in values:
+                collection = _collection_for(struct, model)
+                if collection is None:
+                    continue
+                index = _variant_index(paths, collection, field["yaml"], value)
+                if index is None:
+                    continue
+                base = f"{collection}[{index}]"
+                for member in model["structs"][struct]["fields"]:
+                    key = member["yaml"]
+                    if key == field["yaml"] or not _is_config_field(member["go"], key):
+                        continue
+                    path = f"{base}.{key}"
+                    if any(q == path for _i, q, _n, _t, _v in paths):
+                        continue        # present in this variant, so it belongs
+                    if key not in known:
+                        continue        # no value to copy; claim nothing
+                    added = _yaml_with(text, path, known[key])
+                    if added is None:
+                        continue
+                    if _probe_validate(binary, added) == path:
+                        out[(struct, key, value)] = False
+    return out
+
+
+def _collection_for(struct, model):
+    """The root-relative path of the collection whose elements are `struct`."""
+    for (child, _parent, _key), path in _config_locations(model).items():
+        if child == struct and path.endswith("[]"):
+            return path[:-2]
+    return None
+
+
+def probe_requiredness(model, binary, membership=None):
     """{(region, key): True/False/None} -- required, not, or unanswerable.
 
     For each documented key: remove exactly that key from a working config and
@@ -1791,25 +1973,10 @@ def probe_requiredness(model, binary):
     `optional` would be a guess, and a guess reads exactly like knowledge.
     """
     loc = _config_locations(model)
-    fixtures = []
-    for full in PROBE_FIXTURES:
-        rel = os.path.basename(full)
-        if not os.path.exists(full):
-            raise SourceError(
-                f"the requiredness probe needs {rel}, and it is not there. It "
-                "is a config the binary validates, and the column is read by "
-                "removing one key from it at a time.", kind="missing_probe_fixture")
-        text = open(full).read()
-        if _probe_validate(binary, text) is not None:
-            raise SourceError(
-                f"{rel} no longer loads, so nothing can be learned by removing "
-                "keys from it. A key it names was probably renamed; fix the "
-                "fixture to match the config package.",
-                kind="stale_probe_fixture")
-        fixtures.append((rel, text, _yaml_paths(text)))
+    fixtures = _probe_fixtures(binary)
 
     out = {}
-    for sec in discover_config_sections(model):
+    for sec in discover_config_sections(model, membership):
         disc = sec["discriminator"]
         for struct, field, key, parent in sec["rows"]:
             base = loc.get((struct, parent[0], parent[1]))
@@ -1832,6 +1999,20 @@ def probe_requiredness(model, binary):
                     continue
                 without = _yaml_without(text, path)
                 if without is None:
+                    # The fixture validates and does not contain this key, so
+                    # the program runs without it: a proof it is not required,
+                    # not an absence of evidence. It also means adding a config
+                    # key costs a developer nothing here, and a key later made
+                    # mandatory stops the fixture validating, which is loud.
+                    #
+                    # Only sound while the block the key lives in is present.
+                    # If no fixture instantiates `signers` at all, nothing was
+                    # learned about `signers[].alias` by leaving it out, and
+                    # calling it optional would be a guess.
+                    parent = path.rsplit(".", 1)[0]
+                    if parent == path or any(q == parent or q.startswith(parent + ".")
+                                             for _i, q, _n, _t, _v in paths):
+                        answer = False
                     continue
                 answer = _probe_validate(binary, without) == path
                 # A key only one fixture holds is conditional: the others are
@@ -1898,57 +2079,15 @@ def _requirement(go, field, model, parent=None, probed=None, variant=None):
                 cites.append((path, line))
         return ", ".join(parts), cites
 
-    if probed is not None:
-        # the binary's answer, in the variant this table is about
-        return (("**required**" if not variant else f"**required** for `{variant}`")
-                if probed else "optional"), None
-
-    sources = [(go, key)]
-    if parent:
-        sources.append((parent[0], f"{parent[1]}.{key}"))
-    rules = []
-    for owner, path in sources:
-        for msg, _args in model["validations"].get(owner, []):
-            body = msg.lstrip(".")
-            if body.startswith(path + " ") or body == path:
-                rules.append(body[len(path):].strip())
-
-    # a `required for X` rule outranks a `must not be set for Y` rule: both say
-    # the key belongs to one kind, and only the first says it is mandatory
-    for rest in rules:
-        m = re.match(r"required(?: for (?:type: )?(\w+))?", rest)
-        if m:
-            return ("**required**" if not m.group(1) else f"**required** for `{m.group(1)}`"), None
-    for rest in rules:
-        if rest.startswith("must not be set for"):
-            return f"`{_other_kind(go, rest.split()[-2], model)}` only", None
-        if ("unknown" in rest and "type" in rest) or "must be one of" in rest:
-            return "**required**", None
-
-    # a nested struct whose own Validate requires something is itself required
-    nested = field["type"].lstrip("*")
-    for msg, _a in model["validations"].get(nested, []):
-        if " required" in msg or msg.endswith("required"):
-            return "**required**", None
-    return "optional", None
-
-
-def _other_kind(go, kind, model):
-    """The other value of the struct's discriminator field.
-
-    A `must not be set for local` rule means the key belongs to a remote
-    entry, so the column has to name the opposite of what the rule says.
-    """
-    for field in model["structs"][go]["fields"]:
-        values = sorted(v for c, v in model["consts"].items()
-                        if model["const_type"].get(c) == field["type"].lstrip("*"))
-        if kind in values and len(values) == 2:
-            return [v for v in values if v != kind][0]
-    _problem("unreadable_discriminator",
-             f"{go}: cannot tell what the opposite of {kind!r} is, so the "
-             "column cannot say which kind the key belongs to",
-             struct=go, kind=kind)
-    return UNREADABLE
+    if probed is None:
+        # No answer, and no second opinion to fall back on. Reading the English
+        # here is what this replaced; keeping it for the unanswered case would
+        # put the same silent wrong answer back, reachable only in the case
+        # nobody tests. gen_config has already refused by this point.
+        return UNREADABLE, None
+    # the binary's answer, in the variant this table is about
+    return (("**required**" if not variant else f"**required** for `{variant}`")
+            if probed else "optional"), None
 
 
 def _description(struct, field, model, seen, variant=None):
@@ -2023,10 +2162,12 @@ def _requirement_canary(model):
     if not seen and not os.environ.get("REFGEN_NO_REQUIRED_KEYS"):
         raise SourceError(kind="all_keys_optional", message=(
             "no validation message uses any of "
-            f"{', '.join(repr(w) for w in REQUIREMENT_VOCABULARY)}, so every key "
-            "on the page would be rendered `optional`. Either nothing is "
-            "required any more, or the config package reworded its errors and "
-            "this tool is now reading none of them. Confirm which, then update "
+            f"{', '.join(repr(w) for w in REQUIREMENT_VOCABULARY)}. Whether a "
+            "key is required no longer depends on these words -- that is asked "
+            "of the binary -- but which variant table a key belongs to still "
+            "does, so the attestor and signer tables would silently carry every "
+            "key in both. Either nothing is variant-specific any more, or the "
+            "config package reworded its errors. Confirm which, then update "
             "REQUIREMENT_VOCABULARY or set REFGEN_NO_REQUIRED_KEYS=1."))
 
 
@@ -2092,9 +2233,11 @@ def _example_config():
 def gen_config():
     model = parse_go_config()
     _requirement_canary(model)
-    probed = probe_requiredness(model, build_cli())
+    binary = build_cli()
+    membership = probe_membership(model, binary)
+    probed = probe_requiredness(model, binary, membership)
     blocks, seen_fallbacks = {}, set()
-    for sec in discover_config_sections(model):
+    for sec in discover_config_sections(model, membership):
         rows, cites = [], []
         for struct, field, key, parent in sec["rows"]:
             description = _description(
@@ -2107,11 +2250,11 @@ def gen_config():
                 continue
             answer, condition = probed.get((sec["region"], key), (None, None))
             if answer is None:
-                _problem("unprobed_key",
-                         f"no fixture the probe validates contains `{key}`, so "
-                         "whether it is required could not be asked of the "
-                         "binary. Add it to a probe fixture in "
-                         "docs/6-ibc-cli/tools/.",
+                _problem("unprobed_section",
+                         f"no probe fixture instantiates the block `{key}` lives "
+                         "in, so whether it is required could not be asked of "
+                         "the binary, and calling it optional would be a guess. "
+                         "Add one to a fixture in docs/6-ibc-cli/tools/.",
                          key=key, region=sec["region"])
             req, extra = _requirement(struct, field, model, parent,
                                       probed=answer, variant=condition)
@@ -2230,8 +2373,13 @@ def build_cli():
                        cwd=module, capture_output=True, text=True)
     if r.returncode != 0:
         raise SourceError(f"go build failed:\n{r.stderr}")
-    shutil.copyfile(out, cached)
-    os.chmod(cached, 0o755)
+    # copy to a unique name and rename into place: a copy interrupted partway
+    # leaves a truncated file at the cache path, and every later run then
+    # executes it and reports the binary's failure as the source's
+    themp = f"{cached}.{os.getpid()}"
+    shutil.copyfile(out, themp)
+    os.chmod(themp, 0o755)
+    os.replace(themp, cached)
     return cached
 
 
@@ -2489,16 +2637,24 @@ def required_flags(binary, tree):
     """
     leaves = [p for p, node in tree.items() if not node["subs"]]
     per_leaf, unreachable, incomplete = {}, [], []
-    with tempfile.TemporaryDirectory(prefix="refgen-probe-") as home:
-        seeded = _probe_run(binary, list(PROBE_SEED), home)
-        if seeded is None or seeded.returncode != 0:
-            _problem("unseeded_probe",
-                     f"`{' '.join(PROBE_SEED)}` did not initialise the probe's "
-                     "throwaway home, so a command that needs a config cannot "
-                     "start and the checks it makes itself stay unread. Flags "
-                     "the command framework was told about are still found.",
-                     seed=list(PROBE_SEED))
-        for leaf in sorted(leaves):
+    # A home per command, not one shared by all of them. Some commands are not
+    # rejected -- `config add-chain` runs for real and writes a chain -- so a
+    # shared home meant every command sorting after it was probed against a
+    # different configuration, and the answer depended on alphabetical order.
+    # Worse, a config the CLI then rejects (a key newly made required that
+    # `add-chain` cannot set) made every later command fail at load before
+    # reaching its own flag checks, and their required flags read as optional.
+    for leaf in sorted(leaves):
+        with tempfile.TemporaryDirectory(prefix="refgen-probe-") as home:
+            seeded = _probe_run(binary, list(PROBE_SEED), home)
+            if seeded is None or seeded.returncode != 0:
+                _problem("unseeded_probe",
+                         f"`{' '.join(PROBE_SEED)}` did not initialise the "
+                         "probe's throwaway home, so a command that needs a "
+                         "config cannot start and the checks it makes itself "
+                         "stay unread. Flags the command framework was told "
+                         "about are still found.",
+                         seed=list(PROBE_SEED))
             types = {}
             for node, node_tree in tree.items():
                 if node == "" or leaf == node or leaf.startswith(node + " "):
