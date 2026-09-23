@@ -56,14 +56,13 @@ type UpdateFixture struct {
 }
 
 // MembershipFixture is one storage proof with the account proof that anchors
-// it to the header's state root. Value is empty for non-membership.
+// it to the state root of NonAdjacentUpdate's header, the height both proofs
+// were captured at. Value is empty for non-membership.
 type MembershipFixture struct {
-	Proof             hexutil.Bytes `json:"proof"`        // abi.encode(bytes[]) of the storage proof nodes
-	AccountProof      hexutil.Bytes `json:"accountProof"` // abi.encode(bytes[]) of the account proof nodes
-	ProofHeight       uint64        `json:"proofHeight"`
-	Path              hexutil.Bytes `json:"path"`
-	Value             hexutil.Bytes `json:"value"`
-	ExpectedTimestamp uint64        `json:"expectedTimestamp"`
+	Proof        hexutil.Bytes `json:"proof"`        // abi.encode(bytes[]) of the storage proof nodes
+	AccountProof hexutil.Bytes `json:"accountProof"` // abi.encode(bytes[]) of the account proof nodes
+	Path         hexutil.Bytes `json:"path"`
+	Value        hexutil.Bytes `json:"value"`
 }
 
 // LoadFixture decodes the embedded qbft.json.

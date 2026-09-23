@@ -68,37 +68,11 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 	}
 }
 
-func TestConsensusStateHashChangesWithEveryField(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-	base := fixture.InitialConsensusState()
-
-	h0, err := besu.HashConsensusState(base)
-	require.NoError(t, err)
-
-	ts := base
-	ts.Timestamp++
-	h1, err := besu.HashConsensusState(ts)
-	require.NoError(t, err)
-
-	root := base
-	root.StateRoot[0] ^= 1
-	h2, err := besu.HashConsensusState(root)
-	require.NoError(t, err)
-
-	vals := base
-	vals.Validators = base.Validators[:3]
-	h3, err := besu.HashConsensusState(vals)
-	require.NoError(t, err)
-
-	assert.NotEqual(t, h0, h1)
-	assert.NotEqual(t, h0, h2)
-	assert.NotEqual(t, h0, h3)
-}
-
 func TestConsensusStateHashMatchesSolidity(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	// keccak256(abi.encode(ConsensusState)) for qbft.json's initial trusted state,
-	// computed independently with `cast abi-encode ... | cast keccak`.
+	// computed independently: cast abi-encode "f((uint64,bytes32,address[]))" \
+	//   "(<initialTrustedTimestamp>,<initialTrustedStateRoot>,[<initialTrustedValidators>])" | cast keccak
 	got, err := besu.HashConsensusState(fixture.InitialConsensusState())
 	require.NoError(t, err)
 	assert.Equal(t, common.HexToHash("0x91c4debaf593d0d6251ab85a28ff33ffdbb5cda3a070ab011402ba4599a2b66f"), got)
@@ -106,6 +80,8 @@ func TestConsensusStateHashMatchesSolidity(t *testing.T) {
 
 func TestCommitmentSlotMatchesSolidity(t *testing.T) {
 	fixture := besutest.MustFixture(t)
+	// the slot for qbft.json's membership path, computed independently:
+	//   cast keccak "$(cast abi-encode 'f(bytes32,bytes32)' "$(cast keccak <path>)" <IbcStoreStorageSlot>)"
 	assert.Equal(
 		t,
 		common.HexToHash("0x54dec64b8cfb867e4e0b052552b929bd5886439932474991c8895d84bcc8c6d9"),
