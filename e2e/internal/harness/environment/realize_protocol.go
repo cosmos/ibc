@@ -444,10 +444,9 @@ func acquireIBCClient(
 		resolved solidityibc.Client
 		err      error
 	)
-	kind := ClientKindAttestation
+	kind := clientKind(declaration)
 	switch client := declaration.(type) {
 	case ExistingClient:
-		kind = client.Kind
 		setup, setupErr := solidityIBCSetup(ctx, instance.chain)
 		if setupErr != nil {
 			return nil, setupErr
@@ -474,11 +473,8 @@ func acquireIBCClient(
 		}
 	case NewClient, NewBesuQBFTClient:
 		_, authorityID, _ := newClientAuthority(declaration)
-		if _, ok := declaration.(NewBesuQBFTClient); ok {
-			kind = ClientKindBesuQBFT
-		}
-		prepared := dependencies.preparedClients[label]
-		if prepared == nil {
+		prepared, ok := dependencies.preparedClients[label]
+		if !ok {
 			return nil, fmt.Errorf("IBC Client %q was not prepared", label)
 		}
 		authority, err := runtime.evmAccount(authorityID)

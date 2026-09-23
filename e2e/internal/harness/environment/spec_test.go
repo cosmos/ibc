@@ -420,6 +420,53 @@ func TestExistingClientKind(t *testing.T) {
 	require.ErrorContains(t, err, "does not use attestors")
 }
 
+// A Besu QBFT client can only track a Chain that runs Besu; Anvil is the one
+// kind the Spec can rule out statically.
+func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
+	besuClient := func(instance IBCInstanceID) NewBesuQBFTClient {
+		return NewBesuQBFTClient{IBCInstance: instance, Authority: "signer", TrustingPeriod: 1}
+	}
+	spec := Spec{
+		Chains: []ChainSpec{
+			ManagedBesu{ID: "chain-a", EVMChainID: 1},
+			ManagedBesu{ID: "chain-b", EVMChainID: 2},
+		},
+		IBCInstances: []IBCInstanceSpec{
+			NewIBCInstance{ID: "ibc-a", Chain: "chain-a", Authority: "deploy-a"},
+			NewIBCInstance{ID: "ibc-b", Chain: "chain-b", Authority: "deploy-b"},
+		},
+		Connections: []ConnectionSpec{{ID: "connection-ab", A: besuClient("ibc-a"), B: besuClient("ibc-b")}},
+	}
+	require.NoError(t, spec.validate())
+
+	// an attached Chain may run Besu, so it is allowed
+	spec.Chains[1] = AttachedEVM{
+		ID: "chain-b", EVMChainID: 2, Endpoint: "chain-b-rpc",
+		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
+	}
+	spec.IBCInstances[1] = ExistingIBCInstance{ID: "ibc-b", Chain: "chain-b", Locator: "0xibc-b"}
+	spec.Connections[0].B = ExistingClient{Kind: ClientKindBesuQBFT, IBCInstance: "ibc-b", ID: "client-b"}
+	require.NoError(t, spec.validate())
+
+	spec.Chains[1] = ManagedAnvil{ID: "chain-b", EVMChainID: 2}
+	spec.IBCInstances[1] = NewIBCInstance{ID: "ibc-b", Chain: "chain-b", Authority: "deploy-b"}
+	spec.Connections[0].B = besuClient("ibc-b")
+	require.ErrorContains(
+		t, spec.validate(), `Besu QBFT IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
+	)
+
+	// an existing Besu QBFT client is held to the same rule
+	spec.Chains[0] = AttachedEVM{
+		ID: "chain-a", EVMChainID: 1, Endpoint: "chain-a-rpc",
+		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
+	}
+	spec.IBCInstances[0] = ExistingIBCInstance{ID: "ibc-a", Chain: "chain-a", Locator: "0xibc-a"}
+	spec.Connections[0].A = ExistingClient{Kind: ClientKindBesuQBFT, IBCInstance: "ibc-a", ID: "client-a"}
+	require.ErrorContains(
+		t, spec.validate(), `Besu QBFT IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
+	)
+}
+
 func TestBesuQBFTClientTrustingPeriod(t *testing.T) {
 	client := NewBesuQBFTClient{IBCInstance: "ibc-a", Authority: "signer", TrustingPeriod: 1}
 	_, err := validateClientSpec("connection", "A", client)

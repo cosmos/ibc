@@ -389,6 +389,21 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 	return instance, nil
 }
 
+// clientKind reports the light client kind a validated Client declaration
+// realizes.
+func clientKind(spec ClientSpec) ClientKind {
+	switch client := spec.(type) {
+	case NewClient:
+		return ClientKindAttestation
+	case NewBesuQBFTClient:
+		return ClientKindBesuQBFT
+	case ExistingClient:
+		return client.Kind
+	default:
+		panic(fmt.Sprintf("environment: unsupported validated Client declaration %T", spec))
+	}
+}
+
 func clientIBCInstance(spec ClientSpec) IBCInstanceID {
 	switch declaration := spec.(type) {
 	case NewClient:
@@ -413,6 +428,7 @@ type AttestorSpec struct {
 func (s Spec) validate() error {
 	chains := make(map[ChainID]struct{}, len(s.Chains))
 	attachedChains := make(map[ChainID]struct{}, len(s.Chains))
+	anvilChains := make(map[ChainID]struct{}, len(s.Chains))
 	evmChainIDs := make(map[uint64]ChainID, len(s.Chains))
 	for n, chain := range s.Chains {
 		switch chain.(type) {
@@ -435,10 +451,14 @@ func (s Spec) validate() error {
 		if _, attached := chain.(AttachedEVM); attached {
 			attachedChains[id] = struct{}{}
 		}
+		if _, anvil := chain.(ManagedAnvil); anvil {
+			anvilChains[id] = struct{}{}
+		}
 		evmChainIDs[evmID] = id
 	}
 
 	instances := make(map[IBCInstanceID]struct{}, len(s.IBCInstances))
+	instanceChains := make(map[IBCInstanceID]ChainID, len(s.IBCInstances))
 	newInstances := make(map[IBCInstanceID]struct{}, len(s.IBCInstances))
 	existingInstanceLocators := make(map[struct {
 		chain   ChainID
@@ -485,6 +505,7 @@ func (s Spec) validate() error {
 			existingInstanceLocators[key] = existing.ID
 		}
 		instances[id] = struct{}{}
+		instanceChains[id] = instance.ibcInstanceChain()
 		if _, isNew := instance.(NewIBCInstance); isNew {
 			newInstances[id] = struct{}{}
 		}
@@ -500,7 +521,8 @@ func (s Spec) validate() error {
 		if _, exists := connections[connection.ID]; exists {
 			return errorsf("duplicate IBC Connection id %q", connection.ID)
 		}
-		for _, end := range connection.ends() {
+		ends := connection.ends()
+		for i, end := range ends {
 			label := clientLabel(connection.ID, end.label)
 			instance := clientIBCInstance(end.declaration)
 			if !contains(instances, instance) {
@@ -508,6 +530,15 @@ func (s Spec) validate() error {
 					"IBC Client %q references unknown IBC Instance %q",
 					label,
 					instance,
+				)
+			}
+			// only Anvil is known not to be Besu; an attached Chain may be either
+			counterpartyChain := instanceChains[clientIBCInstance(ends[1-i].declaration)]
+			if clientKind(end.declaration) == ClientKindBesuQBFT && contains(anvilChains, counterpartyChain) {
+				return errorsf(
+					"Besu QBFT IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
+					label,
+					counterpartyChain,
 				)
 			}
 			if _, existing := end.declaration.(ExistingClient); existing && contains(newInstances, instance) {
