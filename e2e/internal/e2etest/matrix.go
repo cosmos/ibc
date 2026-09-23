@@ -187,7 +187,11 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 			case environment.NewClient:
 				attestors += len(client.Attestors)
 			case environment.ExistingClient:
-				attestors += len(client.Attestors)
+				if client.Kind == environment.ClientKindBesuQBFT {
+					besuQBFTClients++
+				} else {
+					attestors += len(client.Attestors)
+				}
 			case environment.NewBesuQBFTClient:
 				besuQBFTClients++
 			}
