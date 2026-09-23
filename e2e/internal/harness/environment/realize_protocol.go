@@ -632,28 +632,20 @@ type besuTrustedState struct {
 
 // besuQBFTTrustedState reads chain's head as a sealed Besu QBFT header.
 func besuQBFTTrustedState(ctx context.Context, chain *Chain) (besuTrustedState, error) {
-	var state besuTrustedState
-	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
-		header, headerErr := client.Client().HeaderByNumber(ctx, nil)
-		if headerErr != nil {
-			return headerErr
-		}
-		parsed, parseErr := besu.ParseSealedHeader(header)
-		if parseErr != nil {
-			return fmt.Errorf("header is not a Besu QBFT header: %w", parseErr)
-		}
-		state = besuTrustedState{
-			height:     parsed.Height,
-			timestamp:  parsed.Timestamp,
-			stateRoot:  parsed.StateRoot,
-			validators: parsed.Validators,
-		}
-		return nil
-	})
-	if !ok {
-		return besuTrustedState{}, fmt.Errorf("Chain %q has no EVM client", chain.id)
+	header, err := evmHeader(ctx, chain)
+	if err != nil {
+		return besuTrustedState{}, err
 	}
-	return state, err
+	parsed, err := besu.ParseSealedHeader(header)
+	if err != nil {
+		return besuTrustedState{}, fmt.Errorf("header is not a Besu QBFT header: %w", err)
+	}
+	return besuTrustedState{
+		height:     parsed.Height,
+		timestamp:  parsed.Timestamp,
+		stateRoot:  parsed.StateRoot,
+		validators: parsed.Validators,
+	}, nil
 }
 
 func clientID(connectionID ConnectionID, end string, declaration ClientSpec) string {
