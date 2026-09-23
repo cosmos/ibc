@@ -646,9 +646,6 @@ func besuQBFTTrustedState(ctx context.Context, chain *Chain) (besuTrustedState, 
 		if parseErr != nil {
 			return fmt.Errorf("header is not a Besu QBFT header: %w", parseErr)
 		}
-		if parsed.Height == 0 {
-			return errors.New("a Besu QBFT client needs a non-zero trusted height")
-		}
 		state = besuTrustedState{
 			height:     parsed.Height,
 			timestamp:  parsed.Timestamp,

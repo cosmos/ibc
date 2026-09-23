@@ -79,12 +79,6 @@ func (c BesuQBFTClientConfig) validate() error {
 	if c.CounterpartyRouter == (common.Address{}) {
 		return fmt.Errorf("client %q has a zero counterparty router", c.ID)
 	}
-	if c.InitialHeight == 0 || c.InitialTimestamp == 0 {
-		return fmt.Errorf("client %q needs a non-zero initial trusted height and timestamp", c.ID)
-	}
-	if c.TrustingPeriod == 0 {
-		return fmt.Errorf("client %q trusting period must be positive", c.ID)
-	}
 	return nil
 }
 

@@ -91,8 +91,7 @@ func TestBesuQBFTArgs(t *testing.T) {
 		want   string
 	}{
 		"router":        {func(p *deploy.BesuQBFTParams) { p.IBCRouter = "nothex" }, "router"},
-		"height":        {func(p *deploy.BesuQBFTParams) { p.InitialHeight = 0 }, "initial height"},
-		"timestamp":     {func(p *deploy.BesuQBFTParams) { p.InitialTimestamp = 0 }, "initial height and timestamp"},
+		"zero router":   {func(p *deploy.BesuQBFTParams) { p.IBCRouter = common.Address{}.Hex() }, "router"},
 		"short root":    {func(p *deploy.BesuQBFTParams) { p.InitialStateRoot = "0x1234" }, "32 hex bytes"},
 		"bad validator": {func(p *deploy.BesuQBFTParams) { p.InitialValidators = []string{"zz"} }, "validator address"},
 	} {

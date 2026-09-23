@@ -607,21 +607,6 @@ func TestTimeChecks(t *testing.T) {
 	require.ErrorContains(t, err, "negative chain timestamp")
 }
 
-func TestRejectZeroTrustingPeriod(t *testing.T) {
-	env := newFixtureEnv(t)
-	env.expectInitialAnchor(t)
-	env.host.clientState.TrustingPeriod = 0
-	require.ErrorContains(
-		t,
-		env.gen.resolve(t.Context(), env.fixture.RouterAddress.Hex()),
-		"trusting period must be nonzero",
-	)
-	_, _, err := env.gen.LatestProvableHeight(t.Context())
-	require.ErrorContains(t, err, "trusting period must be nonzero")
-	_, err = env.gen.ClientUpdatePayload(t.Context(), env.fixture.InitialTrustedHeight)
-	require.ErrorContains(t, err, "trusting period must be nonzero")
-}
-
 func TestLatestProvableHeightDefersOverlapValidationToContract(t *testing.T) {
 	env := newFixtureEnv(t)
 	keys := besutest.Keys(8)

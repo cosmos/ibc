@@ -104,17 +104,6 @@ func ResolveGenerator(
 	return gen, nil
 }
 
-func (g *Generator) clientState(ctx context.Context) (besumsgs.IBesuLightClientMsgsClientState, error) {
-	state, err := g.host.ClientState(ctx, g.clientID)
-	if err != nil {
-		return state, err
-	}
-	if state.TrustingPeriod == 0 {
-		return state, errors.New("besu qbft trusting period must be nonzero")
-	}
-	return state, nil
-}
-
 func unixSeconds(timestamp time.Time) (uint64, error) {
 	seconds := timestamp.Unix()
 	if seconds < 0 {
@@ -128,7 +117,7 @@ func exceedsClockDrift(target, host, drift uint64) bool {
 }
 
 func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) error {
-	state, err := g.clientState(ctx)
+	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return fmt.Errorf("client %q is not a besu-qbft light client: %w", g.clientID, err)
 	}
@@ -154,7 +143,7 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 // LatestProvableHeight selects the newest clock-admissible height. Consensus
 // validity is left to contract simulation; intermediate updates are not supported.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	state, err := g.clientState(ctx)
+	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return 0, time.Time{}, err
 	}
@@ -233,7 +222,7 @@ func checkTrustingPeriod(period, timestamp, host uint64) error {
 // ClientUpdatePayload returns an encoded updateMsg from the client's trusted state to target,
 // or nil when the client already stores an unexpired target. Intermediate updates are not supported.
 func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]byte, error) {
-	state, err := g.clientState(ctx)
+	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
 	}

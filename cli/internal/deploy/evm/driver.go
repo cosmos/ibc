@@ -276,11 +276,8 @@ type besuQBFTConstructorArgs struct {
 // besuQBFTArgs validates besu-qbft params and converts them for the contract
 // constructor.
 func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
-	if !common.IsHexAddress(p.IBCRouter) {
+	if !common.IsHexAddress(p.IBCRouter) || common.HexToAddress(p.IBCRouter) == (common.Address{}) {
 		return besuQBFTConstructorArgs{}, fmt.Errorf("invalid counterparty router address %q", p.IBCRouter)
-	}
-	if p.InitialHeight == 0 || p.InitialTimestamp == 0 {
-		return besuQBFTConstructorArgs{}, fmt.Errorf("initial height and timestamp required")
 	}
 	root, err := hexutil.Decode(p.InitialStateRoot)
 	if err != nil || len(root) != common.HashLength {
