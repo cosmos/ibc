@@ -2,13 +2,15 @@
 
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients and, between two Besu chains, through Besu QBFT light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
 
-`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
+`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation and Besu QBFT light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
 ## Acceptance coverage
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
+
+Besu QBFT light clients are covered by one transfer through a two-chain Besu mesh (`TestTransferBesuQBFT_AutoRelay`), which requires the Besu provider and therefore skips in fast mode. It exercises the full path: client update from a sealed header, membership proofs for the packet, and acknowledgement. Timeouts, non-membership, expiry and catch-up over thinly sealed blocks are not exercised end-to-end on Besu: they need paused or controlled mining, which the Besu harness does not offer, and are covered by the prover's unit tests in `cli/internal/relay/prover/besuqbft`.
 
 ## Running the acceptance tests
 
@@ -130,7 +132,7 @@ output without modifying the committed file.
 
 ## Extending the graph
 
-`attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+`attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains; `qbftMesh` builds the same graph with Besu QBFT Clients and no Attestors, and requires every chain to run Besu. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
 
 ## Debugging
 
