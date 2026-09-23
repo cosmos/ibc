@@ -25,13 +25,20 @@ type AppStack struct {
 	ICS27GMP      common.Address // ERC1967 proxy
 }
 
-// Client is an attestation light client registered with one Instance.
+// Client is a light client registered with one Instance, with the state its
+// contract reports: the attestation set for attestation clients, the tracked
+// router and trust settings for Besu QBFT clients.
 type Client struct {
-	ID                    string
-	Address               common.Address
-	CounterpartyClientID  string
+	ID                   string
+	Address              common.Address
+	CounterpartyClientID string
+
 	Attestors             []common.Address
 	MinRequiredSignatures uint8
+
+	CounterpartyRouter common.Address
+	TrustingPeriod     uint64
+	MaxClockDrift      uint64
 }
 
 // AttestationClientConfig contains the immutable constructor inputs for an

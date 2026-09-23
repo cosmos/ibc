@@ -104,6 +104,9 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	require.NoError(t, err)
 	qbftClient, err := qbft.Deploy(ctx)
 	require.NoError(t, err)
+	require.Equal(t, instance.Router, qbftClient.CounterpartyRouter)
+	require.Equal(t, uint64(14*24*60*60), qbftClient.TrustingPeriod)
+	require.Zero(t, qbftClient.MaxClockDrift)
 	attachedQBFT, err := setup.AttachClient(
 		ctx,
 		instance.Router,

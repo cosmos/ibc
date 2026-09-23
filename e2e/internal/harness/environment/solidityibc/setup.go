@@ -701,9 +701,13 @@ func (s *Setup) verifyClient(
 		if err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: query client state: %w", clientID, err)
 		}
-		if _, err := besumsgs.NewBindings().UnpackClientState(raw); err != nil {
+		state, err := besumsgs.NewBindings().UnpackClientState(raw)
+		if err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 		}
+		client.CounterpartyRouter = state.IbcRouter
+		client.TrustingPeriod = state.TrustingPeriod
+		client.MaxClockDrift = state.MaxClockDrift
 	default:
 		return Client{}, fmt.Errorf("unsupported client kind %q", kind)
 	}
