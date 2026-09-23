@@ -43,14 +43,20 @@ type Clearer struct {
 
 // Result the counts one clearing pass produced.
 type Result struct {
-	Probed      int
-	Outstanding int
-	AlreadyHeld int
-	Recovered   int
-	// Unresolved sequences the next pass will probe again.
-	Unresolved int
-	// Abandoned sequences held on record that no pass will probe again.
-	Abandoned int
+	CommitmentsQueried int
+	CommitmentsLive    int
+
+	PacketsAlreadyStored int
+
+	// PacketsRecovered packet has seq commitment onchain && even log has been found,
+	// insert/upsert DB row
+	PacketsRecovered int
+
+	// SeqsUnresolved sequences the next pass will probe again.
+	SeqsUnresolved int
+
+	// SeqsAbandoned sequences held on record that no pass will probe again.
+	SeqsAbandoned int
 }
 
 // client-specific clearer with fixed rpc latest block height
@@ -59,6 +65,13 @@ type clientClearer struct {
 
 	clientID          string
 	latestBlockHeight uint64
+}
+
+type liveRequest struct {
+	seqFrom        uint64
+	seqTo          uint64
+	seqsExisting   []uint64
+	seqsUnresolved []uint64
 }
 
 func NewClearer(
@@ -133,24 +146,32 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 		return Result{}, errors.Wrapf(err, "reading the latest sequence")
 	}
 
+	// fetch seqs that were recorded by wss subscription between clear() ticks
+	// todo pagination FOU-1679
+	seqsExisting, err := c.storage.ListPacketSequencesFrom(ctx, c.chainID, c.clientID, seqFrom)
+	if err != nil {
+		return Result{}, errors.Wrapf(err, "listing recorded sequences")
+	}
+
 	// query unresolved packages one more time. This might succeed ONLY
 	// if an operator changes RPC to an archival one
-	reprobe := state.Unresolved
+	seqsPreviouslyUnresolved := state.Unresolved
 	if c.abandon {
-		reprobe = nil
+		seqsPreviouslyUnresolved = nil
 	}
 
-	seqsOutstanding, seqsQueried, err := c.queryLiveSequences(ctx, seqFrom, seqLatest, reprobe)
+	// builds an array of what seqs to query, then searches for their commitments on-chain
+	seqsLive, seqsQueried, err := c.queryLiveSequences(ctx, liveRequest{
+		seqFrom:        seqFrom,
+		seqTo:          seqLatest,
+		seqsExisting:   seqsExisting,
+		seqsUnresolved: seqsPreviouslyUnresolved,
+	})
 	if err != nil {
-		return Result{}, err
+		return Result{}, errors.Wrapf(err, "live sequences")
 	}
 
-	unrecorded, err := c.buildUnrecorded(ctx, seqFrom, seqsOutstanding)
-	if err != nil {
-		return Result{}, err
-	}
-
-	toBeInserted, unresolved, err := c.querySendEventsAndBuildRows(ctx, unrecorded)
+	toBeInserted, unresolved, err := c.querySendEventsAndBuildRows(ctx, seqsLive)
 	if err != nil {
 		return Result{}, err
 	}
@@ -161,21 +182,21 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 
 	// measured against what the pass actually probed: a sequence it carried
 	// rather than probed had nothing learned about it, so it stays untouched
-	delta := unresolvedDelta(reprobe, unresolved, c.latestBlockHeight)
+	delta := unresolvedDelta(seqsPreviouslyUnresolved, unresolved, c.latestBlockHeight)
 
 	result := Result{
-		Probed:      seqsQueried,
-		Outstanding: len(seqsOutstanding),
-		AlreadyHeld: len(seqsOutstanding) - len(unrecorded),
-		Recovered:   len(toBeInserted),
-		Unresolved:  0,
-		Abandoned:   0,
+		CommitmentsQueried:   seqsQueried,
+		CommitmentsLive:      len(seqsLive),
+		PacketsAlreadyStored: len(seqsExisting),
+		PacketsRecovered:     len(toBeInserted),
+		SeqsUnresolved:       0,
+		SeqsAbandoned:        0,
 	}
 
 	if c.abandon {
-		result.Abandoned = len(state.Unresolved) + len(delta.Add)
+		result.SeqsAbandoned = len(state.Unresolved) + len(delta.Add)
 	} else {
-		result.Unresolved = len(unresolved)
+		result.SeqsUnresolved = len(unresolved)
 	}
 
 	if err := c.persist(ctx, toBeInserted, seqLatest, delta); err != nil {
@@ -212,8 +233,7 @@ func (c *clientClearer) warnUnservable(sequences []uint64) {
 // optionally query unresolved sequences -- maybe they'll be found live?
 func (c *clientClearer) queryLiveSequences(
 	ctx context.Context,
-	seqFrom, seqTo uint64,
-	unresolvedSequences []uint64,
+	req liveRequest,
 ) (liveSequences []uint64, queried int, err error) {
 	queryCommitments := func(sequences []uint64) error {
 		if len(sequences) == 0 {
@@ -233,53 +253,25 @@ func (c *clientClearer) queryLiveSequences(
 		return nil
 	}
 
-	if err := queryCommitments(sequenceRange(seqFrom, seqTo)); err != nil {
+	if err := queryCommitments(req.sparseRange()); err != nil {
 		return nil, 0, err
 	}
 
-	if len(unresolvedSequences) > 0 {
+	if len(req.seqsUnresolved) > 0 {
 		c.logger.Info(
 			"Querying unresolved sequences",
 			"clientID", c.clientID,
-			"unresolved.length", len(unresolvedSequences),
-			"unresolved.min", unresolvedSequences[0],
-			"unresolved.max", unresolvedSequences[len(unresolvedSequences)-1],
+			"unresolved.length", len(req.seqsUnresolved),
+			"unresolved.min", req.seqsUnresolved[0],
+			"unresolved.max", req.seqsUnresolved[len(req.seqsUnresolved)-1],
 		)
 
-		if err := queryCommitments(unresolvedSequences); err != nil {
+		if err := queryCommitments(req.seqsUnresolved); err != nil {
 			return nil, 0, err
 		}
 	}
 
 	return liveSequences, queried, nil
-}
-
-// buildUnrecorded constructs unrecorded seqs: outstanding (live onchain) minus already recorded in DB
-func (c *clientClearer) buildUnrecorded(ctx context.Context, seqFrom uint64, outstanding []uint64) ([]uint64, error) {
-	if len(outstanding) == 0 {
-		return nil, nil
-	}
-
-	// todo pagination?
-	recorded, err := c.storage.ListPacketSequencesFrom(ctx, c.chainID, c.clientID, seqFrom)
-	if err != nil {
-		return nil, errors.Wrapf(err, "listing recorded sequences")
-	}
-
-	set := make(map[uint64]struct{}, len(recorded))
-	for _, sequence := range recorded {
-		set[sequence] = struct{}{}
-	}
-
-	unrecorded := make([]uint64, 0, len(outstanding))
-
-	for _, sequence := range outstanding {
-		if _, ok := set[sequence]; !ok {
-			unrecorded = append(unrecorded, sequence)
-		}
-	}
-
-	return unrecorded, nil
 }
 
 // takes list of seqs, resolves onchain packet events and constructs rows to write.
@@ -386,15 +378,26 @@ func unresolvedDelta(previousUnresolved, currentUnresolved []uint64, height uint
 	return delta
 }
 
-func sequenceRange(from, to uint64) []uint64 {
-	if from > to {
+// returns [from, to] excluding existing sequences
+func (r liveRequest) sparseRange() []uint64 {
+	if r.seqFrom > r.seqTo {
 		return []uint64{}
 	}
 
-	sequences := make([]uint64, 0, to-from+1)
-	for sequence := from; sequence <= to; sequence++ {
-		sequences = append(sequences, sequence)
+	existing := make(map[uint64]struct{}, len(r.seqsExisting))
+	for _, sequence := range r.seqsExisting {
+		existing[sequence] = struct{}{}
 	}
 
-	return sequences
+	result := make([]uint64, 0, 1+(r.seqTo-r.seqFrom))
+
+	for seq := r.seqFrom; seq <= r.seqTo; seq++ {
+		if _, ok := existing[seq]; ok {
+			continue
+		}
+
+		result = append(result, seq)
+	}
+
+	return result
 }

@@ -84,6 +84,14 @@ type ClientEnd struct {
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
 }
 
+// clientEndIdentity identifies a light client independent of aliases and
+// operational settings.
+type clientEndIdentity struct{ chainID, clientID string }
+
+func (c ClientEnd) identity() clientEndIdentity {
+	return clientEndIdentity{c.ChainID, c.ClientID}
+}
+
 // AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
@@ -301,15 +309,20 @@ func (c RelayerConfig) validateChainOverrides() error {
 }
 
 func (c RelayerConfig) validateConnections() error {
+	for i, conn := range c.Connections {
+		if err := conn.Validate(); err != nil {
+			return errPath(fmt.Sprintf("connections[%d]", i), err)
+		}
+	}
+	return c.validateConnectionIdentities()
+}
+
+func (c RelayerConfig) validateConnectionIdentities() error {
 	aliases := make(map[string]struct{})
-	clientEnds := make(map[string]struct{})
+	clientEnds := make(map[clientEndIdentity]struct{})
 
 	for i, conn := range c.Connections {
 		seg := fmt.Sprintf("connections[%d]", i)
-
-		if err := conn.Validate(); err != nil {
-			return errPath(seg, err)
-		}
 
 		if _, ok := aliases[conn.Alias]; ok {
 			return errPathf(seg, "duplicate alias: %q", conn.Alias)
@@ -317,7 +330,7 @@ func (c RelayerConfig) validateConnections() error {
 		aliases[conn.Alias] = struct{}{}
 
 		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
-			key := end.ChainID + "/" + end.ClientID
+			key := end.identity()
 			if _, ok := clientEnds[key]; ok {
 				return errPathf(seg, "duplicate client %q on chain %q", end.ClientID, end.ChainID)
 			}

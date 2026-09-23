@@ -306,8 +306,8 @@ Print the existing config plus the settings to relay between two chains.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--signer-a <string>` |  | Signers[] alias submitting relay txs on chainA. |
-| `--signer-b <string>` |  | Signers[] alias submitting relay txs on chainB. |
+| `--signer-a <string>` |  | Override the relay signer on chainA; omitted preserves existing settings. |
+| `--signer-b <string>` |  | Override the relay signer on chainB; omitted preserves existing settings. |
 | `-p, --populate-config` |  | Write the printed config to the config file. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
@@ -318,6 +318,18 @@ Print the existing config plus the settings to relay between two chains.
 <!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
+
+Re-running against an existing config is safe: connections are matched by their
+client pair and local attestors by chain and signer, so aliases, names and other
+settings you have changed are kept. `--signer-a` and `--signer-b` replace the
+relay signers only when passed. An incomplete config is still written, with a
+warning listing what is missing.
+
+Automatic client-type changes are not supported, even when replacing a router.
+If a manifest's client type differs from an existing non-remote client, rendering
+fails without writing. Explicitly update that client's type and compatible
+`params` in the config before rerunning. Existing remote-prover settings are
+preserved rather than compared to the manifest's on-chain client type.
 
 ### `ibc deploy show`
 
