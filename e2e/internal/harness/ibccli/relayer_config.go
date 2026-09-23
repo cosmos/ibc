@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box
@@ -248,9 +250,9 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 
 const (
 	RelayerSignerLocal       = "local"
-	RelayerClientAttestation = "attestation"
-	RelayerClientBesuQBFT    = "besu-qbft"
-	RelayerClientRemote      = "remote"
+	RelayerClientAttestation = clientkind.Attestation
+	RelayerClientBesuQBFT    = clientkind.BesuQBFT
+	RelayerClientRemote      = clientkind.Remote
 
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"

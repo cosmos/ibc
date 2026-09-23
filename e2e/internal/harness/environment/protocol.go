@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -53,8 +54,8 @@ type ClientKind string
 
 // Light client kinds the harness can realize.
 const (
-	ClientKindAttestation ClientKind = "attestation"
-	ClientKindBesuQBFT    ClientKind = "besu-qbft"
+	ClientKindAttestation ClientKind = clientkind.Attestation
+	ClientKindBesuQBFT    ClientKind = clientkind.BesuQBFT
 )
 
 type IBCClient struct {

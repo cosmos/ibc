@@ -7,13 +7,15 @@ package deploy
 import (
 	"context"
 
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
-// Client types the deploy engine can provision.
+// Client types the deploy engine can provision, named as the relayer config
+// does.
 const (
-	ClientTypeAttestation = "attestation"
-	ClientTypeBesuQBFT    = "besu-qbft"
+	ClientTypeAttestation = string(config.ClientTypeAttestation)
+	ClientTypeBesuQBFT    = string(config.ClientTypeBesuQBFT)
 )
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/escrow"
 )
@@ -479,7 +480,14 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 		return Client{}, registerErr
 	}
 
-	client, err := s.verifyClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID, "attestation")
+	client, err := s.verifyClient(
+		ctx,
+		p.instance,
+		config.ID,
+		clientAddress,
+		config.CounterpartyClientID,
+		clientkind.Attestation,
+	)
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC verify deployed Client %q: %w", config.ID, err)
 	}
@@ -577,7 +585,14 @@ func (p *PreparedBesuQBFTClient) Deploy(ctx context.Context) (Client, error) {
 		return Client{}, registerErr
 	}
 
-	client, err := s.verifyClient(ctx, p.instance, config.ID, clientAddress, config.CounterpartyClientID, "besu-qbft")
+	client, err := s.verifyClient(
+		ctx,
+		p.instance,
+		config.ID,
+		clientAddress,
+		config.CounterpartyClientID,
+		clientkind.BesuQBFT,
+	)
 	if err != nil {
 		return Client{}, fmt.Errorf("solidity IBC verify deployed Besu QBFT Client %q: %w", config.ID, err)
 	}
@@ -662,7 +677,7 @@ func (s *Setup) verifyClient(
 	}
 	client := Client{ID: clientID, Address: registered, CounterpartyClientID: counterpartyClientID}
 	switch kind {
-	case "attestation":
+	case clientkind.Attestation:
 		lightClient, err := attestation.NewContract(registered, s.backend)
 		if err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind attestation contract: %w", clientID, err)
@@ -677,7 +692,7 @@ func (s *Setup) verifyClient(
 		}
 		client.Attestors = slices.Clone(set.AttestorAddresses)
 		client.MinRequiredSignatures = set.MinRequiredSigs
-	case "besu-qbft":
+	case clientkind.BesuQBFT:
 		lightClient, err := besuqbft.NewContractCaller(registered, s.backend)
 		if err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind besu qbft contract: %w", clientID, err)
