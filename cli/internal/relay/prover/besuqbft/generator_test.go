@@ -244,6 +244,9 @@ func TestClientUpdatePayloadTargetConflicts(t *testing.T) {
 	require.ErrorIs(t, err, ErrConflictingConsensusState)
 }
 
+// The contract stores a consensus state at the header's own height and only
+// raises latestHeight when the header is newer, so a missing height below the
+// latest one is installed from the latest trusted state.
 func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate

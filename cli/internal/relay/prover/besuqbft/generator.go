@@ -141,7 +141,8 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) erro
 }
 
 // LatestProvableHeight selects the newest clock-admissible height. Consensus
-// validity is left to contract simulation; intermediate updates are not supported.
+// validity is left to contract simulation; the relayer never chains several
+// updates to bridge validator turnover.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
@@ -219,8 +220,11 @@ func checkTrustingPeriod(period, timestamp, host uint64) error {
 	return nil
 }
 
-// ClientUpdatePayload returns an encoded updateMsg from the client's trusted state to target,
-// or nil when the client already stores an unexpired target. Intermediate updates are not supported.
+// ClientUpdatePayload returns an encoded updateMsg from the client's latest
+// trusted state to target, or nil when the client already stores an unexpired
+// target. A target below the latest height that is not stored is installed as
+// a historical consensus state, anchored on the latest one like any other
+// update: the update is always one step, never a chain.
 func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]byte, error) {
 	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
