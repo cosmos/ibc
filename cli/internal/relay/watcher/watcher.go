@@ -4,6 +4,7 @@ package watcher
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -13,12 +14,24 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
+// Backoff bounds for reconnecting a dropped subscription.
+const (
+	DefaultMinBackoff = time.Second
+	DefaultMaxBackoff = time.Minute
+)
+
 // eventBuffer matches the log buffer the chain client subscribes with, so a
 // slow store write does not immediately back up the websocket.
 const eventBuffer = 128
 
-// Subscriber the chain-side event stream.
-type Subscriber interface {
+// Chain represents chain client
+type Chain interface {
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+
+	LatestPacketSequence(ctx context.Context, sourceClientID string, height uint64) (uint64, error)
+	PacketCommitments(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error)
+	FindSendPackets(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error)
+
 	SubscribeSendPackets(ctx context.Context, clientIDs []string, out chan<- v2.PacketEvent) (v2.Subscription, error)
 }
 
@@ -27,31 +40,61 @@ type PacketStore interface {
 	UpsertPacket(ctx context.Context, input store.UpsertPacket) error
 }
 
-// Watcher records a packet row for every SendPacket event one chain emits on
-// the clients it watches. The subscription starts where the chain is and never
-// looks backwards, so a packet sent while nothing was listening is not
-// discovered here.
-type Watcher struct {
-	chainID    string
-	clientIDs  []string
-	routes     map[string]config.ClientEnd
-	subscriber Subscriber
-	storage    PacketStore
+// Config the Watcher configuration.
+type Config struct {
+	MinBackoff time.Duration
+	MaxBackoff time.Duration
 
-	cancel  context.CancelFunc
-	stopped chan struct{}
-
-	logger *slog.Logger
+	// CleanOnStart runs a pass as soon as the first subscription is live.
+	CleanOnStart bool
+	// ClearInterval how often a pass runs after that.
+	ClearInterval time.Duration
+	// AbandonUnrecoverablePackets drops packets whose send log the endpoint will
+	// not serve out of the probe set, keeping the record of them.
+	AbandonUnrecoverablePackets bool
 }
 
-// New builds the watcher for one chain.
+// Watcher watches live chain events + runs a periodic clearing pass to fetch missed packets.
+// All discovered packets are written to the storage.
+type Watcher struct {
+	chainID   string
+	clientIDs []string
+	routes    map[string]config.ClientEnd
+	cfg       Config
+
+	chain   Chain
+	storage PacketStore
+
+	clearer  *Clearer
+	clearNow chan struct{}
+
+	logger *slog.Logger
+
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+}
+
+// stream is one open subscription and the events it feeds. The zero value is
+// the gap between a dropped subscription and its replacement.
+type stream struct {
+	sub    v2.Subscription
+	events chan v2.PacketEvent
+	cancel context.CancelFunc
+}
+
+// New Watcher constructor.
 func New(
 	chainID string,
 	connections []config.ConnectionConfig,
-	subscriber Subscriber,
-	storage PacketStore,
+	chain Chain,
+	storage ClearStore,
+	cfg Config,
 	logger *slog.Logger,
 ) *Watcher {
+	if cfg.ClearInterval <= 0 {
+		cfg.ClearInterval = config.DefaultClearInterval
+	}
+
 	clientIDs := make([]string, 0, len(connections))
 
 	for _, conn := range connections {
@@ -60,35 +103,31 @@ func New(
 		}
 	}
 
+	clearer := NewClearer(chainID, connections, chain, storage, cfg, logger)
+
 	return &Watcher{
-		chainID:    chainID,
-		clientIDs:  clientIDs,
-		routes:     routesOf(chainID, connections),
-		subscriber: subscriber,
-		storage:    storage,
-		logger:     logger.With("module", "watcher", "chainID", chainID),
+		chainID:   chainID,
+		clientIDs: clientIDs,
+		routes:    routesOf(chainID, connections),
+		cfg:       cfg,
+
+		chain:   chain,
+		storage: storage,
+
+		// buf of 1 allows instant clearance after wss reconnect
+		clearNow: make(chan struct{}, 1),
+		clearer:  clearer,
+
+		logger: logger.With("module", "watcher", "chainID", chainID),
 	}
 }
 
-// routesOf maps each watched client to the end its packets are relayed to.
-func routesOf(chainID string, connections []config.ConnectionConfig) map[string]config.ClientEnd {
-	routes := make(map[string]config.ClientEnd, len(connections))
-
-	for _, conn := range connections {
-		if source, destination, ok := conn.SourceEnd(chainID); ok {
-			routes[source.ClientID] = destination
-		}
-	}
-
-	return routes
-}
-
-// Start subscribes and begins the event loop in its own goroutine, failing if
-// the subscription cannot be opened.
 func (w *Watcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	stream, err := w.subscribe(ctx)
+	eventsChan := make(chan v2.PacketEvent, eventBuffer)
+
+	eventStream, err := w.subscribe(ctx, eventsChan)
 	if err != nil {
 		cancel()
 
@@ -96,81 +135,35 @@ func (w *Watcher) Start() error {
 	}
 
 	w.cancel = cancel
-	w.stopped = make(chan struct{})
+	w.wg.Add(2)
 
-	go w.run(ctx, stream)
+	go func() {
+		defer w.wg.Done()
+		w.runClearer(ctx)
+	}()
+
+	go func() {
+		defer w.wg.Done()
+		w.runSubscription(ctx, eventStream)
+	}()
 
 	return nil
 }
 
-// stream is one open subscription and the events it feeds.
-type stream struct {
-	sub    v2.Subscription
-	events <-chan v2.PacketEvent
-	cancel context.CancelFunc
-}
-
-// close releases all of a subscription's resources
-func (s stream) close() {
-	s.sub.Unsubscribe()
-	s.cancel()
-}
-
-func (w *Watcher) subscribe(ctx context.Context) (stream, error) {
-	events := make(chan v2.PacketEvent, eventBuffer)
-
-	subCtx, cancel := context.WithCancel(ctx)
-	sub, err := w.subscriber.SubscribeSendPackets(subCtx, w.clientIDs, events)
-	if err != nil {
-		cancel()
-
-		return stream{}, errors.Wrap(err, "subscribing to send packets")
-	}
-
-	return stream{sub: sub, events: events, cancel: cancel}, nil
-}
-
-// Stop cancels the subscription loop and blocks until it has exited.
 func (w *Watcher) Stop() error {
 	if w.cancel == nil {
 		return nil
 	}
 
 	w.cancel()
-	<-w.stopped
+	w.wg.Wait()
+	w.cancel = nil
 
 	return nil
 }
 
-func (w *Watcher) run(ctx context.Context, stream stream) {
-	defer close(w.stopped)
-	defer stream.close()
-
-	defer func() {
-		if err := recover(); err != nil {
-			w.logger.Error("Panic recovery in running watcher", "panic", err)
-		}
-	}()
-
-	w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-stream.events:
-			if err := w.HandleEvent(ctx, event); err != nil {
-				w.logger.Error("Recording send packet", "err", err)
-			}
-		case err := <-stream.sub.Err():
-			w.logger.Error("Send packet subscription ended", "err", err)
-			return
-		}
-	}
-}
-
-// HandleEvent records the packet a send event carries. Events of another kind
-// and reorged-out logs write nothing.
+// HandleEvent records the packet a send event carries.
+// Events of another kind and reorged-out logs write nothing.
 func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 	if event.Kind != v2.KindSendPacket {
 		return nil
@@ -232,7 +225,185 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 	return nil
 }
 
+func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (stream, error) {
+	// note that for evm implementation cancel() is unused because websocket loop
+	// doesn't rely on provided context (see geth's code)
+	ctx, cancel := context.WithCancel(ctx)
+	sub, err := w.chain.SubscribeSendPackets(ctx, w.clientIDs, events)
+	if err != nil {
+		cancel()
+
+		return stream{}, errors.Wrap(err, "subscribing to send packets")
+	}
+
+	return stream{sub, events, cancel}, nil
+}
+
+// connects to live events and recovers broken subscriptions.
+func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
+	defer func() {
+		if p := recover(); p != nil {
+			w.logger.Error("Panic recovery in running live subscription", "panic", p)
+		}
+	}()
+
+	defer func() {
+		eventStream.close(true)
+	}()
+
+	// nil by default, non-nil when it's time to reconnect
+	var reconnectChan <-chan time.Time
+
+	backoff := w.cfg.MinBackoff
+	triggerReconnect := func(msg string, err error) {
+		w.logger.Warn(msg, "backoff", backoff.String(), "err", err)
+		reconnectChan = time.After(backoff)
+		backoff = min(backoff*2, w.cfg.MaxBackoff)
+	}
+
+	// eventsChan *outlives* each subscription, so a reconnect
+	// keeps whatever the dropped one had already buffered.
+	eventsChan := eventStream.events
+
+	for {
+		select {
+		case event := <-eventsChan:
+			if err := w.HandleEvent(ctx, event); err != nil {
+				w.logger.Error("Recording send packet", "err", err)
+			}
+		case <-ctx.Done():
+			return
+		case err := <-eventStream.errs():
+			eventStream.close(false)
+			eventStream = stream{}
+			triggerReconnect("Send packet subscription ended, reconnecting", err)
+		case <-reconnectChan:
+			newStream, err := w.subscribe(ctx, eventsChan)
+			if err != nil {
+				triggerReconnect("Subscribing to send packets failed, retrying", err)
+				continue
+			}
+
+			eventStream = newStream
+			reconnectChan = nil
+
+			// future: consider gradual backoff decrease
+			backoff = w.cfg.MinBackoff
+
+			w.logger.Info("Resubscribed to send packets", "clientIDs", w.clientIDs)
+
+			// trigger clearer
+			w.clearRequest()
+		}
+	}
+}
+
+func (w *Watcher) runClearer(ctx context.Context) {
+	defer func() {
+		if p := recover(); p != nil {
+			w.logger.Error("Panic recovery in running clearer", "panic", p)
+		}
+	}()
+
+	// optional first iteration
+	if w.cfg.CleanOnStart {
+		w.clear(ctx)
+	}
+
+	ticker := time.NewTicker(w.cfg.ClearInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			w.clear(ctx)
+		case <-w.clearNow:
+			w.clear(ctx)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (w *Watcher) clearRequest() {
+	select {
+	case w.clearNow <- struct{}{}:
+	default:
+		// already running
+	}
+}
+
+// clear runs one pass over every watched client. A client that fails is logged
+// and left for the next pass: the backstop going quiet must not take the
+// subscription down with it.
+func (w *Watcher) clear(ctx context.Context) {
+	for _, clientID := range w.clientIDs {
+		if ctx.Err() != nil {
+			return
+		}
+
+		started := time.Now()
+
+		result, err := w.clearer.Clear(ctx, clientID)
+		if err != nil {
+			w.logger.Error("Clearing outstanding packets", "clientID", clientID, "err", err)
+			continue
+		}
+
+		w.logger.Info(
+			"Cleared outstanding packets",
+			"clientID", clientID,
+			"probed", result.Probed,
+			"outstanding", result.Outstanding,
+			"alreadyHeld", result.AlreadyHeld,
+			"recovered", result.Recovered,
+			"unresolved", result.Unresolved,
+			"abandoned", result.Abandoned,
+			"elapsed", time.Since(started).String(),
+		)
+	}
+}
+
+// close releases all of a subscription's resources
+func (s stream) close(closeChan bool) {
+	if s.sub == nil {
+		return
+	}
+
+	s.sub.Unsubscribe()
+	s.cancel()
+
+	if closeChan {
+		close(s.events)
+	}
+}
+
+// errs is nil while nothing is subscribed, so the loop simply waits out a gap.
+func (s stream) errs() <-chan error {
+	if s.sub == nil {
+		return nil
+	}
+
+	return s.sub.Err()
+}
+
+// routesOf maps each watched client to the end its packets are relayed to.
+func routesOf(chainID string, connections []config.ConnectionConfig) map[string]config.ClientEnd {
+	routes := make(map[string]config.ClientEnd, len(connections))
+
+	for _, conn := range connections {
+		if source, destination, ok := conn.SourceEnd(chainID); ok {
+			routes[source.ClientID] = destination
+		}
+	}
+
+	return routes
+}
+
 func packetRow(chainID, destChainID string, event v2.PacketEvent) store.UpsertPacket {
+	//nolint:gosec // timeout timestamps fit in int64
+	timeout := time.Unix(int64(event.Packet.TimeoutTimestamp), 0).UTC()
+
 	return store.UpsertPacket{
 		Status:                    store.RelayStatusPending,
 		SourceChainID:             chainID,
@@ -242,7 +413,6 @@ func packetRow(chainID, destChainID string, event v2.PacketEvent) store.UpsertPa
 		PacketSequenceNumber:      event.Packet.Sequence,
 		PacketSourceClientID:      event.Packet.SourceClient,
 		PacketDestinationClientID: event.Packet.DestinationClient,
-		//nolint:gosec // timeout timestamps fit in int64
-		PacketTimeoutTimestamp: time.Unix(int64(event.Packet.TimeoutTimestamp), 0).UTC(),
+		PacketTimeoutTimestamp:    timeout,
 	}
 }
