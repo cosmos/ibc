@@ -170,9 +170,9 @@ func init() {
 		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
 
 	cmdDeployRenderConfig.Flags().
-		StringVar(&flagDeployRenderSignerA, "signer-a", "", "signers[] alias submitting relay txs on chainA")
+		StringVar(&flagDeployRenderSignerA, "signer-a", "", "Override the relay signer on chainA; omitted preserves existing settings")
 	cmdDeployRenderConfig.Flags().
-		StringVar(&flagDeployRenderSignerB, "signer-b", "", "signers[] alias submitting relay txs on chainB")
+		StringVar(&flagDeployRenderSignerB, "signer-b", "", "Override the relay signer on chainB; omitted preserves existing settings")
 	cmdDeployRenderConfig.Flags().
 		BoolVarP(&flagDeployRenderPopulate, "populate-config", "p", false, "write the printed config to the config file")
 
