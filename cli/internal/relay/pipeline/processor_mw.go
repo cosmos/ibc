@@ -161,12 +161,12 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 			input.ProcessingError = err
 		}
 
-		metrics.batch(ctx, mw.internal.Status(), toProcess, joinBatchError(err, toProcess))
+		metrics.batch(ctx, mw.internal.Status(), toProcess, err)
 
 		return append(toProcess, notProcessing...), nil
 	}
 
-	metrics.batch(ctx, mw.internal.Status(), toProcess, joinBatchError(nil, output))
+	metrics.batch(ctx, mw.internal.Status(), toProcess, batchError(output))
 
 	return append(output, notProcessing...), nil
 }
@@ -183,11 +183,7 @@ func (mw BatchProcessorMW) Status() store.RelayStatus {
 	return mw.internal.Status()
 }
 
-func joinBatchError(err error, output []*processors.Transfer) error {
-	if err != nil {
-		return err
-	}
-
+func batchError(output []*processors.Transfer) error {
 	for _, tr := range output {
 		if tr != nil && tr.ProcessingError != nil {
 			return tr.ProcessingError

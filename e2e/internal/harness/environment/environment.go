@@ -27,6 +27,10 @@ type Environment struct {
 	closed  bool
 }
 
+func (e *Environment) RunID() string {
+	return e.ws.runID
+}
+
 func (e *Environment) Chain(id ChainID) (*Chain, error) {
 	chain, ok := e.chains[id]
 	if !ok {

@@ -21,6 +21,12 @@ make -C e2e test
 
 The test target builds `cli/bin/ibc`; `IBC_BIN` overrides that path. The real relayer collects attestor signatures and submits recv, ack, and timeout transactions with attestation proofs, which the attestation light clients verify.
 
+If tests fail to find the Docker socket (OrbStack, Colima, Desktop), set `DOCKER_HOST` from the active CLI context:
+
+```sh
+export DOCKER_HOST="$(docker context inspect | jq -r '.[0].Endpoints.docker.Host')"
+```
+
 Execution modes choose providers from each test's declared requirements:
 
 | Mode | Provider policy | Unresolved requirement |
@@ -122,3 +128,30 @@ output without modifying the committed file.
 ## Extending the graph
 
 `attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+
+## Debugging
+
+To preserve attestor configs, logs, relayer logs, and other workspace files
+that cleanup normally removes, enable `E2E_DUMP`:
+
+```sh
+make -C e2e test E2E_DUMP=true
+```
+
+```sh
+export E2E_DUMP=true
+make -C e2e test E2E_FLAGS='-run TestTransfer_AutoRelay -count=1 -v -parallel 1'
+```
+
+`E2E_DUMP_DIR` overrides the output directory (default `./dumps/`). Be aware that
+dumps are verbose — a single test run produces many files across configs, diagnostics,
+and relayer homes, so a full suite run accumulates a sizeable tree quickly.
+
+The directory layout groups files by OS process and run timestamp:
+
+```
+dumps/
+  pid-<pid>/                            # go test pid
+    <unix-nano>/                        # environment workspace files
+    <unix-nano>/<TestName>/             # per-test relayer config home
+```

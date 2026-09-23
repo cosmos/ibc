@@ -80,7 +80,7 @@ Collections inside that threshold re-emit the last observed value. A failed quer
 | processors  | `transactions_submitted_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
 | processors  | `transactions_confirmed_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
 | processors  | `transaction_retries_total`     | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
-| txsubmitter | `evm_gas_spent`                 | observable counter | `chain_id`, `wallet`                                                | Cumulative successful owned EVM tx cost in native-token units  |
+| txsubmitter | `evm_gas_spent`                 | observable counter | `chain_id`, `wallet`                                                | Cumulative mined cost of txs this submitter sent, including failed txs, in native-token units |
 | txsubmitter | `evm_gas_balance`               | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
 | watcher     | `watcher_events_total`          | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |
 | dispatch    | `packets_pending`               | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
@@ -96,9 +96,12 @@ past the packet timeout, with a 15m source-finality guard) and can move to confi
 
 Shared label: `{otel_scope_name="ibc.evm_client"}`
 
-| metric                | type           | labels                            | notes                                                                   |
-| --------------------- | -------------- | --------------------------------- | ----------------------------------------------------------------------- |
-| `evm_operation_dur_*` | histogram (ms) | `chain_id`, `operation`, `result` | HTTP JSON-RPC latency. `operation` is evm method, `result` is http code |
+| metric                | type           | labels                                    | notes |
+| --------------------- | -------------- | ----------------------------------------- | ----- |
+| `evm_operation_dur_*` | histogram (ms) | `chain_id`, `operation`, `result`, `code` | go-ethereum call latency on the HTTP endpoint, for both the chain client and the tx submitter. `operation` is the JSON-RPC method the call issues. `result` is `ok` or `error`. `code` is empty on success, `http_<status>` or `jsonrpc_<code>` when go-ethereum reports one, and `other` for any other failure. |
+
+A `null` result such as a receipt that is not found yet is an answer, not a failure, so it counts as `ok`.
+The websocket endpoint used for subscriptions is not instrumented.
 
 ## Guide on creating new metrics
 
@@ -158,7 +161,7 @@ func (m *instrumentation) recordOperation(
 }
 
 func (m *instrumentation) latestHeight(ctx context.Context, attestor, chainID string, height uint64) {
-	m.LatestHeight.Record(ctx, int64(height), otel.WithAttributes(
+	m.LatestHeight.Record(ctx, int64(height), metric.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrAttestor.String(attestor),
 	))

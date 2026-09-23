@@ -63,10 +63,17 @@ type Route struct {
 	SkipDestinationIFTBridge bool
 }
 
-const routeAtoB RouteID = "route-a-to-b"
+const (
+	routeAtoB RouteID = "route-a-to-b"
+	routeBtoA RouteID = "route-b-to-a"
+)
 
 func AtoB(a, b environment.ChainID) Route {
 	return Route{ID: routeAtoB, Source: a, Destination: b}
+}
+
+func BtoA(b, a environment.ChainID) Route {
+	return Route{ID: routeBtoA, Source: b, Destination: a}
 }
 
 func ManualAtoB(a, b environment.ChainID) Route {
@@ -167,21 +174,30 @@ func DeployWithRelayerConfig(
 }
 
 // StartRelayer starts the test relayer and registers idempotent teardown.
-func StartRelayer(
-	t testing.TB,
-	driver *ibccli.Driver,
-	env *environment.Environment,
-) *ibccli.Relayer {
+func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environment) *ibccli.Relayer {
 	t.Helper()
+
 	require.NotNil(t, driver, "e2etest: driver is required")
 	require.NotNil(t, env, "e2etest: Environment is required")
 
+	// opt-on dump for debugging
+	dumpRelayer := func() {
+		if environment.DumpEnabled() {
+			environment.DumpTestDirectory(t, env.RunID(), driver.ConfigHome())
+		}
+	}
+
 	relayer, err := driver.StartRelayer(t.Context())
-	require.NoError(t, err, "e2etest: start relayer")
+	if err != nil {
+		dumpRelayer()
+		t.Fatalf("e2etest: start relayer: %v", err)
+	}
+
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), relayerStopTimeout)
 		defer cancel()
 		assert.NoError(t, relayer.Stop(ctx), "e2etest: stop relayer")
+		dumpRelayer()
 	})
 
 	connected := make(map[string]struct{}, len(relayer.Ready().ChainsConnected))
@@ -358,10 +374,11 @@ func buildConfig(
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
 		FinalityOffset: ibccli.HarnessFinalityOffset,
+		ClearOnStart:   false,
+		ClearInterval:  5 * time.Second,
 	}
 	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
-		ManualRoutes: make(map[string]bool, len(routes)),
 		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
@@ -406,7 +423,6 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
 		}
-		options.ManualRoutes[string(route.ID)] = route.Manual
 		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]

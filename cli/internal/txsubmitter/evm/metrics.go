@@ -134,7 +134,7 @@ func (m *instrumentation) endTx(chainID string, receipt *types.Receipt) {
 
 	delete(m.txOwners, transactionKey{chainID: chainID, txHash: txHash})
 
-	if receipt.Status != types.ReceiptStatusSuccessful || receipt.EffectiveGasPrice == nil {
+	if receipt.EffectiveGasPrice == nil {
 		return
 	}
 

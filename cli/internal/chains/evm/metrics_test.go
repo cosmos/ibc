@@ -3,209 +3,357 @@
 package evm
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
 
-func TestMetricsTransport(t *testing.T) {
-	t.Run("recordsJSONRPCMethodAndChainID", func(t *testing.T) {
-		// ARRANGE
-		reader := setupTestMetrics(t)
-		var (
-			seenBody []byte
-			readErr  error
-		)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			seenBody, readErr = io.ReadAll(r.Body)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":"0x1"}`))
-		}))
-		t.Cleanup(srv.Close)
+type jsonRPCError struct{ code int }
 
-		transport := newMetricsTransport("1", http.DefaultTransport)
-		client := &http.Client{Transport: transport}
-		reqBody := []byte(`{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]}`)
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL, bytes.NewReader(reqBody))
-		require.NoError(t, err)
+func (e jsonRPCError) Error() string  { return fmt.Sprintf("jsonrpc %d", e.code) }
+func (e jsonRPCError) ErrorCode() int { return e.code }
 
-		// ACT
-		resp, err := client.Do(req)
-
-		// ASSERT
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = resp.Body.Close() })
-		require.NoError(t, readErr)
-		assert.Equal(t, reqBody, seenBody)
-
-		histogram := collectOperationHistogram(t, reader)
-		require.Len(t, histogram.DataPoints, 1)
-		assert.Equal(t, uint64(1), histogram.DataPoints[0].Count)
-		assert.GreaterOrEqual(t, histogram.DataPoints[0].Sum, float64(0))
-		assert.ElementsMatch(t, []attribute.KeyValue{
-			attribute.String("operation", "eth_getBlockByNumber"),
-			attribute.String("chain_id", "1"),
-			otel.AttrResult.Int(http.StatusOK),
-		}, histogram.DataPoints[0].Attributes.ToSlice())
-	})
-
-	t.Run("recordsHTTPStatusCode", func(t *testing.T) {
+func TestMeteredClient(t *testing.T) {
+	t.Run("recordsResultAndCode", func(t *testing.T) {
 		for _, tt := range []struct {
-			name       string
-			statusCode int
+			name   string
+			err    error
+			result string
+			code   string
 		}{
-			{
-				name:       "ok",
-				statusCode: http.StatusOK,
-			},
-			{
-				name:       "serverError",
-				statusCode: http.StatusInternalServerError,
-			},
-			{
-				name:       "rateLimited",
-				statusCode: http.StatusTooManyRequests,
-			},
+			{name: "ok", result: "ok"},
+			{name: "notFoundIsAnAnswer", err: ethereum.NotFound, result: "ok"},
+			{name: "httpStatus", err: rpc.HTTPError{StatusCode: http.StatusTooManyRequests}, result: "error", code: "http_429"},
+			{name: "wrappedHTTPStatus", err: fmt.Errorf("x: %w", rpc.HTTPError{StatusCode: 500}), result: "error", code: "http_500"},
+			{name: "jsonRPCCode", err: jsonRPCError{code: -32000}, result: "error", code: "jsonrpc_-32000"},
+			{name: "executionReverted", err: jsonRPCError{code: 3}, result: "error", code: "jsonrpc_3"},
+			{name: "canceled", err: context.Canceled, result: "error", code: "other"},
+			{name: "transport", err: errors.New("connection refused"), result: "error", code: "other"},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
 				// ARRANGE
-				reader := setupTestMetrics(t)
-				transport := newMetricsTransport("1", roundTripFunc(func(*http.Request) (*http.Response, error) {
-					return &http.Response{
-						StatusCode: tt.statusCode,
-						Body:       io.NopCloser(bytes.NewReader(nil)),
-					}, nil
-				}))
-				req, err := http.NewRequestWithContext(
-					t.Context(),
-					http.MethodPost,
-					"http://example.invalid",
-					bytes.NewReader([]byte(`{"jsonrpc":"2.0","method":"eth_blockNumber","id":1}`)),
-				)
-				require.NoError(t, err)
+				ctx := context.Background()
+				client, eth, reader := newTestMeteredClient(t)
+				eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{}, tt.err).Once()
 
 				// ACT
-				resp, err := transport.RoundTrip(req)
+				_, err := client.HeaderByNumber(ctx, nil)
 
 				// ASSERT
-				require.NoError(t, err)
-				t.Cleanup(func() { _ = resp.Body.Close() })
-				assert.Equal(t, tt.statusCode, resp.StatusCode)
-
-				histogram := collectOperationHistogram(t, reader)
-				require.Len(t, histogram.DataPoints, 1)
+				if tt.err == nil {
+					require.NoError(t, err)
+				} else {
+					require.EqualError(t, err, tt.err.Error())
+				}
+				point := requireSingleOperation(t, reader)
 				assert.ElementsMatch(t, []attribute.KeyValue{
-					attribute.String("operation", "eth_blockNumber"),
-					attribute.String("chain_id", "1"),
-					otel.AttrResult.Int(tt.statusCode),
-				}, histogram.DataPoints[0].Attributes.ToSlice())
+					attribute.String("operation", "eth_getBlockByNumber"),
+					attribute.String("chain_id", chainIDEth),
+					attribute.String("result", tt.result),
+					attribute.String("code", tt.code),
+				}, point.Attributes.ToSlice())
 			})
 		}
 	})
 
-	t.Run("recordsDurationOnTransportError", func(t *testing.T) {
-		// ARRANGE
-		reader := setupTestMetrics(t)
-		transport := newMetricsTransport("11155111", roundTripFunc(func(*http.Request) (*http.Response, error) {
-			time.Sleep(2 * time.Millisecond)
-			return nil, errors.New("dial failed")
-		}))
-		req, err := http.NewRequestWithContext(
-			t.Context(),
-			http.MethodPost,
-			"http://example.invalid",
-			bytes.NewReader([]byte(`{"jsonrpc":"2.0","method":"eth_call","id":1}`)),
-		)
-		require.NoError(t, err)
+	// every ETHClient method is instrumented and labeled with the JSON-RPC
+	// method it issues
+	t.Run("labelsEveryMethod", func(t *testing.T) {
+		ctx := context.Background()
+		address := common.HexToAddress("0x01")
+		hash := common.HexToHash("0x02")
 
-		// ACT
-		resp, err := transport.RoundTrip(req)
-		if resp != nil {
-			t.Cleanup(func() { _ = resp.Body.Close() })
-		}
-
-		// ASSERT
-		require.Error(t, err)
-		histogram := collectOperationHistogram(t, reader)
-		require.Len(t, histogram.DataPoints, 1)
-		assert.Equal(t, uint64(1), histogram.DataPoints[0].Count)
-		assert.GreaterOrEqual(t, histogram.DataPoints[0].Sum, float64(2))
-		assert.ElementsMatch(t, []attribute.KeyValue{
-			attribute.String("operation", "eth_call"),
-			attribute.String("chain_id", "11155111"),
-			otel.AttrResult.Int(-1),
-		}, histogram.DataPoints[0].Attributes.ToSlice())
-	})
-
-	t.Run("skipsNonJSONRPCBodies", func(t *testing.T) {
-		// ARRANGE
-		reader := setupTestMetrics(t)
-		var seenBody []byte
-		transport := newMetricsTransport("1", roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			body, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			seenBody = body
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil))}, nil
-		}))
-
-		for _, body := range [][]byte{
-			[]byte(`{"method":"eth_call"}`),
-			[]byte(`[{"jsonrpc":"2.0","method":"eth_call","id":1}]`),
-			[]byte(`not-json`),
+		for _, tt := range []struct {
+			operation string
+			expect    func(eth *mocks.MockETHClient)
+			call      func(client ETHClient) error
+		}{
+			{
+				operation: "eth_getCode",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().CodeAt(ctx, address, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.CodeAt(ctx, address, nil); return err },
+			},
+			{
+				operation: "eth_call",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().CallContract(ctx, mock.Anything, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.CallContract(ctx, ethereum.CallMsg{}, nil); return err },
+			},
+			{
+				operation: "eth_getBlockByNumber",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.HeaderByNumber(ctx, nil); return err },
+			},
+			{
+				operation: "eth_getCode",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().PendingCodeAt(ctx, address).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.PendingCodeAt(ctx, address); return err },
+			},
+			{
+				operation: "eth_getTransactionCount",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().PendingNonceAt(ctx, address).Return(0, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, address); return err },
+			},
+			{
+				operation: "eth_gasPrice",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().SuggestGasPrice(ctx).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.SuggestGasPrice(ctx); return err },
+			},
+			{
+				operation: "eth_maxPriorityFeePerGas",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().SuggestGasTipCap(ctx).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.SuggestGasTipCap(ctx); return err },
+			},
+			{
+				operation: "eth_estimateGas",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().EstimateGas(ctx, mock.Anything).Return(0, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.EstimateGas(ctx, ethereum.CallMsg{}); return err },
+			},
+			{
+				operation: "eth_sendRawTransaction",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().SendTransaction(ctx, mock.Anything).Return(assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { return c.SendTransaction(ctx, types.NewTx(&types.LegacyTx{})) },
+			},
+			{
+				operation: "eth_getLogs",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().FilterLogs(ctx, mock.Anything).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.FilterLogs(ctx, ethereum.FilterQuery{}); return err },
+			},
+			{
+				operation: "eth_subscribe",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().SubscribeFilterLogs(ctx, mock.Anything, mock.Anything).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error {
+					_, err := c.SubscribeFilterLogs(ctx, ethereum.FilterQuery{}, make(chan types.Log))
+					return err
+				},
+			},
+			{
+				operation: "eth_getBalance",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().BalanceAt(ctx, address, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.BalanceAt(ctx, address, nil); return err },
+			},
+			{
+				operation: "eth_getTransactionReceipt",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().TransactionReceipt(ctx, hash).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.TransactionReceipt(ctx, hash); return err },
+			},
+			{
+				operation: "eth_getTransactionByHash",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().TransactionByHash(ctx, hash).Return(nil, false, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, _, err := c.TransactionByHash(ctx, hash); return err },
+			},
+			{
+				operation: "eth_getStorageAt",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().StorageAt(ctx, address, hash, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.StorageAt(ctx, address, hash, nil); return err },
+			},
 		} {
-			req, err := http.NewRequestWithContext(
-				t.Context(),
-				http.MethodPost,
-				"http://example.invalid",
-				bytes.NewReader(body),
-			)
-			require.NoError(t, err)
+			t.Run(tt.operation, func(t *testing.T) {
+				// ARRANGE
+				client, eth, reader := newTestMeteredClient(t)
+				tt.expect(eth)
 
-			// ACT
-			resp, err := transport.RoundTrip(req)
+				// ACT
+				err := tt.call(client)
 
-			// ASSERT
-			require.NoError(t, err)
-			require.NoError(t, resp.Body.Close())
-			assert.Equal(t, body, seenBody)
+				// ASSERT
+				require.ErrorIs(t, err, assert.AnError)
+				point := requireSingleOperation(t, reader)
+				operation, _ := point.Attributes.Value("operation")
+				assert.Equal(t, tt.operation, operation.AsString())
+			})
 		}
-
-		var data metricdata.ResourceMetrics
-		require.NoError(t, reader.Collect(t.Context(), &data))
-		assert.Empty(t, data.ScopeMetrics)
 	})
 }
 
-func collectOperationHistogram(t *testing.T, reader *sdkmetric.ManualReader) metricdata.Histogram[float64] {
+func newTestMeteredClient(t *testing.T) (*meteredClient, *mocks.MockETHClient, *sdkmetric.ManualReader) {
+	t.Helper()
+
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() {
+		require.NoError(t, provider.Shutdown(context.Background()))
+	})
+
+	instruments, err := newInstrumentation(provider.Meter("test"))
+	require.NoError(t, err)
+
+	eth := mocks.NewMockETHClient(t)
+
+	return &meteredClient{eth: eth, chainID: chainIDEth, metrics: instruments}, eth, reader
+}
+
+func requireSingleOperation(t *testing.T, reader *sdkmetric.ManualReader) metricdata.HistogramDataPoint[float64] {
 	t.Helper()
 
 	var data metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(t.Context(), &data))
+	require.NoError(t, reader.Collect(context.Background(), &data))
 	require.Len(t, data.ScopeMetrics, 1)
 	require.Len(t, data.ScopeMetrics[0].Metrics, 1)
-	assert.Equal(t, "evm_operation_dur", data.ScopeMetrics[0].Metrics[0].Name)
-	assert.Equal(t, "ms", data.ScopeMetrics[0].Metrics[0].Unit)
+	require.Equal(t, "evm_operation_dur", data.ScopeMetrics[0].Metrics[0].Name)
 
 	histogram, ok := data.ScopeMetrics[0].Metrics[0].Data.(metricdata.Histogram[float64])
 	require.True(t, ok)
+	require.Len(t, histogram.DataPoints, 1)
+	assert.Equal(t, uint64(1), histogram.DataPoints[0].Count)
 
-	return histogram
+	return histogram.DataPoints[0]
 }
 
-func setupTestMetrics(t *testing.T) *sdkmetric.ManualReader {
+// New wraps the dialed client, and the labels hold for what go-ethereum
+// really returns rather than for hand-built errors.
+func TestNewRecordsRealResponses(t *testing.T) {
+	ctx := context.Background()
+	hash := common.HexToHash("0x02")
+
+	for _, tt := range []struct {
+		name      string
+		status    int
+		body      string // {{id}} is replaced with the request id
+		call      func(ETHClient) error
+		operation string
+		result    string
+		code      string
+	}{
+		{
+			name:      "ok",
+			status:    http.StatusOK,
+			body:      `{"jsonrpc":"2.0","id":{{id}},"result":"0x7"}`,
+			call:      func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, common.Address{}); return err },
+			operation: "eth_getTransactionCount",
+			result:    "ok",
+		},
+		{
+			name:      "nullResultIsAnAnswer",
+			status:    http.StatusOK,
+			body:      `{"jsonrpc":"2.0","id":{{id}},"result":null}`,
+			call:      func(c ETHClient) error { _, err := c.TransactionReceipt(ctx, hash); return err },
+			operation: "eth_getTransactionReceipt",
+			result:    "ok",
+		},
+		{
+			name:      "jsonRPCError",
+			status:    http.StatusOK,
+			body:      `{"jsonrpc":"2.0","id":{{id}},"error":{"code":-32000,"message":"header not found"}}`,
+			call:      func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, common.Address{}); return err },
+			operation: "eth_getTransactionCount",
+			result:    "error",
+			code:      "jsonrpc_-32000",
+		},
+		{
+			name:      "httpStatus",
+			status:    http.StatusTooManyRequests,
+			body:      `rate limited`,
+			call:      func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, common.Address{}); return err },
+			operation: "eth_getTransactionCount",
+			result:    "error",
+			code:      "http_429",
+		},
+		{
+			name:      "malformedBody",
+			status:    http.StatusOK,
+			body:      `<html>bad gateway</html>`,
+			call:      func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, common.Address{}); return err },
+			operation: "eth_getTransactionCount",
+			result:    "error",
+			code:      "other",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ARRANGE
+			reader := installTestMetrics(t)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					ID json.RawMessage `json:"id"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+
+				w.WriteHeader(tt.status)
+				_, _ = io.WriteString(w, strings.ReplaceAll(tt.body, "{{id}}", string(req.ID)))
+			}))
+			t.Cleanup(srv.Close)
+
+			client, err := New(chainIDEth, srv.URL, "", routerAddress)
+			require.NoError(t, err)
+			require.IsType(t, &meteredClient{}, client.eth, "New must install the metered client")
+
+			// ACT
+			err = tt.call(client.eth)
+
+			// ASSERT
+			if tt.result == "ok" {
+				if !errors.Is(err, ethereum.NotFound) {
+					require.NoError(t, err)
+				}
+			} else {
+				require.Error(t, err)
+			}
+			point := requireSingleOperation(t, reader)
+			assert.ElementsMatch(t, []attribute.KeyValue{
+				attribute.String("operation", tt.operation),
+				attribute.String("chain_id", chainIDEth),
+				attribute.String("result", tt.result),
+				attribute.String("code", tt.code),
+			}, point.Attributes.ToSlice())
+		})
+	}
+}
+
+// installTestMetrics routes the package-level instrumentation New installs to
+// a test reader. Wrapper unit tests inject instrumentation directly instead.
+func installTestMetrics(t *testing.T) *sdkmetric.ManualReader {
 	t.Helper()
 
 	reader := sdkmetric.NewManualReader()
@@ -221,10 +369,4 @@ func setupTestMetrics(t *testing.T) *sdkmetric.ManualReader {
 	})
 
 	return reader
-}
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
 }

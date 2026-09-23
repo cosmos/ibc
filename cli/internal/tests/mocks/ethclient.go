@@ -40,6 +40,80 @@ func (_m *MockETHClient) EXPECT() *MockETHClient_Expecter {
 	return &MockETHClient_Expecter{mock: &_m.Mock}
 }
 
+// BalanceAt provides a mock function for the type MockETHClient
+func (_mock *MockETHClient) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+	ret := _mock.Called(ctx, account, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BalanceAt")
+	}
+
+	var r0 *big.Int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, *big.Int) (*big.Int, error)); ok {
+		return returnFunc(ctx, account, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, *big.Int) *big.Int); ok {
+		r0 = returnFunc(ctx, account, blockNumber)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*big.Int)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, common.Address, *big.Int) error); ok {
+		r1 = returnFunc(ctx, account, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockETHClient_BalanceAt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BalanceAt'
+type MockETHClient_BalanceAt_Call struct {
+	*mock.Call
+}
+
+// BalanceAt is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account common.Address
+//   - blockNumber *big.Int
+func (_e *MockETHClient_Expecter) BalanceAt(ctx any, account any, blockNumber any) *MockETHClient_BalanceAt_Call {
+	return &MockETHClient_BalanceAt_Call{Call: _e.mock.On("BalanceAt", ctx, account, blockNumber)}
+}
+
+func (_c *MockETHClient_BalanceAt_Call) Run(run func(ctx context.Context, account common.Address, blockNumber *big.Int)) *MockETHClient_BalanceAt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 common.Address
+		if args[1] != nil {
+			arg1 = args[1].(common.Address)
+		}
+		var arg2 *big.Int
+		if args[2] != nil {
+			arg2 = args[2].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockETHClient_BalanceAt_Call) Return(bigInt *big.Int, err error) *MockETHClient_BalanceAt_Call {
+	_c.Call.Return(bigInt, err)
+	return _c
+}
+
+func (_c *MockETHClient_BalanceAt_Call) RunAndReturn(run func(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)) *MockETHClient_BalanceAt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CallContract provides a mock function for the type MockETHClient
 func (_mock *MockETHClient) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	ret := _mock.Called(ctx, call, blockNumber)
@@ -577,6 +651,86 @@ func (_c *MockETHClient_SendTransaction_Call) Return(err error) *MockETHClient_S
 }
 
 func (_c *MockETHClient_SendTransaction_Call) RunAndReturn(run func(ctx context.Context, tx *types.Transaction) error) *MockETHClient_SendTransaction_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StorageAt provides a mock function for the type MockETHClient
+func (_mock *MockETHClient) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
+	ret := _mock.Called(ctx, account, key, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StorageAt")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, common.Hash, *big.Int) ([]byte, error)); ok {
+		return returnFunc(ctx, account, key, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, common.Hash, *big.Int) []byte); ok {
+		r0 = returnFunc(ctx, account, key, blockNumber)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, common.Address, common.Hash, *big.Int) error); ok {
+		r1 = returnFunc(ctx, account, key, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockETHClient_StorageAt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StorageAt'
+type MockETHClient_StorageAt_Call struct {
+	*mock.Call
+}
+
+// StorageAt is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account common.Address
+//   - key common.Hash
+//   - blockNumber *big.Int
+func (_e *MockETHClient_Expecter) StorageAt(ctx any, account any, key any, blockNumber any) *MockETHClient_StorageAt_Call {
+	return &MockETHClient_StorageAt_Call{Call: _e.mock.On("StorageAt", ctx, account, key, blockNumber)}
+}
+
+func (_c *MockETHClient_StorageAt_Call) Run(run func(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int)) *MockETHClient_StorageAt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 common.Address
+		if args[1] != nil {
+			arg1 = args[1].(common.Address)
+		}
+		var arg2 common.Hash
+		if args[2] != nil {
+			arg2 = args[2].(common.Hash)
+		}
+		var arg3 *big.Int
+		if args[3] != nil {
+			arg3 = args[3].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockETHClient_StorageAt_Call) Return(bytes []byte, err error) *MockETHClient_StorageAt_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockETHClient_StorageAt_Call) RunAndReturn(run func(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)) *MockETHClient_StorageAt_Call {
 	_c.Call.Return(run)
 	return _c
 }
