@@ -566,14 +566,16 @@ Proves each packet's membership or non-membership at a height, one proof per pac
 
 | Field | Type | Description |
 |---|---|---|
-| `proofs` | `bytes[]` | One proof per requested packet, in request order. |
+| `proofs` | `bytes[]` | One proof per requested packet, in request order. The proofs of one response are submitted together in one transaction, in this order, so a prover may carry material the batch shares only in the first proof. |
 
 <!-- [prover.proto:L73](proto/cli/prover.proto#L73) -->
 
 <!-- GEN:api:msg:PacketProofsResponse END -->
 
 `proofs` is one proof per requested packet, in request order, so a response of a
-different length than the request is an error.
+different length than the request is an error. The relayer submits all proofs of
+one response in a single transaction, in that order; a prover may therefore put
+material the whole batch shares (such as an account proof) only in the first proof.
 
 <!-- GEN:api:enum:ProofKind START -->
 
@@ -583,7 +585,7 @@ different length than the request is an error.
 | `PROOF_KIND_ACKNOWLEDGEMENT` | The packet was received and acknowledged. Proven to acknowledge it. |
 | `PROOF_KIND_RECEIPT_ABSENCE` | The packet was never received. Proven to time it out. |
 
-<!-- [prover.proto:L78](proto/cli/prover.proto#L78) -->
+<!-- [prover.proto:L80](proto/cli/prover.proto#L80) -->
 
 <!-- GEN:api:enum:ProofKind END -->
 
@@ -601,7 +603,7 @@ The packet a proof is requested for.
 | `timeout_timestamp` | `uint64` | When the packet stops being receivable, in seconds. |
 | `payloads` | `Payload[]` | The packet's application payloads. |
 
-<!-- [prover.proto:L88](proto/cli/prover.proto#L88) -->
+<!-- [prover.proto:L90](proto/cli/prover.proto#L90) -->
 
 <!-- GEN:api:msg:Packet END -->
 
@@ -615,7 +617,7 @@ The packet a proof is requested for.
 | `encoding` | `string` | How `value` is encoded. |
 | `value` | `bytes` | The application data. |
 
-<!-- [prover.proto:L101](proto/cli/prover.proto#L101) -->
+<!-- [prover.proto:L103](proto/cli/prover.proto#L103) -->
 
 <!-- GEN:api:msg:Payload END -->
 

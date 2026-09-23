@@ -406,7 +406,9 @@ func (x *PacketProofsRequest) GetPackets() []*Packet {
 
 type PacketProofsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// One proof per requested packet, in request order.
+	// One proof per requested packet, in request order. The proofs of one
+	// response are submitted together in one transaction, in this order, so a
+	// prover may carry material the batch shares only in the first proof.
 	Proofs        [][]byte `protobuf:"bytes,1,rep,name=proofs,proto3" json:"proofs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
