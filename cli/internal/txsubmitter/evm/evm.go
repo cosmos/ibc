@@ -189,10 +189,7 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 	}
 
 	// Simulate the full intent, including light-client verification, before signing.
-	gasLimit, err := c.eth.EstimateGas(
-		ctx,
-		ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data, Gas: head.GasLimit},
-	)
+	gasLimit, err := c.eth.EstimateGas(ctx, ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data})
 	if err != nil {
 		return nil, errors.Wrap(err, "estimating gas")
 	}
