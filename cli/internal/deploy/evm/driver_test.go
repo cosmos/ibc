@@ -4,13 +4,18 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"
+	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
 
 func TestAttestationArgs(t *testing.T) {
@@ -103,4 +108,46 @@ func TestBesuQBFTArgs(t *testing.T) {
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
+}
+
+func TestBesuQBFTTrustedState(t *testing.T) {
+	ctx := context.Background()
+	update := besutest.MustFixture(t).AdjacentUpdate
+	var sealed types.Header
+	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &sealed))
+
+	t.Run("sealed header", func(t *testing.T) {
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, new(big.Int).SetUint64(update.Height)).Return(&sealed, nil).Once()
+
+		state, err := (&Driver{backend: eth}).BesuQBFTTrustedState(ctx, update.Height)
+		require.NoError(t, err)
+		validators := make([]string, len(update.ExpectedValidators))
+		for i, v := range update.ExpectedValidators {
+			validators[i] = v.Hex()
+		}
+		require.Equal(t, deploy.BesuQBFTTrustedState{
+			Height:     update.Height,
+			Timestamp:  update.ExpectedTimestamp,
+			StateRoot:  update.ExpectedStateRoot.Hex(),
+			Validators: validators,
+		}, state)
+	})
+
+	t.Run("not a besu header", func(t *testing.T) {
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).
+			Return(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}, nil).Once()
+
+		_, err := (&Driver{backend: eth}).BesuQBFTTrustedState(ctx, 7)
+		require.ErrorContains(t, err, "not a Besu QBFT header")
+	})
+
+	t.Run("rpc error", func(t *testing.T) {
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).Return(nil, errors.New("boom")).Once()
+
+		_, err := (&Driver{backend: eth}).BesuQBFTTrustedState(ctx, 7)
+		require.ErrorContains(t, err, "fetch header 7")
+	})
 }
