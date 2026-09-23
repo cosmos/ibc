@@ -343,12 +343,12 @@ func (w *Watcher) clear(ctx context.Context) {
 		w.logger.Info(
 			"Cleared outstanding packets",
 			"clientID", clientID,
-			"probed", result.Probed,
-			"outstanding", result.Outstanding,
-			"alreadyHeld", result.AlreadyHeld,
-			"recovered", result.Recovered,
-			"unresolved", result.Unresolved,
-			"abandoned", result.Abandoned,
+			"commitmentsQueried", result.CommitmentsQueried,
+			"commitmentsLive", result.CommitmentsLive,
+			"packetsAlreadyStored", result.PacketsAlreadyStored,
+			"packetsRecovered", result.PacketsRecovered,
+			"seqsUnresolved", result.SeqsUnresolved,
+			"seqsAbandoned", result.SeqsAbandoned,
 			"elapsed", time.Since(started).String(),
 		)
 	}
