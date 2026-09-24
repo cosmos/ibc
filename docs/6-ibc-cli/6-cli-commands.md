@@ -185,7 +185,7 @@ Deploy and register a light client tracking a counterparty chain.
 | `--height <uint>` | counterparty head | Initial trusted height. |
 | `--max-clock-drift <duration>` | `1m0s` | Besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds. |
 | `--threshold <uint8>` | `1` | Attestation: signature threshold. |
-| `--timestamp <uint>` | counterparty head; besu-qbft reads it from the header | Attestation: initial trusted timestamp seconds. |
+| `--timestamp <uint>` | counterparty head | Attestation: initial trusted timestamp seconds. |
 | `--trusting-period <duration>` |  | Besu-qbft: required for new clients; positive trusted state lifetime in whole seconds (omitted on reruns preserves recorded value). |
 | `--type <string>` | `attestation` | Light client type: attestation or besu-qbft. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
@@ -194,11 +194,11 @@ Deploy and register a light client tracking a counterparty chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L152](cli/cmd/ibc/main.go#L152) -->
+<!-- [main.go:L155](cli/cmd/ibc/main.go#L155) -->
 
 <!-- GEN:cli:cmd:deploy-client END -->
 
-For a new Besu QBFT client, configure the counterparty chain's `evm.ics26Router` with its deployed router address; no local counterparty manifest is required.
+For a new Besu QBFT client, configure the counterparty chain's `evm.ics26Router` with its deployed router address; no local counterparty manifest is required. Flags marked for the other client type in the table above are rejected when set.
 
 ```bash
 ibc deploy client --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
@@ -261,7 +261,7 @@ Deploy an IFT token on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L185](cli/cmd/ibc/main.go#L185) -->
+<!-- [main.go:L189](cli/cmd/ibc/main.go#L189) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -290,7 +290,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L191](cli/cmd/ibc/main.go#L191) -->
+<!-- [main.go:L195](cli/cmd/ibc/main.go#L195) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -315,7 +315,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
+<!-- [main.go:L181](cli/cmd/ibc/main.go#L181) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -401,6 +401,7 @@ Run the relayer.
 
 | Flag | Default | Description |
 |---|---|---|
+| `--clear-on-start` | `true` | Clear outstanding packets at startup. |
 | `--no-migrate` |  | Skip database migrations. |
 
 <!-- [main.go:L89](cli/cmd/ibc/main.go#L89) -->
@@ -453,7 +454,7 @@ Query a local attestor's identity.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L118](cli/cmd/ibc/main.go#L118) -->
+<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
 
 <!-- GEN:cli:cmd:attestor-info END -->
 
@@ -467,7 +468,7 @@ Query a local attestor's latest attestable height.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L118](cli/cmd/ibc/main.go#L118) -->
+<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
 
 <!-- GEN:cli:cmd:attestor-latest-height END -->
 
@@ -492,7 +493,7 @@ Query a local attestor for a state attestation at `--height`.
 | `--height <uint>` |  | Height to attest. |
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
+<!-- [main.go:L124](cli/cmd/ibc/main.go#L124) -->
 
 <!-- GEN:cli:cmd:attestor-state-attestation END -->
 
@@ -514,7 +515,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L217](cli/cmd/ibc/main.go#L217) -->
+<!-- [main.go:L221](cli/cmd/ibc/main.go#L221) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -534,7 +535,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L222](cli/cmd/ibc/main.go#L222) -->
+<!-- [main.go:L226](cli/cmd/ibc/main.go#L226) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
@@ -561,7 +562,7 @@ Query an address's IFT token balance.
 | `--chain <string>` | required | Chain ID the IFT token is deployed on. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L132](cli/cmd/ibc/main.go#L132) -->
+<!-- [main.go:L135](cli/cmd/ibc/main.go#L135) -->
 
 <!-- GEN:cli:cmd:query-ift-balance END -->
 

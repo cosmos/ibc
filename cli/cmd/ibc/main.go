@@ -156,11 +156,12 @@ func init() {
 		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
 	_ = cmdDeployClient.MarkFlagRequired("counterparty-chain")
 	cmdDeployClient.Flags().
-		StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type: attestation or besu-qbft")
+		StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation,
+			"light client type: "+strings.Join(deployClientTypes, " or "))
 	cmdDeployClient.Flags().
-		StringSliceVar(&flagDeployAttestors, "attestors", nil,
+		StringSliceVar(&flagDeployAttestors, flagNameAttestors, nil,
 			"attestation: attestors for the new client as addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
-	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation: signature threshold")
+	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, flagNameThreshold, 1, "attestation: signature threshold")
 	cmdDeployClient.Flags().
 		StringVar(&flagDeployClientID, "client-id", "", "client id (default: cli-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
@@ -168,13 +169,13 @@ func init() {
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().
-		Uint64Var(&flagDeployTimestamp, "timestamp", 0,
-			"attestation: initial trusted timestamp seconds (default: counterparty head; besu-qbft reads it from the header)")
+		Uint64Var(&flagDeployTimestamp, flagNameTimestamp, 0,
+			"attestation: initial trusted timestamp seconds (default: counterparty head)")
 	cmdDeployClient.Flags().
-		DurationVar(&flagDeployTrustingPeriod, "trusting-period", 0,
+		DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0,
 			"besu-qbft: required for new clients; positive trusted state lifetime in whole seconds (omitted on reruns preserves recorded value)")
 	cmdDeployClient.Flags().
-		DurationVar(&flagDeployMaxClockDrift, "max-clock-drift", 60*time.Second,
+		DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, 60*time.Second,
 			"besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds")
 
 	cmdDeployRenderConfig.Flags().

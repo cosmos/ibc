@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -259,11 +260,48 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
 }
 
-// besu-qbft deploy client flags.
+// deployClientTypes are the --type values deploy client accepts.
+var deployClientTypes = []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesuQBFT}
+
+// deploy client flags that apply to one client type only.
 const (
+	flagNameAttestors      = "attestors"
+	flagNameThreshold      = "threshold"
+	flagNameTimestamp      = "timestamp"
 	flagNameTrustingPeriod = "trusting-period"
 	flagNameMaxClockDrift  = "max-clock-drift"
 )
+
+// typeOnlyFlags lists, per client type, the flags only it reads; the help
+// text of each carries the same "<type>:" prefix.
+var typeOnlyFlags = []struct {
+	clientType string
+	flags      []string
+}{
+	{deploy.ClientTypeAttestation, []string{flagNameAttestors, flagNameThreshold, flagNameTimestamp}},
+	{deploy.ClientTypeBesuQBFT, []string{flagNameTrustingPeriod, flagNameMaxClockDrift}},
+}
+
+// checkClientTypeFlags rejects an unknown --type and any flag set for another
+// client type.
+func checkClientTypeFlags(flags *pflag.FlagSet, clientType string) error {
+	if !slices.Contains(deployClientTypes, clientType) {
+		return errors.Errorf(
+			"unknown client type %q: use %s", clientType, strings.Join(deployClientTypes, " or "),
+		)
+	}
+	for _, group := range typeOnlyFlags {
+		if group.clientType == clientType {
+			continue
+		}
+		for _, name := range group.flags {
+			if flags.Changed(name) {
+				return errors.Errorf("--%s applies to %s clients, not %s", name, group.clientType, clientType)
+			}
+		}
+	}
+	return nil
+}
 
 // clientSpec assembles the ClientSpec for --chain tracking --counterparty-chain,
 // defaulting trusted state from the counterparty chain head.
@@ -388,7 +426,8 @@ func besuQBFTParams(
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
 	}
-	if flags.Changed(flagNameTrustingPeriod) && trustingPeriod == 0 {
+	haveTrustingPeriod := flags.Changed(flagNameTrustingPeriod)
+	if haveTrustingPeriod && trustingPeriod == 0 {
 		return deploy.BesuQBFTParams{}, errors.New("--trusting-period must be positive")
 	}
 	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift, flagNameMaxClockDrift)
@@ -404,7 +443,6 @@ func besuQBFTParams(
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
 	}
-	haveTrustingPeriod := flags.Changed(flagNameTrustingPeriod)
 	if ok && recorded.Type == deploy.ClientTypeBesuQBFT {
 		params, decodeErr := deploy.BesuQBFTParamsFromClient(recorded)
 		if decodeErr != nil {
@@ -414,7 +452,7 @@ func besuQBFTParams(
 		// configured router always wins so a redeployed counterparty core
 		// surfaces as a conflict in Done rather than at relayer startup
 		params.IBCRouter = counterpartyRouter
-		if flags.Changed(flagNameTrustingPeriod) {
+		if haveTrustingPeriod {
 			params.TrustingPeriod = trustingPeriod
 		}
 		if flags.Changed(flagNameMaxClockDrift) {
@@ -535,6 +573,9 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 	}
 	if flagDeployChain == "" {
 		return errors.New("--chain is required")
+	}
+	if err = checkClientTypeFlags(cmd.Flags(), flagDeployClientType); err != nil {
+		return err
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {

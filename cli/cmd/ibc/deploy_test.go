@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -262,6 +263,58 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
 	require.Empty(t, out.Connections[0].ClientA.Params)
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+}
+
+// The "<type>:" help prefixes on deploy client flags and typeOnlyFlags are
+// the same list.
+func TestTypeOnlyFlagsMatchHelp(t *testing.T) {
+	fromHelp := map[string]string{}
+	cmdDeployClient.Flags().VisitAll(func(flag *pflag.Flag) {
+		for _, group := range typeOnlyFlags {
+			if strings.HasPrefix(flag.Usage, group.clientType+":") {
+				fromHelp[flag.Name] = group.clientType
+			}
+		}
+	})
+	fromList := map[string]string{}
+	for _, group := range typeOnlyFlags {
+		for _, name := range group.flags {
+			fromList[name] = group.clientType
+		}
+	}
+	require.Equal(t, fromHelp, fromList)
+}
+
+func TestCheckClientTypeFlags(t *testing.T) {
+	newFlags := func(args ...string) *pflag.FlagSet {
+		flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
+		for _, group := range typeOnlyFlags {
+			for _, name := range group.flags {
+				flags.String(name, "", "")
+			}
+		}
+		require.NoError(t, flags.Parse(args))
+		return flags
+	}
+
+	require.NoError(t, checkClientTypeFlags(newFlags(), deploy.ClientTypeBesuQBFT))
+	require.NoError(t, checkClientTypeFlags(newFlags("--threshold=2"), deploy.ClientTypeAttestation))
+	require.ErrorContains(
+		t,
+		checkClientTypeFlags(newFlags("--threshold=2"), deploy.ClientTypeBesuQBFT),
+		"--threshold applies to attestation clients, not besu-qbft",
+	)
+	require.ErrorContains(
+		t,
+		checkClientTypeFlags(newFlags("--threshold=2", "--trusting-period=1h"), "foo"),
+		`unknown client type "foo": use attestation or besu-qbft`,
+	)
+
+	// the real flag set: non-zero defaults of the other type do not count as set
+	cmdFlags := cmdDeployClient.Flags()
+	for _, clientType := range deployClientTypes {
+		require.NoError(t, checkClientTypeFlags(cmdFlags, clientType), clientType)
+	}
 }
 
 func TestBesuQBFTParamsBootstrap(t *testing.T) {
