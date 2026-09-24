@@ -407,25 +407,26 @@ func (s *Setup) DeployAppStack(
 	}, nil
 }
 
-// PreparedDeployment is a validated, side-effect-free Client deployment of any
-// light client kind, ready to submit.
-type PreparedDeployment interface {
-	Deploy(ctx context.Context) (Client, error)
-}
-
-// PreparedClient is a validated, side-effect-free attestation Client
-// deployment. It keeps preparation facts private so deployment cannot bypass
-// the graph-wide preflight performed by environment realization.
+// PreparedClient is a validated, side-effect-free Client deployment of one
+// light client kind. It keeps preparation facts private so deployment cannot
+// bypass the graph-wide preflight performed by environment realization.
 type PreparedClient struct {
-	setup     *Setup
-	authority evm.Account
-	instance  Instance
-	config    AttestationClientConfig
+	setup                *Setup
+	authority            evm.Account
+	instance             Instance
+	kind                 string
+	id                   string
+	counterpartyClientID string
+	deploy               func(*bind.TransactOpts) (common.Address, *types.Transaction, error)
 }
 
-// PrepareClient validates one Client deployment without submitting a
-// transaction. The returned value owns the snapshotted inputs used by Deploy.
-func (s *Setup) PrepareClient(
+// Authority is the account that deploys and registers the Client.
+func (p *PreparedClient) Authority() evm.Account { return p.authority }
+
+// PrepareAttestationClient validates one attestation Client deployment without
+// submitting a transaction. The returned value owns the snapshotted inputs
+// used by Deploy.
+func (s *Setup) PrepareAttestationClient(
 	ctx context.Context,
 	authority evm.Account,
 	router common.Address,
@@ -433,26 +434,9 @@ func (s *Setup) PrepareClient(
 ) (*PreparedClient, error) {
 	config = config.snapshot()
 	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare Client: %w", err)
+		return nil, fmt.Errorf("solidity IBC prepare %s Client: %w", clientkind.Attestation, err)
 	}
-	instance, err := s.prepareClientInstance(ctx, "solidity IBC prepare Client", authority, router, config.ID)
-	if err != nil {
-		return nil, err
-	}
-	return &PreparedClient{
-		setup:     s,
-		authority: authority,
-		instance:  instance,
-		config:    config,
-	}, nil
-}
-
-// Deploy submits a prepared Client deployment and registers it with the router.
-func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
-	s := p.setup
-	config := p.config
-
-	clientAddress, err := s.deployVerified(ctx, p.authority, "Client "+config.ID,
+	return s.prepareClient(ctx, authority, router, clientkind.Attestation, config.ID, config.CounterpartyClientID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := attestation.DeployContract(
 				opts,
@@ -465,42 +449,6 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 			)
 			return address, transaction, deployErr
 		})
-	if err != nil {
-		return Client{}, err
-	}
-
-	if registerErr := s.registerClient(
-		ctx,
-		p.authority,
-		p.instance,
-		config.ID,
-		config.CounterpartyClientID,
-		clientAddress,
-	); registerErr != nil {
-		return Client{}, registerErr
-	}
-
-	client, err := s.verifyClient(
-		ctx,
-		p.instance,
-		config.ID,
-		clientAddress,
-		config.CounterpartyClientID,
-		clientkind.Attestation,
-	)
-	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC verify deployed Client %q: %w", config.ID, err)
-	}
-	return client, nil
-}
-
-// PreparedBesuQBFTClient is a validated, side-effect-free Besu QBFT Client
-// deployment.
-type PreparedBesuQBFTClient struct {
-	setup     *Setup
-	authority evm.Account
-	instance  Instance
-	config    BesuQBFTClientConfig
 }
 
 // PrepareBesuQBFTClient validates one Besu QBFT Client deployment without
@@ -510,51 +458,12 @@ func (s *Setup) PrepareBesuQBFTClient(
 	authority evm.Account,
 	router common.Address,
 	config BesuQBFTClientConfig,
-) (*PreparedBesuQBFTClient, error) {
+) (*PreparedClient, error) {
 	config = config.snapshot()
 	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare Besu QBFT Client: %w", err)
+		return nil, fmt.Errorf("solidity IBC prepare %s Client: %w", clientkind.BesuQBFT, err)
 	}
-	instance, err := s.prepareClientInstance(ctx, "solidity IBC prepare Besu QBFT Client", authority, router, config.ID)
-	if err != nil {
-		return nil, err
-	}
-	return &PreparedBesuQBFTClient{setup: s, authority: authority, instance: instance, config: config}, nil
-}
-
-// prepareClientInstance runs the preflight every Client deployment shares: a
-// usable authority that may register custom clients on router, and a vacant
-// client id. label prefixes errors with the caller's operation.
-func (s *Setup) prepareClientInstance(
-	ctx context.Context,
-	label string,
-	authority evm.Account,
-	router common.Address,
-	clientID string,
-) (Instance, error) {
-	if err := validateAuthority(authority); err != nil {
-		return Instance{}, fmt.Errorf("%s: %w", label, err)
-	}
-	instance, err := s.AttachInstance(ctx, router)
-	if err != nil {
-		return Instance{}, fmt.Errorf("%s: %w", label, err)
-	}
-	if err := s.requireCanAddCustomClient(ctx, instance, authority.Address()); err != nil {
-		return Instance{}, fmt.Errorf("%s: authority cannot register it: %w", label, err)
-	}
-	if err := s.verifyClientVacant(ctx, instance, clientID); err != nil {
-		return Instance{}, fmt.Errorf("%s: %w", label, err)
-	}
-	return instance, nil
-}
-
-// Deploy submits a prepared Besu QBFT Client deployment and registers it with
-// the router.
-func (p *PreparedBesuQBFTClient) Deploy(ctx context.Context) (Client, error) {
-	s := p.setup
-	config := p.config
-
-	clientAddress, err := s.deployVerified(ctx, p.authority, "Besu QBFT Client "+config.ID,
+	return s.prepareClient(ctx, authority, router, clientkind.BesuQBFT, config.ID, config.CounterpartyClientID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := besuqbft.DeployContract(
 				opts,
@@ -570,82 +479,99 @@ func (p *PreparedBesuQBFTClient) Deploy(ctx context.Context) (Client, error) {
 			)
 			return address, transaction, deployErr
 		})
+}
+
+// describeClient names a Client of kind in errors, as `<kind> Client "<id>"`.
+func describeClient(kind, id string) string {
+	return fmt.Sprintf("%s Client %q", kind, id)
+}
+
+// prepareClient runs the preflight every Client deployment shares (a usable
+// authority that may register custom clients on router, and a vacant client
+// id) and binds the validated config's constructor call to the result.
+func (s *Setup) prepareClient(
+	ctx context.Context,
+	authority evm.Account,
+	router common.Address,
+	kind, id, counterpartyClientID string,
+	deploy func(*bind.TransactOpts) (common.Address, *types.Transaction, error),
+) (*PreparedClient, error) {
+	label := "solidity IBC prepare " + describeClient(kind, id)
+	if err := validateAuthority(authority); err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+	instance, err := s.AttachInstance(ctx, router)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+	if err := s.requireCanAddCustomClient(ctx, instance, authority.Address()); err != nil {
+		return nil, fmt.Errorf("%s: authority cannot register it: %w", label, err)
+	}
+	if err := s.verifyClientVacant(ctx, instance, id); err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
+	return &PreparedClient{
+		setup:                s,
+		authority:            authority,
+		instance:             instance,
+		kind:                 kind,
+		id:                   id,
+		counterpartyClientID: counterpartyClientID,
+		deploy:               deploy,
+	}, nil
+}
+
+// Deploy submits a prepared Client deployment, registers it with the router
+// and verifies the registration.
+func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
+	s := p.setup
+	label := describeClient(p.kind, p.id)
+
+	clientAddress, err := s.deployVerified(ctx, p.authority, label, p.deploy)
 	if err != nil {
 		return Client{}, err
 	}
 
-	if registerErr := s.registerClient(
-		ctx,
-		p.authority,
-		p.instance,
-		config.ID,
-		config.CounterpartyClientID,
-		clientAddress,
-	); registerErr != nil {
-		return Client{}, registerErr
-	}
-
-	client, err := s.verifyClient(
-		ctx,
-		p.instance,
-		config.ID,
-		clientAddress,
-		config.CounterpartyClientID,
-		clientkind.BesuQBFT,
-	)
+	router, err := ics26router.NewContract(p.instance.Router, s.backend)
 	if err != nil {
-		return Client{}, fmt.Errorf("solidity IBC verify deployed Besu QBFT Client %q: %w", config.ID, err)
+		return Client{}, fmt.Errorf("solidity IBC register %s: bind ICS26Router: %w", label, err)
 	}
-	return client, nil
-}
-
-func (s *Setup) registerClient(
-	ctx context.Context,
-	authority evm.Account,
-	instance Instance,
-	clientID string,
-	counterpartyClientID string,
-	clientAddress common.Address,
-) error {
-	router, err := ics26router.NewContract(instance.Router, s.backend)
-	if err != nil {
-		return fmt.Errorf("solidity IBC register Client %q: bind ICS26Router: %w", clientID, err)
-	}
-	_, tx, err := s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
-		transaction, sendErr := router.AddClient(opts, clientID, ics26router.IICS02ClientMsgsCounterpartyInfo{
-			ClientId:     counterpartyClientID,
+	_, tx, err := s.send(ctx, p.authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := router.AddClient(opts, p.id, ics26router.IICS02ClientMsgsCounterpartyInfo{
+			ClientId:     p.counterpartyClientID,
 			MerklePrefix: [][]byte{{}},
 		}, clientAddress)
 		return common.Address{}, transaction, sendErr
 	})
 	if err != nil {
-		return fmt.Errorf("solidity IBC register Client %q: %w", clientID, err)
+		return Client{}, fmt.Errorf("solidity IBC register %s: %w", label, err)
 	}
-	_, err = s.awaitMined(ctx, "register Client "+clientID, tx)
+	if _, err = s.awaitMined(ctx, "register "+label, tx); err != nil {
+		return Client{}, err
+	}
+
+	client, err := s.verifyClient(ctx, p.instance, p.id, clientAddress, p.counterpartyClientID, p.kind)
 	if err != nil {
-		return err
+		return Client{}, fmt.Errorf("solidity IBC verify deployed %s: %w", label, err)
 	}
-	return nil
+	return client, nil
 }
 
 // verifyClientVacant proves that a custom Client ID is currently unoccupied.
 // An unexpected read failure is not treated as vacancy.
 func (s *Setup) verifyClientVacant(ctx context.Context, instance Instance, clientID string) error {
-	if !validCustomClientID(clientID) {
-		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", clientID)
-	}
 	router, err := ics26router.NewContract(instance.Router, s.backend)
 	if err != nil {
-		return fmt.Errorf("verify Client %q vacancy: bind ICS26Router: %w", clientID, err)
+		return fmt.Errorf("verify vacancy: bind ICS26Router: %w", err)
 	}
 	registered, err := router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
 	if err == nil {
-		return fmt.Errorf("Client %q is already registered at %s", clientID, registered)
+		return fmt.Errorf("already registered at %s", registered)
 	}
 	if isIBCClientNotFound(err) {
 		return nil
 	}
-	return fmt.Errorf("verify Client %q vacancy: query ICS26Router: %w", clientID, err)
+	return fmt.Errorf("verify vacancy: query ICS26Router: %w", err)
 }
 
 // AttachClient discovers the light-client address from the router, verifies

@@ -25,7 +25,7 @@ import (
 type connectionDependencies struct {
 	instances       map[IBCInstanceID]*IBCInstance
 	existingClients map[string]*IBCClient
-	preparedClients map[string]solidityibc.PreparedDeployment
+	preparedClients map[string]*solidityibc.PreparedClient
 }
 
 type attestorDependencies struct {
@@ -280,7 +280,7 @@ func prepareConnections(
 	runtime Runtime,
 ) (connectionDependencies, error) {
 	dependencies.existingClients = make(map[string]*IBCClient)
-	dependencies.preparedClients = make(map[string]solidityibc.PreparedDeployment)
+	dependencies.preparedClients = make(map[string]*solidityibc.PreparedClient)
 
 	for _, connection := range spec.Connections {
 		ends := connection.ends()
@@ -333,7 +333,7 @@ func prepareConnections(
 					account, _ := runtime.evmAccount(declaration.Authority)
 					attestors = append(attestors, account.Address())
 				}
-				prepared, err := setup.PrepareClient(
+				prepared, err := setup.PrepareAttestationClient(
 					ctx,
 					authority,
 					common.HexToAddress(string(instance.locator)),
@@ -472,16 +472,11 @@ func acquireIBCClient(
 			}
 		}
 	case NewClient, NewBesuQBFTClient:
-		_, authorityID, _ := newClientAuthority(declaration)
 		prepared, ok := dependencies.preparedClients[label]
 		if !ok {
 			return nil, fmt.Errorf("IBC Client %q was not prepared", label)
 		}
-		authority, err := runtime.evmAccount(authorityID)
-		if err != nil {
-			return nil, err
-		}
-		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, authority); fundingErr != nil {
+		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, prepared.Authority()); fundingErr != nil {
 			return nil, fmt.Errorf("fund IBC Client %q authority: %w", label, fundingErr)
 		}
 		resolved, err = prepared.Deploy(ctx)
