@@ -466,12 +466,3 @@ func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
 		t, spec.validate(), `Besu QBFT IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
 	)
 }
-
-func TestBesuQBFTClientTrustingPeriod(t *testing.T) {
-	client := NewBesuQBFTClient{IBCInstance: "ibc-a", Authority: "signer", TrustingPeriod: 1}
-	_, err := validateClientSpec("connection", "A", client)
-	require.NoError(t, err)
-	client.TrustingPeriod = 0
-	_, err = validateClientSpec("connection", "A", client)
-	require.ErrorContains(t, err, "trusting period must be positive")
-}

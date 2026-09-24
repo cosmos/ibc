@@ -318,58 +318,54 @@ func TestCheckClientTypeFlags(t *testing.T) {
 }
 
 func TestBesuQBFTParamsBootstrap(t *testing.T) {
-	previousDir := flagDeployManifestDir
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
 	previousHeight := flagDeployHeight
-	flagDeployManifestDir = t.TempDir()
 	flagDeployHeight = 1
 	t.Cleanup(func() {
-		flagDeployManifestDir = previousDir
 		flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift
 		flagDeployHeight = previousHeight
 	})
+	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
 		name       string
-		args       []string
-		wantPeriod uint64
+		period     time.Duration
 		router     string
 		hostTime   uint64
+		source     deploy.Target
 		wantErr    string
 		readsState bool // the error comes after the counterparty read
 	}{
+		{name: "omitted", router: router, wantErr: "--trusting-period is required"},
+		{name: "sub-second", period: 1500 * time.Millisecond, router: router, wantErr: "whole seconds"},
+		{name: "finite", period: 2 * time.Hour, router: router},
+		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router"},
+		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router"},
 		{
-			name: "omitted", router: "0x00000000000000000000000000000000000000bb",
-			wantErr: "--trusting-period is required for a new besu-qbft client",
-		},
-		{name: "explicit zero", args: []string{"--trusting-period=0"}, wantErr: "--trusting-period must be positive"},
-		{
-			name: "finite without manifest", args: []string{"--trusting-period=2h"}, wantPeriod: 7200,
-			router: "0x00000000000000000000000000000000000000bb",
-		},
-		{name: "missing router", args: []string{"--trusting-period=2h"}, router: "", wantErr: "evm.ics26Router"},
-		{name: "malformed router", args: []string{"--trusting-period=2h"}, router: "bad", wantErr: "evm.ics26Router"},
-		{name: "zero router", args: []string{"--trusting-period=2h"}, router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router"},
-		{
-			name: "expired on this chain", args: []string{"--trusting-period=1h"},
-			router: "0x00000000000000000000000000000000000000bb", hostTime: liveTimestamp + 3600,
-			wantErr: "already older than the trusting period", readsState: true,
+			name: "zero router", period: 2 * time.Hour,
+			router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router",
 		},
 		{
-			name: "one second from expiry", args: []string{"--trusting-period=1h"}, wantPeriod: 3600,
-			router: "0x00000000000000000000000000000000000000bb", hostTime: liveTimestamp + 3599,
+			name: "not a besu source", period: 2 * time.Hour, router: router,
+			source: &sourcelessTarget{}, wantErr: "cannot serve a besu-qbft trusted state",
 		},
+		{
+			name: "expired on this chain", period: time.Hour, router: router,
+			hostTime: liveTimestamp + 3600, wantErr: "already older than the trusting period", readsState: true,
+		},
+		{name: "one second from expiry", period: time.Hour, router: router, hostTime: liveTimestamp + 3599},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
-			flags.DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0, "")
-			flags.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, time.Minute, "")
-			require.NoError(t, flags.Parse(tc.args))
+			flagDeployTrustingPeriod, flagDeployMaxClockDrift = tc.period, time.Minute
 			source := &bootstrapTarget{}
+			var counterparty deploy.Target = source
+			if tc.source != nil {
+				counterparty = tc.source
+			}
 			host := &hostTarget{timestamp: liveTimestamp + 100}
 			if tc.hostTime != 0 {
 				host.timestamp = tc.hostTime
 			}
-			params, err := besuQBFTParams(t.Context(), tc.router, flags, host, source, "1", "2", "new-client")
+			params, err := besuQBFTParams(t.Context(), tc.router, host, counterparty, "1", "2")
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.Equal(t, tc.readsState, source.called)
@@ -377,11 +373,32 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
-			require.Equal(t, tc.wantPeriod, params.TrustingPeriod)
+			require.Equal(t, uint64(tc.period/time.Second), params.TrustingPeriod)
 			require.Equal(t, tc.router, params.IBCRouter)
 			require.Equal(t, uint64(60), params.MaxClockDrift)
 			require.Equal(t, uint64(1), params.InitialHeight)
 		})
+	}
+}
+
+func TestWholeSeconds(t *testing.T) {
+	for _, tc := range []struct {
+		d       time.Duration
+		want    uint64
+		wantErr string
+	}{
+		{d: 2 * time.Hour, want: 7200},
+		{d: 0, want: 0},
+		{d: -time.Second, wantErr: "--trusting-period must not be negative"},
+		{d: 1500 * time.Millisecond, wantErr: "--trusting-period must be whole seconds"},
+	} {
+		got, err := wholeSeconds(tc.d, flagNameTrustingPeriod)
+		if tc.wantErr != "" {
+			require.ErrorContains(t, err, tc.wantErr, tc.d)
+			continue
+		}
+		require.NoError(t, err, tc.d)
+		require.Equal(t, tc.want, got, tc.d)
 	}
 }
 
@@ -403,174 +420,13 @@ func (t *bootstrapTarget) BesuQBFTTrustedState(
 	}, nil
 }
 
-// A rerun rebuilds the constructor params from the manifest instead of the
-// counterparty chain, whose historical state may already be pruned.
-func TestBesuQBFTParamsReusesRecordedClient(t *testing.T) {
-	dir := t.TempDir()
-	previous := flagDeployManifestDir
-	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
-	flagDeployManifestDir = dir
-	t.Cleanup(func() {
-		flagDeployManifestDir = previous
-		flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift
-	})
-	newFlags := func() *pflag.FlagSet {
-		flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
-		flags.DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0, "")
-		flags.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, time.Minute, "")
-		return flags
-	}
-
-	recorded := deploy.BesuQBFTParams{
-		IBCRouter:         "0x00000000000000000000000000000000000000cc",
-		InitialHeight:     112,
-		InitialTimestamp:  1788192445,
-		InitialStateRoot:  "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
-		InitialValidators: []string{"0x00000000000000000000000000000000000000aa"},
-		TrustingPeriod:    7200,
-		MaxClockDrift:     15,
-	}
-	m := manifest.New("1", "evm")
-	m.Core.Router = "0xrouterA"
-	m.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
-		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{
-			"ibcRouter": recorded.IBCRouter, "initialHeight": float64(recorded.InitialHeight),
-			"initialTimestamp": float64(recorded.InitialTimestamp), "initialStateRoot": recorded.InitialStateRoot,
-			"initialValidators": []any{recorded.InitialValidators[0]},
-			"trustingPeriod":    recorded.TrustingPeriod, "maxClockDrift": recorded.MaxClockDrift,
-		},
-	})
-	require.NoError(t, m.Save(dir))
-
-	flags := newFlags()
-	require.NoError(t, flags.Parse([]string{"--trusting-period=2h"}))
-	_, err := besuQBFTParams(
-		context.Background(), recorded.IBCRouter, flags, nil, &sourcelessTarget{}, "1", "2", "cli-new",
-	)
-	require.ErrorContains(t, err, "cannot serve a besu-qbft trusted state")
-
-	for _, tc := range []struct {
-		name         string
-		args         []string
-		router       string
-		wantParamErr string
-		wantConflict string
-	}{
-		{name: "defaults preserve recorded settings"},
-		{name: "matching settings", args: []string{"--trusting-period=2h", "--max-clock-drift=15s"}},
-		{name: "changed period", args: []string{"--trusting-period=1h"}, wantConflict: "trustingPeriod"},
-		{name: "changed router", router: "0x00000000000000000000000000000000000000dd", wantConflict: "ibcRouter"},
-		{name: "missing router", router: "0x0000000000000000000000000000000000000000", wantParamErr: "evm.ics26Router"},
-		{name: "explicit zero period", args: []string{"--trusting-period=0s"}, wantParamErr: "must be positive"},
-		{name: "zero drift", args: []string{"--max-clock-drift=0s"}, wantConflict: "maxClockDrift"},
-		{name: "explicit default drift", args: []string{"--max-clock-drift=60s"}, wantConflict: "maxClockDrift"},
-		{name: "negative period", args: []string{"--trusting-period=-1s"}, wantParamErr: "must not be negative"},
-		{name: "fractional period", args: []string{"--trusting-period=500ms"}, wantParamErr: "must be whole seconds"},
-		{name: "negative drift", args: []string{"--max-clock-drift=-1s"}, wantParamErr: "must not be negative"},
-		{name: "fractional drift", args: []string{"--max-clock-drift=500ms"}, wantParamErr: "must be whole seconds"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			flags := newFlags()
-			require.NoError(t, flags.Parse(tc.args))
-			router := tc.router
-			if router == "" {
-				router = recorded.IBCRouter
-			}
-			params, err := besuQBFTParams(
-				context.Background(), router, flags, &registeredClientTarget{}, nil, "1", "2", "cli-1-2",
-			)
-			if tc.wantParamErr != "" {
-				require.ErrorContains(t, err, tc.wantParamErr)
-				return
-			}
-			require.NoError(t, err)
-
-			spec := deploy.ClientSpec{
-				ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT,
-				CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2", Params: params,
-			}
-			steps := deploy.ClientSteps(&registeredClientTarget{}, dir, "1", spec)
-			done, err := steps[0].Done(context.Background())
-			if tc.wantConflict != "" {
-				require.ErrorContains(t, err, tc.wantConflict)
-				require.False(t, done)
-				return
-			}
-			require.NoError(t, err)
-			require.True(t, done)
-			require.Equal(t, recorded, params)
-		})
-	}
-
-	// the chain no longer knows the client (reset): the trusted state is read
-	// live again, with the recorded trust settings as defaults
-	t.Run("recorded but unregistered bootstraps live", func(t *testing.T) {
-		previousHeight := flagDeployHeight
-		flagDeployHeight = 1
-		t.Cleanup(func() { flagDeployHeight = previousHeight })
-
-		for _, tc := range []struct {
-			name              string
-			args              []string
-			wantPeriod, drift uint64
-		}{
-			{name: "recorded trust settings", wantPeriod: recorded.TrustingPeriod, drift: recorded.MaxClockDrift},
-			{
-				name: "overridden trust settings", args: []string{"--trusting-period=1h", "--max-clock-drift=30s"},
-				wantPeriod: 3600, drift: 30,
-			},
-		} {
-			t.Run(tc.name, func(t *testing.T) {
-				flags := newFlags()
-				require.NoError(t, flags.Parse(tc.args))
-				source := &bootstrapTarget{}
-				params, err := besuQBFTParams(
-					context.Background(),
-					recorded.IBCRouter,
-					flags,
-					&hostTarget{timestamp: liveTimestamp + 100},
-					source,
-					"1",
-					"2",
-					"cli-1-2",
-				)
-				require.NoError(t, err)
-				require.True(t, source.called)
-
-				live, _ := source.BesuQBFTTrustedState(context.Background(), 1)
-				require.Equal(t, deploy.BesuQBFTParams{
-					IBCRouter:         recorded.IBCRouter,
-					InitialHeight:     live.Height,
-					InitialTimestamp:  live.Timestamp,
-					InitialStateRoot:  live.StateRoot,
-					InitialValidators: live.Validators,
-					TrustingPeriod:    tc.wantPeriod,
-					MaxClockDrift:     tc.drift,
-				}, params)
-			})
-		}
-	})
-}
-
 // sourcelessTarget is a deploy.Target that is not a deploy.BesuQBFTSource.
 type sourcelessTarget struct{ deploy.Target }
-
-type registeredClientTarget struct{ deploy.Target }
-
-func (*registeredClientTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
-	return "0xca", true, nil
-}
 
 // hostTarget is a host chain without the client, whose head sits at timestamp.
 type hostTarget struct {
 	deploy.Target
 	timestamp uint64
-}
-
-func (*hostTarget) ClientRegistered(context.Context, string, string) (string, bool, error) {
-	return "", false, nil
 }
 
 func (h *hostTarget) Head(context.Context) (uint64, uint64, error) {
@@ -579,43 +435,6 @@ func (h *hostTarget) Head(context.Context) (uint64, uint64, error) {
 
 // liveTimestamp is the trusted-state timestamp bootstrapTarget serves.
 const liveTimestamp = 1788200000
-
-func TestRecordedClientLoadFailuresAreNotBootstrapFallbacks(t *testing.T) {
-	previous := flagDeployManifestDir
-	t.Cleanup(func() { flagDeployManifestDir = previous })
-	for _, mode := range []string{"missing", "corrupt", "unreadable", "missing-client"} {
-		t.Run(mode, func(t *testing.T) {
-			flagDeployManifestDir = t.TempDir()
-			path := manifest.Path(flagDeployManifestDir, "1")
-			switch mode {
-			case "corrupt":
-				require.NoError(t, os.WriteFile(path, []byte("{"), 0o600))
-			case "unreadable":
-				require.NoError(t, os.Mkdir(path, 0o700)) // deterministic even when running as root
-			case "missing-client":
-				require.NoError(t, manifest.New("1", "evm").Save(flagDeployManifestDir))
-			}
-			_, _, found, err := recordedClient("1", "client")
-			require.False(t, found)
-			if mode == "corrupt" || mode == "unreadable" {
-				require.ErrorContains(t, err, path)
-				_, err = besuQBFTParams(
-					t.Context(),
-					"0x00000000000000000000000000000000000000cc",
-					pflag.NewFlagSet("test", pflag.ContinueOnError),
-					nil,
-					&sourcelessTarget{},
-					"1",
-					"2",
-					"client",
-				)
-				require.ErrorContains(t, err, path) // would report unavailable proof source if swallowed
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
 
 func TestRenderConfigRejectsDuplicateSignerAliasesBeforeRendering(t *testing.T) {
 	home := setupRenderConfigTest(t)

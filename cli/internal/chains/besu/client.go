@@ -15,12 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/besu"
 	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 // ErrConsensusStateNotFound reports that a light client stores nothing at the
@@ -54,10 +52,10 @@ func New(evmClient *chainsevm.Client) (*Client, error) {
 	return &Client{Client: evmClient, eth: eth, router: router}, nil
 }
 
-// SealedHeader returns the Besu QBFT header at height, parsed from the node's
-// sealed RLP. Validators come from extraData.
+// SealedHeader returns the Besu QBFT header at exactly height, parsed from
+// the node's sealed RLP. Validators come from extraData.
 func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.Header, error) {
-	header, err := c.eth.HeaderByNumber(ctx, blockNumber(height))
+	header, err := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting header for height %d on chain %s", height, c.ChainID())
 	}
@@ -67,7 +65,7 @@ func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.Header,
 		return nil, errors.Wrapf(err, "header %d on chain %s is not a Besu QBFT header", height, c.ChainID())
 	}
 
-	if height != v2.LatestBlock && sealed.Height != height {
+	if sealed.Height != height {
 		return nil, errors.Errorf("chain %s returned header %d for height %d", c.ChainID(), sealed.Height, height)
 	}
 
@@ -168,15 +166,4 @@ func isConsensusStateNotFound(err error) bool {
 	}
 	_, ok = decoded.(*besuerrors.BindingsConsensusStateNotFound)
 	return ok
-}
-
-func blockNumber(height uint64) *big.Int {
-	switch height {
-	case v2.LatestBlock:
-		return big.NewInt(rpc.LatestBlockNumber.Int64())
-	case v2.FinalizedBlock:
-		return big.NewInt(rpc.FinalizedBlockNumber.Int64())
-	default:
-		return new(big.Int).SetUint64(height)
-	}
 }

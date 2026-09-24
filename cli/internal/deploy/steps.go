@@ -462,28 +462,6 @@ func paramsMismatch(spec ClientSpec) error {
 	)
 }
 
-// BesuQBFTParamsFromClient rebuilds the params a recorded besu-qbft client
-// was deployed with, so a rerun needs no counterparty state.
-func BesuQBFTParamsFromClient(client manifest.Client) (BesuQBFTParams, error) {
-	if client.Type != ClientTypeBesuQBFT {
-		return BesuQBFTParams{}, fmt.Errorf(
-			"client %q has type %q, not %q",
-			client.ClientID,
-			client.Type,
-			ClientTypeBesuQBFT,
-		)
-	}
-	raw, err := json.Marshal(client.Params)
-	if err != nil {
-		return BesuQBFTParams{}, fmt.Errorf("client %q params: %w", client.ClientID, err)
-	}
-	var p BesuQBFTParams
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return BesuQBFTParams{}, fmt.Errorf("client %q params: %w", client.ClientID, err)
-	}
-	return p, nil
-}
-
 // clientConflicts reports the identity fields on which spec disagrees with
 // an already-recorded deployment. Values are compared via their JSON
 // encoding so native spec types (uint8, []string) match their file

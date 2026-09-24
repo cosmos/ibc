@@ -186,7 +186,7 @@ Deploy and register a light client tracking a counterparty chain.
 | `--max-clock-drift <duration>` | `1m0s` | Besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds. |
 | `--threshold <uint8>` | `1` | Attestation: signature threshold. |
 | `--timestamp <uint>` | counterparty head | Attestation: initial trusted timestamp seconds. |
-| `--trusting-period <duration>` |  | Besu-qbft: required for new clients; positive trusted state lifetime in whole seconds (omitted on reruns preserves recorded value). |
+| `--trusting-period <duration>` |  | Besu-qbft: required; positive trusted state lifetime in whole seconds. |
 | `--type <string>` | `attestation` | Light client type: attestation or besu-qbft. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |

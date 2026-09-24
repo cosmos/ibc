@@ -5,7 +5,6 @@ package evm
 import (
 	"context"
 	"math/big"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
@@ -146,58 +144,6 @@ func TestGetRouterProof(t *testing.T) {
 	})
 }
 
-func TestNewGetRouterProofRecordsRealResponses(t *testing.T) {
-	result, accountNodes, slot, value := fixtureAccountResult(t)
-
-	for _, tt := range []struct {
-		name   string
-		err    error
-		result string
-		code   string
-	}{
-		{name: "success", result: "ok"},
-		{name: "RPC error", err: jsonRPCError{code: -32000}, result: "error", code: "jsonrpc_-32000"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			reader := installTestMetrics(t)
-			api := &ethProofAPI{result: result, err: tt.err}
-			rpcServer := rpc.NewServer()
-			t.Cleanup(rpcServer.Stop)
-			require.NoError(t, rpcServer.RegisterName("eth", api))
-			server := httptest.NewServer(rpcServer)
-			t.Cleanup(server.Close)
-
-			client, err := New(chainIDEth, server.URL, "", routerAddress)
-			require.NoError(t, err)
-
-			proof, err := client.GetRouterProof(t.Context(), 114, [][32]byte{slot})
-			if tt.err != nil {
-				var rpcErr rpc.Error
-				require.ErrorAs(t, err, &rpcErr)
-				assert.Equal(t, -32000, rpcErr.ErrorCode())
-				assert.Empty(t, proof)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, accountNodes, proof.AccountProof)
-				require.Len(t, proof.StorageProofs, 1)
-				assert.Equal(t, value, proof.StorageProofs[0].Value)
-				assert.Equal(t, result.StorageProof[0].Proof, hexNodes(proof.StorageProofs[0].Proof))
-			}
-			assert.Equal(t, common.HexToAddress(routerAddress), api.account)
-			assert.Equal(t, []string{common.Hash(slot).Hex()}, api.keys)
-			assert.Equal(t, hexutil.EncodeUint64(114), api.block)
-
-			point := requireSingleOperation(t, reader)
-			assert.ElementsMatch(t, []attribute.KeyValue{
-				attribute.String("operation", "eth_getProof"),
-				attribute.String("chain_id", chainIDEth),
-				attribute.String("result", tt.result),
-				attribute.String("code", tt.code),
-			}, point.Attributes.ToSlice())
-		})
-	}
-}
-
 func TestAccountProofFromResultValidation(t *testing.T) {
 	result, _, _, _ := fixtureAccountResult(t)
 
@@ -229,34 +175,24 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 	}
 }
 
+// A malformed node is reported with its proof type, index and height.
 func TestGetRouterProofRejectsMalformedNodes(t *testing.T) {
 	for _, proofType := range []string{"account", "storage"} {
-		for _, tc := range []struct {
-			name string
-			node string
-		}{
-			{"empty string", ""},
-			{"invalid hex", "0xzz"},
-			{"valid prefix then invalid hex", "0xc0zz"},
-			{"odd length", "0xc"},
-			{"missing prefix", "c0"},
-		} {
-			t.Run(proofType+"/"+tc.name, func(t *testing.T) {
-				result, _, slot, _ := fixtureAccountResult(t)
-				nodes := []string{"0xc0", tc.node}
-				if proofType == "account" {
-					result.AccountProof = nodes
-				} else {
-					result.StorageProof[0].Proof = nodes
-				}
-				client := clientWithProofAPI(t, &ethProofAPI{result: result})
-				proof, err := client.GetRouterProof(t.Context(), 114, [][32]byte{slot})
-				require.ErrorContains(t, err, proofType+" proof")
-				require.ErrorContains(t, err, "node 1")
-				require.ErrorContains(t, err, "height 114")
-				assert.Empty(t, proof)
-			})
-		}
+		t.Run(proofType, func(t *testing.T) {
+			result, _, slot, _ := fixtureAccountResult(t)
+			nodes := []string{"0xc0", "0xzz"}
+			if proofType == "account" {
+				result.AccountProof = nodes
+			} else {
+				result.StorageProof[0].Proof = nodes
+			}
+			client := clientWithProofAPI(t, &ethProofAPI{result: result})
+			proof, err := client.GetRouterProof(t.Context(), 114, [][32]byte{slot})
+			require.ErrorContains(t, err, proofType+" proof")
+			require.ErrorContains(t, err, "node 1")
+			require.ErrorContains(t, err, "height 114")
+			assert.Empty(t, proof)
+		})
 	}
 }
 

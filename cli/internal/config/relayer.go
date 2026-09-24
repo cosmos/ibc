@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -15,6 +16,9 @@ const (
 	ClientTypeBesuQBFT    ClientType = "besu-qbft"
 	ClientTypeRemote      ClientType = "remote"
 )
+
+// clientTypes are the values ClientEnd.Type accepts.
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
@@ -247,7 +251,7 @@ func (c ClientEnd) Validate() error {
 		return errPathf("clientId", "required")
 	case c.Signer == "":
 		return errPathf("signer", "required")
-	case c.Type != ClientTypeAttestation && c.Type != ClientTypeBesuQBFT && c.Type != ClientTypeRemote:
+	case !slices.Contains(clientTypes, c.Type):
 		return errPathf("type", "unknown client type: %q", c.Type)
 	}
 

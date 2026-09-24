@@ -253,7 +253,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.Type = "tendermint"
 				},
-				errContains: `unknown client type: "tendermint"`,
+				errContains: `.clientA.type: unknown client type: "tendermint"`,
 			},
 			{
 				name: "duplicate client",

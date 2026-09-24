@@ -676,10 +676,6 @@ func TestSpecToClientBesuQBFTParams(t *testing.T) {
 		got, err := json.Marshal(client.Params)
 		require.NoError(t, err)
 		require.JSONEq(t, string(want), string(got))
-
-		decoded, err := BesuQBFTParamsFromClient(client)
-		require.NoError(t, err)
-		require.Equal(t, params, decoded)
 	}
 }
 
@@ -704,10 +700,12 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, ClientTypeBesuQBFT, recorded.Type)
 
-	// the manifest round-trips the constructor params
-	params, err := BesuQBFTParamsFromClient(recorded)
+	// the manifest records the constructor params
+	want, err := json.Marshal(spec.Params)
 	require.NoError(t, err)
-	require.Equal(t, spec.Params, params)
+	got, err := json.Marshal(recorded.Params)
+	require.NoError(t, err)
+	require.JSONEq(t, string(want), string(got))
 
 	// rerun skips; initial trusted state drift is not an identity conflict
 	drifted := besuQBFTSpec()
@@ -755,7 +753,4 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	bad.Params = AttestationParams{}
 	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", bad))
 	require.ErrorContains(t, err, "does not match client type")
-
-	_, err = BesuQBFTParamsFromClient(manifest.Client{ClientID: "x", Type: ClientTypeAttestation})
-	require.ErrorContains(t, err, "not")
 }

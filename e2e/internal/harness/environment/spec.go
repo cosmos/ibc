@@ -239,7 +239,8 @@ func (c NewClient) clientAttestors() []AttestorSpec { return c.Attestors }
 // NewBesuQBFTClient declares a Besu QBFT IBC Client to create on its host IBC
 // Instance. It verifies the counterparty end's sealed Besu headers, so it needs
 // no Attestors; the counterparty Chain must run Besu QBFT. Authority follows
-// the same rule as NewClient. Periods are seconds; TrustingPeriod must be positive.
+// the same rule as NewClient. Periods are seconds; the contract rejects a zero
+// TrustingPeriod at deploy time.
 type NewBesuQBFTClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID
@@ -349,9 +350,6 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 			)
 		}
 	case NewBesuQBFTClient:
-		if declaration.TrustingPeriod == 0 {
-			return "", errorsf("IBC Client %q trusting period must be positive", clientLabel(connectionID, end))
-		}
 		instance = declaration.IBCInstance
 		variantField = "authority"
 		variantValue = string(declaration.Authority)

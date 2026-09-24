@@ -65,9 +65,8 @@ type Generator struct {
 // snapshot is everything the prover reads about one counterparty height for
 // packet proofs: the header and the router's account and storage proofs.
 type snapshot struct {
-	header    *besu.Header
-	proof     evm.AccountProof
-	consensus besumsgs.IBesuLightClientMsgsConsensusState
+	header *besu.Header
+	proof  evm.AccountProof
 }
 
 // consensusOf is the consensus state an update to header installs. Every
@@ -224,7 +223,7 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if err != nil {
 		return nil, err
 	}
-	targetHeader, err := g.header(ctx, target)
+	targetHeader, err := g.counterparty.SealedHeader(ctx, target)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +326,7 @@ func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Pa
 			accountProof = nil
 		}
 		proof, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
-			ConsensusStatePreimage: snap.consensus,
+			ConsensusStatePreimage: consensusOf(snap.header),
 			AccountProofNodes:      accountProof,
 			ProofNodes:             storage.Proof,
 		})
@@ -377,20 +376,9 @@ func checkValue(kind v2.ProofKind, packet channeltypesv2.Packet, value common.Ha
 	return nil
 }
 
-// header fetches and parses the counterparty header at height.
-func (g *Generator) header(ctx context.Context, height uint64) (*besu.Header, error) {
-	header, err := g.counterparty.SealedHeader(ctx, height)
-	if err != nil {
-		return nil, fmt.Errorf("reading counterparty header %d: %w", height, err)
-	}
-
-	return header, nil
-}
-
-// snapshot reads the header and router proof at height and derives
-// the consensus state an update to that height installs.
+// snapshot reads the header and router proof at height.
 func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byte) (*snapshot, error) {
-	header, err := g.header(ctx, height)
+	header, err := g.counterparty.SealedHeader(ctx, height)
 	if err != nil {
 		return nil, err
 	}
@@ -400,13 +388,13 @@ func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byt
 		return nil, fmt.Errorf("proving router at height %d: %w", height, err)
 	}
 
-	return &snapshot{header: header, proof: proof, consensus: consensusOf(header)}, nil
+	return &snapshot{header: header, proof: proof}, nil
 }
 
 // preimage returns the consensus state the light client stores at height,
 // rebuilt from the counterparty header and checked against the stored hash.
 func (g *Generator) preimage(ctx context.Context, height uint64) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	header, err := g.header(ctx, height)
+	header, err := g.counterparty.SealedHeader(ctx, height)
 	if err != nil {
 		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
 			"rebuilding trusted consensus state at height %d: %w",

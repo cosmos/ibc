@@ -308,7 +308,6 @@ func checkClientTypeFlags(flags *pflag.FlagSet, clientType string) error {
 func clientSpec(
 	ctx context.Context,
 	cfg config.Config,
-	flags *pflag.FlagSet,
 	target, counterpartyTarget deploy.Target,
 	chainID, counterpartyChainID string,
 ) (deploy.ClientSpec, error) {
@@ -346,12 +345,10 @@ func clientSpec(
 		params, err := besuQBFTParams(
 			ctx,
 			counterparty.EVM.ICS26Router,
-			flags,
 			target,
 			counterpartyTarget,
 			chainID,
 			counterpartyChainID,
-			clientID,
 		)
 		if err != nil {
 			return deploy.ClientSpec{}, err
@@ -412,23 +409,23 @@ func attestationParams(
 	}, nil
 }
 
-// besuQBFTParams reuses recorded bootstrap state on reruns, while preserving
-// explicit trust settings for conflict detection. New clients bootstrap from
-// the counterparty at --height (default: head).
+// besuQBFTParams bootstraps a client from the counterparty at --height
+// (default: head). Reruns go through the client step, which skips a matching
+// recorded client and reports differing trust settings as a conflict.
 func besuQBFTParams(
 	ctx context.Context,
 	counterpartyRouter string,
-	flags *pflag.FlagSet,
 	target, counterpartyTarget deploy.Target,
-	chainID, counterpartyChainID, clientID string,
+	chainID, counterpartyChainID string,
 ) (deploy.BesuQBFTParams, error) {
 	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod, flagNameTrustingPeriod)
 	if err != nil {
 		return deploy.BesuQBFTParams{}, err
 	}
-	haveTrustingPeriod := flags.Changed(flagNameTrustingPeriod)
-	if haveTrustingPeriod && trustingPeriod == 0 {
-		return deploy.BesuQBFTParams{}, errors.New("--trusting-period must be positive")
+	if trustingPeriod == 0 {
+		return deploy.BesuQBFTParams{}, errors.New(
+			"--trusting-period is required for a besu-qbft client: choose a positive duration based on validator governance",
+		)
 	}
 	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift, flagNameMaxClockDrift)
 	if err != nil {
@@ -437,49 +434,6 @@ func besuQBFTParams(
 	if !common.IsHexAddress(counterpartyRouter) || common.HexToAddress(counterpartyRouter) == (common.Address{}) {
 		return deploy.BesuQBFTParams{}, errors.Errorf(
 			"counterparty chain %s needs a valid nonzero evm.ics26Router in config", counterpartyChainID,
-		)
-	}
-	recorded, router, ok, err := recordedClient(chainID, clientID)
-	if err != nil {
-		return deploy.BesuQBFTParams{}, err
-	}
-	if ok && recorded.Type == deploy.ClientTypeBesuQBFT {
-		params, decodeErr := deploy.BesuQBFTParamsFromClient(recorded)
-		if decodeErr != nil {
-			return deploy.BesuQBFTParams{}, decodeErr
-		}
-		// explicit flags override the recorded trust settings, and the
-		// configured router always wins so a redeployed counterparty core
-		// surfaces as a conflict in Done rather than at relayer startup
-		params.IBCRouter = counterpartyRouter
-		if haveTrustingPeriod {
-			params.TrustingPeriod = trustingPeriod
-		}
-		if flags.Changed(flagNameMaxClockDrift) {
-			params.MaxClockDrift = maxClockDrift
-		}
-		registered := false
-		if router != "" {
-			if _, registered, err = target.ClientRegistered(ctx, router, clientID); err != nil {
-				return deploy.BesuQBFTParams{}, errors.Wrapf(
-					err,
-					"check client %s registration on chain %s",
-					clientID,
-					chainID,
-				)
-			}
-		}
-		if registered {
-			return params, nil
-		}
-		// recorded but gone from the chain (reset or rollback): the client is
-		// provisioned again, so its trusted state must be read live
-		trustingPeriod, maxClockDrift = params.TrustingPeriod, params.MaxClockDrift
-		haveTrustingPeriod = true
-	}
-	if !haveTrustingPeriod {
-		return deploy.BesuQBFTParams{}, errors.New(
-			"--trusting-period is required for a new besu-qbft client: choose a positive duration based on validator governance",
 		)
 	}
 	source, ok := counterpartyTarget.(deploy.BesuQBFTSource)
@@ -528,24 +482,6 @@ func besuQBFTParams(
 	}, nil
 }
 
-// recordedClient returns clientID's manifest entry on chainID, if any, along
-// with the recorded router.
-func recordedClient(chainID, clientID string) (manifest.Client, string, bool, error) {
-	m, err := manifest.Load(flagDeployManifestDir, chainID)
-	if err != nil {
-		return manifest.Client{}, "", false, errors.Wrapf(
-			err,
-			"load manifest %s",
-			manifest.Path(flagDeployManifestDir, chainID),
-		)
-	}
-	if m == nil {
-		return manifest.Client{}, "", false, nil
-	}
-	c, ok := m.Client(clientID)
-	return c, m.Core.Router, ok, nil
-}
-
 // wholeSeconds converts a duration flag into the contract's seconds, refusing
 // values that truncation would silently change.
 func wholeSeconds(d time.Duration, flag string) (uint64, error) {
@@ -588,7 +524,6 @@ func deployClient(cmd *cobra.Command, _ []string) error {
 	spec, err := clientSpec(
 		cmd.Context(),
 		cfg,
-		cmd.Flags(),
 		target,
 		counterpartyTarget,
 		flagDeployChain,
