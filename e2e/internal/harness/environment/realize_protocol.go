@@ -376,10 +376,10 @@ func prepareConnections(
 						ID:                   clientIDs[end.label],
 						CounterpartyClientID: clientIDs[counterpartyEnd.label],
 						CounterpartyRouter:   counterpartyRouter,
-						InitialHeight:        trusted.height,
-						InitialTimestamp:     trusted.timestamp,
-						InitialStateRoot:     trusted.stateRoot,
-						InitialValidators:    trusted.validators,
+						InitialHeight:        trusted.Height,
+						InitialTimestamp:     trusted.Timestamp,
+						InitialStateRoot:     trusted.StateRoot,
+						InitialValidators:    trusted.Validators,
 						TrustingPeriod:       client.TrustingPeriod,
 						MaxClockDrift:        client.MaxClockDrift,
 						RoleManager:          router,
@@ -621,31 +621,18 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 	return header, err
 }
 
-// besuTrustedState is what a Besu QBFT Client starts trusting about the
-// counterparty chain: its head header's timestamp, state root and validators.
-type besuTrustedState struct {
-	height     uint64
-	timestamp  uint64
-	stateRoot  common.Hash
-	validators []common.Address
-}
-
-// besuQBFTTrustedState reads chain's head as a sealed Besu QBFT header.
-func besuQBFTTrustedState(ctx context.Context, chain *Chain) (besuTrustedState, error) {
+// besuQBFTTrustedState is the sealed head of chain, which a Besu QBFT Client
+// tracking it starts trusting.
+func besuQBFTTrustedState(ctx context.Context, chain *Chain) (*besu.Header, error) {
 	header, err := evmHeader(ctx, chain)
 	if err != nil {
-		return besuTrustedState{}, err
+		return nil, err
 	}
 	parsed, err := besu.ParseSealedHeader(header)
 	if err != nil {
-		return besuTrustedState{}, fmt.Errorf("header is not a Besu QBFT header: %w", err)
+		return nil, fmt.Errorf("header is not a Besu QBFT header: %w", err)
 	}
-	return besuTrustedState{
-		height:     parsed.Height,
-		timestamp:  parsed.Timestamp,
-		stateRoot:  parsed.StateRoot,
-		validators: parsed.Validators,
-	}, nil
+	return parsed, nil
 }
 
 func clientID(connectionID ConnectionID, end string, declaration ClientSpec) string {

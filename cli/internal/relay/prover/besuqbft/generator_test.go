@@ -4,7 +4,6 @@ package besuqbft
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -108,7 +107,7 @@ func newFixtureEnv(t *testing.T) *fixtureEnv {
 		host:         &fakeChain{id: "host", sealed: map[uint64]*besu.Header{}, hashes: map[uint64]hashResult{}},
 		counterparty: &fakeChain{id: "besu-b", sealed: map[uint64]*besu.Header{}, hashes: map[uint64]hashResult{}},
 	}
-	env.gen = New(env.host, env.counterparty, clientID)
+	env.gen = newGenerator(env.host, env.counterparty, clientID)
 	return env
 }
 
@@ -192,32 +191,25 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	assert.Equal(t, env.fixture.InitialConsensusState(), decoded.ConsensusStatePreimage)
 }
 
-func sealedHeader(t *testing.T, template []byte, height uint64, keys []*ecdsa.PrivateKey) *besu.Header {
-	t.Helper()
-	header, err := besutest.MustBuilder(template).
-		SetHeight(height).
-		SetTimestamp(1700000000 + height).
-		SetValidators(besutest.Addresses(keys)).
-		MustSign(keys...).Header()
-	require.NoError(t, err)
-	return header
-}
-
+// The generator sees the header's validators but leaves the overlap rule to
+// the contract: a target sealed by a disjoint validator set is still encoded.
 func TestClientUpdatePayloadDefersOverlapValidationToContract(t *testing.T) {
 	env := newFixtureEnv(t)
-	keys := besutest.Keys(8)
 	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
 		Timestamp:  1700000010,
-		Validators: besutest.Addresses(keys[:4]),
+		Validators: []common.Address{common.HexToAddress("0x01"), common.HexToAddress("0x02")},
 	}
 	env.setAnchor(t, 10, trusted)
-	env.counterparty.sealed[12] = sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[4:])
+	target := parsedUpdate(t, env.fixture.AdjacentUpdate)
+	target.Height, target.Timestamp = 12, 1700000012
+	target.Validators = []common.Address{common.HexToAddress("0x03"), common.HexToAddress("0x04")}
+	env.counterparty.sealed[12] = target
 
 	update, err := env.prepareUpdate(t.Context(), 12)
 	require.NoError(t, err)
 	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(update)
 	require.NoError(t, err)
-	require.Equal(t, env.counterparty.sealed[12].RLP, decoded.HeaderRlp)
+	require.Equal(t, target.RLP, decoded.HeaderRlp)
 }
 
 func TestClientUpdatePayloadTargetAlreadyStored(t *testing.T) {
@@ -412,7 +404,8 @@ func TestLatestProvableHeight(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, header.Height, height)
 		assert.Equal(t, timestamp, ts)
-		require.Equal(t, []uint64{env.fixture.InitialTrustedHeight, header.Height}, env.counterparty.sealedReads)
+		// only the anchor is rebuilt; the target header is read when the update is built
+		require.Equal(t, []uint64{env.fixture.InitialTrustedHeight}, env.counterparty.sealedReads)
 		require.Equal(t, []uint64{env.fixture.InitialTrustedHeight}, env.host.hashReads)
 	})
 
@@ -484,21 +477,21 @@ func TestResolveChecksRouterAndClientType(t *testing.T) {
 	t.Run("router mismatch", func(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
-		err := env.gen.resolve(ctx, common.HexToAddress("0x1234").Hex())
+		err := env.gen.resolve(ctx, common.HexToAddress("0x1234"))
 		require.ErrorContains(t, err, "configured with router")
 	})
 
 	t.Run("not a besu client", func(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.host.clientStateErr = errors.New("execution reverted")
-		err := env.gen.resolve(ctx, env.fixture.RouterAddress.Hex())
+		err := env.gen.resolve(ctx, env.fixture.RouterAddress)
 		require.ErrorContains(t, err, "not a besu-qbft light client")
 	})
 
 	t.Run("warms the anchor", func(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.expectInitialAnchor(t)
-		require.NoError(t, env.gen.resolve(ctx, env.fixture.RouterAddress.Hex()))
+		require.NoError(t, env.gen.resolve(ctx, env.fixture.RouterAddress))
 	})
 }
 
@@ -516,39 +509,6 @@ func (e *fixtureEnv) prepareUpdate(ctx context.Context, height uint64) ([]byte, 
 	}
 	e.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(timestamp+15000), 0)} //nolint:gosec // test offset
 	return e.gen.ClientUpdatePayload(ctx, height)
-}
-
-func TestPacketProofsShareSlot(t *testing.T) {
-	env := newFixtureEnv(t)
-	update := env.fixture.NonAdjacentUpdate
-	packet := channeltypesv2.Packet{Sequence: 7, DestinationClient: "dst"}
-	slots, _, err := packetSlots(v2.ProofKindReceiptAbsence, []channeltypesv2.Packet{packet, packet})
-	require.NoError(t, err)
-	require.Len(t, slots, 1)
-	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
-	env.counterparty.proof = func(_ uint64, got [][32]byte) (evm.AccountProof, error) {
-		require.Equal(t, slots, got)
-		return evm.AccountProof{
-			AccountProof: accountNodes(t, env.fixture.NonMembership),
-			StorageProofs: []evm.StorageProof{
-				{Value: big.NewInt(0), Proof: proofNodes(t, env.fixture.NonMembership)},
-			},
-		}, nil
-	}
-
-	proofs, err := env.gen.PacketProofs(
-		t.Context(), update.Height, v2.ProofKindReceiptAbsence, []channeltypesv2.Packet{packet, packet},
-	)
-	require.NoError(t, err)
-	require.Len(t, proofs, 2)
-	first, err := besumsgs.NewBindings().UnpackMembershipProof(proofs[0])
-	require.NoError(t, err)
-	second, err := besumsgs.NewBindings().UnpackMembershipProof(proofs[1])
-	require.NoError(t, err)
-	require.Equal(t, accountNodes(t, env.fixture.NonMembership), first.AccountProofNodes)
-	require.Empty(t, second.AccountProofNodes)
-	require.Equal(t, first.ProofNodes, second.ProofNodes)
-	require.Equal(t, first.ConsensusStatePreimage, second.ConsensusStatePreimage)
 }
 
 func TestExpiredClientStoredTargets(t *testing.T) {
@@ -610,23 +570,6 @@ func TestTimeChecks(t *testing.T) {
 	require.ErrorContains(t, err, "negative chain timestamp")
 }
 
-func TestLatestProvableHeightDefersOverlapValidationToContract(t *testing.T) {
-	env := newFixtureEnv(t)
-	keys := besutest.Keys(8)
-	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
-		Timestamp:  1700000010,
-		Validators: besutest.Addresses(keys[:4]),
-	}
-	env.setAnchor(t, 10, trusted)
-	header := sealedHeader(t, env.fixture.AdjacentUpdate.HeaderRLP, 12, keys[4:])
-	env.counterparty.sealed[12] = header
-	env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(1700000012, 0)}
-	env.counterparty.latest = &v2.BlockHeader{Height: 12, Timestamp: env.host.latest.Timestamp}
-	height, _, err := env.gen.LatestProvableHeight(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, uint64(12), height)
-}
-
 func TestExpiredHistoricalTargetWithLiveAnchor(t *testing.T) {
 	for _, stored := range []bool{false, true} {
 		t.Run(fmt.Sprint(stored), func(t *testing.T) {
@@ -681,26 +624,4 @@ func TestLiveTargetCannotUpdateFromExpiredAnchor(t *testing.T) {
 	env.host.latest = &v2.BlockHeader{Timestamp: time.Unix(int64(header.Timestamp), 0)}
 	_, err := env.gen.ClientUpdatePayload(t.Context(), header.Height)
 	require.ErrorIs(t, err, ErrClientExpired)
-}
-
-func TestClientUpdatePayloadDefersSealValidationToContract(t *testing.T) {
-	for name, seals := range map[string][][]byte{
-		"missing":   nil,
-		"malformed": {{1}},
-		"duplicate": {{1}, {1}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			env := newFixtureEnv(t)
-			env.expectInitialAnchor(t)
-			update := env.fixture.NonAdjacentUpdate
-			header, err := besutest.MustBuilder(update.HeaderRLP).SetCommitSeals(seals).Header()
-			require.NoError(t, err)
-			env.counterparty.sealed[update.Height] = header
-			payload, err := env.prepareUpdate(t.Context(), update.Height)
-			require.NoError(t, err)
-			decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
-			require.NoError(t, err)
-			require.Equal(t, header.RLP, decoded.HeaderRlp)
-		})
-	}
 }

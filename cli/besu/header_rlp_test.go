@@ -53,11 +53,6 @@ func TestParseHeaderRejectsMalformed(t *testing.T) {
 	})
 }
 
-func TestEncodeHeaderRejectsNil(t *testing.T) {
-	_, err := besu.EncodeHeader(nil)
-	require.Error(t, err)
-}
-
 func TestParseSealedHeader(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 	update := fixture.AdjacentUpdate

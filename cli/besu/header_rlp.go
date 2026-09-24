@@ -8,8 +8,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+)
 
-	"github.com/cosmos/ibc/cli/besu/internal/headerlayout"
+// Besu BFT extraData layout, matching _parseHeader in
+// ibc-contracts/ibc-solidity/contracts/light-clients/besu/BesuLightClientBase.sol.
+const (
+	extraDataItemCount = 5
+	extraIdxValidators = 1
 )
 
 // EncodeHeader RLP-encodes a go-ethereum header. go-ethereum keeps every
@@ -60,14 +65,14 @@ func newHeader(h *types.Header, encoded []byte) (*Header, error) {
 		return nil, fmt.Errorf("%w: extra data list: %w", ErrInvalidHeader, err)
 	}
 
-	if len(extraItems) != headerlayout.ExtraDataItemCount {
+	if len(extraItems) != extraDataItemCount {
 		return nil, fmt.Errorf(
-			"%w: %d extra data items, want %d", ErrInvalidHeader, len(extraItems), headerlayout.ExtraDataItemCount,
+			"%w: %d extra data items, want %d", ErrInvalidHeader, len(extraItems), extraDataItemCount,
 		)
 	}
 
 	header := &Header{RLP: encoded, Height: h.Number.Uint64(), Timestamp: h.Time, StateRoot: h.Root}
-	if err := rlp.DecodeBytes(extraItems[headerlayout.ExtraIdxValidators], &header.Validators); err != nil {
+	if err := rlp.DecodeBytes(extraItems[extraIdxValidators], &header.Validators); err != nil {
 		return nil, fmt.Errorf("%w: validators: %w", ErrInvalidHeader, err)
 	}
 

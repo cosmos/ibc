@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package besutest provides the live Besu QBFT fixture captured in
-// ibc-contracts and a builder for synthetic sealed headers, for tests in the
-// cli and e2e modules.
+// ibc-contracts for tests in the cli module.
 package besutest
 
 import (

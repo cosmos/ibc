@@ -3,7 +3,9 @@
 // Package besuqbft implements prover.Prover for a Besu QBFT light client: it
 // reads the client's trusted state from the host chain, fetches sealed headers
 // and eth_getProof results from the Besu chain it tracks and encodes update
-// and membership payloads. Contract simulation at submission verifies consensus.
+// and membership payloads. It checks the timing and packet values that decide
+// what to submit; consensus (seals, quorum, validator overlap) is verified only
+// by contract simulation at submission.
 package besuqbft
 
 import (
@@ -20,7 +22,6 @@ import (
 	"github.com/cosmos/ibc/cli/besu"
 	chainsbesu "github.com/cosmos/ibc/cli/internal/chains/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
-	"github.com/cosmos/ibc/cli/internal/config"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -30,7 +31,7 @@ var (
 		"besu qbft light client trusting period has expired; the consensus state is no longer usable",
 	)
 	ErrConflictingConsensusState = errors.New(
-		"besu qbft light client stores a different consensus state at the target height",
+		"besu qbft light client stores a consensus state that does not match the counterparty header",
 	)
 	ErrCommitmentMismatch = errors.New("packet commitment on the counterparty does not match the packet")
 	ErrAckMissing         = errors.New("no acknowledgement commitment on the counterparty")
@@ -49,6 +50,7 @@ type Host interface {
 type Counterparty interface {
 	ChainID() string
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+	// SealedHeader returns the parsed header at exactly height.
 	SealedHeader(ctx context.Context, height uint64) (*besu.Header, error)
 	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.AccountProof, error)
 }
@@ -78,23 +80,23 @@ func consensusOf(header *besu.Header) besumsgs.IBesuLightClientMsgsConsensusStat
 	}
 }
 
-// New builds a Generator without touching either chain; ResolveGenerator is
-// the production entry point.
-func New(host Host, counterparty Counterparty, clientID string) *Generator {
+// newGenerator builds a Generator without touching either chain;
+// ResolveGenerator is the production entry point.
+func newGenerator(host Host, counterparty Counterparty, clientID string) *Generator {
 	return &Generator{host: host, counterparty: counterparty, clientID: clientID}
 }
 
-// ResolveGenerator builds the prover for self, tracking counterparty, and
-// fails fast unless self's registered light client is a Besu QBFT client whose
-// tracked router is counterparty's configured router.
+// ResolveGenerator builds the prover for clientID on host, tracking
+// counterparty, and fails fast unless the registered light client is a Besu
+// QBFT client whose tracked router is counterparty's configured router.
 func ResolveGenerator(
 	ctx context.Context,
-	self config.ClientEnd,
-	counterpartyRouter string,
+	clientID string,
+	counterpartyRouter common.Address,
 	host Host,
 	counterpartyChain Counterparty,
 ) (*Generator, error) {
-	gen := New(host, counterpartyChain, self.ClientID)
+	gen := newGenerator(host, counterpartyChain, clientID)
 	if err := gen.resolve(ctx, counterpartyRouter); err != nil {
 		return nil, err
 	}
@@ -114,17 +116,13 @@ func exceedsClockDrift(target, host, drift uint64) bool {
 	return target > host && target-host > drift
 }
 
-func (g *Generator) resolve(ctx context.Context, counterpartyRouter string) error {
+func (g *Generator) resolve(ctx context.Context, counterpartyRouter common.Address) error {
 	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return fmt.Errorf("client %q is not a besu-qbft light client: %w", g.clientID, err)
 	}
 
-	if !common.IsHexAddress(counterpartyRouter) {
-		return fmt.Errorf("client %q: invalid counterparty router address %q", g.clientID, counterpartyRouter)
-	}
-
-	if state.IbcRouter != common.HexToAddress(counterpartyRouter) {
+	if state.IbcRouter != counterpartyRouter {
 		return fmt.Errorf(
 			"client %q proves router %s but chain %s is configured with router %s",
 			g.clientID, state.IbcRouter, g.counterparty.ChainID(), counterpartyRouter,
@@ -197,16 +195,6 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		}
 		height = low
 	}
-
-	if height != state.LatestHeight.RevisionHeight {
-		header, headerErr := g.header(ctx, height)
-		if headerErr != nil {
-			return 0, time.Time{}, headerErr
-		}
-		if checkErr := checkUpdateTime(header, state, hostSeconds); checkErr != nil {
-			return 0, time.Time{}, checkErr
-		}
-	}
 	return height, timestamp, nil
 }
 
@@ -241,7 +229,7 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 		return nil, err
 	}
 	if target <= state.LatestHeight.RevisionHeight {
-		stored, storedErr := g.host.ConsensusStateHash(ctx, g.clientID, target)
+		_, storedErr := g.verifyStored(ctx, targetHeader)
 		switch {
 		case storedErr == nil:
 			if trustErr := checkTrustingPeriod(
@@ -250,14 +238,6 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 				hostSeconds,
 			); trustErr != nil {
 				return nil, fmt.Errorf("proof height %d: %w", target, trustErr)
-			}
-			hash, hashErr := besu.HashConsensusState(consensusOf(targetHeader))
-			if hashErr != nil {
-				return nil, hashErr
-			}
-			if hash != common.Hash(stored) {
-				return nil, fmt.Errorf("%w: height %d stores %s, counterparty state hashes to %s",
-					ErrConflictingConsensusState, target, common.Hash(stored), hash)
 			}
 			return nil, nil
 		case !errors.Is(storedErr, chainsbesu.ErrConsensusStateNotFound):
@@ -311,7 +291,7 @@ func (g *Generator) PacketProofs(
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
 ) ([][]byte, error) {
-	slots, indices, err := packetSlots(kind, packets)
+	slots, err := packetSlots(kind, packets)
 	if err != nil {
 		return nil, err
 	}
@@ -319,34 +299,26 @@ func (g *Generator) PacketProofs(
 	if err != nil {
 		return nil, err
 	}
-	return packetProofs(snap, kind, packets, indices)
+	return packetProofs(snap, kind, packets)
 }
 
-func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, []int, error) {
-	unique := make([][32]byte, 0, len(packets))
-	index := make(map[[32]byte]int, len(packets))
-	indices := make([]int, len(packets))
+// packetSlots is the router storage slot of each packet's claim, in order.
+func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, error) {
+	slots := make([][32]byte, len(packets))
 	for i, packet := range packets {
 		path, err := packetPath(kind, packet)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		slot := besu.CommitmentSlot(path)
-		idx, seen := index[slot]
-		if !seen {
-			idx = len(unique)
-			index[slot] = idx
-			unique = append(unique, slot)
-		}
-		indices[i] = idx
+		slots[i] = besu.CommitmentSlot(path)
 	}
-	return unique, indices, nil
+	return slots, nil
 }
 
-func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Packet, indices []int) ([][]byte, error) {
+func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Packet) ([][]byte, error) {
 	proofs := make([][]byte, len(packets))
 	for i, packet := range packets {
-		storage := snap.proof.StorageProofs[indices[i]]
+		storage := snap.proof.StorageProofs[i]
 		if err := checkValue(kind, packet, common.BigToHash(storage.Value)); err != nil {
 			return nil, fmt.Errorf("packet sequence %d at height %d: %w", packet.Sequence, snap.header.Height, err)
 		}
@@ -412,10 +384,6 @@ func (g *Generator) header(ctx context.Context, height uint64) (*besu.Header, er
 		return nil, fmt.Errorf("reading counterparty header %d: %w", height, err)
 	}
 
-	if header.Height != height {
-		return nil, fmt.Errorf("counterparty returned header %d for height %d", header.Height, height)
-	}
-
 	return header, nil
 }
 
@@ -446,9 +414,18 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besumsgs.IBesu
 			err,
 		)
 	}
+	return g.verifyStored(ctx, header)
+}
 
+// verifyStored rebuilds the consensus state header installs and checks that
+// the client stores its hash at header's height. A missing height surfaces as
+// chainsbesu.ErrConsensusStateNotFound.
+func (g *Generator) verifyStored(
+	ctx context.Context,
+	header *besu.Header,
+) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
 	state := consensusOf(header)
-	stored, err := g.host.ConsensusStateHash(ctx, g.clientID, height)
+	stored, err := g.host.ConsensusStateHash(ctx, g.clientID, header.Height)
 	if err != nil {
 		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
 	}
@@ -460,8 +437,8 @@ func (g *Generator) preimage(ctx context.Context, height uint64) (besumsgs.IBesu
 
 	if hash != common.Hash(stored) {
 		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
-			"consensus state rebuilt for height %d hashes to %s but the light client stores %s",
-			height, hash, common.Hash(stored),
+			"%w: height %d stores %s, counterparty state hashes to %s",
+			ErrConflictingConsensusState, header.Height, common.Hash(stored), hash,
 		)
 	}
 

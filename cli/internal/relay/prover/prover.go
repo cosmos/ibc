@@ -194,7 +194,7 @@ func besuQBFTGenerator(
 		return nil, err
 	}
 
-	return besuqbft.ResolveGenerator(ctx, self, counterpartyClient.RouterAddress().Hex(), host, counterpartyClient)
+	return besuqbft.ResolveGenerator(ctx, self.ClientID, counterpartyClient.RouterAddress(), host, counterpartyClient)
 }
 
 // besuClient wraps chainID's EVM client from clientSet for Besu reads.
