@@ -47,8 +47,6 @@ func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
 	return i.ics27GMP
 }
 
-// IBCClient is one resolved end of an IBC Connection. ID is the protocol
-// identifier registered in the host IBC Instance.
 // ClientKind names a light client implementation as the relayer configures it.
 type ClientKind string
 
@@ -58,6 +56,8 @@ const (
 	ClientKindBesuQBFT    ClientKind = clientkind.BesuQBFT
 )
 
+// IBCClient is one resolved end of an IBC Connection. ID is the protocol
+// identifier registered in the host IBC Instance.
 type IBCClient struct {
 	label                 string
 	instance              *IBCInstance

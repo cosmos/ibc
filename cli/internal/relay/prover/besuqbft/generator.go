@@ -340,9 +340,6 @@ func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte
 		}
 		indices[i] = idx
 	}
-	if len(unique) == 0 {
-		unique = nil
-	}
 	return unique, indices, nil
 }
 

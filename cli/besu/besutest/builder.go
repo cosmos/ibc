@@ -139,16 +139,6 @@ func (b *Builder) Encode() ([]byte, error) {
 	return encoded, nil
 }
 
-// MustEncode is Encode that panics, for test setup.
-func (b *Builder) MustEncode() []byte {
-	encoded, err := b.Encode()
-	if err != nil {
-		panic(err)
-	}
-
-	return encoded
-}
-
 // Header encodes and parses the current state.
 func (b *Builder) Header() (*besu.Header, error) {
 	encoded, err := b.Encode()

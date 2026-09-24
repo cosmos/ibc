@@ -53,7 +53,7 @@ func stubChainClient(t *testing.T, chainID string) *mocks.MockClient {
 	return client
 }
 
-func TestCheckAttestorQuorum(t *testing.T) {
+func TestCheckProvers(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("resolvesBothDirections", func(t *testing.T) {
