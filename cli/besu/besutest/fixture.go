@@ -12,6 +12,7 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	_ "embed"
 )
@@ -114,4 +115,15 @@ func (m MembershipFixture) ProofNodes() ([][]byte, error) {
 // AccountProofNodes unwraps the abi.encode(bytes[]) account proof.
 func (m MembershipFixture) AccountProofNodes() ([][]byte, error) {
 	return messageBindings.UnpackProofNodes(m.AccountProof)
+}
+
+// HashConsensusState is keccak256(abi.encode(state)), the hash the light client
+// stores per height.
+func HashConsensusState(state besumsgs.IBesuLightClientMsgsConsensusState) (common.Hash, error) {
+	data, err := messageBindings.TryPackConsensusState(state)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("encode consensus state: %w", err)
+	}
+
+	return crypto.Keccak256Hash(data[4:]), nil
 }

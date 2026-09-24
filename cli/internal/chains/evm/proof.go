@@ -4,7 +4,6 @@ package evm
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -12,24 +11,17 @@ import (
 	"github.com/pkg/errors"
 )
 
-// AccountProof is an eth_getProof result for one account at one height: the
-// account proof nodes against the block's state root and one storage proof
-// per requested slot, in request order.
-type AccountProof struct {
+// RouterProof is an eth_getProof result for the router at one height: the
+// account proof nodes against the block's state root and the storage proof
+// nodes of each requested slot, in request order.
+type RouterProof struct {
 	AccountProof  [][]byte
-	StorageProofs []StorageProof
-}
-
-// StorageProof is one storage slot's value and trie proof nodes from
-// eth_getProof. Value is zero for an absent slot.
-type StorageProof struct {
-	Value *big.Int
-	Proof [][]byte
+	StorageProofs [][][]byte
 }
 
 // GetRouterProof proves the router account and the requested storage slots at
 // height via eth_getProof. The light client verifies the proofs.
-func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (AccountProof, error) {
+func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (RouterProof, error) {
 	keys := make([]string, len(slots))
 	for i, slot := range slots {
 		keys[i] = common.Hash(slot).Hex()
@@ -37,44 +29,54 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots [][32]
 
 	result, err := c.eth.GetProof(ctx, c.routerAddress, keys, heightToBigInt(height))
 	if err != nil {
-		return AccountProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
+		return RouterProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
 	}
 
-	proof, err := accountProofFromResult(result, len(slots))
+	proof, err := routerProofFromResult(result, slots)
 	if err != nil {
-		return AccountProof{}, errors.Wrapf(err, "router proof at height %d on chain %s", height, c.chainID)
+		return RouterProof{}, errors.Wrapf(err, "router proof at height %d on chain %s", height, c.chainID)
 	}
 
 	return proof, nil
 }
 
-// accountProofFromResult decodes an eth_getProof result whose storage proofs
-// are in request order.
-func accountProofFromResult(result *gethclient.AccountResult, slots int) (AccountProof, error) {
-	if len(result.StorageProof) != slots {
-		return AccountProof{}, errors.Errorf("%d storage proofs returned for %d slots", len(result.StorageProof), slots)
+// routerProofFromResult decodes an eth_getProof result whose storage proofs
+// must be in slots order.
+func routerProofFromResult(result *gethclient.AccountResult, slots [][32]byte) (RouterProof, error) {
+	if len(result.StorageProof) != len(slots) {
+		return RouterProof{}, errors.Errorf(
+			"%d storage proofs returned for %d slots",
+			len(result.StorageProof),
+			len(slots),
+		)
 	}
 
-	proofs := make([]StorageProof, slots)
+	proofs := make([][][]byte, len(slots))
 
 	for i, storage := range result.StorageProof {
-		if storage.Value == nil {
-			return AccountProof{}, errors.Errorf("storage proof %d has no value", i)
+		// nodes may drop leading zeros from the key
+		if key := common.HexToHash(storage.Key); key != slots[i] {
+			return RouterProof{}, errors.Errorf(
+				"storage proof %d is for key %s, requested %s",
+				i,
+				key,
+				common.Hash(slots[i]),
+			)
 		}
 
 		nodes, err := decodeProofNodes(storage.Proof)
 		if err != nil {
-			return AccountProof{}, errors.Wrapf(err, "storage proof %d", i)
+			return RouterProof{}, errors.Wrapf(err, "storage proof %d", i)
 		}
-		proofs[i] = StorageProof{Value: storage.Value, Proof: nodes}
+		proofs[i] = nodes
 	}
 
 	accountNodes, err := decodeProofNodes(result.AccountProof)
 	if err != nil {
-		return AccountProof{}, errors.Wrap(err, "account proof")
+		return RouterProof{}, errors.Wrap(err, "account proof")
 	}
 
-	return AccountProof{
+	return RouterProof{
 		AccountProof:  accountNodes,
 		StorageProofs: proofs,
 	}, nil

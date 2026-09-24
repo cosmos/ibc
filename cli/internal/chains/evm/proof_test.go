@@ -27,7 +27,7 @@ func hexNodes(nodes [][]byte) []string {
 	return out
 }
 
-func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [32]byte, *big.Int) {
+func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [32]byte) {
 	t.Helper()
 
 	fixture := besutest.MustFixture(t)
@@ -46,7 +46,7 @@ func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [3
 		AccountProof: hexNodes(accountNodes),
 		StorageHash:  common.HexToHash("0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa"),
 		StorageProof: []gethclient.StorageResult{{Key: slot.Hex(), Value: value, Proof: hexNodes(storageNodes)}},
-	}, accountNodes, slot, value
+	}, accountNodes, slot
 }
 
 type ethProofAPI struct {
@@ -107,7 +107,7 @@ func clientWithProofAPI(t *testing.T, api *ethProofAPI) *Client {
 
 func TestGetRouterProof(t *testing.T) {
 	ctx := context.Background()
-	result, accountNodes, slot, value := fixtureAccountResult(t)
+	result, accountNodes, slot := fixtureAccountResult(t)
 
 	t.Run("propagates client error", func(t *testing.T) {
 		client, eth := newTestClient(t)
@@ -128,8 +128,7 @@ func TestGetRouterProof(t *testing.T) {
 		assert.Equal(t, hexutil.EncodeUint64(114), api.block)
 		assert.Equal(t, accountNodes, proof.AccountProof)
 		require.Len(t, proof.StorageProofs, 1)
-		assert.Equal(t, value, proof.StorageProofs[0].Value)
-		assert.NotEmpty(t, proof.StorageProofs[0].Proof)
+		assert.NotEmpty(t, proof.StorageProofs[0])
 	})
 
 	t.Run("no slots", func(t *testing.T) {
@@ -144,8 +143,8 @@ func TestGetRouterProof(t *testing.T) {
 	})
 }
 
-func TestAccountProofFromResultValidation(t *testing.T) {
-	result, _, _, _ := fixtureAccountResult(t)
+func TestRouterProofFromResultValidation(t *testing.T) {
+	result, _, slot := fixtureAccountResult(t)
 
 	for name, tc := range map[string]struct {
 		mutate func(*gethclient.AccountResult)
@@ -159,9 +158,9 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 			mutate: func(r *gethclient.AccountResult) { r.StorageProof = append(r.StorageProof, r.StorageProof[0]) },
 			want:   "2 storage proofs returned for 1 slots",
 		},
-		"nil value": {
-			mutate: func(r *gethclient.AccountResult) { r.StorageProof[0].Value = nil },
-			want:   "has no value",
+		"other key": {
+			mutate: func(r *gethclient.AccountResult) { r.StorageProof[0].Key = "0x01" },
+			want:   "storage proof 0 is for key",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -169,7 +168,7 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 			r.StorageProof = append([]gethclient.StorageResult(nil), result.StorageProof...)
 			tc.mutate(&r)
 
-			_, err := accountProofFromResult(&r, 1)
+			_, err := routerProofFromResult(&r, [][32]byte{slot})
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
@@ -179,7 +178,7 @@ func TestAccountProofFromResultValidation(t *testing.T) {
 func TestGetRouterProofRejectsMalformedNodes(t *testing.T) {
 	for _, proofType := range []string{"account", "storage"} {
 		t.Run(proofType, func(t *testing.T) {
-			result, _, slot, _ := fixtureAccountResult(t)
+			result, _, slot := fixtureAccountResult(t)
 			nodes := []string{"0xc0", "0xzz"}
 			if proofType == "account" {
 				result.AccountProof = nodes
@@ -196,15 +195,24 @@ func TestGetRouterProofRejectsMalformedNodes(t *testing.T) {
 	}
 }
 
-func TestAccountProofFromResultAllowsEmptyProofArrays(t *testing.T) {
-	result, _, _, _ := fixtureAccountResult(t)
+// Nodes may return the key without its leading zeros.
+func TestRouterProofFromResultAcceptsUnpaddedKey(t *testing.T) {
+	result, _, _ := fixtureAccountResult(t)
+	slot := [32]byte{31: 0x05}
+	result.StorageProof[0].Key = "0x5"
+
+	_, err := routerProofFromResult(result, [][32]byte{slot})
+	require.NoError(t, err)
+}
+
+func TestRouterProofFromResultAllowsEmptyProofArrays(t *testing.T) {
+	result, _, slot := fixtureAccountResult(t)
 	result.AccountProof = nil
 	result.StorageProof[0].Proof = []string{}
-	result.StorageProof[0].Value = big.NewInt(0)
 
-	proof, err := accountProofFromResult(result, 1)
+	proof, err := routerProofFromResult(result, [][32]byte{slot})
 	require.NoError(t, err)
 	assert.Empty(t, proof.AccountProof)
 	require.Len(t, proof.StorageProofs, 1)
-	assert.Empty(t, proof.StorageProofs[0].Proof)
+	assert.Empty(t, proof.StorageProofs[0])
 }

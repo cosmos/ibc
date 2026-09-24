@@ -36,7 +36,7 @@ func EncodeHeader(h *types.Header) ([]byte, error) {
 // ParseSealedHeader encodes a node-supplied header the way Besu sealed it
 // and reads the fields needed for payloads. Deploy and the prover
 // both start from this: validators come from extraData, not a QBFT RPC.
-func ParseSealedHeader(h *types.Header) (*Header, error) {
+func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	encoded, err := EncodeHeader(h)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func ParseSealedHeader(h *types.Header) (*Header, error) {
 }
 
 // ParseHeader decodes the fields needed for payloads without verifying consensus.
-func ParseHeader(headerRLP []byte) (*Header, error) {
+func ParseHeader(headerRLP []byte) (*ParsedHeader, error) {
 	var h types.Header
 	if err := rlp.DecodeBytes(headerRLP, &h); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidHeader, err)
@@ -55,7 +55,7 @@ func ParseHeader(headerRLP []byte) (*Header, error) {
 	return newHeader(&h, slices.Clone(headerRLP))
 }
 
-func newHeader(h *types.Header, encoded []byte) (*Header, error) {
+func newHeader(h *types.Header, encoded []byte) (*ParsedHeader, error) {
 	if h.Number == nil || !h.Number.IsUint64() {
 		return nil, fmt.Errorf("%w: number %v", ErrInvalidHeader, h.Number)
 	}
@@ -71,7 +71,7 @@ func newHeader(h *types.Header, encoded []byte) (*Header, error) {
 		)
 	}
 
-	header := &Header{RLP: encoded, Height: h.Number.Uint64(), Timestamp: h.Time, StateRoot: h.Root}
+	header := &ParsedHeader{RLP: encoded, Height: h.Number.Uint64(), Timestamp: h.Time, StateRoot: h.Root}
 	if err := rlp.DecodeBytes(extraItems[extraIdxValidators], &header.Validators); err != nil {
 		return nil, fmt.Errorf("%w: validators: %w", ErrInvalidHeader, err)
 	}

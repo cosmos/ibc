@@ -73,7 +73,7 @@ func TestConsensusStateHashMatchesSolidity(t *testing.T) {
 	// keccak256(abi.encode(ConsensusState)) for qbft.json's initial trusted state,
 	// computed independently: cast abi-encode "f((uint64,bytes32,address[]))" \
 	//   "(<initialTrustedTimestamp>,<initialTrustedStateRoot>,[<initialTrustedValidators>])" | cast keccak
-	got, err := besu.HashConsensusState(fixture.InitialConsensusState())
+	got, err := besutest.HashConsensusState(fixture.InitialConsensusState())
 	require.NoError(t, err)
 	assert.Equal(t, common.HexToHash("0x91c4debaf593d0d6251ab85a28ff33ffdbb5cda3a070ab011402ba4599a2b66f"), got)
 }

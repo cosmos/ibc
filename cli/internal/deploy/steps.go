@@ -440,12 +440,16 @@ func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
 		if !ok {
 			return manifest.Client{}, paramsMismatch(spec)
 		}
+		validators := make([]string, len(p.InitialConsensusState.Validators))
+		for i, v := range p.InitialConsensusState.Validators {
+			validators[i] = v.Hex()
+		}
 		client.Params = map[string]any{
-			"ibcRouter":         p.IBCRouter,
+			"ibcRouter":         p.IBCRouter.Hex(),
 			"initialHeight":     p.InitialHeight,
-			"initialTimestamp":  p.InitialTimestamp,
-			"initialStateRoot":  p.InitialStateRoot,
-			"initialValidators": p.InitialValidators,
+			"initialTimestamp":  p.InitialConsensusState.Timestamp,
+			"initialStateRoot":  common.Hash(p.InitialConsensusState.StateRoot).Hex(),
+			"initialValidators": validators,
 			"trustingPeriod":    p.TrustingPeriod,
 			"maxClockDrift":     p.MaxClockDrift,
 		}
@@ -483,7 +487,7 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 		conflict("threshold", existing.Params["threshold"], p.Threshold)
 	}
 	if p, ok := spec.Params.(BesuQBFTParams); ok && spec.Type == ClientTypeBesuQBFT {
-		conflict("ibcRouter", canonicalAddresses(existing.Params["ibcRouter"]), canonicalAddresses(p.IBCRouter))
+		conflict("ibcRouter", canonicalAddresses(existing.Params["ibcRouter"]), p.IBCRouter.Hex())
 		conflict("trustingPeriod", existing.Params["trustingPeriod"], p.TrustingPeriod)
 		conflict("maxClockDrift", existing.Params["maxClockDrift"], p.MaxClockDrift)
 	}

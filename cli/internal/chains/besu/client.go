@@ -8,22 +8,16 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuerrors"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/besu"
 	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
 )
-
-// ErrConsensusStateNotFound reports that a light client stores nothing at the
-// requested height.
-var ErrConsensusStateNotFound = errors.New("consensus state not found")
 
 // ETHClient go-ethereum methods used by the Besu client.
 type ETHClient interface {
@@ -54,7 +48,7 @@ func New(evmClient *chainsevm.Client) (*Client, error) {
 
 // SealedHeader returns the Besu QBFT header at exactly height, parsed from
 // the node's sealed RLP. Validators come from extraData.
-func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.Header, error) {
+func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
 	header, err := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting header for height %d on chain %s", height, c.ChainID())
@@ -102,30 +96,6 @@ func (c *Client) ClientState(ctx context.Context, clientID string) (besumsgs.IBe
 	return state, nil
 }
 
-// ConsensusStateHash reads the consensus state hash clientID's Besu QBFT
-// light client stores at height.
-func (c *Client) ConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error) {
-	lightClient, err := c.lightClient(ctx, clientID)
-	if err != nil {
-		return [32]byte{}, err
-	}
-
-	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, height)
-	if err != nil {
-		if isConsensusStateNotFound(err) {
-			return [32]byte{}, errors.Wrapf(
-				ErrConsensusStateNotFound, "client %q on chain %s at height %d", clientID, c.ChainID(), height,
-			)
-		}
-
-		return [32]byte{}, errors.Wrapf(
-			err, "querying consensus state hash at height %d for client %q on chain %s", height, clientID, c.ChainID(),
-		)
-	}
-
-	return hash, nil
-}
-
 func (c *Client) lightClient(ctx context.Context, clientID string) (*besuqbft.ContractCaller, error) {
 	lightClientAddr, err := c.router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
 	if err != nil {
@@ -138,32 +108,4 @@ func (c *Client) lightClient(ctx context.Context, clientID string) (*besuqbft.Co
 	}
 
 	return lightClient, nil
-}
-
-var errorBindings = besuerrors.NewBindings()
-
-// isConsensusStateNotFound recognizes the light client's
-// ConsensusStateNotFound(uint64) revert in a JSON-RPC error's data.
-func isConsensusStateNotFound(err error) bool {
-	var dataErr interface{ ErrorData() any }
-	if !errors.As(err, &dataErr) {
-		return false
-	}
-
-	data, ok := dataErr.ErrorData().(string)
-	if !ok {
-		return false
-	}
-
-	revert, decodeErr := hexutil.Decode(data)
-	if decodeErr != nil || len(revert) < 4 {
-		return false
-	}
-
-	decoded, decodeErr := errorBindings.UnpackError(revert)
-	if decodeErr != nil {
-		return false
-	}
-	_, ok = decoded.(*besuerrors.BindingsConsensusStateNotFound)
-	return ok
 }

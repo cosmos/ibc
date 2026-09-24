@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
@@ -291,24 +290,17 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
 	require.NoError(t, err)
 
-	validators := make([]string, len(fixture.InitialTrustedValidators))
-	for i, v := range fixture.InitialTrustedValidators {
-		validators[i] = v.Hex()
-	}
-
 	spec := deploy.ClientSpec{
 		ClientID:             "besu-2",
 		Type:                 deploy.ClientTypeBesuQBFT,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "besu-1",
 		Params: deploy.BesuQBFTParams{
-			IBCRouter:         fixture.RouterAddress.Hex(),
-			InitialHeight:     fixture.InitialTrustedHeight,
-			InitialTimestamp:  fixture.InitialTrustedTimestamp,
-			InitialStateRoot:  fixture.InitialTrustedStateRoot.Hex(),
-			InitialValidators: validators,
-			TrustingPeriod:    fixture.TrustingPeriod,
-			MaxClockDrift:     fixture.MaxClockDrift,
+			IBCRouter:             fixture.RouterAddress,
+			InitialHeight:         fixture.InitialTrustedHeight,
+			InitialConsensusState: fixture.InitialConsensusState(),
+			TrustingPeriod:        fixture.TrustingPeriod,
+			MaxClockDrift:         fixture.MaxClockDrift,
 		},
 	}
 	ref, err := d.ProvisionClient(ctx, core.Router, spec)
@@ -346,7 +338,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
 	require.NoError(t, err)
 
-	want, err := besu.HashConsensusState(fixture.InitialConsensusState())
+	want, err := besutest.HashConsensusState(fixture.InitialConsensusState())
 	require.NoError(t, err)
 	require.Equal(t, want, common.Hash(hash))
 

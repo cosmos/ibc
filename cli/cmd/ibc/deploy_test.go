@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
@@ -317,7 +319,7 @@ func TestCheckClientTypeFlags(t *testing.T) {
 	}
 }
 
-func TestBesuQBFTParamsBootstrap(t *testing.T) {
+func TestBesuQBFTParamsFlags(t *testing.T) {
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
 	previousHeight := flagDeployHeight
 	flagDeployHeight = 1
@@ -327,54 +329,39 @@ func TestBesuQBFTParamsBootstrap(t *testing.T) {
 	})
 	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
-		name       string
-		period     time.Duration
-		router     string
-		hostTime   uint64
-		source     deploy.Target
-		wantErr    string
-		readsState bool // the error comes after the counterparty read
+		name    string
+		period  time.Duration
+		drift   time.Duration
+		router  string
+		wantErr string
 	}{
 		{name: "omitted", router: router, wantErr: "--trusting-period is required"},
-		{name: "sub-second", period: 1500 * time.Millisecond, router: router, wantErr: "whole seconds"},
+		{name: "sub-second", period: 1500 * time.Millisecond, router: router, wantErr: "--trusting-period: must be whole seconds"},
+		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
-		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router"},
-		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router"},
+		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},
+		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router: invalid EVM address"},
 		{
 			name: "zero router", period: 2 * time.Hour,
-			router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router",
+			router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router: must not be the zero address",
 		},
-		{
-			name: "not a besu source", period: 2 * time.Hour, router: router,
-			source: &sourcelessTarget{}, wantErr: "cannot serve a besu-qbft trusted state",
-		},
-		{
-			name: "expired on this chain", period: time.Hour, router: router,
-			hostTime: liveTimestamp + 3600, wantErr: "already older than the trusting period", readsState: true,
-		},
-		{name: "one second from expiry", period: time.Hour, router: router, hostTime: liveTimestamp + 3599},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			flagDeployTrustingPeriod, flagDeployMaxClockDrift = tc.period, time.Minute
+			if tc.drift != 0 {
+				flagDeployMaxClockDrift = tc.drift
+			}
 			source := &bootstrapTarget{}
-			var counterparty deploy.Target = source
-			if tc.source != nil {
-				counterparty = tc.source
-			}
-			host := &hostTarget{timestamp: liveTimestamp + 100}
-			if tc.hostTime != 0 {
-				host.timestamp = tc.hostTime
-			}
-			params, err := besuQBFTParams(t.Context(), tc.router, host, counterparty, "1", "2")
+			params, err := besuQBFTParams(t.Context(), tc.router, &hostTarget{timestamp: liveTimestamp + 100}, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
-				require.Equal(t, tc.readsState, source.called)
+				require.False(t, source.called)
 				return
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
 			require.Equal(t, uint64(tc.period/time.Second), params.TrustingPeriod)
-			require.Equal(t, tc.router, params.IBCRouter)
+			require.Equal(t, common.HexToAddress(tc.router), params.IBCRouter)
 			require.Equal(t, uint64(60), params.MaxClockDrift)
 			require.Equal(t, uint64(1), params.InitialHeight)
 		})
@@ -389,10 +376,10 @@ func TestWholeSeconds(t *testing.T) {
 	}{
 		{d: 2 * time.Hour, want: 7200},
 		{d: 0, want: 0},
-		{d: -time.Second, wantErr: "--trusting-period must not be negative"},
-		{d: 1500 * time.Millisecond, wantErr: "--trusting-period must be whole seconds"},
+		{d: -time.Second, wantErr: "must not be negative"},
+		{d: 1500 * time.Millisecond, wantErr: "must be whole seconds"},
 	} {
-		got, err := wholeSeconds(tc.d, flagNameTrustingPeriod)
+		got, err := wholeSeconds(tc.d)
 		if tc.wantErr != "" {
 			require.ErrorContains(t, err, tc.wantErr, tc.d)
 			continue
@@ -407,21 +394,13 @@ type bootstrapTarget struct {
 	called bool
 }
 
-func (t *bootstrapTarget) BesuQBFTTrustedState(
-	_ context.Context,
-	height uint64,
-) (deploy.BesuQBFTTrustedState, error) {
+func (t *bootstrapTarget) BesuQBFTConsensusState(
+	context.Context,
+	uint64,
+) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
 	t.called = true
-	return deploy.BesuQBFTTrustedState{
-		Height:     height,
-		Timestamp:  liveTimestamp,
-		StateRoot:  "0x1111111111111111111111111111111111111111111111111111111111111111",
-		Validators: []string{"0x00000000000000000000000000000000000000ee"},
-	}, nil
+	return besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: liveTimestamp}, nil
 }
-
-// sourcelessTarget is a deploy.Target that is not a deploy.BesuQBFTSource.
-type sourcelessTarget struct{ deploy.Target }
 
 // hostTarget is a host chain without the client, whose head sits at timestamp.
 type hostTarget struct {

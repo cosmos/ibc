@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package besuqbft implements prover.Prover for a Besu QBFT light client: it
-// reads the client's trusted state from the host chain, fetches sealed headers
-// and eth_getProof results from the Besu chain it tracks and encodes update
-// and membership payloads. It checks the timing and packet values that decide
-// what to submit; consensus (seals, quorum, validator overlap) is verified only
-// by contract simulation at submission.
+// reads the client's state from the host chain, fetches sealed headers and
+// eth_getProof results from the Besu chain it tracks and encodes update and
+// membership payloads. The contract verifies everything they carry, checked
+// by simulation at submission.
 package besuqbft
 
 import (
@@ -18,24 +17,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/cli/besu"
-	chainsbesu "github.com/cosmos/ibc/cli/internal/chains/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// Errors the prover surfaces to the pipeline.
-var (
-	ErrClientExpired = errors.New(
-		"besu qbft light client trusting period has expired; the consensus state is no longer usable",
-	)
-	ErrConflictingConsensusState = errors.New(
-		"besu qbft light client stores a consensus state that does not match the counterparty header",
-	)
-	ErrCommitmentMismatch = errors.New("packet commitment on the counterparty does not match the packet")
-	ErrAckMissing         = errors.New("no acknowledgement commitment on the counterparty")
-	ErrReceiptExists      = errors.New("packet receipt exists on the counterparty")
+// ErrClientExpired reports that the client's latest consensus state is past
+// its trusting period, so no update can succeed.
+var ErrClientExpired = errors.New(
+	"besu qbft light client trusting period has expired; the consensus state is no longer usable",
 )
 
 // Host is the chain the light client lives on. It needs no Besu consensus:
@@ -43,7 +33,6 @@ var (
 type Host interface {
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	ClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
-	ConsensusStateHash(ctx context.Context, clientID string, height uint64) ([32]byte, error)
 }
 
 // Counterparty is the Besu chain the light client tracks.
@@ -51,8 +40,8 @@ type Counterparty interface {
 	ChainID() string
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	// SealedHeader returns the parsed header at exactly height.
-	SealedHeader(ctx context.Context, height uint64) (*besu.Header, error)
-	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.AccountProof, error)
+	SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error)
+	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.RouterProof, error)
 }
 
 // Generator implements prover.Prover for one Besu QBFT light client.
@@ -60,23 +49,6 @@ type Generator struct {
 	host         Host
 	counterparty Counterparty
 	clientID     string
-}
-
-// snapshot is everything the prover reads about one counterparty height for
-// packet proofs: the header and the router's account and storage proofs.
-type snapshot struct {
-	header *besu.Header
-	proof  evm.AccountProof
-}
-
-// consensusOf is the consensus state an update to header installs. Every
-// field comes from the header, so no historical state is needed.
-func consensusOf(header *besu.Header) besumsgs.IBesuLightClientMsgsConsensusState {
-	return besumsgs.IBesuLightClientMsgsConsensusState{
-		Timestamp:  header.Timestamp,
-		StateRoot:  header.StateRoot,
-		Validators: header.Validators,
-	}
 }
 
 // newGenerator builds a Generator without touching either chain;
@@ -103,18 +75,8 @@ func ResolveGenerator(
 	return gen, nil
 }
 
-func unixSeconds(timestamp time.Time) (uint64, error) {
-	seconds := timestamp.Unix()
-	if seconds < 0 {
-		return 0, errors.New("negative chain timestamp")
-	}
-	return uint64(seconds), nil
-}
-
-func exceedsClockDrift(target, host, drift uint64) bool {
-	return target > host && target-host > drift
-}
-
+// resolve fails unless clientID is a Besu QBFT client proving
+// counterpartyRouter.
 func (g *Generator) resolve(ctx context.Context, counterpartyRouter common.Address) error {
 	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
@@ -128,36 +90,33 @@ func (g *Generator) resolve(ctx context.Context, counterpartyRouter common.Addre
 		)
 	}
 
-	if _, err := g.preimage(ctx, state.LatestHeight.RevisionHeight); err != nil {
-		return fmt.Errorf("client %q: verifying trusted consensus state: %w", g.clientID, err)
-	}
-
 	return nil
 }
 
-// LatestProvableHeight selects the newest clock-admissible height. Consensus
-// validity is left to contract simulation; the relayer never chains several
-// updates to bridge validator turnover.
+// LatestProvableHeight returns the counterparty head, failing only once the
+// client's latest consensus state has expired. The relayer never chains
+// several updates to bridge validator turnover.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return 0, time.Time{}, err
 	}
 
-	trusted, err := g.preimage(ctx, state.LatestHeight.RevisionHeight)
+	trusted, err := g.counterparty.GetBlockHeader(ctx, state.LatestHeight.RevisionHeight)
 	if err != nil {
-		return 0, time.Time{}, err
+		return 0, time.Time{}, fmt.Errorf("reading trusted counterparty header: %w", err)
 	}
 
 	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
 	}
-	hostSeconds, err := unixSeconds(hostHead.Timestamp)
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-	if expiredErr := checkTrustingPeriod(state.TrustingPeriod, trusted.Timestamp, hostSeconds); expiredErr != nil {
+
+	if expiredErr := checkTrustingPeriod(
+		state.TrustingPeriod,
+		uint64(trusted.Timestamp.Unix()),
+		uint64(hostHead.Timestamp.Unix()),
+	); expiredErr != nil {
 		return 0, time.Time{}, expiredErr
 	}
 
@@ -166,35 +125,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 		return 0, time.Time{}, fmt.Errorf("reading counterparty chain head: %w", err)
 	}
 
-	headSeconds, err := unixSeconds(head.Timestamp)
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-	height, timestamp := head.Height, head.Timestamp
-
-	if exceedsClockDrift(headSeconds, hostSeconds, state.MaxClockDrift) {
-		low, high := state.LatestHeight.RevisionHeight, height
-		timestamp = time.Unix(int64(trusted.Timestamp), 0).UTC()
-		for low < high {
-			mid := low + (high-low)/2 + 1
-			header, err := g.counterparty.GetBlockHeader(ctx, mid)
-			if err != nil {
-				return 0, time.Time{}, fmt.Errorf("reading counterparty header %d: %w", mid, err)
-			}
-			seconds, err := unixSeconds(header.Timestamp)
-			if err != nil {
-				return 0, time.Time{}, err
-			}
-			if exceedsClockDrift(seconds, hostSeconds, state.MaxClockDrift) {
-				high = mid - 1
-			} else {
-				low = mid
-				timestamp = header.Timestamp
-			}
-		}
-		height = low
-	}
-	return height, timestamp, nil
+	return head.Height, head.Timestamp, nil
 }
 
 func checkTrustingPeriod(period, timestamp, host uint64) error {
@@ -206,57 +137,34 @@ func checkTrustingPeriod(period, timestamp, host uint64) error {
 }
 
 // ClientUpdatePayload returns an encoded updateMsg from the client's latest
-// trusted state to target, or nil when the client already stores an unexpired
-// target. A target below the latest height that is not stored is installed as
-// a historical consensus state, anchored on the latest one like any other
-// update: the update is always one step, never a chain.
+// consensus state to target, or nil when target is the latest height. After
+// full verification the contract installs a target below the latest height as
+// a historical consensus state, or no-ops when it already stores it.
 func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]byte, error) {
 	state, err := g.host.ClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
 	}
-	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
-	if err != nil {
-		return nil, fmt.Errorf("reading host chain head: %w", err)
+
+	trustedHeight := state.LatestHeight.RevisionHeight
+	if target == trustedHeight {
+		return nil, nil
 	}
-	hostSeconds, err := unixSeconds(hostHead.Timestamp)
+
+	trusted, err := g.counterparty.SealedHeader(ctx, trustedHeight)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading trusted header: %w", err)
 	}
+
 	targetHeader, err := g.counterparty.SealedHeader(ctx, target)
 	if err != nil {
 		return nil, err
 	}
-	if target <= state.LatestHeight.RevisionHeight {
-		_, storedErr := g.verifyStored(ctx, targetHeader)
-		switch {
-		case storedErr == nil:
-			if trustErr := checkTrustingPeriod(
-				state.TrustingPeriod,
-				targetHeader.Timestamp,
-				hostSeconds,
-			); trustErr != nil {
-				return nil, fmt.Errorf("proof height %d: %w", target, trustErr)
-			}
-			return nil, nil
-		case !errors.Is(storedErr, chainsbesu.ErrConsensusStateNotFound):
-			return nil, storedErr
-		}
-	}
-	trusted, err := g.preimage(ctx, state.LatestHeight.RevisionHeight)
-	if err != nil {
-		return nil, err
-	}
-	if trustErr := checkTrustingPeriod(state.TrustingPeriod, trusted.Timestamp, hostSeconds); trustErr != nil {
-		return nil, trustErr
-	}
-	if checkErr := checkUpdateTime(targetHeader, state, hostSeconds); checkErr != nil {
-		return nil, checkErr
-	}
+
 	update, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 		HeaderRlp:              targetHeader.RLP,
-		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: state.LatestHeight.RevisionHeight},
-		ConsensusStatePreimage: trusted,
+		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trustedHeight},
+		ConsensusStatePreimage: besu.ConsensusStateOf(trusted),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
@@ -264,71 +172,46 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	return update, nil
 }
 
-// checkUpdateTime checks whether a target is usable at the host time.
-func checkUpdateTime(
-	target *besu.Header,
-	state besumsgs.IBesuLightClientMsgsClientState,
-	hostSeconds uint64,
-) error {
-	if trustErr := checkTrustingPeriod(state.TrustingPeriod, target.Timestamp, hostSeconds); trustErr != nil {
-		return fmt.Errorf("proof height %d: %w", target.Height, trustErr)
-	}
-	if exceedsClockDrift(target.Timestamp, hostSeconds, state.MaxClockDrift) {
-		return fmt.Errorf("target height %d exceeds host clock drift", target.Height)
-	}
-
-	return nil
-}
-
 // PacketProofs proves each packet's claim against the router storage at
-// height, sharing one eth_getProof call across packets with the same slot.
-// Only the first proof carries the router account proof: the contract caches
-// the proven storage root for the rest of the transaction.
+// height with one eth_getProof call. Only the first proof carries the router
+// account proof: the contract caches the proven storage root for the rest of
+// the transaction.
 func (g *Generator) PacketProofs(
 	ctx context.Context,
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
 ) ([][]byte, error) {
-	slots, err := packetSlots(kind, packets)
-	if err != nil {
-		return nil, err
-	}
-	snap, err := g.snapshot(ctx, height, slots)
-	if err != nil {
-		return nil, err
-	}
-	return packetProofs(snap, kind, packets)
-}
-
-// packetSlots is the router storage slot of each packet's claim, in order.
-func packetSlots(kind v2.ProofKind, packets []channeltypesv2.Packet) ([][32]byte, error) {
 	slots := make([][32]byte, len(packets))
 	for i, packet := range packets {
-		path, err := packetPath(kind, packet)
+		path, err := kind.CommitmentPath(packet)
 		if err != nil {
 			return nil, err
 		}
 		slots[i] = besu.CommitmentSlot(path)
 	}
-	return slots, nil
-}
 
-func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Packet) ([][]byte, error) {
+	header, err := g.counterparty.SealedHeader(ctx, height)
+	if err != nil {
+		return nil, err
+	}
+
+	routerProof, err := g.counterparty.GetRouterProof(ctx, height, slots)
+	if err != nil {
+		return nil, fmt.Errorf("proving router at height %d: %w", height, err)
+	}
+
+	consensus := besu.ConsensusStateOf(header)
 	proofs := make([][]byte, len(packets))
 	for i, packet := range packets {
-		storage := snap.proof.StorageProofs[i]
-		if err := checkValue(kind, packet, common.BigToHash(storage.Value)); err != nil {
-			return nil, fmt.Errorf("packet sequence %d at height %d: %w", packet.Sequence, snap.header.Height, err)
-		}
-		accountProof := snap.proof.AccountProof
+		accountProof := routerProof.AccountProof
 		if i > 0 {
 			accountProof = nil
 		}
 		proof, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
-			ConsensusStatePreimage: consensusOf(snap.header),
+			ConsensusStatePreimage: consensus,
 			AccountProofNodes:      accountProof,
-			ProofNodes:             storage.Proof,
+			ProofNodes:             routerProof.StorageProofs[i],
 		})
 		if err != nil {
 			return nil, fmt.Errorf("packet sequence %d: %w", packet.Sequence, err)
@@ -336,99 +219,4 @@ func packetProofs(snap *snapshot, kind v2.ProofKind, packets []channeltypesv2.Pa
 		proofs[i] = proof
 	}
 	return proofs, nil
-}
-
-// packetPath is the raw commitment path for kind, keyed by the client the
-// counterparty router stores it under.
-func packetPath(kind v2.ProofKind, packet channeltypesv2.Packet) ([]byte, error) {
-	switch kind {
-	case v2.ProofKindPacketCommitment:
-		return hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence), nil
-	case v2.ProofKindAcknowledgement:
-		return hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence), nil
-	case v2.ProofKindReceiptAbsence:
-		return hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence), nil
-	default:
-		return nil, fmt.Errorf("unsupported proof kind %v", kind)
-	}
-}
-
-// checkValue verifies the slot value matches the claim before it is proven.
-func checkValue(kind v2.ProofKind, packet channeltypesv2.Packet, value common.Hash) error {
-	switch kind {
-	case v2.ProofKindPacketCommitment:
-		expected := common.BytesToHash(channeltypesv2.CommitPacket(packet))
-		if value != expected {
-			return fmt.Errorf("%w: stored %s, packet commits to %s", ErrCommitmentMismatch, value, expected)
-		}
-	case v2.ProofKindAcknowledgement:
-		if value == (common.Hash{}) {
-			return ErrAckMissing
-		}
-	case v2.ProofKindReceiptAbsence:
-		if value != (common.Hash{}) {
-			return ErrReceiptExists
-		}
-	default:
-		return fmt.Errorf("unsupported proof kind %v", kind)
-	}
-
-	return nil
-}
-
-// snapshot reads the header and router proof at height.
-func (g *Generator) snapshot(ctx context.Context, height uint64, slots [][32]byte) (*snapshot, error) {
-	header, err := g.counterparty.SealedHeader(ctx, height)
-	if err != nil {
-		return nil, err
-	}
-
-	proof, err := g.counterparty.GetRouterProof(ctx, height, slots)
-	if err != nil {
-		return nil, fmt.Errorf("proving router at height %d: %w", height, err)
-	}
-
-	return &snapshot{header: header, proof: proof}, nil
-}
-
-// preimage returns the consensus state the light client stores at height,
-// rebuilt from the counterparty header and checked against the stored hash.
-func (g *Generator) preimage(ctx context.Context, height uint64) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	header, err := g.counterparty.SealedHeader(ctx, height)
-	if err != nil {
-		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
-			"rebuilding trusted consensus state at height %d: %w",
-			height,
-			err,
-		)
-	}
-	return g.verifyStored(ctx, header)
-}
-
-// verifyStored rebuilds the consensus state header installs and checks that
-// the client stores its hash at header's height. A missing height surfaces as
-// chainsbesu.ErrConsensusStateNotFound.
-func (g *Generator) verifyStored(
-	ctx context.Context,
-	header *besu.Header,
-) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	state := consensusOf(header)
-	stored, err := g.host.ConsensusStateHash(ctx, g.clientID, header.Height)
-	if err != nil {
-		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
-	}
-
-	hash, err := besu.HashConsensusState(state)
-	if err != nil {
-		return besumsgs.IBesuLightClientMsgsConsensusState{}, err
-	}
-
-	if hash != common.Hash(stored) {
-		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
-			"%w: height %d stores %s, counterparty state hashes to %s",
-			ErrConflictingConsensusState, header.Height, common.Hash(stored), hash,
-		)
-	}
-
-	return state, nil
 }

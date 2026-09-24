@@ -36,34 +36,6 @@ type AttestationParams struct {
 	InitialTimestamp uint64
 }
 
-// BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
-// are in seconds. The initial trusted state describes the counterparty chain
-// at InitialHeight: the header timestamp, state root and validator set.
-type BesuQBFTParams struct {
-	IBCRouter         string   `json:"ibcRouter"`
-	InitialHeight     uint64   `json:"initialHeight"`
-	InitialTimestamp  uint64   `json:"initialTimestamp"`
-	InitialStateRoot  string   `json:"initialStateRoot"`
-	InitialValidators []string `json:"initialValidators"`
-	TrustingPeriod    uint64   `json:"trustingPeriod"`
-	MaxClockDrift     uint64   `json:"maxClockDrift"`
-}
-
-// BesuQBFTTrustedState is the counterparty state a Besu QBFT client starts
-// trusting, read from the counterparty chain at Height.
-type BesuQBFTTrustedState struct {
-	Height     uint64
-	Timestamp  uint64
-	StateRoot  string
-	Validators []string
-}
-
-// BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
-// serve the trusted state a client tracking it is initialized with.
-type BesuQBFTSource interface {
-	BesuQBFTTrustedState(ctx context.Context, height uint64) (BesuQBFTTrustedState, error)
-}
-
 // ClientSpec describes one light client to provision and register.
 // Params carries type-specific parameters: AttestationParams for
 // "attestation", BesuQBFTParams for "besu-qbft".

@@ -4,9 +4,10 @@ package besu
 
 import "github.com/ethereum/go-ethereum/common"
 
-// Header contains the fields needed to construct light-client payloads.
-// RLP is preserved exactly; consensus validity is checked by the contract.
-type Header struct {
+// ParsedHeader is a Besu header's exact RLP plus the few fields decoded from
+// it that light-client payloads need; consensus validity is checked by the
+// contract.
+type ParsedHeader struct {
 	RLP        []byte
 	Height     uint64
 	Timestamp  uint64

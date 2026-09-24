@@ -342,16 +342,11 @@ func clientSpec(
 	case deploy.ClientTypeBesuQBFT:
 		// newTarget already checked that the counterparty is a configured EVM chain.
 		counterparty, _ := cfg.Chain(counterpartyChainID)
-		params, err := besuQBFTParams(
-			ctx,
-			counterparty.EVM.ICS26Router,
-			target,
-			counterpartyTarget,
-			chainID,
-			counterpartyChainID,
-		)
+		params, err := besuQBFTParams(ctx, counterparty.EVM.ICS26Router, target, counterpartyTarget)
 		if err != nil {
-			return deploy.ClientSpec{}, err
+			return deploy.ClientSpec{}, errors.Wrapf(
+				err, "besu-qbft client on chain %s tracking chain %s", chainID, counterpartyChainID,
+			)
 		}
 		spec.Params = params
 	default:
@@ -409,87 +404,50 @@ func attestationParams(
 	}, nil
 }
 
-// besuQBFTParams bootstraps a client from the counterparty at --height
-// (default: head). Reruns go through the client step, which skips a matching
-// recorded client and reports differing trust settings as a conflict.
+// besuQBFTParams reads the besu-qbft flags and bootstraps the client from the
+// counterparty at --height (default: head). Reruns go through the client
+// step, which skips a matching recorded client and reports differing trust
+// settings as a conflict.
 func besuQBFTParams(
 	ctx context.Context,
 	counterpartyRouter string,
 	target, counterpartyTarget deploy.Target,
-	chainID, counterpartyChainID string,
 ) (deploy.BesuQBFTParams, error) {
-	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod, flagNameTrustingPeriod)
+	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, err
+		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "--%s", flagNameTrustingPeriod)
 	}
 	if trustingPeriod == 0 {
-		return deploy.BesuQBFTParams{}, errors.New(
-			"--trusting-period is required for a besu-qbft client: choose a positive duration based on validator governance",
-		)
-	}
-	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift, flagNameMaxClockDrift)
-	if err != nil {
-		return deploy.BesuQBFTParams{}, err
-	}
-	if !common.IsHexAddress(counterpartyRouter) || common.HexToAddress(counterpartyRouter) == (common.Address{}) {
 		return deploy.BesuQBFTParams{}, errors.Errorf(
-			"counterparty chain %s needs a valid nonzero evm.ics26Router in config", counterpartyChainID,
+			"--%s is required: choose a positive duration based on validator governance", flagNameTrustingPeriod,
 		)
 	}
-	source, ok := counterpartyTarget.(deploy.BesuQBFTSource)
-	if !ok {
-		return deploy.BesuQBFTParams{}, errors.Errorf(
-			"counterparty chain %s cannot serve a besu-qbft trusted state", counterpartyChainID,
-		)
-	}
-	height := flagDeployHeight
-	if height == 0 {
-		head, _, headErr := counterpartyTarget.Head(ctx)
-		if headErr != nil {
-			return deploy.BesuQBFTParams{}, errors.Wrap(headErr, "fetch counterparty head for initial trusted state")
-		}
-		height = max(head, 1)
-	}
-	state, err := source.BesuQBFTTrustedState(ctx, height)
+	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(
-			err,
-			"read counterparty chain %s trusted state",
-			counterpartyChainID,
-		)
+		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
 	}
-	// the contract measures expiry against this chain's block time, so a
-	// trusted state that is already expired here can never be updated
-	_, hostTime, err := target.Head(ctx)
+	router, err := config.ParseEVMAddress(counterpartyRouter)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "fetch chain %s head", chainID)
+		return deploy.BesuQBFTParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
 	}
-	if hostTime >= state.Timestamp && hostTime-state.Timestamp >= trustingPeriod {
-		return deploy.BesuQBFTParams{}, errors.Errorf(
-			"counterparty chain %s trusted state at height %d (timestamp %d) is already older than the "+
-				"trusting period (%ds) on chain %s (timestamp %d): pick a newer --height or a longer --trusting-period",
-			counterpartyChainID, state.Height, state.Timestamp, trustingPeriod, chainID, hostTime,
-		)
-	}
-	return deploy.BesuQBFTParams{
-		IBCRouter:         counterpartyRouter,
-		InitialHeight:     state.Height,
-		InitialTimestamp:  state.Timestamp,
-		InitialStateRoot:  state.StateRoot,
-		InitialValidators: state.Validators,
-		TrustingPeriod:    trustingPeriod,
-		MaxClockDrift:     maxClockDrift,
-	}, nil
+	return deploy.BesuQBFTBootstrap{
+		Host:           target,
+		Counterparty:   counterpartyTarget,
+		IBCRouter:      router,
+		Height:         flagDeployHeight,
+		TrustingPeriod: trustingPeriod,
+		MaxClockDrift:  maxClockDrift,
+	}.Params(ctx)
 }
 
-// wholeSeconds converts a duration flag into the contract's seconds, refusing
+// wholeSeconds converts a duration into the contract's seconds, refusing
 // values that truncation would silently change.
-func wholeSeconds(d time.Duration, flag string) (uint64, error) {
+func wholeSeconds(d time.Duration) (uint64, error) {
 	if d < 0 {
-		return 0, errors.Errorf("--%s must not be negative, got %s", flag, d)
+		return 0, errors.Errorf("must not be negative, got %s", d)
 	}
-	if d%time.Second != 0 {
-		return 0, errors.Errorf("--%s must be whole seconds, got %s", flag, d)
+	if d.Truncate(time.Second) != d {
+		return 0, errors.Errorf("must be whole seconds, got %s", d)
 	}
 	return uint64(d / time.Second), nil
 }
@@ -645,9 +603,6 @@ func deployShow(_ *cobra.Command, args []string) error {
 // attestorsFromClient projects one client's on-chain attestor addresses into
 // attestors
 func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
-	if c.Type != deploy.ClientTypeAttestation {
-		return nil
-	}
 	addresses, _ := c.Params["attestors"].([]any)
 
 	out := make(config.Attestors, 0, len(addresses))
@@ -757,8 +712,12 @@ func renderRelayConfig(
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
-		out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		if ca.Type == deploy.ClientTypeAttestation {
+			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		}
+		if cb.Type == deploy.ClientTypeAttestation {
+			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		}
 	}
 	if len(out.Connections) == 0 {
 		return config.DeploymentConfig{}, errors.Errorf(

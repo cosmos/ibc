@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
@@ -24,7 +25,6 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -238,9 +238,13 @@ func (d *Driver) provisionBesuQBFT(
 	if !ok {
 		return deploy.ClientRef{}, fmt.Errorf("client %q: params must be deploy.BesuQBFTParams", spec.ClientID)
 	}
-	args, err := besuQBFTArgs(params)
-	if err != nil {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: %w", spec.ClientID, err)
+	// the constructor accepts both zero values, but neither can track a chain
+	if params.IBCRouter == (common.Address{}) {
+		return deploy.ClientRef{}, fmt.Errorf("client %q: counterparty router must not be zero", spec.ClientID)
+	}
+	trusted := params.InitialConsensusState
+	if trusted.StateRoot == ([32]byte{}) {
+		return deploy.ClientRef{}, fmt.Errorf("client %q: initial state root must not be zero", spec.ClientID)
 	}
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
@@ -249,11 +253,11 @@ func (d *Driver) provisionBesuQBFT(
 	addr, tx, _, err := besuqbft.DeployContract(
 		opts,
 		d.backend,
-		args.router,
+		params.IBCRouter,
 		params.InitialHeight,
-		params.InitialTimestamp,
-		args.stateRoot,
-		args.validators,
+		trusted.Timestamp,
+		trusted.StateRoot,
+		trusted.Validators,
 		params.TrustingPeriod,
 		params.MaxClockDrift,
 		common.HexToAddress(router),
@@ -267,63 +271,22 @@ func (d *Driver) provisionBesuQBFT(
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-type besuQBFTConstructorArgs struct {
-	router     common.Address
-	stateRoot  [32]byte
-	validators []common.Address
-}
-
-// besuQBFTArgs validates besu-qbft params and converts them for the contract
-// constructor.
-func besuQBFTArgs(p deploy.BesuQBFTParams) (besuQBFTConstructorArgs, error) {
-	if !common.IsHexAddress(p.IBCRouter) || common.HexToAddress(p.IBCRouter) == (common.Address{}) {
-		return besuQBFTConstructorArgs{}, fmt.Errorf("invalid counterparty router address %q", p.IBCRouter)
-	}
-	root, err := hexutil.Decode(p.InitialStateRoot)
-	if err != nil || len(root) != common.HashLength {
-		return besuQBFTConstructorArgs{}, fmt.Errorf(
-			"initial state root %q must be 32 hex bytes",
-			p.InitialStateRoot,
-		)
-	}
-	validators := make([]common.Address, len(p.InitialValidators))
-	for i, v := range p.InitialValidators {
-		if !common.IsHexAddress(v) {
-			return besuQBFTConstructorArgs{}, fmt.Errorf("invalid validator address %q", v)
-		}
-		validators[i] = common.HexToAddress(v)
-	}
-	return besuQBFTConstructorArgs{
-		router:     common.HexToAddress(p.IBCRouter),
-		stateRoot:  common.BytesToHash(root),
-		validators: validators,
-	}, nil
-}
-
-// BesuQBFTTrustedState reads the sealed header at height on this driver's
-// chain.
-func (d *Driver) BesuQBFTTrustedState(
+// BesuQBFTConsensusState is the consensus state the sealed header at height on
+// this driver's chain installs.
+func (d *Driver) BesuQBFTConsensusState(
 	ctx context.Context, height uint64,
-) (deploy.BesuQBFTTrustedState, error) {
-	number := new(big.Int).SetUint64(height)
-	header, err := d.backend.HeaderByNumber(ctx, number)
+) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	header, err := d.backend.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
 	if err != nil {
-		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("fetch header %d: %w", height, err)
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("fetch header %d: %w", height, err)
 	}
 	parsed, err := besu.ParseSealedHeader(header)
 	if err != nil {
-		return deploy.BesuQBFTTrustedState{}, fmt.Errorf("header %d is not a Besu QBFT header: %w", height, err)
+		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
+			"header %d is not a Besu QBFT header: %w", height, err,
+		)
 	}
-	validators := make([]string, len(parsed.Validators))
-	for i, v := range parsed.Validators {
-		validators[i] = v.Hex()
-	}
-	return deploy.BesuQBFTTrustedState{
-		Height:     parsed.Height,
-		Timestamp:  parsed.Timestamp,
-		StateRoot:  parsed.StateRoot.Hex(),
-		Validators: validators,
-	}, nil
+	return besu.ConsensusStateOf(parsed), nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

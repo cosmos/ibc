@@ -618,7 +618,7 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 
 // besuQBFTTrustedState is the sealed head of chain, which a Besu QBFT Client
 // tracking it starts trusting.
-func besuQBFTTrustedState(ctx context.Context, chain *Chain) (*besu.Header, error) {
+func besuQBFTTrustedState(ctx context.Context, chain *Chain) (*besu.ParsedHeader, error) {
 	header, err := evmHeader(ctx, chain)
 	if err != nil {
 		return nil, err

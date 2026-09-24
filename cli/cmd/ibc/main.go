@@ -160,8 +160,9 @@ func init() {
 			"light client type: "+strings.Join(deployClientTypes, " or "))
 	cmdDeployClient.Flags().
 		StringSliceVar(&flagDeployAttestors, flagNameAttestors, nil,
-			"attestation: attestors for the new client as addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
-	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, flagNameThreshold, 1, "attestation: signature threshold")
+			deploy.ClientTypeAttestation+": attestors for the new client as addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
+	cmdDeployClient.Flags().
+		Uint8Var(&flagDeployThreshold, flagNameThreshold, 1, deploy.ClientTypeAttestation+": signature threshold")
 	cmdDeployClient.Flags().
 		StringVar(&flagDeployClientID, "client-id", "", "client id (default: cli-<a>-<b>, chain ids sorted)")
 	cmdDeployClient.Flags().
@@ -170,13 +171,13 @@ func init() {
 		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
 	cmdDeployClient.Flags().
 		Uint64Var(&flagDeployTimestamp, flagNameTimestamp, 0,
-			"attestation: initial trusted timestamp seconds (default: counterparty head)")
+			deploy.ClientTypeAttestation+": initial trusted timestamp seconds (default: counterparty head)")
 	cmdDeployClient.Flags().
 		DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0,
-			"besu-qbft: required; positive trusted state lifetime in whole seconds")
+			deploy.ClientTypeBesuQBFT+": required; positive trusted state lifetime in whole seconds")
 	cmdDeployClient.Flags().
 		DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, 60*time.Second,
-			"besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds")
+			deploy.ClientTypeBesuQBFT+": how far ahead of this chain's block time a counterparty header may be, in whole seconds")
 
 	cmdDeployRenderConfig.Flags().
 		StringVar(&flagDeployRenderSignerA, "signer-a", "", "Override the relay signer on chainA; omitted preserves existing settings")

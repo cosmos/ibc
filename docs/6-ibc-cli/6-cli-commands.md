@@ -261,7 +261,7 @@ Deploy an IFT token on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L189](cli/cmd/ibc/main.go#L189) -->
+<!-- [main.go:L190](cli/cmd/ibc/main.go#L190) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -290,7 +290,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L195](cli/cmd/ibc/main.go#L195) -->
+<!-- [main.go:L196](cli/cmd/ibc/main.go#L196) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -315,7 +315,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L181](cli/cmd/ibc/main.go#L181) -->
+<!-- [main.go:L182](cli/cmd/ibc/main.go#L182) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -515,7 +515,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L221](cli/cmd/ibc/main.go#L221) -->
+<!-- [main.go:L222](cli/cmd/ibc/main.go#L222) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -535,7 +535,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L226](cli/cmd/ibc/main.go#L226) -->
+<!-- [main.go:L227](cli/cmd/ibc/main.go#L227) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

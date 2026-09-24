@@ -33,7 +33,7 @@ type Prover interface {
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
 	// ClientUpdatePayload returns the encoded updateMsg for the counterparty state at height.
-	// Empty when the client already stores that height.
+	// May be empty when the client already trusts height.
 	ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at

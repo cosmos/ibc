@@ -4,8 +4,6 @@ package besu
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -14,7 +12,6 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,11 +47,6 @@ func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	_, err := client.SealedHeader(ctx, 7)
 	require.ErrorContains(t, err, "not a Besu QBFT header")
 }
-
-type fakeDataError struct{ data any }
-
-func (e fakeDataError) Error() string  { return "execution reverted" }
-func (e fakeDataError) ErrorData() any { return e.data }
 
 func TestLightClientReads(t *testing.T) {
 	ctx := context.Background()
@@ -100,100 +92,4 @@ func TestLightClientReads(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, state, got)
 	})
-
-	t.Run("consensus state hash", func(t *testing.T) {
-		client, eth := newTestClient(t)
-
-		callData, err := clientABI.Pack("getConsensusStateHash", uint64(112))
-		require.NoError(t, err)
-
-		want := common.HexToHash("0xe90678de9bc0821f64b0634c05ba8dc7726ff865d40fbf283d3bdb32ac38d4b9")
-		output, err := clientABI.Methods["getConsensusStateHash"].Outputs.Pack(want)
-		require.NoError(t, err)
-
-		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil)).
-			Return(getClientOutput, nil).Once()
-		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &lightClientAddress, Data: callData}, (*big.Int)(nil)).
-			Return(output, nil).Once()
-
-		got, err := client.ConsensusStateHash(ctx, "besu-0", 112)
-		require.NoError(t, err)
-		assert.Equal(t, [32]byte(want), got)
-	})
-
-	t.Run("consensus state not found", func(t *testing.T) {
-		client, eth := newTestClient(t)
-
-		callData, err := clientABI.Pack("getConsensusStateHash", uint64(999))
-		require.NoError(t, err)
-
-		revert, err := clientABI.Errors["ConsensusStateNotFound"].Inputs.Pack(uint64(999))
-		require.NoError(t, err)
-		revert = append(clientABI.Errors["ConsensusStateNotFound"].ID.Bytes()[:4], revert...)
-
-		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil)).
-			Return(getClientOutput, nil).Once()
-		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &lightClientAddress, Data: callData}, (*big.Int)(nil)).
-			Return(nil, fakeDataError{data: hexutil.Encode(revert)}).Once()
-
-		_, err = client.ConsensusStateHash(ctx, "besu-0", 999)
-		require.ErrorIs(t, err, ErrConsensusStateNotFound)
-	})
-
-	t.Run("other revert is not mistaken for not found", func(t *testing.T) {
-		client, eth := newTestClient(t)
-
-		callData, err := clientABI.Pack("getConsensusStateHash", uint64(5))
-		require.NoError(t, err)
-
-		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil)).
-			Return(getClientOutput, nil).Once()
-		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &lightClientAddress, Data: callData}, (*big.Int)(nil)).
-			Return(nil, errors.New("boom")).Once()
-
-		_, err = client.ConsensusStateHash(ctx, "besu-0", 5)
-		require.Error(t, err)
-		require.NotErrorIs(t, err, ErrConsensusStateNotFound)
-	})
-}
-
-// Test against the deployed contract ABI, independently of the error bindings.
-func TestIsConsensusStateNotFound(t *testing.T) {
-	contractABI, err := besuqbft.ContractMetaData.GetAbi()
-	require.NoError(t, err)
-	encodeError := func(name string, args ...any) []byte {
-		t.Helper()
-		definition := contractABI.Errors[name]
-		arguments, packErr := definition.Inputs.Pack(args...)
-		require.NoError(t, packErr)
-		return append(definition.ID.Bytes()[:4], arguments...)
-	}
-	missing := encodeError("ConsensusStateNotFound", uint64(999))
-	unrelated := encodeError("InvalidRevisionNumber", uint64(1))
-	overflow := append([]byte(nil), missing...)
-	overflow[4] = 1
-	cases := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"valid", fakeDataError{data: hexutil.Encode(missing)}, true},
-		{"wrapped", fmt.Errorf("RPC call: %w", fakeDataError{data: hexutil.Encode(missing)}), true},
-		{"nil", nil, false},
-		{"no error data", errors.New("execution reverted"), false},
-		{"non-string data", fakeDataError{data: 123}, false},
-		{"invalid hex", fakeDataError{data: "0xzz"}, false},
-		{"empty", fakeDataError{data: "0x"}, false},
-		{"short selector", fakeDataError{data: hexutil.Encode(missing[:3])}, false},
-		{"selector only", fakeDataError{data: hexutil.Encode(missing[:4])}, false},
-		{"truncated argument", fakeDataError{data: hexutil.Encode(missing[:len(missing)-1])}, false},
-		{"uint64 overflow", fakeDataError{data: hexutil.Encode(overflow)}, false},
-		{"unrelated error", fakeDataError{data: hexutil.Encode(unrelated)}, false},
-		{"unknown selector", fakeDataError{data: "0xffffffff"}, false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, isConsensusStateNotFound(tc.err))
-		})
-	}
 }

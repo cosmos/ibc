@@ -77,7 +77,7 @@ Before it can deliver anything, the relayer needs proof of the packets for the l
 
 For an attestation light client, the prover asks the client's attestors to attest to the chain's state at a height. It checks the signatures, and once enough attestors have signed the same attestation to meet the client's threshold, it packages that attestation and its signatures together. That package is the proof.
 
-For a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md), the prover reads the sealed header and an `eth_getProof` result from the Besu chain itself, checks the client's validator rules before submitting, and packages the header with the account and storage proofs.
+For a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md), the prover reads the sealed header and an `eth_getProof` result from the Besu chain itself and packages the header with the account and storage proofs. The client's validator rules are checked when the transaction is simulated.
 
 Either way it returns the client updates for a height, and a proof for each packet in the batch.
 

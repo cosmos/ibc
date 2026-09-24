@@ -2,22 +2,14 @@
 
 package besu
 
-import (
-	"fmt"
+import "github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-)
-
-// HashConsensusState is keccak256(abi.encode(ConsensusState)), the value the light client
-// stores per height. The struct holds a dynamic array, so the encoding starts
-// with an offset word.
-func HashConsensusState(state besumsgs.IBesuLightClientMsgsConsensusState) (common.Hash, error) {
-	data, err := messageBindings.TryPackConsensusState(state)
-	if err != nil {
-		return common.Hash{}, fmt.Errorf("encode consensus state: %w", err)
+// ConsensusStateOf is the consensus state an update to header installs, and
+// the preimage payloads carry for header's height.
+func ConsensusStateOf(header *ParsedHeader) besumsgs.IBesuLightClientMsgsConsensusState {
+	return besumsgs.IBesuLightClientMsgsConsensusState{
+		Timestamp:  header.Timestamp,
+		StateRoot:  header.StateRoot,
+		Validators: header.Validators,
 	}
-
-	return crypto.Keccak256Hash(data[4:]), nil
 }
