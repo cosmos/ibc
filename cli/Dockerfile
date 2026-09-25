@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # 1. Source image builder
-FROM golang:1.26.4-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 
 ARG LDFLAGS="-s -w"
 

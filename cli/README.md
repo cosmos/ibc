@@ -12,7 +12,7 @@ between them.
 
 ## Prerequisites
 
-- [Go](https://go.dev/doc/install) 1.26.4 or later
+- [Go](https://go.dev/doc/install) 1.26.6 or later
 
 ## Support
 
