@@ -1,0 +1,248 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Capslock Capability Diff
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  CAPSLOCK_VERSION: v0.3.3
+  CAPSLOCK_FLAGS: -packages=./... -granularity=intermediate
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.go }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'cli/**'
+              - 'e2e/**'
+              - 'gen/go/solidity-abi/**'
+              - '.github/workflows/capslock.yml'
+              - '.github/workflows/capslock-diff.yml'
+
+  diff:
+    name: Diff ${{ matrix.name }}
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cli
+            dir: cli
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history so the baseline can be regenerated from the base commit
+          # when no cached baseline is available.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+
+      - name: Resolve base revision
+        id: base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BASE_SHA" ]; then
+            # workflow_dispatch: compare against the tip of the default branch.
+            git fetch --no-tags origin "$BASE_REF"
+            sha="$(git rev-parse FETCH_HEAD)"
+          elif git rev-parse -q --verify 'HEAD^2' >/dev/null; then
+            # On pull_request the checked-out ref is refs/pull/N/merge. Its first parent is
+            # the exact base commit this tree was merged onto, which is what the analysis
+            # must be compared against. The event payload's base.sha can be stale if the
+            # base branch advanced after the event was created.
+            sha="$(git rev-parse 'HEAD^1')"
+          else
+            sha="$BASE_SHA"
+          fi
+          echo "Base revision: $sha (event payload reported '${BASE_SHA:-none}')"
+          printf 'ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'slug=%s\n' "$(printf '%s' "$BASE_REF" | tr '/' '-' | tr -c '[:alnum:]_.-' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Capslock
+        run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
+
+      - name: Restore baseline from cache
+        id: baseline-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: capslock-out/${{ matrix.name }}.json
+          key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.slug }}-${{ steps.base.outputs.sha }}
+
+      - name: Generate baseline from base revision
+        if: steps.baseline-cache.outputs.cache-hit != 'true'
+        env:
+          BASE_REF: ${{ steps.base.outputs.ref }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          NAME: ${{ matrix.name }}
+          DIR: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          echo "::notice::No cached Capslock baseline for ${BASE_REF}; generating one from ${BASE_SHA}"
+          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
+          mkdir -p "$GITHUB_WORKSPACE/capslock-out"
+          cd "$RUNNER_TEMP/base/$DIR"
+          capslock $CAPSLOCK_FLAGS -output=json \
+            > "$GITHUB_WORKSPACE/capslock-out/${NAME}.json"
+
+      # Exit status 0 means no difference, 1 means a difference was found, and 2 or above
+      # means capslock itself failed.
+      - name: Compare against baseline
+        id: compare
+        working-directory: ${{ matrix.dir }}
+        env:
+          BASELINE: ${{ github.workspace }}/capslock-out/${{ matrix.name }}.json
+          REPORT: ${{ github.workspace }}/capslock-out/${{ matrix.name }}-diff.txt
+        run: |
+          set -uo pipefail
+          status=0
+          capslock $CAPSLOCK_FLAGS -output=compare "$BASELINE" > "$REPORT" 2>&1 || status=$?
+          cat "$REPORT"
+          if [ "$status" -ge 2 ]; then
+            printf 'ok=false\n' >> "$GITHUB_OUTPUT"
+            echo "::error::capslock could not analyze the packages (exit $status)"
+            exit 1
+          fi
+          printf 'ok=true\n' >> "$GITHUB_OUTPUT"
+
+      - name: Build report
+        id: report
+        if: always() && steps.compare.outcome != 'skipped'
+        env:
+          REPORT: ${{ github.workspace }}/capslock-out/${{ matrix.name }}-diff.txt
+          NAME: ${{ matrix.name }}
+          BASE_REF: ${{ steps.base.outputs.ref }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          COMPARE_OK: ${{ steps.compare.outputs.ok }}
+          SOURCE: ${{ steps.baseline-cache.outputs.cache-matched-key || 'generated from base revision' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT: capslock-diff-${{ matrix.name }}-pr${{ github.event.pull_request.number || github.run_id }}
+        run: |
+          set -euo pipefail
+          LIMIT=50000
+          body="$RUNNER_TEMP/comment-${NAME}.md"
+          counts="$RUNNER_TEMP/counts-${NAME}.env"
+          findings="$RUNNER_TEMP/findings-${NAME}.md"
+
+          if [ "${COMPARE_OK:-}" = "true" ]; then
+            ./scripts/capslock-classify.sh "$REPORT" --counts "$counts" > "$findings"
+            cat "$counts" >> "$GITHUB_OUTPUT"
+            # shellcheck disable=SC1090
+            . "$counts"
+          else
+            printf ':x: capslock did not complete, see the [job log](%s).\n' "$RUN_URL" > "$findings"
+            : > "$counts"
+            high=""; moved=""; low=""; added=""; removed=""
+          fi
+
+          size="$(wc -c < "$findings" | tr -d '[:space:]')"
+          {
+            printf '<!-- capslock-diff:%s -->\n' "$NAME"
+            printf '## Capslock capability diff: `%s`\n\n' "$NAME"
+            printf -- '- Base: `%s` (`%s`)\n' "$BASE_REF" "$BASE_SHA"
+            printf -- '- Baseline: `%s`\n' "$SOURCE"
+            if [ -n "$added" ]; then
+              # Lead with the high-signal count: it is the only number that should block.
+              printf -- '- New high-signal capabilities (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE): **%s**\n' "$high"
+              printf -- '- Likely package moves: %s, lower signal: %s, no longer present: %s\n' "$moved" "$low" "$removed"
+            fi
+            printf '\n'
+            head -c "$LIMIT" "$findings" || printf '(findings unavailable)\n'
+            if [ "$size" -gt "$LIMIT" ]; then
+              printf '\n\nTruncated (%s of %s bytes shown). Full report: `%s` artifact on the [run](%s).\n' \
+                "$LIMIT" "$size" "$ARTIFACT" "$RUN_URL"
+            fi
+          } > "$body"
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"
+          printf 'body=%s\n' "$body" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update PR comment
+        if: |
+          always() && steps.report.outcome == 'success'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          MARKER: '<!-- capslock-diff:${{ matrix.name }} -->'
+          BODY: ${{ steps.report.outputs.body }}
+        run: |
+          set -euo pipefail
+          # Reuse this job's own previous comment so pushes update in place.
+          ids="$(gh api "repos/$REPO/issues/$PR/comments?per_page=100" --paginate \
+            --jq '.[] | select(.user.type == "Bot") | select(.body | startswith(env.MARKER)) | .id' || true)"
+          id="$(printf '%s' "$ids" | tail -n 1)"
+          if [ -n "$id" ]; then
+            jq -n --rawfile body "$BODY" '{body: $body}' \
+              | gh api --method PATCH "repos/$REPO/issues/comments/$id" --input - --silent
+            echo "Updated comment $id"
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file "$BODY"
+          fi
+
+      - name: Upload diff artifact
+        if: always() && steps.compare.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: capslock-diff-${{ matrix.name }}-pr${{ github.event.pull_request.number || github.run_id }}
+          path: capslock-out/${{ matrix.name }}-diff.txt
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+      - name: Fail on new capabilities
+        if: steps.report.outputs.high != '0' && steps.report.outputs.high != ''
+        env:
+          HIGH: ${{ steps.report.outputs.high }}
+          BASE_REF: ${{ steps.base.outputs.ref }}
+        run: |
+          echo "::error::${HIGH} new high-signal capability use(s) (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE) relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- read the call paths in the job summary."
+          exit 1
+
+      - name: Note non-blocking capability changes
+        if: |
+          steps.report.outputs.high == '0'
+          && steps.report.outputs.added != '0'
+          && steps.report.outputs.added != ''
+        env:
+          MOVED: ${{ steps.report.outputs.moved }}
+          LOW: ${{ steps.report.outputs.low }}
+          BASE_REF: ${{ steps.base.outputs.ref }}
+        run: |
+          echo "::notice::No high-signal capability changes relative to ${BASE_REF}. ${MOVED:-0} likely package move(s) and ${LOW:-0} lower-signal change(s) are recorded in the job summary."
