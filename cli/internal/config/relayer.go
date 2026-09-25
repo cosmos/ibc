@@ -15,6 +15,9 @@ const (
 	ClientTypeRemote      ClientType = "remote"
 )
 
+// DefaultClearOnStart whether a clearing pass runs at startup when clearOnStart is unset.
+const DefaultClearOnStart = true
+
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
 
@@ -29,11 +32,13 @@ type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	DispatchPollInterval *time.Duration         `yaml:"dispatchPollInterval,omitempty"`
-	ClearOnStart         *bool                  `yaml:"clearOnStart,omitempty"`
-	ClearInterval        *time.Duration         `yaml:"clearInterval,omitempty"`
-	ChainOverrides       []RelayerChainOverride `yaml:"chainOverrides"`
-	Connections          []ConnectionConfig     `yaml:"connections"`
+	DispatchPollInterval *time.Duration `yaml:"dispatchPollInterval,omitempty"`
+	// ClearOnStart runs a clearing pass at startup. Unset runs it.
+	ClearOnStart *bool `yaml:"clearOnStart,omitempty"`
+	// ClearInterval is how often a clearing pass runs; a chainOverrides entry wins.
+	ClearInterval  *time.Duration         `yaml:"clearInterval,omitempty"`
+	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
+	Connections    []ConnectionConfig     `yaml:"connections"`
 }
 
 // RelayerChainOverride relay settings for one chain.
@@ -75,7 +80,8 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// Params is this client type's settings.
+	// Params is this client type's settings: empty for `attestation`, and
+	// `{url: <ProverService endpoint>}` for `remote`, where it is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
@@ -351,7 +357,10 @@ func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 
 // ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.
 func (c RelayerConfig) ClearOnStartEnabled() bool {
-	return c.ClearOnStart == nil || *c.ClearOnStart
+	if c.ClearOnStart == nil {
+		return DefaultClearOnStart
+	}
+	return *c.ClearOnStart
 }
 
 // ClearIntervalFor resolves the clearing cadence for a chain, preferring its chain override.

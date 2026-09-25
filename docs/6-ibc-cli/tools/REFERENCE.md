@@ -15,6 +15,8 @@ holds the rules; this one holds the detail you look up while following it.
 | `missing_marker` | the source has something the page cannot hold. Carries the rendered table, a suggested heading, and where to insert it | step 2 |
 | `orphaned_marker` | a marker for something the source no longer has | step 2 |
 | `curation` | a choice the source cannot express | step 2 |
+| `moved_citation` | a cited symbol is now declared in exactly one other file; the message names it | repoint, after confirming the sentence |
+| `stale_citation` | a sentence in the prose cites a symbol that is gone, or was never there | see below |
 
 Exit codes: `0` nothing to do, `1` stale or missing, `2` the tool refused. A
 refusal outranks staleness, so `--plan` and `--report` still exit 2 when a page
@@ -93,6 +95,40 @@ Three things follow, and they are the only maintenance these carry:
 
 A fixture that fails to load for any other reason refuses
 (`stale_probe_fixture`) and quotes what the binary stopped at.
+
+## Prose citations
+
+Sentences outside the generated tables carry the code they came from:
+
+```
+<!-- [cli/internal/service/relayer/service.go: Service.Relay] -->
+```
+
+The path is from the repository root and is **required**; the symbol is a
+declaration in that file, and `Type.Member` must be that type's method or that
+struct's field. `--check` verifies all of this and refuses with `stale_citation`
+otherwise.
+
+A path is the one derived fact left in a citation, so a move is answered rather
+than merely refused. When the cited path no longer resolves but the symbol is
+declared in exactly one other file, the kind is `moved_citation` and the message
+names that file — a `cli/` to `link/` rename would otherwise break all
+fifty-six sentences at once with no clue where they went. When the symbol is
+declared nowhere, or in several files, it stays `stale_citation`: those need a
+decision, not a repoint.
+
+Two things it deliberately does not do. It does not check that the symbol is
+the *right* one for the sentence — only that it is declared where you say. And
+it does not update citations for you: a refusal means go read the code, confirm the sentence is
+still true, and cite what backs it now. A citation whose symbol you renamed is
+the cheap case; a citation whose *claim* your change falsified is the one this
+refusal is really fishing for.
+
+A bare file name is refused rather than searched for. Fifteen of the
+twenty-three basenames these pages cite resolve to more than one file in this
+repository -- `relayer.sql.go` to four, one of them a tree nothing imports --
+so a basename told the checker almost nothing and told the reader less.
+
 
 ## Choices the source cannot make
 

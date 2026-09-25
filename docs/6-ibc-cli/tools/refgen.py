@@ -322,6 +322,16 @@ def _field_type(f, owner=None):
     t = _PROTO_SCALARS.get(f.get("type"))
     if t is None:
         t = (f.get("typeName") or "").rsplit(".", 1)[-1]
+    if not t:
+        # a scalar this map does not name leaves the Type cell empty, which
+        # reads as a field with no type rather than as a tool that could not
+        # read one. Same shape as the config side publishing `yaml.RawMessage`.
+        _problem("unreadable_proto_type",
+                 f"the field `{f.get('name')}` has protobuf type "
+                 f"`{f.get('type')}`, which this tool has no name for, so its "
+                 "Type cell would be blank. Add it to _PROTO_SCALARS.",
+                 field=f.get("name"), proto_type=f.get("type"))
+        return UNREADABLE
     if f.get("label") == "LABEL_REPEATED":
         entry = next((n for n in (owner or {}).get("nestedType", [])
                       if n["name"] == t and n.get("options", {}).get("mapEntry")),
@@ -510,9 +520,9 @@ FIELD_DOCS = {
     ("TransactionInfo", "chain_id"): ("The chain it was submitted to.", "8140443d"),
     ("StateAttestationRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
     ("StateAttestationRequest", "height"): ("The height to attest to.", "f4439355"),
-    ("StateAttestationResponse", "attestation"): ("The signed attestation. See below.", "b9fffb17"),
+    ("StateAttestationResponse", "attestation"): ("The signed attestation, in the `Attestation` table.", "b9fffb17"),
     ("PacketAttestationRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
-    ("PacketAttestationResponse", "attestation"): ("The signed attestation. See below.", "b9fffb17"),
+    ("PacketAttestationResponse", "attestation"): ("The signed attestation, in the `Attestation` table.", "b9fffb17"),
     ("LatestHeightRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
     ("LatestHeightResponse", "height"): ("The highest height this attestor will attest to.", "f4439355"),
     ("InfoRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
@@ -651,6 +661,8 @@ DEFAULT_CONSTS = {
     ("RelayerChainOverride", "packetBatchTimeout"): [
         ("receive and acknowledge", "DefaultBatchTimeout"),
         ("timeout", "DefaultTimeoutBatchTimeout")],
+    ("RelayerConfig", "clearInterval"): [("", "DefaultClearInterval")],
+    ("RelayerConfig", "clearOnStart"): [("", "DefaultClearOnStart")],
 }
 
 # Keys the Go source does not document. Values never come from here, only
@@ -691,10 +703,6 @@ FALLBACK_DOCS = {
     ("ClientEnd", "signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
     ("ClientEnd", "clientId"): ("The light client's id on this chain.", "bb596da7"),
     ("ClientEnd", "type"): ("Light client type.", "85b1564f"),
-    ("Observability", "metrics"): ("Whether the process exports metrics. When false, the rest of this block is ignored.", "0754660b"),
-    ("Observability", "type"): ("Which exporter serves the metrics.", "bc67445d"),
-    ("Observability", "simpleMetricsListenAddr"): ("Address the `simple` exporter serves metrics on.", "78d41d56"),
-    ("Observability", "otelFile"): ("OpenTelemetry configuration file, read when `type` is `otel`. `OTEL_CONFIG_FILE` overrides it, and one of the two is required.", "0e180386"),
 }
 
 # Explicit skips only. Unexported struct fields and yaml:"-" tags are dropped
@@ -710,6 +718,18 @@ NO_NAMED_DEFAULT = {
     ("AutoRelayConfig", "enabled"),
     ("RelayerEVMConfig", "gasFeeCapMultiplier"),
     ("RelayerEVMConfig", "gasTipCapMultiplier"),
+    # unset inherits relayer.clearInterval rather than any one value
+    # (relayer.go, ClearIntervalFor)
+    ("RelayerChainOverride", "clearInterval"),
+    # unset is false (relayer.go, AbandonUnrecoverablePacketsFor)
+    ("RelayerChainOverride", "abandonUnrecoverablePackets"),
+}
+
+# What a reader writes where the Go type says nothing useful. `params` is a
+# raw block whose shape is fixed by the sibling `type` key, which no reading of
+# the field alone can recover.
+OPAQUE_TYPES = {
+    ("ClientEnd", "params"): "block",
 }
 
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
@@ -1081,7 +1101,17 @@ def _validate_source(recv, bodies, ctors):
         for ctor in seg_err:
             for w in re.finditer(re.escape(ctor) + r"\([^,]+,\s*\w+\.(\w+)\(", body):
                 wrapped.add(w.group(1))
-        for call in re.findall(r"\b\w+\.(\w+)\(", body):
+        # a call, `c.validateConnections()`, and a method *value* passed
+        # somewhere to be called later:
+        #
+        #   {"", c.crossValidate},
+        #
+        # Config.Validate is a table of those, so every cross-reference rule in
+        # this package sat behind a shape with no parentheses. They were
+        # invisible here, and ended up hand-copied onto the page instead.
+        refs = set(re.findall(r"\b\w+\.(\w+)\(", body))
+        refs |= set(re.findall(r"\b\w+\.(\w+)\b(?!\s*[(.])", body))
+        for call in refs:
             if call not in wrapped and (recv, call) in bodies and call != "Validate":
                 stack.append((recv, call))
     return "\n".join(out)
@@ -1099,7 +1129,39 @@ def _rules_in(body, ctors):
     msgs = []
     for e in re.finditer(r'\b[\w.]+\(\s*"(\.[^"]+)"((?:,\s*\w+)*)', body):
         msgs.append((e.group(1), [a.strip() for a in e.group(2).split(",") if a.strip()]))
+
+    # A fourth shape: the path built one line earlier and passed by name.
+    #
+    #   seg := fmt.Sprintf("relayer.connections[%d].clientA.chainId", i)
+    #   return errPathf(seg, "%q not declared in top-level chains", id)
+    #
+    # The format string is a literal, so the path is there -- only the
+    # indirection hid it. Every cross-reference rule in this package is written
+    # this way, which is why they were invisible and ended up hand-copied into
+    # the page with line numbers that then rotted.
+    def _index_free(fmt_string):
+        # `[%d]` is an element index; the page writes those as `[]`
+        return re.sub(r"%[-+ #0-9.]*[a-z]", "",
+                      fmt_string.replace("[%d]", "[]"))
+
+    # positional, not a dict: every one of these functions names its variable
+    # `seg`, so a flat map would give all of them whichever assignment came
+    # last. Each call binds to the nearest assignment above it.
+    assigns = [(m.start(), m.group(1), _index_free(m.group(2)))
+               for m in re.finditer(r'(\w+)\s*:=\s*fmt\.Sprintf\(\s*"([^"]+)"', body)]
+
+    def _path_before(var, at):
+        for pos, name, path in reversed(assigns):
+            if pos < at and name == var:
+                return path
+        return None
     for name, kind in ctors.items():
+        if kind in ("seg_fmt", "seg_err"):
+            for e in re.finditer(re.escape(name) + r"\(\s*(\w+)\s*,\s*\"([^\"]+)\"((?:,\s*[\w.]+)*)", body):
+                path = _path_before(e.group(1), e.start())
+                if path:
+                    msgs.append((f".{path} {e.group(2)}",
+                                 [a.strip() for a in e.group(3).split(",") if a.strip()]))
         if kind == "seg_fmt":
             for e in re.finditer(re.escape(name) + r'\(\s*"([^"]+)",\s*"([^"]+)"((?:,\s*[\w.]+)*)', body):
                 msgs.append((f".{e.group(1)} {e.group(2)}",
@@ -1327,7 +1389,8 @@ def parse_go_config():
 # a struct that validates something must yield a rule, or say here that it does
 # not.
 RULELESS_VALIDATORS = {
-    "Attestors", "Config", "ServerConfig",   # check cross-references, delegate the rest
+    "Attestors", "Chains", "Signers",        # check cross-references, delegate the rest
+    "Config", "ServerConfig",
     "AttestationParams",                     # `return nil`, satisfies an interface
 }
 
@@ -1652,7 +1715,18 @@ def _type_cell(go, field, model):
         return "list"
     if t in model["structs"] or t in model["aliases"]:
         return "block"
-    return f"`{t}`"
+    if (go, field["yaml"]) in OPAQUE_TYPES:
+        return OPAQUE_TYPES[(go, field["yaml"])]
+    # Everything else was published as whatever Go calls it, which put
+    # `yaml.RawMessage` in a column a reader writes values into. A type this
+    # tool cannot describe is one it must not name.
+    _problem("unreadable_type",
+             f"{go}.{field['go']} has type `{t}`, which is neither a Go type a "
+             "reader writes, a block, nor a set of constants -- so the column "
+             "would publish the Go type name. Give it an entry in OPAQUE_TYPES "
+             "saying what a reader writes there.",
+             struct=go, field=field["yaml"], go_type=t)
+    return UNREADABLE
 
 
 # ---------------------------------------- requiredness, by asking the binary
@@ -1795,7 +1869,14 @@ def _yaml_with(text, path, value):
     return None
 
 
-def _probe_validate(binary, text):
+# `config validate` checks the file's shape. `config validate relayer` and
+# `... attestor` additionally check what a running process needs, and a key can
+# be required only there: `ics26Router` passes a plain validate and stops both
+# runnable targets. Probing only the first published it as `optional`.
+PROBE_TARGETS = [([], None), (["relayer"], "relay"), (["attestor"], "attest")]
+
+
+def _probe_validate(binary, text, target=()):
     """The key path the binary objects to, or None when it is content."""
     home = tempfile.mkdtemp(prefix="refgen-cfg-")
     try:
@@ -1804,11 +1885,16 @@ def _probe_validate(binary, text):
         for name, body in PROBE_SIDECARS.items():
             with open(os.path.join(home, name), "w") as fh:
                 fh.write(body)
-        r = subprocess.run([binary, "config", "validate", "--home", home],
+        r = subprocess.run([binary, "config", "validate", *target, "--home", home],
                            capture_output=True, text=True, timeout=PROBE_TIMEOUT)
         if r.returncode == 0:
             return None
-        m = re.search(r"unable to load the config: ([^:\s]+):", r.stdout + r.stderr)
+        out = r.stdout + r.stderr
+        m = re.search(r"unable to load the config: ([^:\s]+):", out)
+        if m:
+            return m.group(1)
+        # a sufficiency target names the path directly, under its own prefix
+        m = re.search(r"Error: (?:relayer|attestor): ([\w.\[\]]+): ", out)
         return m.group(1) if m else _WALL
     except subprocess.TimeoutExpired:
         return _WALL
@@ -2014,7 +2100,14 @@ def probe_requiredness(model, binary, membership=None):
                                              for _i, q, _n, _t, _v in paths):
                         answer = False
                     continue
+                # asked of the file first, then of each runnable target. A key
+                # only a target refuses is required to run, not to be valid.
                 answer = _probe_validate(binary, without) == path
+                if not answer:
+                    hit = [label for tgt, label in PROBE_TARGETS[1:]
+                           if _probe_validate(binary, without, tgt) == path]
+                    if hit:
+                        answer, condition = True, ("run" if len(hit) > 1 else hit[0])
                 # A key only one fixture holds is conditional: the others are
                 # valid configs without it. The condition is whatever
                 # distinguishes that fixture at the key's own level -- read
@@ -2085,9 +2178,13 @@ def _requirement(go, field, model, parent=None, probed=None, variant=None):
         # put the same silent wrong answer back, reachable only in the case
         # nobody tests. gen_config has already refused by this point.
         return UNREADABLE, None
-    # the binary's answer, in the variant this table is about
-    return (("**required**" if not variant else f"**required** for `{variant}`")
-            if probed else "optional"), None
+    if not probed:
+        return "optional", None
+    if variant in ("run", "relay", "attest"):
+        # required by a running process, not by the file being well formed
+        return ("**required** to run" if variant == "run"
+                else f"**required** to {variant}"), None
+    return ("**required**" if not variant else f"**required** for `{variant}`"), None
 
 
 def _description(struct, field, model, seen, variant=None):
@@ -2230,6 +2327,40 @@ def _example_config():
     return "```yaml\n" + text + "\n```\n\n" + cite(rel, 1)
 
 
+def _cross_references(model):
+    """Rows for keys whose value must name something declared elsewhere.
+
+    These were a hand-written table with hand-written line numbers, because the
+    rules behind them were invisible here: `Config.Validate` holds a table of
+    method values, and each rule builds its path through a local variable. Both
+    shapes are followed now, so the table is derived like every other one and
+    its citations cannot rot.
+    """
+    rows, cites = [], []
+    seen = sorted({msg for msg, _a in model["deep_validations"].get(CONFIG_ROOT, [])})
+    for msg in seen:
+        body = msg.lstrip(".")
+        path, _, rule = body.partition(" ")
+        if not rule or "[]" not in path:
+            continue
+        # `%s` stands for whichever end of a connection is at fault
+        key = path.replace("[]..", "[].<end>.").replace("..", ".<end>.")
+        text = re.sub(r"%[-+ #0-9.]*[a-zA-Z]", "…", rule)
+        rows.append((f"`{key}`", text[0].upper() + text[1:]))
+    if not rows:
+        _problem("no_cross_references",
+                 "no rule in the config package names a key that must match "
+                 "another, which this page has a table for. Either the checks "
+                 "moved somewhere this tool does not follow, or they are gone.",
+                 struct=CONFIG_ROOT)
+        return ""
+    where = model["structs"].get(CONFIG_ROOT, {})
+    body = table(["Key", "What the loader enforces"], rows)
+    if where.get("file"):
+        body += "\n\n" + cite(where["file"], where.get("line"))
+    return body
+
+
 def gen_config():
     model = parse_go_config()
     _requirement_canary(model)
@@ -2274,6 +2405,7 @@ def gen_config():
             body += " " + cite(path, line)
         blocks[sec["region"]] = body
 
+    blocks["config:crossrefs"] = _cross_references(model)
     blocks["config:example"] = _example_config()
     blocks["notice"] = _notice()
 
@@ -3186,10 +3318,127 @@ def _report_downgrades(path, before, after):
           "reads. Confirm which before accepting.", file=sys.stderr)
 
 
+SYMBOL_CITE = re.compile(r"<!--\s*\[([\w./-]+\.go):\s*([\w.]+)\]\s*-->")
+
+# A declaration, not a mention. `\bSymbol\b` anywhere in the file also matches
+# a call, a comment and an unrelated local, so it would accept a citation whose
+# symbol had been deleted and was merely still being referred to.
+_DECL_FORMS = (
+    r"^func\s+{s}\b",                    # func Name(
+    r"^func\s+\([^)]*\)\s+{s}\b",       # func (r T) Name(
+    r"^(?:type|const|var)\s+{s}\b",     # type/const/var Name
+    r"^\s+{s}\s+[\w*\[\]./]",            # struct field, or a const/var block
+    r"^\s+{s}\s*=",                      # an assignment inside such a block
+)
+
+
+def _struct_body(source, name):
+    """The text between `type Name struct {` and its closing brace."""
+    head = re.search(r"^type\s+" + re.escape(name) + r"\s+struct\s*{", source, re.M)
+    if not head:
+        return None
+    depth, i = 1, head.end()
+    while i < len(source) and depth:
+        if source[i] == "{":
+            depth += 1
+        elif source[i] == "}":
+            depth -= 1
+        i += 1
+    return source[head.end():i]
+
+
+def _declares(source, symbol):
+    """Whether this file declares `symbol`.
+
+    A dotted `Type.Member` must be that type's method or that struct's field.
+    There is deliberately no fallback to a bare search for the member: the
+    first version of this had one, and it accepted `Prover.Relay` for a method
+    on `Service` -- the receiver half of the citation went unchecked, which is
+    the half a reader relies on when one file holds several types.
+    """
+    parts = symbol.split(".")
+    if len(parts) == 2:
+        owner, member = parts
+        if re.search(r"^func\s+\(\s*\w+\s+\*?" + re.escape(owner)
+                     + r"\s*\)\s+" + re.escape(member) + r"\b", source, re.M):
+            return True
+        body = _struct_body(source, owner)
+        return bool(body) and bool(
+            re.search(r"^\s+" + re.escape(member) + r"\s+[\w*\[\]./]",
+                      body, re.M))
+    for form in _DECL_FORMS:
+        if re.search(form.format(s=re.escape(parts[-1])), source, re.M):
+            return True
+    return False
+
+
+def _where_declared(symbol):
+    """Every file under the repo that declares `symbol`."""
+    return [f for f in _walk(".go")
+            if not f.endswith("_test.go") and _declares(_read(f), symbol)]
+
+
+def _check_symbol_cites(text, page):
+    """Every `<!-- [path/to/file.go: Symbol] -->` names a declaration that exists.
+
+    Prose citations used to carry line numbers, which are a derived fact frozen
+    into a file someone else edits. Five of eighteen on the config page pointed
+    at unrelated code -- a claim about attestor names citing `DBConfig.Validate`,
+    the `Info` RPC citing a timeout constant. A symbol survives edits above it,
+    and unlike a line range it can be checked by looking for it.
+
+    The path is repo-relative and required. A basename alone was accepted once
+    and it proved almost nothing: fifteen of twenty-three cited basenames were
+    ambiguous, `relayer.sql.go` resolving four ways, one of them a tree nothing
+    imports. The check passed if *any* of them held the symbol, and no reader
+    could tell which file the sentence meant.
+
+    A path is the one derived fact left in a citation, so a directory rename is
+    answered rather than merely refused: upstream renamed `link/` to `cli/`
+    once already, and a rename that breaks fifty-six sentences at once has to
+    say where each one went. `moved` and `gone` are separate kinds because they
+    ask for different work -- one is a repoint you confirm, the other is a claim
+    you re-read.
+    """
+    moved, gone = [], []
+    for m in SYMBOL_CITE.finditer(text):
+        path, symbol = m.group(1), m.group(2)
+        if "/" not in path:
+            gone.append(f"`{path}: {symbol}` needs the path from the repo root, "
+                        f"not just the file name")
+            continue
+        here = os.path.exists(os.path.join(IBC, path))
+        if here and _declares(_read(path), symbol):
+            continue
+        elsewhere = [f for f in _where_declared(symbol) if f != path]
+        why = "no such file" if not here else f"`{symbol}` is not declared there"
+        if len(elsewhere) == 1:
+            moved.append(f"{path} ({why}) -> {elsewhere[0]}")
+        elif not here:
+            gone.append(f"{path} (no such file) for `{symbol}`")
+        else:
+            gone.append(f"`{symbol}` is not declared in {path} any more")
+    if moved:
+        _problem("moved_citation",
+                 f"{os.path.basename(page)} cites code that has moved: "
+                 + "; ".join(moved)
+                 + ". Each symbol is declared in exactly one other file now. "
+                 "Confirm the sentence still holds, then repoint it.",
+                 page=os.path.basename(page), citations=moved)
+    if gone:
+        _problem("stale_citation",
+                 f"{os.path.basename(page)} cites code that has moved or gone: "
+                 + "; ".join(gone)
+                 + ". Find what backs the claim now, check the claim still "
+                 "holds, and cite that symbol.",
+                 page=os.path.basename(page), citations=gone)
+
+
 def run(kind, path, check):
     blocks = GENERATORS[kind]()
     text = open(path).read()
     _check_notice_placement(text, path)
+    _check_symbol_cites(text, path)
     present = {i for i, *_ in find_regions(text)}
     if os.path.normpath(path) == os.path.normpath(os.path.join(ROOT, PAGES[kind])) or \
             os.path.normpath(path) == PAGES[kind]:

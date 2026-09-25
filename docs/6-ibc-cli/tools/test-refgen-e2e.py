@@ -724,7 +724,7 @@ def _claimed_requiredness():
     under `db` and is required under `signers` -- cannot be checked by name
     alone, so it is reported uncovered rather than guessed at.
     """
-    claims, seen = {}, {}
+    claims, seen, texts = {}, {}, {}
     for body in refgen.GENERATORS["config"]().values():
         for line in body.split("\n"):
             if not line.startswith("| `"):
@@ -749,9 +749,11 @@ def _claimed_requiredness():
                 # one as a disagreement
                 seen.setdefault(key, set()).add(kind)
                 claims[key] = kind == "required"
+                texts[key] = cell
     usable = {k: v for k, v in claims.items()
               if seen[k] in ({"required"}, {"optional"})}
-    return usable, sorted(k for k in seen if k not in usable)
+    return (usable, sorted(k for k in seen if k not in usable),
+            {k: texts[k] for k in usable})
 
 
 @case("every key the page calls required is one the binary refuses to run without")
@@ -763,7 +765,7 @@ def _():
     # reworded message now fails a test instead of changing a page.
     with Sandbox() as box:
         binary = refgen.build_cli()
-        claims, ambiguous = _claimed_requiredness()
+        claims, ambiguous, texts = _claimed_requiredness()
         fixture = os.path.join(box.dir, "cli/internal/config/testdata/sample.yml")
         original = open(fixture).read()
         lines = original.split("\n")
@@ -797,9 +799,21 @@ def _():
             home = tempfile.mkdtemp(prefix="refgen-req-")
             try:
                 shutil.copyfile(fixture, os.path.join(home, "ibc.yml"))
-                r = subprocess.run([binary, "config", "validate", "--home", home],
-                                   capture_output=True, text=True, timeout=30)
-                complained = key in (r.stdout + r.stderr) and r.returncode != 0
+                # A cell reading "required to run" is a claim about the
+                # runnable targets, not about the file being well formed, so
+                # ask the same question the cell answers. Deliberately its own
+                # probing rather than the generator's: two paths to one answer
+                # is the point, and calling refgen here would test nothing.
+                targets = ([[]] if "to run" not in texts.get(key, "")
+                           else [["relayer"], ["attestor"]])
+                complained = False
+                for t in targets:
+                    r = subprocess.run(
+                        [binary, "config", "validate", *t, "--home", home],
+                        capture_output=True, text=True, timeout=30)
+                    if key in (r.stdout + r.stderr) and r.returncode != 0:
+                        complained = True
+                        break
             finally:
                 shutil.rmtree(home, ignore_errors=True)
             checked += 1
@@ -977,13 +991,59 @@ def _():
                  '\t\treturn errPathf("region", "required")\n'
                  '\t}\n\tchainType := c.Type()')
         blocks = refgen.GENERATORS["cli"]()
+        # `deploy render-config --signer-a` was the second half of this pair
+        # until upstream made that flag optional. The case needs a command that
+        # loads config and still has a genuinely required flag, not that
+        # particular flag.
         for region, flag in (("cli:cmd:deploy-core", "--chain"),
-                             ("cli:cmd:deploy-render-config", "--signer-a")):
+                             ("cli:cmd:deploy-ift", "--name")):
             row = [l for l in blocks[region].split("\n")
                    if l.startswith(f"| `{flag} ")]
             assert row, f"no {flag} row in {region}"
             assert "required" in row[0].split("|")[2], \
                 f"{flag} lost its required mark in {region}: {row[0]}"
+
+
+@case("a cross-reference rule reaches the page through a method value")
+def _():
+    with Sandbox() as box:
+        # `Config.Validate` is a table of method values, and each rule builds
+        # its path through a local `seg`. Both shapes were invisible here, so
+        # this table was hand-written with hand-written line numbers that then
+        # pointed at unrelated code. Adding a rule must reach the page.
+        box.edit("cli/internal/config/config.go",
+                 "func (c Config) validateChainReferences() error {",
+                 """func (c Config) validateNicknames() error {
+	for i, chain := range c.Chains {
+		if chain.Deployer == "nope" {
+			seg := fmt.Sprintf("chains[%d].deployer", i)
+			return errPathf(seg, "%q is not a usable alias", chain.Deployer)
+		}
+	}
+	return nil
+}
+
+func (c Config) validateChainReferences() error {""")
+        box.edit("cli/internal/config/config.go",
+                 '{"", c.crossValidate},',
+                 '{"", c.crossValidate},\n\t\t{"", c.validateNicknames},')
+        body = refgen.GENERATORS["config"]()["config:crossrefs"]
+        assert "is not a usable alias" in body, f"the new rule never arrived:\n{body}"
+
+
+@case("the cross-reference table survives a reworded rule")
+def _():
+    with Sandbox() as box:
+        # the table is derived from the rules, so rewording one changes the
+        # text it shows -- but the key it is about must not move
+        before = refgen.GENERATORS["config"]()["config:crossrefs"]
+        assert "`chains[].deployer`" in before, before
+        box.edit("cli/internal/config/config.go",
+                 '"chain %q references unknown signer %q"',
+                 '"chain %q names a signer that does not exist: %q"')
+        after = refgen.GENERATORS["config"]()["config:crossrefs"]
+        assert "`chains[].deployer`" in after, f"the key moved:\n{after}"
+        assert "does not exist" in after, f"the reworded rule did not reach:\n{after}"
 
 
 @case("rewording a variant rule does not move a key into the wrong table")
@@ -1245,6 +1305,24 @@ def _():
         refgen._ANCHORS.clear()
         unchanged(box, "config", rename=("cli/", "link/"))
         unchanged(box, "cli", rename=("cli/", "link/"))
+
+
+@case("moving the CLI tells every prose citation where its code went")
+def _():
+    # The generated tables survive a directory rename because nothing in them
+    # names a path the tool did not just find. The prose citations do name one,
+    # so this is the case where that cost comes due: fifty-six sentences at
+    # once. It must name the new path for each, not merely refuse.
+    with Sandbox() as box:
+        os.rename(os.path.join(box.dir, "cli"), os.path.join(box.dir, "link"))
+        refgen._ANCHORS.clear()
+        text = "Claim. <!-- [cli/internal/config/config.go: Config.Server] -->\n"
+        try:
+            refgen._check_symbol_cites(text, "page.md")
+            assert False, "a citation into the old path should not pass"
+        except refgen.SourceError as e:
+            assert e.kind == "moved_citation", e.kind
+            assert "link/internal/config/config.go" in str(e), str(e)
 
 
 @case("realigning a struct's columns changes nothing")

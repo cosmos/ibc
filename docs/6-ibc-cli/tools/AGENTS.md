@@ -31,6 +31,10 @@ quietly wrong when the schema grows a construct.
 you may edit, the probe fixtures behind the required column, and the two
 formats below. This file is the procedure.
 
+[AUDIT.md](AUDIT.md) is separate work: checking whether the pages are *true*
+rather than current. `--check` cannot answer that, so nothing below calls for
+it — read it when that is the question you have.
+
 **The one rule: never edit between a `<!-- GEN:... START -->` and its `END`.**
 Those blocks are rewritten from source, so an edit there disappears the next
 time anyone regenerates — a change that looks like a fix and is not. Everything
@@ -38,8 +42,8 @@ else on those pages is yours: prose, headings, section order, examples.
 
 Two things the generator does not watch. The example config is copied from the
 fixture the Go tests validate, so edit the fixture. And the other pages in
-`docs/6-ibc-cli/` repeat these commands and keys in hand-written prose — when
-you rename or remove something, grep the whole directory.
+`docs/6-ibc-cli/` — the overview, the tutorial, the two guides — describe this
+same surface in hand-written prose. Step 7 is how you check those.
 
 ## 1. Find out what moved
 
@@ -54,6 +58,12 @@ to read what they require, so they are not free and not inert.
 `--plan` is the list to work from; **REFERENCE.md explains every kind it can
 report, and the exit codes.** `--list-regions` prints the stale region ids
 alone: the prose to re-read in step 4.
+
+One kind is worth knowing before you see it. If you renamed or moved a Go
+symbol, expect `stale_citation`: sentences in the prose cite the code they came
+from, by path and symbol, and the check refuses when one no longer resolves. It
+is not asking you to repoint the comment — it is asking whether your change made
+that *sentence* wrong. REFERENCE.md has the format.
 
 ## 2. Resolve everything that needs a decision
 
@@ -136,6 +146,38 @@ section in the format REFERENCE.md shows, one line per item. Unfinished and
 reported is a fine outcome — unfinished and unmentioned is not, because whoever
 reads the pull request cannot tell a page you left alone from a page that
 needed nothing.
+
+## 7. Check the pages nothing generates
+
+The overview, the tutorial and the two standalone guides describe this surface
+in prose, in pasteable examples, and in **captured terminal output**. Nothing
+checks any of it.
+
+**Grepping for the names that changed is not enough, and this is the step
+people get wrong.** Grep finds a rename. It does not find a behaviour change,
+because the sentence that is now false often contains no changed identifier at
+all. A real example: `render-config` began merging the deployment into the
+whole config instead of printing three sections. Nothing was renamed, every
+grep came back clean, and the overview went on describing the old behaviour.
+
+So work from the change, not from the text. For each thing the diff changes,
+ask **what a reader would now see that these pages show**:
+
+| If the change... | look for |
+|---|---|
+| alters what a command prints or writes | every sentence describing that command's output, and every captured transcript of it |
+| adds or removes a startup step, a migration, a log line | transcripts — a line that should now be *present* cannot be grepped for by its absence |
+| changes a count, a total, a version, a duration | the same number quoted anywhere in prose or output |
+| changes a default | sentences stating the old value, and examples that relied on it |
+| adds a required config key | every pasteable config block, which now fails to load |
+
+Two shortcuts worth taking. Any `yaml` block a reader would paste can be
+checked by running `ibc config validate` against it. Any block of captured
+output can be checked by running the command that produced it, when it does
+not need a live chain.
+
+Say in the report which of these pages you read and what you changed. "I
+grepped and found nothing" is not an answer to this step.
 
 **You are done when** `--check` is clean, or everything outstanding is listed
 under *Handed back*.

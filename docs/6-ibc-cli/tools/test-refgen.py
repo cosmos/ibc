@@ -878,6 +878,110 @@ def _():
         "more. Drop them from the list.")
 
 
+
+# ---- prose citations -------------------------------------------------------
+#
+# The checker shipped with no tests, and it was accepting three things it should
+# not have. Each case below is a mutation that passed before the fix.
+
+_CITED_FILE = "cli/internal/service/relayer/service.go"
+
+
+def _cite(symbol, path=_CITED_FILE):
+    return f"Some claim. <!-- [{path}: {symbol}] -->\n"
+
+
+def _refuses(text):
+    try:
+        refgen._check_symbol_cites(text, "page.md")
+    except refgen.SourceError as e:
+        return e
+    return None
+
+
+@case("citation: a real declaration is accepted")
+def _():
+    assert _refuses(_cite("Service.Relay")) is None
+
+
+@case("citation: a bare file name is refused, because it is ambiguous")
+def _():
+    # Fifteen of twenty-three cited basenames in this repo resolve to more than
+    # one file. The old checker searched all of them and passed if any matched.
+    e = _refuses(_cite("Service.Relay", "service.go"))
+    assert e is not None and "path from the repo root" in str(e), e
+
+
+@case("citation: a path that does not exist is refused")
+def _():
+    e = _refuses(_cite("Service.Relay", "cli/internal/service/relayer/gone.go"))
+    assert e is not None and "no such file" in str(e), e
+
+
+@case("citation: a symbol that is only mentioned, not declared, is refused")
+def _():
+    # `Relay` is called all over this file. A citation must name what the file
+    # declares, or it survives the deletion of the thing it points at.
+    e = _refuses(_cite("NewRelayer"))
+    assert e is not None and "not declared" in str(e), e
+
+
+@case("citation: a method cited on the wrong receiver type is refused")
+def _():
+    # The first fix checked the receiver and then fell through to a bare search
+    # for the method name, so this passed and the receiver went unchecked.
+    e = _refuses(_cite("Prover.Relay"))
+    assert e is not None and "not declared" in str(e), e
+
+
+@case("citation: a package-level const cited as a struct field is refused")
+def _():
+    e = _refuses(_cite("Service.MaxPacketsPerAttestation",
+                       "cli/internal/service/attestor/service.go"))
+    assert e is not None and "not declared" in str(e), e
+
+
+@case("citation: a renamed directory is reported as moved, with the new path")
+def _():
+    # Upstream renamed `link/` to `cli/` once already. The path is the one
+    # derived fact left in a citation, so a rename that breaks every sentence
+    # at once has to say where each one went, not just that it is broken.
+    e = _refuses(_cite("Config.Server", "link/internal/config/config.go"))
+    assert e is not None and e.kind == "moved_citation", e
+    assert "cli/internal/config/config.go" in str(e), e
+
+
+@case("citation: a symbol that exists nowhere is stale, not moved")
+def _():
+    # The two kinds ask for different work: a repoint you confirm, against a
+    # claim you re-read. Collapsing them would hide the second in the first.
+    e = _refuses(_cite("VanishedEntirely", "cli/internal/config/config.go"))
+    assert e is not None and e.kind == "stale_citation", e
+
+
+@case("citation: a symbol declared in several files is not guessed at")
+def _():
+    e = _refuses(_cite("upsertPacket", "gone/relayer.sql.go"))
+    assert e is not None and e.kind == "stale_citation", e
+
+
+@case("citation: a real struct field is accepted, and a fictional one is not")
+def _():
+    src = open(os.path.join(refgen.IBC, "cli/internal/config/config.go")).read()
+    assert refgen._declares(src, "Config.Server")
+    assert not refgen._declares(src, "Config.NoSuchField")
+
+
+@case("every prose citation on every page names a declaration")
+def _():
+    # The pages themselves, not a fixture: this is the check that would have
+    # caught all five mispointers on the config page had it existed then.
+    for rel in refgen.PAGES.values():
+        text = open(os.path.join(refgen.IBC, rel)).read()
+        assert _refuses(text) is None, rel
+        assert refgen.SYMBOL_CITE.search(text), f"{rel} cites nothing at all"
+
+
 for name in PASS:
     print(f"  ok    {name}")
 for name, e, tb in FAIL:

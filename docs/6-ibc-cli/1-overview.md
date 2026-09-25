@@ -131,15 +131,16 @@ IBC CLI allows you to run an attestor as its own standalone process, or in-proce
 
 IBC CLI stores the configuration for deployment, the relayer, and attestors in a single YAML file at `~/.ibc/ibc.yml`.
 
-It has six blocks:
+It has eight blocks:
 
 - `chains`: the chains all three parts talk to, with a router address for each, an RPC endpoint, and a websocket endpoint where auto-relay is enabled.
 - `relayer`: the connections to relay, and per-chain relay settings.
 - `attestors`: the attestors this process runs, or queries over the network.
 - `signers`: the keys, each under an alias the other blocks reference by name.
 - `server` and `db`: the address to listen on, and the relayer's database.
+- `logging` and `observability`: the log level and format, and the metrics endpoint.
 
-Most configurations can be generated. `ibc config new` writes a starting file, `config add-chain` appends a chain, and the `ibc keys` commands can append a signer. After deploying, `ibc deploy render-config` prints the chains, connections, and attestors that the deployment implies.
+Most configurations can be generated. `ibc config new` writes a starting file, `config add-chain` appends a chain, and the `ibc keys` commands can append a signer. After deploying, `ibc deploy render-config` prints your config with the relaying settings the deployment implies merged in, and `-p` writes it back.
 
 The IBC CLI also validates the file with the `ibc config validate` command. 
 
