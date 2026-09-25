@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
@@ -55,9 +54,9 @@ type ETHClient interface {
 	GetProof(
 		ctx context.Context,
 		account common.Address,
-		keys []string,
+		keys []common.Hash,
 		blockNumber *big.Int,
-	) (*gethclient.AccountResult, error)
+	) (accountProof [][]byte, storageProofs [][][]byte, err error)
 }
 
 // Client implements chains.Client for EVM chains.

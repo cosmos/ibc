@@ -105,9 +105,9 @@ func TestMeteredClient(t *testing.T) {
 			{
 				operation: "eth_getProof",
 				expect: func(eth *mocks.MockETHClient) {
-					eth.EXPECT().GetProof(ctx, address, []string{hash.Hex()}, (*big.Int)(nil)).Return(nil, assert.AnError).Once()
+					eth.EXPECT().GetProof(ctx, address, []common.Hash{hash}, (*big.Int)(nil)).Return(nil, nil, assert.AnError).Once()
 				},
-				call: func(c ETHClient) error { _, err := c.GetProof(ctx, address, []string{hash.Hex()}, nil); return err },
+				call: func(c ETHClient) error { _, _, err := c.GetProof(ctx, address, []common.Hash{hash}, nil); return err },
 			},
 			{
 				operation: "eth_getBlockByNumber",
