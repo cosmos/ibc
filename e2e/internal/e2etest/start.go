@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,9 @@ const (
 
 const (
 	cleanupTimeout = 30 * time.Second
-	modeEnv        = "E2E_MODE"
+	envMode        = "E2E_MODE"
+	envLoad        = "E2E_LOAD"
+	testLoadPrefix = "TestLoad"
 
 	anvilChainIDBase = 31337
 	besuChainIDBase  = 32337
@@ -66,6 +69,8 @@ var modeFlag = flag.String(
 	"e2e mode to run: fast, complete, or production; overrides E2E_MODE",
 )
 
+var loadFlag = flag.Bool("e2e.load", false, "run load tests; also enabled by E2E_LOAD=1")
+
 type evmResolution struct {
 	chains     []environment.ChainSpec
 	provider   EVMProvider
@@ -78,7 +83,7 @@ func EVMChains(
 	ids ...environment.ChainID,
 ) []environment.ChainSpec {
 	t.Helper()
-	mode, err := resolveMode(*modeFlag, os.Getenv(modeEnv))
+	mode, err := resolveMode(*modeFlag, os.Getenv(envMode))
 	if err != nil {
 		t.Fatalf("e2etest: %v", err)
 	}
@@ -107,8 +112,17 @@ func resolveMode(flagValue, envValue string) (Mode, error) {
 	case ModeFast, ModeComplete, ModeProduction:
 		return mode, nil
 	default:
-		return "", fmt.Errorf("unknown e2e mode %q; set %s or -e2e.mode to fast, complete, or production", raw, modeEnv)
+		return "", fmt.Errorf("unknown e2e mode %q; set %s or -e2e.mode to fast, complete, or production", raw, envMode)
 	}
+}
+
+func resolveLoadTest(flagValue bool, envValue string) (bool, error) {
+	println("resolveLoadTest", flagValue, envValue)
+	if envValue != "" {
+		return strconv.ParseBool(envValue)
+	}
+
+	return flagValue, nil
 }
 
 func resolveEVMChains(
@@ -191,6 +205,23 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 	return chains
 }
 
+func guardLoadTest(t testing.TB) {
+	isLoadTest := strings.HasPrefix(t.Name(), testLoadPrefix)
+
+	wantLoadTest, err := resolveLoadTest(*loadFlag, os.Getenv(envLoad))
+	require.NoError(t, err, "e2etest: resolve load test")
+
+	if !isLoadTest && wantLoadTest {
+		t.Skipf("e2etest: only load tests are allowed when %s enabled", envLoad)
+	}
+
+	if isLoadTest && !wantLoadTest {
+		t.Skipf("e2etest: load tests are skipped when %s is not specified", envLoad)
+	}
+
+	// expected invariants
+}
+
 // RuntimeWithProtocolDeployer returns runtime with the protocol deployer
 // authority, without retaining caller-owned maps.
 func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtime {
@@ -207,8 +238,9 @@ func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtim
 
 func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *environment.Environment {
 	t.Helper()
+
 	if matrixDiscoveryEnabled() {
-		mode, err := resolveMode(*modeFlag, os.Getenv(modeEnv))
+		mode, err := resolveMode(*modeFlag, os.Getenv(envMode))
 		if err != nil {
 			t.Fatalf("e2etest: %v", err)
 		}
@@ -219,8 +251,12 @@ func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *en
 		t.SkipNow()
 		return nil
 	}
+
+	guardLoadTest(t)
+
 	env, err := environment.Start(t.Context(), spec, runtime)
 	require.NoError(t, err, "e2etest: start Environment")
+
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
