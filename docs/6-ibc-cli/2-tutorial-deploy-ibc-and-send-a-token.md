@@ -17,7 +17,7 @@ By the end, you'll have the following:
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.26.4 or later. On Go 1.27 and above every `ibc` command prints a `sonic/ast only supports ...` warning to stderr and falls back to the standard JSON encoder; it is harmless, and the sample output in this guide omits it.
+- [Go](https://go.dev/doc/install) v1.26.6 or later. On Go 1.27 and above every `ibc` command prints a `sonic/ast only supports ...` warning to stderr and falls back to the standard JSON encoder; it is harmless, and the sample output in this guide omits it.
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
