@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 func TestSpecValidateMixedGraph(t *testing.T) {
@@ -278,13 +280,13 @@ func TestSpecValidateClientIDUniquenessIsInstanceScoped(t *testing.T) {
 		Connections: []ConnectionSpec{
 			{
 				ID: "ab",
-				A:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "shared"},
-				B:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-b", ID: "b"},
+				A:  ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-a", ID: "shared"},
+				B:  ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-b", ID: "b"},
 			},
 			{
 				ID: "ac",
-				A:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "shared"},
-				B:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-c", ID: "c"},
+				A:  ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-a", ID: "shared"},
+				B:  ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-c", ID: "c"},
 			},
 		},
 	}
@@ -294,8 +296,8 @@ func TestSpecValidateClientIDUniquenessIsInstanceScoped(t *testing.T) {
 		`IBC Clients "ab/A" and "ac/A" on IBC Instance "ibc-a" resolve to duplicate id "shared"`,
 	)
 
-	spec.Connections[1].A = ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-c", ID: "shared"}
-	spec.Connections[1].B = ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "a-second"}
+	spec.Connections[1].A = ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-c", ID: "shared"}
+	spec.Connections[1].B = ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-a", ID: "a-second"}
 	require.NoError(t, spec.validate(), "the same client id is legal on distinct IBC Instances")
 }
 
@@ -390,8 +392,8 @@ func validSpec() Spec {
 func existingConnectionSpec() ConnectionSpec {
 	return ConnectionSpec{
 		ID: "connection-ab",
-		A:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-a", ID: "client-7"},
-		B:  ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-b", ID: "client-9"},
+		A:  ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-a", ID: "client-7"},
+		B:  ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-b", ID: "client-9"},
 	}
 }
 
@@ -405,17 +407,17 @@ func makeChainAAttached(spec *Spec) {
 }
 
 func TestExistingClientKind(t *testing.T) {
-	for _, kind := range []ClientKind{"", "unknown", ClientKindAttestation, ClientKindBesuQBFT} {
+	for _, kind := range []clientkind.Kind{"", "unknown", clientkind.Attestation, clientkind.BesuQBFT} {
 		client := ExistingClient{Kind: kind, IBCInstance: "ibc-a", ID: "client-a"}
 		_, err := validateClientSpec("connection", "A", client)
-		if kind == ClientKindAttestation || kind == ClientKindBesuQBFT {
+		if kind == clientkind.Attestation || kind == clientkind.BesuQBFT {
 			require.NoError(t, err)
 		} else {
 			require.ErrorContains(t, err, "unsupported kind")
 		}
 	}
 	_, err := validateClientSpec("connection", "A", ExistingClient{
-		Kind: ClientKindBesuQBFT, Attestors: []AttestorSpec{{ID: "attestor"}},
+		Kind: clientkind.BesuQBFT, Attestors: []AttestorSpec{{ID: "attestor"}},
 	})
 	require.ErrorContains(t, err, "does not use attestors")
 }
@@ -445,7 +447,7 @@ func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
 		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
 	}
 	spec.IBCInstances[1] = ExistingIBCInstance{ID: "ibc-b", Chain: "chain-b", Locator: "0xibc-b"}
-	spec.Connections[0].B = ExistingClient{Kind: ClientKindBesuQBFT, IBCInstance: "ibc-b", ID: "client-b"}
+	spec.Connections[0].B = ExistingClient{Kind: clientkind.BesuQBFT, IBCInstance: "ibc-b", ID: "client-b"}
 	require.NoError(t, spec.validate())
 
 	spec.Chains[1] = ManagedAnvil{ID: "chain-b", EVMChainID: 2}
@@ -461,7 +463,7 @@ func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
 		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
 	}
 	spec.IBCInstances[0] = ExistingIBCInstance{ID: "ibc-a", Chain: "chain-a", Locator: "0xibc-a"}
-	spec.Connections[0].A = ExistingClient{Kind: ClientKindBesuQBFT, IBCInstance: "ibc-a", ID: "client-a"}
+	spec.Connections[0].A = ExistingClient{Kind: clientkind.BesuQBFT, IBCInstance: "ibc-a", ID: "client-a"}
 	require.ErrorContains(
 		t, spec.validate(), `Besu QBFT IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
 	)

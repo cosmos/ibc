@@ -39,24 +39,24 @@ func (_m *MockProver) EXPECT() *MockProver_Expecter {
 	return &MockProver_Expecter{mock: &_m.Mock}
 }
 
-// ClientUpdatePayload provides a mock function for the type MockProver
-func (_mock *MockProver) ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error) {
+// ClientUpdatePayloads provides a mock function for the type MockProver
+func (_mock *MockProver) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {
 	ret := _mock.Called(ctx, height)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ClientUpdatePayload")
+		panic("no return value specified for ClientUpdatePayloads")
 	}
 
-	var r0 []byte
+	var r0 [][]byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([]byte, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) ([][]byte, error)); ok {
 		return returnFunc(ctx, height)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) []byte); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) [][]byte); ok {
 		r0 = returnFunc(ctx, height)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]byte)
+			r0 = ret.Get(0).([][]byte)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
@@ -67,19 +67,19 @@ func (_mock *MockProver) ClientUpdatePayload(ctx context.Context, height uint64)
 	return r0, r1
 }
 
-// MockProver_ClientUpdatePayload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClientUpdatePayload'
-type MockProver_ClientUpdatePayload_Call struct {
+// MockProver_ClientUpdatePayloads_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClientUpdatePayloads'
+type MockProver_ClientUpdatePayloads_Call struct {
 	*mock.Call
 }
 
-// ClientUpdatePayload is a helper method to define mock.On call
+// ClientUpdatePayloads is a helper method to define mock.On call
 //   - ctx context.Context
 //   - height uint64
-func (_e *MockProver_Expecter) ClientUpdatePayload(ctx any, height any) *MockProver_ClientUpdatePayload_Call {
-	return &MockProver_ClientUpdatePayload_Call{Call: _e.mock.On("ClientUpdatePayload", ctx, height)}
+func (_e *MockProver_Expecter) ClientUpdatePayloads(ctx any, height any) *MockProver_ClientUpdatePayloads_Call {
+	return &MockProver_ClientUpdatePayloads_Call{Call: _e.mock.On("ClientUpdatePayloads", ctx, height)}
 }
 
-func (_c *MockProver_ClientUpdatePayload_Call) Run(run func(ctx context.Context, height uint64)) *MockProver_ClientUpdatePayload_Call {
+func (_c *MockProver_ClientUpdatePayloads_Call) Run(run func(ctx context.Context, height uint64)) *MockProver_ClientUpdatePayloads_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -97,12 +97,12 @@ func (_c *MockProver_ClientUpdatePayload_Call) Run(run func(ctx context.Context,
 	return _c
 }
 
-func (_c *MockProver_ClientUpdatePayload_Call) Return(bytes []byte, err error) *MockProver_ClientUpdatePayload_Call {
-	_c.Call.Return(bytes, err)
+func (_c *MockProver_ClientUpdatePayloads_Call) Return(bytess [][]byte, err error) *MockProver_ClientUpdatePayloads_Call {
+	_c.Call.Return(bytess, err)
 	return _c
 }
 
-func (_c *MockProver_ClientUpdatePayload_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([]byte, error)) *MockProver_ClientUpdatePayload_Call {
+func (_c *MockProver_ClientUpdatePayloads_Call) RunAndReturn(run func(ctx context.Context, height uint64) ([][]byte, error)) *MockProver_ClientUpdatePayloads_Call {
 	_c.Call.Return(run)
 	return _c
 }

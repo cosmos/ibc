@@ -180,30 +180,26 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 	if err := d.requireSigner(); err != nil {
 		return deploy.ClientRef{}, err
 	}
-	switch spec.Type {
-	case deploy.ClientTypeAttestation:
-		return d.provisionAttestation(ctx, router, spec)
-	case deploy.ClientTypeBesuQBFT:
-		return d.provisionBesuQBFT(ctx, router, spec)
+	switch params := spec.Params.(type) {
+	case deploy.AttestationParams:
+		return d.provisionAttestation(ctx, router, spec.ClientID, params)
+	case deploy.BesuQBFTParams:
+		return d.provisionBesuQBFT(ctx, router, params)
 	default:
 		return deploy.ClientRef{}, fmt.Errorf(
-			"client type %q not supported (supported: %v)",
-			spec.Type,
+			"client params %T not supported (supported types: %v)",
+			spec.Params,
 			d.SupportedClientTypes(),
 		)
 	}
 }
 
 func (d *Driver) provisionAttestation(
-	ctx context.Context, router string, spec deploy.ClientSpec,
+	ctx context.Context, router, clientID string, params deploy.AttestationParams,
 ) (deploy.ClientRef, error) {
-	params, ok := spec.Params.(deploy.AttestationParams)
-	if !ok {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: params must be deploy.AttestationParams", spec.ClientID)
-	}
 	attestors, err := attestationArgs(params)
 	if err != nil {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: %w", spec.ClientID, err)
+		return deploy.ClientRef{}, fmt.Errorf("client %q: %w", clientID, err)
 	}
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
@@ -230,22 +226,9 @@ func (d *Driver) provisionAttestation(
 // provisionBesuQBFT deploys a Besu QBFT light client with this chain's router
 // as its role manager, so only router calls may update or query it.
 func (d *Driver) provisionBesuQBFT(
-	ctx context.Context,
-	router string,
-	spec deploy.ClientSpec,
+	ctx context.Context, router string, params deploy.BesuQBFTParams,
 ) (deploy.ClientRef, error) {
-	params, ok := spec.Params.(deploy.BesuQBFTParams)
-	if !ok {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: params must be deploy.BesuQBFTParams", spec.ClientID)
-	}
-	// the constructor accepts both zero values, but neither can track a chain
-	if params.IBCRouter == (common.Address{}) {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: counterparty router must not be zero", spec.ClientID)
-	}
 	trusted := params.InitialConsensusState
-	if trusted.StateRoot == ([32]byte{}) {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: initial state root must not be zero", spec.ClientID)
-	}
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
 		return deploy.ClientRef{}, err
@@ -271,22 +254,17 @@ func (d *Driver) provisionBesuQBFT(
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// BesuQBFTConsensusState is the consensus state the sealed header at height on
-// this driver's chain installs.
-func (d *Driver) BesuQBFTConsensusState(
-	ctx context.Context, height uint64,
-) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	header, err := d.backend.HeaderByNumber(ctx, new(big.Int).SetUint64(height))
+// BesuQBFTHead is this driver's chain head and the consensus state its sealed
+// header installs.
+func (d *Driver) BesuQBFTHead(ctx context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	header, err := besu.ReadSealedHeader(ctx, d.backend, nil)
 	if err != nil {
-		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("fetch header %d: %w", height, err)
+		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, err
 	}
-	parsed, err := besu.ParseSealedHeader(header)
-	if err != nil {
-		return besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf(
-			"header %d is not a Besu QBFT header: %w", height, err,
-		)
+	if header.Height == 0 {
+		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("no block past genesis to trust yet")
 	}
-	return besu.ConsensusStateOf(parsed), nil
+	return header.Height, besu.ConsensusStateOf(header), nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

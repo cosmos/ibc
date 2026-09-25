@@ -152,10 +152,10 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			return true, nil
 		},
 		Run: func(ctx context.Context) error {
-			if !slices.Contains(t.SupportedClientTypes(), spec.Type) {
+			if !slices.Contains(t.SupportedClientTypes(), spec.Type()) {
 				return fmt.Errorf(
 					"client type %q not supported by target (supported: %v)",
-					spec.Type,
+					spec.Type(),
 					t.SupportedClientTypes(),
 				)
 			}
@@ -173,11 +173,7 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			if _, regErr := t.RegisterClient(ctx, m.Core.Router, spec, ref); regErr != nil {
 				return regErr
 			}
-			client, err := specToClient(spec, ref.Address)
-			if err != nil {
-				return err
-			}
-			m.UpsertClient(client)
+			m.UpsertClient(specToClient(spec, ref.Address))
 			return m.Save(dir)
 		},
 	}}
@@ -413,33 +409,24 @@ func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
 }
 
 // specToClient converts a ClientSpec and its provisioned address into the
-// manifest.Client record. Shared by Run and Done so the two can't drift on
-// how params are marshaled.
-func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
+// manifest.Client record.
+func specToClient(spec ClientSpec, address string) manifest.Client {
 	client := manifest.Client{
 		ClientID:             spec.ClientID,
-		Type:                 spec.Type,
+		Type:                 spec.Type(),
 		Address:              address,
 		CounterpartyChainID:  spec.CounterpartyChainID,
 		CounterpartyClientID: spec.CounterpartyClientID,
 	}
-	switch spec.Type {
-	case ClientTypeAttestation:
-		p, ok := spec.Params.(AttestationParams)
-		if !ok {
-			return manifest.Client{}, paramsMismatch(spec)
-		}
+	switch p := spec.Params.(type) {
+	case AttestationParams:
 		client.Params = map[string]any{
 			"attestors":        p.Attestors,
 			"threshold":        p.Threshold,
 			"initialHeight":    p.InitialHeight,
 			"initialTimestamp": p.InitialTimestamp,
 		}
-	case ClientTypeBesuQBFT:
-		p, ok := spec.Params.(BesuQBFTParams)
-		if !ok {
-			return manifest.Client{}, paramsMismatch(spec)
-		}
+	case BesuQBFTParams:
 		validators := make([]string, len(p.InitialConsensusState.Validators))
 		for i, v := range p.InitialConsensusState.Validators {
 			validators[i] = v.Hex()
@@ -454,16 +441,7 @@ func specToClient(spec ClientSpec, address string) (manifest.Client, error) {
 			"maxClockDrift":     p.MaxClockDrift,
 		}
 	}
-	return client, nil
-}
-
-func paramsMismatch(spec ClientSpec) error {
-	return fmt.Errorf(
-		"client %q: params type %T does not match client type %q",
-		spec.ClientID,
-		spec.Params,
-		spec.Type,
-	)
+	return client
 }
 
 // clientConflicts reports the identity fields on which spec disagrees with
@@ -479,48 +457,17 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 			diffs = append(diffs, fmt.Sprintf("%s: deployed %s, requested %s", field, db, rb))
 		}
 	}
-	conflict("type", existing.Type, spec.Type)
+	conflict("type", existing.Type, spec.Type())
 	conflict("counterpartyChainId", existing.CounterpartyChainID, spec.CounterpartyChainID)
 	conflict("counterpartyClientId", existing.CounterpartyClientID, spec.CounterpartyClientID)
-	if p, ok := spec.Params.(AttestationParams); ok && spec.Type == ClientTypeAttestation {
-		conflict("attestors", canonicalAddresses(existing.Params["attestors"]), canonicalAddresses(p.Attestors))
+	switch p := spec.Params.(type) {
+	case AttestationParams:
+		conflict("attestors", existing.Params["attestors"], p.Attestors)
 		conflict("threshold", existing.Params["threshold"], p.Threshold)
-	}
-	if p, ok := spec.Params.(BesuQBFTParams); ok && spec.Type == ClientTypeBesuQBFT {
-		conflict("ibcRouter", canonicalAddresses(existing.Params["ibcRouter"]), p.IBCRouter.Hex())
+	case BesuQBFTParams:
+		conflict("ibcRouter", existing.Params["ibcRouter"], p.IBCRouter.Hex())
 		conflict("trustingPeriod", existing.Params["trustingPeriod"], p.TrustingPeriod)
 		conflict("maxClockDrift", existing.Params["maxClockDrift"], p.MaxClockDrift)
 	}
 	return diffs
-}
-
-// canonicalAddresses rewrites hex addresses in v (a string or a list of
-// strings) to their checksummed form, so a respelled address is not a
-// conflict. Anything else is returned unchanged.
-func canonicalAddresses(v any) any {
-	switch value := v.(type) {
-	case string:
-		if common.IsHexAddress(value) {
-			return common.HexToAddress(value).Hex()
-		}
-	case []string:
-		if value == nil {
-			return nil
-		}
-		out := make([]any, len(value))
-		for i, s := range value {
-			out[i] = canonicalAddresses(s)
-		}
-		return out
-	case []any:
-		if value == nil {
-			return nil
-		}
-		out := make([]any, len(value))
-		for i, s := range value {
-			out[i] = canonicalAddresses(s)
-		}
-		return out
-	}
-	return v
 }

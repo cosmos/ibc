@@ -75,21 +75,21 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 	return res.Msg.GetHeight(), time.Unix(seconds, 0).UTC(), nil
 }
 
-func (p *Prover) ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error) {
+func (p *Prover) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	res, err := p.client.ClientUpdatePayload(ctx, connect.NewRequest(&proverv2.ClientUpdatePayloadRequest{
+	res, err := p.client.ClientUpdatePayloads(ctx, connect.NewRequest(&proverv2.ClientUpdatePayloadsRequest{
 		Client: p.target(),
 		Height: height,
 	}))
 	if err != nil {
-		return nil, errors.Wrap(err, "remote prover: client update payload")
+		return nil, errors.Wrap(err, "remote prover: client update payloads")
 	}
 
-	p.logger.Debug("Fetched client update payload", "height", height)
+	p.logger.Debug("Fetched client update payloads", "height", height, "count", len(res.Msg.GetPayloads()))
 
-	return res.Msg.GetPayload(), nil
+	return res.Msg.GetPayloads(), nil
 }
 
 func (p *Prover) PacketProofs(

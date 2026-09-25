@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -187,7 +188,7 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 			case environment.NewClient:
 				attestors += len(client.Attestors)
 			case environment.ExistingClient:
-				if client.Kind == environment.ClientKindBesuQBFT {
+				if client.Kind == clientkind.BesuQBFT {
 					besuQBFTClients++
 				} else {
 					attestors += len(client.Attestors)

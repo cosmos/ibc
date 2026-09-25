@@ -44,7 +44,7 @@ Add a chain entry to the config.
 | `--rpc <string>` | required | Chain RPC URL. |
 | `--ws <string>` |  | Chain websocket URL, required for chains sourcing auto-relayed routes. |
 
-<!-- [main.go:L66](cli/cmd/ibc/main.go#L66) -->
+<!-- [main.go:L65](cli/cmd/ibc/main.go#L65) -->
 
 <!-- GEN:cli:cmd:config-add-chain END -->
 
@@ -64,7 +64,7 @@ Create new config file.
 |---|---|---|
 | `--out` |  | Output the config to stdout. |
 
-<!-- [main.go:L64](cli/cmd/ibc/main.go#L64) -->
+<!-- [main.go:L63](cli/cmd/ibc/main.go#L63) -->
 
 <!-- GEN:cli:cmd:config-new END -->
 
@@ -80,7 +80,7 @@ Validate config structure and cross-references.
 |---|---|---|
 | `--live` |  | Extra validation checks. |
 
-<!-- [main.go:L65](cli/cmd/ibc/main.go#L65) -->
+<!-- [main.go:L64](cli/cmd/ibc/main.go#L64) -->
 
 <!-- GEN:cli:cmd:config-validate END -->
 
@@ -114,7 +114,7 @@ Import a private key into `<ibc-home>/keys/<name>`.
 | `--private-key <string>` | required | Hex-encoded private key. |
 | `-p, --populate-config` |  | Write key reference to the config. |
 
-<!-- [main.go:L81](cli/cmd/ibc/main.go#L81) -->
+<!-- [main.go:L80](cli/cmd/ibc/main.go#L80) -->
 
 <!-- GEN:cli:cmd:keys-import END -->
 
@@ -124,7 +124,7 @@ Import a private key into `<ibc-home>/keys/<name>`.
 
 Lists every key from `<ibc-home>/keys/`.
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:keys-list END -->
 
@@ -138,7 +138,7 @@ Saves key into `<ibc-home>/keys/<name>` or prints to stdout if name is not provi
 |---|---|---|
 | `-p, --populate-config` |  | Write key reference to the config. |
 
-<!-- [main.go:L83](cli/cmd/ibc/main.go#L83) -->
+<!-- [main.go:L82](cli/cmd/ibc/main.go#L82) -->
 
 <!-- GEN:cli:cmd:keys-new END -->
 
@@ -152,7 +152,7 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 |---|---|---|
 | `--private` |  | Show private key. |
 
-<!-- [main.go:L80](cli/cmd/ibc/main.go#L80) -->
+<!-- [main.go:L79](cli/cmd/ibc/main.go#L79) -->
 
 <!-- GEN:cli:cmd:keys-show END -->
 
@@ -162,7 +162,7 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
 
-`--chain` is required by the commands that provision something, and the table cannot show it: they check it themselves rather than declaring it required. <!-- [deploy.go:L315-L317](cli/cmd/ibc/deploy.go#L315-L317) -->
+`--chain` is required by the commands that provision something, and the table cannot show it: they check it themselves rather than declaring it required. <!-- [deploy.go:L263-L265](cli/cmd/ibc/deploy.go#L263-L265) -->
 
 `--dry-run` prints the steps a command would take and submits nothing.
 
@@ -170,43 +170,67 @@ Manifests are machine-generated. A command that provisions something reads the m
 
 > **Warning:** Do not edit a manifest by hand. A deploy command decides what to skip from it, and an edit that disagrees with the chain either is overwritten or makes the next run fail.
 
-### `ibc deploy client`
+### `ibc deploy client attestation`
 
-<!-- GEN:cli:cmd:deploy-client START -->
+<!-- GEN:cli:cmd:deploy-client-attestation START -->
 
-Deploy and register a light client tracking a counterparty chain.
+Deploy and register an attestation light client.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--attestors <strings>` | configured attestations for the tracked chain | Attestation: attestors for the new client as addresses, attestation names, or signer aliases. |
+| `--attestors <strings>` | configured attestations for the tracked chain | Attestors for the new client as addresses, attestation names, or signer aliases. |
 | `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
 | `--height <uint>` | counterparty head | Initial trusted height. |
-| `--max-clock-drift <duration>` | `1m0s` | Besu-qbft: how far ahead of this chain's block time a counterparty header may be, in whole seconds. |
-| `--threshold <uint8>` | `1` | Attestation: signature threshold. |
-| `--timestamp <uint>` | counterparty head | Attestation: initial trusted timestamp seconds. |
-| `--trusting-period <duration>` |  | Besu-qbft: required; positive trusted state lifetime in whole seconds. |
-| `--type <string>` | `attestation` | Light client type: attestation or besu-qbft. |
+| `--threshold <uint8>` | `1` | Signature threshold. |
+| `--timestamp <uint>` | counterparty head | Initial trusted timestamp seconds. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L155](cli/cmd/ibc/main.go#L155) -->
+<!-- [main.go:L164](cli/cmd/ibc/main.go#L164) -->
 
-<!-- GEN:cli:cmd:deploy-client END -->
-
-For a new Besu QBFT client, configure the counterparty chain's `evm.ics26Router` with its deployed router address; no local counterparty manifest is required. Flags marked for the other client type in the table above are rejected when set.
+<!-- GEN:cli:cmd:deploy-client-attestation END -->
 
 ```bash
-ibc deploy client --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
+ibc deploy client attestation --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
 ```
 
 The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [attestors.go:L15-L30](cli/cmd/ibc/attestors.go#L15-L30) --> Left out entirely, the command fails when the config lists no attestors for the counterparty chain. <!-- [attestors.go:L32-L42](cli/cmd/ibc/attestors.go#L32-L42) -->
 
-Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [steps.go:L126-L138](cli/internal/deploy/steps.go#L126-L138) -->
+Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [steps.go:L130-L142](cli/internal/deploy/steps.go#L130-L142) -->
+
+### `ibc deploy client besu-qbft`
+
+<!-- GEN:cli:cmd:deploy-client-besu-qbft START -->
+
+Deploy and register a Besu QBFT light client trusting the counterparty head.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
+| `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
+| `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
+| `--max-clock-drift <duration>` | `1m0s` | How far ahead of this chain's block time a counterparty header may be, in whole seconds. |
+| `--trusting-period <duration>` | required | Positive trusted state lifetime in whole seconds. |
+| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--deployer <string>` |  | Signer alias override for deployment transactions. |
+| `--dry-run` |  | Print the step plan without submitting transactions. |
+| `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
+| `--yes` |  | Skip confirmation prompts. |
+
+<!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
+
+<!-- GEN:cli:cmd:deploy-client-besu-qbft END -->
+
+```bash
+ibc deploy client besu-qbft --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
+```
+
+The client starts trusting the counterparty's current head. Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning with a different router, trusting period or clock drift under the same id fails and lists the differences. See [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md#deploying) for choosing the trusting period.
 
 ### `ibc deploy core`
 
@@ -222,7 +246,7 @@ Deploy the core IBC routing stack on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-core END -->
 
@@ -240,7 +264,7 @@ Deploy the ICS27-GMP app on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-gmp END -->
 
@@ -261,7 +285,7 @@ Deploy an IFT token on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L190](cli/cmd/ibc/main.go#L190) -->
+<!-- [main.go:L195](cli/cmd/ibc/main.go#L195) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -290,7 +314,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L196](cli/cmd/ibc/main.go#L196) -->
+<!-- [main.go:L201](cli/cmd/ibc/main.go#L201) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -315,7 +339,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L182](cli/cmd/ibc/main.go#L182) -->
+<!-- [main.go:L187](cli/cmd/ibc/main.go#L187) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -345,7 +369,7 @@ Print the recorded deployment manifest for a chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-show END -->
 
@@ -363,7 +387,7 @@ Verify recorded deployments against live chain state.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-status END -->
 
@@ -383,7 +407,7 @@ Trigger relaying of the packets emitted by a source transaction.
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 | `--tx-hash <string>` | required | Source transaction hash. |
 
-<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
+<!-- [main.go:L89](cli/cmd/ibc/main.go#L89) -->
 
 <!-- GEN:cli:cmd:relayer-relay END -->
 
@@ -404,7 +428,7 @@ Run the relayer.
 | `--clear-on-start` | `true` | Clear outstanding packets at startup. |
 | `--no-migrate` |  | Skip database migrations. |
 
-<!-- [main.go:L89](cli/cmd/ibc/main.go#L89) -->
+<!-- [main.go:L88](cli/cmd/ibc/main.go#L88) -->
 
 <!-- GEN:cli:cmd:relayer-run END -->
 
@@ -430,7 +454,7 @@ List the packets the relayer is aware of, most recent first.
 | `--state <string>` |  | Relay state (not-selected, pending, rejected, relay-failed, succeeded, timed-out). |
 | `--tx-hash <string>` |  | Source transaction hash. |
 
-<!-- [main.go:L99](cli/cmd/ibc/main.go#L99) -->
+<!-- [main.go:L98](cli/cmd/ibc/main.go#L98) -->
 
 <!-- GEN:cli:cmd:relayer-packets END -->
 
@@ -454,7 +478,7 @@ Query a local attestor's identity.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
+<!-- [main.go:L120](cli/cmd/ibc/main.go#L120) -->
 
 <!-- GEN:cli:cmd:attestor-info END -->
 
@@ -468,7 +492,7 @@ Query a local attestor's latest attestable height.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
+<!-- [main.go:L120](cli/cmd/ibc/main.go#L120) -->
 
 <!-- GEN:cli:cmd:attestor-latest-height END -->
 
@@ -478,7 +502,7 @@ Query a local attestor's latest attestable height.
 
 Run the attestor.
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:attestor-run END -->
 
@@ -493,7 +517,7 @@ Query a local attestor for a state attestation at `--height`.
 | `--height <uint>` |  | Height to attest. |
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L124](cli/cmd/ibc/main.go#L124) -->
+<!-- [main.go:L123](cli/cmd/ibc/main.go#L123) -->
 
 <!-- GEN:cli:cmd:attestor-state-attestation END -->
 
@@ -515,7 +539,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L222](cli/cmd/ibc/main.go#L222) -->
+<!-- [main.go:L227](cli/cmd/ibc/main.go#L227) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -535,7 +559,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L227](cli/cmd/ibc/main.go#L227) -->
+<!-- [main.go:L232](cli/cmd/ibc/main.go#L232) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
@@ -562,7 +586,7 @@ Query an address's IFT token balance.
 | `--chain <string>` | required | Chain ID the IFT token is deployed on. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L135](cli/cmd/ibc/main.go#L135) -->
+<!-- [main.go:L134](cli/cmd/ibc/main.go#L134) -->
 
 <!-- GEN:cli:cmd:query-ift-balance END -->
 
@@ -576,7 +600,7 @@ These commands move the schema of the relayer's database up and down.
 
 Migrate DB down.
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:migrate-down END -->
 
@@ -588,7 +612,7 @@ Migrate DB down.
 
 Print migration status.
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:migrate-status END -->
 
@@ -598,7 +622,7 @@ Print migration status.
 
 Migrate DB up.
 
-<!-- [main.go:L52](cli/cmd/ibc/main.go#L52) -->
+<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:migrate-up END -->
 

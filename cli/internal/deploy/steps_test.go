@@ -152,7 +152,6 @@ func TestClientStepsIdempotent(t *testing.T) {
 
 	spec := ClientSpec{
 		ClientID:             "cli-2",
-		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
 		Params: AttestationParams{
@@ -197,7 +196,6 @@ func TestClientStepsUnrecordedClientError(t *testing.T) {
 
 	spec := ClientSpec{
 		ClientID:             "cli-2",
-		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
 		Params: AttestationParams{
@@ -222,26 +220,6 @@ func TestClientStepsUnrecordedClientError(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestClientStepsParamsMismatch(t *testing.T) {
-	dir := t.TempDir()
-	target := newFakeTarget()
-	target.hasCode["0xrouter"] = true
-
-	m := manifest.New("1", "test")
-	m.Core.Router = "0xrouter"
-	require.NoError(t, m.Save(dir))
-
-	spec := ClientSpec{
-		ClientID:             "cli-2",
-		Type:                 ClientTypeAttestation,
-		CounterpartyChainID:  "2",
-		CounterpartyClientID: "cli-1",
-		Params:               "not-attestation-params",
-	}
-	_, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
-	require.ErrorContains(t, err, "does not match client type")
-}
-
 // A rerun whose spec conflicts with the recorded deployment on identity
 // fields must fail loudly: on-chain client params are constructor-fixed, so
 // skipping cannot satisfy the new spec and rewriting the manifest would
@@ -257,7 +235,6 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 
 	spec := ClientSpec{
 		ClientID:             "cli-1-2",
-		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1-2",
 		Params: AttestationParams{
@@ -288,24 +265,6 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	require.NoError(t, loadErr)
 	c, _ := m.Client("cli-1-2")
 	require.Equal(t, []any{"0xa"}, c.Params["attestors"].([]any))
-}
-
-func TestClientConflictsIgnoreAddressSpelling(t *testing.T) {
-	existing := manifest.Client{
-		Type: ClientTypeAttestation,
-		Params: map[string]any{
-			"attestors": []any{"0x00000000000000000000000000000000000000aa"},
-			"threshold": float64(1),
-		},
-	}
-	spec := ClientSpec{
-		Type:   ClientTypeAttestation,
-		Params: AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000AA"}, Threshold: 1},
-	}
-	require.Empty(t, clientConflicts(existing, spec))
-
-	spec.Params = AttestationParams{Attestors: []string{"0x00000000000000000000000000000000000000bb"}, Threshold: 1}
-	require.Len(t, clientConflicts(existing, spec), 1)
 }
 
 // initialHeight/initialTimestamp default from the live counterparty head and
@@ -377,7 +336,6 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 
 	spec := ClientSpec{
 		ClientID:             "cli-1-2",
-		Type:                 ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1-2",
 		Params: AttestationParams{
@@ -646,7 +604,6 @@ func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
 func besuQBFTSpec() ClientSpec {
 	return ClientSpec{
 		ClientID:             "cli-2",
-		Type:                 ClientTypeBesuQBFT,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
 		Params: BesuQBFTParams{
@@ -675,8 +632,7 @@ const besuQBFTRecord = `{
 }`
 
 func TestSpecToClientBesuQBFTParams(t *testing.T) {
-	client, err := specToClient(besuQBFTSpec(), "0xclient")
-	require.NoError(t, err)
+	client := specToClient(besuQBFTSpec(), "0xclient")
 	got, err := json.Marshal(client.Params)
 	require.NoError(t, err)
 	require.JSONEq(t, besuQBFTRecord, string(got))
@@ -686,8 +642,7 @@ func TestSpecToClientBesuQBFTParams(t *testing.T) {
 	params := spec.Params.(BesuQBFTParams)
 	params.InitialHeight = 1<<53 + 1
 	spec.Params = params
-	client, err = specToClient(spec, "0xclient")
-	require.NoError(t, err)
+	client = specToClient(spec, "0xclient")
 	require.Equal(t, params.InitialHeight, client.Params["initialHeight"])
 }
 
@@ -727,14 +682,6 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	require.Equal(t, "skipped", res[0].Action)
 	require.Equal(t, 1, target.registers)
 
-	// a router recorded in another spelling is the same address, not a conflict
-	recorded.Params["ibcRouter"] = "0x00000000000000000000000000000000000000CC"
-	m.UpsertClient(recorded)
-	require.NoError(t, m.Save(dir))
-	res, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", besuQBFTSpec()))
-	require.NoError(t, err)
-	require.Equal(t, "skipped", res[0].Action)
-
 	// identity fields do conflict
 	for name, mutate := range map[string]func(*BesuQBFTParams){
 		"ibcRouter": func(p *BesuQBFTParams) {
@@ -757,11 +704,4 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 			require.ErrorContains(t, runErr, name)
 		})
 	}
-
-	// wrong params type for the declared client type
-	bad := besuQBFTSpec()
-	bad.ClientID = "cli-3"
-	bad.Params = AttestationParams{}
-	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", bad))
-	require.ErrorContains(t, err, "does not match client type")
 }

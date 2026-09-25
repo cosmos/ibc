@@ -189,7 +189,7 @@ The deployer must be a local signer, because deployment requires direct access t
 
 <!-- GEN:config:relayer:connections END -->
 
-Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](cli/cmd/ibc/deploy.go#L256-L262) -->
+Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L400-L406](cli/cmd/ibc/deploy.go#L400-L406) -->
 
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](cli/internal/config/relayer.go#L149-L176) -->
 

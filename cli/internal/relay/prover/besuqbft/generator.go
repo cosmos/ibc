@@ -9,7 +9,6 @@ package besuqbft
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -22,22 +21,16 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// ErrClientExpired reports that the client's latest consensus state is past
-// its trusting period, so no update can succeed.
-var ErrClientExpired = errors.New(
-	"besu qbft light client trusting period has expired; the consensus state is no longer usable",
-)
-
 // Host is the chain the light client lives on. It needs no Besu consensus:
 // any EVM chain hosting the contract qualifies.
 type Host interface {
-	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
-	ClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
+	BesuQBFTClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
 }
 
 // Counterparty is the Besu chain the light client tracks.
 type Counterparty interface {
 	ChainID() string
+	RouterAddress() common.Address
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	// SealedHeader returns the parsed header at exactly height.
 	SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error)
@@ -51,75 +44,27 @@ type Generator struct {
 	clientID     string
 }
 
-// newGenerator builds a Generator without touching either chain;
-// ResolveGenerator is the production entry point.
-func newGenerator(host Host, counterparty Counterparty, clientID string) *Generator {
-	return &Generator{host: host, counterparty: counterparty, clientID: clientID}
-}
-
-// ResolveGenerator builds the prover for clientID on host, tracking
-// counterparty, and fails fast unless the registered light client is a Besu
-// QBFT client whose tracked router is counterparty's configured router.
-func ResolveGenerator(
-	ctx context.Context,
-	clientID string,
-	counterpartyRouter common.Address,
-	host Host,
-	counterpartyChain Counterparty,
-) (*Generator, error) {
-	gen := newGenerator(host, counterpartyChain, clientID)
-	if err := gen.resolve(ctx, counterpartyRouter); err != nil {
+// NewGenerator builds the prover for clientID on host, tracking counterparty,
+// and fails fast unless the client proves counterparty's configured router.
+func NewGenerator(ctx context.Context, clientID string, host Host, counterparty Counterparty) (*Generator, error) {
+	state, err := host.BesuQBFTClientState(ctx, clientID)
+	if err != nil {
 		return nil, err
 	}
 
-	return gen, nil
-}
-
-// resolve fails unless clientID is a Besu QBFT client proving
-// counterpartyRouter.
-func (g *Generator) resolve(ctx context.Context, counterpartyRouter common.Address) error {
-	state, err := g.host.ClientState(ctx, g.clientID)
-	if err != nil {
-		return fmt.Errorf("client %q is not a besu-qbft light client: %w", g.clientID, err)
-	}
-
-	if state.IbcRouter != counterpartyRouter {
-		return fmt.Errorf(
+	if state.IbcRouter != counterparty.RouterAddress() {
+		return nil, fmt.Errorf(
 			"client %q proves router %s but chain %s is configured with router %s",
-			g.clientID, state.IbcRouter, g.counterparty.ChainID(), counterpartyRouter,
+			clientID, state.IbcRouter, counterparty.ChainID(), counterparty.RouterAddress(),
 		)
 	}
 
-	return nil
+	return &Generator{host: host, counterparty: counterparty, clientID: clientID}, nil
 }
 
-// LatestProvableHeight returns the counterparty head, failing only once the
-// client's latest consensus state has expired. The relayer never chains
-// several updates to bridge validator turnover.
+// LatestProvableHeight returns the counterparty head. The light client
+// rejects an update it cannot verify when the relay is simulated.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	state, err := g.host.ClientState(ctx, g.clientID)
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-
-	trusted, err := g.counterparty.GetBlockHeader(ctx, state.LatestHeight.RevisionHeight)
-	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("reading trusted counterparty header: %w", err)
-	}
-
-	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
-	if err != nil {
-		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
-	}
-
-	if expiredErr := checkTrustingPeriod(
-		state.TrustingPeriod,
-		uint64(trusted.Timestamp.Unix()),
-		uint64(hostHead.Timestamp.Unix()),
-	); expiredErr != nil {
-		return 0, time.Time{}, expiredErr
-	}
-
 	head, err := g.counterparty.GetBlockHeader(ctx, v2.LatestBlock)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("reading counterparty chain head: %w", err)
@@ -128,20 +73,12 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	return head.Height, head.Timestamp, nil
 }
 
-func checkTrustingPeriod(period, timestamp, host uint64) error {
-	// Equivalent to Solidity's widened timestamp + period > block.timestamp.
-	if host >= timestamp && host-timestamp >= period {
-		return fmt.Errorf("%w: timestamp %d, trusting period %ds", ErrClientExpired, timestamp, period)
-	}
-	return nil
-}
-
-// ClientUpdatePayload returns an encoded updateMsg from the client's latest
-// consensus state to target, or nil when target is the latest height. After
+// ClientUpdatePayloads returns one updateMsg from the client's latest
+// consensus state to target, or none when target is the latest height. After
 // full verification the contract installs a target below the latest height as
 // a historical consensus state, or no-ops when it already stores it.
-func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]byte, error) {
-	state, err := g.host.ClientState(ctx, g.clientID)
+func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, error) {
+	state, err := g.host.BesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +106,7 @@ func (g *Generator) ClientUpdatePayload(ctx context.Context, target uint64) ([]b
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
-	return update, nil
+	return [][]byte{update}, nil
 }
 
 // PacketProofs proves each packet's claim against the router storage at

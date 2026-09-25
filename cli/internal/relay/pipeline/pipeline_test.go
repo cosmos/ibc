@@ -132,7 +132,7 @@ func mockRelay(
 
 	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
-	mockProver.EXPECT().ClientUpdatePayload(mock.Anything, height).Return([]byte{0x01}, nil).Once()
+	mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, height).Return([][]byte{{0x01}}, nil).Once()
 	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
 		Return(make([][]byte, len(events)), nil).Once()
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).

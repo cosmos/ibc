@@ -6,8 +6,11 @@
 // external caller would: the harness is a black box to the CLI.
 package clientkind
 
+// Kind names a light client implementation as the relayer configures it.
+type Kind string
+
 const (
-	Attestation = "attestation"
-	BesuQBFT    = "besu-qbft"
-	Remote      = "remote"
+	Attestation Kind = "attestation"
+	BesuQBFT    Kind = "besu-qbft"
+	Remote      Kind = "remote"
 )

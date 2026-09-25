@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package besu
+package evm
 
 import (
 	"context"
@@ -15,27 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
-
-const (
-	chainID       = "1"
-	routerAddress = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
-)
-
-func newTestClient(t *testing.T) (*Client, *mocks.MockETHClient) {
-	t.Helper()
-
-	eth := mocks.NewMockETHClient(t)
-	evmClient, err := chainsevm.NewWithClient(chainID, eth, routerAddress)
-	require.NoError(t, err)
-	client, err := New(evmClient)
-	require.NoError(t, err)
-
-	return client, eth
-}
 
 func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	ctx := context.Background()
@@ -48,7 +28,7 @@ func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	require.ErrorContains(t, err, "not a Besu QBFT header")
 }
 
-func TestLightClientReads(t *testing.T) {
+func TestBesuQBFTClientState(t *testing.T) {
 	ctx := context.Background()
 	lightClientAddress := common.HexToAddress("0x00000000000000000000000000000000000abc")
 	routerAddr := common.HexToAddress(routerAddress)
@@ -88,7 +68,7 @@ func TestLightClientReads(t *testing.T) {
 			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: getClientStateCallData}, (*big.Int)(nil),
 		).Return(output, nil).Once()
 
-		got, err := client.ClientState(ctx, "besu-0")
+		got, err := client.BesuQBFTClientState(ctx, "besu-0")
 		require.NoError(t, err)
 		assert.Equal(t, state, got)
 	})

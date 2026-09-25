@@ -14,7 +14,6 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/chains"
-	chainsbesu "github.com/cosmos/ibc/cli/internal/chains/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
@@ -27,14 +26,15 @@ import (
 // Prover generates packet membership/non-membership proofs and update
 // payloads for one configured light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent ClientUpdatePayload
+	// LatestProvableHeight resolves the highest height a subsequent ClientUpdatePayloads
 	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// ClientUpdatePayload returns the encoded updateMsg for the counterparty state at height.
-	// May be empty when the client already trusts height.
-	ClientUpdatePayload(ctx context.Context, height uint64) ([]byte, error)
+	// ClientUpdatePayloads returns the encoded updateMsgs that bring the client
+	// to the counterparty state at height, submitted in order. Empty when the
+	// client already trusts height.
+	ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
@@ -184,30 +184,30 @@ func besuQBFTGenerator(
 	self, counterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
 ) (*besuqbft.Generator, error) {
-	host, err := besuClient(clientSet, self.ChainID)
+	host, err := evmClient(clientSet, self.ChainID)
 	if err != nil {
 		return nil, err
 	}
 
-	counterpartyClient, err := besuClient(clientSet, counterparty.ChainID)
+	counterpartyClient, err := evmClient(clientSet, counterparty.ChainID)
 	if err != nil {
 		return nil, err
 	}
 
-	return besuqbft.ResolveGenerator(ctx, self.ClientID, counterpartyClient.RouterAddress(), host, counterpartyClient)
+	return besuqbft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
 }
 
-// besuClient wraps chainID's EVM client from clientSet for Besu reads.
-func besuClient(clientSet *chains.ClientSet, chainID string) (*chainsbesu.Client, error) {
+// evmClient returns chainID's EVM client from clientSet.
+func evmClient(clientSet *chains.ClientSet, chainID string) (*evm.Client, error) {
 	client, ok := clientSet.Get(chainID)
 	if !ok {
 		return nil, errors.Errorf("no client for chain %q", chainID)
 	}
 
-	evmClient, ok := client.(*evm.Client)
+	evmChain, ok := client.(*evm.Client)
 	if !ok {
 		return nil, errors.Errorf("chain %q is not an EVM chain", chainID)
 	}
 
-	return chainsbesu.New(evmClient)
+	return evmChain, nil
 }

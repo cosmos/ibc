@@ -28,6 +28,11 @@ type CoreParams struct {
 	ChainID string
 }
 
+// ClientParams are the constructor inputs of one client type.
+type ClientParams interface {
+	ClientType() string
+}
+
 // AttestationParams are the constructor inputs for an attestation client.
 type AttestationParams struct {
 	Attestors        []string
@@ -36,16 +41,19 @@ type AttestationParams struct {
 	InitialTimestamp uint64
 }
 
+// ClientType implements ClientParams.
+func (AttestationParams) ClientType() string { return ClientTypeAttestation }
+
 // ClientSpec describes one light client to provision and register.
-// Params carries type-specific parameters: AttestationParams for
-// "attestation", BesuQBFTParams for "besu-qbft".
 type ClientSpec struct {
 	ClientID             string
-	Type                 string
 	CounterpartyChainID  string
 	CounterpartyClientID string
-	Params               any
+	Params               ClientParams
 }
+
+// Type is the client type Params construct.
+func (s ClientSpec) Type() string { return s.Params.ClientType() }
 
 // CoreRef is the result of provisioning the core stack.
 type CoreRef struct {
@@ -134,8 +142,7 @@ type Target interface {
 	// Verify checks a manifest's recorded deployment against live chain
 	// state.
 	Verify(ctx context.Context, m *manifest.Manifest) (Report, error)
-	// SupportedClientTypes lists the client type names ProvisionClient
-	// accepts in ClientSpec.Type.
+	// SupportedClientTypes lists the client types ProvisionClient accepts.
 	SupportedClientTypes() []string
 	// ProvisionGMP deploys the ICS27-GMP app (account logic + impl + proxy).
 	ProvisionGMP(ctx context.Context, router, accessManager string) (GMPRef, error)

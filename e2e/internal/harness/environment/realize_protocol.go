@@ -18,6 +18,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -291,7 +292,7 @@ func prepareConnections(
 		for index, end := range ends {
 			counterpartyEnd := ends[1-index]
 			label := clientLabel(connection.ID, end.label)
-			instanceID := clientIBCInstance(end.declaration)
+			instanceID := end.declaration.clientIBCInstance()
 			switch client := end.declaration.(type) {
 			case ExistingClient:
 				resolved, err := acquireIBCClient(
@@ -318,7 +319,7 @@ func prepareConnections(
 					return dependencies, err
 				}
 				authority, _ := runtime.evmAccount(client.Authority)
-				counterparty := clientIBCInstance(counterpartyEnd.declaration)
+				counterparty := counterpartyEnd.declaration.clientIBCInstance()
 				header, err := evmHeader(ctx, dependencies.instances[counterparty].chain)
 				if err != nil {
 					return dependencies, fmt.Errorf(
@@ -357,7 +358,7 @@ func prepareConnections(
 					return dependencies, err
 				}
 				authority, _ := runtime.evmAccount(client.Authority)
-				counterparty := dependencies.instances[clientIBCInstance(counterpartyEnd.declaration)]
+				counterparty := dependencies.instances[counterpartyEnd.declaration.clientIBCInstance()]
 				counterpartyRouter := common.HexToAddress(string(counterparty.locator))
 				trusted, err := besuQBFTTrustedState(ctx, counterparty.chain)
 				if err != nil {
@@ -433,7 +434,7 @@ func acquireIBCClient(
 	dependencies connectionDependencies,
 	runtime Runtime,
 ) (*IBCClient, error) {
-	instance := dependencies.instances[clientIBCInstance(declaration)]
+	instance := dependencies.instances[declaration.clientIBCInstance()]
 	label := clientLabel(connectionID, end)
 	counterpartyID := clientIDs[counterpartyEnd(end)]
 	if resolved := dependencies.existingClients[label]; resolved != nil {
@@ -444,7 +445,7 @@ func acquireIBCClient(
 		resolved solidityibc.Client
 		err      error
 	)
-	kind := clientKind(declaration)
+	kind := declaration.clientKind()
 	switch client := declaration.(type) {
 	case ExistingClient:
 		setup, setupErr := solidityIBCSetup(ctx, instance.chain)
@@ -456,12 +457,12 @@ func acquireIBCClient(
 			common.HexToAddress(string(instance.locator)),
 			client.ID,
 			counterpartyID,
-			string(kind),
+			kind,
 		)
 		if err != nil {
 			return nil, err
 		}
-		if kind == ClientKindAttestation {
+		if kind == clientkind.Attestation {
 			if attestorErr := requireDeclaredAttestors(
 				label,
 				resolved.Attestors,
@@ -619,15 +620,16 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 // besuQBFTTrustedState is the sealed head of chain, which a Besu QBFT Client
 // tracking it starts trusting.
 func besuQBFTTrustedState(ctx context.Context, chain *Chain) (*besu.ParsedHeader, error) {
-	header, err := evmHeader(ctx, chain)
-	if err != nil {
-		return nil, err
+	var header *besu.ParsedHeader
+	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
+		var readErr error
+		header, readErr = besu.ReadSealedHeader(ctx, client.Client(), nil)
+		return readErr
+	})
+	if !ok {
+		return nil, fmt.Errorf("Chain %q has no EVM client", chain.id)
 	}
-	parsed, err := besu.ParseSealedHeader(header)
-	if err != nil {
-		return nil, fmt.Errorf("header is not a Besu QBFT header: %w", err)
-	}
-	return parsed, nil
+	return header, err
 }
 
 func clientID(connectionID ConnectionID, end string, declaration ClientSpec) string {

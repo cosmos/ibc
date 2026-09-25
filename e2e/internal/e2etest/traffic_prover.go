@@ -59,12 +59,12 @@ func buildProverConfig(
 			A: ibccli.RelayerClientEnd{
 				ChainID:    chainEVMID(t, env, connection.A().IBCInstance().Chain().ID()),
 				ClientID:   connection.A().ID(),
-				ClientType: string(connection.A().Kind()),
+				ClientType: connection.A().Kind(),
 			},
 			B: ibccli.RelayerClientEnd{
 				ChainID:    chainEVMID(t, env, connection.B().IBCInstance().Chain().ID()),
 				ClientID:   connection.B().ID(),
-				ClientType: string(connection.B().Kind()),
+				ClientType: connection.B().Kind(),
 			},
 		})
 	}

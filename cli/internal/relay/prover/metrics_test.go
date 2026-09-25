@@ -60,13 +60,13 @@ func TestInstrumentation(t *testing.T) {
 		reader := setTestMetrics(t)
 		prover := mocks.NewMockProver(t)
 		prover.EXPECT().
-			ClientUpdatePayload(ctx, uint64(7)).
+			ClientUpdatePayloads(ctx, uint64(7)).
 			Return(nil, errors.New("client update payload unavailable")).
 			Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
-		payload, err := instrumented.ClientUpdatePayload(ctx, 7)
+		payload, err := instrumented.ClientUpdatePayloads(ctx, 7)
 
 		// ASSERT
 		require.ErrorContains(t, err, "client update payload unavailable")
@@ -76,7 +76,7 @@ func TestInstrumentation(t *testing.T) {
 		operation := requireFloat64Histogram(t, collected, "prover_operation")
 		require.Len(t, operation.DataPoints, 1)
 		assert.Equal(t, uint64(1), operation.DataPoints[0].Count)
-		expectedAttributes := operationAttributes("client_update_payload", "error")
+		expectedAttributes := operationAttributes("client_update_payloads", "error")
 		assert.Equal(t, expectedAttributes.ToSlice(), operation.DataPoints[0].Attributes.ToSlice())
 	})
 

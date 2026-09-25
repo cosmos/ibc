@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -24,10 +25,10 @@ func TestMergeRelayerConnection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, reversed := range []bool{false, true} {
 				a := ibccli.RelayerClientEnd{
-					ChainID: "1", ClientID: "client-0", ClientType: ibccli.RelayerClientBesuQBFT,
+					ChainID: "1", ClientID: "client-0", ClientType: clientkind.BesuQBFT,
 				}
 				b := ibccli.RelayerClientEnd{
-					ChainID: "2", ClientID: "client-0", ClientType: ibccli.RelayerClientAttestation,
+					ChainID: "2", ClientID: "client-0", ClientType: clientkind.Attestation,
 				}
 				forward := ibccli.RelayerConnection{A: a, B: b}
 				forward.A.AutoRelay = tc.autoA
@@ -54,9 +55,9 @@ func TestMergeRelayerConnection(t *testing.T) {
 }
 
 func TestMergeRelayerConnectionKeysBothEnds(t *testing.T) {
-	a := ibccli.RelayerClientEnd{ChainID: "1", ClientID: "a", ClientType: ibccli.RelayerClientBesuQBFT}
-	b := ibccli.RelayerClientEnd{ChainID: "1", ClientID: "b", ClientType: ibccli.RelayerClientAttestation}
-	c := ibccli.RelayerClientEnd{ChainID: "2", ClientID: "c", ClientType: ibccli.RelayerClientAttestation}
+	a := ibccli.RelayerClientEnd{ChainID: "1", ClientID: "a", ClientType: clientkind.BesuQBFT}
+	b := ibccli.RelayerClientEnd{ChainID: "1", ClientID: "b", ClientType: clientkind.Attestation}
+	c := ibccli.RelayerClientEnd{ChainID: "2", ClientID: "c", ClientType: clientkind.Attestation}
 	var cfg ibccli.RelayerConfig
 	indices := map[[4]string]int{}
 	mergeRelayerConnection(&cfg, indices, ibccli.RelayerConnection{A: b, B: a})

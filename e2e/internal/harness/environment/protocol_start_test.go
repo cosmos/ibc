@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 func TestEnvironmentCloseWaitsForLeasedAttestorUse(t *testing.T) {
@@ -243,7 +245,7 @@ func TestPreparedClientsRejectExistingSignerReuseBeforeDeployment(t *testing.T) 
 	require.NoError(t, err)
 	spec := Spec{Connections: []ConnectionSpec{{
 		ID: "connection-ab",
-		A:  ExistingClient{Kind: ClientKindAttestation, ID: "existing", IBCInstance: "ibc-a"},
+		A:  ExistingClient{Kind: clientkind.Attestation, ID: "existing", IBCInstance: "ibc-a"},
 		B: NewClient{
 			IBCInstance: "ibc-b", Attestors: []AttestorSpec{{ID: "new", Authority: "new-signer"}},
 		},
@@ -294,7 +296,7 @@ func TestClientIDUsesStableConnectionEnd(t *testing.T) {
 	require.Equal(
 		t,
 		"existing",
-		clientID("connection-ab", "A", ExistingClient{Kind: ClientKindAttestation, ID: "existing"}),
+		clientID("connection-ab", "A", ExistingClient{Kind: clientkind.Attestation, ID: "existing"}),
 	)
 }
 
@@ -355,7 +357,7 @@ func mixedProtocolSpec() Spec {
 				IBCInstance: "ibc-a", Authority: "client-owner", MinRequiredSignatures: 1,
 				Attestors: []AttestorSpec{{ID: "attestor-a", Authority: "attestor-signer"}},
 			},
-			B: ExistingClient{Kind: ClientKindAttestation, IBCInstance: "ibc-b", ID: "existing-client-b"},
+			B: ExistingClient{Kind: clientkind.Attestation, IBCInstance: "ibc-b", ID: "existing-client-b"},
 		}},
 	}
 }

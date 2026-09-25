@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 // Graph identities are distinct types so references to different resource
@@ -218,7 +220,11 @@ func (i ExistingIBCInstance) validateIBCInstance() error {
 // identified existing state have different durability and mutation semantics.
 // A Connection may combine either variant at each end.
 type ClientSpec interface {
-	clientSpec()
+	clientKind() clientkind.Kind
+	clientIBCInstance() IBCInstanceID
+	// clientAuthority is the Authority that creates the Client's contract;
+	// existing Clients have none.
+	clientAuthority() (AuthorityID, bool)
 	clientAttestors() []AttestorSpec
 }
 
@@ -233,8 +239,10 @@ type NewClient struct {
 	Attestors             []AttestorSpec
 }
 
-func (NewClient) clientSpec()                       {}
-func (c NewClient) clientAttestors() []AttestorSpec { return c.Attestors }
+func (NewClient) clientKind() clientkind.Kind            { return clientkind.Attestation }
+func (c NewClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
+func (c NewClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
+func (c NewClient) clientAttestors() []AttestorSpec      { return c.Attestors }
 
 // NewBesuQBFTClient declares a Besu QBFT IBC Client to create on its host IBC
 // Instance. It verifies the counterparty end's sealed Besu headers, so it needs
@@ -248,33 +256,24 @@ type NewBesuQBFTClient struct {
 	MaxClockDrift  uint64
 }
 
-func (NewBesuQBFTClient) clientSpec()                     {}
-func (NewBesuQBFTClient) clientAttestors() []AttestorSpec { return nil }
-
-// newClientAuthority reports the host IBC Instance and Authority of a Client
-// declaration that creates a contract; existing Clients have neither.
-func newClientAuthority(spec ClientSpec) (IBCInstanceID, AuthorityID, bool) {
-	switch declaration := spec.(type) {
-	case NewClient:
-		return declaration.IBCInstance, declaration.Authority, true
-	case NewBesuQBFTClient:
-		return declaration.IBCInstance, declaration.Authority, true
-	default:
-		return "", "", false
-	}
-}
+func (NewBesuQBFTClient) clientKind() clientkind.Kind            { return clientkind.BesuQBFT }
+func (c NewBesuQBFTClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
+func (c NewBesuQBFTClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
+func (NewBesuQBFTClient) clientAttestors() []AttestorSpec        { return nil }
 
 // ExistingClient identifies an already-created IBC Client by its protocol ID
 // and explicit kind. Attestors are only valid for attestation clients.
 type ExistingClient struct {
-	Kind        ClientKind
+	Kind        clientkind.Kind
 	IBCInstance IBCInstanceID
 	ID          string
 	Attestors   []AttestorSpec
 }
 
-func (ExistingClient) clientSpec()                       {}
-func (c ExistingClient) clientAttestors() []AttestorSpec { return c.Attestors }
+func (c ExistingClient) clientKind() clientkind.Kind        { return c.Kind }
+func (c ExistingClient) clientIBCInstance() IBCInstanceID   { return c.IBCInstance }
+func (ExistingClient) clientAuthority() (AuthorityID, bool) { return "", false }
+func (c ExistingClient) clientAttestors() []AttestorSpec    { return c.Attestors }
 
 func snapshotClient(spec ClientSpec) ClientSpec {
 	switch client := spec.(type) {
@@ -355,10 +354,10 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		instance = declaration.IBCInstance
-		if declaration.Kind != ClientKindAttestation && declaration.Kind != ClientKindBesuQBFT {
+		if declaration.Kind != clientkind.Attestation && declaration.Kind != clientkind.BesuQBFT {
 			return "", errorsf("IBC Client %q: unsupported kind %q", clientLabel(connectionID, end), declaration.Kind)
 		}
-		if declaration.Kind == ClientKindBesuQBFT && len(declaration.Attestors) != 0 {
+		if declaration.Kind == clientkind.BesuQBFT && len(declaration.Attestors) != 0 {
 			return "", errorsf("IBC Client %q: besu-qbft does not use attestors", clientLabel(connectionID, end))
 		}
 		variantField = "id"
@@ -385,34 +384,6 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 		return "", err
 	}
 	return instance, nil
-}
-
-// clientKind reports the light client kind a validated Client declaration
-// realizes.
-func clientKind(spec ClientSpec) ClientKind {
-	switch client := spec.(type) {
-	case NewClient:
-		return ClientKindAttestation
-	case NewBesuQBFTClient:
-		return ClientKindBesuQBFT
-	case ExistingClient:
-		return client.Kind
-	default:
-		panic(fmt.Sprintf("environment: unsupported validated Client declaration %T", spec))
-	}
-}
-
-func clientIBCInstance(spec ClientSpec) IBCInstanceID {
-	switch declaration := spec.(type) {
-	case NewClient:
-		return declaration.IBCInstance
-	case NewBesuQBFTClient:
-		return declaration.IBCInstance
-	case ExistingClient:
-		return declaration.IBCInstance
-	default:
-		panic(fmt.Sprintf("environment: unsupported validated IBC Client declaration %T", spec))
-	}
 }
 
 // AttestorSpec declares an Attestor for the Client that contains it.
@@ -522,7 +493,7 @@ func (s Spec) validate() error {
 		ends := connection.ends()
 		for i, end := range ends {
 			label := clientLabel(connection.ID, end.label)
-			instance := clientIBCInstance(end.declaration)
+			instance := end.declaration.clientIBCInstance()
 			if !contains(instances, instance) {
 				return errorsf(
 					"IBC Client %q references unknown IBC Instance %q",
@@ -531,8 +502,8 @@ func (s Spec) validate() error {
 				)
 			}
 			// only Anvil is known not to be Besu; an attached Chain may be either
-			counterpartyChain := instanceChains[clientIBCInstance(ends[1-i].declaration)]
-			if clientKind(end.declaration) == ClientKindBesuQBFT && contains(anvilChains, counterpartyChain) {
+			counterpartyChain := instanceChains[ends[1-i].declaration.clientIBCInstance()]
+			if end.declaration.clientKind() == clientkind.BesuQBFT && contains(anvilChains, counterpartyChain) {
 				return errorsf(
 					"Besu QBFT IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
 					label,

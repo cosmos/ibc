@@ -60,7 +60,7 @@ type RelayerClientEnd struct {
 	ChainID  string
 	ClientID string
 	// ClientType is required unless the connection uses a remote prover.
-	ClientType string
+	ClientType clientkind.Kind
 	AutoRelay  bool
 }
 
@@ -173,24 +173,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		a, err := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
-		if err != nil {
-			return fileConfig{}, fmt.Errorf(
-				"connection %s/%s end A: %w",
-				connection.A.ChainID,
-				connection.A.ClientID,
-				err,
-			)
-		}
-		b, err := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
-		if err != nil {
-			return fileConfig{}, fmt.Errorf(
-				"connection %s/%s end B: %w",
-				connection.B.ChainID,
-				connection.B.ClientID,
-				err,
-			)
-		}
+		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
+		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
 			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
 			ClientA: a,
@@ -200,7 +184,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) (clientEndFileConfig, error) {
+func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clientEndFileConfig {
 	result := clientEndFileConfig{
 		ChainID:   end.ChainID,
 		ClientID:  end.ClientID,
@@ -209,12 +193,10 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) (cli
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
 	if proverURL != "" {
-		result.Type = RelayerClientRemote
+		result.Type = clientkind.Remote
 		result.Params = map[string]any{"url": proverURL}
-	} else if end.ClientType != RelayerClientAttestation && end.ClientType != RelayerClientBesuQBFT {
-		return clientEndFileConfig{}, fmt.Errorf("unsupported client type %q", end.ClientType)
 	}
-	return result, nil
+	return result
 }
 
 // addAttestor declares one explicitly-configured candidate attestor.
@@ -249,11 +231,7 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 }
 
 const (
-	RelayerSignerLocal       = "local"
-	RelayerClientAttestation = clientkind.Attestation
-	RelayerClientBesuQBFT    = clientkind.BesuQBFT
-	RelayerClientRemote      = clientkind.Remote
-
+	RelayerSignerLocal    = "local"
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"
 	RelayerAttestorRemote = "remote"
@@ -284,7 +262,7 @@ type clientEndFileConfig struct {
 	ChainID   string               `yaml:"chainId"`
 	Signer    string               `yaml:"signer"`
 	ClientID  string               `yaml:"clientId"`
-	Type      string               `yaml:"type"`
+	Type      clientkind.Kind      `yaml:"type"`
 	Params    map[string]any       `yaml:"params,omitempty"`
 	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
 }

@@ -15,6 +15,7 @@ import (
 
 	chainimpl "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 func TestStartValidatesRuntimeBeforeAcquisition(t *testing.T) {
@@ -68,12 +69,12 @@ func TestStartRejectsAttestorSignerReuseAcrossClientsBeforeAcquisition(t *testin
 		Connections: []ConnectionSpec{{
 			ID: "connection-ab",
 			A: ExistingClient{
-				Kind:        ClientKindAttestation,
+				Kind:        clientkind.Attestation,
 				IBCInstance: "ibc-a", ID: "existing-a",
 				Attestors: []AttestorSpec{{ID: "attestor-a", Authority: "signer-a"}},
 			},
 			B: ExistingClient{
-				Kind:        ClientKindAttestation,
+				Kind:        clientkind.Attestation,
 				IBCInstance: "ibc-b", ID: "existing-b",
 				Attestors: []AttestorSpec{{ID: "attestor-b", Authority: "signer-b"}},
 			},
@@ -149,7 +150,7 @@ func TestValidateChecksSpecAndRuntime(t *testing.T) {
 
 func TestProductionPrerequisitesRequireExecutableAttestorBinary(t *testing.T) {
 	spec := Spec{Connections: []ConnectionSpec{{
-		A: ExistingClient{Kind: ClientKindAttestation, Attestors: []AttestorSpec{{ID: "attestor-a"}}},
+		A: ExistingClient{Kind: clientkind.Attestation, Attestors: []AttestorSpec{{ID: "attestor-a"}}},
 	}}}
 	path := filepath.Join(t.TempDir(), "ibc")
 	t.Setenv("IBC_BIN", path)

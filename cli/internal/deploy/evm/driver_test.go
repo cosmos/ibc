@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -62,7 +61,6 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 		context.Background(),
 		common.Address{}.Hex(),
 		deploy.ClientSpec{
-			Type: deploy.ClientTypeAttestation,
 			Params: deploy.AttestationParams{
 				Attestors:        []string{"0x00000000000000000000000000000000000000aa"},
 				Threshold:        1,
@@ -74,71 +72,46 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 	require.ErrorContains(t, err, "no deployer signer configured")
 }
 
-// Zero values the constructor accepts are refused before any transaction.
-func TestProvisionBesuQBFTRejectsZeroValues(t *testing.T) {
-	valid := deploy.BesuQBFTParams{
-		IBCRouter:     common.HexToAddress("0x00000000000000000000000000000000000000cc"),
-		InitialHeight: 1,
-		InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{
-			Timestamp:  1,
-			StateRoot:  common.HexToHash("0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa"),
-			Validators: []common.Address{common.HexToAddress("0x00000000000000000000000000000000000000aa")},
-		},
-	}
-
-	for name, tc := range map[string]struct {
-		mutate func(*deploy.BesuQBFTParams)
-		want   string
-	}{
-		"valid":       {func(*deploy.BesuQBFTParams) {}, "no deployer signer configured"},
-		"zero router": {func(p *deploy.BesuQBFTParams) { p.IBCRouter = common.Address{} }, "router must not be zero"},
-		"zero root": {
-			func(p *deploy.BesuQBFTParams) { p.InitialConsensusState.StateRoot = [32]byte{} },
-			"initial state root must not be zero",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			p := valid
-			tc.mutate(&p)
-			_, err := (&Driver{chainID: big.NewInt(1)}).provisionBesuQBFT(
-				t.Context(),
-				common.Address{}.Hex(),
-				deploy.ClientSpec{Type: deploy.ClientTypeBesuQBFT, Params: p},
-			)
-			require.ErrorContains(t, err, tc.want)
-		})
-	}
-}
-
-func TestBesuQBFTConsensusState(t *testing.T) {
+func TestBesuQBFTHead(t *testing.T) {
 	ctx := context.Background()
 	update := besutest.MustFixture(t).AdjacentUpdate
 	var sealed types.Header
 	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &sealed))
 
-	t.Run("sealed header", func(t *testing.T) {
+	t.Run("sealed head", func(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
-		eth.EXPECT().HeaderByNumber(ctx, new(big.Int).SetUint64(update.Height)).Return(&sealed, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&sealed, nil).Once()
 
-		state, err := (&Driver{backend: eth}).BesuQBFTConsensusState(ctx, update.Height)
+		height, state, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
 		require.NoError(t, err)
+		require.Equal(t, update.Height, height)
 		require.Equal(t, update.ExpectedConsensusState(), state)
+	})
+
+	t.Run("genesis head", func(t *testing.T) {
+		genesis := sealed
+		genesis.Number = big.NewInt(0)
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&genesis, nil).Once()
+
+		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		require.ErrorContains(t, err, "no block past genesis")
 	})
 
 	t.Run("not a besu header", func(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
-		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).
 			Return(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}, nil).Once()
 
-		_, err := (&Driver{backend: eth}).BesuQBFTConsensusState(ctx, 7)
+		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
 		require.ErrorContains(t, err, "not a Besu QBFT header")
 	})
 
 	t.Run("rpc error", func(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
-		eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).Return(nil, errors.New("boom")).Once()
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(nil, errors.New("boom")).Once()
 
-		_, err := (&Driver{backend: eth}).BesuQBFTConsensusState(ctx, 7)
-		require.ErrorContains(t, err, "fetch header 7")
+		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		require.ErrorContains(t, err, "getting header latest")
 	})
 }

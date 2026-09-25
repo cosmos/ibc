@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
@@ -97,8 +98,8 @@ type ChainDeployment struct {
 type RouteClients struct {
 	SourceClientID   string
 	DestClientID     string
-	SourceClientKind environment.ClientKind
-	DestClientKind   environment.ClientKind
+	SourceClientKind clientkind.Kind
+	DestClientKind   clientkind.Kind
 }
 
 // Deployment is the e2e traffic-layer view of protocol apps and test tokens.
@@ -436,13 +437,13 @@ func buildConfig(
 			A: ibccli.RelayerClientEnd{
 				ChainID:    sourceChain,
 				ClientID:   clients.SourceClientID,
-				ClientType: string(clients.SourceClientKind),
+				ClientType: clients.SourceClientKind,
 				AutoRelay:  !route.Manual,
 			},
 			B: ibccli.RelayerClientEnd{
 				ChainID:    destinationChain,
 				ClientID:   clients.DestClientID,
-				ClientType: string(clients.DestClientKind),
+				ClientType: clients.DestClientKind,
 			},
 		}
 		mergeRelayerConnection(&config, connections, connection)

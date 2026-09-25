@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"testing"
 	"time"
 
@@ -27,6 +26,7 @@ const clientID = "besu-chain-a"
 
 type fakeChain struct {
 	id             string
+	router         common.Address
 	latest         *v2.BlockHeader
 	sealed         map[uint64]*besu.ParsedHeader
 	clientState    besumsgs.IBesuLightClientMsgsClientState
@@ -36,15 +36,14 @@ type fakeChain struct {
 
 func (f *fakeChain) ChainID() string { return f.id }
 
+func (f *fakeChain) RouterAddress() common.Address { return f.router }
+
 func (f *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHeader, error) {
 	if height == v2.LatestBlock {
 		if f.latest != nil {
 			return *f.latest, nil
 		}
 		return v2.BlockHeader{}, errors.New("no latest header")
-	}
-	if s, ok := f.sealed[height]; ok {
-		return v2.BlockHeader{Height: s.Height, Timestamp: time.Unix(int64(s.Timestamp), 0).UTC()}, nil
 	}
 	return v2.BlockHeader{}, fmt.Errorf("no block header %d", height)
 }
@@ -64,7 +63,7 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots [][32
 	return f.proof(height, slots)
 }
 
-func (f *fakeChain) ClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
+func (f *fakeChain) BesuQBFTClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	return f.clientState, f.clientStateErr
 }
 
@@ -83,7 +82,8 @@ func newFixtureEnv(t *testing.T) *fixtureEnv {
 		host:         &fakeChain{id: "host", sealed: map[uint64]*besu.ParsedHeader{}},
 		counterparty: &fakeChain{id: "besu-b", sealed: map[uint64]*besu.ParsedHeader{}},
 	}
-	env.gen = newGenerator(env.host, env.counterparty, clientID)
+	env.counterparty.router = env.fixture.RouterAddress
+	env.gen = &Generator{host: env.host, counterparty: env.counterparty, clientID: clientID}
 	return env
 }
 
@@ -121,9 +121,7 @@ func consensusHeader(height uint64, state besumsgs.IBesuLightClientMsgsConsensus
 
 func parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.ParsedHeader {
 	t.Helper()
-	header, err := besu.ParseHeader(update.HeaderRLP)
-	require.NoError(t, err)
-	return header
+	return besutest.ParseHeader(t, update.HeaderRLP)
 }
 
 func (e *fixtureEnv) setAnchor(t *testing.T, height uint64, state besumsgs.IBesuLightClientMsgsConsensusState) {
@@ -144,11 +142,11 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	env.expectInitialAnchor(t)
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	payload, err := env.gen.ClientUpdatePayload(ctx, update.Height)
+	payloads, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
 	require.NoError(t, err)
-	require.NotEmpty(t, payload)
+	require.Len(t, payloads, 1)
 
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
 	require.NoError(t, err)
 	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
 	assert.Equal(
@@ -173,9 +171,10 @@ func TestClientUpdatePayloadDefersOverlapValidationToContract(t *testing.T) {
 	target.Validators = []common.Address{common.HexToAddress("0x03"), common.HexToAddress("0x04")}
 	env.counterparty.sealed[12] = target
 
-	update, err := env.gen.ClientUpdatePayload(t.Context(), 12)
+	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), 12)
 	require.NoError(t, err)
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(update)
+	require.Len(t, payloads, 1)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
 	require.NoError(t, err)
 	require.Equal(t, target.RLP, decoded.HeaderRlp)
 }
@@ -186,9 +185,9 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	payload, err := env.gen.ClientUpdatePayload(t.Context(), update.Height)
+	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
-	assert.Nil(t, payload, "no update needed")
+	assert.Empty(t, payloads, "no update needed")
 }
 
 // The contract stores a consensus state at the header's own height and only
@@ -201,11 +200,11 @@ func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 	env.setAnchor(t, anchor, env.fixture.InitialConsensusState())
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	payload, err := env.gen.ClientUpdatePayload(t.Context(), update.Height)
+	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
-	require.NotEmpty(t, payload)
+	require.Len(t, payloads, 1)
 
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payload)
+	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
 	require.NoError(t, err)
 	assert.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: anchor}, decoded.TrustedHeight)
 }
@@ -324,10 +323,7 @@ func TestPacketProofs(t *testing.T) {
 // rejects a header beyond maxClockDrift at simulation.
 func TestLatestProvableHeightReturnsHead(t *testing.T) {
 	env := newFixtureEnv(t)
-	env.expectInitialAnchor(t)
-	base := time.Unix(int64(env.fixture.InitialTrustedTimestamp), 0).UTC() //nolint:gosec // fixture timestamp
-	env.host.latest = &v2.BlockHeader{Height: 500, Timestamp: base}
-	head := base.Add(time.Duration(env.fixture.MaxClockDrift+60) * time.Second) //nolint:gosec // fixture drift
+	head := time.Unix(int64(env.fixture.InitialTrustedTimestamp), 0).UTC() //nolint:gosec // fixture timestamp
 	env.counterparty.latest = &v2.BlockHeader{Height: env.fixture.InitialTrustedHeight + 50, Timestamp: head}
 
 	height, ts, err := env.gen.LatestProvableHeight(t.Context())
@@ -336,67 +332,29 @@ func TestLatestProvableHeightReturnsHead(t *testing.T) {
 	assert.Equal(t, head, ts)
 }
 
-func TestLatestProvableHeightTrustingPeriod(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		hostOffset  time.Duration
-		age, period uint64
-		expired     bool
-	}{
-		{name: "host behind wall clock", hostOffset: -time.Hour, age: 119, period: 120},
-		{name: "host ahead of wall clock", hostOffset: time.Hour, age: 120, period: 120, expired: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			env := newFixtureEnv(t)
-			hostTime := time.Now().Add(tc.hostOffset).Truncate(time.Second)
-			state := env.clientState(env.fixture.InitialTrustedHeight)
-			state.TrustingPeriod = tc.period
-			trusted := env.fixture.InitialConsensusState()
-			trusted.Timestamp = uint64(hostTime.Unix()) - tc.age //nolint:gosec // current epoch seconds
-			env.setAnchor(t, state.LatestHeight.RevisionHeight, trusted)
-			env.host.clientState = state
-			env.host.latest = &v2.BlockHeader{Height: 500, Timestamp: hostTime}
-			if !tc.expired {
-				env.counterparty.latest = &v2.BlockHeader{
-					Height:    state.LatestHeight.RevisionHeight,
-					Timestamp: time.Unix(int64(trusted.Timestamp), 0).UTC(),
-				}
-			}
-			height, timestamp, err := env.gen.LatestProvableHeight(context.Background())
-			if tc.expired {
-				require.ErrorIs(t, err, ErrClientExpired)
-				assert.Zero(t, height)
-				assert.True(t, timestamp.IsZero())
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, state.LatestHeight.RevisionHeight, height)
-			assert.Equal(t, env.counterparty.latest.Timestamp, timestamp)
-		})
-	}
-}
-
-func TestResolveChecksRouterAndClientType(t *testing.T) {
+func TestNewGeneratorChecksRouter(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("router mismatch", func(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
-		err := env.gen.resolve(ctx, common.HexToAddress("0x1234"))
+		env.counterparty.router = common.HexToAddress("0x1234")
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
 		require.ErrorContains(t, err, "configured with router")
 	})
 
-	t.Run("not a besu client", func(t *testing.T) {
+	t.Run("client state error", func(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.host.clientStateErr = errors.New("execution reverted")
-		err := env.gen.resolve(ctx, env.fixture.RouterAddress)
-		require.ErrorContains(t, err, "not a besu-qbft light client")
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
+		require.ErrorContains(t, err, "execution reverted")
 	})
 
 	t.Run("matching router", func(t *testing.T) {
 		env := newFixtureEnv(t)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
-		require.NoError(t, env.gen.resolve(ctx, env.fixture.RouterAddress))
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
+		require.NoError(t, err)
 	})
 }
 
@@ -405,28 +363,4 @@ func splitPath(t *testing.T, path []byte, kind byte) (string, uint64) {
 	require.Greater(t, len(path), 9)
 	require.Equal(t, kind, path[len(path)-9])
 	return string(path[:len(path)-9]), binary.BigEndian.Uint64(path[len(path)-8:])
-}
-
-func TestCheckTrustingPeriod(t *testing.T) {
-	for _, tc := range []struct {
-		name                    string
-		timestamp, host, period uint64
-		expired                 bool
-	}{
-		{"before expiry", 100, 119, 20, false},
-		{"at expiry", 100, 120, 20, true},
-		{"after expiry", 100, 121, 20, true},
-		{"future anchor", 120, 100, 20, false},
-		{"wide sum", 1700000000, 1700000000, math.MaxUint64, false},
-		{"maximum host", 1, math.MaxUint64, math.MaxUint64, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			err := checkTrustingPeriod(tc.period, tc.timestamp, tc.host)
-			if tc.expired {
-				require.ErrorIs(t, err, ErrClientExpired)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }

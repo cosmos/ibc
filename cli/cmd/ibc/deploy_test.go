@@ -7,13 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/config"
@@ -267,66 +265,9 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
 }
 
-// The "<type>:" help prefixes on deploy client flags and typeOnlyFlags are
-// the same list.
-func TestTypeOnlyFlagsMatchHelp(t *testing.T) {
-	fromHelp := map[string]string{}
-	cmdDeployClient.Flags().VisitAll(func(flag *pflag.Flag) {
-		for _, group := range typeOnlyFlags {
-			if strings.HasPrefix(flag.Usage, group.clientType+":") {
-				fromHelp[flag.Name] = group.clientType
-			}
-		}
-	})
-	fromList := map[string]string{}
-	for _, group := range typeOnlyFlags {
-		for _, name := range group.flags {
-			fromList[name] = group.clientType
-		}
-	}
-	require.Equal(t, fromHelp, fromList)
-}
-
-func TestCheckClientTypeFlags(t *testing.T) {
-	newFlags := func(args ...string) *pflag.FlagSet {
-		flags := pflag.NewFlagSet("deploy client", pflag.ContinueOnError)
-		for _, group := range typeOnlyFlags {
-			for _, name := range group.flags {
-				flags.String(name, "", "")
-			}
-		}
-		require.NoError(t, flags.Parse(args))
-		return flags
-	}
-
-	require.NoError(t, checkClientTypeFlags(newFlags(), deploy.ClientTypeBesuQBFT))
-	require.NoError(t, checkClientTypeFlags(newFlags("--threshold=2"), deploy.ClientTypeAttestation))
-	require.ErrorContains(
-		t,
-		checkClientTypeFlags(newFlags("--threshold=2"), deploy.ClientTypeBesuQBFT),
-		"--threshold applies to attestation clients, not besu-qbft",
-	)
-	require.ErrorContains(
-		t,
-		checkClientTypeFlags(newFlags("--threshold=2", "--trusting-period=1h"), "foo"),
-		`unknown client type "foo": use attestation or besu-qbft`,
-	)
-
-	// the real flag set: non-zero defaults of the other type do not count as set
-	cmdFlags := cmdDeployClient.Flags()
-	for _, clientType := range deployClientTypes {
-		require.NoError(t, checkClientTypeFlags(cmdFlags, clientType), clientType)
-	}
-}
-
 func TestBesuQBFTParamsFlags(t *testing.T) {
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
-	previousHeight := flagDeployHeight
-	flagDeployHeight = 1
-	t.Cleanup(func() {
-		flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift
-		flagDeployHeight = previousHeight
-	})
+	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
 	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
 		name    string
@@ -335,7 +276,7 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 		router  string
 		wantErr string
 	}{
-		{name: "omitted", router: router, wantErr: "--trusting-period is required"},
+		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
 		{name: "sub-second", period: 1500 * time.Millisecond, router: router, wantErr: "--trusting-period: must be whole seconds"},
 		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
@@ -351,8 +292,8 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 			if tc.drift != 0 {
 				flagDeployMaxClockDrift = tc.drift
 			}
-			source := &bootstrapTarget{}
-			params, err := besuQBFTParams(t.Context(), tc.router, &hostTarget{timestamp: liveTimestamp + 100}, source)
+			source := &besuHeadTarget{}
+			params, err := besuQBFTParams(t.Context(), tc.router, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -360,12 +301,18 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
-			require.Equal(t, uint64(tc.period/time.Second), params.TrustingPeriod)
-			require.Equal(t, common.HexToAddress(tc.router), params.IBCRouter)
-			require.Equal(t, uint64(60), params.MaxClockDrift)
-			require.Equal(t, uint64(1), params.InitialHeight)
+			require.Equal(t, deploy.BesuQBFTParams{
+				IBCRouter:             common.HexToAddress(tc.router),
+				InitialHeight:         besuHeadHeight,
+				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
+				TrustingPeriod:        uint64(tc.period / time.Second),
+				MaxClockDrift:         60,
+			}, params)
 		})
 	}
+
+	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
+	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
 }
 
 func TestWholeSeconds(t *testing.T) {
@@ -389,31 +336,26 @@ func TestWholeSeconds(t *testing.T) {
 	}
 }
 
-type bootstrapTarget struct {
+const (
+	besuHeadHeight    = 112
+	besuHeadTimestamp = 1788200000
+)
+
+// besuHeadTarget is a Besu chain whose head is besuHeadHeight.
+type besuHeadTarget struct {
 	deploy.Target
 	called bool
 }
 
-func (t *bootstrapTarget) BesuQBFTConsensusState(
-	context.Context,
-	uint64,
-) (besumsgs.IBesuLightClientMsgsConsensusState, error) {
+func (t *besuHeadTarget) BesuQBFTHead(context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
 	t.called = true
-	return besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: liveTimestamp}, nil
+	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
 }
 
-// hostTarget is a host chain without the client, whose head sits at timestamp.
-type hostTarget struct {
+// hostOnlyTarget is a chain that cannot serve Besu consensus states.
+type hostOnlyTarget struct {
 	deploy.Target
-	timestamp uint64
 }
-
-func (h *hostTarget) Head(context.Context) (uint64, uint64, error) {
-	return 0, h.timestamp, nil
-}
-
-// liveTimestamp is the trusted-state timestamp bootstrapTarget serves.
-const liveTimestamp = 1788200000
 
 func TestRenderConfigRejectsDuplicateSignerAliasesBeforeRendering(t *testing.T) {
 	home := setupRenderConfigTest(t)

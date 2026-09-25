@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 func TestBuildRelayerConfigYAML(t *testing.T) {
@@ -135,16 +137,6 @@ func TestBuildRelayerConfigRejectsHarnessInvalidConfig(t *testing.T) {
 		edit func(*RelayerConfig)
 		err  string
 	}{
-		{
-			"missing client type A",
-			func(c *RelayerConfig) { c.Connections[0].A.ClientType = "" },
-			`end A: unsupported client type ""`,
-		},
-		{
-			"missing client type B",
-			func(c *RelayerConfig) { c.Connections[0].B.ClientType = "" },
-			`end B: unsupported client type ""`,
-		},
 		{"signer key", func(c *RelayerConfig) { c.SignerKeyFile = "" }, "signer key file is required"},
 		{"attestor key required", func(c *RelayerConfig) {
 			c.Attestors = []RelayerAttestor{{Name: "a", Type: RelayerAttestorLocal, ChainID: "1"}}
@@ -178,10 +170,10 @@ func testRelayerConfig() RelayerConfig {
 				A: RelayerClientEnd{
 					ChainID:    "1",
 					ClientID:   "client-1",
-					ClientType: RelayerClientAttestation,
+					ClientType: clientkind.Attestation,
 					AutoRelay:  true,
 				},
-				B: RelayerClientEnd{ChainID: "2", ClientID: "client-2", ClientType: RelayerClientAttestation},
+				B: RelayerClientEnd{ChainID: "2", ClientID: "client-2", ClientType: clientkind.Attestation},
 			},
 		},
 	}
@@ -189,13 +181,13 @@ func testRelayerConfig() RelayerConfig {
 
 func TestClientTypesPerEnd(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].A.ClientType = RelayerClientBesuQBFT
-	cfg.Connections[0].B.ClientType = RelayerClientBesuQBFT
+	cfg.Connections[0].A.ClientType = clientkind.BesuQBFT
+	cfg.Connections[0].B.ClientType = clientkind.BesuQBFT
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientB.Type)
+	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientB.Type)
 	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
 	require.Empty(t, file.Attestors)
 	require.Equal(t, []signerConfig{
@@ -203,21 +195,16 @@ func TestClientTypesPerEnd(t *testing.T) {
 	}, file.Signers)
 
 	// ends may differ
-	cfg.Connections[0].B.ClientType = RelayerClientAttestation
+	cfg.Connections[0].B.ClientType = clientkind.Attestation
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, RelayerClientBesuQBFT, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, RelayerClientAttestation, file.Relayer.Connections[0].ClientB.Type)
+	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 
 	// a prover URL overrides both ends
 	cfg.Connections[0].ProverURL = "http://prover:9090"
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, RelayerClientRemote, file.Relayer.Connections[0].ClientB.Type)
-
-	cfg.Connections[0].ProverURL = ""
-	cfg.Connections[0].A.ClientType = "unknown"
-	_, err = buildRelayerFileConfig(cfg)
-	require.ErrorContains(t, err, "unsupported client type")
+	require.Equal(t, clientkind.Remote, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Remote, file.Relayer.Connections[0].ClientB.Type)
 }

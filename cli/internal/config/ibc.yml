@@ -57,22 +57,6 @@ relayer:
         autoRelay:
           enabled: true
 
-    # a client end of type: besu-qbft verifies the counterparty's sealed Besu
-    # QBFT headers and storage proofs itself, so it needs no attestors; both
-    # chains of such a connection run Besu QBFT (the chain IDs below reuse
-    # this sample's chains only to keep the example short)
-    - alias: "besu-a-besu-b"
-      clientA:
-        chainId: "1"
-        signer: "eth-relayer-key"
-        clientId: "besu-b"
-        type: "besu-qbft"
-      clientB:
-        chainId: "8453"
-        signer: "base-relayer-key"
-        clientId: "besu-a"
-        type: "besu-qbft"
-
     # a client end of type: remote delegates proof generation to a
     # ProverService over gRPC instead of building proofs from attestations, so
     # a light client IBC CLI does not implement can be relayed by serving that

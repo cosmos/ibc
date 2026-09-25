@@ -15,63 +15,33 @@ import (
 	"github.com/cosmos/ibc/cli/besu/besutest"
 )
 
-func TestParseHeaderFixture(t *testing.T) {
+func TestParseSealedHeaderFixture(t *testing.T) {
 	fixture := besutest.MustFixture(t)
 
 	for _, update := range []besutest.UpdateFixture{fixture.AdjacentUpdate, fixture.NonAdjacentUpdate} {
-		header, err := besu.ParseHeader(update.HeaderRLP)
-		require.NoError(t, err)
+		header := besutest.ParseHeader(t, update.HeaderRLP)
 
 		assert.Equal(t, update.Height, header.Height)
 		assert.Equal(t, update.ExpectedTimestamp, header.Timestamp)
+		assert.Equal(t, update.ExpectedStateRoot, header.StateRoot)
 		assert.Equal(t, update.ExpectedValidators, header.Validators)
 		assert.Equal(t, []byte(update.HeaderRLP), header.RLP)
 	}
 }
 
-func TestParseHeaderRejectsMalformed(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-	template := fixture.AdjacentUpdate.HeaderRLP
-
-	t.Run("not a list", func(t *testing.T) {
-		_, err := besu.ParseHeader([]byte{0x80})
-		require.ErrorIs(t, err, besu.ErrInvalidHeader)
-	})
-
-	t.Run("invalid state root", func(t *testing.T) {
-		var items []rlp.RawValue
-		require.NoError(t, rlp.DecodeBytes(template, &items))
-		for _, root := range []any{make([]byte, 31), make([]byte, 33), []any{}} {
-			var err error
-			items[3], err = rlp.EncodeToBytes(root)
-			require.NoError(t, err)
-			raw, err := rlp.EncodeToBytes(items)
-			require.NoError(t, err)
-			_, err = besu.ParseHeader(raw)
-			require.ErrorIs(t, err, besu.ErrInvalidHeader)
-		}
-	})
-}
-
-func TestParseSealedHeader(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-	update := fixture.AdjacentUpdate
+func TestParseSealedHeaderRejectsMalformed(t *testing.T) {
 	var header types.Header
-	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
 
-	got, err := besu.ParseSealedHeader(&header)
-	require.NoError(t, err)
-	assert.Equal(t, []byte(update.HeaderRLP), got.RLP)
-	assert.Equal(t, update.Height, got.Height)
-	assert.Equal(t, update.ExpectedTimestamp, got.Timestamp)
-	assert.Equal(t, update.ExpectedStateRoot, got.StateRoot)
-	assert.Equal(t, update.ExpectedValidators, got.Validators)
+	_, err := besu.ParseSealedHeader(nil)
+	require.ErrorContains(t, err, "nil header")
 
-	_, err = besu.ParseSealedHeader(nil)
-	require.Error(t, err)
+	header.Extra = []byte{0x80}
+	_, err = besu.ParseSealedHeader(&header)
+	require.ErrorContains(t, err, "extra data list")
 }
 
-func TestParseHeaderDefersBFTValidationToContract(t *testing.T) {
+func TestParseSealedHeaderDefersBFTValidationToContract(t *testing.T) {
 	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
 	for _, tc := range []struct {
 		name  string
@@ -91,15 +61,14 @@ func TestParseHeaderDefersBFTValidationToContract(t *testing.T) {
 			require.NoError(t, err)
 			raw, err := rlp.EncodeToBytes(items)
 			require.NoError(t, err)
-			header, err := besu.ParseHeader(raw)
-			require.NoError(t, err)
+			header := besutest.ParseHeader(t, raw)
 			require.Equal(t, raw, header.RLP)
 		})
 	}
 }
 
 // The parser extracts validator addresses without imposing consensus rules.
-func TestParseHeaderDefersValidatorValidationToContract(t *testing.T) {
+func TestParseSealedHeaderDefersValidatorValidationToContract(t *testing.T) {
 	template := besutest.MustFixture(t).AdjacentUpdate.HeaderRLP
 	a, b := common.HexToAddress("0x01"), common.HexToAddress("0x02")
 	for name, validators := range map[string][]common.Address{
@@ -124,8 +93,7 @@ func TestParseHeaderDefersValidatorValidationToContract(t *testing.T) {
 			require.NoError(t, err)
 			raw, err := rlp.EncodeToBytes(items)
 			require.NoError(t, err)
-			header, err := besu.ParseHeader(raw)
-			require.NoError(t, err)
+			header := besutest.ParseHeader(t, raw)
 			require.Equal(t, raw, header.RLP)
 			require.Len(t, header.Validators, len(validators))
 			for i, validator := range validators {

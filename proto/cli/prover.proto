@@ -13,13 +13,14 @@ option go_package = "github.com/cosmos/ibc/cli/api/v2/prover";
 // Every request names the light client it is scoped to, so one service can
 // serve many clients across many chains.
 service ProverService {
-  // LatestProvableHeight returns the highest height a subsequent ClientUpdatePayload
+  // LatestProvableHeight returns the highest height a subsequent ClientUpdatePayloads
   // and PacketProofs call sharing that height can currently succeed at, with
   // that height's counterparty-chain timestamp.
   rpc LatestProvableHeight(LatestProvableHeightRequest) returns (LatestProvableHeightResponse) {}
 
-  // ClientUpdatePayload returns the encoded light-client update payload at a height.
-  rpc ClientUpdatePayload(ClientUpdatePayloadRequest) returns (ClientUpdatePayloadResponse) {}
+  // ClientUpdatePayloads returns the encoded light-client updates that bring the
+  // client to a height.
+  rpc ClientUpdatePayloads(ClientUpdatePayloadsRequest) returns (ClientUpdatePayloadsResponse) {}
 
   // PacketProofs proves each packet's membership or non-membership at a
   // height, one proof per packet with indices aligned to the request.
@@ -47,16 +48,18 @@ message LatestProvableHeightResponse {
   uint64 timestamp = 2;
 }
 
-message ClientUpdatePayloadRequest {
+message ClientUpdatePayloadsRequest {
   // The light client this call is scoped to.
   Client client = 1;
   // The counterparty height to prove at.
   uint64 height = 2;
 }
 
-message ClientUpdatePayloadResponse {
-  // The encoded update payload, passed unchanged as updateMsg. Empty when no update is needed.
-  bytes payload = 1;
+message ClientUpdatePayloadsResponse {
+  // The encoded updates, each passed unchanged as one updateMsg and submitted
+  // in order before the packets. Empty when no update is needed; each entry is
+  // a non-empty updateMsg.
+  repeated bytes payloads = 1;
 }
 
 message PacketProofsRequest {

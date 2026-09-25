@@ -182,7 +182,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	}
 	for _, connection := range spec.Connections {
 		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			if _, authority, ok := newClientAuthority(declaration); ok {
+			if authority, ok := declaration.clientAuthority(); ok {
 				requiredAuthorities[authority] = struct{}{}
 			}
 			for _, attestor := range declaration.clientAttestors() {
@@ -211,10 +211,11 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	}
 	for _, connection := range spec.Connections {
 		for _, end := range connection.ends() {
-			instanceID, authorityID, ok := newClientAuthority(end.declaration)
+			authorityID, ok := end.declaration.clientAuthority()
 			if !ok {
 				continue
 			}
+			instanceID := end.declaration.clientIBCInstance()
 			instance, isNew := newInstances[instanceID]
 			if !isNew {
 				continue

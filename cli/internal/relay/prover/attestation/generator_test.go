@@ -73,7 +73,7 @@ func signedPacketAttestor(
 	return a
 }
 
-func TestGeneratorClientUpdatePayload(t *testing.T) {
+func TestGeneratorClientUpdatePayloads(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returnsEncodedPayloadAtRequestedHeight", func(t *testing.T) {
@@ -84,9 +84,10 @@ func TestGeneratorClientUpdatePayload(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		payload, err := gen.ClientUpdatePayload(ctx, 10)
+		payloads, err := gen.ClientUpdatePayloads(ctx, 10)
 		require.NoError(t, err)
-		require.NotEmpty(t, payload)
+		require.Len(t, payloads, 1)
+		require.NotEmpty(t, payloads[0])
 	})
 
 	t.Run("mismatchedHeightErrors", func(t *testing.T) {
@@ -97,7 +98,7 @@ func TestGeneratorClientUpdatePayload(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		_, err := gen.ClientUpdatePayload(ctx, 11)
+		_, err := gen.ClientUpdatePayloads(ctx, 11)
 		require.Error(t, err)
 	})
 }

@@ -145,11 +145,6 @@ func (c *Client) ChainID() string {
 	return c.chainID
 }
 
-// ETH returns the chain's HTTP JSON-RPC client.
-func (c *Client) ETH() ETHClient {
-	return c.eth
-}
-
 // RouterAddress returns the ICS26 router address.
 func (c *Client) RouterAddress() common.Address {
 	return c.routerAddress

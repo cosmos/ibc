@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -56,7 +57,7 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	qbft := summarizeSpec(environment.Spec{
 		Connections: []environment.ConnectionSpec{{
 			A: environment.NewBesuQBFTClient{},
-			B: environment.ExistingClient{Kind: environment.ClientKindBesuQBFT},
+			B: environment.ExistingClient{Kind: clientkind.BesuQBFT},
 		}},
 	})
 	if qbft.BesuQBFTClients != 2 || qbft.Attestors != 0 {

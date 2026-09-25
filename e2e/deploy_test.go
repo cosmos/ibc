@@ -124,6 +124,7 @@ func TestDeployConnection(t *testing.T) {
 		{"core", "--chain", chainBID, "--yes"},
 		{
 			"client",
+			"attestation",
 			"--chain",
 			chainAID,
 			"--counterparty-chain",
@@ -134,6 +135,7 @@ func TestDeployConnection(t *testing.T) {
 		},
 		{
 			"client",
+			"attestation",
 			"--chain",
 			chainBID,
 			"--counterparty-chain",
@@ -259,6 +261,7 @@ func TestDeployIFTBridge(t *testing.T) {
 			{"core", "--chain", chainID, "--yes"},
 			{
 				"client",
+				"attestation",
 				"--chain",
 				chainID,
 				"--counterparty-chain",

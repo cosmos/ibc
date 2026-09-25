@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ibcerc20"
@@ -25,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
@@ -414,7 +414,7 @@ type PreparedClient struct {
 	setup                *Setup
 	authority            evm.Account
 	instance             Instance
-	kind                 string
+	kind                 clientkind.Kind
 	id                   string
 	counterpartyClientID string
 	deploy               func(*bind.TransactOpts) (common.Address, *types.Transaction, error)
@@ -482,7 +482,7 @@ func (s *Setup) PrepareBesuQBFTClient(
 }
 
 // describeClient names a Client of kind in errors, as `<kind> Client "<id>"`.
-func describeClient(kind, id string) string {
+func describeClient(kind clientkind.Kind, id string) string {
 	return fmt.Sprintf("%s Client %q", kind, id)
 }
 
@@ -493,7 +493,8 @@ func (s *Setup) prepareClient(
 	ctx context.Context,
 	authority evm.Account,
 	router common.Address,
-	kind, id, counterpartyClientID string,
+	kind clientkind.Kind,
+	id, counterpartyClientID string,
 	deploy func(*bind.TransactOpts) (common.Address, *types.Transaction, error),
 ) (*PreparedClient, error) {
 	label := "solidity IBC prepare " + describeClient(kind, id)
@@ -580,7 +581,8 @@ func (s *Setup) verifyClientVacant(ctx context.Context, instance Instance, clien
 func (s *Setup) AttachClient(
 	ctx context.Context,
 	router common.Address,
-	clientID, counterpartyClientID, kind string,
+	clientID, counterpartyClientID string,
+	kind clientkind.Kind,
 ) (Client, error) {
 	instance, err := s.AttachInstance(ctx, router)
 	if err != nil {
@@ -595,7 +597,8 @@ func (s *Setup) verifyClient(
 	instance Instance,
 	clientID string,
 	expectedAddress common.Address,
-	counterpartyClientID, kind string,
+	counterpartyClientID string,
+	kind clientkind.Kind,
 ) (Client, error) {
 	registered, err := s.verifyClientRegistration(ctx, instance, clientID, expectedAddress, counterpartyClientID)
 	if err != nil {
@@ -619,21 +622,9 @@ func (s *Setup) verifyClient(
 		client.Attestors = slices.Clone(set.AttestorAddresses)
 		client.MinRequiredSignatures = set.MinRequiredSigs
 	case clientkind.BesuQBFT:
-		lightClient, err := besuqbft.NewContractCaller(registered, s.backend)
-		if err != nil {
-			return Client{}, fmt.Errorf("solidity IBC attach Client %q: bind besu qbft contract: %w", clientID, err)
-		}
-		raw, err := lightClient.GetClientState(&bind.CallOpts{Context: ctx})
-		if err != nil {
-			return Client{}, fmt.Errorf("solidity IBC attach Client %q: query client state: %w", clientID, err)
-		}
-		state, err := besumsgs.NewBindings().UnpackClientState(raw)
-		if err != nil {
+		if _, err := besu.ReadClientState(ctx, s.backend, registered); err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 		}
-		client.CounterpartyRouter = state.IbcRouter
-		client.TrustingPeriod = state.TrustingPeriod
-		client.MaxClockDrift = state.MaxClockDrift
 	default:
 		return Client{}, fmt.Errorf("unsupported client kind %q", kind)
 	}
