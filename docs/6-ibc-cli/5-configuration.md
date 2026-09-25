@@ -163,7 +163,7 @@ Server reflection is always enabled. <!-- [bootstrap.go:L120](cli/internal/boots
 
 <!-- GEN:config:chains END -->
 
-`ibc deploy core` deploys the router. <!-- [steps.go:L67-L97](cli/internal/deploy/steps.go#L67-L97) --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [deploy.go:L544-L600](cli/cmd/ibc/deploy.go#L544-L600) -->
+`ibc deploy core` deploys the router. <!-- [steps.go:L67-L97](cli/internal/deploy/steps.go#L67-L97) --> Omit `ics26Router` before deployment, then fill it in from the manifest, or use `ibc deploy render-config --populate-config` to update the config. <!-- [deploy.go:L601-L672](cli/cmd/ibc/deploy.go#L601-L672) -->
 
 The deployer must be a local signer, because deployment requires direct access to the key. <!-- [deploy.go:L123-L155](cli/cmd/ibc/deploy.go#L123-L155) -->
 
@@ -185,7 +185,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.params, connections[].clientB.params` | `yaml.RawMessage` | optional | This client type's settings. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L51](cli/internal/config/relayer.go#L51) -->
+<!-- [relayer.go:L64](cli/internal/config/relayer.go#L64) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -208,10 +208,10 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `dispatchPollInterval` | `duration` | `1s` | How often the dispatcher polls the store for unfinished packets. |
-| `clearOnStart` | `bool` | `true` | Whether a clearing pass runs at startup. `ibc relayer run --clear-on-start=false` overrides it for that process, and only when passed explicitly. |
+| `clearOnStart` | `bool` | optional | Whether a clearing pass runs at startup. Defaults to true; `ibc relayer run --clear-on-start=false` overrides it for that process. |
 | `clearInterval` | `duration` | `5m` | How often a clearing pass runs after startup. Overridable per chain. |
 
-<!-- [relayer.go:L28](cli/internal/config/relayer.go#L28) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
+<!-- [relayer.go:L31](cli/internal/config/relayer.go#L31) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L19](cli/internal/config/relayer.go#L19) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -223,12 +223,12 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].txSubmissionDelay` | `duration` | `2s` | Minimum delay between two transaction submissions on the chain. |
 | `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
+| `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
+| `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
-| `chainOverrides[].clearInterval` | `duration` | optional | Overrides `clearInterval` for packets sourced from this chain. |
-| `chainOverrides[].abandonUnrecoverablePackets` | `bool` | `false` | Stops re-probing packets whose send log the endpoint will not serve. |
 
-<!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L40](cli/internal/config/relayer.go#L40) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 

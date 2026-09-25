@@ -17,7 +17,7 @@ By the end, you'll have the following:
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.26.4 or later
+- [Go](https://go.dev/doc/install) v1.26.6 or later
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
@@ -215,30 +215,21 @@ This command registers both sides. It ties each token to the client pointing at 
 
 Next, you'll need to configure the relayer to start sending packets between the two chains.
 
-1. Generate the relayer's configuration.
+1. Generate and save the relayer's configuration:
 
 ```bash
-./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer
+./bin/ibc deploy render-config 41001 41002 \
+  --signer-a relayer --signer-b relayer \
+  --populate-config --yes
 ```
 
-This prints the three sections relaying needs: the chains with their router addresses, the connection, and the attestors. Each is already filled in with the addresses your deploy commands recorded.
+This merges the deployed router addresses, connection, and local attestors into your existing config, preserving settings such as `server`, `db`, and `signers`. It prints the complete config and writes it to `~/.ibc/ibc.yml`. The `--yes` flag skips the confirmation prompt.
 
-The two signer flags name the key that submits relay transactions on each chain. Both are required, and each is checked against your configured signers. You imported `relayer` in step 3.
+The two signer flags select the key that submits relay transactions on each chain. Set both for this new connection; each is checked against your configured signers. You imported `relayer` in step 3 of section 2.
 
 The attestors section declares both of your attestor keys as `type: local`. This means the relayer will run the attestors in the same process.
 
-2. Add the `render-config` output to your config manually or use the following command to merge the generated sections into your config:
-
-```bash
-{ sed -n '1,/^chains:/p' ~/.ibc/ibc.yml | sed '$d'
-  ./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer
-  sed -n '/^signers:/,$p' ~/.ibc/ibc.yml
-} > /tmp/ibc.yml.merged && mv /tmp/ibc.yml.merged ~/.ibc/ibc.yml
-```
-
-This keeps your `server`, `db`, and `signers` blocks, and replaces the three the deploy tool generated.
-
-3. Use the validate command to check the result against both chains before starting anything:
+2. Use the validate command to check the result against both chains before starting anything:
 
 ```bash
 ./bin/ibc config validate --live
@@ -251,7 +242,7 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 }
 ```
 
-4. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You'll come back to it in the next step.
+3. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You'll come back to it in the next step.
 
 ```bash
 # open a new terminal and start the relayer
@@ -260,7 +251,7 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 
 ```
 level=INFO msg="Attestor config provided, running in dual mode: relayer with attestor" module=bootstrap
-level=INFO msg="Migrated database" module=bootstrap migrations_applied=3
+level=INFO msg="Migrated database" module=bootstrap migrations_applied=4
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3000}"
 ```
 

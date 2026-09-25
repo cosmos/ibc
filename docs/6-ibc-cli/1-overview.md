@@ -139,7 +139,7 @@ It has six blocks:
 - `signers`: the keys, each under an alias the other blocks reference by name.
 - `server` and `db`: the address to listen on, and the relayer's database.
 
-Most configurations can be generated. `ibc config new` writes a starting file, `config add-chain` appends a chain, and the `ibc keys` commands can append a signer. After deploying, `ibc deploy render-config` prints the chains, connections, and attestors that the deployment implies.
+Most configurations can be generated. `ibc config new` writes a starting file, `config add-chain` appends a chain, and the `ibc keys` commands can append a signer. After deploying, `ibc deploy render-config` prints the complete config with deployment settings merged in. Add `--populate-config` to save it.
 
 The IBC CLI also validates the file with the `ibc config validate` command. 
 
