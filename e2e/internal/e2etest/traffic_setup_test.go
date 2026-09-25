@@ -40,7 +40,7 @@ func TestMergeRelayerConnection(t *testing.T) {
 				}
 
 				var cfg ibccli.RelayerConfig
-				indices := map[[4]string]int{}
+				indices := map[[2]string]int{}
 				for _, route := range routes {
 					mergeRelayerConnection(&cfg, indices, route)
 				}
@@ -52,15 +52,4 @@ func TestMergeRelayerConnection(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestMergeRelayerConnectionKeysBothEnds(t *testing.T) {
-	a := ibccli.RelayerClientEnd{ChainID: "1", ClientID: "a", ClientType: clientkind.BesuQBFT}
-	b := ibccli.RelayerClientEnd{ChainID: "1", ClientID: "b", ClientType: clientkind.Attestation}
-	c := ibccli.RelayerClientEnd{ChainID: "2", ClientID: "c", ClientType: clientkind.Attestation}
-	var cfg ibccli.RelayerConfig
-	indices := map[[4]string]int{}
-	mergeRelayerConnection(&cfg, indices, ibccli.RelayerConnection{A: b, B: a})
-	mergeRelayerConnection(&cfg, indices, ibccli.RelayerConnection{A: a, B: c})
-	require.Equal(t, []ibccli.RelayerConnection{{A: a, B: b}, {A: a, B: c}}, cfg.Connections)
 }

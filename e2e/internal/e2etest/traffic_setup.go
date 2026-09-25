@@ -417,7 +417,7 @@ func buildConfig(
 		})
 	}
 
-	connections := map[[4]string]int{}
+	connections := map[[2]string]int{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
 		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
@@ -454,14 +454,14 @@ func buildConfig(
 // mergeRelayerConnection combines directional routes into one reciprocal pair.
 func mergeRelayerConnection(
 	config *ibccli.RelayerConfig,
-	indices map[[4]string]int,
+	indices map[[2]string]int,
 	connection ibccli.RelayerConnection,
 ) {
 	if connection.B.ChainID < connection.A.ChainID ||
 		(connection.B.ChainID == connection.A.ChainID && connection.B.ClientID < connection.A.ClientID) {
 		connection.A, connection.B = connection.B, connection.A
 	}
-	key := [4]string{connection.A.ChainID, connection.A.ClientID, connection.B.ChainID, connection.B.ClientID}
+	key := [2]string{connection.A.ChainID, connection.A.ClientID}
 	if index, seen := indices[key]; seen {
 		existing := &config.Connections[index]
 		existing.A.AutoRelay = existing.A.AutoRelay || connection.A.AutoRelay

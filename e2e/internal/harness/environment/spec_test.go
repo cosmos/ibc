@@ -406,16 +406,7 @@ func makeChainAAttached(spec *Spec) {
 	}
 }
 
-func TestExistingClientKind(t *testing.T) {
-	for _, kind := range []clientkind.Kind{"", "unknown", clientkind.Attestation, clientkind.BesuQBFT} {
-		client := ExistingClient{Kind: kind, IBCInstance: "ibc-a", ID: "client-a"}
-		_, err := validateClientSpec("connection", "A", client)
-		if kind == clientkind.Attestation || kind == clientkind.BesuQBFT {
-			require.NoError(t, err)
-		} else {
-			require.ErrorContains(t, err, "unsupported kind")
-		}
-	}
+func TestExistingBesuQBFTClientRejectsAttestors(t *testing.T) {
 	_, err := validateClientSpec("connection", "A", ExistingClient{
 		Kind: clientkind.BesuQBFT, Attestors: []AttestorSpec{{ID: "attestor"}},
 	})

@@ -19,8 +19,9 @@ import (
 const deployCommandTimeout = 10 * time.Minute
 
 // placeholderRouter satisfies chains[].evm.ics26Router's required-non-empty
-// validation before `ibc deploy core` has recorded a real router address;
-// deploy commands read the router from the manifest, never from config.
+// validation before `ibc deploy core` has recorded a real router address.
+// Deploy commands read a chain's own router from its manifest; only
+// `deploy client besu-qbft` reads the counterparty's from config.
 const placeholderRouter = "0x0000000000000000000000000000000000000001"
 
 // DeployConfig describes the minimal IBC CLI config `ibc deploy` needs: chains
@@ -33,10 +34,11 @@ type DeployConfig struct {
 }
 
 // DeployChain is one chain `ibc deploy` can target. ChainID is the decimal
-// EVM chain id.
+// EVM chain id; an empty ICS26Router writes a placeholder.
 type DeployChain struct {
-	ChainID string
-	RPC     string
+	ChainID     string
+	RPC         string
+	ICS26Router string
 }
 
 // WriteDeployConfig renders an IBC CLI config file declaring every Chain with
@@ -63,9 +65,13 @@ func WriteDeployConfig(path string, cfg DeployConfig) error {
 		}},
 	}
 	for _, chain := range cfg.Chains {
+		router := chain.ICS26Router
+		if router == "" {
+			router = placeholderRouter
+		}
 		file.Chains = append(file.Chains, chainConfig{
 			ChainID:  chain.ChainID,
-			EVM:      evmChainConfig{RPC: chain.RPC, ICS26Router: placeholderRouter},
+			EVM:      evmChainConfig{RPC: chain.RPC, ICS26Router: router},
 			Deployer: cfg.SignerAlias,
 		})
 	}

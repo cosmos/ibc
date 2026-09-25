@@ -18,7 +18,6 @@ import (
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -462,15 +461,13 @@ func acquireIBCClient(
 		if err != nil {
 			return nil, err
 		}
-		if kind == clientkind.Attestation {
-			if attestorErr := requireDeclaredAttestors(
-				label,
-				resolved.Attestors,
-				declaration.clientAttestors(),
-				runtime,
-			); attestorErr != nil {
-				return nil, attestorErr
-			}
+		if attestorErr := requireDeclaredAttestors(
+			label,
+			resolved.Attestors,
+			declaration.clientAttestors(),
+			runtime,
+		); attestorErr != nil {
+			return nil, attestorErr
 		}
 	case NewClient, NewBesuQBFTClient:
 		prepared, ok := dependencies.preparedClients[label]

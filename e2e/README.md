@@ -10,7 +10,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-Besu QBFT light clients are covered by one transfer through a two-chain Besu mesh (`TestTransferBesuQBFT_AutoRelay`), which requires the Besu provider and therefore skips in fast mode. It exercises the full path: client update from a sealed header, membership proofs for the packet, and acknowledgement. Timeouts, non-membership and expiry are not exercised end-to-end on Besu: they need paused or controlled mining, which the Besu harness does not offer. The prover's unit tests in `cli/internal/relay/prover/besuqbft` cover the payloads it builds for them; the light client verifies those payloads itself.
+Besu QBFT light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestDeployBesuQBFTConnection` deploys the clients through `ibc deploy client besu-qbft`. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
 
 ## Running the acceptance tests
 

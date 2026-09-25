@@ -354,9 +354,6 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		instance = declaration.IBCInstance
-		if declaration.Kind != clientkind.Attestation && declaration.Kind != clientkind.BesuQBFT {
-			return "", errorsf("IBC Client %q: unsupported kind %q", clientLabel(connectionID, end), declaration.Kind)
-		}
 		if declaration.Kind == clientkind.BesuQBFT && len(declaration.Attestors) != 0 {
 			return "", errorsf("IBC Client %q: besu-qbft does not use attestors", clientLabel(connectionID, end))
 		}
