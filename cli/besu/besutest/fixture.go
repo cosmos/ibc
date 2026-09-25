@@ -28,6 +28,8 @@ import (
 //go:embed testdata/qbft.json
 var qbftFixtureJSON []byte
 
+var messageBindings = besumsgs.NewBindings()
+
 // Fixture mirrors the qbft.json layout.
 //
 // TODO(FOU-1406): Move fixture generation from ibc-contracts into this repo's
@@ -108,8 +110,6 @@ func (u UpdateFixture) ExpectedConsensusState() besumsgs.IBesuLightClientMsgsCon
 		Validators: u.ExpectedValidators,
 	}
 }
-
-var messageBindings = besumsgs.NewBindings()
 
 // ProofNodes unwraps the abi.encode(bytes[]) storage proof.
 func (m MembershipFixture) ProofNodes() ([][]byte, error) {

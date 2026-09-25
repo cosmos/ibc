@@ -27,6 +27,11 @@ import (
 	"github.com/cosmos/ibc/cli/keyfile"
 )
 
+const (
+	flagNameTrustingPeriod = "trusting-period"
+	flagNameMaxClockDrift  = "max-clock-drift"
+)
+
 var (
 	flagDeployManifestDir     string
 	flagDeployDeployer        string
@@ -269,11 +274,6 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	}
 	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
 }
-
-const (
-	flagNameTrustingPeriod = "trusting-period"
-	flagNameMaxClockDrift  = "max-clock-drift"
-)
 
 // clientSpec resolves the client ids for --chain tracking
 // --counterparty-chain, leaving Params to the caller.

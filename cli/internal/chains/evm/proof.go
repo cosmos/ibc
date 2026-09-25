@@ -21,6 +21,23 @@ type RouterProof struct {
 	StorageProofs [][][]byte
 }
 
+// rpcClient adds eth_getProof to ethclient on the same connection.
+type rpcClient struct {
+	*ethclient.Client
+}
+
+var _ ETHClient = (*rpcClient)(nil)
+
+// proofResult is the part of an eth_getProof result the light client needs.
+type proofResult struct {
+	AccountProof []hexutil.Bytes      `json:"accountProof"`
+	StorageProof []storageProofResult `json:"storageProof"`
+}
+
+type storageProofResult struct {
+	Proof []hexutil.Bytes `json:"proof"`
+}
+
 // GetRouterProof proves the router account and the requested storage slots at
 // height via eth_getProof. The light client verifies the proofs, deriving each
 // storage key from the packet itself.
@@ -40,25 +57,8 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots []comm
 	return RouterProof{AccountProof: accountProof, StorageProofs: storageProofs}, nil
 }
 
-// rpcClient adds eth_getProof to ethclient on the same connection.
-type rpcClient struct {
-	*ethclient.Client
-}
-
-var _ ETHClient = (*rpcClient)(nil)
-
 func newRPCClient(client *rpc.Client) *rpcClient {
 	return &rpcClient{Client: ethclient.NewClient(client)}
-}
-
-// proofResult is the part of an eth_getProof result the light client needs.
-type proofResult struct {
-	AccountProof []hexutil.Bytes      `json:"accountProof"`
-	StorageProof []storageProofResult `json:"storageProof"`
-}
-
-type storageProofResult struct {
-	Proof []hexutil.Bytes `json:"proof"`
 }
 
 // GetProof calls eth_getProof directly: go-ethereum only offers it through
