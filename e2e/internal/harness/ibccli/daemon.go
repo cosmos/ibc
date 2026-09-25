@@ -333,7 +333,7 @@ func (d *Relayer) probePacketsEndpoint(ctx context.Context) error {
 			return fmt.Errorf("ibc relayer run: packets probe: %w", err)
 		}
 		if len(response.Msg.GetPackets()) != 0 {
-			return fmt.Errorf("ibc relayer run: packets probe: unknown transaction returned packets")
+			return errors.New("ibc relayer run: packets probe: unknown transaction returned packets")
 		}
 		return nil
 	}

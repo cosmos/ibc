@@ -3,6 +3,7 @@
 package environment
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -104,11 +105,11 @@ func dumpDirectory(runID, path string) {
 func tryDumpDirectory(runID, path, testName string) (string, error) {
 	switch {
 	case dumpDir == "":
-		return "", fmt.Errorf("dump directory is not configured")
+		return "", errors.New("dump directory is not configured")
 	case runID == "":
-		return "", fmt.Errorf("run ID is empty")
+		return "", errors.New("run ID is empty")
 	case path == "":
-		return "", fmt.Errorf("dump source path is empty")
+		return "", errors.New("dump source path is empty")
 	}
 
 	src, err := filepath.Abs(path)

@@ -4,6 +4,7 @@ package e2etest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -523,7 +524,7 @@ func (p *IFTSend) awaitPendingCleared(ctx context.Context) error {
 			)
 			switch {
 			case err == nil:
-				return struct{}{}, false, fmt.Errorf("pending transfer still present")
+				return struct{}{}, false, errors.New("pending transfer still present")
 			case isIFTPendingTransferNotFound(err):
 				return struct{}{}, true, nil
 			default:

@@ -4,6 +4,7 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 // ValidateListenAddr validates a listen address in the format host:port or :port
 func ValidateListenAddr(raw string) error {
 	if raw == "" {
-		return fmt.Errorf("empty string provided")
+		return errors.New("empty string provided")
 	}
 
 	_, port, err := net.SplitHostPort(raw)

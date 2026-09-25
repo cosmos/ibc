@@ -77,7 +77,7 @@ func keysNew(_ *cobra.Command, args []string) error {
 
 	if !saveKey {
 		if flagKeysPopulateConfig {
-			return fmt.Errorf("--populate-config requires a key name")
+			return errors.New("--populate-config requires a key name")
 		}
 
 		// for ephemeral keys we print the key to stdout including the private key
@@ -142,7 +142,7 @@ func keysImport(_ *cobra.Command, args []string) error {
 	case err != nil:
 		return err
 	case keyType != keyfile.ECDSA:
-		return fmt.Errorf("only ecdsa keys are supported")
+		return errors.New("only ecdsa keys are supported")
 	}
 
 	keyName := args[1]
