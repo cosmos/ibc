@@ -73,7 +73,7 @@ Either call returns the counterparty's timestamp at the verified height, which t
 
 IBC supports many client types. What differs between them is only how each one decides what to trust. They all have the same job: verify a claim about a record in the counterparty's [store](3-core-router-and-store.md). In addition, they all must implement [the interface above](#what-a-light-client-verifies).
 
-The [attestation light client](../4-light-clients/1-attestation-light-client.md) is one example. It trusts a fixed set of attestors, and accepts a claim signed by a quorum of them at a height it already holds.
+The [attestation light client](../4-light-clients/1-attestation-light-client.md) is one example. It trusts a fixed set of attestors, and accepts a claim signed by a quorum of them at a height it already holds. The [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md) is another: it trusts the counterparty's validator set, accepts headers they sealed, and checks claims with storage proofs against those headers.
 
 Because a proof is opaque bytes to IBC, the router never needs to know how a client decides what to trust. That is what lets IBC connect chains with different security models.
 

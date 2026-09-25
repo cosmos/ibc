@@ -233,7 +233,7 @@ func (x *LatestProvableHeightResponse) GetTimestamp() uint64 {
 	return 0
 }
 
-type StateProofRequest struct {
+type ClientUpdatePayloadsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The light client this call is scoped to.
 	Client *Client `protobuf:"bytes,1,opt,name=client,proto3" json:"client,omitempty"`
@@ -243,20 +243,20 @@ type StateProofRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StateProofRequest) Reset() {
-	*x = StateProofRequest{}
+func (x *ClientUpdatePayloadsRequest) Reset() {
+	*x = ClientUpdatePayloadsRequest{}
 	mi := &file_prover_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StateProofRequest) String() string {
+func (x *ClientUpdatePayloadsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StateProofRequest) ProtoMessage() {}
+func (*ClientUpdatePayloadsRequest) ProtoMessage() {}
 
-func (x *StateProofRequest) ProtoReflect() protoreflect.Message {
+func (x *ClientUpdatePayloadsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_prover_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -268,47 +268,49 @@ func (x *StateProofRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StateProofRequest.ProtoReflect.Descriptor instead.
-func (*StateProofRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ClientUpdatePayloadsRequest.ProtoReflect.Descriptor instead.
+func (*ClientUpdatePayloadsRequest) Descriptor() ([]byte, []int) {
 	return file_prover_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *StateProofRequest) GetClient() *Client {
+func (x *ClientUpdatePayloadsRequest) GetClient() *Client {
 	if x != nil {
 		return x.Client
 	}
 	return nil
 }
 
-func (x *StateProofRequest) GetHeight() uint64 {
+func (x *ClientUpdatePayloadsRequest) GetHeight() uint64 {
 	if x != nil {
 		return x.Height
 	}
 	return 0
 }
 
-type StateProofResponse struct {
+type ClientUpdatePayloadsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The proof, opaque to the relayer and passed to the light client unchanged.
-	Proof         []byte `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`
+	// The encoded updates, each passed unchanged as one updateMsg and submitted
+	// in order before the packets. Empty when no update is needed; each entry is
+	// a non-empty updateMsg.
+	Payloads      [][]byte `protobuf:"bytes,1,rep,name=payloads,proto3" json:"payloads,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StateProofResponse) Reset() {
-	*x = StateProofResponse{}
+func (x *ClientUpdatePayloadsResponse) Reset() {
+	*x = ClientUpdatePayloadsResponse{}
 	mi := &file_prover_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StateProofResponse) String() string {
+func (x *ClientUpdatePayloadsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StateProofResponse) ProtoMessage() {}
+func (*ClientUpdatePayloadsResponse) ProtoMessage() {}
 
-func (x *StateProofResponse) ProtoReflect() protoreflect.Message {
+func (x *ClientUpdatePayloadsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_prover_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -320,14 +322,14 @@ func (x *StateProofResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StateProofResponse.ProtoReflect.Descriptor instead.
-func (*StateProofResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ClientUpdatePayloadsResponse.ProtoReflect.Descriptor instead.
+func (*ClientUpdatePayloadsResponse) Descriptor() ([]byte, []int) {
 	return file_prover_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *StateProofResponse) GetProof() []byte {
+func (x *ClientUpdatePayloadsResponse) GetPayloads() [][]byte {
 	if x != nil {
-		return x.Proof
+		return x.Payloads
 	}
 	return nil
 }
@@ -406,7 +408,9 @@ func (x *PacketProofsRequest) GetPackets() []*Packet {
 
 type PacketProofsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// One proof per requested packet, in request order.
+	// One proof per requested packet, in request order. The proofs of one
+	// response are submitted together in one transaction, in this order, so a
+	// prover may carry material the batch shares only in the first proof.
 	Proofs        [][]byte `protobuf:"bytes,1,rep,name=proofs,proto3" json:"proofs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -623,12 +627,12 @@ const file_prover_proto_rawDesc = "" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\"T\n" +
 	"\x1cLatestProvableHeightResponse\x12\x16\n" +
 	"\x06height\x18\x01 \x01(\x04R\x06height\x12\x1c\n" +
-	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\"Z\n" +
-	"\x11StateProofRequest\x12-\n" +
+	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\"d\n" +
+	"\x1bClientUpdatePayloadsRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
-	"\x06height\x18\x02 \x01(\x04R\x06height\"*\n" +
-	"\x12StateProofResponse\x12\x14\n" +
-	"\x05proof\x18\x01 \x01(\fR\x05proof\"\xbb\x01\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\":\n" +
+	"\x1cClientUpdatePayloadsResponse\x12\x1a\n" +
+	"\bpayloads\x18\x01 \x03(\fR\bpayloads\"\xbb\x01\n" +
 	"\x13PacketProofsRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12,\n" +
@@ -653,11 +657,10 @@ const file_prover_proto_rawDesc = "" +
 	"\x16PROOF_KIND_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cPROOF_KIND_PACKET_COMMITMENT\x10\x01\x12\x1e\n" +
 	"\x1aPROOF_KIND_ACKNOWLEDGEMENT\x10\x02\x12\x1e\n" +
-	"\x1aPROOF_KIND_RECEIPT_ABSENCE\x10\x032\xb2\x02\n" +
+	"\x1aPROOF_KIND_RECEIPT_ABSENCE\x10\x032\xd0\x02\n" +
 	"\rProverService\x12q\n" +
-	"\x14LatestProvableHeight\x12*.ibc.v2.prover.LatestProvableHeightRequest\x1a+.ibc.v2.prover.LatestProvableHeightResponse\"\x00\x12S\n" +
-	"\n" +
-	"StateProof\x12 .ibc.v2.prover.StateProofRequest\x1a!.ibc.v2.prover.StateProofResponse\"\x00\x12Y\n" +
+	"\x14LatestProvableHeight\x12*.ibc.v2.prover.LatestProvableHeightRequest\x1a+.ibc.v2.prover.LatestProvableHeightResponse\"\x00\x12q\n" +
+	"\x14ClientUpdatePayloads\x12*.ibc.v2.prover.ClientUpdatePayloadsRequest\x1a+.ibc.v2.prover.ClientUpdatePayloadsResponse\"\x00\x12Y\n" +
 	"\fPacketProofs\x12\".ibc.v2.prover.PacketProofsRequest\x1a#.ibc.v2.prover.PacketProofsResponse\"\x00B)Z'github.com/cosmos/ibc/cli/api/v2/proverb\x06proto3"
 
 var (
@@ -679,8 +682,8 @@ var file_prover_proto_goTypes = []any{
 	(*Client)(nil),                       // 1: ibc.v2.prover.Client
 	(*LatestProvableHeightRequest)(nil),  // 2: ibc.v2.prover.LatestProvableHeightRequest
 	(*LatestProvableHeightResponse)(nil), // 3: ibc.v2.prover.LatestProvableHeightResponse
-	(*StateProofRequest)(nil),            // 4: ibc.v2.prover.StateProofRequest
-	(*StateProofResponse)(nil),           // 5: ibc.v2.prover.StateProofResponse
+	(*ClientUpdatePayloadsRequest)(nil),  // 4: ibc.v2.prover.ClientUpdatePayloadsRequest
+	(*ClientUpdatePayloadsResponse)(nil), // 5: ibc.v2.prover.ClientUpdatePayloadsResponse
 	(*PacketProofsRequest)(nil),          // 6: ibc.v2.prover.PacketProofsRequest
 	(*PacketProofsResponse)(nil),         // 7: ibc.v2.prover.PacketProofsResponse
 	(*Packet)(nil),                       // 8: ibc.v2.prover.Packet
@@ -688,16 +691,16 @@ var file_prover_proto_goTypes = []any{
 }
 var file_prover_proto_depIdxs = []int32{
 	1, // 0: ibc.v2.prover.LatestProvableHeightRequest.client:type_name -> ibc.v2.prover.Client
-	1, // 1: ibc.v2.prover.StateProofRequest.client:type_name -> ibc.v2.prover.Client
+	1, // 1: ibc.v2.prover.ClientUpdatePayloadsRequest.client:type_name -> ibc.v2.prover.Client
 	1, // 2: ibc.v2.prover.PacketProofsRequest.client:type_name -> ibc.v2.prover.Client
 	0, // 3: ibc.v2.prover.PacketProofsRequest.kind:type_name -> ibc.v2.prover.ProofKind
 	8, // 4: ibc.v2.prover.PacketProofsRequest.packets:type_name -> ibc.v2.prover.Packet
 	9, // 5: ibc.v2.prover.Packet.payloads:type_name -> ibc.v2.prover.Payload
 	2, // 6: ibc.v2.prover.ProverService.LatestProvableHeight:input_type -> ibc.v2.prover.LatestProvableHeightRequest
-	4, // 7: ibc.v2.prover.ProverService.StateProof:input_type -> ibc.v2.prover.StateProofRequest
+	4, // 7: ibc.v2.prover.ProverService.ClientUpdatePayloads:input_type -> ibc.v2.prover.ClientUpdatePayloadsRequest
 	6, // 8: ibc.v2.prover.ProverService.PacketProofs:input_type -> ibc.v2.prover.PacketProofsRequest
 	3, // 9: ibc.v2.prover.ProverService.LatestProvableHeight:output_type -> ibc.v2.prover.LatestProvableHeightResponse
-	5, // 10: ibc.v2.prover.ProverService.StateProof:output_type -> ibc.v2.prover.StateProofResponse
+	5, // 10: ibc.v2.prover.ProverService.ClientUpdatePayloads:output_type -> ibc.v2.prover.ClientUpdatePayloadsResponse
 	7, // 11: ibc.v2.prover.ProverService.PacketProofs:output_type -> ibc.v2.prover.PacketProofsResponse
 	9, // [9:12] is the sub-list for method output_type
 	6, // [6:9] is the sub-list for method input_type

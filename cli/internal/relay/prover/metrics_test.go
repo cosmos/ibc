@@ -54,26 +54,29 @@ func TestInstrumentation(t *testing.T) {
 		assert.Equal(t, expectedHeightAttributes.ToSlice(), latestHeight.DataPoints[0].Attributes.ToSlice())
 	})
 
-	t.Run("stateProofRecordsFailedOperation", func(t *testing.T) {
+	t.Run("clientUpdatePayloadRecordsFailedOperation", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		reader := setTestMetrics(t)
 		prover := mocks.NewMockProver(t)
-		prover.EXPECT().StateProof(ctx, uint64(7)).Return(nil, errors.New("proof unavailable")).Once()
+		prover.EXPECT().
+			ClientUpdatePayloads(ctx, uint64(7)).
+			Return(nil, errors.New("client update payload unavailable")).
+			Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
-		proof, err := instrumented.StateProof(ctx, 7)
+		payload, err := instrumented.ClientUpdatePayloads(ctx, 7)
 
 		// ASSERT
-		require.ErrorContains(t, err, "proof unavailable")
-		assert.Nil(t, proof)
+		require.ErrorContains(t, err, "client update payload unavailable")
+		assert.Nil(t, payload)
 
 		collected := collectMetrics(ctx, t, reader)
 		operation := requireFloat64Histogram(t, collected, "prover_operation")
 		require.Len(t, operation.DataPoints, 1)
 		assert.Equal(t, uint64(1), operation.DataPoints[0].Count)
-		expectedAttributes := operationAttributes("state_proof", "error")
+		expectedAttributes := operationAttributes("client_update_payloads", "error")
 		assert.Equal(t, expectedAttributes.ToSlice(), operation.DataPoints[0].Attributes.ToSlice())
 	})
 

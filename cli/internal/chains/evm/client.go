@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
@@ -51,6 +50,13 @@ type ETHClient interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
+
+	GetProof(
+		ctx context.Context,
+		account common.Address,
+		keys []common.Hash,
+		blockNumber *big.Int,
+	) (accountProof [][]byte, storageProofs [][][]byte, err error)
 }
 
 // Client implements chains.Client for EVM chains.
@@ -66,12 +72,12 @@ type Client struct {
 
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	eth, err := ethclient.Dial(rpcURL)
+	rpcClient, err := rpc.Dial(rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
 
-	return newMeteredClient(chainID, eth), nil
+	return newMeteredClient(chainID, newRPCClient(rpcClient)), nil
 }
 
 // New dials the chain.
@@ -85,12 +91,12 @@ func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 
 	if wsURL != "" {
 		// ws is not metered
-		dialed, errDial := ethclient.Dial(wsURL)
+		dialed, errDial := rpc.Dial(wsURL)
 		if errDial != nil {
 			return nil, errors.Wrapf(errDial, "dialing websocket for chain %s", chainID)
 		}
 
-		ws = dialed
+		ws = newRPCClient(dialed)
 	}
 
 	return NewWithClients(chainID, eth, ws, ics26RouterAddress)
@@ -136,6 +142,11 @@ func NewWithClients(chainID string, eth, ws ETHClient, ics26RouterAddress string
 
 func (c *Client) ChainID() string {
 	return c.chainID
+}
+
+// RouterAddress returns the ICS26 router address.
+func (c *Client) RouterAddress() common.Address {
+	return c.routerAddress
 }
 
 func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.PacketEvent, error) {

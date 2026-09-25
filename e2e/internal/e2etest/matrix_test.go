@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -50,6 +51,17 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	}
 	if got := record.Spec.Chains; len(got) != 2 || got[0].Type != "Attached EVM" || got[1].Type != "Besu" {
 		t.Fatalf("sorted chain summary = %#v", got)
+	}
+
+	// new and existing Besu QBFT clients count alike, and never as attestors
+	qbft := summarizeSpec(environment.Spec{
+		Connections: []environment.ConnectionSpec{{
+			A: environment.NewBesuQBFTClient{},
+			B: environment.ExistingClient{Kind: clientkind.BesuQBFT},
+		}},
+	})
+	if qbft.BesuQBFTClients != 2 || qbft.Attestors != 0 {
+		t.Fatalf("besu qbft summary = %#v", qbft)
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 )
 
 // Generator implements prover.Prover for one configured
-// attestation light client: LatestProvableHeight/StateProof/PacketProofs all
+// attestation light client: LatestProvableHeight/ClientUpdatePayloads/PacketProofs all
 // query the same fixed attestor set with the same quorum threshold
 type Generator struct {
 	attestors         []attestor.Attestor
@@ -45,7 +45,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	return latestProvableHeight(ctx, g.logger, g.attestors, g.threshold, g.counterpartyChain)
 }
 
-func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, error) {
+func (g *Generator) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {
 	result, err := queryStateQuorum(ctx, g.logger, g.attestors, g.threshold, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying state attestation quorum")
@@ -64,12 +64,12 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 		)
 	}
 
-	proof, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
+	payload, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
 		return nil, errors.Wrap(err, "encoding state attestation proof")
 	}
 
-	return proof, nil
+	return [][]byte{payload}, nil
 }
 
 func (g *Generator) PacketProofs(

@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/pkg/logging"
 )
 
@@ -152,22 +151,38 @@ func init() {
 	dpf.BoolVar(&flagDeployDryRun, "dry-run", false, "print the step plan without submitting transactions")
 	dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")
 
-	cmdDeployClient.Flags().
-		StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
-	_ = cmdDeployClient.MarkFlagRequired("counterparty-chain")
-	cmdDeployClient.Flags().StringVar(&flagDeployClientType, "type", deploy.ClientTypeAttestation, "light client type")
-	cmdDeployClient.Flags().
-		StringSliceVar(&flagDeployAttestors, "attestors", nil,
-			"attestors for the new client: addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)")
-	cmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, "attestation signature threshold")
-	cmdDeployClient.Flags().
-		StringVar(&flagDeployClientID, "client-id", "", "client id (default: cli-<a>-<b>, chain ids sorted)")
-	cmdDeployClient.Flags().
-		StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "", "counterparty's client id (default: cli-<a>-<b>, chain ids sorted)")
-	cmdDeployClient.Flags().
-		Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
-	cmdDeployClient.Flags().
-		Uint64Var(&flagDeployTimestamp, "timestamp", 0, "initial trusted timestamp seconds (default: counterparty head)")
+	cmdDeployClient.AddCommand(cmdDeployClientAttestation, cmdDeployClientBesuQBFT)
+	for _, c := range []*cobra.Command{cmdDeployClientAttestation, cmdDeployClientBesuQBFT} {
+		c.Flags().
+			StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
+		_ = c.MarkFlagRequired("counterparty-chain")
+		c.Flags().StringVar(&flagDeployClientID, "client-id", "", "client id (default: cli-<a>-<b>, chain ids sorted)")
+		c.Flags().StringVar(&flagDeployCounterpartyCID, "counterparty-client-id", "",
+			"counterparty's client id (default: cli-<a>-<b>, chain ids sorted)")
+	}
+
+	daf := cmdDeployClientAttestation.Flags()
+	daf.StringSliceVar(
+		&flagDeployAttestors,
+		"attestors",
+		nil,
+		"attestors for the new client as addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)",
+	)
+	daf.Uint8Var(&flagDeployThreshold, "threshold", 1, "signature threshold")
+	daf.Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")
+	daf.Uint64Var(
+		&flagDeployTimestamp,
+		"timestamp",
+		0,
+		"initial trusted timestamp seconds (default: counterparty head)",
+	)
+
+	dbf := cmdDeployClientBesuQBFT.Flags()
+	dbf.DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0,
+		"positive trusted state lifetime in whole seconds")
+	_ = cmdDeployClientBesuQBFT.MarkFlagRequired(flagNameTrustingPeriod)
+	dbf.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, 60*time.Second,
+		"how far ahead of this chain's block time a counterparty header may be, in whole seconds")
 
 	cmdDeployRenderConfig.Flags().
 		StringVar(&flagDeployRenderSignerA, "signer-a", "", "Override the relay signer on chainA; omitted preserves existing settings")

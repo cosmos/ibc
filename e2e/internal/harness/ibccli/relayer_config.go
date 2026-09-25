@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box
-// binary. If Attestors is empty, one default local attestor per chain is used.
+// binary. An empty Attestors list runs without attestors.
 type RelayerConfig struct {
 	DBPath      string
 	SignerAlias string
@@ -24,7 +26,7 @@ type RelayerConfig struct {
 	// SignerRemoteKeyID is the opaque remote KMS key selector sent to GetKey
 	// and Sign. It is distinct from the signer alias and address.
 	SignerRemoteKeyID string
-	// SignerKeyFile backs the default local signer and default local attestors.
+	// SignerKeyFile backs the local transaction signer.
 	SignerKeyFile string
 	// FinalityOffset applies to local attestations and pipeline finality
 	// checks: heights up to "latest" minus the offset count as final. The dev
@@ -53,18 +55,21 @@ type RelayerChain struct {
 	PacketBatchTimeout time.Duration
 }
 
-// RelayerConnection is a reciprocal on-chain client pair. Clients are the
-// registered client identifiers (locators).
-type RelayerConnection struct {
-	ChainA     string
-	ClientA    string
-	ChainB     string
-	ClientB    string
-	AutoRelayA bool
-	AutoRelayB bool
+// RelayerClientEnd is a registered client and its endpoint relay policy.
+type RelayerClientEnd struct {
+	ChainID  string
+	ClientID string
+	// ClientType is required unless the connection uses a remote prover.
+	ClientType clientkind.Kind
+	AutoRelay  bool
+}
 
-	// ProverURL points both client ends at a ProverService. Empty keeps
-	// attestation.
+// RelayerConnection is a reciprocal on-chain client pair.
+type RelayerConnection struct {
+	A, B RelayerClientEnd
+
+	// ProverURL points both client ends at a ProverService, overriding the
+	// declared client types.
 	ProverURL string
 }
 
@@ -161,55 +166,41 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		})
 	}
 
-	if len(cfg.Attestors) == 0 {
-		for _, chain := range cfg.Chains {
-			addDefaultLocalAttestor(&file, processSigner, cfg.FinalityOffset, chain.ChainID)
-		}
-	} else {
-		for _, attestor := range cfg.Attestors {
-			if err := addAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
-				return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
-			}
+	for _, attestor := range cfg.Attestors {
+		if err := addAttestor(&file, cfg.FinalityOffset, attestor); err != nil {
+			return fileConfig{}, fmt.Errorf("attestor %q: %w", attestor.Name, err)
 		}
 	}
 
 	for _, connection := range cfg.Connections {
-		clientType := relayerClientAttestation
-
-		var params map[string]any
-
-		if connection.ProverURL != "" {
-			clientType = relayerClientRemote
-			params = map[string]any{"url": connection.ProverURL}
-		}
-
+		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
+		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
 		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
-			Alias: connection.ClientA + "-" + connection.ClientB,
-			ClientA: clientEndFileConfig{
-				ChainID:   connection.ChainA,
-				Signer:    cfg.SignerAlias,
-				ClientID:  connection.ClientA,
-				Type:      clientType,
-				Params:    params,
-				AutoRelay: autoRelay(connection.AutoRelayA),
-			},
-			ClientB: clientEndFileConfig{
-				ChainID:   connection.ChainB,
-				Signer:    cfg.SignerAlias,
-				ClientID:  connection.ClientB,
-				Type:      clientType,
-				Params:    params,
-				AutoRelay: autoRelay(connection.AutoRelayB),
-			},
+			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
+			ClientA: a,
+			ClientB: b,
 		})
 	}
 	return file, nil
 }
 
+func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clientEndFileConfig {
+	result := clientEndFileConfig{
+		ChainID:   end.ChainID,
+		ClientID:  end.ClientID,
+		Signer:    signer,
+		Type:      end.ClientType,
+		AutoRelay: autoRelay(end.AutoRelay),
+	}
+	if proverURL != "" {
+		result.Type = clientkind.Remote
+		result.Params = map[string]any{"url": proverURL}
+	}
+	return result
+}
+
 // addAttestor declares one explicitly-configured candidate attestor.
-// Local entries always bring their own key file, unlike the implicit
-// default (addDefaultLocalAttestor), so multiple local attestors don't
-// share a signing identity.
+// Local entries bring their own key file.
 func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
 	case RelayerAttestorRemote:
@@ -239,30 +230,8 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 	}
 }
 
-// addDefaultLocalAttestor declares the default local attestor for a chain,
-// backed by the relayer process's own signer.
-func addDefaultLocalAttestor(file *fileConfig, processSigner signerConfig, finalityOffset uint64, chainID string) {
-	name := localAttestorName(chainID)
-	signerAlias := name + "-signer"
-
-	signer := processSigner
-	signer.Alias = signerAlias
-	file.Signers = append(file.Signers, signer)
-	file.Attestors = append(file.Attestors, attestorFileConfig{
-		Name: name, ChainID: chainID, Type: RelayerAttestorLocal,
-		Signer: signerAlias, FinalityOffset: uint(finalityOffset),
-	})
-}
-
-func localAttestorName(chainID string) string {
-	return "local-attestor-" + chainID
-}
-
 const (
-	RelayerSignerLocal       = "local"
-	relayerClientAttestation = "attestation"
-	relayerClientRemote      = "remote"
-
+	RelayerSignerLocal    = "local"
 	RelayerSignerRemote   = "remote"
 	RelayerAttestorLocal  = "local"
 	RelayerAttestorRemote = "remote"
@@ -293,7 +262,7 @@ type clientEndFileConfig struct {
 	ChainID   string               `yaml:"chainId"`
 	Signer    string               `yaml:"signer"`
 	ClientID  string               `yaml:"clientId"`
-	Type      string               `yaml:"type"`
+	Type      clientkind.Kind      `yaml:"type"`
 	Params    map[string]any       `yaml:"params,omitempty"`
 	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
 }

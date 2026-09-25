@@ -151,22 +151,22 @@ func (h *handler) LatestProvableHeight(
 	}), nil
 }
 
-func (h *handler) StateProof(
+func (h *handler) ClientUpdatePayloads(
 	ctx context.Context,
-	req *connect.Request[proverv2.StateProofRequest],
-) (*connect.Response[proverv2.StateProofResponse], error) {
+	req *connect.Request[proverv2.ClientUpdatePayloadsRequest],
+) (*connect.Response[proverv2.ClientUpdatePayloadsResponse], error) {
 	target, err := h.prover(req.Msg.GetClient())
 	if err != nil {
 		return nil, err
 	}
 
-	proof, err := target.StateProof(ctx, req.Msg.GetHeight())
+	payloads, err := target.ClientUpdatePayloads(ctx, req.Msg.GetHeight())
 	if err != nil {
-		h.logger.Error("StateProof", "err", err)
+		h.logger.Error("ClientUpdatePayloads", "err", err)
 		return nil, errInternal
 	}
 
-	return connect.NewResponse(&proverv2.StateProofResponse{Proof: proof}), nil
+	return connect.NewResponse(&proverv2.ClientUpdatePayloadsResponse{Payloads: payloads}), nil
 }
 
 func (h *handler) PacketProofs(

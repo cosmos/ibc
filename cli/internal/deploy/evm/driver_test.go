@@ -4,13 +4,18 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"
+	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
 
 func TestAttestationArgs(t *testing.T) {
@@ -56,7 +61,6 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 		context.Background(),
 		common.Address{}.Hex(),
 		deploy.ClientSpec{
-			Type: deploy.ClientTypeAttestation,
 			Params: deploy.AttestationParams{
 				Attestors:        []string{"0x00000000000000000000000000000000000000aa"},
 				Threshold:        1,
@@ -66,4 +70,48 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 		},
 	)
 	require.ErrorContains(t, err, "no deployer signer configured")
+}
+
+func TestBesuQBFTHead(t *testing.T) {
+	ctx := context.Background()
+	update := besutest.MustFixture(t).AdjacentUpdate
+	var sealed types.Header
+	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &sealed))
+
+	t.Run("sealed head", func(t *testing.T) {
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&sealed, nil).Once()
+
+		height, state, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		require.NoError(t, err)
+		require.Equal(t, update.Height, height)
+		require.Equal(t, update.ExpectedConsensusState(), state)
+	})
+
+	t.Run("genesis head", func(t *testing.T) {
+		genesis := sealed
+		genesis.Number = big.NewInt(0)
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&genesis, nil).Once()
+
+		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		require.ErrorContains(t, err, "no block past genesis")
+	})
+
+	t.Run("not a besu header", func(t *testing.T) {
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).
+			Return(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}, nil).Once()
+
+		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		require.ErrorContains(t, err, "parse header latest: extra data list")
+	})
+
+	t.Run("rpc error", func(t *testing.T) {
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(nil, errors.New("boom")).Once()
+
+		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		require.ErrorContains(t, err, "getting header latest")
+	})
 }

@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
@@ -27,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
@@ -38,7 +41,10 @@ type backend interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
-var _ deploy.Target = (*Driver)(nil)
+var (
+	_ deploy.Target         = (*Driver)(nil)
+	_ deploy.BesuQBFTSource = (*Driver)(nil)
+)
 
 // Driver implements deploy.Target for EVM chains.
 type Driver struct {
@@ -80,7 +86,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 }
 
 func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation}
+	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesuQBFT}
 }
 
 // requireSigner errors if called on a driver built without a deployer
@@ -174,20 +180,26 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 	if err := d.requireSigner(); err != nil {
 		return deploy.ClientRef{}, err
 	}
-	if spec.Type != deploy.ClientTypeAttestation {
+	switch params := spec.Params.(type) {
+	case deploy.AttestationParams:
+		return d.provisionAttestation(ctx, router, spec.ClientID, params)
+	case deploy.BesuQBFTParams:
+		return d.provisionBesuQBFT(ctx, router, params)
+	default:
 		return deploy.ClientRef{}, fmt.Errorf(
-			"client type %q not supported (supported: %v)",
-			spec.Type,
+			"client params %T not supported (supported types: %v)",
+			spec.Params,
 			d.SupportedClientTypes(),
 		)
 	}
-	params, ok := spec.Params.(deploy.AttestationParams)
-	if !ok {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: params must be deploy.AttestationParams", spec.ClientID)
-	}
+}
+
+func (d *Driver) provisionAttestation(
+	ctx context.Context, router, clientID string, params deploy.AttestationParams,
+) (deploy.ClientRef, error) {
 	attestors, err := attestationArgs(params)
 	if err != nil {
-		return deploy.ClientRef{}, fmt.Errorf("client %q: %w", spec.ClientID, err)
+		return deploy.ClientRef{}, fmt.Errorf("client %q: %w", clientID, err)
 	}
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
@@ -209,6 +221,50 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 		return deploy.ClientRef{}, err
 	}
 	return deploy.ClientRef{Address: addr.Hex()}, nil
+}
+
+// provisionBesuQBFT deploys a Besu QBFT light client with this chain's router
+// as its role manager, so only router calls may update or query it.
+func (d *Driver) provisionBesuQBFT(
+	ctx context.Context, router string, params deploy.BesuQBFTParams,
+) (deploy.ClientRef, error) {
+	trusted := params.InitialConsensusState
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return deploy.ClientRef{}, err
+	}
+	addr, tx, _, err := besuqbft.DeployContract(
+		opts,
+		d.backend,
+		params.IBCRouter,
+		params.InitialHeight,
+		trusted.Timestamp,
+		trusted.StateRoot,
+		trusted.Validators,
+		params.TrustingPeriod,
+		params.MaxClockDrift,
+		common.HexToAddress(router),
+	)
+	if err != nil {
+		return deploy.ClientRef{}, fmt.Errorf("deploy besu-qbft client: %w", err)
+	}
+	if err := d.awaitMined(ctx, "deploy besu-qbft client", tx); err != nil {
+		return deploy.ClientRef{}, err
+	}
+	return deploy.ClientRef{Address: addr.Hex()}, nil
+}
+
+// BesuQBFTHead is this driver's chain head and the consensus state its sealed
+// header installs.
+func (d *Driver) BesuQBFTHead(ctx context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	header, err := besu.ReadSealedHeader(ctx, d.backend, nil)
+	if err != nil {
+		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, err
+	}
+	if header.Height == 0 {
+		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("no block past genesis to trust yet")
+	}
+	return header.Height, besu.ConsensusStateOf(header), nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

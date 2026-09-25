@@ -147,10 +147,20 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 				{ChainID: chainAID, RPC: chainARPC, ICS26Router: string(resolvedInstanceA.Locator())},
 				{ChainID: chainBID, RPC: chainBRPC, ICS26Router: string(resolvedInstanceB.Locator())},
 			},
-			Connections: []ibccli.RelayerConnection{{
-				ChainA: chainAID, ClientA: connection.A().ID(),
-				ChainB: chainBID, ClientB: connection.B().ID(),
-			}},
+			Connections: []ibccli.RelayerConnection{
+				{
+					A: ibccli.RelayerClientEnd{
+						ChainID:    chainAID,
+						ClientID:   connection.A().ID(),
+						ClientType: connection.A().Kind(),
+					},
+					B: ibccli.RelayerClientEnd{
+						ChainID:    chainBID,
+						ClientID:   connection.B().ID(),
+						ClientType: connection.B().Kind(),
+					},
+				},
+			},
 			Attestors: attestors,
 		}
 

@@ -16,7 +16,7 @@ import (
 
 // Validate exercises network-dependent config validation:
 // database reachability, on-chain counterparty registration for each
-// connection, and attestor quorum satisfaction.
+// connection, and prover construction for every client end.
 func Validate(ctx context.Context, cfg config.Config) error {
 	if err := store.ValidateConfigLive(cfg); err != nil {
 		return errors.Wrap(err, "db")
@@ -31,5 +31,5 @@ func Validate(ctx context.Context, cfg config.Config) error {
 		return errors.Wrap(err, "connections")
 	}
 
-	return checkAttestorQuorum(ctx, cfg, clientSet)
+	return checkProvers(ctx, cfg, clientSet)
 }

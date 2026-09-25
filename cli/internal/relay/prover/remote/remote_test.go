@@ -24,7 +24,7 @@ func TestProverRequestTimeout(t *testing.T) {
 	_, _, err := prover.LatestProvableHeight(ctx)
 	require.NoError(t, err)
 
-	_, err = prover.StateProof(ctx, 1)
+	_, err = prover.ClientUpdatePayloads(ctx, 1)
 	require.NoError(t, err)
 
 	_, err = prover.PacketProofs(ctx, 1, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{{Sequence: 1}})
@@ -43,12 +43,12 @@ func (c timeoutProverClient) LatestProvableHeight(
 	return connect.NewResponse(&proverv2.LatestProvableHeightResponse{}), nil
 }
 
-func (c timeoutProverClient) StateProof(
+func (c timeoutProverClient) ClientUpdatePayloads(
 	ctx context.Context,
-	_ *connect.Request[proverv2.StateProofRequest],
-) (*connect.Response[proverv2.StateProofResponse], error) {
+	_ *connect.Request[proverv2.ClientUpdatePayloadsRequest],
+) (*connect.Response[proverv2.ClientUpdatePayloadsResponse], error) {
 	c.requireDeadline(ctx)
-	return connect.NewResponse(&proverv2.StateProofResponse{}), nil
+	return connect.NewResponse(&proverv2.ClientUpdatePayloadsResponse{}), nil
 }
 
 func (c timeoutProverClient) PacketProofs(

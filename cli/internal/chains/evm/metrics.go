@@ -104,6 +104,19 @@ func (c *meteredClient) HeaderByNumber(ctx context.Context, number *big.Int) (*t
 	return header, err
 }
 
+func (c *meteredClient) GetProof(
+	ctx context.Context,
+	account common.Address,
+	keys []common.Hash,
+	blockNumber *big.Int,
+) ([][]byte, [][][]byte, error) {
+	started := time.Now()
+	accountProof, storageProofs, err := c.eth.GetProof(ctx, account, keys, blockNumber)
+	c.record(ctx, "eth_getProof", started, err)
+
+	return accountProof, storageProofs, err
+}
+
 func (c *meteredClient) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
 	started := time.Now()
 	code, err := c.eth.PendingCodeAt(ctx, account)

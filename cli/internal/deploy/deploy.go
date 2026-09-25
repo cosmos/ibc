@@ -7,11 +7,19 @@ package deploy
 import (
 	"context"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
-// ClientTypeAttestation is the only client type currently implemented.
-const ClientTypeAttestation = "attestation"
+// Client types the deploy engine can provision, named as the relayer config
+// does.
+const (
+	ClientTypeAttestation = string(config.ClientTypeAttestation)
+	ClientTypeBesuQBFT    = string(config.ClientTypeBesuQBFT)
+)
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under
 // (ICS27Lib.DEFAULT_PORT_ID). ICS27GMP.onRecvPacket requires this exact port,
@@ -23,6 +31,11 @@ type CoreParams struct {
 	ChainID string
 }
 
+// ClientParams are the constructor inputs of one client type.
+type ClientParams interface {
+	ClientType() string
+}
+
 // AttestationParams are the constructor inputs for an attestation client.
 type AttestationParams struct {
 	Attestors        []string
@@ -31,15 +44,39 @@ type AttestationParams struct {
 	InitialTimestamp uint64
 }
 
+// ClientType implements ClientParams.
+func (AttestationParams) ClientType() string { return ClientTypeAttestation }
+
+// BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
+// are in seconds.
+type BesuQBFTParams struct {
+	IBCRouter             common.Address
+	InitialHeight         uint64
+	InitialConsensusState besumsgs.IBesuLightClientMsgsConsensusState
+	TrustingPeriod        uint64
+	MaxClockDrift         uint64
+}
+
+// ClientType implements ClientParams.
+func (BesuQBFTParams) ClientType() string { return ClientTypeBesuQBFT }
+
+// BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
+// serve the consensus state of their head, which a new client tracking them
+// starts trusting.
+type BesuQBFTSource interface {
+	BesuQBFTHead(ctx context.Context) (height uint64, state besumsgs.IBesuLightClientMsgsConsensusState, err error)
+}
+
 // ClientSpec describes one light client to provision and register.
-// Params carries type-specific parameters (AttestationParams for "attestation").
 type ClientSpec struct {
 	ClientID             string
-	Type                 string
 	CounterpartyChainID  string
 	CounterpartyClientID string
-	Params               any
+	Params               ClientParams
 }
+
+// Type is the client type Params construct.
+func (s ClientSpec) Type() string { return s.Params.ClientType() }
 
 // CoreRef is the result of provisioning the core stack.
 type CoreRef struct {
@@ -128,8 +165,7 @@ type Target interface {
 	// Verify checks a manifest's recorded deployment against live chain
 	// state.
 	Verify(ctx context.Context, m *manifest.Manifest) (Report, error)
-	// SupportedClientTypes lists the client type names ProvisionClient
-	// accepts in ClientSpec.Type.
+	// SupportedClientTypes lists the client types ProvisionClient accepts.
 	SupportedClientTypes() []string
 	// ProvisionGMP deploys the ICS27-GMP app (account logic + impl + proxy).
 	ProvisionGMP(ctx context.Context, router, accessManager string) (GMPRef, error)

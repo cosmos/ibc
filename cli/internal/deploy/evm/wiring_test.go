@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -19,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
+	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
@@ -81,7 +86,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 
 	spec := deploy.ClientSpec{
 		ClientID:             "cli-2",
-		Type:                 deploy.ClientTypeAttestation,
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
 		Params: deploy.AttestationParams{
@@ -274,4 +278,62 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 	report, err = d.Verify(ctx, &broken)
 	require.NoError(t, err)
 	require.NotEmpty(t, report.Failed())
+}
+
+// A Besu QBFT client deploys from recorded params alone, registers like any
+// other client, and exposes its state through the reads the prover relies on.
+func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
+	d, sim, _ := newSimDriver(t)
+	ctx := context.Background()
+	fixture := besutest.MustFixture(t)
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+
+	spec := deploy.ClientSpec{
+		ClientID:             "besu-2",
+		CounterpartyChainID:  "2",
+		CounterpartyClientID: "besu-1",
+		Params: deploy.BesuQBFTParams{
+			IBCRouter:             fixture.RouterAddress,
+			InitialHeight:         fixture.InitialTrustedHeight,
+			InitialConsensusState: fixture.InitialConsensusState(),
+			TrustingPeriod:        fixture.TrustingPeriod,
+			MaxClockDrift:         fixture.MaxClockDrift,
+		},
+	}
+	ref, err := d.ProvisionClient(ctx, core.Router, spec)
+	require.NoError(t, err)
+
+	id, err := d.RegisterClient(ctx, core.Router, spec, ref)
+	require.NoError(t, err)
+	require.Equal(t, "besu-2", id)
+
+	m := manifest.New("1337", "evm")
+	m.Core.Router = core.Router
+	m.TargetData = core.TargetData
+	m.UpsertClient(manifest.Client{
+		ClientID: "besu-2", Type: deploy.ClientTypeBesuQBFT, Address: ref.Address, CounterpartyClientID: "besu-1",
+	})
+	report, err := d.Verify(ctx, m)
+	require.NoError(t, err)
+	require.Empty(t, report.Failed())
+
+	state, err := besu.ReadClientState(ctx, sim.Client(), common.HexToAddress(ref.Address))
+	require.NoError(t, err)
+	require.Equal(t, besumsgs.IBesuLightClientMsgsClientState{
+		IbcRouter:      fixture.RouterAddress,
+		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
+		TrustingPeriod: fixture.TrustingPeriod,
+		MaxClockDrift:  fixture.MaxClockDrift,
+	}, state)
+
+	lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
+	require.NoError(t, err)
+	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
+	require.NoError(t, err)
+
+	want, err := besutest.HashConsensusState(fixture.InitialConsensusState())
+	require.NoError(t, err)
+	require.Equal(t, want, common.Hash(hash))
 }

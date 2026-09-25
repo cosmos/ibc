@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package prover generates packet membership/non-membership proofs and
-// light-client state proofs. There is one implementation per light-client
+// light-client update payloads. There is one implementation per light-client
 // type.
 package prover
 
@@ -14,23 +14,27 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/chains"
+	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/besuqbft"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// Prover generates packet membership/non-membership proofs and state
-// proofs for one configured light client.
+// Prover generates packet membership/non-membership proofs and update
+// payloads for one configured light client.
 type Prover interface {
-	// LatestProvableHeight resolves the highest height a subsequent StateProof
+	// LatestProvableHeight resolves the highest height a subsequent ClientUpdatePayloads
 	// and PacketProofs call sharing that height can currently succeed at,
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// StateProof proves the light client's counterparty state at height.
-	StateProof(ctx context.Context, height uint64) ([]byte, error)
+	// ClientUpdatePayloads returns the encoded updateMsgs that bring the client
+	// to the counterparty state at height, submitted in order. Empty when the
+	// client already trusts height.
+	ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
@@ -43,7 +47,10 @@ type Prover interface {
 	) ([][]byte, error)
 }
 
-var _ Prover = (*attestation.Generator)(nil)
+var (
+	_ Prover = (*attestation.Generator)(nil)
+	_ Prover = (*besuqbft.Generator)(nil)
+)
 
 // Key identifies one configured light client by the chain it lives on and
 // its client id, the composite key Prover instances are scoped by.
@@ -137,6 +144,20 @@ func addGenerator(
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
+	case config.ClientTypeBesuQBFT:
+		gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
+		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
+			gen,
+			client.ChainID,
+			client.ClientID,
+			client.Type,
+		)
+
+		return nil
 	case config.ClientTypeRemote:
 		params, err := client.ClientParams()
 		if err != nil {
@@ -156,4 +177,37 @@ func addGenerator(
 	default:
 		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
 	}
+}
+
+func besuQBFTGenerator(
+	ctx context.Context,
+	self, counterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+) (*besuqbft.Generator, error) {
+	host, err := evmClient(clientSet, self.ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	counterpartyClient, err := evmClient(clientSet, counterparty.ChainID)
+	if err != nil {
+		return nil, err
+	}
+
+	return besuqbft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
+}
+
+// evmClient returns chainID's EVM client from clientSet.
+func evmClient(clientSet *chains.ClientSet, chainID string) (*evm.Client, error) {
+	client, ok := clientSet.Get(chainID)
+	if !ok {
+		return nil, errors.Errorf("no client for chain %q", chainID)
+	}
+
+	evmChain, ok := client.(*evm.Client)
+	if !ok {
+		return nil, errors.Errorf("chain %q is not an EVM chain", chainID)
+	}
+
+	return evmChain, nil
 }

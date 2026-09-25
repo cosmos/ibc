@@ -103,6 +103,13 @@ func TestMeteredClient(t *testing.T) {
 				call: func(c ETHClient) error { _, err := c.CallContract(ctx, ethereum.CallMsg{}, nil); return err },
 			},
 			{
+				operation: "eth_getProof",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().GetProof(ctx, address, []common.Hash{hash}, (*big.Int)(nil)).Return(nil, nil, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, _, err := c.GetProof(ctx, address, []common.Hash{hash}, nil); return err },
+			},
+			{
 				operation: "eth_getBlockByNumber",
 				expect: func(eth *mocks.MockETHClient) {
 					eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(nil, assert.AnError).Once()

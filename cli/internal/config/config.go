@@ -638,15 +638,21 @@ func (a Attestors) validateIdentities() error {
 }
 
 func (c EVMChainConfig) validateICS26Router() error {
+	_, err := ParseEVMAddress(c.ICS26Router)
+	return err
+}
+
+// ParseEVMAddress parses a required, nonzero hex EVM address.
+func ParseEVMAddress(s string) (common.Address, error) {
 	switch {
-	case c.ICS26Router == "":
-		return fmt.Errorf("required")
-	case !common.IsHexAddress(c.ICS26Router):
-		return fmt.Errorf("invalid EVM address %q", c.ICS26Router)
-	case common.HexToAddress(c.ICS26Router) == (common.Address{}):
-		return fmt.Errorf("must not be the zero address")
+	case s == "":
+		return common.Address{}, fmt.Errorf("required")
+	case !common.IsHexAddress(s):
+		return common.Address{}, fmt.Errorf("invalid EVM address %q", s)
+	case common.HexToAddress(s) == (common.Address{}):
+		return common.Address{}, fmt.Errorf("must not be the zero address")
 	default:
-		return nil
+		return common.HexToAddress(s), nil
 	}
 }
 

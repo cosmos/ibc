@@ -3,11 +3,15 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/config"
@@ -234,6 +238,122 @@ func captureStdout(t *testing.T, fn func()) string {
 	require.NoError(t, err)
 
 	return string(bz)
+}
+
+func TestRenderRelayConfigBesuQBFT(t *testing.T) {
+	a := manifest.New("1", "evm")
+	a.Core.Router = "0xrouterA"
+	a.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+	})
+	b := manifest.New("2", "evm")
+	b.Core.Router = "0xrouterB"
+	b.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+	})
+
+	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
+	require.NoError(t, err)
+	require.Len(t, out.Connections, 1)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
+	require.Empty(t, out.Connections[0].ClientA.Params)
+	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+}
+
+func TestBesuQBFTParamsFlags(t *testing.T) {
+	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
+	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
+	const router = "0x00000000000000000000000000000000000000bb"
+	for _, tc := range []struct {
+		name    string
+		period  time.Duration
+		drift   time.Duration
+		router  string
+		wantErr string
+	}{
+		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
+		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
+		{name: "finite", period: 2 * time.Hour, router: router},
+		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},
+		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router: invalid EVM address"},
+		{
+			name: "zero router", period: 2 * time.Hour,
+			router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router: must not be the zero address",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flagDeployTrustingPeriod, flagDeployMaxClockDrift = tc.period, time.Minute
+			if tc.drift != 0 {
+				flagDeployMaxClockDrift = tc.drift
+			}
+			source := &besuHeadTarget{}
+			params, err := besuQBFTParams(t.Context(), tc.router, source)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				require.False(t, source.called)
+				return
+			}
+			require.NoError(t, err)
+			require.True(t, source.called)
+			require.Equal(t, deploy.BesuQBFTParams{
+				IBCRouter:             common.HexToAddress(tc.router),
+				InitialHeight:         besuHeadHeight,
+				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
+				TrustingPeriod:        uint64(tc.period / time.Second),
+				MaxClockDrift:         60,
+			}, params)
+		})
+	}
+
+	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
+	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+}
+
+func TestWholeSeconds(t *testing.T) {
+	for _, tc := range []struct {
+		d       time.Duration
+		want    uint64
+		wantErr string
+	}{
+		{d: 2 * time.Hour, want: 7200},
+		{d: 0, want: 0},
+		{d: -time.Second, wantErr: "must not be negative"},
+		{d: 1500 * time.Millisecond, wantErr: "must be whole seconds"},
+	} {
+		got, err := wholeSeconds(tc.d)
+		if tc.wantErr != "" {
+			require.ErrorContains(t, err, tc.wantErr, tc.d)
+			continue
+		}
+		require.NoError(t, err, tc.d)
+		require.Equal(t, tc.want, got, tc.d)
+	}
+}
+
+const (
+	besuHeadHeight    = 112
+	besuHeadTimestamp = 1788200000
+)
+
+// besuHeadTarget is a Besu chain whose head is besuHeadHeight.
+type besuHeadTarget struct {
+	deploy.Target
+	called bool
+}
+
+func (t *besuHeadTarget) BesuQBFTHead(context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	t.called = true
+	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
+}
+
+// hostOnlyTarget is a chain that cannot serve Besu consensus states.
+type hostOnlyTarget struct {
+	deploy.Target
 }
 
 func TestRenderConfigRejectsDuplicateSignerAliasesBeforeRendering(t *testing.T) {
