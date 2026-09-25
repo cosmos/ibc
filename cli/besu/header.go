@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -77,20 +78,15 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	return header, nil
 }
 
-// HeaderReader reads block headers from a node.
-type HeaderReader interface {
-	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
-}
-
 // ReadSealedHeader reads and parses the Besu QBFT header at number, or the
 // head when number is nil.
-func ReadSealedHeader(ctx context.Context, reader HeaderReader, number *big.Int) (*ParsedHeader, error) {
+func ReadSealedHeader(ctx context.Context, backend bind.ContractBackend, number *big.Int) (*ParsedHeader, error) {
 	at := "latest"
 	if number != nil {
 		at = number.String()
 	}
 
-	header, err := reader.HeaderByNumber(ctx, number)
+	header, err := backend.HeaderByNumber(ctx, number)
 	if err != nil {
 		return nil, fmt.Errorf("getting header %s: %w", at, err)
 	}

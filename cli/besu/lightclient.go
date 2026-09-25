@@ -14,7 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var messageBindings = besumsgs.NewBindings()
+var (
+	messageBindings     = besumsgs.NewBindings()
+	ibcStoreStorageSlot = common.HexToHash(ics26router.IbcStoreStorageSlot)
+)
 
 // EncodeUpdateClient encodes the updateClient payload.
 func EncodeUpdateClient(msg besumsgs.IBesuLightClientMsgsMsgUpdateClient) ([]byte, error) {
@@ -37,8 +40,6 @@ func EncodeMembershipProof(proof besumsgs.IBesuLightClientMsgsMembershipProof) (
 
 	return data[4:], nil
 }
-
-var ibcStoreStorageSlot = common.HexToHash(ics26router.IbcStoreStorageSlot)
 
 // CommitmentSlot is the storage slot holding the commitment for a raw IBC
 // path: keccak256(abi.encode(keccak256(path), IbcStoreStorageSlot)). Pass it
