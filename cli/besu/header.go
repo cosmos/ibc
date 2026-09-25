@@ -93,7 +93,7 @@ func ReadSealedHeader(ctx context.Context, backend bind.ContractBackend, number 
 
 	parsed, err := ParseSealedHeader(header)
 	if err != nil {
-		return nil, fmt.Errorf("header %s is not a Besu QBFT header: %w", at, err)
+		return nil, fmt.Errorf("parse header %s: %w", at, err)
 	}
 
 	return parsed, nil

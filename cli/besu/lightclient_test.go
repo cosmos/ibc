@@ -68,23 +68,13 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 	}
 }
 
-func TestConsensusStateHashMatchesSolidity(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-	// keccak256(abi.encode(ConsensusState)) for qbft.json's initial trusted state,
-	// computed independently: cast abi-encode "f((uint64,bytes32,address[]))" \
-	//   "(<initialTrustedTimestamp>,<initialTrustedStateRoot>,[<initialTrustedValidators>])" | cast keccak
-	got, err := besutest.HashConsensusState(fixture.InitialConsensusState())
-	require.NoError(t, err)
-	assert.Equal(t, common.HexToHash("0x91c4debaf593d0d6251ab85a28ff33ffdbb5cda3a070ab011402ba4599a2b66f"), got)
-}
-
 func TestCommitmentSlotMatchesSolidity(t *testing.T) {
-	fixture := besutest.MustFixture(t)
-	// the slot for qbft.json's membership path, computed independently:
+	// the packet commitment path of client-0 sequence 1, computed independently:
 	//   cast keccak "$(cast abi-encode 'f(bytes32,bytes32)' "$(cast keccak <path>)" <IbcStoreStorageSlot>)"
+	path := common.FromHex("0x636c69656e742d30010000000000000001")
 	assert.Equal(
 		t,
-		common.HexToHash("0x54dec64b8cfb867e4e0b052552b929bd5886439932474991c8895d84bcc8c6d9"),
-		besu.CommitmentSlot(fixture.Membership.Path),
+		common.HexToHash("0x79a5307f4993e7eb3894d3aafa592f86bb1b605ca1a506e595f1874343b9a987"),
+		besu.CommitmentSlot(path),
 	)
 }

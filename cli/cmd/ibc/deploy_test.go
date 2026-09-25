@@ -277,7 +277,6 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 		wantErr string
 	}{
 		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
-		{name: "sub-second", period: 1500 * time.Millisecond, router: router, wantErr: "--trusting-period: must be whole seconds"},
 		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
 		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},

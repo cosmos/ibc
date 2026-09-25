@@ -24,6 +24,18 @@ func (e revertError) Error() string  { return "execution reverted" }
 func (e revertError) ErrorCode() int { return e.code }
 func (e revertError) ErrorData() any { return e.data }
 
+// revertData is the hex revert data of the named custom error.
+func revertData(t *testing.T, metadata *bind.MetaData, name string, args ...any) string {
+	t.Helper()
+	contractABI, err := metadata.GetAbi()
+	require.NoError(t, err)
+	customErr, ok := contractABI.Errors[name]
+	require.True(t, ok)
+	packed, err := customErr.Inputs.Pack(args...)
+	require.NoError(t, err)
+	return hexutil.Encode(append(customErr.ID[:4], packed...))
+}
+
 func TestExplainRevert(t *testing.T) {
 	for _, tc := range []struct {
 		metadata *bind.MetaData
@@ -40,17 +52,10 @@ func TestExplainRevert(t *testing.T) {
 		},
 	} {
 		t.Run("names "+tc.name, func(t *testing.T) {
-			contractABI, err := tc.metadata.GetAbi()
-			require.NoError(t, err)
-			customErr, ok := contractABI.Errors[tc.name]
-			require.True(t, ok)
-			args, err := customErr.Inputs.Pack(tc.args...)
-			require.NoError(t, err)
-
-			data := hexutil.Encode(append(customErr.ID[:4], args...))
+			data := revertData(t, tc.metadata, tc.name, tc.args...)
 			// geth and Besu 26.x use code 3, older Besu -32000
 			for _, code := range []int{3, -32000} {
-				err = explainRevert(revertError{code: code, data: data})
+				err := explainRevert(revertError{code: code, data: data})
 				require.EqualError(t, err, tc.want+": execution reverted")
 			}
 		})

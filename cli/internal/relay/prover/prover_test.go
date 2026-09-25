@@ -125,22 +125,6 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 		ClientB: config.ClientEnd{ChainID: "2", Signer: "relayer", ClientID: "besu-a", Type: config.ClientTypeBesuQBFT},
 	}
 	cfg := config.Config{
-		Chains: config.Chains{
-			{
-				ChainID: "1",
-				EVM: &config.EVMChainConfig{
-					RPC:         "http://a",
-					ICS26Router: "0x00000000000000000000000000000000000000aa",
-				},
-			},
-			{
-				ChainID: "2",
-				EVM: &config.EVMChainConfig{
-					RPC:         "http://b",
-					ICS26Router: "0x00000000000000000000000000000000000000bb",
-				},
-			},
-		},
 		Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
 	}
 

@@ -104,7 +104,7 @@ func TestBesuQBFTHead(t *testing.T) {
 			Return(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}, nil).Once()
 
 		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
-		require.ErrorContains(t, err, "not a Besu QBFT header")
+		require.ErrorContains(t, err, "parse header latest: extra data list")
 	})
 
 	t.Run("rpc error", func(t *testing.T) {

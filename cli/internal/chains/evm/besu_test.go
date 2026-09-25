@@ -25,7 +25,7 @@ func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).Return(header, nil).Once()
 
 	_, err := client.SealedHeader(ctx, 7)
-	require.ErrorContains(t, err, "not a Besu QBFT header")
+	require.ErrorContains(t, err, "parse header 7: extra data list")
 }
 
 func TestBesuQBFTClientState(t *testing.T) {

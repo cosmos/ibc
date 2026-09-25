@@ -194,7 +194,10 @@ func (e *fixtureEnv) expectProofAt(
 ) {
 	t.Helper()
 	e.counterparty.sealed[update.Height] = parsedUpdate(t, update)
-	e.counterparty.proof = func(_ uint64, slots []common.Hash) (evm.RouterProof, error) {
+	e.counterparty.proof = func(height uint64, slots []common.Hash) (evm.RouterProof, error) {
+		if height != update.Height {
+			return evm.RouterProof{}, fmt.Errorf("router proof at %d, want %d", height, update.Height)
+		}
 		proof := evm.RouterProof{AccountProof: accountNodes(t, e.fixture.Membership)}
 		for _, slot := range slots {
 			proof.StorageProofs = append(proof.StorageProofs, nodesFor(slot))
@@ -301,7 +304,7 @@ func TestPacketProofs(t *testing.T) {
 // rejects a header beyond maxClockDrift at simulation.
 func TestLatestProvableHeightReturnsHead(t *testing.T) {
 	env := newFixtureEnv(t)
-	head := time.Unix(int64(env.fixture.InitialTrustedTimestamp), 0).UTC() //nolint:gosec // fixture timestamp
+	head := time.Now().Add(time.Hour).Truncate(time.Second).UTC()
 	env.counterparty.latest = &v2.BlockHeader{Height: env.fixture.InitialTrustedHeight + 50, Timestamp: head}
 
 	height, ts, err := env.gen.LatestProvableHeight(t.Context())

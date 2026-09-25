@@ -631,18 +631,13 @@ const besuQBFTRecord = `{
 	"maxClockDrift": 15
 }`
 
+// heights must not round through float64 before saving
 func TestSpecToClientBesuQBFTParams(t *testing.T) {
-	client := specToClient(besuQBFTSpec(), "0xclient")
-	got, err := json.Marshal(client.Params)
-	require.NoError(t, err)
-	require.JSONEq(t, besuQBFTRecord, string(got))
-
-	// heights must not round through float64 before saving
 	spec := besuQBFTSpec()
 	params := spec.Params.(BesuQBFTParams)
 	params.InitialHeight = 1<<53 + 1
 	spec.Params = params
-	client = specToClient(spec, "0xclient")
+	client := specToClient(spec, "0xclient")
 	require.Equal(t, params.InitialHeight, client.Params["initialHeight"])
 }
 

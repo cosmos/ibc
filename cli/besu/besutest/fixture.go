@@ -22,8 +22,9 @@ import (
 )
 
 // qbftFixtureJSON is ibc-solidity/test/besu-bft/fixtures/qbft.json from
-// ibc-contracts: real headers, account proofs and storage proofs captured from
-// a four-validator Besu QBFT chain during an e2e transfer.
+// ibc-contracts at the go-abigen commit (make sync-besu-fixture): headers and
+// proofs captured from a four-validator Besu QBFT chain during an e2e
+// transfer, plus synthetic updates for the negative Solidity cases.
 //
 //go:embed testdata/qbft.json
 var qbftFixtureJSON []byte
@@ -50,8 +51,8 @@ type Fixture struct {
 	NonMembership MembershipFixture `json:"nonMembership"`
 }
 
-// UpdateFixture is one header update used by Go tests. Negative Solidity
-// cases (lowOverlap/conflicting) remain in qbft.json but are not decoded here.
+// UpdateFixture is one header update used by Go tests. The negative Solidity
+// cases remain in qbft.json but are not decoded here.
 type UpdateFixture struct {
 	Height             uint64           `json:"height"`
 	HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
@@ -63,12 +64,11 @@ type UpdateFixture struct {
 
 // MembershipFixture is one storage proof with the account proof that anchors
 // it to the state root of NonAdjacentUpdate's header, the height both proofs
-// were captured at. Value is empty for non-membership.
+// were captured at.
 type MembershipFixture struct {
 	Proof        hexutil.Bytes `json:"proof"`        // abi.encode(bytes[]) of the storage proof nodes
 	AccountProof hexutil.Bytes `json:"accountProof"` // abi.encode(bytes[]) of the account proof nodes
 	Path         hexutil.Bytes `json:"path"`
-	Value        hexutil.Bytes `json:"value"`
 }
 
 // LoadFixture decodes the embedded qbft.json.
