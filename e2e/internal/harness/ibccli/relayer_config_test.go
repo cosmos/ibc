@@ -77,6 +77,19 @@ signers:
 `, string(data))
 }
 
+func TestBuildRelayerConfigEnablesOTELObservability(t *testing.T) {
+	config := testRelayerConfig()
+	config.Observability = true
+
+	file, err := buildRelayerFileConfig(config)
+	require.NoError(t, err)
+	require.Equal(t, observabilityConfig{
+		Metrics:  true,
+		Type:     observabilityTypeOTEL,
+		OtelFile: defaultOTELConfigPath(),
+	}, file.Observability)
+}
+
 func TestClientEndsOptOutOfAutoRelay(t *testing.T) {
 	cfg := testRelayerConfig()
 	cfg.Connections[0].AutoRelayA = false

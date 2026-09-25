@@ -369,6 +369,7 @@ func buildConfig(
 	dbPath string,
 ) (ibccli.RelayerConfig, ibccli.RelayerOptions) {
 	t.Helper()
+
 	config := ibccli.RelayerConfig{
 		DBPath:         dbPath,
 		SignerAlias:    relayerSignerAlias,
@@ -376,12 +377,17 @@ func buildConfig(
 		FinalityOffset: ibccli.HarnessFinalityOffset,
 		ClearOnStart:   false,
 		ClearInterval:  5 * time.Second,
+		Observability:  env.ObservabilityEnabled(),
 	}
+
+	chains := env.Chains()
 	options := ibccli.RelayerOptions{
-		ChainIDs:     make(map[string]string, len(env.Chains())),
-		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
+		ChainIDs:      make(map[string]string, len(chains)),
+		WaitPolicies:  make(map[string]ibccli.WaitPolicy, len(routes)),
+		Observability: env.ObservabilityEnabled(),
 	}
-	for _, id := range env.Chains() {
+
+	for _, id := range chains {
 		chain, err := env.Chain(id)
 		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		rpc, err := driver.ChainRPC(string(id))

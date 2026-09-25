@@ -507,6 +507,7 @@ func acquireAttestor(
 		SignerRemoteKeyID: binding.SignerRemoteKeyID,
 		RPCURL:            dependencies.observed.chain.rpcURL,
 		ICS26Router:       string(dependencies.observed.locator),
+		Observability:     ibccli.ObservabilityEnabled(ctx),
 	}
 	if binding.SignerGRPC == "" {
 		launch.PrivateKeyHex = binding.PrivateKeyHex

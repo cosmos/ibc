@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 const (
@@ -205,7 +206,7 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 	return chains
 }
 
-func guardLoadTest(t testing.TB) {
+func guardLoadTest(t testing.TB) bool {
 	isLoadTest := strings.HasPrefix(t.Name(), testLoadPrefix)
 
 	wantLoadTest, err := resolveLoadTest(*loadFlag, os.Getenv(envLoad))
@@ -220,6 +221,8 @@ func guardLoadTest(t testing.TB) {
 	}
 
 	// expected invariants
+
+	return isLoadTest
 }
 
 // RuntimeWithProtocolDeployer returns runtime with the protocol deployer
@@ -252,9 +255,10 @@ func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *en
 		return nil
 	}
 
-	guardLoadTest(t)
+	isLoadTest := guardLoadTest(t)
+	ctx := ibccli.WithObservability(t.Context(), isLoadTest)
 
-	env, err := environment.Start(t.Context(), spec, runtime)
+	env, err := environment.Start(ctx, spec, runtime)
 	require.NoError(t, err, "e2etest: start Environment")
 
 	t.Cleanup(func() {

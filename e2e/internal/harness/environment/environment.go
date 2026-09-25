@@ -21,7 +21,8 @@ type Environment struct {
 	effects *effectJournal
 	ws      workspace
 
-	lease *environmentLease
+	lease         *environmentLease
+	observability bool
 
 	closeMu sync.Mutex
 	closed  bool
@@ -29,6 +30,10 @@ type Environment struct {
 
 func (e *Environment) RunID() string {
 	return e.ws.runID
+}
+
+func (e *Environment) ObservabilityEnabled() bool {
+	return e.observability
 }
 
 func (e *Environment) Chain(id ChainID) (*Chain, error) {

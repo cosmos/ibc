@@ -39,7 +39,8 @@ test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, fo
 	forge build $(FORGE_BUILD_FLAGS) --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	../scripts/generate-contract-bindings.sh
 
-test: _build-cli ## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=...)
+## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=...)
+test: _build-cli _ensure-observability-stack
 	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
 	E2E_MODE=$(E2E_MODE) E2E_LOAD=$(E2E_LOAD) go test . -timeout 60m -parallel 4 $(E2E_FLAGS)
 
@@ -85,8 +86,14 @@ run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 _build-cli:
 	$(MAKE) -C ../cli build build-test-bin
 
+_ensure-observability-stack:
+ifeq ($(E2E_LOAD),true)
+	@echo "==== Ensuring observability stack is running ===="
+	$(MAKE) -C ../cli/scripts/otel up
+endif
+
 .PHONY: help doctor doctor-tools lint lint-fix
 .PHONY: test-harness test-apps test
 .PHONY: generate-matrix check-matrix
 .PHONY:	clean clean-dry-run check-stale run-all-checks
-.PHONY: _build-cli
+.PHONY: _build-cli _ensure-observability-stack

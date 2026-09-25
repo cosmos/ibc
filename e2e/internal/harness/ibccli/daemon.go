@@ -50,6 +50,8 @@ type RelayerOptions struct {
 	ChainIDs map[string]string
 	// WaitPolicies maps route identifiers to their end-to-end packet wait policy.
 	WaitPolicies map[string]WaitPolicy
+
+	Observability bool
 }
 
 type Relayer struct {
@@ -85,6 +87,8 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.Env = processEnv
+	otelEnvApply(cmd, opts.Observability, "relayer")
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Structured stderr logs carry readiness and land in relayer.log for post-mortems.
