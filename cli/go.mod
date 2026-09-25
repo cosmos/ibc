@@ -61,7 +61,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cockroachdb/crlib v0.0.0-20241112164430-1264a2edc35b // indirect
 	github.com/cockroachdb/pebble/v2 v2.1.4 // indirect
-	github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b // indirect
+	github.com/cockroachdb/swiss v0.0.0-20260820225851-333444432258 // indirect
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/cosmos/btree v1.0.0 // indirect
