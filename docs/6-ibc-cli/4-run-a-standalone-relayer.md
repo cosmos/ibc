@@ -102,7 +102,7 @@ EOF
 ```
 
 ```
-level=INFO msg="Migrated database" module=bootstrap migrations_applied=4
+level=INFO msg="Migrated database" module=bootstrap migrations_applied=3
 level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg="Subscribed to send packets" module=bootstrap module=watcher chainID=41001 clientIDs=[cli-41001-41002]
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3002}"

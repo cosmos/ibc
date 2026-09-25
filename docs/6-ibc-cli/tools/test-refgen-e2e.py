@@ -306,12 +306,11 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/config.go",
-                 '\toriginalFilePath string\n',
-                 '\tMetrics MetricsConfig `yaml:"metrics"`\n\n'
-                 '\toriginalFilePath string\n')
-        box.append("cli/internal/config/config.go",
-                   '\ntype MetricsConfig struct {\n'
-                   '\tListenAddress string `yaml:"listenAddr"`\n}\n')
+                 '\tSigners   Signers       `yaml:"signers"`\n}',
+                 '\tSigners   Signers       `yaml:"signers"`\n'
+                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n}\n\n'
+                 'type MetricsConfig struct {\n'
+                 '\tListenAddress string `yaml:"listenAddr"`\n}')
         page = box.page("config", own=True)
         try:
             refgen.run("config", page, check=True)
@@ -325,14 +324,13 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/config.go",
-                 '\toriginalFilePath string\n',
-                 '\tMetrics MetricsConfig `yaml:"metrics"`\n\n'
-                 '\toriginalFilePath string\n')
-        box.append("cli/internal/config/config.go",
-                   '\n// MetricsConfig config for the metrics endpoint.\n'
-                   'type MetricsConfig struct {\n'
-                   '\t// ListenAddress is where metrics are served.\n'
-                   '\tListenAddress string `yaml:"listenAddr"`\n}\n')
+                 '\tSigners   Signers       `yaml:"signers"`\n}',
+                 '\tSigners   Signers       `yaml:"signers"`\n'
+                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n}\n\n'
+                 '// MetricsConfig config for the metrics endpoint.\n'
+                 'type MetricsConfig struct {\n'
+                 '\t// ListenAddress is where metrics are served.\n'
+                 '\tListenAddress string `yaml:"listenAddr"`\n}')
         page = box.page("config", own=True)
         p = refgen.plan("config", page)
         new = [m for m in p["missing_marker"] if m["region"] == "config:metrics"]

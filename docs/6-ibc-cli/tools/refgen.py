@@ -552,8 +552,6 @@ CONFIG_ROOT = "Config"
 DEFAULT_CONSTS = {
     ("RelayerConfig", "DispatchPollInterval"): [
         ("", "cli/internal/relay/dispatch/dispatcher.go", "DefaultPollInterval")],
-    ("RelayerConfig", "ClearInterval"): [
-        ("", "cli/internal/config/relayer.go", "DefaultClearInterval")],
     ("RelayerChainOverride", "TxSubmissionDelay"): [
         ("", "cli/internal/txsubmitter/evm/evm.go", "DefaultTxSubmissionDelay")],
     ("RelayerChainOverride", "PacketBatchSize"): [
@@ -589,8 +587,6 @@ FALLBACK_DOCS = {
     ("AttestorConfig", "Type"): ("Whether this process runs the attestor or queries it.", "a58f9a4e"),
     ("SignerConfig", "Type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
     ("RelayerConfig", "DispatchPollInterval"): ("How often the dispatcher polls the store for unfinished packets.", "893f79b1"),
-    ("RelayerConfig", "ClearOnStart"): ("Whether a clearing pass runs at startup. Defaults to true; `ibc relayer run --clear-on-start=false` overrides it for that process.", "b806b578"),
-    ("RelayerConfig", "ClearInterval"): ("How often a clearing pass runs after startup. Overridable per chain.", "024c8c0c"),
     ("RelayerChainOverride", "ChainID"): ("The chain these settings apply to.", "69a3e543"),
     ("RelayerChainOverride", "TxSubmissionDelay"): ("Minimum delay between two transaction submissions on the chain.", "5691fa23"),
     ("RelayerChainOverride", "PacketBatchSize"): ("How many packets the relayer puts in one transaction.", "b4f4f14c"),
@@ -609,15 +605,13 @@ FALLBACK_DOCS = {
 # in parse_go_config and never reach here.
 SKIP_FIELDS = set()
 
-# Pointer fields without a named default constant. The prose describes what
-# unset means so that a new pointer field cannot silently lose its default.
+# Pointer fields whose default is not a named constant anywhere: unset means
+# unset, and the prose says what that implies. Listed so that a new pointer
+# field cannot quietly read as "optional" when a default exists for it.
 NO_NAMED_DEFAULT = {
     # nil and false are the same input: a connection end without it is not
     # auto-relayed (relayer.go:L127)
     ("AutoRelayConfig", "Enabled"),
-    ("RelayerConfig", "ClearOnStart"),
-    ("RelayerChainOverride", "ClearInterval"),
-    ("RelayerChainOverride", "AbandonUnrecoverablePackets"),
     ("RelayerEVMConfig", "GasFeeCapMultiplier"),
     ("RelayerEVMConfig", "GasTipCapMultiplier"),
 }

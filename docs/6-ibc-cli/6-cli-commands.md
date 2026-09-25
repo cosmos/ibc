@@ -52,7 +52,7 @@ Add a chain entry to the config.
 ibc config add-chain --chain-id 41001 --rpc http://localhost:8545
 ```
 
-Leave `--router` out until the chain has a router to point at. `ibc deploy render-config` prints the complete config with router addresses filled in from the manifests. Add `--populate-config` to save it.
+Leave `--router` out until the chain has a router to point at. `ibc deploy render-config` prints the finished chain entries, with the router addresses filled in from the manifests.
 
 ### `ibc config new`
 
@@ -192,7 +192,7 @@ Deploy and register a light client tracking a counterparty chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L155](cli/cmd/ibc/main.go#L155) -->
+<!-- [main.go:L152](cli/cmd/ibc/main.go#L152) -->
 
 <!-- GEN:cli:cmd:deploy-client END -->
 
@@ -257,7 +257,7 @@ Deploy an IFT token on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
+<!-- [main.go:L177](cli/cmd/ibc/main.go#L177) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -286,7 +286,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L186](cli/cmd/ibc/main.go#L186) -->
+<!-- [main.go:L183](cli/cmd/ibc/main.go#L183) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -311,7 +311,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L172](cli/cmd/ibc/main.go#L172) -->
+<!-- [main.go:L169](cli/cmd/ibc/main.go#L169) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -397,7 +397,6 @@ Run the relayer.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--clear-on-start` | `true` | Clear outstanding packets at startup. |
 | `--no-migrate` |  | Skip database migrations. |
 
 <!-- [main.go:L89](cli/cmd/ibc/main.go#L89) -->
@@ -450,7 +449,7 @@ Query a local attestor's identity.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
+<!-- [main.go:L118](cli/cmd/ibc/main.go#L118) -->
 
 <!-- GEN:cli:cmd:attestor-info END -->
 
@@ -464,7 +463,7 @@ Query a local attestor's latest attestable height.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
+<!-- [main.go:L118](cli/cmd/ibc/main.go#L118) -->
 
 <!-- GEN:cli:cmd:attestor-latest-height END -->
 
@@ -489,7 +488,7 @@ Query a local attestor for a state attestation at `--height`.
 | `--height <uint>` |  | Height to attest. |
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L124](cli/cmd/ibc/main.go#L124) -->
+<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
 
 <!-- GEN:cli:cmd:attestor-state-attestation END -->
 
@@ -511,7 +510,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L212](cli/cmd/ibc/main.go#L212) -->
+<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -531,7 +530,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L217](cli/cmd/ibc/main.go#L217) -->
+<!-- [main.go:L214](cli/cmd/ibc/main.go#L214) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
@@ -558,7 +557,7 @@ Query an address's IFT token balance.
 | `--chain <string>` | required | Chain ID the IFT token is deployed on. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L135](cli/cmd/ibc/main.go#L135) -->
+<!-- [main.go:L132](cli/cmd/ibc/main.go#L132) -->
 
 <!-- GEN:cli:cmd:query-ift-balance END -->
 
