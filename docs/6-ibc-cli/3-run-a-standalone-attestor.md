@@ -62,7 +62,7 @@ signers:
 EOF
 ```
 
-An attestor's name is `attestor-<chain it watches>`.
+The name is yours to choose; it is how a relayer addresses this attestor. This guide uses `attestor-<chain it watches>`. `deploy render-config` generates a longer form of its own, `attestor-<chain>-<signing address>`, so a name you write by hand will not match the one in the config the tutorial generated.
 
 > **Warning:** The attestor's name has to match the name the relayer uses for it. A relayer sends that name in every query, and the process serves its attestors by name, so a mismatch makes every lookup fail.
 

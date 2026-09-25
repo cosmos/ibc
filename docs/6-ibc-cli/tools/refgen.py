@@ -71,8 +71,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 # upstream layout: this file is docs/6-ibc-cli/tools/refgen.py, so the repo root
 # is three levels up, and the source it reads is the working tree itself
@@ -141,6 +143,27 @@ def outside(text, regions):
     return "".join(out)
 
 
+FRONTMATTER = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n", re.S)
+
+
+def _check_notice_placement(text, path):
+    """The notice must not sit above a page's frontmatter.
+
+    Frontmatter is only frontmatter when it starts at the first byte. A marker
+    pair above it turns `title:` into body text and the `---` into a rule, so
+    the page loses its title rather than gaining a notice.
+    """
+    if FRONTMATTER.match(text):
+        return                      # frontmatter is where it must be
+    without = re.sub(r"\s*<!-- GEN:notice START -->.*?<!-- GEN:notice END -->\s*",
+                     "", text, flags=re.S).lstrip()
+    if FRONTMATTER.match(without):
+        raise MarkerError(
+            f"{path}: the GEN:notice marker sits above the page's frontmatter, "
+            "which stops the frontmatter being frontmatter -- the title becomes "
+            "body text. Move the marker pair below the closing `---`.")
+
+
 def render(text, blocks):
     """Replace region bodies from {id: body}. Unknown ids on the page are an
     error; a generator that produces nothing for a marker is a bug, not a
@@ -180,175 +203,230 @@ def table(headers, rows):
 
 
 def cite(path, start, end=None):
-    rng = f"L{start}" if end is None or end == start else f"L{start}-L{end}"
     open_, close = COMMENT
+    if start is None:
+        # the line could not be located; the file still points a reader at the
+        # right place, and a citation is never worth failing a run over
+        return f"{open_} [{os.path.basename(path)}]({path}) {close}"
+    rng = f"L{start}" if end is None or end == start else f"L{start}-L{end}"
     return f"{open_} [{os.path.basename(path)}:{rng}]({path}#{rng}) {close}"
 
 
-# ---------------------------------------------------------------- proto -> api
+_DESCRIPTOR = {}
+
+# scalar type enum -> the word the .proto author wrote
+_PROTO_SCALARS = {
+    "TYPE_DOUBLE": "double", "TYPE_FLOAT": "float", "TYPE_INT64": "int64",
+    "TYPE_UINT64": "uint64", "TYPE_INT32": "int32", "TYPE_FIXED64": "fixed64",
+    "TYPE_FIXED32": "fixed32", "TYPE_BOOL": "bool", "TYPE_STRING": "string",
+    "TYPE_BYTES": "bytes", "TYPE_UINT32": "uint32", "TYPE_SFIXED32": "sfixed32",
+    "TYPE_SFIXED64": "sfixed64", "TYPE_SINT32": "sint32", "TYPE_SINT64": "sint64",
+}
 
 
-def _decl_blocks(src):
-    """Yield (kind, name, line_no, doc, body) for every top-level proto decl.
+def _buf_descriptor():
+    """Every proto in the repo, compiled, with source info. Built once.
 
-    Brace-aware, so a message written on one line and a message with a body
-    are handled by the same code. The earlier line-scanning version read
-    forward past a one-line message and stole the next message's fields.
+    Requires `buf` on PATH. It is not optional and there is no text-parsing
+    fallback: a fallback that reads the schema less well than the compiler is
+    how a page goes quietly wrong when the schema grows a construct.
     """
-    lines = src.split("\n")
-    doc, i = [], 0
-    decl = re.compile(r"^(service|message|enum)\s+(\w+)\s*\{")
-    while i < len(lines):
-        stripped = lines[i].strip()
-        if stripped.startswith("//"):
-            doc.append(stripped[2:].strip())
-            i += 1
-            continue
-        m = decl.match(stripped)
-        if not m:
-            doc, i = [], i + 1
-            continue
-        # walk characters from the opening brace until it balances
-        depth, j, body = 0, i, []
-        while j < len(lines):
-            line = lines[j]
-            start = line.index("{") + 1 if j == i else 0
-            piece, cut = [], None
-            for pos in range(start, len(line)):
-                ch = line[pos]
-                if ch == "{":
-                    depth += 1
-                elif ch == "}":
-                    if depth == 0:
-                        cut = pos
-                        break
-                    depth -= 1
-                piece.append(ch)
-            body.append("".join(piece))
-            if cut is not None:
-                break
-            j += 1
-        yield m.group(1), m.group(2), i + 1, " ".join(doc), "\n".join(body)
-        doc, i = [], j + 1
+    if _DESCRIPTOR.get("__root__") == IBC:
+        return _DESCRIPTOR["files"]
+    if not shutil.which("buf"):
+        raise SourceError(
+            "`buf` is not on PATH, and the API page is generated from the "
+            "descriptor set it compiles. Install it (https://buf.build/docs/"
+            "installation), or run this from an environment that has it. This "
+            "repository already builds its protos with buf; see "
+            "`proto/buf.gen.yaml`.")
+    roots = sorted({os.path.dirname(f) for f in _walk(".proto")})
+    if not roots:
+        raise SourceError("no .proto files found to compile")
+    # buf builds a module, so hand it the directory holding buf.yaml -- the
+    # nearest one at or above the protos
+    module = os.path.commonpath(roots) if len(roots) > 1 else roots[0]
+    while module and not any(
+            os.path.exists(os.path.join(IBC, module, n))
+            for n in ("buf.yaml", "buf.work.yaml", "buf.gen.yaml")):
+        parent = os.path.dirname(module)
+        if parent == module:
+            break
+        module = parent
+    out = os.path.join(tempfile.gettempdir(), f"refgen-desc-{os.getpid()}.json")
+    try:
+        r = subprocess.run(
+            ["buf", "build", ".", "-o", out + "#format=json"],
+            cwd=os.path.join(IBC, module), capture_output=True, text=True,
+            timeout=180)
+        if r.returncode != 0:
+            raise SourceError(
+                f"buf build failed in {module}, so no page derived from the "
+                f"schema can be written:\n{r.stderr.strip()}",
+                kind="proto_build_failed")
+        with open(out) as fh:
+            files = json.load(fh).get("file", [])
+    finally:
+        if os.path.exists(out):
+            os.remove(out)
+    by_name = {}
+    for fd in files:
+        if "sourceCodeInfo" not in fd:
+            raise SourceError(
+                f"{fd.get('name')} came back without source info, so no comment "
+                "on it can be read. `buf build` must keep source info.")
+        by_name[fd["name"]] = fd
+    _DESCRIPTOR.clear()
+    _DESCRIPTOR.update({"__root__": IBC, "files": by_name})
+    return by_name
 
 
-FIELD = re.compile(r"^(optional\s+|repeated\s+|required\s+)?([\w.]+)\s+(\w+)\s*=\s*\d+")
-RPC = re.compile(r"rpc\s+(\w+)\s*\(\s*([\w.]+)\s*\)\s*returns\s*\(\s*([\w.]+)\s*\)")
+def _descriptor_for(path):
+    """The compiled file whose name matches this repo-relative .proto path."""
+    files = _buf_descriptor()
+    want = path.replace(os.sep, "/")
+    for name, fd in files.items():
+        if want.endswith(name):
+            return fd
+    raise SourceError(
+        f"{path} is not in the descriptor set buf produced "
+        f"({', '.join(sorted(files)) or 'nothing'}), so it is not part of the "
+        "proto module and nothing here can read it.")
 
 
-def _statements(body):
-    """Yield (doc, statement, offset) for each `;`-terminated statement in a
-    body, carrying the comment lines that precede it and the line it sits on,
-    counted from the body's first line. Statements may share a line."""
-    doc = []
-    for offset, raw in enumerate(body.split("\n")):
-        line = raw.strip()
-        if line.startswith("//"):
-            doc.append(line[2:].strip())
-            continue
-        for part in line.split(";"):
-            part = part.strip()
-            if not part:
-                continue
-            yield " ".join(doc), part, offset
-            doc = []
-
-
-def _fields(body):
-    """Fields of a message body, in declaration order, with a oneof folded
-    into one entry."""
-    oneofs = {name: {"name": name, "type": "oneof", "doc": doc,
-                     "opts": [f.group(3) for _d, s, _o in _statements(inner)
-                              for f in [FIELD.match(s)] if f]}
-              for name, doc, inner in _decl_oneofs(body)}
-    # blank the oneof bodies, keeping line positions, so one ordered pass works
-    masked = body
-    for _n, _d, inner in _decl_oneofs(body):
-        masked = masked.replace(inner, "\n" * inner.count("\n"))
-
-    out, doc = [], []
-    for raw in masked.split("\n"):
-        line = raw.strip()
-        if line.startswith("//"):
-            doc.append(line[2:].strip())
-            continue
-        m = re.match(r"oneof\s+(\w+)\s*\{", line)
-        if m:
-            out.append(oneofs[m.group(1)])
-            doc = []
-            continue
-        for part in line.split(";"):
-            stmt = part.strip()
-            if not stmt or stmt in ("}", "{"):
-                continue
-            f = FIELD.match(stmt)
-            if not f:
-                continue
-            prefix = (f.group(1) or "").strip()
-            t = f.group(2)
-            if prefix == "repeated":
-                t = "repeated " + t
-            elif prefix == "optional":
-                t = t + ", optional"
-            out.append({"name": f.group(3), "type": t, "doc": " ".join(doc)})
-            doc = []
+def _comments(fd):
+    """{path tuple: leading comment} from the compiled file's source info."""
+    out = {}
+    for loc in fd["sourceCodeInfo"].get("location", []):
+        lead = loc.get("leadingComments")
+        if lead:
+            out[tuple(loc.get("path", []))] = " ".join(lead.split())
     return out
 
 
-def _decl_oneofs(body):
-    """Yield (name, doc, inner_body) for each oneof in a message."""
-    lines = body.split("\n")
-    doc = []
-    for idx, raw in enumerate(lines):
-        line = raw.strip()
-        if line.startswith("//"):
-            doc.append(line[2:].strip())
-            continue
-        m = re.match(r"oneof\s+(\w+)\s*\{", line)
-        if not m:
-            doc = []
-            continue
-        rest = "\n".join(lines[idx:])
-        open_at = rest.index("{")
-        depth, end = 0, None
-        for pos in range(open_at + 1, len(rest)):
-            if rest[pos] == "{":
-                depth += 1
-            elif rest[pos] == "}":
-                if depth == 0:
-                    end = pos
-                    break
-                depth -= 1
-        yield m.group(1), " ".join(doc), rest[open_at + 1:end]
-        doc = []
+def _line(fd, path):
+    """The 1-based line the element at this descriptor path is declared on."""
+    for loc in fd["sourceCodeInfo"].get("location", []):
+        if tuple(loc.get("path", [])) == path and loc.get("span"):
+            return loc["span"][0] + 1
+    return 1
+
+
+def _field_type(f, owner=None):
+    """The type as the .proto author wrote it, and as a reader meets it.
+
+    A `map<k, v>` is a repeated field of a hidden entry message in the
+    descriptor. Rendering that literally published `LabelsEntry[]` -- a type
+    name that appears nowhere in the schema and that no reader can act on.
+    """
+    t = _PROTO_SCALARS.get(f.get("type"))
+    if t is None:
+        t = (f.get("typeName") or "").rsplit(".", 1)[-1]
+    if not t:
+        # a scalar this map does not name leaves the Type cell empty, which
+        # reads as a field with no type rather than as a tool that could not
+        # read one. Same shape as the config side publishing `yaml.RawMessage`.
+        _problem("unreadable_proto_type",
+                 f"the field `{f.get('name')}` has protobuf type "
+                 f"`{f.get('type')}`, which this tool has no name for, so its "
+                 "Type cell would be blank. Add it to _PROTO_SCALARS.",
+                 field=f.get("name"), proto_type=f.get("type"))
+        return UNREADABLE
+    if f.get("label") == "LABEL_REPEATED":
+        entry = next((n for n in (owner or {}).get("nestedType", [])
+                      if n["name"] == t and n.get("options", {}).get("mapEntry")),
+                     None)
+        if entry:
+            by_name = {g["name"]: g for g in entry["field"]}
+            return (f"map<{_field_type(by_name['key'])}, "
+                    f"{_field_type(by_name['value'])}>")
+        return "repeated " + t
+    # proto3 `optional` is a synthetic one-field oneof in the descriptor, and
+    # `proto3Optional` is what distinguishes it from every other proto3 field,
+    # all of which also carry LABEL_OPTIONAL
+    if f.get("proto3Optional"):
+        return t + ", optional"
+    return t
 
 
 def parse_proto(path):
-    """Services, rpcs, messages, enums with their leading // comments."""
-    src = open(os.path.join(IBC, path)).read()
+    """Services, rpcs, messages, enums with their leading comments.
+
+    Read from the compiled descriptor, not from the file's text. Field numbers
+     6, 4, 5 are protobuf's own path tags for service, message and enum; 2 is
+    the member list of each.
+    """
+    fd = _descriptor_for(path)
+    com = _comments(fd)
     out = {"services": [], "messages": [], "enums": []}
-    for kind, name, line, doc, body in _decl_blocks(src):
-        if kind == "service":
-            rpcs = []
-            for rdoc, stmt, offset in _statements(body):
-                m = RPC.match(stmt)
-                if m:
-                    # the rpc's own line, so its citation points at itself
-                    # rather than at the service declaration above it
-                    rpcs.append({"name": m.group(1), "req": m.group(2),
-                                 "resp": m.group(3), "doc": rdoc,
-                                 "line": line + offset})
-            out["services"].append({"name": name, "doc": doc, "line": line, "rpcs": rpcs})
-        elif kind == "message":
-            out["messages"].append({"name": name, "doc": doc, "line": line,
-                                    "fields": _fields(body)})
-        else:
-            values = []
-            for vdoc, stmt, _offset in _statements(body):
-                m = re.match(r"(\w+)\s*=\s*\d+", stmt)
-                if m:
-                    values.append({"name": m.group(1), "doc": vdoc})
-            out["enums"].append({"name": name, "doc": doc, "line": line, "values": values})
+
+    for si, svc in enumerate(fd.get("service", [])):
+        rpcs = []
+        for mi, m in enumerate(svc.get("method", [])):
+            if m.get("clientStreaming") or m.get("serverStreaming"):
+                # the tables describe one request body and one response body.
+                # A stream has neither, and rendering it in those columns would
+                # read exactly like a unary call -- the descriptor can see the
+                # difference even though the page has no shape for it.
+                _problem("streaming_rpc",
+                         f"{svc['name']}.{m['name']} streams, and the API page "
+                         "has a row for a request body and a response body. "
+                         "Rendering it there would read as a unary call. Give "
+                         "the page a shape for streaming calls, then teach this "
+                         "function to use it.",
+                         service=svc["name"], rpc=m["name"],
+                         file=path, line=_line(fd, (6, si, 2, mi)))
+                continue
+            rpcs.append({"name": m["name"],
+                         "req": m["inputType"].rsplit(".", 1)[-1],
+                         "resp": m["outputType"].rsplit(".", 1)[-1],
+                         "doc": com.get((6, si, 2, mi), ""),
+                         "line": _line(fd, (6, si, 2, mi))})
+        out["services"].append({"name": svc["name"], "doc": com.get((6, si), ""),
+                                "line": _line(fd, (6, si)), "rpcs": rpcs})
+
+    for mi, msg in enumerate(fd.get("messageType", [])):
+        if msg.get("options", {}).get("mapEntry"):
+            continue            # the synthetic entry type behind a map<> field
+        out["messages"].append({"name": msg["name"], "doc": com.get((4, mi), ""),
+                                "line": _line(fd, (4, mi)),
+                                "fields": _descriptor_fields(fd, com, mi, msg)})
+
+    for ei, en in enumerate(fd.get("enumType", [])):
+        out["enums"].append({
+            "name": en["name"], "doc": com.get((5, ei), ""),
+            "line": _line(fd, (5, ei)),
+            "values": [{"name": v["name"], "doc": com.get((5, ei, 2, vi), "")}
+                       for vi, v in enumerate(en.get("value", []))]})
+    return out
+
+
+def _descriptor_fields(fd, com, mi, msg):
+    """A message's fields in declaration order, a oneof folded into one entry.
+
+    A real oneof becomes a single row named for the oneof, listing its members,
+    the way the page has always shown it. A proto3 `optional` field is also a
+    oneof in the descriptor -- a synthetic one -- and is not folded, because to
+    a reader it is just an optional field.
+    """
+    synthetic = {f["oneofIndex"] for f in msg.get("field", [])
+                 if f.get("proto3Optional") and "oneofIndex" in f}
+    out, seen = [], set()
+    for fi, f in enumerate(msg.get("field", [])):
+        oi = f.get("oneofIndex")
+        if oi is not None and oi not in synthetic:
+            if oi in seen:
+                continue        # already emitted as part of its oneof
+            seen.add(oi)
+            decl = msg["oneofDecl"][oi]
+            out.append({
+                "name": decl["name"], "type": "oneof",
+                "doc": com.get((4, mi, 8, oi), ""),
+                "opts": [g["name"] for g in msg["field"]
+                         if g.get("oneofIndex") == oi]})
+            continue
+        out.append({"name": f["name"], "type": _field_type(f, msg),
+                    "doc": com.get((4, mi, 2, fi), "")})
     return out
 
 def _proto_type(t):
@@ -365,19 +443,20 @@ def _proto_type(t):
 
 
 def _lead_strip(name, doc):
-    """Drop the identifier a Go or proto comment opens with.
+    """The comment as its author wrote it, with a capital at the front.
 
-    `// Relay tracks the packets` documents the RPC named Relay, and a table
-    cell that repeats the name in its own row reads as a stutter.
+    This used to drop the identifier a comment opens with, so a row for `Relay`
+    did not read "Relay tracks the packets". It worked for exactly that shape
+    and mangled every other one: `// Labels are forwarded` published as "Are
+    forwarded", `// State of the packet` as "Of the packet", and a comment
+    opening `WS` was missed entirely because the casing did not match. Each
+    repair was another word added to a list that would have to grow forever --
+    the same shape as the vocabularies this tool exists to do without.
+
+    So it strips nothing. If a description stutters on the page, the comment in
+    the schema is the thing to reword, which is where every other fact on these
+    pages is fixed too.
     """
-    if not doc:
-        return ""
-    camel = "".join(part.capitalize() for part in name.split("_"))
-    for lead in (name, camel):
-        if doc.startswith(lead + " "):
-            doc = doc[len(lead) + 1:]
-            break
-    doc = re.sub(r"^is\s+", "", doc)
     return doc[0].upper() + doc[1:] if doc else ""
 
 
@@ -388,18 +467,10 @@ def _fence(doc, names):
     return doc
 
 
-PROTO_DIR = "proto"
-
-
 def _proto_files():
-    """Every .proto under PROTO_DIR. Naming them would mean a new service is
-    absent from the page with nothing to notice it."""
-    out = []
-    for root, _dirs, files in os.walk(os.path.join(IBC, PROTO_DIR)):
-        for f in sorted(files):
-            if f.endswith(".proto"):
-                out.append(os.path.relpath(os.path.join(root, f), IBC))
-    return sorted(out)
+    """Every .proto in the repo. Naming a directory would mean a schema that
+    moved goes missing from the page with nothing to notice it."""
+    return _walk(".proto")
 
 
 def _proto_short(path):
@@ -407,7 +478,10 @@ def _proto_short(path):
     m = re.search(r"^package\s+([\w.]+);", _read(path), re.M)
     if not m:
         raise SourceError(f"{path} declares no proto package")
-    return m.group(1).split(".")[-1]
+    # the last segment that names something, not a version: `ibc.v2.relayer`
+    # is the relayer, and `ibc.core.client.v1` is the client, not `v1`
+    parts = [p for p in m.group(1).split(".") if not re.fullmatch(r"v\d+\w*", p)]
+    return parts[-1] if parts else m.group(1)
 
 
 # The services, in the order a reader meets them, with the names the page uses.
@@ -446,9 +520,9 @@ FIELD_DOCS = {
     ("TransactionInfo", "chain_id"): ("The chain it was submitted to.", "8140443d"),
     ("StateAttestationRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
     ("StateAttestationRequest", "height"): ("The height to attest to.", "f4439355"),
-    ("StateAttestationResponse", "attestation"): ("The signed attestation. See below.", "b9fffb17"),
+    ("StateAttestationResponse", "attestation"): ("The signed attestation, in the `Attestation` table.", "b9fffb17"),
     ("PacketAttestationRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
-    ("PacketAttestationResponse", "attestation"): ("The signed attestation. See below.", "b9fffb17"),
+    ("PacketAttestationResponse", "attestation"): ("The signed attestation, in the `Attestation` table.", "b9fffb17"),
     ("LatestHeightRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
     ("LatestHeightResponse", "height"): ("The highest height this attestor will attest to.", "f4439355"),
     ("InfoRequest", "attestor"): ("Which attestor to ask, by its `name` in the `attestors` block.", "5d870b5f"),
@@ -461,16 +535,30 @@ def _field_fingerprint(msg, field):
     return hashlib.sha1(f"{field['type']}|{field['name']}".encode()).hexdigest()[:8]
 
 
-def _field_doc(msg, field, seen):
-    """The Description cell, with the same four checks the config page uses."""
+def _field_doc(msg, field, seen, where_declared=None, at_line=None):
+    """The Description cell, with the same four checks the config page uses.
+
+    Including the one that was missing: a field with neither a comment nor an
+    entry used to return an empty string and raise nothing, so a new field on a
+    public API shipped with a blank Description cell and a clean check.
+    """
     doc = _lead_strip(field["name"], field["doc"])
     entry = FIELD_DOCS.get((msg, field["name"]))
     where = f"{msg}.{field['name']}"
     if doc and entry:
         _problem("stale_field_doc",
-                 f"{where} now has a proto comment; drop its FIELD_DOCS entry", field=where)
+                 f"{where} now has a proto comment; drop its FIELD_DOCS entry",
+                 field=where, file=where_declared, line=at_line)
         return doc
     if not entry:
+        if not doc:
+            _problem("missing_field_description",
+                     f"{where} has no proto comment and no FIELD_DOCS entry. The "
+                     "better fix is a comment on the field in the schema; a "
+                     "FIELD_DOCS entry is for a schema you cannot edit.",
+                     field=where, declared_in=msg, proto_field=field["name"],
+                     file=where_declared, line=at_line)
+            return "TODO: describe this field"
         return doc
     text, recorded = entry
     seen.add((msg, field["name"]))
@@ -479,7 +567,8 @@ def _field_doc(msg, field, seen):
         _problem("field_fingerprint_mismatch",
                  f"{where}: the field changed shape (fingerprint {recorded} -> {current}). "
                  f"Re-read \"{text}\" against the proto, then record the new fingerprint.",
-                 field=where, description=text, was=recorded, now=current)
+                 field=where, description=text, was=recorded, now=current,
+                 file=where_declared, line=at_line)
     return text
 
 
@@ -515,7 +604,8 @@ def gen_api():
             for f in msg["fields"]:
                 t = (f"oneof: {' or '.join('`'+o+'`' for o in f['opts'])}"
                      if f["type"] == "oneof" else _proto_type(f["type"]))
-                doc = _fence(_field_doc(msg["name"], f, seen_docs), names - {f["name"]})
+                doc = _fence(_field_doc(msg["name"], f, seen_docs, fname, msg["line"]),
+                             names - {f["name"]})
                 rows.append((f"`{f['name']}`", t, doc))
             blocks[f"api:msg:{msg['name']}"] = (
                 table(["Field", "Type", "Description"], rows)
@@ -526,6 +616,7 @@ def gen_api():
             blocks[f"api:enum:{en['name']}"] = (
                 table(["Value", "Meaning"], rows) + "\n\n" + cite(fname, en["line"]))
 
+    blocks["notice"] = _notice()
     orphans = sorted(f"{m}.{f}" for m, f in set(FIELD_DOCS) - seen_docs)
     if orphans:
         _problem("dead_field_doc",
@@ -539,26 +630,39 @@ def gen_api():
 # The config package, read whole. Naming files here would mean a new file with
 # a new block is silently absent from the page, which is the failure this whole
 # tool exists to prevent.
-CONFIG_PKG = "cli/internal/config"
+
 
 # The one anchor. Every block on the page is a struct reachable from this type,
 # so the page's shape follows the code's rather than a list kept by hand.
+# Which command-line program these pages document, as a package directory,
+# when the repo holds more than one. Left unset it is discovered. A repo that
+# grows a second CLI cannot be asked which of them a page is about -- that is a
+# choice, not a fact -- so the refusal names the candidates and points here.
+CLI_PACKAGE = None
+
 CONFIG_ROOT = "Config"
+
+# The function that returns a populated root config, whatever it is called.
+# A builder of defaults takes nothing and returns the root config, by value or
+# by pointer. Loaders and helpers that merely mention the type take arguments,
+# which is what keeps this anchor pointing at one function.
+DEFAULTS_FUNC = r"^func [A-Z]\w*\(\s*\)\s*\*?" + CONFIG_ROOT + r"\s*\{"
 
 # Where a pointer field's default lives when the struct itself carries no
 # value: a named constant in the code that consumes the field. The label in
 # each entry is prose; the value is always read from source, and a missing
 # constant is an error rather than a stale number.
+# The constant names it: a package that moves costs nothing, and a constant
+# that is renamed or deleted is a real change that says so by name.
 DEFAULT_CONSTS = {
-    ("RelayerConfig", "DispatchPollInterval"): [
-        ("", "cli/internal/relay/dispatch/dispatcher.go", "DefaultPollInterval")],
-    ("RelayerChainOverride", "TxSubmissionDelay"): [
-        ("", "cli/internal/txsubmitter/evm/evm.go", "DefaultTxSubmissionDelay")],
-    ("RelayerChainOverride", "PacketBatchSize"): [
-        ("", "cli/internal/relay/pipeline/opts.go", "DefaultBatchSize")],
-    ("RelayerChainOverride", "PacketBatchTimeout"): [
-        ("receive and acknowledge", "cli/internal/relay/pipeline/opts.go", "DefaultBatchTimeout"),
-        ("timeout", "cli/internal/relay/pipeline/opts.go", "DefaultTimeoutBatchTimeout")],
+    ("RelayerConfig", "dispatchPollInterval"): [("", "DefaultPollInterval")],
+    ("RelayerChainOverride", "txSubmissionDelay"): [("", "DefaultTxSubmissionDelay")],
+    ("RelayerChainOverride", "packetBatchSize"): [("", "DefaultBatchSize")],
+    ("RelayerChainOverride", "packetBatchTimeout"): [
+        ("receive and acknowledge", "DefaultBatchTimeout"),
+        ("timeout", "DefaultTimeoutBatchTimeout")],
+    ("RelayerConfig", "clearInterval"): [("", "DefaultClearInterval")],
+    ("RelayerConfig", "clearOnStart"): [("", "DefaultClearOnStart")],
 }
 
 # Keys the Go source does not document. Values never come from here, only
@@ -578,27 +682,27 @@ DEFAULT_CONSTS = {
 # The real fix is upstream doc comments. Every one added shrinks this map, and
 # the second rule above turns that into a guided migration rather than a sweep.
 FALLBACK_DOCS = {
-    ("ServerConfig", "ListenAddress"): ("Address the gRPC server binds. It serves the relayer and attestor APIs together.", "a05468ed"),
-    ("DBConfig", "Type"): ("Database backend.", "70e2ad2c"),
-    ("DBConfig", "URL"): ("File path for sqlite, connection string for postgres. `:memory:` is rejected.", "d084b0d4"),
-    ("ChainConfig", "ChainID"): ("The chain's id, as the chain reports it.", "69a3e543"),
-    ("EVMChainConfig", "RPC"): ("JSON-RPC endpoint for the chain.", "690d071f"),
-    ("EVMChainConfig", "ICS26Router"): ("Address of the ICS26 router on the chain.", "1daaecba"),
-    ("AttestorConfig", "Type"): ("Whether this process runs the attestor or queries it.", "a58f9a4e"),
-    ("SignerConfig", "Type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
-    ("RelayerConfig", "DispatchPollInterval"): ("How often the dispatcher polls the store for unfinished packets.", "893f79b1"),
-    ("RelayerChainOverride", "ChainID"): ("The chain these settings apply to.", "69a3e543"),
-    ("RelayerChainOverride", "TxSubmissionDelay"): ("Minimum delay between two transaction submissions on the chain.", "5691fa23"),
-    ("RelayerChainOverride", "PacketBatchSize"): ("How many packets the relayer puts in one transaction.", "b4f4f14c"),
-    ("RelayerChainOverride", "PacketBatchTimeout"): ("How long the relayer waits to fill a batch before submitting it.", "84d8816e"),
-    ("RelayerEVMConfig", "GasFeeCapMultiplier"): ("Multiplies the fee cap the node suggests.", "b9de0a8d"),
-    ("RelayerEVMConfig", "GasTipCapMultiplier"): ("Multiplies the tip cap the node suggests.", "634e0708"),
-    ("ConnectionConfig", "Alias"): ("Name for the connection, unique in the file.", "7e352d14"),
-    ("AutoRelayConfig", "Enabled"): ("Whether the relayer carries packets leaving this end without being asked.", "d693129e"),
-    ("ClientEnd", "ChainID"): ("The chain this end's client lives on.", "69a3e543"),
-    ("ClientEnd", "Signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
-    ("ClientEnd", "ClientID"): ("The light client's id on this chain.", "bb596da7"),
-    ("ClientEnd", "Type"): ("Light client type.", "85b1564f"),
+    ("ServerConfig", "listenAddr"): ("Address the gRPC server binds. It serves the relayer and attestor APIs together.", "a05468ed"),
+    ("DBConfig", "type"): ("Database backend.", "70e2ad2c"),
+    ("DBConfig", "url"): ("File path for sqlite, connection string for postgres. `:memory:` is rejected.", "d084b0d4"),
+    ("ChainConfig", "chainId"): ("The chain's id, as the chain reports it.", "69a3e543"),
+    ("EVMChainConfig", "rpc"): ("JSON-RPC endpoint for the chain.", "690d071f"),
+    ("EVMChainConfig", "ics26Router"): ("Address of the ICS26 router on the chain.", "1daaecba"),
+    ("AttestorConfig", "type"): ("Whether this process runs the attestor or queries it.", "a58f9a4e"),
+    ("SignerConfig", "type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
+    ("RelayerConfig", "dispatchPollInterval"): ("How often the dispatcher polls the store for unfinished packets.", "893f79b1"),
+    ("RelayerChainOverride", "chainId"): ("The chain these settings apply to.", "69a3e543"),
+    ("RelayerChainOverride", "txSubmissionDelay"): ("Minimum delay between two transaction submissions on the chain.", "5691fa23"),
+    ("RelayerChainOverride", "packetBatchSize"): ("How many packets the relayer puts in one transaction.", "b4f4f14c"),
+    ("RelayerChainOverride", "packetBatchTimeout"): ("How long the relayer waits to fill a batch before submitting it.", "84d8816e"),
+    ("RelayerEVMConfig", "gasFeeCapMultiplier"): ("Multiplies the fee cap the node suggests.", "b9de0a8d"),
+    ("RelayerEVMConfig", "gasTipCapMultiplier"): ("Multiplies the tip cap the node suggests.", "634e0708"),
+    ("ConnectionConfig", "alias"): ("Name for the connection, unique in the file.", "7e352d14"),
+    ("AutoRelayConfig", "enabled"): ("Whether the relayer carries packets leaving this end without being asked.", "d693129e"),
+    ("ClientEnd", "chainId"): ("The chain this end's client lives on.", "69a3e543"),
+    ("ClientEnd", "signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
+    ("ClientEnd", "clientId"): ("The light client's id on this chain.", "bb596da7"),
+    ("ClientEnd", "type"): ("Light client type.", "85b1564f"),
 }
 
 # Explicit skips only. Unexported struct fields and yaml:"-" tags are dropped
@@ -611,9 +715,21 @@ SKIP_FIELDS = set()
 NO_NAMED_DEFAULT = {
     # nil and false are the same input: a connection end without it is not
     # auto-relayed (relayer.go:L127)
-    ("AutoRelayConfig", "Enabled"),
-    ("RelayerEVMConfig", "GasFeeCapMultiplier"),
-    ("RelayerEVMConfig", "GasTipCapMultiplier"),
+    ("AutoRelayConfig", "enabled"),
+    ("RelayerEVMConfig", "gasFeeCapMultiplier"),
+    ("RelayerEVMConfig", "gasTipCapMultiplier"),
+    # unset inherits relayer.clearInterval rather than any one value
+    # (relayer.go, ClearIntervalFor)
+    ("RelayerChainOverride", "clearInterval"),
+    # unset is false (relayer.go, AbandonUnrecoverablePacketsFor)
+    ("RelayerChainOverride", "abandonUnrecoverablePackets"),
+}
+
+# What a reader writes where the Go type says nothing useful. `params` is a
+# raw block whose shape is fixed by the sibling `type` key, which no reading of
+# the field alone can recover.
+OPAQUE_TYPES = {
+    ("ClientEnd", "params"): "block",
 }
 
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
@@ -621,25 +737,157 @@ GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int"
 
 
 class SourceError(Exception):
-    pass
+    """A refusal to publish. `kind` names which one.
+
+    The kind is carried rather than only phrased, because a test that matched
+    the message as a substring accepted any refusal that happened to name the
+    same identifier -- two cases named for `stale_fallback` were both passing
+    on a different refusal entirely.
+    """
+
+    def __init__(self, message, kind=None):
+        super().__init__(message)
+        self.kind = kind
 
 
 # When PLAN is a list, a problem is recorded and generation continues with a
 # placeholder, so one run reports every gap rather than the first. When it is
 # None, the same problem raises and nothing is written. Check mode and a normal
 # regeneration always run with PLAN None: refusing to write stays the default.
+# What a cell holds when the tool could not read it and plan mode is collecting
+# rather than refusing. It is never written to a page: outside plan mode the
+# problem raises, so nothing renders. It exists so one unreadable value does not
+# cost the work order every other item on the page.
+UNREADABLE = "?"
+
 PLAN = None
 
 
 def _problem(kind, message, **fields):
     """Raise, or record and continue in plan mode."""
     if PLAN is None:
-        raise SourceError(message)
+        raise SourceError(message, kind)
     PLAN.append(dict(kind=kind, message=message, **fields))
 
 
 def _read(path):
     return open(os.path.join(IBC, path)).read()
+
+# ------------------------------------------------------- where things are
+
+# Paths were five constants naming `cli/...`. Upstream renamed `link/` to
+# `cli/` in #1423 and all five had to be hand-edited, for a change no reader of
+# these pages could see. So each one is now found by what it contains: a
+# directory move costs nothing, and a thing that genuinely disappears says so
+# by name instead of surfacing as a confusing empty table.
+_ANCHORS = {}
+
+_SKIP_DIRS = {".git", "vendor", "node_modules", "testdata", "bin"}
+
+
+def _walk(suffix):
+    """Every file under the source repo with this suffix, repo-relative."""
+    out = []
+    for root, dirs, files in os.walk(IBC):
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        for f in sorted(files):
+            if f.endswith(suffix):
+                out.append(os.path.relpath(os.path.join(root, f), IBC))
+    return sorted(out)
+
+
+def _locate(pattern, what, files=None, also=None, unique="match"):
+    """The one file whose source matches, or a SourceError naming what is gone.
+
+    The pattern is anchored at the start of a line, so it matches a
+    declaration rather than a mention of one: a doc comment that quotes
+    `func DefaultConfig()` should not make this ambiguous.
+
+    Ambiguity is an error too. Two matches means the anchor no longer picks out
+    one thing, and guessing between them is how a generator starts reading the
+    wrong file without saying so.
+    """
+    rx = re.compile(pattern, re.M)
+    hits = []
+    for rel in (files if files is not None else _walk(".go")):
+        try:
+            text = open(os.path.join(IBC, rel), errors="ignore").read()
+        except OSError:
+            continue
+        if also is not None and also not in text:
+            continue
+        # every match, not every file: two matches in one file is the same
+        # ambiguity as two files, and reading the first of them silently is how
+        # a generator starts describing the wrong thing.
+        # a declaration should occur once, so count matches. A call site is
+        # written once per use -- `cmd.PersistentFlags().StringVar(...)` six
+        # times over is ordinary Go -- so for those, count files.
+        found = rx.findall(text)
+        if not found:
+            continue
+        hits += [rel] if unique == "file" else [rel] * len(found)
+    if len(hits) == 1:
+        return hits[0]
+    raise SourceError(
+        f"cannot locate {what}: {len(hits)} matches for {pattern!r}"
+        + (f" (in {', '.join(sorted(set(hits)))})" if hits else "")
+        + ". It moved, was renamed, was removed, or there are now two of it; "
+        "this tool finds it by content rather than by path, so tell it the new "
+        "anchor.")
+
+
+def _anchors():
+    """Locate every path this tool reads, once per source tree."""
+    if _ANCHORS.get("__root__") == IBC:
+        return _ANCHORS
+    go = [f for f in _walk(".go") if not f.endswith("_test.go")]
+
+    # The CLI is located first, because everything else is scoped to the module
+    # it lives in. `func DefaultConfig() Config` is among the most ordinary
+    # things to write in Go, so searching a whole repo for it stops picking out
+    # one thing the day a second implementation lands beside this one.
+    cobra_dirs = {os.path.dirname(f) for f in go
+                  if "cobra.Command{" in open(os.path.join(IBC, f),
+                                              errors="ignore").read()}
+    entries = [f for f in go if os.path.dirname(f) in cobra_dirs]
+    if CLI_PACKAGE:
+        entries = [f for f in entries if os.path.dirname(f) == CLI_PACKAGE]
+    main_go = _locate(r"^func main\(", "the CLI entry point", entries)
+
+    cli_src = os.path.dirname(main_go)
+    # the module the CLI lives in: the nearest go.mod at or above its source
+    module = cli_src
+    while module and not os.path.exists(os.path.join(IBC, module, "go.mod")):
+        module = os.path.dirname(module)
+    if not os.path.exists(os.path.join(IBC, module or ".", "go.mod")):
+        raise SourceError(f"no go.mod at or above {cli_src}; cannot build the CLI")
+    in_module = [f for f in go if f.startswith((module or ".") + os.sep)]
+
+    # the config package: the one in this CLI's module with a function that
+    # builds a fully populated root config
+    config_go = _locate(DEFAULTS_FUNC,
+                        f"the package that builds the {CONFIG_ROOT} this CLI reads",
+                        in_module)
+    # the root's own flags are declared in the config package rather than beside
+    # the command, and are found by the cobra call that declares them, so the
+    # function holding them is free to be called anything
+    flags_go = _locate(r"PersistentFlags\(\)", "the persistent flag declarations",
+                       [f for f in in_module
+                        if os.path.dirname(f) == os.path.dirname(config_go)],
+                       unique="file")
+
+    _ANCHORS.clear()
+    _ANCHORS.update({
+        "__root__": IBC,
+        "config_pkg": os.path.dirname(config_go),
+        "global_flags_file": flags_go,
+        "cli_src": cli_src,
+        "cli_main": main_go,
+        "cli_module": module or ".",
+        "cli_pkg": os.path.relpath(cli_src, module or "."),
+        "binary": os.path.basename(cli_src),
+    })
+    return _ANCHORS
 
 
 def _is_config_field(go_name, yaml_key):
@@ -650,61 +898,438 @@ def _is_config_field(go_name, yaml_key):
 
 
 def _config_files():
-    """Every non-test Go file in the config package, sorted for stable output."""
-    d = os.path.join(IBC, CONFIG_PKG)
-    return [f"{CONFIG_PKG}/{f}" for f in sorted(os.listdir(d))
-            if f.endswith(".go") and not f.endswith("_test.go")]
+    """Every non-test Go file at or below the config package.
+
+    Recursive, because a `Validate` moved into a subpackage is invisible to a
+    listing of one directory -- and a struct whose rules go unread renders
+    every one of its keys as `optional`.
+    """
+    pkg = _anchors()["config_pkg"]
+    return [f for f in _walk(".go")
+            if (f == pkg or f.startswith(pkg + os.sep))
+            and not f.endswith("_test.go")]
+
+
+def _params(sig):
+    """A Go parameter list as [(name, type)], with grouped names expanded.
+
+    `segment, format string` declares two strings, and reading it as one
+    parameter is how a constructor stops being recognised -- taking every rule
+    it carries off the page while the page still renders.
+    """
+    out, pending = [], []
+    for part in sig.split(","):
+        bits = part.split()
+        if not bits:
+            continue
+        if len(bits) == 1:
+            pending.append(bits[0])
+            continue
+        typ = " ".join(bits[1:])
+        out += [(name, typ) for name in pending + [bits[0]]]
+        pending = []
+    # a list of bare types and no names: `func f(string, error) error`
+    return out or [("", t) for t in pending]
+
+
+def _path_error_ctors(src):
+    """The package's path-prefixing error builders, found by signature.
+
+    Validation errors are wrapped by helpers that take a path segment (or a
+    list index) and return an error. Their names belong to whoever wrote them
+    and are free to change; their shape is what this reads, so a rename is
+    invisible here and a new helper of the same shape is picked up without
+    being told about.
+
+        func f(segment string, err error) error            -> seg_err
+        func f(segment string, format string, ...) error    -> seg_fmt
+        func f(idx int, err error) error                    -> idx_err
+        func f(idx int, format string, ...) error           -> idx_fmt
+    """
+    out = {}
+    for m in re.finditer(r"func (\w+)\(([^)]*)\) error \{", src):
+        params = _params(m.group(2))
+        if len(params) < 2:
+            continue
+        first, second = params[0][1], params[1][1]
+        head = "seg" if first == "string" else "idx" if first == "int" else None
+        tail = "err" if second == "error" else "fmt" if second == "string" else None
+        if head and tail:
+            out[m.group(1)] = f"{head}_{tail}"
+    return out
+
+
+def _blank(src, strings=True):
+    """The source with comments -- and optionally string bodies -- blanked.
+
+    Length is preserved rather than the text deleted, so every offset and line
+    number still indexes the real source. Searching raw source for a
+    declaration finds it inside a comment just as readily: a
+    `/* DefaultBatchTimeout = 30 * time.Second */` note above the real one
+    published 30s.
+    """
+    out, j, n = list(src), 0, len(src)
+    while j < n:
+        c = src[j]
+        if c == "/" and j + 1 < n and src[j + 1] == "/":
+            while j < n and src[j] != "\n":
+                out[j] = " "
+                j += 1
+            continue
+        if c == "/" and j + 1 < n and src[j + 1] == "*":
+            close = src.find("*/", j + 2)
+            close = n if close == -1 else close + 2
+            for k in range(j, close):
+                if src[k] != "\n":
+                    out[k] = " "
+            j = close
+            continue
+        if c in "\"`'":
+            quote, j = c, j + 1
+            while j < n:
+                if src[j] == "\\" and quote != "`":
+                    if strings:
+                        out[j] = " "
+                        if j + 1 < n:
+                            out[j + 1] = " "
+                    j += 2
+                    continue
+                if src[j] == quote:
+                    j += 1
+                    break
+                if strings and src[j] != "\n":
+                    out[j] = " "
+                j += 1
+            continue
+        j += 1
+    return "".join(out)
+
+
+def _blank_comments(src):
+    """Comments blanked, string literals intact."""
+    return _blank(src, strings=False)
+
+
+def _blank_noncode(src):
+    """Comments and string bodies both blanked."""
+    return _blank(src, strings=True)
+
+
+def _go_block(src, i):
+    """The braced block starting at or after `i`, and where it ends.
+
+    Braces are counted outside strings and comments. Cutting at the first
+    line that is just `}` is close enough almost always, and silently wrong
+    when a body holds a raw string containing one -- which takes every rule
+    below it off the page with nothing to notice.
+    """
+    start = src.index("{", i)
+    depth, j, n = 0, src.index("{", i), len(src)
+    while j < n:
+        c = src[j]
+        if c == "/" and j + 1 < n and src[j + 1] == "/":
+            nl = src.find("\n", j)
+            j = n if nl == -1 else nl
+            continue
+        if c == "/" and j + 1 < n and src[j + 1] == "*":
+            close = src.find("*/", j + 2)
+            j = n if close == -1 else close + 2
+            continue
+        if c in "\"`'":
+            quote, j = c, j + 1
+            while j < n:
+                if src[j] == "\\" and quote != "`":
+                    j += 2
+                    continue
+                if src[j] == quote:
+                    j += 1
+                    break
+                j += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return src[start + 1:j], j
+        j += 1
+    raise SourceError(
+        "a declaration's braces never balance; the source did not parse and "
+        "reading on would attribute its contents to whatever follows")
+
+
+def _method_bodies(src):
+    """{(receiver type, method name): body} for every method in the package."""
+    out = {}
+    for m in re.finditer(r"func \((?:\w+ )?\*?(\w+)\) (\w+)\(", src):
+        try:
+            body, _end = _go_block(src, m.end())
+        except (SourceError, ValueError):
+            continue
+        out[(m.group(1), m.group(2))] = body
+    return out
+
+
+def _validate_source(recv, bodies, ctors):
+    """Validate's body, plus the same-receiver helpers whose rules it owns.
+
+    A helper called for its error alone contributes that error's path, so its
+    body is read as part of Validate:
+
+        if err := c.validateConnections(); err != nil { ... }
+
+    A helper whose result is wrapped with a path segment at the call site does
+    not: the key is at the call site and the condition often is too, so the
+    rule inside cannot be restated as `this key is required`.
+
+        case validateICS26Router:
+            return errPath("ics26Router", c.validateICS26Router())
+
+    Reading the second kind is how `ics26Router` would come to be called
+    required when it is required only when a caller asks for it.
+    """
+    seg_err = {n for n, k in ctors.items() if k in ("seg_err", "idx_err")}
+    seen, out, stack = set(), [], [(recv, "Validate")]
+    while stack:
+        key = stack.pop()
+        if key in seen or key not in bodies:
+            continue
+        seen.add(key)
+        body = bodies[key]
+        out.append(body)
+        wrapped = set()
+        for ctor in seg_err:
+            for w in re.finditer(re.escape(ctor) + r"\([^,]+,\s*\w+\.(\w+)\(", body):
+                wrapped.add(w.group(1))
+        # a call, `c.validateConnections()`, and a method *value* passed
+        # somewhere to be called later:
+        #
+        #   {"", c.crossValidate},
+        #
+        # Config.Validate is a table of those, so every cross-reference rule in
+        # this package sat behind a shape with no parentheses. They were
+        # invisible here, and ended up hand-copied onto the page instead.
+        refs = set(re.findall(r"\b\w+\.(\w+)\(", body))
+        refs |= set(re.findall(r"\b\w+\.(\w+)\b(?!\s*[(.])", body))
+        for call in refs:
+            if call not in wrapped and (recv, call) in bodies and call != "Validate":
+                stack.append((recv, call))
+    return "\n".join(out)
+
+
+def _rules_in(body, ctors):
+    """(message, format args) for every field rule a body can return.
+
+    Three shapes, none of which names a function:
+
+      f(".key msg", args...)   a path and a message in one string
+      f("key", "msg", args...) a path segment and a message, by a seg_fmt ctor
+      f(idx, "msg", args...)   an indexed element, by an idx_fmt ctor
+    """
+    msgs = []
+    for e in re.finditer(r'\b[\w.]+\(\s*"(\.[^"]+)"((?:,\s*\w+)*)', body):
+        msgs.append((e.group(1), [a.strip() for a in e.group(2).split(",") if a.strip()]))
+
+    # A fourth shape: the path built one line earlier and passed by name.
+    #
+    #   seg := fmt.Sprintf("relayer.connections[%d].clientA.chainId", i)
+    #   return errPathf(seg, "%q not declared in top-level chains", id)
+    #
+    # The format string is a literal, so the path is there -- only the
+    # indirection hid it. Every cross-reference rule in this package is written
+    # this way, which is why they were invisible and ended up hand-copied into
+    # the page with line numbers that then rotted.
+    def _index_free(fmt_string):
+        # `[%d]` is an element index; the page writes those as `[]`
+        return re.sub(r"%[-+ #0-9.]*[a-z]", "",
+                      fmt_string.replace("[%d]", "[]"))
+
+    # positional, not a dict: every one of these functions names its variable
+    # `seg`, so a flat map would give all of them whichever assignment came
+    # last. Each call binds to the nearest assignment above it.
+    assigns = [(m.start(), m.group(1), _index_free(m.group(2)))
+               for m in re.finditer(r'(\w+)\s*:=\s*fmt\.Sprintf\(\s*"([^"]+)"', body)]
+
+    def _path_before(var, at):
+        for pos, name, path in reversed(assigns):
+            if pos < at and name == var:
+                return path
+        return None
+    for name, kind in ctors.items():
+        if kind in ("seg_fmt", "seg_err"):
+            for e in re.finditer(re.escape(name) + r"\(\s*(\w+)\s*,\s*\"([^\"]+)\"((?:,\s*[\w.]+)*)", body):
+                path = _path_before(e.group(1), e.start())
+                if path:
+                    msgs.append((f".{path} {e.group(2)}",
+                                 [a.strip() for a in e.group(3).split(",") if a.strip()]))
+        if kind == "seg_fmt":
+            for e in re.finditer(re.escape(name) + r'\(\s*"([^"]+)",\s*"([^"]+)"((?:,\s*[\w.]+)*)', body):
+                msgs.append((f".{e.group(1)} {e.group(2)}",
+                             [a.strip() for a in e.group(3).split(",") if a.strip()]))
+        elif kind == "idx_fmt":
+            for e in re.finditer(re.escape(name) + r'\([^,"]+,\s*"([^"]+)"((?:,\s*[\w.]+)*)', body):
+                msgs.append((f".[] {e.group(1)}",
+                             [a.strip() for a in e.group(2).split(",") if a.strip()]))
+    return msgs
+
+
+# One field declaration, with Go's grouped names allowed.
+FIELD_DECL = re.compile(r"(\w+(?:\s*,\s*\w+)*)\s+([^\s`]+)(?:\s+`([^`]*)`)?$")
+
+
+def _unparsed_field(struct, path, lines):
+    """Refuse on a struct member this parser did not understand.
+
+    The proto side refuses on constructs it cannot read. This is its twin, and
+    it was missing: an embedded struct with an inline yaml tag, a field
+    whose type this pattern does not match, or an anonymous nested struct all
+    matched nothing and were skipped. A skipped field renders a shorter table,
+    a table with no rows renders as `_None._`, and regenerating makes the check
+    green again -- so a whole block can leave the page and look like currency.
+    """
+    if not lines:
+        return
+    _problem(
+        "unreadable_member",
+        f"{struct} in {path} declares members this parser does not read: "
+        + "; ".join(sorted(lines)[:4])
+        + f"{' ...' if len(lines) > 4 else ''}. Skipping them would shorten the "
+        "table, and a table with nothing left renders as `_None._` on a page "
+        "that still passes its check. Teach parse_go_config() the construct, or "
+        "give the field a `yaml:\"-\"` tag if a reader never writes it.")
 
 
 def parse_go_config():
     """Structs, string constants, literal defaults, and validation rules from
     the config package."""
     structs, aliases, consts, const_type, defaults, validations = {}, {}, {}, {}, {}, {}
+    duplicates = []
     files = _config_files()
     src = "\n".join(_read(f) for f in files)
+    # a copy with comments and string bodies blanked, so a declaration written
+    # out inside a comment is not read as one. String *values* are still needed
+    # for the constant table, so that scan gets a copy with comments blanked
+    # and strings intact.
+    blanked = _blank_noncode(src)
+    blanked_strings = _blank_comments(src)
 
     for m in re.finditer(r"type\s+(\w+)\s+\[\](\w+)", src):
         aliases[m.group(1)] = m.group(2)
 
-    for m in re.finditer(r'(\w+)\s+(\w+)?\s*=\s*"([^"]*)"', src):
+    # The named string types the package declares. Only these make a key an
+    # enum on the page: a constant declared `const X string = "..."` says its
+    # type is the builtin, and reading that as an enum rendered every `string`
+    # key in every table as a list of unrelated constants.
+    named_string_types = {t.group(1) for t in
+                          re.finditer(r"^type\s+(\w+)\s+string\b", blanked, re.M)}
+    # and the same declarations written in a grouped `type ( ... )` block,
+    # which is how this package spells them
+    in_group = False
+    for ln in blanked.split("\n"):
+        if re.match(r"^type\s*\($", ln.strip()):
+            in_group = True
+            continue
+        if in_group:
+            if ln.startswith(")"):
+                in_group = False
+                continue
+            d = re.match(r"^\s+(\w+)\s+string\s*$", ln)
+            if d:
+                named_string_types.add(d.group(1))
+
+    for m in re.finditer(r'(\w+)(?:\s+(\w+))?\s*=\s*"([^"]*)"', blanked_strings):
         consts[m.group(1)] = m.group(3)
-        if m.group(2):
+        if m.group(2) and m.group(2) in named_string_types:
             const_type[m.group(1)] = m.group(2)
 
     for path in files:
-        lines = _read(path).split("\n")
-        i = 0
-        while i < len(lines):
-            m = re.match(r"type\s+(\w+)\s+struct\s*\{", lines[i])
-            if not m:
-                i += 1
-                continue
-            name, fields, doc = m.group(1), [], []
-            j = i + 1
-            while j < len(lines) and not lines[j].startswith("}"):
-                ln = lines[j].strip()
+        text = _read(path)
+        # a copy with trailing comments blanked, so `URL string `+"`"+`yaml:"url"`+"`"+` // note`
+        # parses as the field it is. Doc comments are read from the raw line,
+        # which still has them.
+        masked = _blank_comments(text)
+        for m in re.finditer(r"^type\s+(\w+)\s+struct\s*\{", text, re.M):
+            name = m.group(1)
+            # brace-aware, because `type X struct{}` closes on its own line and
+            # scanning forward for one swallowed every declaration after it
+            body, _end = _go_block(text, m.end() - 1)
+            body_masked, _e2 = _go_block(masked, m.end() - 1)
+            masked_lines = body_masked.split("\n")
+            decl_line = text[:m.start()].count("\n") + 1
+            first = text[:m.end()].count("\n") + 1
+            fields, doc, leftover = [], [], []
+            for k, raw in enumerate(body.split("\n")):
+                ln = raw.strip()
                 if ln.startswith("//"):
                     doc.append(ln[2:].strip())
-                elif ln:
-                    f = re.match(r"(\w+)\s+([^\s`]+)(?:\s+`([^`]*)`)?", ln)
-                    if f:
-                        go_name = f.group(1)
-                        tag = re.search(r'yaml:"([^",]+)', f.group(3) or "")
-                        yaml_key = tag.group(1) if tag else go_name
-                        if _is_config_field(go_name, yaml_key):
-                            fields.append({"go": go_name, "type": f.group(2),
-                                           "yaml": yaml_key,
-                                           "doc": " ".join(doc), "line": j + 1})
+                    continue
+                if not ln:
                     doc = []
-                else:
+                    continue
+                # the declaration without whatever comment trails it
+                code = (masked_lines[k] if k < len(masked_lines) else ln).strip()
+                if not code:
                     doc = []
-                j += 1
-            structs[name] = {"fields": fields, "line": i + 1, "file": path}
-            i = j + 1
+                    continue
+                f = FIELD_DECL.match(code)
+                if not f:
+                    leftover.append(ln)
+                    doc = []
+                    continue
+                raw_tag = re.search(r'yaml:"([^"]*)"', f.group(3) or "")
+                if raw_tag is None:
+                    # the tag's contents were blanked with the comment; read it
+                    # back from the real line
+                    raw_tag = re.search(r'yaml:"([^"]*)"', ln)
+                tag = re.search(r'yaml:"([^",]+)', f.group(3) or "")
+                names = [n.strip() for n in f.group(1).split(",")]
+                # an embedded struct folded into the parent's keys. Its fields
+                # belong in this table and this parser does not reach them, so
+                # the row it would render is a lie by omission.
+                inline = raw_tag and "inline" in raw_tag.group(1).split(",")
+                if inline or (tag and len(names) > 1):
+                    leftover.append(ln)
+                    doc = []
+                    continue
+                for go_name in names:
+                    # No tag is not an error: goccy lowercases the field name
+                    # and the key works. Falling back to the Go name published
+                    # a key the CLI rejects outright -- it runs with
+                    # DisallowUnknownField, so `MaxRecvBytes` answers
+                    # `unknown field`, while the sample config this same tool
+                    # documents writes `maxrecvbytes`. Verified against the
+                    # binary: ToLower over the whole name, so `TLSCertFile`
+                    # becomes `tlscertfile` and not `tlsCertFile`.
+                    yaml_key = tag.group(1) if tag else go_name.lower()
+                    if _is_config_field(go_name, yaml_key):
+                        fields.append({"go": go_name, "type": f.group(2),
+                                       "yaml": yaml_key, "doc": " ".join(doc),
+                                       "line": first + k})
+                doc = []
+            _unparsed_field(name, path, leftover)
+            if name in structs and structs[name]["file"] != path:
+                # only when it would actually reach a page. A repeated type
+                # name in a corner of the package that nothing documents is
+                # not this tool's business, and refusing over it is the kind
+                # of stop that has nothing to do with a reader.
+                duplicates.append((name, structs[name]["file"], path, decl_line))
+            structs[name] = {"fields": fields, "line": decl_line, "file": path}
 
-    # literal defaults from DefaultConfig()
-    body = src[src.index("func DefaultConfig()"):]
-    body = body[:body.index("\n}\n")]
+    # literal defaults from the function that builds a populated root config
+    at = re.findall(DEFAULTS_FUNC, src, re.M)
+    if len(at) != 1:
+        raise SourceError(
+            f"{len(at)} functions return a populated {CONFIG_ROOT}; the defaults "
+            "column is read from exactly one of them, and picking the first "
+            "silently replaces every default on the page with whatever that "
+            "one sets. Name the builder, or fold the others into it.")
+    # comments blanked, string bodies kept: the row patterns below are anchored
+    # at end-of-line, so a trailing `// note` on a default stopped the row from
+    # matching at all and the default silently left the page. Every other Go
+    # read in this file already goes through a blanked copy; this one did not.
+    # Blanking preserves length, so the offsets still index the real source.
+    body, _end = _go_block(blanked_strings,
+                           re.search(DEFAULTS_FUNC, blanked_strings, re.M).end())
     current = None
     for ln in body.split("\n"):
         s = ln.strip()
@@ -720,41 +1345,129 @@ def parse_go_config():
             value = m.group(2) if m.group(2) is not None else consts.get(m.group(3), m.group(3))
             defaults[(current, m.group(1))] = value
 
-    # validation rules: every error string a struct's Validate can return
-    for m in re.finditer(r"func \(c (\w+)\) Validate\([^)]*\) error \{", src):
-        recv = m.group(1)
-        tail = src[m.end():]
-        tail = tail[:tail.index("\n}\n")]
-        msgs = []
-        for e in re.finditer(r'errors\.(?:New|Errorf)\("(\.[^"]+)"((?:,\s*\w+)*)', tail):
-            msgs.append((e.group(1), [a.strip() for a in e.group(2).split(",") if a.strip()]))
-        for e in re.finditer(r'errPathf\("([^"]+)",\s*"([^"]+)"((?:,\s*[\w.]+)*)', tail):
-            msgs.append((f".{e.group(1)} {e.group(2)}",
-                         [a.strip() for a in e.group(3).split(",") if a.strip()]))
-        for e in re.finditer(r'errPathIndexf\(\w+,\s*"([^"]+)"((?:,\s*[\w.]+)*)', tail):
-            msgs.append((f".[] {e.group(1)}",
-                         [a.strip() for a in e.group(2).split(",") if a.strip()]))
-        validations[recv] = msgs
+    # validation rules: every error string a struct's Validate can return.
+    # The shapes are discovered, not listed: the constructors by their
+    # signatures and the helpers by how their result is used. A rename in the
+    # config package is invisible here, which is the point -- teaching this
+    # file a new name was work that changed no word a reader sees.
+    # Two depths, because they answer different questions.
+    #
+    # `validations` is what Validate itself returns, and it is what the
+    # required column reads. A rule a helper returns is usually conditional on
+    # the branch that called the helper, so restating it as `this key is
+    # required` would be a lie: `otelFile` is required when `type` is `otel`,
+    # and `ics26Router` when a caller asks for it.
+    #
+    # `deep` adds those helper rules, and feeds the fingerprints and the
+    # ruleless-struct check. A hand-written description whose helper rule
+    # changed then goes stale and says so, which is the guard the two name
+    # lists used to provide -- without a list, and without stopping anyone to
+    # be taught a name.
+    ctors = _path_error_ctors(src)
+    bodies = _method_bodies(src)
+    deep = {}
+    for recv, _name in [k for k in bodies if k[1] == "Validate"]:
+        validations[recv] = _rules_in(bodies[(recv, "Validate")], ctors)
+        deep[recv] = _rules_in(_validate_source(recv, bodies, ctors), ctors)
 
     return {"structs": structs, "aliases": aliases, "consts": consts,
-            "const_type": const_type, "defaults": defaults, "validations": validations}
+            "duplicates": duplicates,
+            "const_type": const_type, "defaults": defaults,
+            "validations": validations, "deep_validations": deep}
 
 
-def _const_value(path, name):
-    """Read a named Go constant's value out of the file that declares it."""
-    src = _read(path)
-    m = re.search(r"\b" + name + r"\s*=\s*([^\n]+)", src)
-    if not m:
-        raise SourceError(f"constant {name} not found in {path}")
-    raw = m.group(1).strip().rstrip(",")
+# Structs whose Validate() legitimately yields no field rule: they check
+# cross-references and delegate to nested Validate() calls rather than rejecting
+# a field's own value. Asserted in test-refgen.py, so a struct cannot go silent.
+#
+# This list is the one guard that replaced two others. There used to be a list
+# of the error constructors a Validate body was allowed to call and a list of
+# the helpers it was allowed to delegate to, and a new name in either one was a
+# hard refusal -- work for a developer that changed no word a reader sees. Both
+# are now derived: constructors by their signatures, helpers by how their result
+# is used. What remains is a claim about coverage rather than about vocabulary:
+# a struct that validates something must yield a rule, or say here that it does
+# not.
+RULELESS_VALIDATORS = {
+    "Attestors", "Chains", "Signers",        # check cross-references, delegate the rest
+    "Config", "ServerConfig",
+    "AttestationParams",                     # `return nil`, satisfies an interface
+}
+
+
+def _const_value(name):
+    """A named Go constant's value, and where it is declared.
+
+    The constant is found by name across the repo rather than read out of a
+    path written down here: the package it lives in is free to move, and a
+    constant that is renamed or deleted is a change worth stopping for.
+    """
+    # The declaration, not a mention of it. A constant named in a comment --
+    # `// DefaultPollInterval = 99 * time.Second (was)` -- matched a bare
+    # search first and published that number.
+    # The declaration, with an optional explicit type, and not a mention of it
+    # in prose. Matching is done against a copy with comments and string bodies
+    # blanked; the value itself is then sliced out of the real source, because
+    # a blanked copy turns `"3s"` into `"  "`.
+    decl = re.compile(r"^[ \t]*(?:const\s+)?" + re.escape(name)
+                      + r"(?:\s+[\w.*\[\]]+)?\s*=\s*(.+)$", re.M)
+    # only the module the CLI is built from: an unrelated package elsewhere in
+    # the repo declaring the same name is not this page's business
+    module = _anchors()["cli_module"]
+    hits = []
+    for rel in _walk(".go"):
+        if rel.endswith("_test.go") or not rel.startswith(module + os.sep):
+            continue
+        src = open(os.path.join(IBC, rel), errors="ignore").read()
+        # every match, not the first: a constant of the same name declared
+        # inside a function is legal Go, and taking the first one published
+        # its value as the documented default
+        for m in decl.finditer(_blank_noncode(src)):
+            hits.append((rel, src, m))
+    if len(hits) != 1:
+        _problem(
+            "unreadable_default",
+            f"constant {name} has {len(hits)} declarations"
+            + (f" (in {', '.join(sorted({h[0] for h in hits}))})" if hits else "")
+            + "; a default on the page is read from it, so it cannot be "
+            "guessed at. It was renamed, removed, or duplicated.",
+            constant=name, found_in=[h[0] for h in hits])
+        return UNREADABLE, None, None
+    path, src, m = hits[0]
+    # blanking preserves length, so the same span indexes the real text. What
+    # the comment occupied is spaces in the blanked copy, so rstrip cuts
+    # exactly the comment and nothing of the value.
+    keep = len(m.group(1).rstrip())
+    raw = src[m.start(1):m.start(1) + keep].strip().rstrip(",")
     line = src[:m.start()].count("\n") + 1
-    d = re.match(r"(\d+)\s*\*\s*time\.(Second|Minute|Hour)", raw)
+    if re.search(r"[*+\-/(,]$", raw):
+        _problem(
+            "unreadable_default",
+            f"the value of {name} continues onto the next line ({raw!r}); this "
+            "reads one line and would publish that fragment as the default. "
+            "Put the expression on one line, or give the key its default in "
+            "the config builder instead.",
+            constant=name, file=path, line=line)
+        return UNREADABLE, path, line
+    units = {"Nanosecond": "ns", "Microsecond": "us", "Millisecond": "ms",
+             "Second": "s", "Minute": "m", "Hour": "h"}
+    unit = "|".join(units)
+    d = re.match(r"(\d+)\s*\*\s*time\.(%s)$" % unit, raw)
     if d:
-        return f"{d.group(1)}{d.group(2)[0].lower()}", line
-    d = re.match(r"time\.(Second|Minute|Hour)$", raw)
+        return f"{d.group(1)}{units[d.group(2)]}", path, line
+    d = re.match(r"time\.(%s)$" % unit, raw)
     if d:
-        return f"1{d.group(1)[0].lower()}", line
-    return raw, line
+        return f"1{units[d.group(1)]}", path, line
+    if re.fullmatch(r'-?\d+(\.\d+)?|".*"|true|false', raw):
+        return raw, path, line
+    _problem(
+        "unreadable_default",
+        f"the value of {name} is {raw!r}, which this does not know how to write "
+        "for a reader. Printing it as-is would put Go source in the Default "
+        "column. Teach _const_value() the form, or give the key its default in "
+        "the config builder instead.",
+        constant=name, value=raw, file=path, line=line)
+    return UNREADABLE, path, line
 
 
 def _element_type(go_type, model):
@@ -782,16 +1495,36 @@ def _discriminator(struct, model):
                         if model["const_type"].get(c) == field["type"].lstrip("*"))
         if len(values) < 2:
             for msg, args in model["validations"].get(struct, []):
-                if msg.lstrip(".").split()[0] == field["yaml"] and "must be one of" in msg:
+                # the same rule the Type column uses: a rule about this key
+                # that names constants is stating the values it accepts,
+                # whatever words surround them
+                if msg.lstrip(".").split()[0] == field["yaml"]:
                     values = sorted(model["consts"][a] for a in args if a in model["consts"])
         if len(values) >= 2:
             return field, values
     return None, []
 
 
-def _applies(struct, field, model, value):
-    """Whether a key belongs in the table for one discriminator value."""
+def _applies(struct, field, model, value, membership=None):
+    """Whether a key belongs in the table for one discriminator value.
+
+    Two rules answering two different questions, not a rule and a fallback.
+
+    The probe answers "does the program refuse this key here": a proof, and the
+    one that matters, because a key in the wrong table is one a reader sets and
+    gets an error for. Rewording `must not be set for remote attestors` used to
+    move `finalityOffset` into the remote table, which is exactly that.
+
+    The validation text answers "is this key conventionally part of this
+    shape". The signer tables are split that way and the binary enforces none
+    of it -- it accepts `grpc` on a local signer -- so no probe can see it. If
+    that wording changes, the signer tables get keys that work but do not
+    belong, which a reader can shrug off. The canary still watches for the
+    whole vocabulary going at once.
+    """
     key = field["yaml"]
+    if membership is not None and membership.get((struct, key, value)) is False:
+        return False
     for msg, _a in model["validations"].get(struct, []):
         body = msg.lstrip(".")
         if not body.startswith(key + " "):
@@ -805,7 +1538,7 @@ def _applies(struct, field, model, value):
     return True
 
 
-def discover_config_sections(model):
+def discover_config_sections(model, membership=None):
     """Every table the page needs, by three rules and no list.
 
     One table per top-level block. A nested struct flattens into its parent
@@ -837,7 +1570,8 @@ def discover_config_sections(model):
 
         field, values = _discriminator(struct, model)
         if values:
-            per_value = {v: [r for r in rows if _applies(r[0], r[1], model, v)]
+            per_value = {v: [r for r in rows
+                             if _applies(r[0], r[1], model, v, membership)]
                          for v in values}
             # a two-valued key that gates nothing is not a discriminator: db.type
             # picks a backend, it does not change which keys exist
@@ -876,10 +1610,27 @@ def discover_config_sections(model):
     for field in model["structs"][CONFIG_ROOT]["fields"]:
         child = _element_type(field["type"], model)
         if not child:
-            raise SourceError(f"top-level key {field['yaml']} is not a block; "
-                              "the page has no shape for a scalar there")
+            _problem("scalar_top_level",
+                     f"top-level key {field['yaml']} is not a block; the page "
+                     "has no shape for a scalar there. Give it a section of its "
+                     "own, or nest it under one.",
+                     key=field["yaml"])
+            continue
         walk(f"config:{field['yaml']}", child, (CONFIG_ROOT, field["yaml"]))
     return out
+
+
+def _rules_for(struct, field, model):
+    """Every validation rule that names this field.
+
+    What the fingerprint is computed over, and what a `fingerprint_mismatch`
+    has to report: a rule that only changed wording still moves the hash, and
+    still changes what the Default-or-required column says.
+    """
+    return sorted(set(
+        msg for msg, _a in
+        model.get("deep_validations", model["validations"]).get(struct, [])
+        if msg.lstrip(".").split()[0].split("[")[0] == field["yaml"]))
 
 
 def _fingerprint(struct, field, model):
@@ -891,17 +1642,33 @@ def _fingerprint(struct, field, model):
     validation rule naming it: enough to catch a real change, and blind to
     whitespace and to code elsewhere in the struct.
     """
-    rules = sorted(msg for msg, _a in model["validations"].get(struct, [])
-                   if msg.lstrip(".").split()[0].split("[")[0] == field["yaml"])
-    basis = "|".join([field["type"], field["yaml"], *rules])
+    basis = "|".join([field["type"], field["yaml"],
+                      *_rules_for(struct, field, model)])
     return hashlib.sha1(basis.encode()).hexdigest()[:8]
 
 
-def _clean_doc(field):
+# A clause a Go comment opens with to say which variant a key belongs to.
+# Stripping one is only safe when the table it lands in is already about that
+# variant -- otherwise the clause is the sole statement of the condition, and
+# removing it leaves a row that reads as unconditional.
+_VARIANT_CLAUSE = [
+    re.compile(r"^(required|optional)[^.]*?(?:--|—)\s*"),
+    re.compile(r"^required for [^.]*\.\s*"),
+    re.compile(r"^(local|remote) only\.\s*"),
+]
+
+
+def _clean_doc(field, variant=None):
     """A Go field comment, read as a sentence about the key.
 
-    Go comments open with the field's own name and often restate the
-    required-ness that already has its own column, so both come off.
+    Go comments open with the field's own name, so that comes off -- an exact
+    match on the identifier, not a guess.
+
+    A clause naming a variant comes off only when `variant` says this table is
+    already about that variant. It used to come off always, on the reasoning
+    that the columns restate it. They do not always: a key whose condition
+    lives in a helper renders `optional`, and the stripped clause was the only
+    place a reader could have learned otherwise.
     """
     doc = field["doc"]
     if not doc:
@@ -909,9 +1676,10 @@ def _clean_doc(field):
     if doc.startswith(field["go"]):
         doc = doc[len(field["go"]):].strip()
     doc = re.sub(r"^is\s+", "", doc)
-    doc = re.sub(r"^(required|optional)[^.]*?(?:--|—)\s*", "", doc)
-    doc = re.sub(r"^required for [^.]*\.\s*", "", doc)
-    doc = re.sub(r"^(local|remote) only\.\s*", "", doc)
+    for rx in _VARIANT_CLAUSE:
+        m = rx.match(doc)
+        if m and variant and variant.lower() in m.group(0).lower():
+            doc = doc[m.end():]
     doc = re.sub(r'"([^"]+)"', r"`\1`", doc)
     if re.fullmatch(r"\[.*\]", doc):
         return ""
@@ -930,8 +1698,14 @@ def _type_cell(go, field, model):
     values = [v for c, v in model["consts"].items() if named.get(c) == t]
     if values:
         return " | ".join(f"`{v}`" for v in sorted(values))
+    # A rule about this key that names constants is stating the values it
+    # accepts, whatever words surround them. This used to require the message
+    # to say "must be one of": `Observability.Validate` says "expected [...]"
+    # instead, so `observability.type` published as `string` while `db.type`
+    # -- same shape of key, different phrasing -- published its two values.
+    # Nobody noticed, because every guard here watches the required column.
     for msg, args in model["validations"].get(go, []):
-        if msg.lstrip(".").split()[0] == field["yaml"] and "must be one of" in msg:
+        if msg.lstrip(".").split()[0] == field["yaml"]:
             resolved = [model["consts"][a] for a in args if a in model["consts"]]
             if resolved:
                 return " | ".join(f"`{v}`" for v in resolved)
@@ -941,72 +1715,479 @@ def _type_cell(go, field, model):
         return "list"
     if t in model["structs"] or t in model["aliases"]:
         return "block"
-    return f"`{t}`"
+    if (go, field["yaml"]) in OPAQUE_TYPES:
+        return OPAQUE_TYPES[(go, field["yaml"])]
+    # Everything else was published as whatever Go calls it, which put
+    # `yaml.RawMessage` in a column a reader writes values into. A type this
+    # tool cannot describe is one it must not name.
+    _problem("unreadable_type",
+             f"{go}.{field['go']} has type `{t}`, which is neither a Go type a "
+             "reader writes, a block, nor a set of constants -- so the column "
+             "would publish the Go type name. Give it an entry in OPAQUE_TYPES "
+             "saying what a reader writes there.",
+             struct=go, field=field["yaml"], go_type=t)
+    return UNREADABLE
 
 
-def _requirement(go, field, model, parent=None):
+# ---------------------------------------- requiredness, by asking the binary
+
+# Whether a config key is required was read out of the English in the Go
+# validation messages. That is the last thing on these pages decided by
+# matching words, and the words are free to change: rewording `required` to
+# `mandatory` flipped a key to optional with nothing to notice.
+#
+# The binary already answers the question exactly. `PathError.Path()` comes
+# back as the key path, so removing one key from a working config and asking
+# `ibc config validate` says whether that key is required -- and the match is
+# against the path removed, not against any phrase.
+#
+# Two fixtures because `observability.type` cannot be `simple` and `otel` at
+# once. Both are validated by the probe before anything is read from them: a
+# fixture that stops loading answers nothing, and says so.
+# beside this file, not under the tree being documented: the fixture belongs
+# to the tool. A sandbox that renames a config key makes it stale, and a stale
+# fixture refuses rather than answering wrongly, which is the intended
+# behaviour rather than an accident of where the file sits.
+PROBE_FIXTURES = [os.path.join(os.path.dirname(os.path.abspath(__file__)), n)
+                  for n in ("probe-config.yml", "probe-config-otel.yml")]
+
+# files a fixture refers to that must exist for it to validate at all
+PROBE_SIDECARS = {"probe-key.json": "{}", "otel.yaml": "{}"}
+
+
+def _yaml_join(stack):
+    out = ""
+    for _indent, seg in stack:
+        out += seg if seg.startswith("[") else (("." + seg) if out else seg)
+    return out
+
+
+def _yaml_paths(text):
+    """(line, path, indent, opens_a_list_item, inline value) for every key.
+
+    Indentation and `- ` are enough to know where you are, which keeps this
+    file free of a yaml dependency it otherwise does not need.
+    """
+    out, stack, counts = [], [], {}
+    for i, raw in enumerate(text.split("\n")):
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        body, item = raw.lstrip(), False
+        if body.startswith("- "):
+            body, item, indent = body[2:], True, indent + 2
+        m = re.match(r"([A-Za-z_]\w*):(.*)$", body)
+        if not m:
+            continue
+        # a new list item also retires the previous item's index marker, which
+        # sits one level shallower than the item's own keys
+        floor = indent - 1 if item else indent
+        while stack and stack[-1][0] >= floor:
+            if not stack[-1][1].startswith("["):
+                counts.pop(_yaml_join(stack), None)
+            stack.pop()
+        if item:
+            parent = _yaml_join(stack)
+            n = counts.get(parent, -1) + 1
+            counts[parent] = n
+            stack.append((indent - 1, f"[{n}]"))
+        stack.append((indent, m.group(1)))
+        out.append((i, _yaml_join(stack), indent, item, m.group(2).strip().strip('"')))
+    return out
+
+
+def _yaml_without(text, path):
+    """`text` with `path` removed, or None if it is not there.
+
+    Only the key's own children go with it -- a sibling sits at the same
+    indent, and taking siblings too removed a whole block and produced an
+    error about something else entirely.
+    """
+    lines = text.split("\n")
+    hit = [(i, ind, item) for i, p, ind, item, _v in _yaml_paths(text) if p == path]
+    if not hit:
+        return None
+    i, indent, item = hit[0]
+    j = i + 1
+    while j < len(lines) and (not lines[j].strip() or
+                              len(lines[j]) - len(lines[j].lstrip()) > indent):
+        j += 1
+    kept = lines[:i] + lines[j:]
+    if item:
+        # this key carried the item's `- `; the next sibling inherits it
+        if i < len(kept) and len(kept[i]) - len(kept[i].lstrip()) == indent:
+            kept[i] = " " * (indent - 2) + "- " + kept[i].lstrip()
+        else:
+            return None
+    return "\n".join(kept)
+
+
+def _probe_unknown_key(binary, text):
+    """The fixture path the binary calls an unknown field, if that is its
+    complaint. Any other complaint is not this function's business."""
+    home = tempfile.mkdtemp(prefix="refgen-unk-")
+    try:
+        with open(os.path.join(home, "ibc.yml"), "w") as fh:
+            fh.write(text)
+        for name, body in PROBE_SIDECARS.items():
+            with open(os.path.join(home, name), "w") as fh:
+                fh.write(body)
+        r = subprocess.run([binary, "config", "validate", "--home", home],
+                           capture_output=True, text=True, timeout=PROBE_TIMEOUT)
+        m = re.search(r'unknown field "([^"]+)"', r.stdout + r.stderr)
+        if not m:
+            return None
+        name = m.group(1)
+        for _i, path, _ind, _item, _v in _yaml_paths(text):
+            if path.rsplit(".", 1)[-1] == name:
+                return path
+        return None
+    except subprocess.TimeoutExpired:
+        return None
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def _yaml_with(text, path, value):
+    """`text` with `path` added, carrying `value`. None when it cannot be placed.
+
+    Used to ask the other question the tables need: not "is this key required"
+    but "does this key belong here at all". A key the binary rejects when it is
+    added to a variant does not belong in that variant's table.
+    """
+    if any(p == path for _i, p, _n, _t, _v in _yaml_paths(text)):
+        return text
+    parent, _, leaf = path.rpartition(".")
+    lines = text.split("\n")
+    # a list element is not a key line of its own, so the block is located by
+    # a sibling already inside it, which also gives the indent to match
+    for i, p, indent, _item, _v in _yaml_paths(text):
+        if p.rpartition(".")[0] != parent:
+            continue
+        return "\n".join(lines[:i + 1] + [" " * indent + f"{leaf}: {value}"]
+                         + lines[i + 1:])
+    return None
+
+
+# `config validate` checks the file's shape. `config validate relayer` and
+# `... attestor` additionally check what a running process needs, and a key can
+# be required only there: `ics26Router` passes a plain validate and stops both
+# runnable targets. Probing only the first published it as `optional`.
+PROBE_TARGETS = [([], None), (["relayer"], "relay"), (["attestor"], "attest")]
+
+
+def _probe_validate(binary, text, target=()):
+    """The key path the binary objects to, or None when it is content."""
+    home = tempfile.mkdtemp(prefix="refgen-cfg-")
+    try:
+        with open(os.path.join(home, "ibc.yml"), "w") as fh:
+            fh.write(text)
+        for name, body in PROBE_SIDECARS.items():
+            with open(os.path.join(home, name), "w") as fh:
+                fh.write(body)
+        r = subprocess.run([binary, "config", "validate", *target, "--home", home],
+                           capture_output=True, text=True, timeout=PROBE_TIMEOUT)
+        if r.returncode == 0:
+            return None
+        out = r.stdout + r.stderr
+        m = re.search(r"unable to load the config: ([^:\s]+):", out)
+        if m:
+            return m.group(1)
+        # a sufficiency target names the path directly, under its own prefix
+        m = re.search(r"Error: (?:relayer|attestor): ([\w.\[\]]+): ", out)
+        return m.group(1) if m else _WALL
+    except subprocess.TimeoutExpired:
+        return _WALL
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def _config_locations(model):
+    """{(child struct, parent struct, parent key): path from the root}.
+
+    Walks the struct graph the model already holds, so a key's place in the
+    file is derived rather than spelled out anywhere. `[]` marks a collection,
+    filled in later with the index of the element that matches the variant
+    being documented.
+    """
+    structs, aliases = model["structs"], model["aliases"]
+
+    def child_of(f):
+        t = f["type"].lstrip("*")
+        if t.startswith("[]"):
+            t = t[2:]
+            return (t, True) if t in structs else (None, False)
+        if t in aliases:
+            return aliases[t], True
+        return (t, False) if t in structs else (None, False)
+
+    loc = {}
+
+    def walk(struct, prefix, seen):
+        if struct in seen:
+            return
+        for f in structs[struct]["fields"]:
+            child, collection = child_of(f)
+            if not child:
+                continue
+            path = f"{prefix}.{f['yaml']}" if prefix else f["yaml"]
+            if collection:
+                path += "[]"
+            loc[(child, struct, f["yaml"])] = path
+            walk(child, path, seen + (struct,))
+
+    walk(CONFIG_ROOT, "", ())
+    return loc
+
+
+_FIXTURE_CACHE = {}
+
+
+def _probe_fixtures(binary):
+    """Every probe fixture, loaded once and proven to load at all."""
+    if _FIXTURE_CACHE.get("__binary__") == binary:
+        return _FIXTURE_CACHE["fixtures"]
+    fixtures = []
+    for full in PROBE_FIXTURES:
+        rel = os.path.basename(full)
+        if not os.path.exists(full):
+            raise SourceError(
+                f"the requiredness probe needs {rel}, and it is not there. It "
+                "is a config the binary validates, and the column is read by "
+                "removing one key from it at a time.", kind="missing_probe_fixture")
+        text = open(full).read()
+        # A key the schema dropped leaves the fixture ahead of the code, and
+        # the binary names it. Dropping it here is a repair, not a guess: the
+        # fixture is scaffolding for the probe, and a key that no longer exists
+        # cannot be probed anyway. An addition is different -- a value would
+        # have to be invented -- so that still refuses, below.
+        for _ in range(20):
+            problem = _probe_validate(binary, text)
+            if problem is None:
+                break
+            stale = _probe_unknown_key(binary, text)
+            if stale is None:
+                break
+            healed = _yaml_without(text, stale)
+            if healed is None or healed == text:
+                break
+            text = healed
+        problem = _probe_validate(binary, text)
+        if problem is not None:
+            raise SourceError(
+                f"{rel} no longer loads, so nothing can be learned by removing "
+                f"keys from it: the binary stops at `{problem}`. Put a value "
+                "for that key in the probe fixtures, taken from its doc "
+                "comment, its validation, or an existing example -- see "
+                "\"The probe fixtures\" in REFERENCE.md. If nothing in the "
+                "tree says what a valid value is, hand it back rather than "
+                "inventing one.",
+                kind="stale_probe_fixture")
+        fixtures.append((rel, text, _yaml_paths(text)))
+    _FIXTURE_CACHE.clear()
+    _FIXTURE_CACHE.update({"__binary__": binary, "fixtures": fixtures})
+    return fixtures
+
+
+def probe_membership(model, binary):
+    """{(struct, yaml key, variant): False} for keys a variant refuses.
+
+    The other question the variant tables ask. A block like `attestors` holds
+    two shapes, and a reader of the local shape should never meet a remote-only
+    key. That used to be read from the words `must not be set for remote
+    attestors`; rewording it put `finalityOffset` into the remote table, where
+    the binary rejects it and a reader would have acted on it.
+
+    So it is asked instead: put the key into an element of that variant and see
+    whether the program refuses it. The value is copied from an element that
+    already carries the key, never invented -- if no element has it, nothing is
+    claimed and the key stays where the tables already put it.
+    """
+    out = {}
+    fixtures = _probe_fixtures(binary)
+    for struct in sorted(model["structs"]):
+        field, values = _discriminator(struct, model)
+        if not field or len(values) < 2:
+            continue
+        for _rel, text, paths in fixtures:
+            known = {}
+            for _i, path, _n, _t, inline in paths:
+                leaf = path.rpartition(".")[2]
+                if inline:
+                    known.setdefault(leaf, inline)
+            for value in values:
+                collection = _collection_for(struct, model)
+                if collection is None:
+                    continue
+                index = _variant_index(paths, collection, field["yaml"], value)
+                if index is None:
+                    continue
+                base = f"{collection}[{index}]"
+                for member in model["structs"][struct]["fields"]:
+                    key = member["yaml"]
+                    if key == field["yaml"] or not _is_config_field(member["go"], key):
+                        continue
+                    path = f"{base}.{key}"
+                    if any(q == path for _i, q, _n, _t, _v in paths):
+                        continue        # present in this variant, so it belongs
+                    if key not in known:
+                        continue        # no value to copy; claim nothing
+                    added = _yaml_with(text, path, known[key])
+                    if added is None:
+                        continue
+                    if _probe_validate(binary, added) == path:
+                        out[(struct, key, value)] = False
+    return out
+
+
+def _collection_for(struct, model):
+    """The root-relative path of the collection whose elements are `struct`."""
+    for (child, _parent, _key), path in _config_locations(model).items():
+        if child == struct and path.endswith("[]"):
+            return path[:-2]
+    return None
+
+
+def probe_requiredness(model, binary, membership=None):
+    """{(region, key): True/False/None} -- required, not, or unanswerable.
+
+    For each documented key: remove exactly that key from a working config and
+    ask the binary. It is required when the binary objects to the path that was
+    removed. Nothing here reads a word of the message.
+
+    None means no fixture holds the key, so nothing is claimed. Rendering it
+    `optional` would be a guess, and a guess reads exactly like knowledge.
+    """
+    loc = _config_locations(model)
+    fixtures = _probe_fixtures(binary)
+
+    out = {}
+    for sec in discover_config_sections(model, membership):
+        disc = sec["discriminator"]
+        for struct, field, key, parent in sec["rows"]:
+            base = loc.get((struct, parent[0], parent[1]))
+            if base is None:
+                out[(sec["region"], key)] = (None, None)
+                continue
+            answer, condition = None, None
+            for _rel, text, paths in fixtures:
+                path, reachable = f"{base}.{field['yaml']}", True
+                while "[]" in path:
+                    head = path.split("[]", 1)[0]
+                    index = 0
+                    if disc is not None:
+                        index = _variant_index(paths, head, disc[0]["yaml"], disc[1])
+                        if index is None:
+                            reachable = False
+                            break
+                    path = path.replace("[]", f"[{index}]", 1)
+                if not reachable:
+                    continue
+                without = _yaml_without(text, path)
+                if without is None:
+                    # The fixture validates and does not contain this key, so
+                    # the program runs without it: a proof it is not required,
+                    # not an absence of evidence. It also means adding a config
+                    # key costs a developer nothing here, and a key later made
+                    # mandatory stops the fixture validating, which is loud.
+                    #
+                    # Only sound while the block the key lives in is present.
+                    # If no fixture instantiates `signers` at all, nothing was
+                    # learned about `signers[].alias` by leaving it out, and
+                    # calling it optional would be a guess.
+                    parent = path.rsplit(".", 1)[0]
+                    if parent == path or any(q == parent or q.startswith(parent + ".")
+                                             for _i, q, _n, _t, _v in paths):
+                        answer = False
+                    continue
+                # asked of the file first, then of each runnable target. A key
+                # only a target refuses is required to run, not to be valid.
+                answer = _probe_validate(binary, without) == path
+                if not answer:
+                    hit = [label for tgt, label in PROBE_TARGETS[1:]
+                           if _probe_validate(binary, without, tgt) == path]
+                    if hit:
+                        answer, condition = True, ("run" if len(hit) > 1 else hit[0])
+                # A key only one fixture holds is conditional: the others are
+                # valid configs without it. The condition is whatever
+                # distinguishes that fixture at the key's own level -- read
+                # from the fixture, not named here.
+                elsewhere = [p2 for rel2, t2, p2 in fixtures if t2 is not text]
+                if answer and elsewhere and all(
+                        not any(q == path for _i, q, _n, _t, _v in p2)
+                        for p2 in elsewhere):
+                    condition = _sibling_discriminator(paths, path)
+                break
+            out[(sec["region"], key)] = (answer, condition)
+    return out
+
+
+def _sibling_discriminator(paths, path):
+    """The value of a `type` sitting beside `path`, if there is one.
+
+    What makes a fixture the otel one rather than the simple one is that its
+    `observability.type` says so. Reading it back out is how a key only that
+    fixture holds gets labelled with the condition it depends on.
+    """
+    parent = path.rsplit(".", 1)[0]
+    for _i, p, _ind, _item, inline in paths:
+        if p == f"{parent}.type" and inline:
+            return inline
+    return None
+
+
+def _variant_index(paths, collection, field, value):
+    """Which element of `collection` is the variant being documented."""
+    rx = re.compile(re.escape(collection) + r"\[(\d+)\]\." + re.escape(field) + r"$")
+    for _i, path, _ind, _item, inline in paths:
+        m = rx.match(path)
+        if m and inline == value:
+            return int(m.group(1))
+    return None
+
+
+def _requirement(go, field, model, parent=None, probed=None, variant=None):
     """The Default-or-required column.
 
     A key with a default is never the reader's to supply, so a default wins
-    over a validation rule. Required-ness itself is read out of the Validate
-    methods, which is where this codebase keeps it.
+    over everything below.
+
+    Required-ness itself comes from `probed`: the binary was asked, by removing
+    the key from a working config and seeing whether it objected to that path.
+    Reading it out of the English in the validation messages is what this
+    replaced -- a reworded message flipped a key to optional and nothing
+    noticed. The old reading stays only as the answer for tables whose
+    membership is still decided that way; where the probe has spoken, it wins.
     """
     key = field["yaml"]
     if (go, field["go"]) in model["defaults"]:
         return f"`{model['defaults'][(go, field['go'])]}`", None
-    if (go, field["go"]) in DEFAULT_CONSTS:
+    if (go, field["yaml"]) in DEFAULT_CONSTS:
         parts, cites = [], []
-        for label, path, const in DEFAULT_CONSTS[(go, field["go"])]:
-            value, line = _const_value(path, const)
+        for label, const in DEFAULT_CONSTS[(go, field["yaml"])]:
+            value, path, line = _const_value(const)
             parts.append(f"`{value}` ({label})" if label else f"`{value}`")
-            cites.append((path, line))
+            if path:
+                # a constant the tool could not locate has nowhere to point
+                cites.append((path, line))
         return ", ".join(parts), cites
 
-    sources = [(go, key)]
-    if parent:
-        sources.append((parent[0], f"{parent[1]}.{key}"))
-    rules = []
-    for owner, path in sources:
-        for msg, _args in model["validations"].get(owner, []):
-            body = msg.lstrip(".")
-            if body.startswith(path + " ") or body == path:
-                rules.append(body[len(path):].strip())
-
-    # a `required for X` rule outranks a `must not be set for Y` rule: both say
-    # the key belongs to one kind, and only the first says it is mandatory
-    for rest in rules:
-        m = re.match(r"required(?: for (?:type: )?(\w+))?", rest)
-        if m:
-            return ("**required**" if not m.group(1) else f"**required** for `{m.group(1)}`"), None
-    for rest in rules:
-        if rest.startswith("must not be set for"):
-            return f"`{_other_kind(go, rest.split()[-2], model)}` only", None
-        if ("unknown" in rest and "type" in rest) or "must be one of" in rest:
-            return "**required**", None
-
-    # a nested struct whose own Validate requires something is itself required
-    nested = field["type"].lstrip("*")
-    for msg, _a in model["validations"].get(nested, []):
-        if " required" in msg or msg.endswith("required"):
-            return "**required**", None
-    return "optional", None
+    if probed is None:
+        # No answer, and no second opinion to fall back on. Reading the English
+        # here is what this replaced; keeping it for the unanswered case would
+        # put the same silent wrong answer back, reachable only in the case
+        # nobody tests. gen_config has already refused by this point.
+        return UNREADABLE, None
+    if not probed:
+        return "optional", None
+    if variant in ("run", "relay", "attest"):
+        # required by a running process, not by the file being well formed
+        return ("**required** to run" if variant == "run"
+                else f"**required** to {variant}"), None
+    return ("**required**" if not variant else f"**required** for `{variant}`"), None
 
 
-def _other_kind(go, kind, model):
-    """The other value of the struct's discriminator field.
-
-    A `must not be set for local` rule means the key belongs to a remote
-    entry, so the column has to name the opposite of what the rule says.
-    """
-    for field in model["structs"][go]["fields"]:
-        values = sorted(v for c, v in model["consts"].items()
-                        if model["const_type"].get(c) == field["type"].lstrip("*"))
-        if kind in values and len(values) == 2:
-            return [v for v in values if v != kind][0]
-    raise SourceError(f"{go}: cannot tell what the opposite of {kind!r} is")
-
-
-def _description(struct, field, model, seen):
+def _description(struct, field, model, seen, variant=None):
     """The Description cell, and the four checks that keep it honest.
 
     A key documented in the source uses that; a key the source leaves
@@ -1014,75 +2195,200 @@ def _description(struct, field, model, seen):
     code it describes. Both, neither, or a fingerprint that no longer matches
     all raise, because each of those is a description nobody has re-read.
     """
-    doc = _clean_doc(field)
-    fallback = FALLBACK_DOCS.get((struct, field["go"]))
+    doc = _clean_doc(field, variant)
+    fallback = FALLBACK_DOCS.get((struct, field["yaml"]))
     where = f"{struct}.{field['go']}"
+    # Where a person -- or an agent -- goes to fix it. The better fix for a key
+    # nobody has described is a doc comment on the declaration itself, so the
+    # work order names the declaration rather than only the key.
+    declared_in = model["structs"].get(struct, {}).get("file")
+    declared_at = field.get("line")
     if doc and fallback:
         _problem("stale_fallback",
                  f"{where} now has a doc comment; drop its FALLBACK_DOCS entry",
-                 field=where)
+                 field=where, yaml_key=field["yaml"],
+                 file=declared_in, line=declared_at)
         return doc
     if not doc and not fallback:
         _problem("missing_description",
-                 f"{where} has no doc comment and no FALLBACK_DOCS entry",
+                 f"{where} has no doc comment and no FALLBACK_DOCS entry. The "
+                 "better fix is a doc comment on the declaration; a "
+                 "FALLBACK_DOCS entry is for a source you cannot edit.",
                  field=where, yaml_key=field["yaml"],
+                 file=declared_in, line=declared_at,
                  fingerprint=_fingerprint(struct, field, model))
         return "TODO: describe this key"
     if not fallback:
         return doc
     text, recorded = fallback
-    seen.add((struct, field["go"]))
+    seen.add((struct, field["yaml"]))
     current = _fingerprint(struct, field, model)
     if current != recorded:
         _problem("fingerprint_mismatch",
                  f"{where}: the source behind its hand-written description changed "
                  f"(fingerprint {recorded} -> {current}). Re-read \"{text}\" against the "
-                 "code, then record the new fingerprint. Nothing is written until you do.",
-                 field=where, description=text, was=recorded, now=current)
+                 "code, then record the new fingerprint. Nothing is written until you "
+                 f"do. What the fingerprint covers: type {field['type']}, key "
+                 f"{field['yaml']}, rules {_rules_for(struct, field, model) or 'none'}. "
+                 "A validation message that only changed wording moves this "
+                 "fingerprint too, and changes what the Default-or-required column "
+                 "says even though the declaration you are sent to did not move.",
+                 field=where, description=text, was=recorded, now=current,
+                 rules=_rules_for(struct, field, model),
+                 file=declared_in, line=declared_at)
     return text
 
 
-def _root_table(model, seen):
-    """The index of top-level blocks: what each is and which processes read it.
+# The words `_requirement` reads out of a validation message to decide what the
+# Default-or-required column says. They are the config package's words, not
+# this tool's, so they can be reworded -- and a rewording moves no table cell,
+# it only empties one.
+REQUIREMENT_VOCABULARY = ("required", "must not be set for", "must be one of")
 
-    Type and default mean nothing for a key whose value is a whole block, so
-    this table carries the two things a reader wants instead.
+
+def _requirement_canary(model):
+    """Refuse if no validation message uses the words the column is read from.
+
+    The same shape as the required-flag canary on the CLI side. It cannot see a
+    single key reworded -- only the whole vocabulary going away at once, which
+    is what a refactor of the error messages looks like. That is the failure
+    that renders a full page of `optional` and still passes every check.
     """
-    fields = model["structs"][CONFIG_ROOT]["fields"]
-    keys = [f["yaml"] for f in fields]
-    missing = [k for k in keys if k not in READ_BY]
-    read_by = dict(READ_BY)   # never mutate the module's copy: plan mode runs
-    if missing:                # in the same process as everything else
-        _problem("missing_read_by",
-                 "READ_BY has no entry for the top-level block(s): " + ", ".join(missing),
-                 blocks=missing)
-        for k in missing:
-            read_by[k] = "TODO: which processes read this"
-    gone = [k for k in READ_BY if k not in keys]
-    if gone:
-        _problem("dead_read_by",
-                 "READ_BY names top-level blocks that are gone: " + ", ".join(gone),
-                 blocks=gone)
-    rows = [(f"`{f['yaml']}`", read_by[f["yaml"]], _description(CONFIG_ROOT, f, model, seen))
-            for f in fields]
-    info = model["structs"][CONFIG_ROOT]
-    return (table(["Block", "Read by", "Purpose"], rows)
-            + "\n\n" + cite(info["file"], info["line"]))
+    seen = [msg for rules in model["validations"].values() for msg, _a in rules
+            if any(w in msg for w in REQUIREMENT_VOCABULARY)]
+    if not seen and not os.environ.get("REFGEN_NO_REQUIRED_KEYS"):
+        raise SourceError(kind="all_keys_optional", message=(
+            "no validation message uses any of "
+            f"{', '.join(repr(w) for w in REQUIREMENT_VOCABULARY)}. Whether a "
+            "key is required no longer depends on these words -- that is asked "
+            "of the binary -- but which variant table a key belongs to still "
+            "does, so the attestor and signer tables would silently carry every "
+            "key in both. Either nothing is variant-specific any more, or the "
+            "config package reworded its errors. Confirm which, then update "
+            "REQUIREMENT_VOCABULARY or set REFGEN_NO_REQUIRED_KEYS=1."))
+
+
+def _example_config():
+    """The config fixture the config package's own tests load and validate.
+
+    Copied, not written here and not synthesised. It is a file the Go suite
+    already parses with validation on, so a key renamed without updating it
+    fails `go test` in the same pull request that renamed it -- a stronger
+    guarantee than anything this tool could check for itself, and one that
+    costs nothing to follow. The example on this page used to be a hand-copy
+    of the tutorial's config: nothing checked it, and a rename left it showing
+    a key that no longer existed.
+
+    The fixture is found by what the tests load rather than by its path, so
+    renaming it or moving testdata costs nothing. Two fixtures is a stop:
+    which config a reference page should show is not this tool's decision.
+    """
+    pkg = _anchors()["config_pkg"]
+    tests = [f for f in _walk(".go")
+             if f.endswith("_test.go") and os.path.dirname(f) == pkg]
+    names, validated = set(), False
+    for f in tests:
+        src = _blank_comments(_read(f))
+        for m in re.finditer(
+                r'filepath\.Join\(\s*"([^"]+)"\s*,\s*"([^"]+\.ya?ml)"\s*\)', src):
+            names.add((m.group(1), m.group(2)))
+        if re.search(r"LoadFromFile\([^)]*,\s*true\s*\)", src):
+            validated = True
+    if not names:
+        _problem("no_example_config",
+                 f"no yaml fixture is loaded by the tests in {pkg}, so there is "
+                 "no example config that anything keeps valid. The example is "
+                 "copied from the fixture the Go tests already validate.",
+                 package=pkg)
+        return ""
+    if len(names) > 1:
+        _problem("ambiguous_example_config",
+                 f"{pkg} tests load more than one yaml fixture "
+                 f"({', '.join('/'.join(n) for n in sorted(names))}); which one a "
+                 "reference page should show is a choice this tool cannot make.",
+                 package=pkg, fixtures=sorted("/".join(n) for n in names))
+        return ""
+    sub, name = names.pop()
+    rel = os.path.join(pkg, sub, name)
+    if not os.path.exists(os.path.join(IBC, rel)):
+        _problem("unreadable_example_config",
+                 f"the tests load {rel}, but it is not there to read", file=rel)
+        return ""
+    if not validated:
+        _problem("unvalidated_example_config",
+                 f"no test in {pkg} loads a config with validation on, so nothing "
+                 f"proves {rel} is still valid. The example is published on the "
+                 "strength of that test.",
+                 file=rel)
+        return ""
+    text = open(os.path.join(IBC, rel)).read()
+    # the licence header is a fact about the repository, not about the config
+    text = re.sub(r"\A(\s*#[^\n]*\n)+", "", text).strip("\n")
+    return "```yaml\n" + text + "\n```\n\n" + cite(rel, 1)
+
+
+def _cross_references(model):
+    """Rows for keys whose value must name something declared elsewhere.
+
+    These were a hand-written table with hand-written line numbers, because the
+    rules behind them were invisible here: `Config.Validate` holds a table of
+    method values, and each rule builds its path through a local variable. Both
+    shapes are followed now, so the table is derived like every other one and
+    its citations cannot rot.
+    """
+    rows, cites = [], []
+    seen = sorted({msg for msg, _a in model["deep_validations"].get(CONFIG_ROOT, [])})
+    for msg in seen:
+        body = msg.lstrip(".")
+        path, _, rule = body.partition(" ")
+        if not rule or "[]" not in path:
+            continue
+        # `%s` stands for whichever end of a connection is at fault
+        key = path.replace("[]..", "[].<end>.").replace("..", ".<end>.")
+        text = re.sub(r"%[-+ #0-9.]*[a-zA-Z]", "…", rule)
+        rows.append((f"`{key}`", text[0].upper() + text[1:]))
+    if not rows:
+        _problem("no_cross_references",
+                 "no rule in the config package names a key that must match "
+                 "another, which this page has a table for. Either the checks "
+                 "moved somewhere this tool does not follow, or they are gone.",
+                 struct=CONFIG_ROOT)
+        return ""
+    where = model["structs"].get(CONFIG_ROOT, {})
+    body = table(["Key", "What the loader enforces"], rows)
+    if where.get("file"):
+        body += "\n\n" + cite(where["file"], where.get("line"))
+    return body
 
 
 def gen_config():
     model = parse_go_config()
+    _requirement_canary(model)
+    binary = build_cli()
+    membership = probe_membership(model, binary)
+    probed = probe_requiredness(model, binary, membership)
     blocks, seen_fallbacks = {}, set()
-    for sec in discover_config_sections(model):
+    for sec in discover_config_sections(model, membership):
         rows, cites = [], []
         for struct, field, key, parent in sec["rows"]:
-            description = _description(struct, field, model, seen_fallbacks)
+            description = _description(
+                struct, field, model, seen_fallbacks,
+                variant=sec["discriminator"][1] if sec["discriminator"] else None)
             if sec["discriminator"] and field is sec["discriminator"][0]:
                 # the key that names this table: its value is the heading
                 rows.append((f"`{key}`", f"`{sec['discriminator'][1]}`",
                              "**required**", description))
                 continue
-            req, extra = _requirement(struct, field, model, parent)
+            answer, condition = probed.get((sec["region"], key), (None, None))
+            if answer is None:
+                _problem("unprobed_section",
+                         f"no probe fixture instantiates the block `{key}` lives "
+                         "in, so whether it is required could not be asked of "
+                         "the binary, and calling it optional would be a guess. "
+                         "Add one to a fixture in docs/6-ibc-cli/tools/.",
+                         key=key, region=sec["region"])
+            req, extra = _requirement(struct, field, model, parent,
+                                      probed=answer, variant=condition)
             if extra:
                 cites.extend(extra)
             if sec["discriminator"]:
@@ -1099,7 +2405,24 @@ def gen_config():
             body += " " + cite(path, line)
         blocks[sec["region"]] = body
 
-    reachable = {(st, f["go"]) for sec in discover_config_sections(model)
+    blocks["config:crossrefs"] = _cross_references(model)
+    blocks["config:example"] = _example_config()
+    blocks["notice"] = _notice()
+
+    # A repeated type name only matters if both would reach a page: the tables
+    # are keyed by type name, so one silently replaces the other and the page
+    # describes whichever file sorted last.
+    documented = {st for sec in discover_config_sections(model)
+                  for st, _f, _k, _p in sec["rows"]}
+    for name, first, second, line in model.get("duplicates", []):
+        if name in documented:
+            _problem("duplicate_struct",
+                     f"{name} is declared in both {first} and {second}, and both "
+                     "would describe the same keys. One silently replaces the "
+                     "other. Rename one, or move it out of the config package.",
+                     struct=name, files=[first, second], file=second, line=line)
+
+    reachable = {(st, f["yaml"]) for sec in discover_config_sections(model)
                  for st, f, _k, _p in sec["rows"]}
     orphans = sorted(f"{s}.{f}" for s, f in set(FALLBACK_DOCS) - seen_fallbacks)
     if orphans:
@@ -1115,8 +2438,8 @@ def gen_config():
         f"{st}.{f['go']}" for sec in discover_config_sections(model)
         for st, f, _k, _p in sec["rows"]
         if f["type"].startswith("*") and not _element_type(f["type"], model)
-        and (st, f["go"]) not in DEFAULT_CONSTS
-        and (st, f["go"]) not in NO_NAMED_DEFAULT
+        and (st, f["yaml"]) not in DEFAULT_CONSTS
+        and (st, f["yaml"]) not in NO_NAMED_DEFAULT
         and (st, f["go"]) not in SKIP_FIELDS)
     if unclaimed:
         _problem("unclaimed_default",
@@ -1129,12 +2452,6 @@ def gen_config():
 
 # ----------------------------------------------------------------- cli -> page
 
-CLI_DIR = "cli"
-CLI_SRC = "cli/cmd/ibc"
-
-# The root command's own flags are declared here rather than in main.go.
-GLOBAL_FLAGS_FILE = "cli/internal/config/flags.go"
-CLI_BIN = "cli/bin/ibc"
 
 # Cobra generates these and nobody reads a page about them. Excluded here so
 # the coverage assertion below still accounts for every other command.
@@ -1154,14 +2471,48 @@ def build_cli():
     `--help` prints and exits, so this needs a Go toolchain and nothing else:
     no chains, no config, no network.
     """
-    out = os.path.join(IBC, CLI_BIN)
+    a = _anchors()
+    out = os.path.join(IBC, a["cli_module"], "bin", a["binary"])
     if os.environ.get("REFGEN_NO_BUILD") and os.path.exists(out):
         return out
-    r = subprocess.run(["go", "build", "-o", "bin/ibc", "./cmd/ibc/..."],
-                       cwd=os.path.join(IBC, CLI_DIR), capture_output=True, text=True)
+
+    # Keyed by what the sources say, not by where they are. Two runs over the
+    # same code share a binary, which matters now that the config page probes
+    # one too -- and a fixed output path was a race between concurrent runs,
+    # because each would overwrite the other's binary mid-read.
+    # every Go file in the repository, not just this module's: the CLI depends
+    # on a second module through a `replace`, and keying on one module alone
+    # would serve a stale binary after the other changed -- a cache that
+    # documents a CLI which no longer exists.
+    digest = hashlib.sha256()
+    module = os.path.join(IBC, a["cli_module"])
+    for root, dirs, files in os.walk(IBC):
+        dirs[:] = sorted(d for d in dirs if d not in _SKIP_DIRS)
+        for name in sorted(files):
+            if not name.endswith((".go", ".mod", ".sum")):
+                continue
+            path = os.path.join(root, name)
+            digest.update(os.path.relpath(path, IBC).encode())
+            with open(path, "rb") as fh:
+                digest.update(fh.read())
+    key = digest.hexdigest()[:16]
+    cached = os.path.join(tempfile.gettempdir(), f"refgen-cli-{key}")
+    if os.path.exists(cached):
+        return cached
+
+    r = subprocess.run(["go", "build", "-o", os.path.join("bin", a["binary"]),
+                        "./" + a["cli_pkg"] + "/..."],
+                       cwd=module, capture_output=True, text=True)
     if r.returncode != 0:
         raise SourceError(f"go build failed:\n{r.stderr}")
-    return out
+    # copy to a unique name and rename into place: a copy interrupted partway
+    # leaves a truncated file at the cache path, and every later run then
+    # executes it and reports the binary's failure as the source's
+    themp = f"{cached}.{os.getpid()}"
+    shutil.copyfile(out, themp)
+    os.chmod(themp, 0o755)
+    os.replace(themp, cached)
+    return cached
 
 
 def _cli_help(binary, path):
@@ -1198,10 +2549,22 @@ def _parse_flags(help_text, section):
         elif out and line.startswith("  "):
             out[-1]["doc"] += " " + line.strip()
     for f in out:
-        d = re.search(r"\s*\(default:?\s+(.+)\)$", f["doc"])
-        f["default"] = d.group(1).strip('"') if d else ""
+        # The last parenthetical, not the first. `re.search` is leftmost and
+        # `(.+)` is greedy, so a flag carrying both the author's `(default: x)`
+        # and Cobra's `(default "y")` captured everything between the first
+        # opener and the last closer, publishing `x) (default "y` as the
+        # default. Cobra's comes last because Cobra appends it, and it is the
+        # binary's own answer, so it wins; the author's parenthetical stays in
+        # the description, which is where prose about a computed default reads.
+        d = None
+        if f["doc"].endswith(")"):
+            for m in re.finditer(r"\s*\(default:?\s+", f["doc"]):
+                d = m
         if d:
+            f["default"] = f["doc"][d.end():-1].strip().strip('"')
             f["doc"] = f["doc"][:d.start()].rstrip()
+        else:
+            f["default"] = ""
     return [f for f in out if f["name"] != "help"]
 
 
@@ -1229,102 +2592,334 @@ def walk_cli(binary):
     return tree
 
 
-def parse_cli_source():
-    """Required flags, which `--help` does not print.
+# ------------------------------------------------- required flags, by asking
 
-    Cobra keeps required-ness in an annotation set by MarkFlagRequired, so it
-    is read out of the command wiring the same way config required-ness is
-    read out of the Validate methods.
+# Cobra reports required flags when a command is run without them, so the
+# honest source is the binary, not the wiring that registered them. Reading the
+# wiring meant matching Go variable names (`cmdDeployClient`), the
+# `&cobra.Command{}` literal, and the root's `AddCommand(` with hand-balanced
+# parentheses. None of that is visible to a reader, all of it is free to change,
+# and every change to it stopped a developer to teach this file a new name.
+PROBE_PLACEHOLDER = "refgen-probe"
+
+# Cobra validates positional arguments before required flags, so a command with
+# arity answers the arity question first and never mentions its flags. Read the
+# count it asks for, supply that many placeholders, and ask again. Placeholders
+# are never executed: validation fails before RunE runs.
+_ARITY = [
+    (re.compile(r"accepts between (\d+) and \d+ arg\(s\)"), 1),
+    (re.compile(r"accepts (\d+) arg\(s\)"), 1),
+    (re.compile(r"accepts at least (\d+) arg\(s\)"), 1),
+    (re.compile(r"requires at least (\d+) arg\(s\)"), 1),
+]
+_REQUIRED = re.compile(r'required flag\(s\) ((?:"[\w.-]+"(?:, )?)+) not set')
+
+# Cobra has more than one way to say it, and a command can also check by hand
+# in RunE. Reading only the first sentence meant `ibc deploy core`, which exits
+# with `Error: --chain is required`, rendered every flag as optional.
+_REQUIRED_ALSO = [
+    re.compile(r"(?:^|\s)--([\w-]+) is required"),
+    re.compile(r'flag "?--?([\w-]+)"? is required'),
+]
+
+# A rule over a group of flags -- at least one of these, or all or none -- makes
+# no single flag mandatory. Reading the group as a flag name produced a "flag"
+# called `alpha beta`, which matches nothing, so both real flags rendered
+# optional while the binary refused to run without one.
+PROBE_TIMEOUT = 20
+
+# Run once to give the throwaway home a config, so a command gets past loading
+# one and reaches its own checks. Cobra's own required flags are validated
+# before RunE and are seen either way; a command that checks a flag by hand
+# inside RunE is only reachable once it can start. Best effort: if this command
+# does not exist the probe simply sees less, and says so per command.
+PROBE_SEED = ["config", "new"]
+
+# Commands whose required-flag answer is a floor: the probe stopped on something
+# that was not a missing flag, so a flag checked only afterwards is unread. The
+# report names them, because `required` on one row and blank on another reads as
+# a deliberate distinction rather than an incomplete answer.
+INCOMPLETE_PROBES = []
+
+
+def _probe_run(binary, argv, home):
+    """Run the CLI once, unable to touch anything the developer owns.
+
+    A command with no required flag is not stopped by the flag check, so the
+    probe really does run it. `ibc migrate down` rolled back a migration and
+    `ibc config new` wrote into the developer's home before this was sandboxed.
+    So: a throwaway home, no stdin to read, and a timeout, because `relayer
+    run` is a server and would otherwise never return.
     """
-    # declarations are spread across the package; every AddCommand, flag
-    # registration, and MarkFlagRequired lives in main.go, and citations point
-    # there, so the wiring is parsed on its own to keep line numbers true
-    src = "\n".join(open(os.path.join(IBC, CLI_SRC, f)).read()
-                    for f in sorted(os.listdir(os.path.join(IBC, CLI_SRC)))
-                    if f.endswith(".go") and not f.endswith("_test.go"))
-    wiring = open(os.path.join(IBC, CLI_SRC, "main.go")).read()
+    env = dict(os.environ, HOME=home, XDG_CONFIG_HOME=os.path.join(home, ".config"))
+    try:
+        return subprocess.run([binary] + argv + ["--home", home],
+                              capture_output=True, text=True, env=env,
+                              stdin=subprocess.DEVNULL, timeout=PROBE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None
 
+
+# The probe stopped at an error that is not about a missing flag: a value it
+# supplied was rejected, or the command needs state it does not have. Anything
+# the command would have asked for next is unread, so the list is a floor
+# rather than the answer.
+_WALL = object()
+
+
+def _error_line(out):
+    """The line the command failed on, and nothing after it.
+
+    What follows is the usage block, which prints every flag with its help
+    text. Reading that too let a sentence in a flag's description -- `required
+    only for remote signers` -- mark the flag required.
+    """
+    for line in out.splitlines():
+        if line.startswith("Error:"):
+            return line
+    return out.split("\n", 1)[0]
+
+
+def _probe_once(binary, path, supplied, home, max_args=8):
+    """What one run of a command says it is missing, given what it was handed.
+
+    Returns a list of flag names, or None when the run never reached flag
+    validation, which the caller reports rather than reads as `nothing is
+    required`. A command group returns [] because running one prints help.
+    """
+    positional = []
+    while True:
+        r = _probe_run(binary, path.split() + positional + list(supplied), home)
+        if r is None:
+            return None
+        line = _error_line((r.stderr or "") + (r.stdout or ""))
+        m = _REQUIRED.search(line)
+        if m:
+            return sorted(re.findall(r'"([\w.-]+)"', m.group(1)))
+        for rx in _REQUIRED_ALSO:
+            extra = rx.search(line)
+            if extra:
+                return [extra.group(1)]
+        want = None
+        for rx, group in _ARITY:
+            am = rx.search(line)
+            if am:
+                want = int(am.group(group))
+                break
+        if want is None:
+            # ran clean, or stopped on something that is not a missing flag.
+            # The difference matters: the first means nothing more is required,
+            # the second means the asking stopped early.
+            return [] if r.returncode == 0 else _WALL
+        if want <= len(positional) or want > max_args:
+            return None
+        positional = [PROBE_PLACEHOLDER] * want
+
+
+def _probe_required(binary, path, flag_types, home, rounds=8):
+    """Every flag a command refuses to run without.
+
+    One answer is not the answer. The command framework reports the flags it
+    was told are required before the command body runs, so a command that also
+    checks one by hand never mentions the second until the first is supplied:
+    `deploy client` names `--counterparty-chain`, and only then `--chain`. So
+    supply what has been learned and ask again, until asking stops naming
+    anything new.
+
+    What this cannot reach: a check that runs only after an earlier value is
+    accepted. The probe supplies a placeholder, the command rejects it as not
+    naming anything real, and whatever it would have asked for next is unread.
+    `deploy render-config` requires `--signer-b` and says so only once
+    `--signer-a` names a signer that exists. So a list here is a floor. It is
+    the same floor the wiring scraper had -- it saw neither flag -- and the
+    tables are no worse for it, but it is not the whole truth and should not
+    be read as one.
+    """
+    found, supplied, reached = set(), [], False
+    for _ in range(rounds):
+        got = _probe_once(binary, path, supplied, home)
+        if got is None:
+            return (sorted(found), "unreachable") if reached else (None, "unreachable")
+        if got is _WALL:
+            # A wall before anything was found says only that the command needs
+            # state the probe does not have, which is true of most of them. A
+            # wall *after* a flag was found is the interesting one: the command
+            # was still answering, and stopped.
+            return sorted(found), "partial" if found else "blocked"
+        reached = True
+        new = set(got) - found
+        if not new:
+            return sorted(found), "complete"
+        found |= new
+        supplied = []
+        for name in sorted(found):
+            supplied.append("--" + name)
+            if flag_types.get(name, "string") != "bool":
+                supplied.append(PROBE_PLACEHOLDER)
+    return sorted(found), "partial"
+
+
+def required_flags(binary, tree):
+    """{command path: {flag, ...}} for every node in the tree.
+
+    A flag is required at a node when it is required on every runnable leaf
+    beneath it, which is what a persistent required flag means. Marking it on
+    the node as well as the leaf is what puts `required` on the inherited rows
+    of each leaf's table.
+    """
+    leaves = [p for p, node in tree.items() if not node["subs"]]
+    per_leaf, unreachable, incomplete = {}, [], []
+    # A home per command, not one shared by all of them. Some commands are not
+    # rejected -- `config add-chain` runs for real and writes a chain -- so a
+    # shared home meant every command sorting after it was probed against a
+    # different configuration, and the answer depended on alphabetical order.
+    # Worse, a config the CLI then rejects (a key newly made required that
+    # `add-chain` cannot set) made every later command fail at load before
+    # reaching its own flag checks, and their required flags read as optional.
+    for leaf in sorted(leaves):
+        with tempfile.TemporaryDirectory(prefix="refgen-probe-") as home:
+            seeded = _probe_run(binary, list(PROBE_SEED), home)
+            if seeded is None or seeded.returncode != 0:
+                _problem("unseeded_probe",
+                         f"`{' '.join(PROBE_SEED)}` did not initialise the "
+                         "probe's throwaway home, so a command that needs a "
+                         "config cannot start and the checks it makes itself "
+                         "stay unread. Flags the command framework was told "
+                         "about are still found.",
+                         seed=list(PROBE_SEED))
+            types = {}
+            for node, node_tree in tree.items():
+                if node == "" or leaf == node or leaf.startswith(node + " "):
+                    types.update({f["name"]: f["type"] for f in node_tree["flags"]})
+            got, how = _probe_required(binary, leaf, types, home)
+            if got is None:
+                unreachable.append(leaf)
+                got = []
+            elif how != "complete" and got:
+                # It stopped on something that was not a missing flag, so what
+                # it found is a floor. Only worth naming when it found
+                # something: a column of blanks claims nothing, but `required`
+                # on one row and blank on the next reads as a distinction the
+                # tool did not actually make.
+                incomplete.append(leaf)
+            per_leaf[leaf] = set(got)
+    if unreachable:
+        _problem("unprobed_command",
+                 "these commands never reached flag validation, so their required "
+                 f"flags could not be read: {sorted(unreachable)}. Their tables "
+                 "would claim every flag is optional.",
+                 commands=sorted(unreachable))
+
+    # The canary. If Cobra ever rewords this message the probe matches nothing,
+    # every table quietly loses its `required` marks, and the page still renders
+    # -- which is what a green check looks like when a generator has gone blind.
+    if not any(per_leaf.values()) and not os.environ.get("REFGEN_NO_REQUIRED_FLAGS"):
+        raise SourceError(kind="all_flags_optional", message=(
+            "no command reports a required flag. Either the CLI genuinely has "
+            "none, or Cobra no longer says `required flag(s) \"x\" not set` and "
+            "this probe now reads every flag as optional. Confirm which, then "
+            "set REFGEN_NO_REQUIRED_FLAGS=1 if the CLI really has none."))
+
+    INCOMPLETE_PROBES.clear()
+    INCOMPLETE_PROBES.extend(sorted(incomplete))
+
+    out = {}
+    for node, info in tree.items():
+        if node in per_leaf:
+            # a command answers for itself, including the flags it inherits:
+            # `--chain` is persistent on `deploy` and required by `deploy core`
+            # alone, which only the leaf can say
+            out[node] = per_leaf[node]
+            continue
+        under = [p for p in leaves if node == "" or p.startswith(node + " ")]
+        shared = set.intersection(*(per_leaf[p] for p in under)) if under else set()
+        # and only over flags the node itself declares, so a group is never
+        # credited with a flag private to the one command beneath it
+        out[node] = shared & {f["name"] for f in info["flags"]}
+    return out
+
+
+def cli_citation_lines():
+    """Where to point a reader, which is the one thing only the source knows.
+
+    Best effort by design. A citation names a file and a line; a line this
+    cannot find degrades to the file, and nothing here raises. Facts come from
+    the binary, so a miss here costs a reader some precision and cannot make a
+    table wrong.
+    """
+    lines = {}
+    try:
+        wiring = _read(_anchors()["cli_main"])
+    except OSError:
+        return lines
+
+    src = "\n".join(open(os.path.join(IBC, _anchors()["cli_src"], f)).read()
+                    for f in sorted(os.listdir(os.path.join(IBC, _anchors()["cli_src"])))
+                    if f.endswith(".go") and not f.endswith("_test.go"))
     consts = {m.group(1): m.group(2)
               for m in re.finditer(r'(\w+)\s*=\s*"([\w-]+)"', src)}
 
+    # Any identifier assigned a cobra.Command, not just the ones spelled
+    # `cmdX`. Matching the prefix meant a command variable renamed to
+    # `deployClientCmd` fell out of the tree and took its citation with it.
     use = {}
-    for m in re.finditer(r"(cmd\w+)\s*=\s*&cobra\.Command\{", src):
+    for m in re.finditer(r"(\w+)\s*=\s*&cobra\.Command\{", src):
         tail = src[m.end():m.end() + 400]
         u = re.search(r'Use:\s*(?:"([\w-]+)|(\w+))', tail)
         if u:
-            # Use: is sometimes a const shared by two commands, as with
-            # useStatus, so resolve identifiers through the const table
             use[m.group(1)] = u.group(1) or consts.get(u.group(2), u.group(2))
 
     parent = {}
-    for m in re.finditer(r"(cmd\w+|rootCmd)\.AddCommand\(", wiring):
+    for m in re.finditer(r"(\w+)\.AddCommand\(", wiring):
         depth, i = 1, m.end()
-        while depth:
+        while depth and i < len(wiring):
             depth += {"(": 1, ")": -1}.get(wiring[i], 0)
             i += 1
-        for child in re.findall(r"cmd\w+", wiring[m.end():i - 1]):
-            parent[child] = m.group(1)
+        for child in re.findall(r"\w+", wiring[m.end():i - 1]):
+            if child in use:
+                parent[child] = m.group(1)
+
+    # The root command is the one nothing adds as a child. Its own name is the
+    # binary, which is not part of any command's path.
+    roots = set(use) - set(parent)
 
     def path_of(var):
-        parts = []
-        while var in use:
-            parts.insert(0, use[var])
+        parts, seen = [], set()
+        while var in use and var not in seen:
+            seen.add(var)
+            if var not in roots:
+                parts.insert(0, use[var])
             var = parent.get(var, "")
         return " ".join(parts)
 
-    lines = {}
-    root = re.search(r"rootCmd\.AddCommand\(", wiring)
-    if not root:
-        raise SourceError("main.go no longer assembles the tree with rootCmd.AddCommand")
-    # the root's own flags are declared in the config package, so citing
-    # main.go's AddCommand for them points a reader at the wrong file
-    lines[""] = wiring[:root.start()].count("\n") + 1
-    flags_src = _read(GLOBAL_FLAGS_FILE)
-    decl = re.search(r"func DeclarePersistentFlags\(", flags_src)
-    if not decl:
-        raise SourceError(f"{GLOBAL_FLAGS_FILE} no longer declares the persistent flags")
-    lines["__global__"] = flags_src[:decl.start()].count("\n") + 1
-    for var, path in ((v, path_of(v)) for v in use):
+    # where the tree is assembled, cited by tables that span commands. Found by
+    # whichever variable is the root rather than by it being called `rootCmd`.
+    for m in re.finditer(r"(\w+)\.AddCommand\(", wiring):
+        if m.group(1) in roots:
+            lines[""] = wiring[:m.start()].count("\n") + 1
+            break
+    try:
+        flags_src = _read(_anchors()["global_flags_file"])
+        # the function that declares them, whatever it is called: the one whose
+        # body makes the cobra call
+        for m in re.finditer(r"^func \w+\(", flags_src, re.M):
+            body, _end = _go_block(flags_src, m.end())
+            if "PersistentFlags()" in body:
+                lines["__global__"] = flags_src[:m.start()].count("\n") + 1
+                break
+    except (OSError, SourceError, ValueError):
+        pass
+
+    for var in use:
         m = re.search(r"\b" + var + r"\.(?:Persistent)?Flags\(\)", wiring)
         if m:
-            lines[path] = wiring[:m.start()].count("\n") + 1
-
-    required = {}
-    for m in re.finditer(r"(cmd\w+)\.Mark(?:Persistent)?FlagRequired\((\"[\w-]+\"|\w+)\)", wiring):
-        raw = m.group(2)
-        if not raw.startswith('"'):
-            if raw not in consts:
-                continue          # a loop variable; the loop forms handle those
-            flag = consts[raw]
-        else:
-            flag = raw.strip('"')
-        required.setdefault(path_of(m.group(1)), set()).add(flag)
-
-    # the loop form: for _, req := range []string{...} { cmdX.Mark...(req) }
-    for m in re.finditer(r"for _, req := range \[\]string\{([^}]*)\}\s*\{([^}]*)\}", wiring):
-        names = [consts.get(n.strip().strip('"'), n.strip().strip('"'))
-                 for n in m.group(1).split(",") if n.strip()]
-        c = re.search(r"(cmd\w+)\.Mark(?:Persistent)?FlagRequired", m.group(2))
-        if c:
-            required.setdefault(path_of(c.group(1)), set()).update(names)
-
+            lines[path_of(var)] = wiring[:m.start()].count("\n") + 1
     for m in re.finditer(r"for _, c := range \[\]\*cobra\.Command\{([^}]*)\}\s*\{", wiring):
-        cmds = re.findall(r"cmd\w+", m.group(1))
-        depth, i = 1, m.end()
-        while depth and i < len(wiring):
-            depth += {"{": 1, "}": -1}.get(wiring[i], 0)
-            i += 1
-        body = wiring[m.end():i]
-        flags = [f.strip('"') for f in
-                 re.findall(r"Mark(?:Persistent)?FlagRequired\(\"([\w-]+)\"\)", body)]
         loop_line = wiring[:m.start()].count("\n") + 1
-        for var in cmds:
-            required.setdefault(path_of(var), set()).update(flags)
-            # flags registered inside the loop, so cite the loop
-            lines.setdefault(path_of(var), loop_line)
-
-    return {"paths": {v: path_of(v) for v in use}, "required": required,
-            "lines": lines}
+        for var in re.findall(r"\w+", m.group(1)):
+            if var in use:
+                lines.setdefault(path_of(var), loop_line)
+    return lines
 
 
 def _flag_name(f):
@@ -1337,10 +2932,10 @@ def _flag_name(f):
     return f"`{lead}`" if f["type"] == "bool" else f"`{lead} <{f['type']}>`"
 
 
-def _flag_rows(flags, path, source):
+def _flag_rows(flags, path, required_map):
     """Flag, Default, Description. Required-ness shows in the Default column,
     because a required flag is precisely one with no default."""
-    required = source["required"].get(path, set())
+    required = required_map.get(path, set())
     rows = []
     for f in flags:
         if f["name"] in required:
@@ -1377,31 +2972,24 @@ def _slug(path):
 def gen_cli():
     binary = build_cli()
     tree = walk_cli(binary)
-    source = parse_cli_source()
+    required = required_flags(binary, tree)
+    lines = cli_citation_lines()
     blocks = {}
 
     leaves = sorted(p for p, c in tree.items() if p and not c["subs"])
-    # the tree the wiring describes and the tree the binary reports must agree
-    wired = {p for p in source["paths"].values() if p}
-    absent = sorted(set(leaves) - wired)
-    if absent:
-        _problem("unwired_command",
-                 f"commands the binary has and the wiring does not: {absent}",
-                 commands=absent)
-
-    main_go = os.path.join(CLI_SRC, "main.go")
+    main_go = _anchors()["cli_main"]
 
     def where(path):
         """Cite the line in main.go that registers this command's flags, or
         the line that assembles the tree for a table that spans commands."""
-        return cite(main_go, source["lines"].get(path, source["lines"][""]))
+        return cite(main_go, lines.get(path, lines.get("")))
 
     tree_citation = where("")
 
     blocks["cli:global-flags"] = (
         table(FLAG_COLUMNS,
-              _flag_rows(_parse_flags(tree[""]["help"], "Flags:"), "", source))
-        + "\n\n" + cite(GLOBAL_FLAGS_FILE, source["lines"]["__global__"]))
+              _flag_rows(_parse_flags(tree[""]["help"], "Flags:"), "", required))
+        + "\n\n" + cite(_anchors()["global_flags_file"], lines.get("__global__")))
 
     groups = {}
     for path in leaves:
@@ -1427,15 +3015,30 @@ def gen_cli():
     # removes the need for a threshold rule, a fold rule, and a cross-reference.
     # Root flags are the exception, stated once at the top: they apply to all
     # 28 commands, and inlining them would add 140 rows.
+    # What a command inherits is read from the command's own help, not inferred
+    # from its ancestor's. Cobra prints a group's local and persistent flags
+    # together under `Flags:`, so `.Flags()` where `.PersistentFlags()` was
+    # meant was indistinguishable there -- and put a row on all eight commands
+    # under `deploy`, each of which answers `unknown flag`. The child's help
+    # separates them: `Global Flags:` is exactly what it inherits. The binary
+    # already answered this question; the tool was throwing the answer away.
+    root_flags = {f["name"] for f in _parse_flags(tree[""]["help"], "Flags:")}
+
     def inherited_by(path):
-        return [(node, f) for node, node_tree in tree.items()
-                if node and node_tree["subs"] and path.startswith(node + " ")
-                for f in node_tree["flags"]]
+        """Flags `path` inherits from a group, the root's excluded.
+
+        Root flags are documented once at the top of the page rather than on
+        each of the 28 commands, so they come out here.
+        """
+        return [f for f in _parse_flags(tree[path]["help"], "Global Flags:")
+                if f["name"] not in root_flags]
 
     for path in leaves:
-        rows = sorted(_flag_rows(tree[path]["flags"], path, source))
-        for node, f in sorted(inherited_by(path), key=lambda e: e[1]["name"]):
-            rows += _flag_rows([f], node, source)
+        rows = sorted(_flag_rows(tree[path]["flags"], path, required))
+        for f in sorted(inherited_by(path), key=lambda e: e["name"]):
+            # the flag is declared on the group and required, or not, by this
+            # command
+            rows += _flag_rows([f], path, required)
         body = _prose(tree[path]["short"]).rstrip(".") + "."
         if rows:
             body += "\n\n" + table(FLAG_COLUMNS, rows)
@@ -1456,11 +3059,51 @@ def gen_cli():
                      f"`ibc {node}` has flags and no command under it, so they "
                      "appear in no table",
                      node=node, flags=[f["name"] for f in node_tree["flags"]])
+            continue
+        if not node_tree["subs"]:
+            continue          # a leaf's own flags are documented in its own table
+        # A group flag no command under it actually inherits is registered with
+        # `.Flags()` rather than `.PersistentFlags()`. It reaches no table now
+        # that inheritance is read from the child, and a flag documented
+        # nowhere is the same failure as one documented everywhere falsely --
+        # so it stops here rather than going quiet.
+        reaches = set()
+        for p in under:
+            reaches.update(f["name"] for f in inherited_by(p))
+        orphans = [f["name"] for f in node_tree["flags"]
+                   if f["name"] not in reaches and f["name"] not in root_flags]
+        if orphans:
+            _problem("uninherited_flag",
+                     f"`ibc {node}` registers {', '.join('--' + o for o in orphans)} "
+                     "but no command under it inherits them, so they appear in no "
+                     "table. `.Flags()` registers a flag on the group alone; "
+                     "`.PersistentFlags()` is what makes it reach the commands.",
+                     node=node, flags=orphans)
 
+    blocks["notice"] = _notice()
     for region, body in blocks.items():
         if "IBC Link" in body:
-            raise SourceError(f"{region} carries the retired product name; the page cannot")
+            _problem("retired_name",
+                     f"{region} carries the retired product name; the page cannot",
+                     region=region)
     return blocks
+
+
+# Every page says, where only a writer can see it, which half of it is derived
+# and which half is theirs. Generated like everything else, so it cannot drift
+# from the truth and cannot be quietly deleted: the page owes a marker for it.
+NOTICE = """Tables between GEN markers on this page are generated from this
+repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
+run overwrites whatever is there, so a hand edit looks like a fix and is not.
+The prose around them is written by hand and is yours to change.
+
+After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
+before opening a pull request."""
+
+
+def _notice():
+    open_, close = COMMENT
+    return f"{open_}\n{NOTICE}\n{close}"
 
 
 GENERATORS = {"api": gen_api, "cli": gen_cli, "config": gen_config}
@@ -1490,6 +3133,33 @@ def stale_regions(kind, path):
     return stale
 
 
+def _dropped_requirements(text, blocks):
+    """Keys the page calls required that the regenerated tables do not.
+
+    The most consequential diff this tool produces and the least obvious: it
+    reads as ordinary drift. A key stops being required when the code stops
+    requiring it, and also when a validation message is reworded past the words
+    `_requirement` reads -- and only the first of those is a real change.
+    """
+    was = _requirements(text)
+    now = {}
+    for region, body in blocks.items():
+        for line in body.split("\n"):
+            row = ROW.match(line)
+            if row:
+                now[(region, row.group(1))] = bool(_SAYS_REQUIRED.search(row.group(2)))
+    return [{
+        "kind": "requirement_dropped",
+        "message": f"{key} in {region} is documented as required and the "
+                   "regenerated table does not call it required. A key stops "
+                   "being required when the code stops requiring it, and also "
+                   "when a validation message is reworded past the words this "
+                   "tool reads. Confirm which before accepting.",
+        "region": region, "key": key,
+    } for (region, key), required in sorted(was.items())
+        if required and region in blocks and not now.get((region, key), True)]
+
+
 def plan(kind, path):
     """Everything a human or an agent needs to bring one page back in line.
 
@@ -1514,14 +3184,32 @@ def plan(kind, path):
     finally:
         curation, PLAN = PLAN, None
 
+    # the config walk runs more than once per generation, so a problem raised
+    # inside it is recorded each time. One gap should be one line of work.
+    seen, unique = set(), []
+    for c in curation:
+        fingerprint = (c["kind"], c["message"])
+        if fingerprint not in seen:
+            seen.add(fingerprint)
+            unique.append(c)
+    curation = unique
+
     text = open(path).read()
     regions = find_regions(text)
     present = [i for i, *_ in regions]
     order = list(blocks)
 
+    # A key the page calls required and the regeneration does not is the most
+    # consequential diff this tool produces and the least obvious: it reads as
+    # ordinary drift. It belongs in the work order, and from there in the pull
+    # request, rather than in a line of stderr nobody keeps.
+    curation += _dropped_requirements(text, blocks)
+
     def after(region):
         """The last region already on the page that precedes this one in source
         order, which is where a new section belongs."""
+        if region == "notice":
+            return None     # belongs at the top, under the frontmatter
         i = order.index(region)
         earlier = [r for r in order[:i] if r in present]
         return earlier[-1] if earlier else None
@@ -1529,6 +3217,7 @@ def plan(kind, path):
     return {
         "page": os.path.relpath(path, ROOT) if path.startswith(ROOT) else path,
         "kind": kind,
+        "regions": len(blocks),
         "stale": [i for i in present
                   if i in blocks and _body(text, regions, i) != blocks[i].strip()],
         "missing_marker": [{
@@ -1555,6 +3244,8 @@ def _body(text, regions, ident):
 def _suggest_heading(region):
     """A heading a writer will probably keep, derived from the region id. The
     words are a suggestion; the writer owns them."""
+    if region == "notice":
+        return ""          # not a section: an invisible comment, placed first
     parts = region.split(":")
     if parts[0] == "config":
         name = re.sub(r"Config$", "", parts[-1])
@@ -1563,16 +3254,191 @@ def _suggest_heading(region):
         return f"#### `{parts[-1]}`"
     if parts[0] == "api" and parts[1] == "enum":
         return f"#### `{parts[-1]}`"
-    if parts[:2] == ["cli", "flags"]:
+    if parts[:2] == ["cli", "cmd"]:
         return "### `ibc " + parts[-1].replace("-", " ") + "`"
     if parts[:2] == ["cli", "group-flags"]:
         return "### Flags every `" + parts[-1].replace("-", " ") + "` command accepts"
     return f"## {parts[-1]}"
 
 
+ROW = re.compile(r"^\|\s*(`[^`]+`)\s*\|(.*)\|\s*$")
+
+
+# The config tables bold it and the flag tables do not, so both spellings
+# count. Reading only one meant this saw the config page and not the CLI one --
+# and required-ness on the CLI page is the half read out of a running binary.
+_SAYS_REQUIRED = re.compile(r"(?:^|\|)\s*(?:\*\*required\*\*|required)\s*(?:\||$)")
+
+
+def _requirements(text):
+    """{row key: True when the row says the key is required}, for one page.
+
+    Rows outside a generated region are not this tool's to judge, so they are
+    skipped rather than allowed to overwrite a generated row with the same key.
+    """
+    out = {}
+    region = ""
+    for line in text.split("\n"):
+        m = START.search(line)
+        if m:
+            region = m.group("id")
+            continue
+        if END.search(line):
+            region = ""
+            continue
+        if not region:
+            continue
+        r = ROW.match(line)
+        if r:
+            out[(region, r.group(1))] = bool(_SAYS_REQUIRED.search(r.group(2)))
+    return out
+
+
+def _downgrades(before, after):
+    """Keys this regeneration stops calling required.
+
+    A reworded validation message moves a key from required to optional and
+    shows up as an ordinary-looking diff. It is a diff worth reading twice,
+    because accepting it tells every reader a mandatory key is theirs to omit.
+    """
+    was, now = _requirements(before), _requirements(after)
+    return sorted(k for k, req in was.items() if req and not now.get(k, True))
+
+
+def _report_downgrades(path, before, after):
+    lost = _downgrades(before, after)
+    if not lost:
+        return
+    print(f"{path}: NOTE -- this drops `required` from "
+          f"{len(lost)} key{'s' if len(lost) > 1 else ''}:", file=sys.stderr)
+    for region, key in lost:
+        print(f"  {key} in {region}", file=sys.stderr)
+    print("  A key stops being required when the code stops requiring it, and "
+          "also when a validation message is reworded past the words this tool "
+          "reads. Confirm which before accepting.", file=sys.stderr)
+
+
+SYMBOL_CITE = re.compile(r"<!--\s*\[([\w./-]+\.go):\s*([\w.]+)\]\s*-->")
+
+# A declaration, not a mention. `\bSymbol\b` anywhere in the file also matches
+# a call, a comment and an unrelated local, so it would accept a citation whose
+# symbol had been deleted and was merely still being referred to.
+_DECL_FORMS = (
+    r"^func\s+{s}\b",                    # func Name(
+    r"^func\s+\([^)]*\)\s+{s}\b",       # func (r T) Name(
+    r"^(?:type|const|var)\s+{s}\b",     # type/const/var Name
+    r"^\s+{s}\s+[\w*\[\]./]",            # struct field, or a const/var block
+    r"^\s+{s}\s*=",                      # an assignment inside such a block
+)
+
+
+def _struct_body(source, name):
+    """The text between `type Name struct {` and its closing brace."""
+    head = re.search(r"^type\s+" + re.escape(name) + r"\s+struct\s*{", source, re.M)
+    if not head:
+        return None
+    depth, i = 1, head.end()
+    while i < len(source) and depth:
+        if source[i] == "{":
+            depth += 1
+        elif source[i] == "}":
+            depth -= 1
+        i += 1
+    return source[head.end():i]
+
+
+def _declares(source, symbol):
+    """Whether this file declares `symbol`.
+
+    A dotted `Type.Member` must be that type's method or that struct's field.
+    There is deliberately no fallback to a bare search for the member: the
+    first version of this had one, and it accepted `Prover.Relay` for a method
+    on `Service` -- the receiver half of the citation went unchecked, which is
+    the half a reader relies on when one file holds several types.
+    """
+    parts = symbol.split(".")
+    if len(parts) == 2:
+        owner, member = parts
+        if re.search(r"^func\s+\(\s*\w+\s+\*?" + re.escape(owner)
+                     + r"\s*\)\s+" + re.escape(member) + r"\b", source, re.M):
+            return True
+        body = _struct_body(source, owner)
+        return bool(body) and bool(
+            re.search(r"^\s+" + re.escape(member) + r"\s+[\w*\[\]./]",
+                      body, re.M))
+    for form in _DECL_FORMS:
+        if re.search(form.format(s=re.escape(parts[-1])), source, re.M):
+            return True
+    return False
+
+
+def _where_declared(symbol):
+    """Every file under the repo that declares `symbol`."""
+    return [f for f in _walk(".go")
+            if not f.endswith("_test.go") and _declares(_read(f), symbol)]
+
+
+def _check_symbol_cites(text, page):
+    """Every `<!-- [path/to/file.go: Symbol] -->` names a declaration that exists.
+
+    Prose citations used to carry line numbers, which are a derived fact frozen
+    into a file someone else edits. Five of eighteen on the config page pointed
+    at unrelated code -- a claim about attestor names citing `DBConfig.Validate`,
+    the `Info` RPC citing a timeout constant. A symbol survives edits above it,
+    and unlike a line range it can be checked by looking for it.
+
+    The path is repo-relative and required. A basename alone was accepted once
+    and it proved almost nothing: fifteen of twenty-three cited basenames were
+    ambiguous, `relayer.sql.go` resolving four ways, one of them a tree nothing
+    imports. The check passed if *any* of them held the symbol, and no reader
+    could tell which file the sentence meant.
+
+    A path is the one derived fact left in a citation, so a directory rename is
+    answered rather than merely refused: upstream renamed `link/` to `cli/`
+    once already, and a rename that breaks fifty-six sentences at once has to
+    say where each one went. `moved` and `gone` are separate kinds because they
+    ask for different work -- one is a repoint you confirm, the other is a claim
+    you re-read.
+    """
+    moved, gone = [], []
+    for m in SYMBOL_CITE.finditer(text):
+        path, symbol = m.group(1), m.group(2)
+        if "/" not in path:
+            gone.append(f"`{path}: {symbol}` needs the path from the repo root, "
+                        f"not just the file name")
+            continue
+        here = os.path.exists(os.path.join(IBC, path))
+        if here and _declares(_read(path), symbol):
+            continue
+        elsewhere = [f for f in _where_declared(symbol) if f != path]
+        why = "no such file" if not here else f"`{symbol}` is not declared there"
+        if len(elsewhere) == 1:
+            moved.append(f"{path} ({why}) -> {elsewhere[0]}")
+        elif not here:
+            gone.append(f"{path} (no such file) for `{symbol}`")
+        else:
+            gone.append(f"`{symbol}` is not declared in {path} any more")
+    if moved:
+        _problem("moved_citation",
+                 f"{os.path.basename(page)} cites code that has moved: "
+                 + "; ".join(moved)
+                 + ". Each symbol is declared in exactly one other file now. "
+                 "Confirm the sentence still holds, then repoint it.",
+                 page=os.path.basename(page), citations=moved)
+    if gone:
+        _problem("stale_citation",
+                 f"{os.path.basename(page)} cites code that has moved or gone: "
+                 + "; ".join(gone)
+                 + ". Find what backs the claim now, check the claim still "
+                 "holds, and cite that symbol.",
+                 page=os.path.basename(page), citations=gone)
+
+
 def run(kind, path, check):
     blocks = GENERATORS[kind]()
     text = open(path).read()
+    _check_notice_placement(text, path)
+    _check_symbol_cites(text, path)
     present = {i for i, *_ in find_regions(text)}
     if os.path.normpath(path) == os.path.normpath(os.path.join(ROOT, PAGES[kind])) or \
             os.path.normpath(path) == PAGES[kind]:
@@ -1588,10 +3454,81 @@ def run(kind, path, check):
         print(f"{path}: STALE")
         sys.stdout.writelines(difflib.unified_diff(
             text.splitlines(True), new.splitlines(True), "on disk", "generated"))
+        _report_downgrades(path, text, new)
         return 1
+    _report_downgrades(path, text, new)
     open(path, "w").write(new)
     print(f"{path}: regenerated {len(wanted)} regions")
     return 0
+
+
+def report(plans):
+    """A short account of what the tool did and what it could not do.
+
+    Two audiences and one rule: a reader has to be able to tell what was
+    derived from source from what a person or an agent wrote. The first is as
+    true as the code; the second is only as true as whoever wrote it, and is
+    what a reviewer needs to spend their attention on.
+
+    The tool can only account for its own half. Whatever an agent writes --
+    prose, a doc comment, a description -- it appends under the second heading,
+    one line each, naming where it went.
+    """
+    out = ["## Reference documentation", ""]
+    refused = [p for p in plans if p.get("refused")]
+    readable = [p for p in plans if not p.get("refused")]
+    derived = sum(p["regions"] for p in readable)
+    out.append(f"Derived from source: {derived} regions across "
+               f"{len(readable)} page{'' if len(readable) == 1 else 's'}.")
+    if refused:
+        out += ["", "**Could not be read at all, so nothing below accounts for "
+                    f"{'it' if len(refused) == 1 else 'them'}:**"]
+        for p in refused:
+            out.append(f"- {os.path.basename(p['page'])}: {p['refused']}")
+
+    stale = [(p, r) for p in plans for r in p["stale"]]
+    if stale:
+        out.append(f"{len(stale)} do not match the source:")
+        for pl in plans:
+            if pl["stale"]:
+                out.append(f"- {os.path.basename(pl['page'])}: "
+                       + ", ".join(f"`{r}`" for r in pl["stale"]))
+
+    gaps = [(pl, c) for pl in plans for c in pl["curation"]]
+    missing = [(pl, m) for pl in plans for m in pl["missing_marker"]]
+    orphans = [(pl, o) for pl in plans for o in pl["orphaned_marker"]]
+
+    if missing:
+        out += ["", "The source has these and the pages have nowhere to put them:"]
+        for _pl, m in missing:
+            out.append(f"- `{m['region']}` -- suggested heading {m['suggested_heading']}")
+    if orphans:
+        out += ["", "The pages describe these and the source no longer has them:"]
+        for _pl, o in orphans:
+            out.append(f"- `{o['region']}`")
+    if INCOMPLETE_PROBES:
+        out += ["", "- `required` on the command tables is a floor. It is read by "
+                    "running each command, which stops at the first value it "
+                    "rejects, so a flag a command checks only after that is "
+                    "unread. A blank cell means *not seen*, not *optional*."]
+    if gaps:
+        out += ["", "Needs a decision the source cannot make:"]
+        for _pl, c in gaps:
+            at = f" ({c['file']}:{c['line']})" if c.get("file") and c.get("line") else ""
+            # the first sentence, not the first period: a message names files,
+            # and `config.go` is not the end of one
+            first = re.split(r"(?<=[a-z0-9)])\.\s", c["message"], maxsplit=1)[0]
+            out.append(f"- {c['kind']}{at}: {first.rstrip('.')}.")
+
+    if not (stale or missing or orphans or gaps or refused):
+        out += ["", "Nothing to do: every table matches the source."]
+    elif refused and not (stale or missing or orphans or gaps):
+        out += ["", "Nothing else to report, but the page above was never read, "
+                    "so that is not the same as nothing being wrong."]
+    out += ["", "### Written by hand, not derived", "",
+            "_Nothing yet. Anything written rather than generated belongs here, "
+            "one line each, so a reviewer knows where to look._"]
+    return "\n".join(out)
 
 
 def main():
@@ -1603,6 +3540,9 @@ def main():
                     help="print the stale region ids, one per line, and nothing else")
     ap.add_argument("--plan", action="store_true",
                     help="print, as JSON, every gap and the work each one needs")
+    ap.add_argument("--report", action="store_true",
+                    help="print a short account of what was derived and what "
+                         "still needs a person, for a pull request description")
     a = ap.parse_args()
     jobs = [(k, os.path.join(ROOT, p)) for k, p in sorted(PAGES.items())] \
         if a.kind == "all" else [(a.kind, a.page)]
@@ -1611,7 +3551,7 @@ def main():
     rc, plans = 0, []
     for kind, page in jobs:
         try:
-            if a.plan:
+            if a.plan or a.report:
                 plans.append(plan(kind, page))
                 continue
             if a.list_regions:
@@ -1624,11 +3564,23 @@ def main():
         except (MarkerError, SourceError) as e:
             print(f"{page}: {e}", file=sys.stderr)
             rc = max(rc, 2)
-    if a.plan:
-        print(json.dumps(plans, indent=2))
+            if a.plan or a.report:
+                # a page the tool could not read has to appear in the work
+                # order. Leaving it out is how a report comes to say every
+                # table matches the source about a page nobody could parse.
+                plans.append({
+                    "page": os.path.relpath(page, ROOT) if page.startswith(ROOT) else page,
+                    "kind": kind, "regions": 0, "refused": str(e),
+                    "stale": [], "missing_marker": [], "orphaned_marker": [],
+                    "curation": [],
+                })
+    if a.plan or a.report:
+        print(json.dumps(plans, indent=2) if a.plan else report(plans))
         work = sum(len(p["stale"]) + len(p["missing_marker"])
                    + len(p["orphaned_marker"]) + len(p["curation"]) for p in plans)
-        rc = 1 if work else 0
+        # a refusal outranks staleness; never report a quiet exit over a page
+        # the tool could not read
+        rc = max(rc, 1 if work else 0)
     return rc
 
 

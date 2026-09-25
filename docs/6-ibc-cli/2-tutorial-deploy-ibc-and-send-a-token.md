@@ -17,7 +17,7 @@ By the end, you'll have the following:
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.26.4 or later
+- [Go](https://go.dev/doc/install) v1.26.6 or later. On Go 1.27 and above every `ibc` command prints a `sonic/ast only supports ...` warning to stderr and falls back to the standard JSON encoder; it is harmless, and the sample output in this guide omits it.
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
@@ -136,6 +136,8 @@ With both chains registered, deploy the IBC contracts on each.
 Each run sends four transactions: an access manager, the router implementation, the router behind a proxy, and one call that opens the packet-delivery methods to any caller. Your deployer key is the access manager's admin.
 
 ```
+level=INFO msg="would execute" dryRun=true step="core stack on chain 41001"
+level=INFO msg=executing dryRun=false step="core stack on chain 41001"
 level=INFO msg="transaction mined" label="deploy AccessManager" tx=0xa1c9fe97... block=38 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router implementation" tx=0x23988e80... block=39 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router proxy" tx=0x064d03a3... block=40 chain=41001
@@ -221,22 +223,32 @@ Next, you'll need to configure the relayer to start sending packets between the 
 ./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer
 ```
 
-This prints the three sections relaying needs: the chains with their router addresses, the connection, and the attestors. Each is already filled in with the addresses your deploy commands recorded.
+This prints your whole config with the settings relaying needs merged in: the chains with their router addresses, the connection, and the attestors, each filled in with the addresses your deploy commands recorded.
 
-The two signer flags name the key that submits relay transactions on each chain. Both are required, and each is checked against your configured signers. You imported `relayer` in step 3.
+The two signer flags name the key that submits relay transactions on each chain. Neither is required — omitting one keeps whatever the connection already has — and an alias you do pass is checked against your configured signers. You imported `relayer` in step 3.
 
 The attestors section declares both of your attestor keys as `type: local`. This means the relayer will run the attestors in the same process.
 
-2. Add the `render-config` output to your config manually or use the following command to merge the generated sections into your config:
+2. Save that output to your config yourself, or add `-p` and let the command write it:
 
 ```bash
-{ sed -n '1,/^chains:/p' ~/.ibc/ibc.yml | sed '$d'
-  ./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer
-  sed -n '/^signers:/,$p' ~/.ibc/ibc.yml
-} > /tmp/ibc.yml.merged && mv /tmp/ibc.yml.merged ~/.ibc/ibc.yml
+./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer -p
 ```
 
-This keeps your `server`, `db`, and `signers` blocks, and replaces the three the deploy tool generated.
+The command prints the config, then names what it is about to overwrite and asks before writing. Answer `y`:
+
+```
+This operation overwrites values for the following:
+  chain 41001
+  chain 41002
+
+About to write /home/you/.ibc/ibc.yml. Proceed? [y/N]: y
+Wrote /home/you/.ibc/ibc.yml
+```
+
+Add `--yes` to skip the prompt. Without an answer the command exits with `confirmation required; rerun with --yes for non-interactive use`, leaving your config untouched.
+
+This keeps your `server`, `db`, and `signers` blocks and merges the relaying settings into them.
 
 3. Use the validate command to check the result against both chains before starting anything:
 
@@ -260,11 +272,12 @@ This keeps your `server`, `db`, and `signers` blocks, and replaces the three the
 
 ```
 level=INFO msg="Attestor config provided, running in dual mode: relayer with attestor" module=bootstrap
-level=INFO msg="Migrated database" module=bootstrap migrations_applied=3
+level=INFO msg="Migrated database" module=bootstrap migrations_applied=4
+level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3000}"
 ```
 
-The readiness line is how you know it is up. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
+The transcript is abridged: a clearing pass runs at startup for each chain it relays from, logging what it cleared. The readiness line is how you know it is up. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
 
 Leave it running, and go back to your first terminal for the rest of the tutorial.
 
@@ -308,19 +321,28 @@ It will read `PACKET_STATE_PENDING` for up to a minute, then it should read `PAC
 
 ```json
 {
-  "packets":  [
+  "packets": [
     {
-      "state":  "PACKET_STATE_SUCCEEDED",
-      "sequenceNumber":  "1",
-      "sourceClientId":  "cli-41001-41002",
-      "sendTx":  {"txHash":  "0xf1fa599e...", "chainId":  "41001"},
-      "recvTx":  {"txHash":  "0xf8281f04...", "chainId":  "41002"},
-      "ackTx":  {"txHash":  "0x0f56d3f0...", "chainId":  "41001"},
-      "timeoutTx":  null
+      "state": "PACKET_STATE_SUCCEEDED",
+      "sequenceNumber": "1",
+      "sourceClientId": "cli-41001-41002",
+      "sendTx": {
+        "txHash": "0xf1fa599e...",
+        "chainId": "41001"
+      },
+      "recvTx": {
+        "txHash": "0xf8281f04...",
+        "chainId": "41002"
+      },
+      "ackTx": {
+        "txHash": "0x0f56d3f0...",
+        "chainId": "41001"
+      },
+      "timeoutTx": null
     }
   ],
-  "hasMore":  false,
-  "nextCursor":  ""
+  "hasMore": false,
+  "nextCursor": ""
 }
 ```
 

@@ -100,13 +100,15 @@ type DBConfig struct {
 
 // Observability configures metric collection and export.
 type Observability struct {
-	// Metrics enables metric collection and export.
+	// Metrics enables metric collection and export. When false, the rest of
+	// this block is ignored.
 	Metrics bool `yaml:"metrics"`
 	// Type selects simple Prometheus export or an OTEL configuration file.
 	Type string `yaml:"type"`
 	// SimpleMetricsListenAddr is the Prometheus listener address in simple mode.
 	SimpleMetricsListenAddr string `yaml:"simpleMetricsListenAddr"`
 	// OtelFile is the OTEL configuration file, overridden by OTEL_CONFIG_FILE.
+	// One of the two is required.
 	OtelFile string `yaml:"otelFile"`
 }
 

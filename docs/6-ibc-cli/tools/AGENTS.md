@@ -1,0 +1,208 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Updating the reference pages
+
+You are here because something under `cli/`, `proto/` or `gen/` changed. Three
+pages carry tables derived from that surface:
+
+| Page | Covers | Derived from |
+|------|--------|--------------|
+| [5-configuration.md](../5-configuration.md) | every key in `ibc.yml`, and the example config | the config structs in `cli/internal/config/`, and the yaml fixture that package's tests load |
+| [6-cli-commands.md](../6-cli-commands.md) | every command and flag | the built binary's command tree, plus the wiring in `cli/cmd/ibc/` |
+| [7-api.md](../7-api.md) | both gRPC services | `proto/cli/*.proto` |
+
+Do this **before the pull request is opened**, in the same pull request as the
+code. Run everything from the repository root. Three things must be on PATH:
+
+- `python3` — the generator uses only the standard library
+- a **Go toolchain** — both the CLI and config pages build the binary and ask
+  it: a flag's default is only honest once assembled, and whether a config key
+  is required is asked by removing it and seeing whether the binary objects
+- **`buf`** — the API page is generated from the descriptor set it compiles,
+  which is how this repository already builds its protos (`proto/buf.gen.yaml`).
+  Install it from https://buf.build/docs/installation
+
+None of the three is optional and none has a fallback. Without `buf` the API
+page refuses rather than falling back to reading the `.proto` as text: a reader
+that understands the schema less well than the compiler is how a page goes
+quietly wrong when the schema grows a construct.
+
+[REFERENCE.md](REFERENCE.md) is the catalogue: every plan kind, the constants
+you may edit, the probe fixtures behind the required column, and the two
+formats below. This file is the procedure.
+
+[AUDIT.md](AUDIT.md) is separate work: checking whether the pages are *true*
+rather than current. `--check` cannot answer that, so nothing below calls for
+it — read it when that is the question you have.
+
+**The one rule: never edit between a `<!-- GEN:... START -->` and its `END`.**
+Those blocks are rewritten from source, so an edit there disappears the next
+time anyone regenerates — a change that looks like a fix and is not. Everything
+else on those pages is yours: prose, headings, section order, examples.
+
+Two things the generator does not watch. The example config is copied from the
+fixture the Go tests validate, so edit the fixture. And the other pages in
+`docs/6-ibc-cli/` — the overview, the tutorial, the two guides — describe this
+same surface in hand-written prose. Step 7 is how you check those.
+
+## 1. Find out what moved
+
+```sh
+python3 docs/6-ibc-cli/tools/refgen.py all --check   # a diff per stale table
+python3 docs/6-ibc-cli/tools/refgen.py all --plan    # the work order, as JSON
+```
+
+Neither writes to a page. Both build the CLI and run every one of its commands
+to read what they require, so they are not free and not inert.
+
+`--plan` is the list to work from; **REFERENCE.md explains every kind it can
+report, and the exit codes.** `--list-regions` prints the stale region ids
+alone: the prose to re-read in step 4.
+
+One kind is worth knowing before you see it. If you renamed or moved a Go
+symbol, expect `stale_citation`: sentences in the prose cite the code they came
+from, by path and symbol, and the check refuses when one no longer resolves. It
+is not asking you to repoint the comment — it is asking whether your change made
+that *sentence* wrong. REFERENCE.md has the format.
+
+## 2. Resolve everything that needs a decision
+
+Nothing is written while any of these remain, and each is named. **Read
+REFERENCE.md before resolving anything** — it says what each kind means and
+what fixes it.
+
+Three things govern every one of them:
+
+- **Fix it at the source where you can.** A doc comment on the declaration
+  beats an entry in this directory, because the page then documents itself.
+- **If the code does not say what something means, ask the person you are
+  working with.** A guess reads exactly like knowledge on the page.
+- **Hand it back where the decision is not yours.** See step 6.
+
+**A page blocked by one item still has work you can do.** Resolve everything
+else on it — descriptions, markers, sections, prose. Leaving them because the
+page will not regenerate yet is how a whole page gets skipped over one line of
+protobuf.
+
+**`SKIP_FIELDS` and `CLI_EXCLUDED` delete a row, and nothing checks either for
+obsolescence.** A key listed there is gone from the page for good, including
+after it is renamed. Never reach for one to make a refusal go away: that
+answers a refusal with the short-table-that-reads-complete this tool refuses
+everywhere else. Use them only for something readers never write or run.
+
+## 3. Heal the tables
+
+```sh
+python3 docs/6-ibc-cli/tools/refgen.py all
+```
+
+Deterministic. Run it as often as you like.
+
+## 4. Correct the prose the code has overtaken
+
+Regenerating repairs a table and leaves the paragraph above it saying the old
+thing. For every region that moved, fix the prose beside it — a key that gained
+a default the text still calls required, an example that no longer works, a
+sentence about a flag that is gone. **The code is the authority.** Match the
+page you are writing into; do not restate a table in words.
+
+## 5. Check your work
+
+```sh
+python3 docs/6-ibc-cli/tools/refgen.py all --check   # must be clean
+```
+
+Then read each region you touched against the code it came from, once. Running
+twice and changing nothing proves the tool is stable, not that it is right.
+
+That is the whole check **unless you edited `refgen.py`** — the suites below
+test the generator, not the documentation (about 50 seconds, and about 3 and a
+half minutes).
+
+```sh
+# only if you changed refgen.py
+python3 docs/6-ibc-cli/tools/test-refgen.py
+python3 docs/6-ibc-cli/tools/test-refgen-e2e.py
+```
+
+**The suites read the working tree**, so a refusal you are handing back makes
+them fail until it is resolved. That part is expected. **Do not classify those
+failures by eye** — a failure can name the refusal you were told to expect and
+still be yours. REFERENCE.md gives the comparison that tells them apart.
+
+## 6. Report what you wrote
+
+```sh
+python3 docs/6-ibc-cli/tools/refgen.py all --report
+```
+
+Put it in the pull request description, and **add one line under *Written by
+hand, not derived* for everything you wrote yourself**, naming where it went.
+That section is the point of the report: everything above it is as true as the
+code, everything below it is only as true as you.
+
+If something is blocked, **say so; do not go quiet.** Add a *Handed back*
+section in the format REFERENCE.md shows, one line per item. Unfinished and
+reported is a fine outcome — unfinished and unmentioned is not, because whoever
+reads the pull request cannot tell a page you left alone from a page that
+needed nothing.
+
+## 7. Check the pages nothing generates
+
+The overview, the tutorial and the two standalone guides describe this surface
+in prose, in pasteable examples, and in **captured terminal output**. Nothing
+checks any of it.
+
+**Grepping for the names that changed is not enough, and this is the step
+people get wrong.** Grep finds a rename. It does not find a behaviour change,
+because the sentence that is now false often contains no changed identifier at
+all. A real example: `render-config` began merging the deployment into the
+whole config instead of printing three sections. Nothing was renamed, every
+grep came back clean, and the overview went on describing the old behaviour.
+
+So work from the change, not from the text. For each thing the diff changes,
+ask **what a reader would now see that these pages show**:
+
+| If the change... | look for |
+|---|---|
+| alters what a command prints or writes | every sentence describing that command's output, and every captured transcript of it |
+| adds or removes a startup step, a migration, a log line | transcripts — a line that should now be *present* cannot be grepped for by its absence |
+| changes a count, a total, a version, a duration | the same number quoted anywhere in prose or output |
+| changes a default | sentences stating the old value, and examples that relied on it |
+| adds a required config key | every pasteable config block, which now fails to load |
+
+Two shortcuts worth taking. Any `yaml` block a reader would paste can be
+checked by running `ibc config validate` against it. Any block of captured
+output can be checked by running the command that produced it, when it does
+not need a live chain.
+
+Say in the report which of these pages you read and what you changed. "I
+grepped and found nothing" is not an answer to this step.
+
+**You are done when** `--check` is clean, or everything outstanding is listed
+under *Handed back*.
+
+## What you must never do
+
+Write a heading with a placeholder under it. State a value the source does not
+state. Edit inside a generated region. Delete a marker the generator still
+fills — deleting the pair for something the source no longer has is
+`orphaned_marker`, and is correct; the difference is whether the subject is
+gone or merely unreadable.
+
+**Never set `REFGEN_NO_REQUIRED_FLAGS`, `REFGEN_NO_REQUIRED_KEYS` or
+`REFGEN_NO_BUILD`.** Two switch off the checks that catch a whole page rendering
+every flag or key as optional; the third builds the tables from a stale binary.
+The refusals name them for someone who has confirmed the CLI genuinely has no
+required flags. You are not that person: if you trip one, it is a hand-back.
+
+A refusal is not an obstacle to route around. The tool refuses because it would
+otherwise publish something it could not verify, and a wrong page is worse than
+a missing one: a reader trusts a default, a required flag, a key name, and acts
+on it.
+
+## Not automated yet
+
+**Nothing runs `--check` for you.** These pages go stale silently, and this
+procedure is the only thing that catches it. Run step 1 whenever a change
+touches `cli/`, `proto/` or `gen/`.

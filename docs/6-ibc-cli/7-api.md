@@ -1,7 +1,21 @@
 ---
 title: "API"
-description: "The two gRPC services a running relayer and attestor serve, and how to call them."
+description: "The two gRPC services a running relayer and attestor serve, how to call them, and the prover service you can implement for them to call."
 ---
+
+<!-- GEN:notice START -->
+
+<!--
+Tables between GEN markers on this page are generated from this
+repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
+run overwrites whatever is there, so a hand edit looks like a fix and is not.
+The prose around them is written by hand and is yours to change.
+
+After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
+before opening a pull request.
+-->
+
+<!-- GEN:notice END -->
 
 The IBC CLI exposes two APIs: a relayer API and an attestation API.
 
@@ -12,7 +26,9 @@ The relayer's API has two main parts:
 
 The attestor's API serves the attestations a light client verifies. A relayer is its usual caller, gathering proofs for a packet it is delivering. An operator calls it directly to check which attestor is answering and how far behind the head it will sign.
 
-Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`.
+Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`. <!-- [cli/internal/config/config.go: DefaultConfig] -->
+
+A third service is described at the end of this page, and the CLI does not serve it: `ProverService` is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. <!-- [cli/internal/relay/prover/prover.go: addGenerator] -->
 
 To list running services:
 
@@ -24,6 +40,10 @@ grpcurl -plaintext localhost:3000 list
 ibc.v2.relayer.RelayerApiService
 ```
 
+A process lists only the services it is running. The attestation service joins
+this list when the config gives it a local attestor to serve; the relayer above
+had none. <!-- [cli/internal/bootstrap/bootstrap.go: BuildRelayer] -->
+
 ## Relayer service
 
 `ibc.v2.relayer.RelayerApiService`. `ibc relayer relay` and `ibc relayer packets` call these two.
@@ -32,7 +52,7 @@ ibc.v2.relayer.RelayerApiService
 
 <!-- GEN:api:rpc:Relay START -->
 
-Tracks the packets emitted by a source transaction and submits the transactions required to complete them.
+Relay tracks the packets emitted by a source transaction and submits the transactions required to complete them.
 
 <!-- [relayer.proto:L12](proto/cli/relayer.proto#L12) -->
 
@@ -46,7 +66,7 @@ Tracks the packets emitted by a source transaction and submits the transactions 
 |---|---|---|
 | `tx_hash` | `string` | The transaction that sent the packets, on the source chain. |
 | `source_chain_id` | `string` | The chain that transaction was sent on. |
-| `selection` | oneof: `all_packets` or `selected_packets` | Required and controls only this relayer instance; IBC relaying remains permissionless. |
+| `selection` | oneof: `all_packets` or `selected_packets` | Selection is required and controls only this relayer instance; IBC relaying remains permissionless. |
 
 <!-- [relayer.proto:L18](proto/cli/relayer.proto#L18) -->
 
@@ -54,7 +74,7 @@ Tracks the packets emitted by a source transaction and submits the transactions 
 
 Field names in these tables are the schema's. The JSON encoding uses lowerCamelCase, so `tx_hash` is sent as `txHash`.
 
-`all_packets` takes every packet for which this relayer has a configured client and route. Packets without one are skipped, and the request succeeds even when that leaves nothing to relay. <!-- [relayer.proto:L30-L33](proto/cli/relayer.proto#L30-L33) -->
+`all_packets` takes every packet for which this relayer has a configured client and route. Packets without one are skipped, and the request succeeds even when that leaves nothing to relay. <!-- [cli/internal/service/relayer/service.go: Service.packetsFromEvents] -->
 
 #### `SelectedPackets`
 
@@ -81,9 +101,9 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 
 <!-- GEN:api:msg:PacketSelector END -->
 
-A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [relayer.proto:L35-L37](proto/cli/relayer.proto#L35-L37) -->
+A `selected_packets` request fails if any packet it names is absent or has no configured route. Naming a packet that is already selected, in flight, or finished succeeds and changes nothing. <!-- [cli/internal/service/relayer/service.go: Service.Relay] --> <!-- [cli/internal/store/repository/sqlite/relayer.sql.go: upsertPacket] -->
 
-`Relay` answers with every send packet in the transaction, including the ones it will not carry.
+`Relay` answers with every send packet in the transaction, including the ones it will not carry. <!-- [cli/internal/service/relayer/service.go: relayResult] -->
 
 #### `RelayResponse`
 
@@ -136,7 +156,7 @@ grpcurl -plaintext -d '{"txHash":"0xSendTxHash","sourceChainId":"41001","allPack
 
 <!-- GEN:api:rpc:Packets START -->
 
-Lists the packets this relayer is aware of, most recent first.
+Packets lists the packets this relayer is aware of, most recent first.
 
 <!-- [relayer.proto:L15](proto/cli/relayer.proto#L15) -->
 
@@ -225,7 +245,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 
 #### `PacketState`
 
-`NOT_SELECTED` and `PENDING` are still open. The other four are final.
+`NOT_SELECTED` and `PENDING` are still open. The other four are final. <!-- [cli/internal/service/relayer/service.go: mapPacketState] --> <!-- [cli/internal/store/repository/sqlite/relayer.sql.go: listDispatchablePackets] -->
 
 <!-- GEN:api:enum:PacketState START -->
 
@@ -270,7 +290,7 @@ Both attestation calls return this shape.
 
 <!-- GEN:api:msg:Attestation END -->
 
-`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [resolve.go:L37-L60](cli/internal/relay/prover/attestation/resolve.go#L37-L60) -->
+`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [cli/internal/relay/prover/attestation/quorum.go: reduceQuorum] --> <!-- [cli/internal/relay/prover/attestation/resolve.go: MatchAttestors] -->
 
 ### `StateAttestation`
 
@@ -301,13 +321,13 @@ Retrieves an attestation for a state at a given height.
 
 | Field | Type | Description |
 |---|---|---|
-| `attestation` | `Attestation` | The signed attestation. See below. |
+| `attestation` | `Attestation` | The signed attestation, in the `Attestation` table. |
 
 <!-- [attestor.proto:L29](proto/cli/attestor.proto#L29) -->
 
 <!-- GEN:api:msg:StateAttestationResponse END -->
 
-A height above what `LatestHeight` reports is refused, so ask for the height first. <!-- [local.go:L111-L117](cli/internal/service/attestor/local.go#L111-L117) -->
+A height above what `LatestHeight` reports is refused, so ask for the height first. <!-- [cli/internal/service/attestor/local.go: LocalAttestor.StateAttestation] -->
 
 ### `PacketAttestation`
 
@@ -356,13 +376,13 @@ Retrieves an attestation for a set of packets.
 
 | Field | Type | Description |
 |---|---|---|
-| `attestation` | `Attestation` | The signed attestation. See below. |
+| `attestation` | `Attestation` | The signed attestation, in the `Attestation` table. |
 
 <!-- [attestor.proto:L51](proto/cli/attestor.proto#L51) -->
 
 <!-- GEN:api:msg:PacketAttestationResponse END -->
 
-One request carries at most 100 packets, each at most 128 KB, and a request over either limit is refused. <!-- [service.go:L72-L76](cli/internal/service/attestor/service.go#L72-L76) --> <!-- [service.go:L169-L180](cli/internal/service/attestor/service.go#L169-L180) -->
+One request carries at most 100 packets, each at most 128 KB, and a request over either limit is refused. <!-- [cli/internal/service/attestor/service.go: MaxPacketsPerAttestation] --> <!-- [cli/internal/service/attestor/service.go: MaxPacketSizeBytes] -->
 
 ### `LatestHeight`
 
@@ -398,7 +418,7 @@ Returns the latest height the attestor will generate attestations for.
 
 <!-- GEN:api:msg:LatestHeightResponse END -->
 
-Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts, which sits closer to the head. <!-- [local.go:L77-L104](cli/internal/service/attestor/local.go#L77-L104) -->
+Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts, which sits closer to the head. <!-- [cli/internal/service/attestor/local.go: LocalAttestor.LatestHeight] -->
 
 ### `Info`
 
@@ -435,7 +455,7 @@ Returns identity information about a configured attestor.
 
 <!-- GEN:api:msg:InfoResponse END -->
 
-`address` is what a light client checks signatures against. So this call is how an operator confirms that the running attestor is the one an on-chain client expects.
+`address` is what a light client checks signatures against. So this call is how an operator confirms that the running attestor is the one an on-chain client expects. <!-- [cli/internal/relay/prover/attestation/resolve.go: MatchAttestors] -->
 
 ```bash
 grpcurl -plaintext -d '{"attestor":"attestor-41002"}' \
@@ -476,7 +496,7 @@ Every request carries one, identifying the light client the call is scoped to.
 
 <!-- GEN:api:rpc:LatestProvableHeight START -->
 
-Returns the highest height a subsequent StateProof and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
+LatestProvableHeight returns the highest height a subsequent StateProof and PacketProofs call sharing that height can currently succeed at, with that height's counterparty-chain timestamp.
 
 <!-- [prover.proto:L19](proto/cli/prover.proto#L19) -->
 
@@ -504,13 +524,13 @@ Returns the highest height a subsequent StateProof and PacketProofs call sharing
 <!-- GEN:api:msg:LatestProvableHeightResponse END -->
 
 The relayer calls this first and proves at the height it returns, so a prover
-paces the relayer by holding the height back until it can prove at it.
+paces the relayer by holding the height back until it can prove at it. <!-- [cli/internal/relay/processors/batch_relay.go: relayPackets] -->
 
 ### `StateProof`
 
 <!-- GEN:api:rpc:StateProof START -->
 
-Proves the light client's counterparty state at a height.
+StateProof proves the light client's counterparty state at a height.
 
 <!-- [prover.proto:L22](proto/cli/prover.proto#L22) -->
 
@@ -543,7 +563,7 @@ Proves the light client's counterparty state at a height.
 
 <!-- GEN:api:rpc:PacketProofs START -->
 
-Proves each packet's membership or non-membership at a height, one proof per packet with indices aligned to the request.
+PacketProofs proves each packet's membership or non-membership at a height, one proof per packet with indices aligned to the request.
 
 <!-- [prover.proto:L26](proto/cli/prover.proto#L26) -->
 
@@ -573,7 +593,7 @@ Proves each packet's membership or non-membership at a height, one proof per pac
 <!-- GEN:api:msg:PacketProofsResponse END -->
 
 `proofs` is one proof per requested packet, in request order, so a response of a
-different length than the request is an error.
+different length than the request is an error. <!-- [cli/internal/relay/prover/remote/remote.go: Prover.PacketProofs] -->
 
 <!-- GEN:api:enum:ProofKind START -->
 

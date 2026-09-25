@@ -200,6 +200,8 @@ def _():
     # holds in the docs repo and in the copy that lives beside the code
     for gen in refgen.GENERATORS.values():
         for region, body in gen().items():
+            if region == "notice":
+                continue          # says what the page is, not what the code says
             cites = re.findall(r"\]\(([^)#]+)#L(\d+)", body)
             assert cites, f"{region} carries no citation"
             for path, line in cites:
@@ -270,29 +272,193 @@ def _():
                 assert cells[-1], f"{region}: {cells[0]} has no description"
 
 
-@case("api: a field that gains a proto comment raises, so FIELD_DOCS cannot shadow it")
+@case("probe: a flag group is not read as a flag, and does not claim required")
 def _():
+    # cobra says `at least one of the flags in the group [alpha beta] is
+    # required`. Reading that as a flag name produced a flag called
+    # "alpha beta", which matches nothing -- so both real flags rendered
+    # optional while the binary refused to run without one.
+    for line in ("Error: at least one of the flags in the group [alpha beta] is required",
+                 "Error: if any flags in the group [alpha beta] are set they must all be set"):
+        # the assertion that matters: no pattern the probe actually uses
+        # reads this line as a flag. There used to be a second assertion here,
+        # that a `_FLAG_GROUP` list matched the message -- but nothing in the
+        # generator consulted that list, so it tested only itself. The list is
+        # gone and this is what is left, which is the real behaviour.
+        hits = [rx.search(line) for rx in refgen._REQUIRED_ALSO]
+        assert not any(hits), (line, hits)
+        assert not refgen._REQUIRED.search(line), line
+    # a genuine single-flag message is still read
+    assert refgen._REQUIRED_ALSO[0].search("Error: --chain is required")
+
+
+@case("probe: only the error line is read, never the usage block under it")
+def _():
+    out = ("Error: accepts 1 arg(s), received 0\n"
+           "Usage:\n  ibc keys show [name] [flags]\n"
+           "Flags:\n      --private   required for remote signers\n")
+    assert refgen._error_line(out) == "Error: accepts 1 arg(s), received 0"
+    # the usage text below must not be mined for requirements
+    assert not refgen._REQUIRED_ALSO[0].search(refgen._error_line(out))
+
+
+@case("probe: a command whose answer is a floor is recorded as one")
+def _():
+    binary = refgen.build_cli()
+    tree = refgen.walk_cli(binary)
+    refgen.required_flags(binary, tree)
+    # every command that reports required flags stops at the first value it
+    # rejects, so each of them is a floor and the report has to say so
+    assert refgen.INCOMPLETE_PROBES, "nothing recorded as incomplete"
+    for path in refgen.INCOMPLETE_PROBES:
+        assert path in tree, path
+
+
+@case("plan: a description gap names the declaration to go and fix")
+def _():
+    key = ("ServerConfig", "listenAddr")
+    saved = dict(refgen.FALLBACK_DOCS)
+    try:
+        del refgen.FALLBACK_DOCS[key]
+        refgen.PLAN = []
+        refgen.gen_config()
+        gaps = [c for c in refgen.PLAN if c["kind"] == "missing_description"]
+    finally:
+        refgen.PLAN = None
+        refgen.FALLBACK_DOCS.clear()
+        refgen.FALLBACK_DOCS.update(saved)
+    assert gaps, "no missing_description recorded"
+    g = gaps[0]
+    assert g["file"].endswith(".go"), g
+    assert isinstance(g["line"], int) and g["line"] > 0, g
+    line = refgen._read(g["file"]).split("\n")[g["line"] - 1]
+    assert "ListenAddress" in line, (g, line)
+
+
+@case("plan: a key that stops being required is named in the work order")
+def _():
+    # The worst diff this tool can produce and the least obvious: a validation
+    # message reworded past the words `_requirement` knows turns a mandatory
+    # key optional, and it reads as ordinary drift.
+    page = ("<!-- GEN:config:db START -->\n"
+            "| Key | Type | Default or required | Description |\n"
+            "|---|---|---|---|\n"
+            "| `url` | `string` | **required** | x. |\n"
+            "| `type` | `string` | **required** | y. |\n"
+            "<!-- GEN:config:db END -->\n")
+    blocks = {"config:db": ("| Key | Type | Default or required | Description |\n"
+                            "|---|---|---|---|\n"
+                            "| `url` | `string` | optional | x. |\n"
+                            "| `type` | `string` | **required** | y. |\n")}
+    got = refgen._dropped_requirements(page, blocks)
+    assert len(got) == 1, got
+    assert got[0]["key"] == "`url`" and got[0]["region"] == "config:db", got
+    # a key that is still required must not be reported
+    assert all(g["key"] != "`type`" for g in got), got
+    # and neither must a region the regeneration did not produce
+    assert refgen._dropped_requirements(page, {}) == []
+
+
+@case("report: a page the tool could not read is named, and the exit code says so")
+def _():
+    # This is the failure the report exists to prevent, and the report had it:
+    # a refused page was dropped from `plans` and rc=2 was overwritten by rc=1,
+    # so it printed "every table matches the source" and exited 0.
+    refused = [{"page": "x.md", "kind": "api", "regions": 0,
+                "refused": "go build failed", "stale": [], "missing_marker": [],
+                "orphaned_marker": [], "curation": []}]
+    out = refgen.report(refused)
+    assert "could not be read" in out.lower(), out
+    assert "go build failed" in out, out
+    assert "every table matches the source" not in out, out
+
+
+@case("report: counts only the pages it could actually read")
+def _():
+    plans = [{"page": "a.md", "kind": "api", "regions": 7, "stale": [],
+              "missing_marker": [], "orphaned_marker": [], "curation": []},
+             {"page": "b.md", "kind": "cli", "regions": 0, "refused": "nope",
+              "stale": [], "missing_marker": [], "orphaned_marker": [],
+              "curation": []}]
+    out = refgen.report(plans)
+    assert "7 regions across 1 page" in out, out
+
+
+@case("report: a message naming a file is not cut at the file's dot")
+def _():
+    plans = [{"page": "a.md", "kind": "config", "regions": 1, "stale": [],
+              "missing_marker": [], "orphaned_marker": [],
+              "curation": [{"kind": "missing_description",
+                            "message": "DBConfig.URL has no doc comment in "
+                                       "cli/internal/config/config.go anywhere. Fix it.",
+                            "file": "cli/internal/config/config.go", "line": 3}]}]
+    out = refgen.report(plans)
+    assert "config.go anywhere" in out, out
+
+
+@case("notice: every page carries one, and it says the prose is still yours")
+def _():
+    for kind, gen in refgen.GENERATORS.items():
+        blocks = gen()
+        assert "notice" in blocks, kind
+        body = blocks["notice"]
+        assert body.startswith(refgen.COMMENT[0]), (kind, body[:40])
+        assert body.rstrip().endswith(refgen.COMMENT[1]), kind
+        assert "AGENTS.md" in body, kind
+        # it must not tell anyone to stop editing the prose, which is theirs
+        assert "yours to change" in body, kind
+
+
+@case("notice: it is not a section, so it gets no heading and goes first")
+def _():
+    assert refgen._suggest_heading("notice") == ""
+    assert refgen._suggest_heading("cli:cmd:keys-export") == "### `ibc keys export`"
+
+
+@case("notice: a marker above the frontmatter is refused")
+def _():
+    page = ("<!-- GEN:notice START -->\n<!-- GEN:notice END -->\n"
+            "---\ntitle: \"X\"\n---\n\nbody\n")
+    try:
+        refgen._check_notice_placement(page, "x.md")
+    except refgen.MarkerError as e:
+        assert "frontmatter" in str(e), e
+    else:
+        raise AssertionError("a notice above the frontmatter must be refused")
+    ok = ("---\ntitle: \"X\"\n---\n\n<!-- GEN:notice START -->\n"
+          "<!-- GEN:notice END -->\n\nbody\n")
+    refgen._check_notice_placement(ok, "x.md")      # must not raise
+
+
+@case("api: a proto field with no comment and no entry raises, not a blank cell")
+def _():
+    # This used to return an empty string and raise nothing, so a new field on
+    # a public API shipped with a blank Description and a clean check.
     key = ("PacketSelector", "sequence_number")
     saved = refgen.FIELD_DOCS[key]
     try:
-        # the real check runs against source; simulate by removing the entry's
-        # partner condition, which is what a new comment upstream would create
         del refgen.FIELD_DOCS[key]
         try:
             refgen.gen_api()
         except refgen.SourceError as e:
-            assert "sequence_number" not in str(e) or True
-        # an entry for a field that does not exist must raise
-        refgen.FIELD_DOCS[("PacketSelector", "gone_away")] = ("x", "y")
-        try:
-            refgen.gen_api()
-        except refgen.SourceError as e:
-            assert "gone_away" in str(e), e
-            return
+            assert "sequence_number" in str(e), e
+        else:
+            raise AssertionError("a field nobody described must not render blank")
+    finally:
+        refgen.FIELD_DOCS[key] = saved
+
+
+@case("api: an entry for a field that is gone raises")
+def _():
+    refgen.FIELD_DOCS[("PacketSelector", "gone_away")] = ("x", "y")
+    try:
+        refgen.gen_api()
+    except refgen.SourceError as e:
+        assert "gone_away" in str(e), e
+    else:
         raise AssertionError("expected SourceError for a dead FIELD_DOCS entry")
     finally:
         refgen.FIELD_DOCS.pop(("PacketSelector", "gone_away"), None)
-        refgen.FIELD_DOCS[key] = saved
 
 
 @case("api: a list renders as an array, not as protobuf's `repeated`")
@@ -303,11 +469,15 @@ def _():
     assert "`uint64` (optional)" in b["api:msg:Attestation"]
 
 
-@case("api: a description does not repeat the name of its own row")
+@case("api: a description is the schema comment, unedited")
 def _():
+    # This case used to assert the opposite -- that the leading identifier was
+    # dropped. That transformation worked on `Relay tracks` and mangled every
+    # other shape, so it is gone, and the page now carries what the schema
+    # says. If a row stutters, the comment in the .proto is what to reword.
     b = refgen.gen_api()
-    assert b["api:rpc:Relay"].startswith("Tracks the packets")
-    assert "Relay tracks" not in b["api:rpc:Relay"]
+    assert b["api:rpc:Relay"].startswith("Relay tracks the packets"), \
+        b["api:rpc:Relay"][:80]
 
 
 @case("api: a sibling field named in a description is fenced")
@@ -344,10 +514,11 @@ def _():
 def _():
     saved = dict(refgen.FALLBACK_DOCS)
     try:
-        del refgen.FALLBACK_DOCS[("ServerConfig", "ListenAddress")]
+        del refgen.FALLBACK_DOCS[("ServerConfig", "listenAddr")]
         try:
             refgen.gen_config()
-        except refgen.SourceError:
+        except refgen.SourceError as e:
+            assert e.kind == "missing_description", f"raised {e.kind!r}: {e}"
             return
         raise AssertionError("expected SourceError")
     finally:
@@ -355,23 +526,178 @@ def _():
         refgen.FALLBACK_DOCS.update(saved)
 
 
-@case("config: a fallback description that the source now provides is an error")
+@case("config: a variant clause survives in a table that is not about that variant")
 def _():
-    refgen.FALLBACK_DOCS[("AttestorConfig", "Name")] = "shadows a real doc comment"
+    # The clause is the only statement of the condition when the required
+    # column cannot see it -- a rule that lives in a helper renders `optional`,
+    # and stripping this left a row reading as unconditional.
+    field = {"go": "Signer", "doc": "Signer required for type: local only -- "
+                                    "the signer used to sign attestations."}
+    kept = refgen._clean_doc(field, variant=None)
+    assert "required for type: local" in kept.lower(), kept
+    other = refgen._clean_doc(field, variant="remote")
+    assert "required for type: local" in other.lower(), other
+
+
+@case("config: a variant clause comes off in the table already about that variant")
+def _():
+    field = {"go": "Signer", "doc": "Signer required for type: local only -- "
+                                    "the signer used to sign attestations."}
+    got = refgen._clean_doc(field, variant="local")
+    assert got == "The signer used to sign attestations.", got
+
+
+@case("config: 'local only.' is kept unless the table is the local one")
+def _():
+    field = {"go": "FinalityOffset", "doc": "FinalityOffset local only. Zero attests "
+                                            "up to the chain's finalized tag."}
+    assert refgen._clean_doc(field, variant=None).startswith("Local only."), \
+        refgen._clean_doc(field, variant=None)
+    assert refgen._clean_doc(field, variant="local").startswith("Zero attests"), \
+        refgen._clean_doc(field, variant="local")
+
+
+@case("api: a proto comment is published as its author wrote it")
+def _():
+    # This used to drop the leading identifier, which worked for `Relay tracks`
+    # and mangled `Labels are forwarded` into `Are forwarded` and `State of the
+    # packet` into `Of the packet`. Each repair was another word on a list.
+    for name, doc in (("labels", "Labels are forwarded to the receipt."),
+                      ("state", "State of the packet."),
+                      ("Relay", "Relay tracks the packets.")):
+        assert refgen._lead_strip(name, doc) == doc, refgen._lead_strip(name, doc)
+    assert refgen._lead_strip("x", "lowercase start.") == "Lowercase start."
+
+
+@case("config: accepted values are read however the rule is worded")
+def _():
+    # `db.type` published its two values and `observability.type` published
+    # `string`, because one author wrote "must be one of" and the other wrote
+    # "expected [...]". Same shape of key, and the difference was a phrase.
+    b = refgen.gen_config()
+    for region, expect in (("config:db", "`sqlite` \\| `postgres`"),
+                           ("config:observability", "`simple` \\| `otel`")):
+        row = [l for l in b[region].split("\n") if l.startswith("| `type`")]
+        assert row, f"no type row in {region}"
+        assert expect.replace("\\", "") in row[0].replace("\\", ""), row[0]
+
+
+@case("config: the canary fires when no validation message is recognised any more")
+def _():
+    # The guard against the worst thing this tool can do: render a whole page
+    # of `optional` because the config package reworded its errors. It had no
+    # test at all -- it could be deleted outright and both suites stayed green.
+    saved = refgen.REQUIREMENT_VOCABULARY
+    refgen.REQUIREMENT_VOCABULARY = ("no-message-says-this",)
     try:
         refgen.gen_config()
-    except refgen.SourceError:
+    except refgen.SourceError as e:
+        assert e.kind == "all_keys_optional", f"raised {e.kind!r}: {e}"
         return
     finally:
-        del refgen.FALLBACK_DOCS[("AttestorConfig", "Name")]
+        refgen.REQUIREMENT_VOCABULARY = saved
+    raise AssertionError("expected the canary to refuse")
+
+
+@case("config: a fallback description that the source now provides is an error")
+def _():
+    # Keyed on the yaml key, not the Go field name. Keyed on "Name" this entry
+    # matched no field at all, so the refusal under test never ran and the case
+    # passed on `dead_description` instead -- which is why the kind is asserted
+    # rather than the mere fact of a raise.
+    refgen.FALLBACK_DOCS[("AttestorConfig", "name")] = "shadows a real doc comment"
+    try:
+        refgen.gen_config()
+    except refgen.SourceError as e:
+        assert e.kind == "stale_fallback", f"raised {e.kind!r}: {e}"
+        return
+    finally:
+        del refgen.FALLBACK_DOCS[("AttestorConfig", "name")]
     raise AssertionError("expected SourceError")
+
+
+@case("config: error builders are found by shape, however they are spelled")
+def _():
+    # The four spellings Go allows for the same signature. Reading only one of
+    # them means a constructor written another way carries its rules off the
+    # page while the page still renders, which is the failure this replaced a
+    # hardcoded list of names to avoid.
+    for sig in ("segment string, format string, args ...any",
+                "segment, format string, args ...any",
+                "string, string"):
+        got = refgen._path_error_ctors("func e(%s) error { return nil }" % sig)
+        assert got == {"e": "seg_fmt"}, (sig, got)
+    for sig, kind in (("segment string, err error", "seg_err"),
+                      ("idx int, format string, args ...any", "idx_fmt"),
+                      ("idx int, err error", "idx_err")):
+        got = refgen._path_error_ctors("func e(%s) error { return nil }" % sig)
+        assert got == {"e": kind}, (sig, got)
+    # a function of another shape is not one of these
+    assert refgen._path_error_ctors(
+        "func store(c Config, path string, m map[string]string) error { return nil }") == {}
+
+    # and the package's own builders are still all found
+    src = "\n".join(refgen._read(f) for f in refgen._config_files())
+    found = refgen._path_error_ctors(src)
+    assert set(found.values()) == {"seg_err", "seg_fmt", "idx_err", "idx_fmt"}, found
+
+
+@case("config: every method in the package is parsed, so no helper goes unread")
+def _():
+    src = "\n".join(refgen._read(f) for f in refgen._config_files())
+    declared = {(m.group(2), m.group(3)) for m in
+                re.finditer(r"^func \((\w+ )?\*?(\w+)\) (\w+)\(", src, re.M)}
+    parsed = set(refgen._method_bodies(src))
+    assert not declared - parsed, sorted(declared - parsed)
+
+
+@case("config: a brace inside a string does not cut a Validate body short")
+def _():
+    # A rule below a raw string containing a lone `}` used to be unreadable,
+    # and unreadable means absent from the page rather than reported.
+    body = ('func (c T) Validate() error {\n'
+            '\t_ = `\n}\n`\n'
+            '\treturn errPathf("key", "required")\n}\n')
+    rules = refgen._rules_in("".join(refgen._method_bodies(body).values()),
+                             {"errPathf": "seg_fmt"})
+    assert rules == [(".key required", [])], rules
+    # and a parameter list with its own parentheses parses too
+    body = ('func (c T) Validate(check func(string) error) error {\n'
+            '\treturn errPathf("key", "required")\n}\n')
+    rules = refgen._rules_in("".join(refgen._method_bodies(body).values()),
+                             {"errPathf": "seg_fmt"})
+    assert rules == [(".key required", [])], rules
+
+
+@case("config: a default constant is read from its declaration, not a comment")
+def _():
+    import tempfile
+    saved, saved_anchors = refgen.IBC, dict(refgen._ANCHORS)
+    with tempfile.TemporaryDirectory() as d:
+        os.makedirs(os.path.join(d, "cli", "pkg"))
+        with open(os.path.join(d, "cli", "pkg", "opts.go"), "w") as fh:
+            fh.write("package pkg\n\n"
+                     "// DefaultThing = 99 * time.Second  (before the change)\n"
+                     "/*\nDefaultThing = 98 * time.Second\n*/\n"
+                     "const (\n\tDefaultThing = 2 * time.Second\n)\n")
+        try:
+            refgen.IBC = d
+            refgen._ANCHORS.clear()
+            refgen._ANCHORS.update({"__root__": d, "cli_module": "cli"})
+            value, path, _line = refgen._const_value("DefaultThing")
+        finally:
+            refgen.IBC = saved
+            refgen._ANCHORS.clear()
+            refgen._ANCHORS.update(saved_anchors)
+    assert value == "2s", value
+    assert path.endswith("opts.go"), path
 
 
 @case("config: a missing default constant is an error, not a stale number")
 def _():
-    key = ("RelayerConfig", "DispatchPollInterval")
+    key = ("RelayerConfig", "dispatchPollInterval")
     saved = refgen.DEFAULT_CONSTS[key]
-    refgen.DEFAULT_CONSTS[key] = [("", "cli/internal/relay/dispatch/dispatcher.go", "GoneAway")]
+    refgen.DEFAULT_CONSTS[key] = [("", "GoneAway")]
     try:
         refgen.gen_config()
     except refgen.SourceError:
@@ -513,6 +839,147 @@ def _():
         open(p, "w").write("just prose\n")
         assert refgen.run("api", p, check=False) == 0
         assert open(p).read() == "just prose\n"
+
+
+@case("every struct that validates yields a rule, or is listed as ruleless")
+def _():
+    """A rule count that can silently reach zero is the failure this guards.
+
+    Validation rules drive required-ness, enum values, and the discriminators.
+    When the config package moved to errPathf helpers, the scraper harvested
+    nothing from any struct, the pages still rendered, and check mode still
+    reported them up to date. So any struct declaring Validate() must yield at
+    least one rule unless it is named in RULELESS_VALIDATORS.
+    """
+    validations = refgen.parse_go_config()["validations"]
+    assert validations, "no struct with a Validate() was found at all"
+    empty = {s for s, rules in validations.items() if not rules}
+    unexpected = empty - refgen.RULELESS_VALIDATORS
+    assert not unexpected, (
+        f"{sorted(unexpected)} declare Validate() but yield no field rule. Either "
+        "the scraper cannot read how they build errors, or they belong in "
+        "RULELESS_VALIDATORS.")
+    # Absence, not just emptiness: a receiver shape the regex cannot match drops
+    # the struct from validations entirely, and an emptiness check cannot see that.
+    import re as _re, os as _os
+    declared = set()
+    for rel in refgen._config_files():
+        src = open(_os.path.join(refgen.IBC, rel)).read()
+        declared |= set(_re.findall(
+            r"func \((?:\w+ )?\*?(\w+)\) Validate\([^)]*\) error \{", src))
+    missing = declared - set(validations)
+    assert not missing, (
+        f"{sorted(missing)} declare Validate() in the source but never reached the "
+        "parser. The receiver pattern in parse_go_config() cannot match their shape.")
+
+    stale = refgen.RULELESS_VALIDATORS - set(validations)
+    assert not stale, (
+        f"{sorted(stale)} are in RULELESS_VALIDATORS but have no Validate() any "
+        "more. Drop them from the list.")
+
+
+
+# ---- prose citations -------------------------------------------------------
+#
+# The checker shipped with no tests, and it was accepting three things it should
+# not have. Each case below is a mutation that passed before the fix.
+
+_CITED_FILE = "cli/internal/service/relayer/service.go"
+
+
+def _cite(symbol, path=_CITED_FILE):
+    return f"Some claim. <!-- [{path}: {symbol}] -->\n"
+
+
+def _refuses(text):
+    try:
+        refgen._check_symbol_cites(text, "page.md")
+    except refgen.SourceError as e:
+        return e
+    return None
+
+
+@case("citation: a real declaration is accepted")
+def _():
+    assert _refuses(_cite("Service.Relay")) is None
+
+
+@case("citation: a bare file name is refused, because it is ambiguous")
+def _():
+    # Fifteen of twenty-three cited basenames in this repo resolve to more than
+    # one file. The old checker searched all of them and passed if any matched.
+    e = _refuses(_cite("Service.Relay", "service.go"))
+    assert e is not None and "path from the repo root" in str(e), e
+
+
+@case("citation: a path that does not exist is refused")
+def _():
+    e = _refuses(_cite("Service.Relay", "cli/internal/service/relayer/gone.go"))
+    assert e is not None and "no such file" in str(e), e
+
+
+@case("citation: a symbol that is only mentioned, not declared, is refused")
+def _():
+    # `Relay` is called all over this file. A citation must name what the file
+    # declares, or it survives the deletion of the thing it points at.
+    e = _refuses(_cite("NewRelayer"))
+    assert e is not None and "not declared" in str(e), e
+
+
+@case("citation: a method cited on the wrong receiver type is refused")
+def _():
+    # The first fix checked the receiver and then fell through to a bare search
+    # for the method name, so this passed and the receiver went unchecked.
+    e = _refuses(_cite("Prover.Relay"))
+    assert e is not None and "not declared" in str(e), e
+
+
+@case("citation: a package-level const cited as a struct field is refused")
+def _():
+    e = _refuses(_cite("Service.MaxPacketsPerAttestation",
+                       "cli/internal/service/attestor/service.go"))
+    assert e is not None and "not declared" in str(e), e
+
+
+@case("citation: a renamed directory is reported as moved, with the new path")
+def _():
+    # Upstream renamed `link/` to `cli/` once already. The path is the one
+    # derived fact left in a citation, so a rename that breaks every sentence
+    # at once has to say where each one went, not just that it is broken.
+    e = _refuses(_cite("Config.Server", "link/internal/config/config.go"))
+    assert e is not None and e.kind == "moved_citation", e
+    assert "cli/internal/config/config.go" in str(e), e
+
+
+@case("citation: a symbol that exists nowhere is stale, not moved")
+def _():
+    # The two kinds ask for different work: a repoint you confirm, against a
+    # claim you re-read. Collapsing them would hide the second in the first.
+    e = _refuses(_cite("VanishedEntirely", "cli/internal/config/config.go"))
+    assert e is not None and e.kind == "stale_citation", e
+
+
+@case("citation: a symbol declared in several files is not guessed at")
+def _():
+    e = _refuses(_cite("upsertPacket", "gone/relayer.sql.go"))
+    assert e is not None and e.kind == "stale_citation", e
+
+
+@case("citation: a real struct field is accepted, and a fictional one is not")
+def _():
+    src = open(os.path.join(refgen.IBC, "cli/internal/config/config.go")).read()
+    assert refgen._declares(src, "Config.Server")
+    assert not refgen._declares(src, "Config.NoSuchField")
+
+
+@case("every prose citation on every page names a declaration")
+def _():
+    # The pages themselves, not a fixture: this is the check that would have
+    # caught all five mispointers on the config page had it existed then.
+    for rel in refgen.PAGES.values():
+        text = open(os.path.join(refgen.IBC, rel)).read()
+        assert _refuses(text) is None, rel
+        assert refgen.SYMBOL_CITE.search(text), f"{rel} cites nothing at all"
 
 
 for name in PASS:
