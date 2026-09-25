@@ -304,15 +304,15 @@ func clientSpec(chainID, counterpartyChainID string) (deploy.ClientSpec, error) 
 func attestationParams(
 	ctx context.Context,
 	cfg config.Config,
-	counterpartyTarget deploy.Target,
 	counterpartyChainID string,
-) (deploy.AttestationParams, error) {
+	counterpartyTarget deploy.Target,
+) (deploy.ClientParams, error) {
 	var attestors []string
 	if len(flagDeployAttestors) > 0 {
 		for _, token := range flagDeployAttestors {
 			address, err := resolveAttestorToken(cfg, token)
 			if err != nil {
-				return deploy.AttestationParams{}, err
+				return nil, err
 			}
 			attestors = append(attestors, address)
 		}
@@ -320,14 +320,14 @@ func attestationParams(
 		var err error
 		attestors, err = attestorsForChain(cfg, counterpartyChainID)
 		if err != nil {
-			return deploy.AttestationParams{}, err
+			return nil, err
 		}
 	}
 	height, timestamp := flagDeployHeight, flagDeployTimestamp
 	if height == 0 || timestamp == 0 {
 		h, ts, err := counterpartyTarget.Head(ctx)
 		if err != nil {
-			return deploy.AttestationParams{}, errors.Wrap(err, "fetch counterparty head for initial trusted state")
+			return nil, errors.Wrap(err, "fetch counterparty head for initial trusted state")
 		}
 		if height == 0 {
 			// a fresh chain's head is genesis (0), which clients reject as
@@ -405,11 +405,7 @@ func defaultClientID(a, b string) string {
 }
 
 func deployAttestationClient(cmd *cobra.Command, _ []string) error {
-	return deployClient(cmd, func(
-		ctx context.Context, cfg config.Config, counterpartyChainID string, counterpartyTarget deploy.Target,
-	) (deploy.ClientParams, error) {
-		return attestationParams(ctx, cfg, counterpartyTarget, counterpartyChainID)
-	})
+	return deployClient(cmd, attestationParams)
 }
 
 func deployBesuQBFTClient(cmd *cobra.Command, _ []string) error {

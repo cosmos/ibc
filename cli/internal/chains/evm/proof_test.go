@@ -27,7 +27,7 @@ func hexNodes(nodes [][]byte) []string {
 	return out
 }
 
-func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, [32]byte) {
+func fixtureAccountResult(t *testing.T) (*gethclient.AccountResult, [][]byte, common.Hash) {
 	t.Helper()
 
 	fixture := besutest.MustFixture(t)
@@ -112,19 +112,19 @@ func TestGetRouterProof(t *testing.T) {
 	t.Run("propagates client error", func(t *testing.T) {
 		client, eth := newTestClient(t)
 		eth.EXPECT().
-			GetProof(ctx, common.HexToAddress(routerAddress), []string{common.Hash(slot).Hex()}, big.NewInt(114)).
+			GetProof(ctx, common.HexToAddress(routerAddress), []string{slot.Hex()}, big.NewInt(114)).
 			Return(nil, assert.AnError).
 			Once()
-		_, err := client.GetRouterProof(ctx, 114, [][32]byte{slot})
+		_, err := client.GetRouterProof(ctx, 114, []common.Hash{slot})
 		require.ErrorIs(t, err, assert.AnError)
 	})
 
 	t.Run("converts", func(t *testing.T) {
 		api := &ethProofAPI{result: result}
-		proof, err := clientWithProofAPI(t, api).GetRouterProof(ctx, 114, [][32]byte{slot})
+		proof, err := clientWithProofAPI(t, api).GetRouterProof(ctx, 114, []common.Hash{slot})
 		require.NoError(t, err)
 		assert.Equal(t, common.HexToAddress(routerAddress), api.account)
-		assert.Equal(t, []string{common.Hash(slot).Hex()}, api.keys)
+		assert.Equal(t, []string{slot.Hex()}, api.keys)
 		assert.Equal(t, hexutil.EncodeUint64(114), api.block)
 		assert.Equal(t, accountNodes, proof.AccountProof)
 		require.Len(t, proof.StorageProofs, 1)
@@ -144,7 +144,7 @@ func TestGetRouterProof(t *testing.T) {
 }
 
 func TestRouterProofFromResultValidation(t *testing.T) {
-	result, _, slot := fixtureAccountResult(t)
+	result, _, _ := fixtureAccountResult(t)
 
 	for name, tc := range map[string]struct {
 		mutate func(*gethclient.AccountResult)
@@ -158,17 +158,13 @@ func TestRouterProofFromResultValidation(t *testing.T) {
 			mutate: func(r *gethclient.AccountResult) { r.StorageProof = append(r.StorageProof, r.StorageProof[0]) },
 			want:   "2 storage proofs returned for 1 slots",
 		},
-		"other key": {
-			mutate: func(r *gethclient.AccountResult) { r.StorageProof[0].Key = "0x01" },
-			want:   "storage proof 0 is for key",
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := *result
 			r.StorageProof = append([]gethclient.StorageResult(nil), result.StorageProof...)
 			tc.mutate(&r)
 
-			_, err := routerProofFromResult(&r, [][32]byte{slot})
+			_, err := routerProofFromResult(&r, 1)
 			require.ErrorContains(t, err, tc.want)
 		})
 	}
@@ -186,7 +182,7 @@ func TestGetRouterProofRejectsMalformedNodes(t *testing.T) {
 				result.StorageProof[0].Proof = nodes
 			}
 			client := clientWithProofAPI(t, &ethProofAPI{result: result})
-			proof, err := client.GetRouterProof(t.Context(), 114, [][32]byte{slot})
+			proof, err := client.GetRouterProof(t.Context(), 114, []common.Hash{slot})
 			require.ErrorContains(t, err, proofType+" proof")
 			require.ErrorContains(t, err, "node 1")
 			require.ErrorContains(t, err, "height 114")
@@ -195,22 +191,12 @@ func TestGetRouterProofRejectsMalformedNodes(t *testing.T) {
 	}
 }
 
-// Nodes may return the key without its leading zeros.
-func TestRouterProofFromResultAcceptsUnpaddedKey(t *testing.T) {
-	result, _, _ := fixtureAccountResult(t)
-	slot := [32]byte{31: 0x05}
-	result.StorageProof[0].Key = "0x5"
-
-	_, err := routerProofFromResult(result, [][32]byte{slot})
-	require.NoError(t, err)
-}
-
 func TestRouterProofFromResultAllowsEmptyProofArrays(t *testing.T) {
-	result, _, slot := fixtureAccountResult(t)
+	result, _, _ := fixtureAccountResult(t)
 	result.AccountProof = nil
 	result.StorageProof[0].Proof = []string{}
 
-	proof, err := routerProofFromResult(result, [][32]byte{slot})
+	proof, err := routerProofFromResult(result, 1)
 	require.NoError(t, err)
 	assert.Empty(t, proof.AccountProof)
 	require.Len(t, proof.StorageProofs, 1)

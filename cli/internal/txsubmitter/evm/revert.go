@@ -22,7 +22,8 @@ var revertContracts = []*bind.MetaData{
 }
 
 // explainRevert names the custom error in err's revert data, which nodes
-// return undecoded.
+// return undecoded. Any error code is accepted: Besu before 26.x reports
+// reverts with -32000 rather than 3.
 func explainRevert(err error) error {
 	var dataErr rpc.DataError
 	if !errors.As(err, &dataErr) {

@@ -34,7 +34,7 @@ type Counterparty interface {
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
 	// SealedHeader returns the parsed header at height.
 	SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error)
-	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.RouterProof, error)
+	GetRouterProof(ctx context.Context, height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
 
 // Generator implements prover.Prover for one Besu QBFT light client.
@@ -119,7 +119,7 @@ func (g *Generator) PacketProofs(
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
 ) ([][]byte, error) {
-	slots := make([][32]byte, len(packets))
+	slots := make([]common.Hash, len(packets))
 	for i, packet := range packets {
 		path, err := kind.CommitmentPath(packet)
 		if err != nil {

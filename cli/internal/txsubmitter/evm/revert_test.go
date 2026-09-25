@@ -15,10 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type revertError struct{ data any }
+type revertError struct {
+	code int
+	data any
+}
 
 func (e revertError) Error() string  { return "execution reverted" }
-func (e revertError) ErrorCode() int { return 3 }
+func (e revertError) ErrorCode() int { return e.code }
 func (e revertError) ErrorData() any { return e.data }
 
 func TestExplainRevert(t *testing.T) {
@@ -44,8 +47,12 @@ func TestExplainRevert(t *testing.T) {
 			args, err := customErr.Inputs.Pack(tc.args...)
 			require.NoError(t, err)
 
-			err = explainRevert(revertError{data: hexutil.Encode(append(customErr.ID[:4], args...))})
-			require.EqualError(t, err, tc.want+": execution reverted")
+			data := hexutil.Encode(append(customErr.ID[:4], args...))
+			// geth and Besu 26.x use code 3, older Besu -32000
+			for _, code := range []int{3, -32000} {
+				err = explainRevert(revertError{code: code, data: data})
+				require.EqualError(t, err, tc.want+": execution reverted")
+			}
 		})
 	}
 

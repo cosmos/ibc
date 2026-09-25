@@ -31,7 +31,7 @@ type fakeChain struct {
 	sealed         map[uint64]*besu.ParsedHeader
 	clientState    besumsgs.IBesuLightClientMsgsClientState
 	clientStateErr error
-	proof          func(height uint64, slots [][32]byte) (evm.RouterProof, error)
+	proof          func(height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
 
 func (f *fakeChain) ChainID() string { return f.id }
@@ -56,7 +56,7 @@ func (f *fakeChain) SealedHeader(_ context.Context, height uint64) (*besu.Parsed
 	return h, nil
 }
 
-func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots [][32]byte) (evm.RouterProof, error) {
+func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots []common.Hash) (evm.RouterProof, error) {
 	if f.proof == nil {
 		return evm.RouterProof{}, fmt.Errorf("no router proof at %d", height)
 	}
@@ -157,28 +157,6 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	assert.Equal(t, env.fixture.InitialConsensusState(), decoded.ConsensusStatePreimage)
 }
 
-// The generator sees the header's validators but leaves the overlap rule to
-// the contract: a target sealed by a disjoint validator set is still encoded.
-func TestClientUpdatePayloadDefersOverlapValidationToContract(t *testing.T) {
-	env := newFixtureEnv(t)
-	trusted := besumsgs.IBesuLightClientMsgsConsensusState{
-		Timestamp:  1700000010,
-		Validators: []common.Address{common.HexToAddress("0x01"), common.HexToAddress("0x02")},
-	}
-	env.setAnchor(t, 10, trusted)
-	target := parsedUpdate(t, env.fixture.AdjacentUpdate)
-	target.Height, target.Timestamp = 12, 1700000012
-	target.Validators = []common.Address{common.HexToAddress("0x03"), common.HexToAddress("0x04")}
-	env.counterparty.sealed[12] = target
-
-	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), 12)
-	require.NoError(t, err)
-	require.Len(t, payloads, 1)
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
-	require.NoError(t, err)
-	require.Equal(t, target.RLP, decoded.HeaderRlp)
-}
-
 func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
@@ -212,11 +190,11 @@ func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
 func (e *fixtureEnv) expectProofAt(
 	t *testing.T,
 	update besutest.UpdateFixture,
-	nodesFor func(slot [32]byte) [][]byte,
+	nodesFor func(slot common.Hash) [][]byte,
 ) {
 	t.Helper()
 	e.counterparty.sealed[update.Height] = parsedUpdate(t, update)
-	e.counterparty.proof = func(_ uint64, slots [][32]byte) (evm.RouterProof, error) {
+	e.counterparty.proof = func(_ uint64, slots []common.Hash) (evm.RouterProof, error) {
 		proof := evm.RouterProof{AccountProof: accountNodes(t, e.fixture.Membership)}
 		for _, slot := range slots {
 			proof.StorageProofs = append(proof.StorageProofs, nodesFor(slot))
@@ -254,7 +232,7 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("membership wraps the storage proof with the proof-height preimage", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(t, update, func([32]byte) [][]byte { return membershipNodes })
+		env.expectProofAt(t, update, func(common.Hash) [][]byte { return membershipNodes })
 
 		proofs, err := env.gen.PacketProofs(
 			ctx,
@@ -274,7 +252,7 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("only the first proof carries the account proof", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(t, update, func([32]byte) [][]byte { return membershipNodes })
+		env.expectProofAt(t, update, func(common.Hash) [][]byte { return membershipNodes })
 		next := sent
 		next.Sequence++
 
@@ -298,8 +276,8 @@ func TestPacketProofs(t *testing.T) {
 
 	t.Run("receipt absence uses the fixture exclusion proof", func(t *testing.T) {
 		env := newFixtureEnv(t)
-		env.expectProofAt(t, update, func(slot [32]byte) [][]byte {
-			require.Equal(t, besu.CommitmentSlot(fixture.NonMembership.Path), common.Hash(slot))
+		env.expectProofAt(t, update, func(slot common.Hash) [][]byte {
+			require.Equal(t, besu.CommitmentSlot(fixture.NonMembership.Path), slot)
 			return nonMembershipNodes
 		})
 

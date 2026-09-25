@@ -56,7 +56,7 @@ func ReadClientState(
 		return besumsgs.IBesuLightClientMsgsClientState{}, fmt.Errorf("querying client state: %w", err)
 	}
 
-	state, err := besumsgs.NewBindings().UnpackClientState(raw)
+	state, err := messageBindings.UnpackClientState(raw)
 	if err != nil {
 		return besumsgs.IBesuLightClientMsgsClientState{}, fmt.Errorf(
 			"%s is not a besu-qbft light client: %w", address, err,
