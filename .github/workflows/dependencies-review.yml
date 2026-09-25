@@ -1,0 +1,136 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Dependency Review
+
+on:
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+env:
+  GOVULNCHECK_VERSION: 1.8.0
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Resolve accepted advisories
+        id: allowlist
+        run: |
+          set -euo pipefail
+          ghsas="$(./scripts/govulncheck-ignore-ghsas.sh)"
+          echo "Accepted GHSAs: ${ghsas:-none}"
+          printf 'ghsas=%s\n' "$ghsas" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          base-ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          head-ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+          allow-ghsas: ${{ steps.allowlist.outputs.ghsas }}
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+
+      - name: Go vulnerability check
+        id: govuln
+        env:
+          GOVULNCHECK_VERSION: ${{ env.GOVULNCHECK_VERSION }}
+          VULNCHECK_JSON: ${{ runner.temp }}/govulncheck.json
+        run: |
+          set -uo pipefail
+          # JSON rather than the text target: only the JSON output carries the advisory
+          # aliases, which is where the CVE identifiers come from.
+          # Guarded so the -e this step runs under cannot abort before the message below.
+          status=0
+          make vulncheck-json || status=$?
+
+          # The target reports findings without failing, so a non-zero status here means a
+          # module could not be scanned and this run tells us nothing about it.
+          if [ "$status" -ne 0 ]; then
+            echo "::error::govulncheck could not scan every module (make exit $status); see the step log"
+            exit 1
+          fi
+          printf 'ok=true\n' >> "$GITHUB_OUTPUT"
+
+      - name: Build vulnerability report
+        id: report
+        if: always() && steps.govuln.outputs.ok == 'true'
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VULNCHECK_JSON: ${{ runner.temp }}/govulncheck.json
+        run: |
+          set -euo pipefail
+          LIMIT=60000
+          body="$RUNNER_TEMP/vuln-comment.md"
+          counts="$RUNNER_TEMP/vuln-counts.env"
+
+          ./scripts/vulncheck-report.sh "$VULNCHECK_JSON" --counts "$counts" > "$body.full"
+          cat "$counts" >> "$GITHUB_OUTPUT"
+          # shellcheck disable=SC1090
+          . "$counts"
+
+          size="$(wc -c < "$body.full" | tr -d '[:space:]')"
+          head -c "$LIMIT" "$body.full" > "$body"
+          if [ "$size" -gt "$LIMIT" ]; then
+            printf '\n\nTruncated; see the [run](%s) for the full report.\n' "$RUN_URL" >> "$body"
+          fi
+          printf '\n<sub>From `make vulncheck-json` on this run: [logs](%s).</sub>\n' "$RUN_URL" >> "$body"
+
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"
+          printf 'body=%s\n' "$body" >> "$GITHUB_OUTPUT"
+          echo "unexpected=$unexpected accepted=$accepted total=$total"
+
+      - name: Post or update PR comment
+        if: |
+          always() && steps.report.outcome == 'success'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          MARKER: '<!-- dependency-review:govulncheck -->'
+          BODY: ${{ steps.report.outputs.body }}
+          UNEXPECTED: ${{ steps.report.outputs.unexpected }}
+        run: |
+          set -euo pipefail
+          ids="$(gh api "repos/$REPO/issues/$PR/comments?per_page=100" --paginate \
+            --jq '.[] | select(.user.type == "Bot") | select(.body | startswith(env.MARKER)) | .id' || true)"
+          id="$(printf '%s' "$ids" | tail -n 1)"
+          if [ -n "$id" ]; then
+            jq -n --rawfile body "$BODY" '{body: $body}' \
+              | gh api --method PATCH "repos/$REPO/issues/comments/$id" --input - --silent
+            echo "Updated comment $id"
+          elif [ "${UNEXPECTED:-0}" != "0" ]; then
+            gh pr comment "$PR" --repo "$REPO" --body-file "$BODY"
+          else
+            echo "Nothing needs attention and no existing comment; not posting one."
+          fi
+
+      - name: Fail on unexpected vulnerabilities
+        if: steps.report.outputs.unexpected != '0'
+        env:
+          UNEXPECTED: ${{ steps.report.outputs.unexpected }}
+          LIBRARIES: ${{ steps.report.outputs.libraries }}
+        run: |
+          echo "::error::${UNEXPECTED} reachable advisories across ${LIBRARIES} librar(y/ies) with no accepted exception; see the PR comment or job summary"
+          exit 1
