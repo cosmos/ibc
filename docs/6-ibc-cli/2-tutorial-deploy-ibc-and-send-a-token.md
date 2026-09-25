@@ -126,11 +126,11 @@ With both chains registered, deploy the IBC contracts on each.
 1. Deploy the IBC core on each chain. This deploys the ICS26 router and the access manager:
 
 ```bash
-./bin/ibc deploy core --chain 41001
+./bin/ibc deploy core --chain 41001 --yes
 ```
 
 ```bash
-./bin/ibc deploy core --chain 41002
+./bin/ibc deploy core --chain 41002 --yes
 ```
 
 Each run sends four transactions: an access manager, the router implementation, the router behind a proxy, and one call that opens the packet-delivery methods to any caller. Your deployer key is the access manager's admin.
@@ -151,11 +151,11 @@ level=INFO msg="transaction mined" label=setTargetFunctionRole tx=0x2fb39d8a... 
 2. Deploy an attestation light client on each chain. Each deployment tracks the state of the other chain:
 
 ```bash
-./bin/ibc deploy client --chain 41001 --counterparty-chain 41002 --attestors attestor-41002 --threshold 1
+./bin/ibc deploy client --chain 41001 --counterparty-chain 41002 --attestors attestor-41002 --threshold 1 --yes
 ```
 
 ```bash
-./bin/ibc deploy client --chain 41002 --counterparty-chain 41001 --attestors attestor-41001 --threshold 1
+./bin/ibc deploy client --chain 41002 --counterparty-chain 41001 --attestors attestor-41001 --threshold 1 --yes
 ```
 
 The `--attestors` flag takes the aliases from step 4. Each resolves to that key's address, and those addresses become the client's attestation set on chain.
@@ -173,21 +173,21 @@ The next steps deploy the General Message Passing (GMP) app and the Interchain F
 1. Deploy the GMP app on each chain. This allows cross-chain contract calls between the chains:
 
 ```bash
-./bin/ibc deploy gmp --chain 41001
+./bin/ibc deploy gmp --chain 41001 --yes
 ```
 
 ```bash
-./bin/ibc deploy gmp --chain 41002
+./bin/ibc deploy gmp --chain 41002 --yes
 ```
 
 2. Deploy an IFT contract on each chain. This is the token that will be transferred between the chains:
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --yes
 ```
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --yes
 ```
 
 ```
@@ -206,7 +206,7 @@ If you need to view these addresses later, the `deploy show` command prints a ch
 4. The next step is to link the two token contracts together. Registering a bridge tells each token to accept mints from its counterpart on the other chain. A transfer then burns tokens on the source chain and mints them on the destination.
 
 ```bash
-./bin/ibc deploy ift-bridge --chain-a 41001 --ift-a "$IFT_A" --chain-b 41002 --ift-b "$IFT_B"
+./bin/ibc deploy ift-bridge --chain-a 41001 --ift-a "$IFT_A" --chain-b 41002 --ift-b "$IFT_B" --yes
 ```
 
 This command registers both sides. It ties each token to the client pointing at the other chain, which is how a transfer knows where to land.
