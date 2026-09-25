@@ -32,7 +32,7 @@ type Counterparty interface {
 	ChainID() string
 	RouterAddress() common.Address
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
-	// SealedHeader returns the parsed header at exactly height.
+	// SealedHeader returns the parsed header at height.
 	SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error)
 	GetRouterProof(ctx context.Context, height uint64, slots [][32]byte) (evm.RouterProof, error)
 }

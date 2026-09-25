@@ -37,10 +37,6 @@ func ReadSealedHeader(ctx context.Context, reader HeaderReader, number *big.Int)
 		return nil, fmt.Errorf("header %s is not a Besu QBFT header: %w", at, err)
 	}
 
-	if number != nil && (!number.IsUint64() || parsed.Height != number.Uint64()) {
-		return nil, fmt.Errorf("node returned header %d for height %v", parsed.Height, number)
-	}
-
 	return parsed, nil
 }
 

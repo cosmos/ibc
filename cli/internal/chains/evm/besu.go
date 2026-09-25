@@ -13,7 +13,7 @@ import (
 	"github.com/cosmos/ibc/cli/besu"
 )
 
-// SealedHeader returns the Besu QBFT header at exactly height.
+// SealedHeader returns the Besu QBFT header at height.
 func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
 	header, err := besu.ReadSealedHeader(ctx, c.eth, new(big.Int).SetUint64(height))
 	if err != nil {
