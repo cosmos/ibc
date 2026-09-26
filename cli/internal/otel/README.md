@@ -53,6 +53,12 @@ Shared label: `{otel_scope_name="ibc.prover"}`
 
 `proof_kind`: `packet_commitment`, `acknowledgement`, `receipt_absence`, `unknown`.
 
+Attestation prover metric (`otel_scope_name="ibc.prover.attestation"`):
+
+| Metric | Type | Labels | Notes |
+| --- | --- | --- | --- |
+| `attestation_data_matches_total` | counter | `chain_id`, `client_id`, `attestor`, `result` | Whether returned data matches the expected claim (`true|false`). |
+
 ### Relayer metrics
 
 Shared label: `{otel_scope_name="ibc.relayer"}`
