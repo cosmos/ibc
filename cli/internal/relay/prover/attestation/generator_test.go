@@ -4,14 +4,18 @@ package attestation
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
@@ -82,7 +86,12 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil, slog.Default())
+		chain := mocks.NewMockClient(t)
+		chain.EXPECT().
+			GetBlockHeader(mock.Anything, uint64(10)).
+			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil).
+			Once()
+		gen := New(attestors, 2, chain, slog.Default())
 
 		proof, err := gen.StateProof(ctx, 10)
 		require.NoError(t, err)
@@ -95,7 +104,12 @@ func TestGeneratorStateProof(t *testing.T) {
 			signedStateAttestor(t, "a2", 10),
 		}
 
-		gen := New(attestors, 2, nil, slog.Default())
+		chain := mocks.NewMockClient(t)
+		chain.EXPECT().
+			GetBlockHeader(mock.Anything, uint64(11)).
+			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil).
+			Once()
+		gen := New(attestors, 2, chain, slog.Default())
 
 		_, err := gen.StateProof(ctx, 11)
 		require.Error(t, err)
@@ -110,9 +124,12 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		{Sequence: 2, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
 	}
 
-	compact := []attestorevm.PacketCompact{
-		{Path: [32]byte{1}, Commitment: [32]byte{2}},
-		{Path: [32]byte{3}, Commitment: [32]byte{4}},
+	compact := make([]attestorevm.PacketCompact, len(packets))
+	for i, packet := range packets {
+		compact[i] = attestorevm.PacketCompact{
+			Path:       crypto.Keccak256Hash(hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence)),
+			Commitment: [32]byte(channeltypesv2.CommitPacket(packet)),
+		}
 	}
 
 	t.Run("returnsOneProofPerPacket", func(t *testing.T) {
@@ -123,7 +140,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets)
+		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets, nil)
 		require.NoError(t, err)
 		require.Len(t, proofs, len(packets))
 		require.Equal(t, proofs[0], proofs[1], "the shared attestation blob is duplicated across every packet index")
@@ -134,7 +151,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 		// attestor, so the generator here is given no attestors at all.
 		gen := New(nil, 2, nil, slog.Default())
 
-		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets)
+		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets, nil)
 		require.Error(t, err)
 	})
 }
@@ -158,4 +175,171 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(90), height)
 	require.Equal(t, someBlockTime, timestamp)
+}
+
+func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
+	packets := []channeltypesv2.Packet{
+		{Sequence: 1, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
+		{Sequence: 2, SourceClient: "src-0", DestinationClient: "dst-0", TimeoutTimestamp: 1000},
+	}
+
+	tests := []struct {
+		name    string
+		height  uint64
+		mutate  func([]attestorevm.PacketCompact) []attestorevm.PacketCompact
+		wantErr bool
+	}{
+		{name: "valid", height: 20},
+		{
+			name: "path", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				claims[0].Path[0] ^= 1
+				return claims
+			},
+		},
+		{
+			name: "commitment", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				claims[0].Commitment[0] ^= 1
+				return claims
+			},
+		},
+		{
+			name: "reordered", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				return []attestorevm.PacketCompact{claims[1], claims[0]}
+			},
+		},
+		{
+			name: "duplicate", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				return []attestorevm.PacketCompact{claims[0], claims[0]}
+			},
+		},
+		{
+			name: "missing", height: 20, wantErr: true,
+			mutate: func(claims []attestorevm.PacketCompact) []attestorevm.PacketCompact {
+				return claims[:1]
+			},
+		},
+		{name: "height", height: 21, wantErr: true},
+	}
+
+	for _, kind := range []v2.ProofKind{v2.ProofKindPacketCommitment, v2.ProofKindAcknowledgement, v2.ProofKindReceiptAbsence} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%v/%s", kind, tt.name), func(t *testing.T) {
+				chain := mocks.NewMockClient(t)
+				var acknowledgements []channeltypesv2.Acknowledgement
+				claims := make([]attestorevm.PacketCompact, len(packets))
+				for i, packet := range packets {
+					switch kind {
+					case v2.ProofKindPacketCommitment:
+						claims[i].Path = crypto.Keccak256Hash(
+							hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence),
+						)
+						claims[i].Commitment = [32]byte(channeltypesv2.CommitPacket(packet))
+					case v2.ProofKindAcknowledgement:
+						claims[i].Path = crypto.Keccak256Hash(
+							hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence),
+						)
+						ack := channeltypesv2.NewAcknowledgement([]byte{byte(i + 1)})
+						acknowledgements = append(acknowledgements, ack)
+						claims[i].Commitment = [32]byte(channeltypesv2.CommitAcknowledgement(ack))
+					case v2.ProofKindReceiptAbsence:
+						claims[i].Path = crypto.Keccak256Hash(
+							hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence),
+						)
+					}
+				}
+				if tt.mutate != nil {
+					claims = tt.mutate(claims)
+				}
+				gen := New([]attestor.Attestor{
+					signedPacketAttestor(t, "a1", tt.height, claims),
+					signedPacketAttestor(t, "a2", tt.height, claims),
+				}, 2, chain, slog.Default())
+
+				proofs, err := gen.PacketProofs(context.Background(), 20, kind, packets, acknowledgements)
+				if !tt.wantErr {
+					require.NoError(t, err)
+					require.Len(t, proofs, len(packets))
+				} else {
+					require.ErrorContains(t, err, "attested data does not match expected claim")
+					require.Nil(t, proofs)
+				}
+			})
+		}
+	}
+}
+
+func TestGeneratorStateTimestampMismatch(t *testing.T) {
+	chain := mocks.NewMockClient(t)
+	chain.EXPECT().
+		GetBlockHeader(mock.Anything, uint64(10)).
+		Return(v2.BlockHeader{Timestamp: someBlockTime.Add(time.Second)}, nil).
+		Once()
+	gen := New([]attestor.Attestor{signedStateAttestor(t, "a1", 10)}, 1, chain, slog.Default())
+
+	proof, err := gen.StateProof(context.Background(), 10)
+	require.ErrorContains(t, err, "attested data does not match expected claim")
+	require.Nil(t, proof)
+}
+
+func TestGeneratorExpectedClaimLookupFailure(t *testing.T) {
+	t.Run("stateHeader", func(t *testing.T) {
+		chain := mocks.NewMockClient(t)
+		chain.EXPECT().GetBlockHeader(mock.Anything, uint64(10)).Return(v2.BlockHeader{}, assert.AnError).Once()
+		gen := New(nil, 1, chain, slog.Default())
+
+		proof, err := gen.StateProof(context.Background(), 10)
+		require.ErrorIs(t, err, assert.AnError)
+		require.Nil(t, proof)
+	})
+}
+
+func TestGeneratorAcknowledgementProofs(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		acknowledgements []channeltypesv2.Acknowledgement
+		wantErr          bool
+	}{
+		{name: "multiple payloads", acknowledgements: []channeltypesv2.Acknowledgement{channeltypesv2.NewAcknowledgement([]byte("a"), []byte("b"))}},
+		{name: "universal error", acknowledgements: []channeltypesv2.Acknowledgement{channeltypesv2.NewAcknowledgement(channeltypesv2.ErrorAcknowledgement[:])}},
+		{name: "missing", wantErr: true},
+		{name: "too many", acknowledgements: []channeltypesv2.Acknowledgement{{}, {}}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			packet := channeltypesv2.Packet{
+				Sequence:          1,
+				DestinationClient: "dst-0",
+				Payloads:          []channeltypesv2.Payload{{}, {}},
+			}
+			var attestors []attestor.Attestor
+			if !tc.wantErr {
+				claim := attestorevm.PacketCompact{
+					Path: crypto.Keccak256Hash(
+						hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence),
+					),
+					Commitment: [32]byte(channeltypesv2.CommitAcknowledgement(tc.acknowledgements[0])),
+				}
+				attestors = []attestor.Attestor{signedPacketAttestor(t, "a1", 20, []attestorevm.PacketCompact{claim})}
+			}
+			// No chain client: acknowledgements must not require historical state reads.
+			gen := New(attestors, 1, nil, slog.Default())
+			proofs, err := gen.PacketProofs(
+				context.Background(),
+				20,
+				v2.ProofKindAcknowledgement,
+				[]channeltypesv2.Packet{packet},
+				tc.acknowledgements,
+			)
+			if tc.wantErr {
+				require.ErrorContains(t, err, "acknowledgement count must match packet count")
+				require.Nil(t, proofs)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, proofs, 1)
+			}
+		})
+	}
 }
