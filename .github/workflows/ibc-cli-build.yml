@@ -5,30 +5,24 @@ name: IBC CLI Build Artifacts
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ["*"]
-  pull_request:
-    # PR must contain `build-artifacts` label
-    types: [closed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.base.ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions: read-all
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
-  BUILD_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+  BUILD_SHA: ${{ github.sha }}
   GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
 
 jobs:
   # Build binaries
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }} binary
-    if: >-
-      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
-      (github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'build-artifacts'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -80,10 +74,6 @@ jobs:
   # Prepare Docker metadata
   image-metadata:
     name: Prepare Docker metadata
-    if: >-
-      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
-      (github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'build-artifacts'))
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
@@ -91,13 +81,10 @@ jobs:
       - name: Select image tag
         id: tag
         env:
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [[ -n "$BASE_BRANCH" ]]; then
-            tag="$BASE_BRANCH"
-          elif [[ "$REF_TYPE" == "branch" || "$REF_TYPE" == "tag" ]]; then
+          if [[ "$REF_TYPE" == "branch" || "$REF_TYPE" == "tag" ]]; then
             tag="$REF_NAME"
           else
             tag="${BUILD_SHA:0:8}"
