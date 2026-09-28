@@ -9,7 +9,7 @@ on:
     paths:
       - "cli/**"
       - "gen/go/solidity-abi/**"
-      - ".github/workflows/ibc-cli-build.yml"
+      - ".github/workflows/ibc-cli-*.yml"
     tags: ["*"]
 
 concurrency:
