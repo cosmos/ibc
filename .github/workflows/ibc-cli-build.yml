@@ -6,6 +6,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "cli/**"
+      - "gen/go/solidity-abi/**"
+      - ".github/workflows/ibc-cli-build.yml"
     tags: ["*"]
 
 concurrency:
