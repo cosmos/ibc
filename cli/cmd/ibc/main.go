@@ -179,10 +179,10 @@ func init() {
 
 	dbf := cmdDeployClientBesuQBFT.Flags()
 	dbf.DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0,
-		"positive trusted state lifetime in whole seconds")
+		"positive trusted state lifetime")
 	_ = cmdDeployClientBesuQBFT.MarkFlagRequired(flagNameTrustingPeriod)
 	dbf.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, 60*time.Second,
-		"how far ahead of this chain's block time a counterparty header may be, in whole seconds")
+		"how far ahead of this chain's block time a counterparty header may be")
 
 	cmdDeployRenderConfig.Flags().
 		StringVar(&flagDeployRenderSignerA, "signer-a", "", "Override the relay signer on chainA; omitted preserves existing settings")

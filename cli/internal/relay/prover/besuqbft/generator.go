@@ -101,7 +101,7 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 	update, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 		HeaderRlp:              targetHeader.RLP,
 		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trustedHeight},
-		ConsensusStatePreimage: besu.ConsensusStateOf(trusted),
+		ConsensusStatePreimage: trusted.ConsensusState(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
@@ -138,7 +138,7 @@ func (g *Generator) PacketProofs(
 		return nil, fmt.Errorf("proving router at height %d: %w", height, err)
 	}
 
-	consensus := besu.ConsensusStateOf(header)
+	consensus := header.ConsensusState()
 	proofs := make([][]byte, len(packets))
 	for i, packet := range packets {
 		accountProof := routerProof.AccountProof

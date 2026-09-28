@@ -323,7 +323,7 @@ func TestWholeSeconds(t *testing.T) {
 		{d: 2 * time.Hour, want: 7200},
 		{d: 0, want: 0},
 		{d: -time.Second, wantErr: "must not be negative"},
-		{d: 1500 * time.Millisecond, wantErr: "must be whole seconds"},
+		{d: 1500 * time.Millisecond, want: 1},
 	} {
 		got, err := wholeSeconds(tc.d)
 		if tc.wantErr != "" {

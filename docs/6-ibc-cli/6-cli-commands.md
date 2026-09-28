@@ -214,8 +214,8 @@ Deploy and register a Besu QBFT light client trusting the counterparty head.
 | `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
-| `--max-clock-drift <duration>` | `1m0s` | How far ahead of this chain's block time a counterparty header may be, in whole seconds. |
-| `--trusting-period <duration>` | required | Positive trusted state lifetime in whole seconds. |
+| `--max-clock-drift <duration>` | `1m0s` | How far ahead of this chain's block time a counterparty header may be. |
+| `--trusting-period <duration>` | required | Positive trusted state lifetime. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |

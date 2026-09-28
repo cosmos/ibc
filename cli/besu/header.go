@@ -33,13 +33,13 @@ type ParsedHeader struct {
 	Validators []common.Address
 }
 
-// ConsensusStateOf is the consensus state an update to header installs, and
-// the preimage payloads carry for header's height.
-func ConsensusStateOf(header *ParsedHeader) besumsgs.IBesuLightClientMsgsConsensusState {
+// ConsensusState is the consensus state an update to h installs, and the
+// preimage payloads carry for h's height.
+func (h *ParsedHeader) ConsensusState() besumsgs.IBesuLightClientMsgsConsensusState {
 	return besumsgs.IBesuLightClientMsgsConsensusState{
-		Timestamp:  header.Timestamp,
-		StateRoot:  header.StateRoot,
-		Validators: header.Validators,
+		Timestamp:  h.Timestamp,
+		StateRoot:  h.StateRoot,
+		Validators: h.Validators,
 	}
 }
 

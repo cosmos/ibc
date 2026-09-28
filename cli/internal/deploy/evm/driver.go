@@ -264,7 +264,7 @@ func (d *Driver) BesuQBFTHead(ctx context.Context) (uint64, besumsgs.IBesuLightC
 	if header.Height == 0 {
 		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("no block past genesis to trust yet")
 	}
-	return header.Height, besu.ConsensusStateOf(header), nil
+	return header.Height, header.ConsensusState(), nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

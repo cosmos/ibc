@@ -384,14 +384,11 @@ func besuQBFTParams(
 	}, nil
 }
 
-// wholeSeconds converts a duration into the contract's seconds, refusing
-// values that truncation would silently change.
+// wholeSeconds converts a duration into the contract's seconds, truncating
+// any fraction.
 func wholeSeconds(d time.Duration) (uint64, error) {
 	if d < 0 {
 		return 0, errors.Errorf("must not be negative, got %s", d)
-	}
-	if d.Truncate(time.Second) != d {
-		return 0, errors.Errorf("must be whole seconds, got %s", d)
 	}
 	return uint64(d / time.Second), nil
 }

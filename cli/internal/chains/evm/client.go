@@ -51,6 +51,8 @@ type ETHClient interface {
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
 
+	// GetProof is eth_getProof for account at blockNumber, or the head when
+	// nil: the account proof nodes and one storage proof per key, in key order.
 	GetProof(
 		ctx context.Context,
 		account common.Address,
