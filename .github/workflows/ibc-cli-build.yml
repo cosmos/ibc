@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["*"]
-  pull_request_target:
+  pull_request:
     # PR must contain `build-artifacts` label
     types: [closed]
 
@@ -130,6 +130,12 @@ jobs:
           path: image
       - name: Prepare image context
         run: chmod +x image/ibc
+      # The runtime stage has a RUN instruction, so building the arm64 image on an
+      # x86_64 runner needs binfmt emulation registered first.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+        if: matrix.goarch == 'arm64'
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
