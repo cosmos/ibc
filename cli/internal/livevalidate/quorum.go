@@ -34,8 +34,11 @@ func checkAttestorQuorum(ctx context.Context, cfg config.Config, clientSet *chai
 	attestors = append(attestors, local...)
 	attestors = append(attestors, remote...)
 
+	// This resolves every client end's prover, which for an attestation client
+	// is what checks the quorum. A remote client end resolves here too, so the
+	// error is labeled for what failed rather than assuming a quorum problem.
 	if _, err := prover.NewSetFromConfig(ctx, cfg, clientSet, attestors, slog.Default()); err != nil {
-		return errors.Wrap(err, "attestor quorum")
+		return errors.Wrap(err, "provers")
 	}
 
 	return nil

@@ -96,6 +96,55 @@ func TestNewSetFromConfig(t *testing.T) {
 		require.True(t, ok)
 	})
 
+	t.Run("unreachableRemoteProverIsNotFatal", func(t *testing.T) {
+		// A remote prover that is briefly down must not block relayer boot:
+		// the probe warns and the client end still resolves, matching how an
+		// unresolvable attestor is skipped rather than failing startup.
+		conn := testConnection()
+		// Both ends remote, so no attestation generator is resolved and the
+		// chain clients are not consulted.
+		// 127.0.0.1:1 refuses immediately, so this does not wait on a timeout.
+		conn.ClientA.Type = config.ClientTypeRemote
+		conn.ClientA.Params = []byte(`{"url":"http://127.0.0.1:1"}`)
+		conn.ClientB.Type = config.ClientTypeRemote
+		conn.ClientB.Params = []byte(`{"url":"http://127.0.0.1:1"}`)
+
+		clientSet := chains.NewClientSet(map[string]chains.Client{
+			conn.ClientA.ChainID: mocks.NewMockClient(t),
+			conn.ClientB.ChainID: mocks.NewMockClient(t),
+		})
+
+		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+
+		set, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		require.NoError(t, err, "an unreachable remote prover must not fail the set")
+
+		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
+		require.True(t, ok, "the unreachable prover is still registered")
+	})
+
+	t.Run("unresolvableRemoteProverTLSErrors", func(t *testing.T) {
+		// A bad tls block is a config error, not a transient outage, so it
+		// still fails rather than warning.
+		conn := testConnection()
+		conn.ClientA.Type = config.ClientTypeRemote
+		conn.ClientA.Params = []byte(
+			`{"url":"https://127.0.0.1:1","tls":{"caFile":"/nonexistent/ca.crt"}}`,
+		)
+		conn.ClientB.Type = config.ClientTypeRemote
+		conn.ClientB.Params = []byte(`{"url":"http://127.0.0.1:1"}`)
+
+		clientSet := chains.NewClientSet(map[string]chains.Client{
+			conn.ClientA.ChainID: mocks.NewMockClient(t),
+			conn.ClientB.ChainID: mocks.NewMockClient(t),
+		})
+
+		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		require.ErrorContains(t, err, "tls")
+	})
+
 	t.Run("unsupportedClientTypeErrors", func(t *testing.T) {
 		// ARRANGE
 		conn := testConnection()

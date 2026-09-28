@@ -494,16 +494,8 @@ func (c EVMChainConfig) Validate(validateICS26Router bool) error {
 		return errPathf("rpc", "required")
 	}
 
-	if strings.Contains(c.RPC, schemeSeparator) {
-		if _, err := parseEndpoint("rpc", c.RPC, schemeHTTP, schemeHTTPS, schemeWS, schemeWSS); err != nil {
-			return err
-		}
-	}
-
-	if c.WS != "" {
-		if _, err := parseEndpoint("ws", c.WS, schemeWS, schemeWSS); err != nil {
-			return err
-		}
+	if c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://") {
+		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
 	}
 
 	if validateICS26Router {
@@ -547,7 +539,7 @@ func (c AttestorConfig) Validate() error {
 		switch {
 		case c.GRPC == "":
 			return errPathf("grpc", "required for remote attestors")
-		case strings.Contains(c.GRPC, schemeSeparator):
+		case strings.Contains(c.GRPC, "://"):
 			return errPathf("grpc", "must be a bare host:port, not a URL: %q", c.GRPC)
 		case c.ChainID != "":
 			return errPathf("chainId", "must not be set for remote attestors")
