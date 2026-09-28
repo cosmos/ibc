@@ -20,6 +20,7 @@ import (
 )
 
 const requestTimeout = time.Minute
+const probeTimeout = 5 * time.Second
 
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.
@@ -46,7 +47,7 @@ func NewFromURL(url, chainID, clientID string, tlsConfig *tls.Config, logger *sl
 }
 
 func (p *Prover) Probe(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 
 	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{

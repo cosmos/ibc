@@ -155,7 +155,7 @@ func addGenerator(
 
 		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, tlsConfig, logger)
 		if err := prover.Probe(ctx); err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
+			logger.Warn("Remote prover unreachable at startup, continuing", "connection", connAlias, "err", err)
 		}
 
 		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)

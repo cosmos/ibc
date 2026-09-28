@@ -179,7 +179,6 @@ func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
 // todo: revisit these params
 func newConnectHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 

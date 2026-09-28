@@ -48,7 +48,6 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	cfg := &tls.Config{
 		MinVersion: minVersion,
 		ServerName: opts.ServerName,
-		//nolint:gosec // operator opt-in, rejected by config validation unless deliberately set
 		InsecureSkipVerify: opts.InsecureSkipVerify,
 	}
 

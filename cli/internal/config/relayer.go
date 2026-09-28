@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -277,16 +278,8 @@ func (p RemoteParams) Validate() error {
 		return errPathf("url", "required")
 	}
 
-	parsed, err := parseEndpoint("url", p.URL, schemeHTTP, schemeHTTPS)
-	if err != nil {
-		return err
-	}
-
-	switch {
-	case parsed.RawQuery != "" || parsed.Fragment != "":
-		return errPathf("url", "must not carry a query or fragment, got %q", p.URL)
-	case p.TLS != nil && parsed.Scheme == schemeHTTP:
-		return errPathf("tls", "requires an %s%s url, got %q", schemeHTTPS, schemeSeparator, p.URL)
+	if p.TLS != nil && !strings.HasPrefix(p.URL, "https://") {
+		return errPathf("tls", "requires an https:// url, got %q", p.URL)
 	}
 
 	return errPath("tls", p.TLS.Validate())
