@@ -4,12 +4,14 @@ package signer
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"time"
 
 	"github.com/cosmos/kms/gen/signerservice"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/cosmos/ibc/cli/keyfile"
@@ -44,8 +46,8 @@ func NewRemote(ctx context.Context, client signerservice.SignerServiceClient, ke
 	return s, nil
 }
 
-func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string) (*RemoteSigner, error) {
-	grpcClient, err := newGRPCClientFromURL(grpcURL)
+func NewRemoteFromURL(ctx context.Context, grpcURL, keyID string, tlsConfig *tls.Config) (*RemoteSigner, error) {
+	grpcClient, err := newGRPCClientFromURL(grpcURL, tlsConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create grpc client")
 	}
@@ -119,9 +121,13 @@ func keyTypeFromProto(scheme signerservice.SignatureScheme) (keyfile.Type, error
 	}
 }
 
-// todo: revisit security if needed. we can convert `signer.grpc string` to `signer.grpc{<options>}`
-func newGRPCClientFromURL(url string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func newGRPCClientFromURL(url string, tlsConfig *tls.Config) (*grpc.ClientConn, error) {
+	creds := insecure.NewCredentials()
+	if tlsConfig != nil {
+		creds = credentials.NewTLS(tlsConfig)
+	}
+
+	return grpc.NewClient(url, grpc.WithTransportCredentials(creds))
 }
 
 func bytesToPayload(message []byte) *signerservice.Payload {

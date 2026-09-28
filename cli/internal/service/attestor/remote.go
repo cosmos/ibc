@@ -4,6 +4,7 @@ package attestor
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"time"
@@ -30,9 +31,9 @@ const remoteRequestTimeout = 5 * time.Second
 
 // NewRemoteFromURL connects to the attestor at grpcURL and queries its Info
 // RPC to resolve its chain and address.
-func NewRemoteFromURL(ctx context.Context, grpcURL, name string) (*RemoteAttestor, error) {
+func NewRemoteFromURL(ctx context.Context, grpcURL, name string, tlsConfig *tls.Config) (*RemoteAttestor, error) {
 	var (
-		httpClient  = newConnectHTTPClient()
+		httpClient  = newConnectHTTPClient(tlsConfig)
 		protoClient = proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
 	)
 
@@ -176,13 +177,13 @@ func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
 
 // https://connectrpc.com/docs/go/getting-started/#make-requests
 // todo: revisit these params
-func newConnectHTTPClient() *http.Client {
+func newConnectHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
 	return &http.Client{
-		Transport: &http.Transport{Protocols: protocols},
+		Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig},
 	}
 }

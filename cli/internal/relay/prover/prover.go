@@ -148,7 +148,16 @@ func addGenerator(
 			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
 		}
 
-		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, logger)
+		tlsConfig, err := remoteParams.TLS.TLSConfig()
+		if err != nil {
+			return errors.Wrapf(err, "connection %q: tls", connAlias)
+		}
+
+		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, tlsConfig, logger)
+		if err := prover.Probe(ctx); err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
 		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 

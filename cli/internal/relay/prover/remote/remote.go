@@ -6,6 +6,7 @@ package remote
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"time"
@@ -40,16 +41,27 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *s
 
 // NewFromURL dials url with a client that can negotiate h2c, which gRPC
 // requires over plaintext.
-func NewFromURL(url, chainID, clientID string, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(), url, chainID, clientID, logger)
+func NewFromURL(url, chainID, clientID string, tlsConfig *tls.Config, logger *slog.Logger) *Prover {
+	return New(newHTTPClient(tlsConfig), url, chainID, clientID, logger)
 }
 
-func newHTTPClient() *http.Client {
+func (p *Prover) Probe(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
+		Client: p.target(),
+	}))
+
+	return errors.Wrap(err, "remote prover: probe")
+}
+
+func newHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig}}
 }
 
 func (p *Prover) target() *proverv2.Client {

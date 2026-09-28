@@ -79,7 +79,12 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 
 		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
 	case config.SignerRemote:
-		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID)
+		tlsConfig, err := cfg.TLS.TLSConfig()
+		if err != nil {
+			return nil, "", errors.Wrapf(err, "signer %q tls", cfg.Alias)
+		}
+
+		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID, tlsConfig)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}
