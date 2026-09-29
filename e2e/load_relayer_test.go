@@ -18,15 +18,48 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/loadtest"
 )
 
-const baseMnemonic = "rotate stumble once topic possible message powder recall turkey legend depart brick"
+const (
+	baseMnemonic       = "rotate stumble once topic possible message powder recall turkey legend depart brick"
+	packetBatchSize    = 64
+	packetBatchTimeout = 1 * time.Second
+)
+
+type relayerLoadIFT struct {
+	totalPackets    int
+	numWallets      int
+	packetsPerBlock int
+}
+
+type loadTestRelayer struct {
+	t          *testing.T
+	env        *environment.Environment
+	deployment *e2etest.Deployment
+	sender     e2etest.Signer
+	relayer    *ibccli.Relayer
+}
 
 func TestLoad_RelayerBurst(t *testing.T) {
+	testLoadRelayer(t, relayerLoadIFT{
+		totalPackets:    1000,
+		numWallets:      200,
+		packetsPerBlock: 100,
+	})
+}
+
+func TestLoad_RelayerLongRun(t *testing.T) {
+	testLoadRelayer(t, relayerLoadIFT{
+		totalPackets:    8000,
+		numWallets:      200,
+		packetsPerBlock: 20,
+	})
+}
+
+func testLoadRelayer(t *testing.T, load relayerLoadIFT) {
+	t.Helper()
 	// ARRANGE
-	const (
-		totalPackets    = 100
-		numWallets      = 200
-		packetsPerBlock = 50
-	)
+	numWallets := load.numWallets
+	totalPackets := load.totalPackets
+	packetsPerBlock := load.packetsPerBlock
 
 	// Given test suite
 	ts := newLoadTestRelayer(t)
@@ -131,21 +164,8 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	require.NoError(t, errAwaitAB, "Await A->B")
 	require.NoError(t, errAwaitBA, "Await B->A")
 
-	// ASSERT #3
-	// todo query ALL packets from the relayer
-	// todo calculate stats
-}
-
-func TestLoad_RelayerLongRun(t *testing.T) {
-	t.Log("wip")
-}
-
-type loadTestRelayer struct {
-	t          *testing.T
-	env        *environment.Environment
-	deployment *e2etest.Deployment
-	sender     e2etest.Signer
-	relayer    *ibccli.Relayer
+	// view Grafana dashboard to track latencies
+	// todo: FOU-1740: expose timestamps for tx lifecycle
 }
 
 func newLoadTestRelayer(t *testing.T) *loadTestRelayer {
@@ -165,6 +185,11 @@ func newLoadTestRelayer(t *testing.T) *loadTestRelayer {
 	withConfig := func(cfg *ibccli.RelayerConfig) {
 		cfg.ClearInterval = 1 * time.Second
 		cfg.ClearOnStart = true
+
+		for i := range cfg.Chains {
+			cfg.Chains[i].PacketBatchSize = packetBatchSize
+			cfg.Chains[i].PacketBatchTimeout = packetBatchTimeout
+		}
 	}
 
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, withConfig, routeAB, routeBA)

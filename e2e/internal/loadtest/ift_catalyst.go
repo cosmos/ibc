@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/skip-mev/catalyst/ift/accounts"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -51,8 +51,9 @@ const (
 	// wei value
 	defaultTokenTransferAmount = "10000"
 
-	catalystPacketPoll = 6 * time.Second
-	catalystTxLookups  = 10
+	catalystPacketPoll     = 6 * time.Second
+	catalystTxLookups      = 10
+	awaitPacketConcurrency = 32
 )
 
 func NewSpecIFT(
@@ -197,16 +198,21 @@ func AwaitPacketsFromCatalyst(
 	start := time.Now()
 
 	errs := make([]error, len(packets))
-	var wg sync.WaitGroup
+
+	// limit concurrency
+	var eg errgroup.Group
+	eg.SetLimit(awaitPacketConcurrency)
+
 	for i, packet := range packets {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errs[i] = e2etest.AwaitStable(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
-		}()
+		const expect = relayerv2.PacketState_PACKET_STATE_SUCCEEDED
+
+		eg.Go(func() error {
+			_, errs[i] = e2etest.AwaitState(ctx, relayer, packet, expect)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	_ = eg.Wait()
 
 	elapsed := time.Since(start)
 	tb.Logf("AwaitPacketsFromCatalyst[%s]: %d packets awaited in %s", route.Source, len(packets), elapsed.String())
