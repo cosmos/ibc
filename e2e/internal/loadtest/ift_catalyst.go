@@ -2,7 +2,9 @@ package loadtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +15,10 @@ import (
 	"github.com/skip-mev/catalyst/ift/accounts"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 type SpecIFT struct {
@@ -34,12 +40,19 @@ type IFTToken struct {
 	Address  string
 }
 
+type relayerAPI interface {
+	PacketStatuses(ctx context.Context, sourceChainID, sourceTxHash string) ([]*relayerv2.PacketStatus, error)
+}
+
 const (
 	msgTypeIFTTransfer = "MsgIFTTransfer"
 	packetTimeout      = time.Hour
 
 	// wei value
 	defaultTokenTransferAmount = "10000"
+
+	catalystPacketPoll = 6 * time.Second
+	catalystTxLookups  = 10
 )
 
 func NewSpecIFT(
@@ -73,6 +86,9 @@ func NewSpecIFT(
 		Kind:        catalyst.KindEVM,
 		Name:        "IFT",
 		Description: "IFT auto-relay load test",
+
+		// Block scans count every receipt in the window, including relayer txs.
+		SkipReceiptCollection: true,
 
 		NumOfBlocks: totalPackets / packetsPerBlock,
 
@@ -144,26 +160,176 @@ func (s *SpecIFT) Wallets() ([]common.Address, error) {
 }
 
 // Run executes this spec in-process.
-func (s *SpecIFT) Run(ctx context.Context, t testing.TB) (catalyst.LoadTestResult, error) {
-	cfg := s.catalyst
-
-	// sink := zapcore.AddSync(t.Output())
-	// logger, err := zap.NewDevelopment(
-	// 	zap.ErrorOutput(sink),
-	// 	zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-	// 		enc := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
-	// 		return zapcore.NewCore(enc, sink, core)
-	// 	}),
-	// )
-	// require.NoError(t, err)
-
-	//nolint:errcheck // best-effort flush
-	// defer logger.Sync()
-
-	logger := zap.NewNop()
-
-	runner, err := ethrunner.NewRunner(ctx, logger, cfg)
+func (s *SpecIFT) Run(ctx context.Context, t testing.TB) (catalyst.LoadTestResult, []*catalystevm.SentTx, error) {
+	runner, err := ethrunner.NewRunner(ctx, zap.NewNop(), s.catalyst)
 	require.NoError(t, err)
 
-	return runner.Run(ctx)
+	result, err := runner.Run(ctx)
+	if err != nil {
+		return catalyst.LoadTestResult{}, nil, err
+	}
+
+	return result, runner.SentTxs(), nil
+}
+
+type catalystTx struct {
+	hash    string
+	lookups int
+}
+
+// AwaitPacketsFromCatalyst queries the relayer until each broadcast transaction
+// is indexed, then waits for every packet it emitted to stay succeeded.
+func AwaitPacketsFromCatalyst(
+	ctx context.Context,
+	tb testing.TB,
+	route e2etest.Route,
+	relayer *ibccli.Relayer,
+	txs []*catalystevm.SentTx,
+) error {
+	tb.Helper()
+
+	packets, err := discoverCatalystPackets(ctx, tb, route, relayer, txs, catalystPacketPoll)
+	if err != nil {
+		return err
+	}
+
+	tb.Logf("AwaitPacketsFromCatalyst[%s]: awaiting for %d packets finalization", route.Source, len(packets))
+	start := time.Now()
+
+	errs := make([]error, len(packets))
+	var wg sync.WaitGroup
+	for i, packet := range packets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = e2etest.AwaitStable(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+		}()
+	}
+
+	wg.Wait()
+
+	elapsed := time.Since(start)
+	tb.Logf("AwaitPacketsFromCatalyst[%s]: %d packets awaited in %s", route.Source, len(packets), elapsed.String())
+
+	return errors.Join(errs...)
+}
+
+func discoverCatalystPackets(
+	ctx context.Context,
+	tb testing.TB,
+	route e2etest.Route,
+	relayer relayerAPI,
+	txs []*catalystevm.SentTx,
+	interval time.Duration,
+) ([]e2etest.PacketTx, error) {
+	pendingTXs, failures := queueCatalystTxs(txs)
+	if len(pendingTXs) == 0 {
+		return nil, joinDiscoverErrors(failures)
+	}
+
+	foundPackets := make([]e2etest.PacketTx, 0, len(pendingTXs))
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for len(pendingTXs) > 0 {
+		tb.Logf(
+			"discoverCatalystPackets[%s]: %d txs to be indexed by the relayer",
+			route.Source,
+			len(pendingTXs),
+		)
+
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf(
+				"await packets: %d txs still unindexed: %w",
+				len(pendingTXs),
+				errors.Join(append(failures, err)...),
+			)
+		}
+
+		nextPendingTXs := make([]catalystTx, 0, len(pendingTXs))
+		for _, tx := range pendingTXs {
+			txPackets, err := relayer.PacketStatuses(ctx, string(route.Source), tx.hash)
+			if err != nil && ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+
+			if err != nil || len(txPackets) == 0 {
+				tx.lookups++
+				if tx.lookups >= catalystTxLookups {
+					failures = append(failures, undiscoveredTx(tx.hash, err))
+					continue
+				}
+				nextPendingTXs = append(nextPendingTXs, tx)
+				continue
+			}
+
+			for _, status := range txPackets {
+				foundPackets = append(foundPackets, e2etest.PacketTx{
+					RouteID:        route.ID,
+					Source:         route.Source,
+					SourceClientID: status.GetSourceClientId(),
+					SourceTxHash:   tx.hash,
+					Sequence:       status.GetSequenceNumber(),
+				})
+			}
+		}
+
+		pendingTXs = nextPendingTXs
+		if len(pendingTXs) == 0 {
+			tb.Logf(
+				"discoverCatalystPackets[%s]: %d packets discovered",
+				route.Source,
+				len(foundPackets),
+			)
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf(
+				"await catalyst packets: %d txs still unindexed: %w",
+				len(pendingTXs),
+				errors.Join(append(failures, ctx.Err())...),
+			)
+		case <-ticker.C:
+		}
+	}
+
+	if err := joinDiscoverErrors(failures); err != nil {
+		return nil, err
+	}
+
+	return foundPackets, nil
+}
+
+func undiscoveredTx(hash string, err error) error {
+	if err != nil {
+		return fmt.Errorf("tx %s: %w", hash, err)
+	}
+	return fmt.Errorf("tx %s: not indexed after %d queries", hash, catalystTxLookups)
+}
+
+func joinDiscoverErrors(failed []error) error {
+	if len(failed) == 0 {
+		return nil
+	}
+	return fmt.Errorf("await catalyst packets: %w", errors.Join(failed...))
+}
+
+func queueCatalystTxs(txs []*catalystevm.SentTx) ([]catalystTx, []error) {
+	queued := make([]catalystTx, 0, len(txs))
+	var failed []error
+	for _, tx := range txs {
+		if tx == nil {
+			continue
+		}
+		hash := tx.TxHash.Hex()
+		if tx.SendTransactionErr != nil {
+			failed = append(failed, fmt.Errorf("tx %s was not broadcast: %w", hash, tx.SendTransactionErr))
+			continue
+		}
+		queued = append(queued, catalystTx{hash: hash})
+	}
+	return queued, failed
 }

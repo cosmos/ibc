@@ -1,12 +1,14 @@
 package e2e_test
 
 import (
+	"context"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	catalystevm "github.com/skip-mev/catalyst/chains/ethereum/types"
 	catalyst "github.com/skip-mev/catalyst/chains/types"
 	"github.com/stretchr/testify/require"
 
@@ -32,7 +34,8 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	ctx := t.Context()
 
 	// Given IFT load spec for A->B
-	evmEndpointA, tokenA := ts.catalystSource(e2etest.AtoB(e2etest.ChainA, e2etest.ChainB))
+	routeAB := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	evmEndpointA, tokenA := ts.catalystSource(routeAB)
 	loadSpecAB, err := loadtest.NewSpecIFT(
 		numWallets, totalPackets/2, packetsPerBlock,
 		baseMnemonic,
@@ -43,7 +46,8 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	require.NotNil(t, loadSpecAB)
 
 	// Given IFT load spec for B->A
-	evmEndpointB, tokenB := ts.catalystSource(e2etest.BtoA(e2etest.ChainB, e2etest.ChainA))
+	routeBA := e2etest.BtoA(e2etest.ChainB, e2etest.ChainA)
+	evmEndpointB, tokenB := ts.catalystSource(routeBA)
 	loadSpecBA, err := loadtest.NewSpecIFT(
 		numWallets, totalPackets/2, packetsPerBlock,
 		baseMnemonic,
@@ -83,15 +87,18 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	// ACT
 	// Run two catalysts in parallel
 	wg.Add(2)
-	var errAB, errBA error
-	var resultAB, resultBA catalyst.LoadTestResult
+	var (
+		resultAB, resultBA catalyst.LoadTestResult
+		txsAB, txsBA       []*catalystevm.SentTx
+		errAB, errBA       error
+	)
 
 	go func() {
-		resultAB, errAB = loadSpecAB.Run(ctx, t)
+		resultAB, txsAB, errAB = loadSpecAB.Run(ctx, t)
 		wg.Done()
 	}()
 	go func() {
-		resultBA, errBA = loadSpecBA.Run(ctx, t)
+		resultBA, txsBA, errBA = loadSpecBA.Run(ctx, t)
 		wg.Done()
 	}()
 
@@ -102,9 +109,31 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	require.Equal(t, totalPackets/2, resultAB.Overall.TotalTransactions, "Catalyst A->B")
 	require.Equal(t, totalPackets/2, resultBA.Overall.TotalTransactions, "Catalyst B->A")
 
-	// todo -- expose txSent
-	// todo -- wait for all packets to be FINALIZED
-	// todo -- collect SQL stats from the relayer
+	// ASSERT #2
+	wg.Add(2)
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	var errAwaitAB, errAwaitBA error
+
+	go func() {
+		errAwaitAB = loadtest.AwaitPacketsFromCatalyst(ctx, t, routeAB, ts.relayer, txsAB)
+		wg.Done()
+	}()
+	go func() {
+		errAwaitBA = loadtest.AwaitPacketsFromCatalyst(ctx, t, routeBA, ts.relayer, txsBA)
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	require.NoError(t, errAwaitAB, "Await A->B")
+	require.NoError(t, errAwaitBA, "Await B->A")
+
+	// ASSERT #3
+	// todo query ALL packets from the relayer
+	// todo calculate stats
 }
 
 func TestLoad_RelayerLongRun(t *testing.T) {
@@ -133,7 +162,12 @@ func newLoadTestRelayer(t *testing.T) *loadTestRelayer {
 	routeAB := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	routeBA := e2etest.BtoA(e2etest.ChainB, e2etest.ChainA)
 
-	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, routeAB, routeBA)
+	withConfig := func(cfg *ibccli.RelayerConfig) {
+		cfg.ClearInterval = 1 * time.Second
+		cfg.ClearOnStart = true
+	}
+
+	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, withConfig, routeAB, routeBA)
 
 	// Given a relayer
 	relayer := e2etest.StartRelayer(t, driver, env)
