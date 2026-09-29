@@ -44,6 +44,10 @@ func RequiredSignerBalance() *big.Int {
 	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
 }
 
+func GasCoins(coins int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(coins), big.NewInt(weiPerEther))
+}
+
 // ProtocolAuthorityAddress is the deployer funded for IBC Instance realization.
 // Attached Chains must provision it out of band before Start.
 func ProtocolAuthorityAddress() common.Address {
