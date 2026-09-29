@@ -19,10 +19,7 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-const (
-	requestTimeout = time.Minute
-	probeTimeout   = 5 * time.Second
-)
+const requestTimeout = time.Minute
 
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.
@@ -49,7 +46,7 @@ func NewFromURL(url, chainID, clientID string, tlsConfig *tls.Config, logger *sl
 }
 
 func (p *Prover) Probe(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
 	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{

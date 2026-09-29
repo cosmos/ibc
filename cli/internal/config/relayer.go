@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -278,12 +277,12 @@ func (p RemoteParams) Validate() error {
 		return errPathf("url", "required")
 	}
 
-	parsed, err := url.Parse(p.URL)
+	parsed, err := parseEndpoint(p.URL, "http", "https")
 	if err != nil {
 		return errPath("url", err)
 	}
-	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
-		return errPathf("url", "must be an http:// or https:// URL with a host, got %q", p.URL)
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return errPathf("url", "must not contain a query")
 	}
 
 	if p.TLS != nil && parsed.Scheme != "https" {

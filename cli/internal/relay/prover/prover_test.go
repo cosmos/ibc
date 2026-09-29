@@ -4,16 +4,59 @@ package prover
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
+
+func TestProbeRemoteDeadlines(t *testing.T) {
+	for _, tt := range []struct {
+		name             string
+		requireReachable bool
+		parentTimeout    time.Duration
+		wantTimeout      time.Duration
+	}{
+		{name: "startup", wantTimeout: 5 * time.Second},
+		{name: "live validation", requireReachable: true, wantTimeout: time.Minute},
+		{name: "caller deadline", requireReachable: true, parentTimeout: time.Second, wantTimeout: time.Second},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			if tt.parentTimeout != 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tt.parentTimeout)
+				defer cancel()
+			}
+			called := false
+			client := &http.Client{Transport: probeTransport(func(req *http.Request) (*http.Response, error) {
+				called = true
+				deadline, ok := req.Context().Deadline()
+				require.True(t, ok)
+				require.InDelta(t, tt.wantTimeout.Seconds(), time.Until(deadline).Seconds(), 0.5)
+				return nil, errors.New("probe transport stopped")
+			})}
+			p := remote.New(client, "https://prover.example.com", "1", "client-0", slog.Default())
+			require.ErrorContains(t, probeRemote(ctx, p, tt.requireReachable), "probe transport stopped")
+			require.True(t, called)
+		})
+	}
+}
+
+type probeTransport func(*http.Request) (*http.Response, error)
+
+func (f probeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func testConnection() config.ConnectionConfig {
 	return config.ConnectionConfig{

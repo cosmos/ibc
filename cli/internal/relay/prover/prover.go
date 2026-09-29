@@ -173,7 +173,7 @@ func addGenerator(
 		}
 
 		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, tlsConfig, logger)
-		if err := prover.Probe(ctx); err != nil {
+		if err := probeRemote(ctx, prover, requireReachable); err != nil {
 			if requireReachable {
 				return errors.Wrapf(
 					err,
@@ -194,4 +194,13 @@ func addGenerator(
 	default:
 		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
 	}
+}
+
+func probeRemote(ctx context.Context, p *remote.Prover, requireReachable bool) error {
+	if !requireReachable {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+	}
+	return p.Probe(ctx)
 }
