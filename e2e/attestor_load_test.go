@@ -47,6 +47,7 @@ func TestLoad_AttestorBurst(t *testing.T) {
 		return &packets[rand.Intn(len(packets))]
 	}
 
+	// generates load for grpc.PacketAttestation()
 	t.Run("packets", func(t *testing.T) {
 		ctx := t.Context()
 
@@ -90,6 +91,7 @@ func TestLoad_AttestorBurst(t *testing.T) {
 		require.Positive(t, result.Succeeded)
 	})
 
+	// generates load for grpc.StateAttestation()
 	t.Run("state", func(t *testing.T) {
 		ctx := t.Context()
 
