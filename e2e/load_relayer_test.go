@@ -19,15 +19,10 @@ const baseMnemonic = "rotate stumble once topic possible message powder recall t
 
 func TestLoad_RelayerBurst(t *testing.T) {
 	// ARRANGE
-	// const (
-	// 	totalPackets    = 1_000
-	// 	numWallets      = 200
-	// 	packetsPerBlock = 50
-	// )
 	const (
-		totalPackets    = 200
+		totalPackets    = 1_000
 		numWallets      = 200
-		packetsPerBlock = 5
+		packetsPerBlock = 50
 	)
 
 	// Given test suite
@@ -61,8 +56,9 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	require.Len(t, wallets, numWallets)
 
 	// Fund wallets with gas on chain A and chain B
+	// Fund wallets with IFT on chain A and chain B
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(4)
 	go func() {
 		ts.fundGas(e2etest.ChainA, wallets)
 		wg.Done()
@@ -71,11 +67,16 @@ func TestLoad_RelayerBurst(t *testing.T) {
 		ts.fundGas(e2etest.ChainB, wallets)
 		wg.Done()
 	}()
+	go func() {
+		ts.fundIFT(e2etest.ChainA, wallets)
+		wg.Done()
+	}()
+	go func() {
+		ts.fundIFT(e2etest.ChainB, wallets)
+		wg.Done()
+	}()
 	wg.Wait()
 
-	// todo for each wallet:
-	// todo  - fund wallet with IFT on chain A
-	// todo  - fund wallet with IFT on chain B
 	// todo run catalyst
 	// todo -- update protos
 	// todo -- update abi
@@ -95,6 +96,7 @@ type loadTestRelayer struct {
 	t          *testing.T
 	env        *environment.Environment
 	deployment *e2etest.Deployment
+	sender     e2etest.Signer
 	relayer    *ibccli.Relayer
 }
 
@@ -121,6 +123,7 @@ func newLoadTestRelayer(t *testing.T) *loadTestRelayer {
 		t:          t,
 		env:        env,
 		deployment: deployment,
+		sender:     sender,
 		relayer:    relayer,
 	}
 }
@@ -159,9 +162,9 @@ func (ts *loadTestRelayer) fundGas(chainID environment.ChainID, wallets []common
 	require.NoError(ts.t, err)
 
 	ctx := ts.t.Context()
-	desiredBalance := e2etest.GasCoins(10)
+	desiredBalance := e2etest.Coins(10)
 
-	ts.t.Logf("funding %d wallets on chain %s", len(wallets), chainID)
+	ts.t.Logf("Funding %d wallets on chain %s", len(wallets), chainID)
 	start := time.Now()
 
 	for _, wallet := range wallets {
@@ -170,5 +173,39 @@ func (ts *loadTestRelayer) fundGas(chainID environment.ChainID, wallets []common
 	}
 
 	elapsed := time.Since(start)
-	ts.t.Logf("funded %d wallets on chain %s in %s", len(wallets), chainID, elapsed.String())
+	ts.t.Logf("Funded %d wallets on chain %s in %s", len(wallets), chainID, elapsed.String())
+}
+
+func (ts *loadTestRelayer) fundIFT(chainID environment.ChainID, wallets []common.Address) {
+	var route e2etest.Route
+	switch chainID {
+	case e2etest.ChainA:
+		route = e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	case e2etest.ChainB:
+		route = e2etest.BtoA(e2etest.ChainB, e2etest.ChainA)
+	default:
+		ts.t.Fatalf("fund IFT: unsupported chain %q", chainID)
+	}
+
+	app := e2etest.NewIFT(ts.t, ts.env, ts.deployment, ts.sender, route)
+
+	amount := e2etest.Coins(10)
+	requests := make([]e2etest.ERCTransferRequest, len(wallets))
+	for i, wallet := range wallets {
+		requests[i] = e2etest.ERCTransferRequest{Address: wallet, Amount: amount}
+	}
+
+	ts.t.Logf("Sending %s IFT to %d wallets on chain %s", amount, len(wallets), chainID)
+
+	start := time.Now()
+	receipts, err := app.TransferBatch(ts.t.Context(), requests)
+	require.NoError(ts.t, err)
+
+	ts.t.Logf(
+		"Sent IFT to %d wallets on chain %s in %s (%d txs)",
+		len(wallets),
+		chainID,
+		time.Since(start).String(),
+		len(receipts),
+	)
 }

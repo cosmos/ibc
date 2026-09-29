@@ -44,7 +44,8 @@ func RequiredSignerBalance() *big.Int {
 	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
 }
 
-func GasCoins(coins int64) *big.Int {
+// Coins converts $counts * 10^18 wei
+func Coins(coins int64) *big.Int {
 	return new(big.Int).Mul(big.NewInt(coins), big.NewInt(weiPerEther))
 }
 
