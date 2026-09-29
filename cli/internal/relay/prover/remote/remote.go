@@ -19,8 +19,10 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-const requestTimeout = time.Minute
-const probeTimeout = 5 * time.Second
+const (
+	requestTimeout = time.Minute
+	probeTimeout   = 5 * time.Second
+)
 
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.

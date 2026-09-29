@@ -90,7 +90,17 @@ func NewSetFromConfig(
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger, requireReachable)
+		return addGenerator(
+			ctx,
+			generators,
+			connAlias,
+			self,
+			counterparty,
+			clientSet,
+			attestors,
+			logger,
+			requireReachable,
+		)
 	})
 	if err != nil {
 		return nil, err
@@ -165,7 +175,13 @@ func addGenerator(
 		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, tlsConfig, logger)
 		if err := prover.Probe(ctx); err != nil {
 			if requireReachable {
-				return errors.Wrapf(err, "connection %q: remote prover %s/%s", connAlias, client.ChainID, client.ClientID)
+				return errors.Wrapf(
+					err,
+					"connection %q: remote prover %s/%s",
+					connAlias,
+					client.ChainID,
+					client.ClientID,
+				)
 			}
 
 			logger.Warn("Remote prover unreachable at startup, continuing", "connection", connAlias, "err", err)
