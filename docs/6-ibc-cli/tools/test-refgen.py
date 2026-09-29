@@ -982,6 +982,119 @@ def _():
         assert refgen.SYMBOL_CITE.search(text), f"{rel} cites nothing at all"
 
 
+# ---- fail-open paths -------------------------------------------------------
+#
+# Each of these was a case where the tool answered a narrower question than the
+# page implies and said nothing about it. A shorter table reads exactly like a
+# complete one, so every one of them is asserted rather than trusted.
+
+@case("a method whose signature holds braces still yields its rules")
+def _():
+    # Brace-matching from the signature's opening paren closed on the `{}` in
+    # `map[string]struct{}`, so the body came back EMPTY and every rule in it
+    # vanished silently. The connection-signer cross-reference was missing from
+    # the page for exactly this reason.
+    src = open(os.path.join(refgen.IBC,
+                            "cli/internal/config/config.go")).read()
+    bodies = refgen._method_bodies(src)
+    empty = sorted(f"{r}.{n}" for (r, n), b in bodies.items() if not b.strip())
+    assert not empty, f"empty method bodies: {empty}"
+    body = bodies[("Config", "validateConnectionSigners")]
+    assert "references unknown signer" in body, body[:200]
+
+
+@case("the connection signer cross-reference reaches the model")
+def _():
+    model = refgen.parse_go_config()
+    rules = [m for m, _a in model["deep_validations"].get(refgen.CONFIG_ROOT, [])]
+    assert any("connections[]" in r and "signer" in r for r in rules), rules
+
+
+@case("a declaration inside a block comment does not satisfy a citation")
+def _():
+    src = "/*\nfunc WasDeleted() error { return nil }\n*/\nfunc Real() {}\n"
+    assert refgen._declares(src, "WasDeleted"), "raw source still matches"
+    assert not refgen._declares(refgen._blank_comments(src), "WasDeleted")
+
+
+@case("the probe environment drops every variable the program reads")
+def _():
+    # `Observability.ConfigFile` honours OTEL_CONFIG_FILE. Inheriting it made
+    # the probe see a config that validates without `otelFile`, which would
+    # publish a required key as optional.
+    refgen._ENV_CACHE.clear()
+    env = refgen._program_env()
+    assert "OTEL_CONFIG_FILE" in refgen._ENV_CACHE["names"], \
+        refgen._ENV_CACHE["names"]
+    assert "OTEL_CONFIG_FILE" not in env
+    assert "PATH" in env, "the binary still needs a usable environment"
+    refgen._ENV_CACHE.clear()
+
+
+@case("env var names are read from the source, not listed here")
+def _():
+    # The point of deriving them: a variable added tomorrow is covered without
+    # anyone editing refgen.py.
+    refgen._ENV_CACHE.clear()
+    refgen._program_env()
+    names = refgen._ENV_CACHE["names"]
+    found = set()
+    for rel in refgen._walk(".go"):
+        if rel.endswith("_test.go"):
+            continue
+        src = refgen._blank_comments(refgen._read(rel))
+        consts = dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', src))
+        for m in re.finditer(r"os\.(?:Getenv|LookupEnv)\(\s*([^)]+?)\s*\)", src):
+            a = m.group(1).strip()
+            if a.startswith('"'):
+                found.add(a.strip('"'))
+            elif a in consts:
+                found.add(consts[a])
+    assert set(names) == found, (sorted(found - set(names)),
+                                 sorted(set(names) - found))
+    refgen._ENV_CACHE.clear()
+
+
+@case("a nested proto type is refused, not silently skipped")
+def _():
+    # No proto declares one today, so this feeds parse_proto a descriptor that
+    # does. Without the refusal the message is documented and the nested type
+    # simply is not, with no table and no warning.
+    fake = {"name": "cli/fake.proto", "sourceCodeInfo": {"location": []},
+            "messageType": [{"name": "Outer",
+                             "field": [],
+                             "nestedType": [{"name": "Inner", "field": []}]}]}
+    saved = refgen._descriptor_for
+    refgen._descriptor_for = lambda path: fake
+    try:
+        refgen.parse_proto("cli/fake.proto")
+    except refgen.SourceError as e:
+        assert e.kind == "nested_proto_type", e.kind
+        assert "Inner" in str(e), str(e)
+    else:
+        assert False, "a nested type should not pass silently"
+    finally:
+        refgen._descriptor_for = saved
+
+
+@case("a map field's synthetic entry type is not mistaken for a nested type")
+def _():
+    # map<string,string> compiles to a nested mapEntry message. Refusing those
+    # would refuse every proto that uses a map.
+    fake = {"name": "cli/fake.proto", "sourceCodeInfo": {"location": []},
+            "messageType": [{"name": "Outer", "field": [],
+                             "nestedType": [{"name": "LabelsEntry",
+                                             "field": [],
+                                             "options": {"mapEntry": True}}]}]}
+    saved = refgen._descriptor_for
+    refgen._descriptor_for = lambda path: fake
+    try:
+        out = refgen.parse_proto("cli/fake.proto")
+        assert [m["name"] for m in out["messages"]] == ["Outer"], out["messages"]
+    finally:
+        refgen._descriptor_for = saved
+
+
 for name in PASS:
     print(f"  ok    {name}")
 for name, e, tb in FAIL:

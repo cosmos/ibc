@@ -15,8 +15,13 @@ holds the rules; this one holds the detail you look up while following it.
 | `missing_marker` | the source has something the page cannot hold. Carries the rendered table, a suggested heading, and where to insert it | step 2 |
 | `orphaned_marker` | a marker for something the source no longer has | step 2 |
 | `curation` | a choice the source cannot express | step 2 |
+| `unreadable_method` | a method's body could not be located, so any rule inside it is invisible | teach `_body_brace` the new signature shape |
+| `nested_proto_type` | a proto declares a message or enum inside another; only top-level types are documented | move it to the top level, or decide where nested types belong on the page |
 | `moved_citation` | a cited symbol is now declared in exactly one other file; the message names it | repoint, after confirming the sentence |
 | `stale_citation` | a sentence in the prose cites a symbol that is gone, or was never there | see below |
+
+`--list-regions` prints just the ids of the stale regions, one per line — the
+list of prose sections to re-read once the tables are rewritten.
 
 Exit codes: `0` nothing to do, `1` stale or missing, `2` the tool refused. A
 refusal outranks staleness, so `--plan` and `--report` still exit 2 when a page

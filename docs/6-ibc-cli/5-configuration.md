@@ -40,7 +40,7 @@ Values can contain `${VAR}`. The CLI replaces each variable from the environment
 
 ## Example config.yml
 
-A working configuration, copied from the fixture the CLI's own tests load and validate. Every key below is one the relayer accepts today: if a key is renamed and this file is not updated, the Go test suite fails.
+Below is an example of a config file:
 
 <!-- GEN:config:example START -->
 
@@ -133,6 +133,7 @@ Some fields name something declared elsewhere in the file. The loader checks eac
 | `connections[].<end>.autoRelay` | Requires chains[…].evm.ws |
 | `relayer.chainOverrides[].chainId` | … not declared in top-level chains |
 | `relayer.connections[].<end>.chainId` | … not declared in top-level chains |
+| `relayer.connections[].<end>.signer` | References unknown signer … |
 
 <!-- [config.go:L68](cli/internal/config/config.go#L68) -->
 

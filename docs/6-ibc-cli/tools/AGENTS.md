@@ -2,14 +2,19 @@
 
 # Updating the reference pages
 
-You are here because something under `cli/`, `proto/` or `gen/` changed. Three
-pages carry tables derived from that surface:
+You are here because something under `cli/`, `proto/` or `gen/` changed. That
+includes changes that rename no symbol at all: the `go` directive in a `go.mod`
+is quoted as a prerequisite on two of these pages, and a dependency bump that
+moves it is a documentation change. Do not skip this for a merge that only
+touches build files.
+
+Three pages carry tables derived from that surface:
 
 | Page | Covers | Derived from |
 |------|--------|--------------|
 | [5-configuration.md](../5-configuration.md) | every key in `ibc.yml`, and the example config | the config structs in `cli/internal/config/`, and the yaml fixture that package's tests load |
 | [6-cli-commands.md](../6-cli-commands.md) | every command and flag | the built binary's command tree, plus the wiring in `cli/cmd/ibc/` |
-| [7-api.md](../7-api.md) | both gRPC services | `proto/cli/*.proto` |
+| [7-api.md](../7-api.md) | all three gRPC services (relayer, attestation, prover) | `proto/cli/*.proto` |
 
 Do this **before the pull request is opened**, in the same pull request as the
 code. Run everything from the repository root. Three things must be on PATH:
@@ -40,10 +45,15 @@ Those blocks are rewritten from source, so an edit there disappears the next
 time anyone regenerates — a change that looks like a fix and is not. Everything
 else on those pages is yours: prose, headings, section order, examples.
 
-Two things the generator does not watch. The example config is copied from the
-fixture the Go tests validate, so edit the fixture. And the other pages in
-`docs/6-ibc-cli/` — the overview, the tutorial, the two guides — describe this
-same surface in hand-written prose. Step 7 is how you check those.
+The example config is generated like everything else, so `--check` covers it —
+but it is *copied* from the fixture the Go tests validate, so the way to change
+it is to edit `cli/internal/config/testdata/sample.yml`, not the page.
+
+What the generator does not watch is the other pages in `docs/6-ibc-cli/` — the
+overview, the tutorial, the two guides — which describe this same surface in
+hand-written prose. **They carry no markers and no citations, so nothing in this
+file will ever name them.** Step 7 is how you check those, and it is the only
+thing that does.
 
 ## 1. Find out what moved
 
@@ -115,9 +125,11 @@ python3 docs/6-ibc-cli/tools/refgen.py all --check   # must be clean
 Then read each region you touched against the code it came from, once. Running
 twice and changing nothing proves the tool is stable, not that it is right.
 
-That is the whole check **unless you edited `refgen.py`** — the suites below
-test the generator, not the documentation (about 50 seconds, and about 3 and a
-half minutes).
+That is the whole check **unless this pull request changes `refgen.py`** — the suites below
+test the generator, not the documentation. Budget about a minute for the unit
+suite and **ten or more for the end-to-end one** — it builds the binary
+repeatedly. If your tool has a timeout, run it in the background rather than
+reading the overrun as a hang.
 
 ```sh
 # only if you changed refgen.py
@@ -171,10 +183,14 @@ ask **what a reader would now see that these pages show**:
 | changes a default | sentences stating the old value, and examples that relied on it |
 | adds a required config key | every pasteable config block, which now fails to load |
 
-Two shortcuts worth taking. Any `yaml` block a reader would paste can be
-checked by running `ibc config validate` against it. Any block of captured
-output can be checked by running the command that produced it, when it does
-not need a live chain.
+Two shortcuts worth taking, with one trap. A `yaml` block that is a *whole*
+config can be checked by running `ibc config validate` against it. Most blocks
+on these pages are not: they are fragments a reader pastes *into* a config — a
+bare `attestors:` list, a `signers:` entry — and `config validate` rejects each
+as an incomplete config, complaining about the fragment rather than the keys. To
+check a fragment, splice it into `cli/internal/config/testdata/sample.yml` and
+validate that. Any block of captured output can be checked by running the
+command that produced it, when it does not need a live chain.
 
 Say in the report which of these pages you read and what you changed. "I
 grepped and found nothing" is not an answer to this step.

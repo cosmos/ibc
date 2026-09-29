@@ -3,6 +3,14 @@
 
 """Generate reference-page tables from source, in place, between markers.
 
+TLDR: three pages under `docs/6-ibc-cli/` carry tables of every CLI command and
+flag, every config key, and every gRPC message and field. This script builds
+those tables from the code and writes them onto the pages, replacing only the
+text inside the GEN markers. Run `refgen.py all` to update them and
+`refgen.py all --check` to fail when a page no longer matches the code. Run it
+before opening a pull request that changes `cli/`, `proto/` or `gen/`; the
+procedure is in AGENTS.md beside this file.
+
 A reference page is part prose and part table. The prose is written by a human
 and the tables are derived from code, so the tables can be regenerated whenever
 the code moves and the page cannot drift from it.
@@ -388,6 +396,23 @@ def parse_proto(path):
     for mi, msg in enumerate(fd.get("messageType", [])):
         if msg.get("options", {}).get("mapEntry"):
             continue            # the synthetic entry type behind a map<> field
+        # A type declared inside another is not visited, so a field could name
+        # a type the page has no table for. Refusing beats traversing: where a
+        # nested type belongs on the page, and under what heading, is a choice
+        # about the page, not something to infer here.
+        nested = [n["name"] for n in msg.get("nestedType", [])
+                  if not n.get("options", {}).get("mapEntry")]
+        nested += [e["name"] for e in msg.get("enumType", [])]
+        if nested:
+            _problem("nested_proto_type",
+                     f"{msg['name']} declares {', '.join(nested)} inside it. "
+                     "This tool documents top-level types only, so a field "
+                     "naming one would point at a table that does not exist. "
+                     "Move it to the top level, or decide where nested types "
+                     "belong on the page and teach this function that shape.",
+                     proto_message=msg["name"], nested=nested,
+                     file=path, line=_line(fd, (4, mi)))
+            continue
         out["messages"].append({"name": msg["name"], "doc": com.get((4, mi), ""),
                                 "line": _line(fd, (4, mi)),
                                 "fields": _descriptor_fields(fd, com, mi, msg)})
@@ -1058,15 +1083,65 @@ def _go_block(src, i):
         "reading on would attribute its contents to whatever follows")
 
 
+def _body_brace(src, after):
+    """Offset of the `{` that opens a function body.
+
+    Brace-matching from the signature's opening paren finds the wrong brace:
+    `validateConnectionSigners(signerSet map[string]struct{})` closes on the
+    one inside `struct{}`, and the body came back empty. An empty body yields no
+    rules and says nothing, so the connection-signer cross-reference silently
+    never reached the page. Skip the parameter list by paren depth, then skip
+    any `struct{}` or `interface{}` in the return type, and the next brace is
+    the body's.
+    """
+    depth, i = 1, after
+    while i < len(src) and depth:
+        if src[i] == "(":
+            depth += 1
+        elif src[i] == ")":
+            depth -= 1
+        i += 1
+    while i < len(src):
+        if src[i] == "{":
+            lead = src[:i].rstrip()
+            if lead.endswith("struct") or lead.endswith("interface"):
+                d, i = 1, i + 1
+                while i < len(src) and d:
+                    if src[i] == "{":
+                        d += 1
+                    elif src[i] == "}":
+                        d -= 1
+                    i += 1
+                continue
+            return i
+        if src[i] == "\n" and src[i - 1] not in ",(":
+            break
+        i += 1
+    raise SourceError("no function body found")
+
+
 def _method_bodies(src):
-    """{(receiver type, method name): body} for every method in the package."""
-    out = {}
+    """{(receiver type, method name): body} for every method in the package.
+
+    A method whose body cannot be located is a refusal, not an omission: the
+    rules it holds would otherwise go missing with no sign, and a table one row
+    short reads exactly like a complete one.
+    """
+    out, unreadable = {}, []
     for m in re.finditer(r"func \((?:\w+ )?\*?(\w+)\) (\w+)\(", src):
         try:
-            body, _end = _go_block(src, m.end())
+            body, _end = _go_block(src, _body_brace(src, m.end()))
         except (SourceError, ValueError):
+            unreadable.append(f"{m.group(1)}.{m.group(2)}")
             continue
         out[(m.group(1), m.group(2))] = body
+    if unreadable:
+        _problem("unreadable_method",
+                 "cannot find the body of " + ", ".join(sorted(unreadable))
+                 + ". Any validation rule inside is invisible to this tool, so "
+                 "a table here would be short without saying so. The signature "
+                 "shape is new; teach _body_brace to skip it.",
+                 methods=sorted(unreadable))
     return out
 
 
@@ -1833,6 +1908,7 @@ def _probe_unknown_key(binary, text):
             with open(os.path.join(home, name), "w") as fh:
                 fh.write(body)
         r = subprocess.run([binary, "config", "validate", "--home", home],
+                           env=_program_env(),
                            capture_output=True, text=True, timeout=PROBE_TIMEOUT)
         m = re.search(r'unknown field "([^"]+)"', r.stdout + r.stderr)
         if not m:
@@ -1876,6 +1952,42 @@ def _yaml_with(text, path, value):
 PROBE_TARGETS = [([], None), (["relayer"], "relay"), (["attestor"], "attest")]
 
 
+_ENV_CACHE = {}
+
+
+def _program_env():
+    """The environment to run the binary in: ours, minus what it reads.
+
+    `Observability.ConfigFile` honours `OTEL_CONFIG_FILE`, so a developer with
+    that variable exported probed a config that validates without `otelFile`
+    and would have published the key as optional -- wrong for every reader who
+    does not have it set. The probe answers what the program requires, so it
+    must not inherit an answer.
+
+    The names are read out of the source rather than listed here: a variable
+    added tomorrow is covered without anyone editing this file.
+    """
+    if not _ENV_CACHE:
+        names = set()
+        for rel in _walk(".go"):
+            if rel.endswith("_test.go"):
+                continue
+            src = _blank_comments(_read(rel))
+            consts = dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', src))
+            for m in re.finditer(r"os\.(?:Getenv|LookupEnv)\(\s*([^)]+?)\s*\)", src):
+                arg = m.group(1).strip()
+                if arg.startswith('"'):
+                    names.add(arg.strip('"'))
+                elif arg in consts:
+                    names.add(consts[arg])
+        env = dict(os.environ)
+        for name in names:
+            env.pop(name, None)
+        _ENV_CACHE["env"] = env
+        _ENV_CACHE["names"] = sorted(names)
+    return _ENV_CACHE["env"]
+
+
 def _probe_validate(binary, text, target=()):
     """The key path the binary objects to, or None when it is content."""
     home = tempfile.mkdtemp(prefix="refgen-cfg-")
@@ -1886,6 +1998,7 @@ def _probe_validate(binary, text, target=()):
             with open(os.path.join(home, name), "w") as fh:
                 fh.write(body)
         r = subprocess.run([binary, "config", "validate", *target, "--home", home],
+                           env=_program_env(),
                            capture_output=True, text=True, timeout=PROBE_TIMEOUT)
         if r.returncode == 0:
             return None
@@ -2495,28 +2608,43 @@ def build_cli():
             digest.update(os.path.relpath(path, IBC).encode())
             with open(path, "rb") as fh:
                 digest.update(fh.read())
+    # The sources alone do not determine the binary. `go env` settles the
+    # toolchain, the target and the build flags, and our own tutorial documents
+    # Go 1.27 changing runtime behaviour -- so identical sources built on two
+    # toolchains are two different programs, and a table generated from the
+    # wrong one is wrong without saying so.
+    settings = subprocess.run(
+        ["go", "env", "GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS",
+         "GOEXPERIMENT", "GOTAGS"],
+        cwd=module, capture_output=True, text=True)
+    if settings.returncode != 0:
+        raise SourceError(f"go env failed:\n{settings.stderr}")
+    digest.update(settings.stdout.encode())
     key = digest.hexdigest()[:16]
     cached = os.path.join(tempfile.gettempdir(), f"refgen-cli-{key}")
     if os.path.exists(cached):
         return cached
 
-    r = subprocess.run(["go", "build", "-o", os.path.join("bin", a["binary"]),
+    # Build straight to a path only this process knows. Building to the
+    # module's own `bin/` let two concurrent runs overwrite each other there,
+    # and one could then publish tables read from the other's binary.
+    themp = f"{cached}.{os.getpid()}"
+    r = subprocess.run(["go", "build", "-o", themp,
                         "./" + a["cli_pkg"] + "/..."],
                        cwd=module, capture_output=True, text=True)
     if r.returncode != 0:
         raise SourceError(f"go build failed:\n{r.stderr}")
-    # copy to a unique name and rename into place: a copy interrupted partway
-    # leaves a truncated file at the cache path, and every later run then
-    # executes it and reports the binary's failure as the source's
-    themp = f"{cached}.{os.getpid()}"
-    shutil.copyfile(out, themp)
+    # rename into place: a copy interrupted partway leaves a truncated file at
+    # the cache path, and every later run then executes it and reports the
+    # binary's failure as the source's
     os.chmod(themp, 0o755)
     os.replace(themp, cached)
     return cached
 
 
 def _cli_help(binary, path):
-    r = subprocess.run([binary] + path + ["--help"], capture_output=True, text=True)
+    r = subprocess.run([binary] + path + ["--help"], env=_program_env(),
+                       capture_output=True, text=True)
     if r.returncode != 0:
         raise SourceError(f"ibc {' '.join(path)} --help failed:\n{r.stderr}")
     return r.stdout
@@ -2651,7 +2779,8 @@ def _probe_run(binary, argv, home):
     So: a throwaway home, no stdin to read, and a timeout, because `relayer
     run` is a server and would otherwise never return.
     """
-    env = dict(os.environ, HOME=home, XDG_CONFIG_HOME=os.path.join(home, ".config"))
+    env = dict(_program_env(), HOME=home,
+               XDG_CONFIG_HOME=os.path.join(home, ".config"))
     try:
         return subprocess.run([binary] + argv + ["--home", home],
                               capture_output=True, text=True, env=env,
@@ -3372,10 +3501,22 @@ def _declares(source, symbol):
     return False
 
 
+def _declaring_source(path):
+    """A file's source with comments blanked, for declaration searches.
+
+    A declaration inside a `/* ... */` block satisfied the citation check, so a
+    citation kept passing after the real symbol was deleted and only a
+    commented-out copy remained. Every other reader in this file already blanks
+    comments; this one did not.
+    """
+    return _blank_comments(_read(path))
+
+
 def _where_declared(symbol):
     """Every file under the repo that declares `symbol`."""
     return [f for f in _walk(".go")
-            if not f.endswith("_test.go") and _declares(_read(f), symbol)]
+            if not f.endswith("_test.go")
+            and _declares(_declaring_source(f), symbol)]
 
 
 def _check_symbol_cites(text, page):
@@ -3408,7 +3549,7 @@ def _check_symbol_cites(text, page):
                         f"not just the file name")
             continue
         here = os.path.exists(os.path.join(IBC, path))
-        if here and _declares(_read(path), symbol):
+        if here and _declares(_declaring_source(path), symbol):
             continue
         elsewhere = [f for f in _where_declared(symbol) if f != path]
         why = "no such file" if not here else f"`{symbol}` is not declared there"

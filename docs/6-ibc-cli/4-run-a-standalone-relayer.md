@@ -107,7 +107,7 @@ level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3002}"
 ```
 
-The relayer is running and waiting for packets. The transcript is abridged: a clearing pass runs at startup for each chain it relays from, and again on `relayer.clearInterval`, logging what it cleared.
+The relayer is running and waiting for packets. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
 
 2. Back in your first terminal, send a transfer and keep the hash:
 
