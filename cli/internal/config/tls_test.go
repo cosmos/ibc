@@ -17,6 +17,9 @@ import (
 func TestTLSClientConfigValidate(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := certs.WriteSelfSigned(t, dir, "test")
+	_, otherKey := certs.WriteSelfSigned(t, dir, "other")
+	badPEM := filepath.Join(dir, "bad.pem")
+	require.NoError(t, os.WriteFile(badPEM, []byte("not PEM"), 0o600))
 
 	for _, tt := range []struct {
 		name        string
@@ -30,6 +33,26 @@ func TestTLSClientConfigValidate(t *testing.T) {
 		{
 			name: "empty block means system roots",
 			cfg:  &TLSClientConfig{},
+		},
+		{
+			name:        "skip verify with CA is rejected",
+			cfg:         &TLSClientConfig{CAFile: certFile, InsecureSkipVerify: true},
+			errContains: "caFile: must not be set",
+		},
+		{
+			name:        "malformed CA",
+			cfg:         &TLSClientConfig{CAFile: badPEM},
+			errContains: "no PEM certificates",
+		},
+		{
+			name:        "malformed client certificate",
+			cfg:         &TLSClientConfig{CertFile: badPEM, KeyFile: keyFile},
+			errContains: "load client certificate",
+		},
+		{
+			name:        "mismatched key pair",
+			cfg:         &TLSClientConfig{CertFile: certFile, KeyFile: otherKey},
+			errContains: "load client certificate",
 		},
 		{
 			name: "full mTLS block",
@@ -288,11 +311,9 @@ func TestRemoteParamsValidate(t *testing.T) {
 			params: RemoteParams{URL: "http://prover.example.com:9090"},
 		},
 		{
-			// The url's scheme is deliberately unvalidated so that an existing
-			// config keeps loading. A schemeless url still fails at request
-			// time, which is where it failed before too.
-			name:   "schemeless url is accepted",
-			params: RemoteParams{URL: "prover.example.com:9090"},
+			name:        "schemeless url is rejected",
+			params:      RemoteParams{URL: "prover.example.com:9090"},
+			errContains: "url: must be",
 		},
 		{
 			name: "https url with tls",
@@ -300,6 +321,20 @@ func TestRemoteParamsValidate(t *testing.T) {
 				URL: "https://prover.example.com:9090",
 				TLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
 			},
+		},
+		{
+			name:   "uppercase https with tls",
+			params: RemoteParams{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
+		},
+		{
+			name:        "unsupported scheme",
+			params:      RemoteParams{URL: "ftp://prover.example.com"},
+			errContains: "url: must be",
+		},
+		{
+			name:        "missing host",
+			params:      RemoteParams{URL: "https:///path"},
+			errContains: "url: must be",
 		},
 		{
 			name:        "empty url",
@@ -323,7 +358,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 				URL: "prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
-			errContains: "tls: requires an https:// url",
+			errContains: "url: must be",
 		},
 		{
 			name: "bad tls block on an https url",

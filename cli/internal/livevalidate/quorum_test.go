@@ -142,3 +142,15 @@ func TestCheckAttestorQuorum(t *testing.T) {
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
 	})
 }
+
+func TestCheckAttestorQuorumRejectsUnreachableRemoteProver(t *testing.T) {
+	conn := testConnection()
+	conn.ClientA.Type = config.ClientTypeRemote
+	conn.ClientA.Params = []byte(`{"url":"http://127.0.0.1:1"}`)
+	conn.ClientB.Type = config.ClientTypeRemote
+	conn.ClientB.Params = conn.ClientA.Params
+	cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+	err := checkAttestorQuorum(context.Background(), cfg, chains.NewClientSet(nil))
+	require.ErrorContains(t, err, "remote prover")
+	require.ErrorContains(t, err, conn.Alias)
+}

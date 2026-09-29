@@ -54,6 +54,8 @@ func (c *TLSClientConfig) Validate() error {
 	}
 
 	switch {
+	case c.InsecureSkipVerify && c.CAFile != "":
+		return errPathf(fieldCAFile, "must not be set when insecureSkipVerify is enabled")
 	case c.CertFile != "" && c.KeyFile == "":
 		return errPathf(fieldKeyFile, "required when certFile is set")
 	case c.KeyFile != "" && c.CertFile == "":
@@ -86,7 +88,8 @@ func (c *TLSClientConfig) Validate() error {
 		}
 	}
 
-	return nil
+	_, err := c.TLSConfig()
+	return err
 }
 
 // TLSConfig resolves the block into a *tls.Config, or nil when the block is

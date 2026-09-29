@@ -69,6 +69,12 @@ func (s *Set) Get(chainID, clientID string) (Prover, bool) {
 	return generator, ok
 }
 
+// SetOptions controls remote prover checks during construction.
+type SetOptions struct {
+	// RequireReachable makes probe failures fatal, as needed by live validation.
+	RequireReachable bool
+}
+
 // NewSetFromConfig resolves a Prover for every client end of every
 // configured connection, matching against attestors (this process's own
 // local attestors plus every resolved remote one).
@@ -78,11 +84,13 @@ func NewSetFromConfig(
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
 	logger *slog.Logger,
+	opts ...SetOptions,
 ) (*Set, error) {
+	requireReachable := len(opts) > 0 && opts[0].RequireReachable
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger, requireReachable)
 	})
 	if err != nil {
 		return nil, err
@@ -118,6 +126,7 @@ func addGenerator(
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
 	logger *slog.Logger,
+	requireReachable bool,
 ) error {
 	logger = logger.With("module", "prover", "chainID", client.ChainID, "clientID", client.ClientID)
 
@@ -155,6 +164,10 @@ func addGenerator(
 
 		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, tlsConfig, logger)
 		if err := prover.Probe(ctx); err != nil {
+			if requireReachable {
+				return errors.Wrapf(err, "connection %q: remote prover %s/%s", connAlias, client.ChainID, client.ClientID)
+			}
+
 			logger.Warn("Remote prover unreachable at startup, continuing", "connection", connAlias, "err", err)
 		}
 

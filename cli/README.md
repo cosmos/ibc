@@ -78,3 +78,32 @@ for a worked example.
 Repository-wide black-box tests live in [`../e2e/`](../e2e/README.md), with the
 harness in `../e2e/internal/harness` as a separate Go module. From the
 repository root, `make -C e2e doctor && make -C e2e test` runs the suite.
+
+### Outbound TLS
+
+Remote signers and attestors enable TLS when a `tls:` block is present;
+`tls: {}` uses system roots. Remote provers require an `http://` or `https://`
+URL, whose scheme enables TLS. A prover's optional `tls:` block requires HTTPS.
+All three support the same options:
+
+```yaml
+tls:
+  caFile: /tls/ca.crt
+  certFile: /tls/client.crt
+  keyFile: /tls/client.key
+  serverName: service.example.com
+  minVersion: "1.2"
+```
+
+Omit `certFile` and `keyFile` for one-way TLS; supply both for mTLS. Certificate
+files are parsed during config validation. Client certificates reload on each
+handshake, but CA changes require a restart. Separate cert/key updates can cause
+brief handshake failures while the pair is mismatched. `insecureSkipVerify: true`
+disables server verification, logs a warning, and cannot be combined with `caFile`.
+
+Remote prover probes warn on failure during relayer startup, but fail
+`ibc config validate --live`. Probes run sequentially with a five-second timeout
+per client end, so unresponsive endpoints can add startup delay.
+
+Plaintext remote attestors now use HTTP/2 (h2c), matching remote provers. An
+HTTP/1-only proxy in front of an attestor must support h2c or be reconfigured.

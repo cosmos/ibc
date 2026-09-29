@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"os"
 )
 
@@ -39,15 +40,21 @@ type ClientTLS struct {
 // BuildClientTLS resolves opts into a *tls.Config. A client certificate is
 // loaded once here so a bad pair fails immediately, then reloaded per
 // handshake so rotation on disk takes effect without restarting the process.
+// CA roots require a restart. Updating cert and key separately can briefly
+// cause handshakes to fail if they observe a mismatched pair.
 func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
+	if opts.InsecureSkipVerify {
+		slog.Warn("TLS server certificate verification is disabled", "serverName", opts.ServerName)
+	}
+
 	minVersion, err := ParseTLSVersion(opts.MinVersion)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := &tls.Config{
-		MinVersion: minVersion,
-		ServerName: opts.ServerName,
+		MinVersion:         minVersion,
+		ServerName:         opts.ServerName,
 		InsecureSkipVerify: opts.InsecureSkipVerify,
 	}
 
