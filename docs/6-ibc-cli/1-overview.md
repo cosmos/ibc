@@ -140,7 +140,7 @@ It has eight blocks:
 - `server` and `db`: the address to listen on, and the relayer's database.
 - `logging` and `observability`: the log level and format, and the metrics endpoint.
 
-Most configurations can be generated. `ibc config new` writes a starting file, `config add-chain` appends a chain, and the `ibc keys` commands can append a signer. After deploying, `ibc deploy render-config` prints your config with the relaying settings the deployment implies merged in, and `-p` writes it back.
+Most configurations can be generated. `ibc config new` writes a starting file, `config add-chain` appends a chain, and the `ibc keys` commands can append a signer. After deploying, `ibc deploy render-config` prints the complete config with deployment settings merged in. Add `--populate-config` to save it.
 
 The IBC CLI also validates the file with the `ibc config validate` command. 
 

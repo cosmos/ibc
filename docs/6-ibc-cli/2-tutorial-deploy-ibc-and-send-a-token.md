@@ -17,7 +17,7 @@ By the end, you'll have the following:
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.26.6 or later. On Go 1.27 and above every `ibc` command prints a `sonic/ast only supports ...` warning to stderr and falls back to the standard JSON encoder; it is harmless, and the sample output in this guide omits it.
+- [Go](https://go.dev/doc/install) v1.26.6 or later
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
@@ -217,40 +217,21 @@ This command registers both sides. It ties each token to the client pointing at 
 
 Next, you'll need to configure the relayer to start sending packets between the two chains.
 
-1. Generate the relayer's configuration.
+1. Generate and save the relayer's configuration:
 
 ```bash
-./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer
+./bin/ibc deploy render-config 41001 41002 \
+  --signer-a relayer --signer-b relayer \
+  --populate-config
 ```
 
-This prints your whole config with the settings relaying needs merged in: the chains with their router addresses, the connection, and the attestors, each filled in with the addresses your deploy commands recorded.
+This merges the deployed router addresses, connection, and local attestors into your existing config, preserving settings such as `server`, `db`, and `signers`. It prints the complete config and prompts for confirmation before writing it to `~/.ibc/ibc.yml`.
 
-The two signer flags name the key that submits relay transactions on each chain. Neither is required — omitting one keeps whatever the connection already has — and an alias you do pass is checked against your configured signers. You imported `relayer` in step 3.
+The two signer flags select the key that submits relay transactions on each chain. Set both for this new connection; each is checked against your configured signers. You imported `relayer` in step 3 of section 2.
 
 The attestors section declares both of your attestor keys as `type: local`. This means the relayer will run the attestors in the same process.
 
-2. Save that output to your config yourself, or add `-p` and let the command write it:
-
-```bash
-./bin/ibc deploy render-config 41001 41002 --signer-a relayer --signer-b relayer -p
-```
-
-The command prints the config, then names what it is about to overwrite and asks before writing. Answer `y`:
-
-```
-This operation overwrites values for the following:
-  chain 41001
-  chain 41002
-
-About to write /home/you/.ibc/ibc.yml. Proceed? [y/N]: y
-Wrote /home/you/.ibc/ibc.yml
-```
-
-Add `--yes` to skip the prompt. Without an answer the command exits with `confirmation required; rerun with --yes for non-interactive use`, leaving your config untouched.
-
-This keeps your `server`, `db`, and `signers` blocks and merges the relaying settings into them.
-
-3. Use the validate command to check the result against both chains before starting anything:
+2. Use the validate command to check the result against both chains before starting anything:
 
 ```bash
 ./bin/ibc config validate --live
@@ -263,7 +244,7 @@ This keeps your `server`, `db`, and `signers` blocks and merges the relaying set
 }
 ```
 
-4. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You'll come back to it in the next step.
+3. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You'll come back to it in the next step.
 
 ```bash
 # open a new terminal and start the relayer
@@ -273,7 +254,6 @@ This keeps your `server`, `db`, and `signers` blocks and merges the relaying set
 ```
 level=INFO msg="Attestor config provided, running in dual mode: relayer with attestor" module=bootstrap
 level=INFO msg="Migrated database" module=bootstrap migrations_applied=4
-level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3000}"
 ```
 
