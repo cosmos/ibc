@@ -10,6 +10,19 @@ import (
 	"strings"
 )
 
+func validateRPCEndpoint(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	// Match ethclient.Dial: scheme-less addresses are IPC paths, not URLs.
+	if parsed.Scheme == "" || parsed.Scheme == "stdio" {
+		return nil
+	}
+	_, err = parseEndpoint(raw, "http", "https", "ws", "wss")
+	return err
+}
+
 func parseEndpoint(raw string, schemes ...string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil {

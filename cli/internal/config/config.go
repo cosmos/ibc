@@ -493,7 +493,7 @@ func (c EVMChainConfig) Validate(validateICS26Router bool) error {
 	if c.RPC == "" {
 		return errPathf("rpc", "required")
 	}
-	if _, err := parseEndpoint(c.RPC, "http", "https", "ws", "wss"); err != nil {
+	if err := validateRPCEndpoint(c.RPC); err != nil {
 		return errPath("rpc", err)
 	}
 
