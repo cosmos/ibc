@@ -1,13 +1,18 @@
 package loadtest
 
 import (
+	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethrunner "github.com/skip-mev/catalyst/chains/ethereum/runner"
 	catalystevm "github.com/skip-mev/catalyst/chains/ethereum/types"
 	catalyst "github.com/skip-mev/catalyst/chains/types"
 	"github.com/skip-mev/catalyst/ift/accounts"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type SpecIFT struct {
@@ -136,4 +141,29 @@ func (s *SpecIFT) Wallets() ([]common.Address, error) {
 	s.wallets = wallets
 
 	return wallets, nil
+}
+
+// Run executes this spec in-process.
+func (s *SpecIFT) Run(ctx context.Context, t testing.TB) (catalyst.LoadTestResult, error) {
+	cfg := s.catalyst
+
+	// sink := zapcore.AddSync(t.Output())
+	// logger, err := zap.NewDevelopment(
+	// 	zap.ErrorOutput(sink),
+	// 	zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+	// 		enc := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+	// 		return zapcore.NewCore(enc, sink, core)
+	// 	}),
+	// )
+	// require.NoError(t, err)
+
+	//nolint:errcheck // best-effort flush
+	// defer logger.Sync()
+
+	logger := zap.NewNop()
+
+	runner, err := ethrunner.NewRunner(ctx, logger, cfg)
+	require.NoError(t, err)
+
+	return runner.Run(ctx)
 }

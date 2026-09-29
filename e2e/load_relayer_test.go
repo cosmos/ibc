@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	catalyst "github.com/skip-mev/catalyst/chains/types"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -20,13 +21,15 @@ const baseMnemonic = "rotate stumble once topic possible message powder recall t
 func TestLoad_RelayerBurst(t *testing.T) {
 	// ARRANGE
 	const (
-		totalPackets    = 1_000
+		totalPackets    = 100
 		numWallets      = 200
 		packetsPerBlock = 50
 	)
 
 	// Given test suite
 	ts := newLoadTestRelayer(t)
+
+	ctx := t.Context()
 
 	// Given IFT load spec for A->B
 	evmEndpointA, tokenA := ts.catalystSource(e2etest.AtoB(e2etest.ChainA, e2etest.ChainB))
@@ -55,9 +58,9 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, wallets, numWallets)
 
-	// Fund wallets with gas on chain A and chain B
-	// Fund wallets with IFT on chain A and chain B
-	wg := sync.WaitGroup{}
+	// Fund wallets with gas on both chains
+	// Fund wallets with IFT on both chains
+	var wg sync.WaitGroup
 	wg.Add(4)
 	go func() {
 		ts.fundGas(e2etest.ChainA, wallets)
@@ -77,14 +80,30 @@ func TestLoad_RelayerBurst(t *testing.T) {
 	}()
 	wg.Wait()
 
-	// todo run catalyst
-	// todo -- update protos
-	// todo -- update abi
-	// todo -- update allow non-zero gas
+	// ACT
+	// Run two catalysts in parallel
+	wg.Add(2)
+	var errAB, errBA error
+	var resultAB, resultBA catalyst.LoadTestResult
+
+	go func() {
+		resultAB, errAB = loadSpecAB.Run(ctx, t)
+		wg.Done()
+	}()
+	go func() {
+		resultBA, errBA = loadSpecBA.Run(ctx, t)
+		wg.Done()
+	}()
+
+	// ASSERT
+	wg.Wait()
+	require.NoError(t, errAB, "Catalyst A->B")
+	require.NoError(t, errBA, "Catalyst B->A")
+	require.Equal(t, totalPackets/2, resultAB.Overall.TotalTransactions, "Catalyst A->B")
+	require.Equal(t, totalPackets/2, resultBA.Overall.TotalTransactions, "Catalyst B->A")
+
 	// todo -- expose txSent
-	// todo -- wait for both catalysts to return
 	// todo -- wait for all packets to be FINALIZED
-	// todo -- collect simple stats from catalyst
 	// todo -- collect SQL stats from the relayer
 }
 

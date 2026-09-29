@@ -3,6 +3,7 @@ package loadtest
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -46,9 +47,9 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 	defer cancel()
 
 	var (
-		succeeded, failed, timedOut, dropped atomic.Int64
-		mu                                   sync.Mutex
-		latencies                            []time.Duration
+		succeeded, failed, timedOut, dropped, iterations atomic.Int64
+		mu                                               sync.Mutex
+		latencies                                        []time.Duration
 	)
 
 	wrappedCall := func() {
@@ -88,6 +89,10 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 			// loop until jobs is closed
 			for range jobs {
 				wrappedCall()
+
+				if i := iterations.Add(1); i%1000 == 0 {
+					slog.InfoContext(ctx, "SimpleLoad", "iterations", i)
+				}
 			}
 		})
 	}
