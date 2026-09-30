@@ -36,6 +36,7 @@ import (
 
 	attestorapi "github.com/cosmos/ibc/cli/api/v2/attestor"
 	proverapi "github.com/cosmos/ibc/cli/api/v2/prover"
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -46,6 +47,10 @@ import (
 // belongs to the rest of this suite. See the "Outbound TLS" section of
 // ../cli/README.md for the feature this exercises.
 func TestOutboundTLS(t *testing.T) {
+	// Unlike every other test here, this one has no chain topology to
+	// record, and check-matrix's discovery run doesn't build cli/bin/ibc:
+	// exec-ing it for real would fail there rather than skip cleanly.
+	e2etest.SkipUnderMatrixDiscovery(t)
 	t.Parallel()
 
 	bin := ibccli.ResolvedBin()

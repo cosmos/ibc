@@ -73,6 +73,13 @@ func newMatrixCollector(out io.Writer) *matrixCollector {
 
 func matrixDiscoveryEnabled() bool { return *matrixFlag }
 
+func SkipUnderMatrixDiscovery(t testing.TB) {
+	t.Helper()
+	if matrixDiscoveryEnabled() {
+		t.SkipNow()
+	}
+}
+
 func recordEVMSelection(
 	t testing.TB,
 	mode Mode,
