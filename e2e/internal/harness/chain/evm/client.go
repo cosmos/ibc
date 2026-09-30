@@ -37,9 +37,9 @@ type TransactionWait struct {
 func (w TransactionWait) context(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	switch {
 	case w.Timeout <= 0:
-		return nil, nil, fmt.Errorf("evm transaction wait timeout must be greater than zero")
+		return nil, nil, errors.New("evm transaction wait timeout must be greater than zero")
 	case w.PollInterval <= 0:
-		return nil, nil, fmt.Errorf("evm transaction wait poll interval must be greater than zero")
+		return nil, nil, errors.New("evm transaction wait poll interval must be greater than zero")
 	default:
 		waitCtx, cancel := context.WithTimeout(ctx, w.Timeout)
 		return waitCtx, cancel, nil
@@ -112,7 +112,7 @@ func (e *EVMClient) Logs(ctx context.Context, q ethereum.FilterQuery) ([]types.L
 // plain value transfer across managed EVM providers.
 func (e *EVMClient) RequireEOA(ctx context.Context, address common.Address) error {
 	if address == (common.Address{}) {
-		return fmt.Errorf("EOA address is zero")
+		return errors.New("EOA address is zero")
 	}
 	code, err := e.client.CodeAt(ctx, address, nil)
 	if err != nil {

@@ -4,17 +4,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/goccy/go-yaml"
-
 	"github.com/cosmos/ibc/cli/internal/network"
 	"github.com/cosmos/ibc/cli/internal/pkg/logging"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Chain types
@@ -463,7 +462,7 @@ func (c ChainConfig) Validate() error {
 	case c.ChainID == "":
 		return errPathf("chainId", "required")
 	case chainType == "":
-		return fmt.Errorf("unknown chain type")
+		return errors.New("unknown chain type")
 	case chainType != ChainTypeEVM:
 		return fmt.Errorf("unsupported chain type %s", chainType)
 	case chainType == ChainTypeEVM:
@@ -640,11 +639,11 @@ func (a Attestors) validateIdentities() error {
 func (c EVMChainConfig) validateICS26Router() error {
 	switch {
 	case c.ICS26Router == "":
-		return fmt.Errorf("required")
+		return errors.New("required")
 	case !common.IsHexAddress(c.ICS26Router):
 		return fmt.Errorf("invalid EVM address %q", c.ICS26Router)
 	case common.HexToAddress(c.ICS26Router) == (common.Address{}):
-		return fmt.Errorf("must not be the zero address")
+		return errors.New("must not be the zero address")
 	default:
 		return nil
 	}

@@ -228,7 +228,7 @@ func (ac *Chain) closeEVMClient() {
 // requested minimum without exposing that control through the resolved Chain.
 func (ac *Chain) EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error {
 	if minimum == nil || minimum.Sign() < 0 {
-		return fmt.Errorf("anvil ensure EOA balance: minimum must be non-nil and non-negative")
+		return errors.New("anvil ensure EOA balance: minimum must be non-nil and non-negative")
 	}
 
 	ac.fundingMu.Lock()

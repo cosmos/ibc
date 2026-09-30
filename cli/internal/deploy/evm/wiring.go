@@ -349,7 +349,7 @@ func (d *Driver) RegisterIFTBridge(ctx context.Context, iftAddr string, spec dep
 		return fmt.Errorf("invalid send call constructor address %q", spec.SendCallConstructor)
 	}
 	if spec.CounterpartyIFT == "" {
-		return fmt.Errorf("counterparty ift address required")
+		return errors.New("counterparty ift address required")
 	}
 	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
 	if err != nil {

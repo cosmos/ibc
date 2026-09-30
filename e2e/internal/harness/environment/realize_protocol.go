@@ -379,7 +379,7 @@ func acquireConnection(
 		return nil, err
 	}
 	if a.counterpartyID != b.id || b.counterpartyID != a.id {
-		return nil, fmt.Errorf("resolved IBC Clients are not reciprocal")
+		return nil, errors.New("resolved IBC Clients are not reciprocal")
 	}
 	return &Connection{id: declaration.ID, a: a, b: b}, nil
 }
@@ -464,7 +464,7 @@ func acquireIBCClient(
 
 func ensureProtocolAuthorityFunded(ctx context.Context, chain *Chain, authority evm.Account) error {
 	if chain == nil {
-		return fmt.Errorf("missing resolved Chain")
+		return errors.New("missing resolved Chain")
 	}
 	if chain.funding == nil {
 		return nil
@@ -525,7 +525,7 @@ func acquireAttestor(
 		return attestorAcquisition{
 			description: fmt.Sprintf("stop Attestor %q", declaration.ID),
 			release:     process.Stop,
-		}, fmt.Errorf("Attestor signer address does not match its runtime authority")
+		}, errors.New("Attestor signer address does not match its runtime authority")
 	}
 	attestor := &Attestor{
 		id:       declaration.ID,
@@ -548,7 +548,7 @@ func acquireAttestor(
 
 func solidityIBCSetup(ctx context.Context, chain *Chain) (*solidityibc.Setup, error) {
 	if chain == nil {
-		return nil, fmt.Errorf("missing resolved Chain")
+		return nil, errors.New("missing resolved Chain")
 	}
 	var setup *solidityibc.Setup
 	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {

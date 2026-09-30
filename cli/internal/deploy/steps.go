@@ -5,6 +5,7 @@ package deploy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -407,7 +408,7 @@ func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
 	if m.EVMSendCallConstructor != "" {
 		return m.EVMSendCallConstructor, nil
 	}
-	return "", fmt.Errorf("no send call constructor recorded")
+	return "", errors.New("no send call constructor recorded")
 }
 
 // specToClient converts a ClientSpec and its provisioned address into the

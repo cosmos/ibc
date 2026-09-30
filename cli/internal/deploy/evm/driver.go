@@ -8,6 +8,7 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -87,7 +88,7 @@ func (d *Driver) SupportedClientTypes() []string {
 // signer; every mutating operation must call it first.
 func (d *Driver) requireSigner() error {
 	if d.key == nil {
-		return fmt.Errorf("no deployer signer configured for this chain: set chains[].deployer or pass --deployer")
+		return errors.New("no deployer signer configured for this chain: set chains[].deployer or pass --deployer")
 	}
 	return nil
 }

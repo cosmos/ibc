@@ -284,7 +284,7 @@ func (bc *Chain) WSURL() string { return bc.wsURL }
 // treasury, then verifies the requested minimum on-chain.
 func (bc *Chain) EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error {
 	if minimum == nil || minimum.Sign() < 0 {
-		return fmt.Errorf("besu ensure EOA balance: minimum must be non-nil and non-negative")
+		return errors.New("besu ensure EOA balance: minimum must be non-nil and non-negative")
 	}
 	if err := bc.RequireEOA(ctx, address); err != nil {
 		return fmt.Errorf("besu ensure EOA balance: %w", err)

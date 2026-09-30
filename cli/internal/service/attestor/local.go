@@ -40,15 +40,15 @@ var _ Attestor = &LocalAttestor{}
 func NewLocal(cfg config.AttestorConfig, client chains.Client, backingSigner signer.Signer) (*LocalAttestor, error) {
 	switch {
 	case cfg.ChainID == "":
-		return nil, fmt.Errorf("chainID required")
+		return nil, errors.New("chainID required")
 	case cfg.Name == "":
-		return nil, fmt.Errorf("name required")
+		return nil, errors.New("name required")
 	case client == nil:
-		return nil, fmt.Errorf("client required")
+		return nil, errors.New("client required")
 	case client.ChainID() != cfg.ChainID:
 		return nil, fmt.Errorf("client chainID mismatch: got %s, want %s", client.ChainID(), cfg.ChainID)
 	case backingSigner == nil:
-		return nil, fmt.Errorf("signer required")
+		return nil, errors.New("signer required")
 	case backingSigner.Type() != signer.ECDSA:
 		return nil, fmt.Errorf("ECDSA signer required, got %s", backingSigner.Type())
 	}
