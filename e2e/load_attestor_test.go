@@ -216,14 +216,10 @@ func (ts *loadTestAttestor) sendPackets(count int) []*e2etest.TransferSend {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(len(results))
-
 	for _, send := range results {
-		go func(result *e2etest.TransferSend) {
-			defer wg.Done()
-			mustDeliver(ts.t, ts.relayer, result)
-		}(send)
+		wg.Go(func() { mustDeliver(ts.t, ts.relayer, send) })
 	}
+
 	wg.Wait()
 
 	return results

@@ -98,66 +98,49 @@ func testLoadRelayer(t *testing.T, load relayerLoadIFT) {
 	// Fund wallets with gas on both chains
 	// Fund wallets with IFT on both chains
 	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() {
-		ts.fundGas(e2etest.ChainA, wallets)
-		wg.Done()
-	}()
-	go func() {
-		ts.fundGas(e2etest.ChainB, wallets)
-		wg.Done()
-	}()
-	go func() {
-		ts.fundIFT(e2etest.ChainA, wallets)
-		wg.Done()
-	}()
-	go func() {
-		ts.fundIFT(e2etest.ChainB, wallets)
-		wg.Done()
-	}()
+
+	wg.Go(func() { ts.fundGas(e2etest.ChainA, wallets) })
+	wg.Go(func() { ts.fundGas(e2etest.ChainB, wallets) })
+	wg.Go(func() { ts.fundIFT(e2etest.ChainA, wallets) })
+	wg.Go(func() { ts.fundIFT(e2etest.ChainB, wallets) })
+
 	wg.Wait()
 
 	// ACT
 	// Run two catalysts in parallel
-	wg.Add(2)
 	var (
 		resultAB, resultBA catalyst.LoadTestResult
 		txsAB, txsBA       []*catalystevm.SentTx
 		errAB, errBA       error
 	)
 
-	go func() {
+	wg.Go(func() {
 		resultAB, txsAB, errAB = loadSpecAB.Run(ctx, t)
-		wg.Done()
-	}()
-	go func() {
+	})
+	wg.Go(func() {
 		resultBA, txsBA, errBA = loadSpecBA.Run(ctx, t)
-		wg.Done()
-	}()
+	})
+
+	wg.Wait()
 
 	// ASSERT
-	wg.Wait()
 	require.NoError(t, errAB, "Catalyst A->B")
 	require.NoError(t, errBA, "Catalyst B->A")
 	require.Equal(t, totalPackets/2, resultAB.Overall.TotalTransactions, "Catalyst A->B")
 	require.Equal(t, totalPackets/2, resultBA.Overall.TotalTransactions, "Catalyst B->A")
 
 	// ASSERT #2
-	wg.Add(2)
-
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 
 	var errAwaitAB, errAwaitBA error
 
-	go func() {
+	wg.Go(func() {
 		errAwaitAB = loadtest.AwaitPacketsFromCatalyst(ctx, t, routeAB, ts.relayer, txsAB)
-		wg.Done()
-	}()
-	go func() {
+	})
+	wg.Go(func() {
 		errAwaitBA = loadtest.AwaitPacketsFromCatalyst(ctx, t, routeBA, ts.relayer, txsBA)
-		wg.Done()
-	}()
+	})
 
 	wg.Wait()
 
