@@ -91,7 +91,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			GetBlockHeader(mock.Anything, uint64(10)).
 			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil).
 			Once()
-		gen := New(attestors, 2, chain, slog.Default())
+		gen := New("client-chain", "client-0", attestors, 2, chain, slog.Default())
 
 		proof, err := gen.StateProof(ctx, 10)
 		require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			GetBlockHeader(mock.Anything, uint64(11)).
 			Return(v2.BlockHeader{Timestamp: someBlockTime}, nil).
 			Once()
-		gen := New(attestors, 2, chain, slog.Default())
+		gen := New("client-chain", "client-0", attestors, 2, chain, slog.Default())
 
 		_, err := gen.StateProof(ctx, 11)
 		require.Error(t, err)
@@ -138,7 +138,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 			signedPacketAttestor(t, "a2", 20, compact),
 		}
 
-		gen := New(attestors, 2, nil, slog.Default())
+		gen := New("client-chain", "client-0", attestors, 2, nil, slog.Default())
 
 		proofs, err := gen.PacketProofs(ctx, 20, v2.ProofKindPacketCommitment, packets, nil)
 		require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestGeneratorPacketProofs(t *testing.T) {
 	t.Run("unsupportedKindErrors", func(t *testing.T) {
 		// an unsupported kind must be rejected before ever querying an
 		// attestor, so the generator here is given no attestors at all.
-		gen := New(nil, 2, nil, slog.Default())
+		gen := New("client-chain", "client-0", nil, 2, nil, slog.Default())
 
 		_, err := gen.PacketProofs(ctx, 20, v2.ProofKindUnknown, packets, nil)
 		require.Error(t, err)
@@ -169,7 +169,7 @@ func TestGeneratorLatestProvableHeight(t *testing.T) {
 		GetBlockHeader(mock.Anything, uint64(90)).
 		Return(v2.BlockHeader{Timestamp: someBlockTime}, nil)
 
-	gen := New(attestors, 2, counterpartyChain, slog.Default())
+	gen := New("client-chain", "client-0", attestors, 2, counterpartyChain, slog.Default())
 
 	height, timestamp, err := gen.LatestProvableHeight(ctx)
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func TestGeneratorRejectsUnexpectedPacketClaims(t *testing.T) {
 				if tt.mutate != nil {
 					claims = tt.mutate(claims)
 				}
-				gen := New([]attestor.Attestor{
+				gen := New("client-chain", "client-0", []attestor.Attestor{
 					signedPacketAttestor(t, "a1", tt.height, claims),
 					signedPacketAttestor(t, "a2", tt.height, claims),
 				}, 2, chain, slog.Default())
@@ -278,7 +278,14 @@ func TestGeneratorStateTimestampMismatch(t *testing.T) {
 		GetBlockHeader(mock.Anything, uint64(10)).
 		Return(v2.BlockHeader{Timestamp: someBlockTime.Add(time.Second)}, nil).
 		Once()
-	gen := New([]attestor.Attestor{signedStateAttestor(t, "a1", 10)}, 1, chain, slog.Default())
+	gen := New(
+		"client-chain",
+		"client-0",
+		[]attestor.Attestor{signedStateAttestor(t, "a1", 10)},
+		1,
+		chain,
+		slog.Default(),
+	)
 
 	proof, err := gen.StateProof(context.Background(), 10)
 	require.ErrorContains(t, err, "attested data does not match expected claim")
@@ -289,7 +296,7 @@ func TestGeneratorExpectedClaimLookupFailure(t *testing.T) {
 	t.Run("stateHeader", func(t *testing.T) {
 		chain := mocks.NewMockClient(t)
 		chain.EXPECT().GetBlockHeader(mock.Anything, uint64(10)).Return(v2.BlockHeader{}, assert.AnError).Once()
-		gen := New(nil, 1, chain, slog.Default())
+		gen := New("client-chain", "client-0", nil, 1, chain, slog.Default())
 
 		proof, err := gen.StateProof(context.Background(), 10)
 		require.ErrorIs(t, err, assert.AnError)
@@ -325,7 +332,7 @@ func TestGeneratorAcknowledgementProofs(t *testing.T) {
 				attestors = []attestor.Attestor{signedPacketAttestor(t, "a1", 20, []attestorevm.PacketCompact{claim})}
 			}
 			// No chain client: acknowledgements must not require historical state reads.
-			gen := New(attestors, 1, nil, slog.Default())
+			gen := New("client-chain", "client-0", attestors, 1, nil, slog.Default())
 			proofs, err := gen.PacketProofs(
 				context.Background(),
 				20,

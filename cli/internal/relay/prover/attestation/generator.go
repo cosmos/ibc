@@ -27,15 +27,20 @@ type Generator struct {
 	threshold         int
 	counterpartyChain chains.Client
 	logger            *slog.Logger
+	chainID           string
+	clientID          string
 }
 
 func New(
+	chainID, clientID string,
 	attestors []attestor.Attestor,
 	threshold int,
 	counterpartyChain chains.Client,
 	logger *slog.Logger,
 ) *Generator {
 	return &Generator{
+		chainID:           chainID,
+		clientID:          clientID,
 		attestors:         attestors,
 		threshold:         threshold,
 		counterpartyChain: counterpartyChain,
@@ -58,7 +63,7 @@ func (g *Generator) StateProof(ctx context.Context, height uint64) ([]byte, erro
 		return nil, errors.Wrap(err, "encoding expected state attestation")
 	}
 
-	result, err := queryStateQuorum(ctx, g.logger, g.attestors, g.threshold, height, expectedData)
+	result, err := g.queryStateQuorum(ctx, height, expectedData)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying state attestation quorum")
 	}
@@ -114,16 +119,7 @@ func (g *Generator) PacketProofs(
 		return nil, errors.Wrap(err, "encoding expected packet attestation")
 	}
 
-	result, err := queryPacketQuorum(
-		ctx,
-		g.logger,
-		g.attestors,
-		g.threshold,
-		encodedPackets,
-		height,
-		commitmentType,
-		expectedData,
-	)
+	result, err := g.queryPacketQuorum(ctx, encodedPackets, height, commitmentType, expectedData)
 	if err != nil {
 		return nil, errors.Wrap(err, "querying packet attestation quorum")
 	}
