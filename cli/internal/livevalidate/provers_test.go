@@ -139,6 +139,9 @@ func TestCheckProvers(t *testing.T) {
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 		err := checkQuorumAndProverReachability(ctx, cfg, chains.NewClientSet(nil))
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
+	})
+}
+
 func TestCheckAttestorQuorumRejectsUnreachableRemoteProver(t *testing.T) {
 	conn := testConnection()
 	conn.ClientA.Type = config.ClientTypeRemote

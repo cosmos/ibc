@@ -109,6 +109,8 @@ func NewSetFromConfig(
 		switch self.Type {
 		case config.ClientTypeAttestation:
 			return addAttestationGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		case config.ClientTypeBesuQBFT:
+			return addBesuQBFTGenerator(ctx, generators, connAlias, self, counterparty, clientSet)
 		case config.ClientTypeRemote:
 			p, err := buildRemoteProver(connAlias, self, logger)
 			if err != nil {
@@ -169,6 +171,23 @@ func addAttestationGenerator(
 	}
 
 	gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
+	if err != nil {
+		return errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
+
+	return nil
+}
+
+func addBesuQBFTGenerator(
+	ctx context.Context,
+	generators map[string]Prover,
+	connAlias string,
+	client, clientCounterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+) error {
+	gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
 	if err != nil {
 		return errors.Wrapf(err, "connection %q", connAlias)
 	}

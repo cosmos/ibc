@@ -225,12 +225,12 @@ func TestNewSetFromConfigBesuQBFT(t *testing.T) {
 			"1": mocks.NewMockClient(t),
 			"2": mocks.NewMockClient(t),
 		})
-		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default(), SetOptions{})
 		require.ErrorContains(t, err, "is not an EVM chain")
 	})
 
 	t.Run("missing chain client", func(t *testing.T) {
-		_, err := NewSetFromConfig(ctx, cfg, chains.NewClientSet(nil), nil, slog.Default())
+		_, err := NewSetFromConfig(ctx, cfg, chains.NewClientSet(nil), nil, slog.Default(), SetOptions{})
 		require.ErrorContains(t, err, `no client for chain "1"`)
 	})
 }

@@ -42,9 +42,9 @@ func TestProverMutualTLS(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(42), height)
 
-		proof, err := prover.StateProof(context.Background(), height)
+		payloads, err := prover.ClientUpdatePayloads(context.Background(), height)
 		require.NoError(t, err)
-		require.Equal(t, []byte("state-proof"), proof)
+		require.Equal(t, [][]byte{[]byte("update-payload")}, payloads)
 	})
 
 	t.Run("is refused without a client certificate", func(t *testing.T) {
@@ -190,10 +190,12 @@ func (stubProverService) LatestProvableHeight(
 	}), nil
 }
 
-func (stubProverService) StateProof(
-	context.Context, *connect.Request[proverv2.StateProofRequest],
-) (*connect.Response[proverv2.StateProofResponse], error) {
-	return connect.NewResponse(&proverv2.StateProofResponse{Proof: []byte("state-proof")}), nil
+func (stubProverService) ClientUpdatePayloads(
+	context.Context, *connect.Request[proverv2.ClientUpdatePayloadsRequest],
+) (*connect.Response[proverv2.ClientUpdatePayloadsResponse], error) {
+	return connect.NewResponse(&proverv2.ClientUpdatePayloadsResponse{
+		Payloads: [][]byte{[]byte("update-payload")},
+	}), nil
 }
 
 func (stubProverService) PacketProofs(
