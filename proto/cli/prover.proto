@@ -13,13 +13,14 @@ option go_package = "github.com/cosmos/ibc/cli/api/v2/prover";
 // Every request names the light client it is scoped to, so one service can
 // serve many clients across many chains.
 service ProverService {
-  // LatestProvableHeight returns the highest height a subsequent StateProof
+  // LatestProvableHeight returns the highest height a subsequent ClientUpdatePayloads
   // and PacketProofs call sharing that height can currently succeed at, with
   // that height's counterparty-chain timestamp.
   rpc LatestProvableHeight(LatestProvableHeightRequest) returns (LatestProvableHeightResponse) {}
 
-  // StateProof proves the light client's counterparty state at a height.
-  rpc StateProof(StateProofRequest) returns (StateProofResponse) {}
+  // ClientUpdatePayloads returns the encoded light-client updates that bring the
+  // client to a height.
+  rpc ClientUpdatePayloads(ClientUpdatePayloadsRequest) returns (ClientUpdatePayloadsResponse) {}
 
   // PacketProofs proves each packet's membership or non-membership at a
   // height, one proof per packet with indices aligned to the request.
@@ -47,16 +48,18 @@ message LatestProvableHeightResponse {
   uint64 timestamp = 2;
 }
 
-message StateProofRequest {
+message ClientUpdatePayloadsRequest {
   // The light client this call is scoped to.
   Client client = 1;
   // The counterparty height to prove at.
   uint64 height = 2;
 }
 
-message StateProofResponse {
-  // The proof, opaque to the relayer and passed to the light client unchanged.
-  bytes proof = 1;
+message ClientUpdatePayloadsResponse {
+  // The encoded updates, each passed unchanged as one updateMsg and submitted
+  // in order before the packets. Empty when no update is needed; each entry is
+  // a non-empty updateMsg.
+  repeated bytes payloads = 1;
 }
 
 message PacketProofsRequest {
@@ -71,7 +74,9 @@ message PacketProofsRequest {
 }
 
 message PacketProofsResponse {
-  // One proof per requested packet, in request order.
+  // One proof per requested packet, in request order. The proofs of one
+  // response are submitted together in one transaction, in this order, so a
+  // prover may carry material the batch shares only in the first proof.
   repeated bytes proofs = 1;
 }
 

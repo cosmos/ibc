@@ -151,11 +151,11 @@ level=INFO msg="transaction mined" label=setTargetFunctionRole tx=0x2fb39d8a... 
 2. Deploy an attestation light client on each chain. Each deployment tracks the state of the other chain:
 
 ```bash
-./bin/ibc deploy client --chain 41001 --counterparty-chain 41002 --attestors attestor-41002 --threshold 1 --yes
+./bin/ibc deploy client attestation --chain 41001 --counterparty-chain 41002 --attestors attestor-41002 --threshold 1 --yes
 ```
 
 ```bash
-./bin/ibc deploy client --chain 41002 --counterparty-chain 41001 --attestors attestor-41001 --threshold 1 --yes
+./bin/ibc deploy client attestation --chain 41002 --counterparty-chain 41001 --attestors attestor-41001 --threshold 1 --yes
 ```
 
 The `--attestors` flag takes the aliases from step 4. Each resolves to that key's address, and those addresses become the client's attestation set on chain.
