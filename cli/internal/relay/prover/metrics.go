@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/otel"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -125,10 +125,11 @@ func (p *instrumentedProver) PacketProofs(
 	ctx context.Context,
 	height uint64,
 	kind v2.ProofKind,
-	packets []types.Packet,
+	packets []channeltypesv2.Packet,
+	acknowledgements []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
 	started := time.Now()
-	proofs, err := p.Prover.PacketProofs(ctx, height, kind, packets)
+	proofs, err := p.Prover.PacketProofs(ctx, height, kind, packets, acknowledgements)
 
 	metrics.record(ctx, "packet_proofs", p.chainID, p.clientID, p.proverType, err, started, proofKindAttribute(kind))
 	metrics.packetBatchSize(ctx, p.chainID, p.clientID, p.proverType, kind, len(packets))

@@ -26,9 +26,10 @@ type stubProver struct {
 	stateProof []byte
 	proofs     [][]byte
 
-	gotHeight  uint64
-	gotKind    v2.ProofKind
-	gotPackets []channeltypesv2.Packet
+	gotHeight           uint64
+	gotKind             v2.ProofKind
+	gotPackets          []channeltypesv2.Packet
+	gotAcknowledgements []channeltypesv2.Acknowledgement
 }
 
 func (s *stubProver) LatestProvableHeight(context.Context) (uint64, time.Time, error) {
@@ -45,8 +46,10 @@ func (s *stubProver) PacketProofs(
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
+	acknowledgements []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
 	s.gotHeight, s.gotKind, s.gotPackets = height, kind, packets
+	s.gotAcknowledgements = acknowledgements
 	return s.proofs, nil
 }
 
@@ -106,7 +109,7 @@ func TestProverServiceRoundTrip(t *testing.T) {
 			{Sequence: 8, SourceClient: "client-0", DestinationClient: "client-1"},
 		}
 
-		proofs, err := client.PacketProofs(ctx, 4321, v2.ProofKindReceiptAbsence, packets)
+		proofs, err := client.PacketProofs(ctx, 4321, v2.ProofKindReceiptAbsence, packets, nil)
 		require.NoError(t, err)
 		require.Equal(t, [][]byte{[]byte("proof-a"), []byte("proof-b")}, proofs)
 
@@ -132,6 +135,26 @@ func TestProverServiceRejectsMismatchedProofCount(t *testing.T) {
 	client := newClient(t, set, "chain-a", "client-0")
 
 	_, err := client.PacketProofs(context.Background(), 1, v2.ProofKindPacketCommitment,
-		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}})
+		[]channeltypesv2.Packet{{Sequence: 1}, {Sequence: 2}}, nil)
 	require.ErrorContains(t, err, "returned 1 proofs for 2 packets")
+}
+
+func TestAcknowledgementProofRoundTrip(t *testing.T) {
+	packets := []channeltypesv2.Packet{{Sequence: 7}, {Sequence: 8}}
+	acks := []channeltypesv2.Acknowledgement{
+		channeltypesv2.NewAcknowledgement([]byte("first"), []byte("second")),
+		channeltypesv2.NewAcknowledgement(channeltypesv2.ErrorAcknowledgement[:]),
+	}
+	stub := &stubProver{proofs: [][]byte{[]byte("proof-a"), []byte("proof-b")}}
+	client := newClient(
+		t,
+		prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub}),
+		"chain-a",
+		"client-0",
+	)
+	_, err := client.PacketProofs(context.Background(), 4321, v2.ProofKindAcknowledgement, packets, acks)
+	require.NoError(t, err)
+	require.Equal(t, packets, stub.gotPackets)
+	require.Equal(t, acks, stub.gotAcknowledgements)
+	require.Equal(t, v2.ProofKindAcknowledgement, stub.gotKind)
 }

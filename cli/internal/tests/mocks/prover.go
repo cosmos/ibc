@@ -106,8 +106,8 @@ func (_c *MockProver_LatestProvableHeight_Call) RunAndReturn(run func(ctx contex
 }
 
 // PacketProofs provides a mock function for the type MockProver
-func (_mock *MockProver) PacketProofs(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error) {
-	ret := _mock.Called(ctx, height, kind, packets)
+func (_mock *MockProver) PacketProofs(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet, acknowledgements []types.Acknowledgement) ([][]byte, error) {
+	ret := _mock.Called(ctx, height, kind, packets, acknowledgements)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PacketProofs")
@@ -115,18 +115,18 @@ func (_mock *MockProver) PacketProofs(ctx context.Context, height uint64, kind v
 
 	var r0 [][]byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) ([][]byte, error)); ok {
-		return returnFunc(ctx, height, kind, packets)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet, []types.Acknowledgement) ([][]byte, error)); ok {
+		return returnFunc(ctx, height, kind, packets, acknowledgements)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet) [][]byte); ok {
-		r0 = returnFunc(ctx, height, kind, packets)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64, v2.ProofKind, []types.Packet, []types.Acknowledgement) [][]byte); ok {
+		r0 = returnFunc(ctx, height, kind, packets, acknowledgements)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([][]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64, v2.ProofKind, []types.Packet) error); ok {
-		r1 = returnFunc(ctx, height, kind, packets)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64, v2.ProofKind, []types.Packet, []types.Acknowledgement) error); ok {
+		r1 = returnFunc(ctx, height, kind, packets, acknowledgements)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -143,11 +143,12 @@ type MockProver_PacketProofs_Call struct {
 //   - height uint64
 //   - kind v2.ProofKind
 //   - packets []types.Packet
-func (_e *MockProver_Expecter) PacketProofs(ctx any, height any, kind any, packets any) *MockProver_PacketProofs_Call {
-	return &MockProver_PacketProofs_Call{Call: _e.mock.On("PacketProofs", ctx, height, kind, packets)}
+//   - acknowledgements []types.Acknowledgement
+func (_e *MockProver_Expecter) PacketProofs(ctx any, height any, kind any, packets any, acknowledgements any) *MockProver_PacketProofs_Call {
+	return &MockProver_PacketProofs_Call{Call: _e.mock.On("PacketProofs", ctx, height, kind, packets, acknowledgements)}
 }
 
-func (_c *MockProver_PacketProofs_Call) Run(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet)) *MockProver_PacketProofs_Call {
+func (_c *MockProver_PacketProofs_Call) Run(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet, acknowledgements []types.Acknowledgement)) *MockProver_PacketProofs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -165,11 +166,16 @@ func (_c *MockProver_PacketProofs_Call) Run(run func(ctx context.Context, height
 		if args[3] != nil {
 			arg3 = args[3].([]types.Packet)
 		}
+		var arg4 []types.Acknowledgement
+		if args[4] != nil {
+			arg4 = args[4].([]types.Acknowledgement)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
+			arg4,
 		)
 	})
 	return _c
@@ -180,7 +186,7 @@ func (_c *MockProver_PacketProofs_Call) Return(bytess [][]byte, err error) *Mock
 	return _c
 }
 
-func (_c *MockProver_PacketProofs_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet) ([][]byte, error)) *MockProver_PacketProofs_Call {
+func (_c *MockProver_PacketProofs_Call) RunAndReturn(run func(ctx context.Context, height uint64, kind v2.ProofKind, packets []types.Packet, acknowledgements []types.Acknowledgement) ([][]byte, error)) *MockProver_PacketProofs_Call {
 	_c.Call.Return(run)
 	return _c
 }

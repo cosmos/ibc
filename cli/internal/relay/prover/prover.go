@@ -34,12 +34,14 @@ type Prover interface {
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
-	// an error if a proof cannot be generated for any packet
+	// an error if a proof cannot be generated for any packet. Acknowledgements
+	// must align with packets for acknowledgement proofs; pass nil for other kinds.
 	PacketProofs(
 		ctx context.Context,
 		height uint64,
 		kind v2.ProofKind,
 		packets []channeltypesv2.Packet,
+		acknowledgements []channeltypesv2.Acknowledgement,
 	) ([][]byte, error)
 }
 

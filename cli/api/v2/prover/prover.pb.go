@@ -341,9 +341,11 @@ type PacketProofsRequest struct {
 	// Which commitment to prove for every packet in this request.
 	Kind ProofKind `protobuf:"varint,3,opt,name=kind,proto3,enum=ibc.v2.prover.ProofKind" json:"kind,omitempty"`
 	// The packets to prove, all under the same kind and height.
-	Packets       []*Packet `protobuf:"bytes,4,rep,name=packets,proto3" json:"packets,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Packets []*Packet `protobuf:"bytes,4,rep,name=packets,proto3" json:"packets,omitempty"`
+	// One acknowledgement per packet, in packet order; only for acknowledgement proofs.
+	Acknowledgements []*Acknowledgement `protobuf:"bytes,5,rep,name=acknowledgements,proto3" json:"acknowledgements,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PacketProofsRequest) Reset() {
@@ -400,6 +402,13 @@ func (x *PacketProofsRequest) GetKind() ProofKind {
 func (x *PacketProofsRequest) GetPackets() []*Packet {
 	if x != nil {
 		return x.Packets
+	}
+	return nil
+}
+
+func (x *PacketProofsRequest) GetAcknowledgements() []*Acknowledgement {
+	if x != nil {
+		return x.Acknowledgements
 	}
 	return nil
 }
@@ -530,6 +539,50 @@ func (x *Packet) GetPayloads() []*Payload {
 	return nil
 }
 
+type Acknowledgement struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	AppAcknowledgements [][]byte               `protobuf:"bytes,1,rep,name=app_acknowledgements,json=appAcknowledgements,proto3" json:"app_acknowledgements,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *Acknowledgement) Reset() {
+	*x = Acknowledgement{}
+	mi := &file_prover_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Acknowledgement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Acknowledgement) ProtoMessage() {}
+
+func (x *Acknowledgement) ProtoReflect() protoreflect.Message {
+	mi := &file_prover_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Acknowledgement.ProtoReflect.Descriptor instead.
+func (*Acknowledgement) Descriptor() ([]byte, []int) {
+	return file_prover_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *Acknowledgement) GetAppAcknowledgements() [][]byte {
+	if x != nil {
+		return x.AppAcknowledgements
+	}
+	return nil
+}
+
 type Payload struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The application that sent the payload.
@@ -548,7 +601,7 @@ type Payload struct {
 
 func (x *Payload) Reset() {
 	*x = Payload{}
-	mi := &file_prover_proto_msgTypes[8]
+	mi := &file_prover_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -560,7 +613,7 @@ func (x *Payload) String() string {
 func (*Payload) ProtoMessage() {}
 
 func (x *Payload) ProtoReflect() protoreflect.Message {
-	mi := &file_prover_proto_msgTypes[8]
+	mi := &file_prover_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -573,7 +626,7 @@ func (x *Payload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Payload.ProtoReflect.Descriptor instead.
 func (*Payload) Descriptor() ([]byte, []int) {
-	return file_prover_proto_rawDescGZIP(), []int{8}
+	return file_prover_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Payload) GetSourcePort() string {
@@ -628,12 +681,13 @@ const file_prover_proto_rawDesc = "" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\"*\n" +
 	"\x12StateProofResponse\x12\x14\n" +
-	"\x05proof\x18\x01 \x01(\fR\x05proof\"\xbb\x01\n" +
+	"\x05proof\x18\x01 \x01(\fR\x05proof\"\x87\x02\n" +
 	"\x13PacketProofsRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12,\n" +
 	"\x04kind\x18\x03 \x01(\x0e2\x18.ibc.v2.prover.ProofKindR\x04kind\x12/\n" +
-	"\apackets\x18\x04 \x03(\v2\x15.ibc.v2.prover.PacketR\apackets\".\n" +
+	"\apackets\x18\x04 \x03(\v2\x15.ibc.v2.prover.PacketR\apackets\x12J\n" +
+	"\x10acknowledgements\x18\x05 \x03(\v2\x1e.ibc.v2.prover.AcknowledgementR\x10acknowledgements\".\n" +
 	"\x14PacketProofsResponse\x12\x16\n" +
 	"\x06proofs\x18\x01 \x03(\fR\x06proofs\"\xd9\x01\n" +
 	"\x06Packet\x12\x1a\n" +
@@ -641,7 +695,9 @@ const file_prover_proto_rawDesc = "" +
 	"\rsource_client\x18\x02 \x01(\tR\fsourceClient\x12-\n" +
 	"\x12destination_client\x18\x03 \x01(\tR\x11destinationClient\x12+\n" +
 	"\x11timeout_timestamp\x18\x04 \x01(\x04R\x10timeoutTimestamp\x122\n" +
-	"\bpayloads\x18\x05 \x03(\v2\x16.ibc.v2.prover.PayloadR\bpayloads\"\xa1\x01\n" +
+	"\bpayloads\x18\x05 \x03(\v2\x16.ibc.v2.prover.PayloadR\bpayloads\"D\n" +
+	"\x0fAcknowledgement\x121\n" +
+	"\x14app_acknowledgements\x18\x01 \x03(\fR\x13appAcknowledgements\"\xa1\x01\n" +
 	"\aPayload\x12\x1f\n" +
 	"\vsource_port\x18\x01 \x01(\tR\n" +
 	"sourcePort\x12)\n" +
@@ -673,7 +729,7 @@ func file_prover_proto_rawDescGZIP() []byte {
 }
 
 var file_prover_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_prover_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_prover_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_prover_proto_goTypes = []any{
 	(ProofKind)(0),                       // 0: ibc.v2.prover.ProofKind
 	(*Client)(nil),                       // 1: ibc.v2.prover.Client
@@ -684,26 +740,28 @@ var file_prover_proto_goTypes = []any{
 	(*PacketProofsRequest)(nil),          // 6: ibc.v2.prover.PacketProofsRequest
 	(*PacketProofsResponse)(nil),         // 7: ibc.v2.prover.PacketProofsResponse
 	(*Packet)(nil),                       // 8: ibc.v2.prover.Packet
-	(*Payload)(nil),                      // 9: ibc.v2.prover.Payload
+	(*Acknowledgement)(nil),              // 9: ibc.v2.prover.Acknowledgement
+	(*Payload)(nil),                      // 10: ibc.v2.prover.Payload
 }
 var file_prover_proto_depIdxs = []int32{
-	1, // 0: ibc.v2.prover.LatestProvableHeightRequest.client:type_name -> ibc.v2.prover.Client
-	1, // 1: ibc.v2.prover.StateProofRequest.client:type_name -> ibc.v2.prover.Client
-	1, // 2: ibc.v2.prover.PacketProofsRequest.client:type_name -> ibc.v2.prover.Client
-	0, // 3: ibc.v2.prover.PacketProofsRequest.kind:type_name -> ibc.v2.prover.ProofKind
-	8, // 4: ibc.v2.prover.PacketProofsRequest.packets:type_name -> ibc.v2.prover.Packet
-	9, // 5: ibc.v2.prover.Packet.payloads:type_name -> ibc.v2.prover.Payload
-	2, // 6: ibc.v2.prover.ProverService.LatestProvableHeight:input_type -> ibc.v2.prover.LatestProvableHeightRequest
-	4, // 7: ibc.v2.prover.ProverService.StateProof:input_type -> ibc.v2.prover.StateProofRequest
-	6, // 8: ibc.v2.prover.ProverService.PacketProofs:input_type -> ibc.v2.prover.PacketProofsRequest
-	3, // 9: ibc.v2.prover.ProverService.LatestProvableHeight:output_type -> ibc.v2.prover.LatestProvableHeightResponse
-	5, // 10: ibc.v2.prover.ProverService.StateProof:output_type -> ibc.v2.prover.StateProofResponse
-	7, // 11: ibc.v2.prover.ProverService.PacketProofs:output_type -> ibc.v2.prover.PacketProofsResponse
-	9, // [9:12] is the sub-list for method output_type
-	6, // [6:9] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	1,  // 0: ibc.v2.prover.LatestProvableHeightRequest.client:type_name -> ibc.v2.prover.Client
+	1,  // 1: ibc.v2.prover.StateProofRequest.client:type_name -> ibc.v2.prover.Client
+	1,  // 2: ibc.v2.prover.PacketProofsRequest.client:type_name -> ibc.v2.prover.Client
+	0,  // 3: ibc.v2.prover.PacketProofsRequest.kind:type_name -> ibc.v2.prover.ProofKind
+	8,  // 4: ibc.v2.prover.PacketProofsRequest.packets:type_name -> ibc.v2.prover.Packet
+	9,  // 5: ibc.v2.prover.PacketProofsRequest.acknowledgements:type_name -> ibc.v2.prover.Acknowledgement
+	10, // 6: ibc.v2.prover.Packet.payloads:type_name -> ibc.v2.prover.Payload
+	2,  // 7: ibc.v2.prover.ProverService.LatestProvableHeight:input_type -> ibc.v2.prover.LatestProvableHeightRequest
+	4,  // 8: ibc.v2.prover.ProverService.StateProof:input_type -> ibc.v2.prover.StateProofRequest
+	6,  // 9: ibc.v2.prover.ProverService.PacketProofs:input_type -> ibc.v2.prover.PacketProofsRequest
+	3,  // 10: ibc.v2.prover.ProverService.LatestProvableHeight:output_type -> ibc.v2.prover.LatestProvableHeightResponse
+	5,  // 11: ibc.v2.prover.ProverService.StateProof:output_type -> ibc.v2.prover.StateProofResponse
+	7,  // 12: ibc.v2.prover.ProverService.PacketProofs:output_type -> ibc.v2.prover.PacketProofsResponse
+	10, // [10:13] is the sub-list for method output_type
+	7,  // [7:10] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_prover_proto_init() }
@@ -717,7 +775,7 @@ func file_prover_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_prover_proto_rawDesc), len(file_prover_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
