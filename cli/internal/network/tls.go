@@ -62,9 +62,9 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	}
 
 	if opts.CAFile != "" {
-		pool, err := CAPool(opts.CAFile)
-		if err != nil {
-			return nil, err
+		pool, poolErr := CAPool(opts.CAFile)
+		if poolErr != nil {
+			return nil, poolErr
 		}
 
 		cfg.RootCAs = pool
