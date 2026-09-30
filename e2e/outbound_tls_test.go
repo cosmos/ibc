@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build e2e
-
 package e2e_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -31,17 +36,19 @@ import (
 
 	attestorapi "github.com/cosmos/ibc/cli/api/v2/attestor"
 	proverapi "github.com/cosmos/ibc/cli/api/v2/prover"
-	"github.com/cosmos/ibc/cli/internal/testutil/certs"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
+// TestOutboundTLS is a black-box test of CLI configuration loading and
+// outbound TLS: it runs the real ibc binary's `config validate --live`
+// against local gRPC/HTTP/2 service fixtures over server-authenticated TLS
+// and mTLS. It does not relay real packets or need Docker; that coverage
+// belongs to the rest of this suite. See the "Outbound TLS" section of
+// ../cli/README.md for the feature this exercises.
 func TestOutboundTLS(t *testing.T) {
-	bin := filepath.Join(t.TempDir(), "ibc")
-	buildCtx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
-	defer cancel()
-	build := exec.CommandContext(buildCtx, "go", "build", "-o", bin, "./cmd/ibc")
-	build.Dir = ".."
-	out, err := build.CombinedOutput()
-	require.NoError(t, err, "build ibc: %s", out)
+	t.Parallel()
+
+	bin := ibccli.ResolvedBin()
 
 	for _, mutual := range []bool{false, true} {
 		name := "TLS"
@@ -130,15 +137,15 @@ type tlsFixture struct {
 
 func newTLSFixture(t *testing.T, mutual bool) *tlsFixture {
 	t.Helper()
-	ca := certs.NewCA(t)
+	ca := newTestCA(t)
 	dir := t.TempDir()
-	cert, key := ca.WriteLeaf(t, dir, "client")
+	cert, key := ca.writeLeaf(t, dir, "client")
 	f := &tlsFixture{
-		ca: ca.WriteCA(t, dir), otherCA: certs.NewCA(t).WriteCA(t, t.TempDir()),
+		ca: ca.writeCA(t, dir), otherCA: newTestCA(t).writeCA(t, t.TempDir()),
 		cert: cert, key: key, mutual: mutual,
 		signer: &kmsService{}, attestor: &attestorService{}, prover: &proverService{},
 	}
-	serverTLS := ca.ServerTLS(t, "localhost", mutual)
+	serverTLS := ca.serverTLS(t, "localhost", mutual)
 	serverTLS.MinVersion = tls.VersionTLS13
 	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(serverTLS)),
 		grpc.UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo,
@@ -179,7 +186,7 @@ func newTLSFixture(t *testing.T, mutual bool) *tlsFixture {
 	httpServer.StartTLS()
 	t.Cleanup(httpServer.Close)
 	f.api = strings.TrimPrefix(httpServer.URL, "https://")
-	f.chain = startChain(t)
+	f.chain = startFakeEVMChain(t)
 	return f
 }
 
@@ -322,7 +329,10 @@ func (s *proverService) LatestProvableHeight(ctx context.Context,
 	return connect.NewResponse(&proverapi.LatestProvableHeightResponse{Height: 42, Timestamp: 1}), nil
 }
 
-func startChain(t *testing.T) string {
+// startFakeEVMChain fakes just enough JSON-RPC (a single eth_call, answering
+// the router counterparty lookup live validation makes) to validate a config
+// without a real chain: this test is about outbound TLS, not chain state.
+func startFakeEVMChain(t *testing.T) string {
 	t.Helper()
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
@@ -345,4 +355,165 @@ func startChain(t *testing.T) string {
 	}))
 	t.Cleanup(server.Close)
 	return server.URL
+}
+
+// Certificates below are generated locally rather than shared with the cli
+// module's cli/internal/testutil/certs: this e2e module is separate and,
+// per the harness wall (see internal/harness/AGENTS.md), must not import
+// cli/internal.
+
+const testCertValidity = time.Hour
+
+// testCA is a self-signed authority that issues the server and client
+// certificates this test needs.
+type testCA struct {
+	cert *x509.Certificate
+	der  []byte
+	key  *ecdsa.PrivateKey
+}
+
+func newTestCA(t testing.TB) *testCA {
+	t.Helper()
+
+	key := newTestCertKey(t)
+
+	tpl := &x509.Certificate{
+		SerialNumber:          testCertSerial(),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now().Add(-testCertValidity),
+		NotAfter:              time.Now().Add(testCertValidity),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create CA certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatalf("parse CA certificate: %v", err)
+	}
+
+	return &testCA{cert: cert, der: der, key: key}
+}
+
+// pool returns a pool trusting only this CA.
+func (c *testCA) pool() *x509.CertPool {
+	pool := x509.NewCertPool()
+	pool.AddCert(c.cert)
+
+	return pool
+}
+
+// leaf issues a certificate valid for both server and client auth, carrying
+// commonName as a DNS name and 127.0.0.1 as an IP SAN so it verifies against
+// a loopback listener.
+func (c *testCA) leaf(t testing.TB, commonName string) tls.Certificate {
+	t.Helper()
+
+	key := newTestCertKey(t)
+
+	tpl := &x509.Certificate{
+		SerialNumber: testCertSerial(),
+		Subject:      pkix.Name{CommonName: commonName},
+		NotBefore:    time.Now().Add(-testCertValidity),
+		NotAfter:     time.Now().Add(testCertValidity),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		DNSNames:     []string{commonName},
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1)},
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tpl, c.cert, &key.PublicKey, c.key)
+	if err != nil {
+		t.Fatalf("create leaf certificate: %v", err)
+	}
+
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// serverTLS returns a server config presenting a leaf for commonName. When
+// requireClientCert is set the server demands and verifies a client
+// certificate issued by this CA.
+func (c *testCA) serverTLS(t testing.TB, commonName string, requireClientCert bool) *tls.Config {
+	t.Helper()
+
+	cfg := &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{c.leaf(t, commonName)},
+	}
+
+	if requireClientCert {
+		cfg.ClientCAs = c.pool()
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+
+	return cfg
+}
+
+// writeCA writes the CA certificate into dir and returns its path, suitable
+// for a caFile config field.
+func (c *testCA) writeCA(t testing.TB, dir string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, "ca.crt")
+	writeTestPEM(t, path, "CERTIFICATE", c.der)
+
+	return path
+}
+
+// writeLeaf issues a leaf for name and writes it into dir, returning paths
+// suitable for certFile and keyFile config fields.
+func (c *testCA) writeLeaf(t testing.TB, dir, name string) (certFile, keyFile string) {
+	t.Helper()
+
+	return writeTestCertificate(t, dir, name, c.leaf(t, name))
+}
+
+func writeTestCertificate(t testing.TB, dir, name string, cert tls.Certificate) (certFile, keyFile string) {
+	t.Helper()
+
+	key, ok := cert.PrivateKey.(*ecdsa.PrivateKey)
+	if !ok {
+		t.Fatalf("unexpected private key type %T", cert.PrivateKey)
+	}
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatalf("marshal private key: %v", err)
+	}
+
+	certFile = filepath.Join(dir, name+".crt")
+	keyFile = filepath.Join(dir, name+".key")
+
+	writeTestPEM(t, certFile, "CERTIFICATE", cert.Certificate[0])
+	writeTestPEM(t, keyFile, "EC PRIVATE KEY", keyDER)
+
+	return certFile, keyFile
+}
+
+func writeTestPEM(t testing.TB, path, blockType string, der []byte) {
+	t.Helper()
+
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der}), 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func newTestCertKey(t testing.TB) *ecdsa.PrivateKey {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	return key
+}
+
+func testCertSerial() *big.Int {
+	return big.NewInt(time.Now().UnixNano())
 }
