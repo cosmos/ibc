@@ -370,5 +370,5 @@ replace (
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 
 	// todo: tmp - remove once merged https://github.com/skip-mev/catalyst/pull/70
-	github.com/skip-mev/catalyst => github.com/skip-mev/catalyst v0.0.0-beta.21.0.20260929210658-9bf02573db2d
+	github.com/skip-mev/catalyst => github.com/skip-mev/catalyst v0.0.0-beta.21.0.20260930132249-47c910fc13e1
 )
