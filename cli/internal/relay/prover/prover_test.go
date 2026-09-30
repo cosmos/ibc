@@ -129,7 +129,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		cfg, clientSet, attestors := testConfig(t)
 		conn := cfg.Relayer.Connections[0]
 
-		set, err := NewSetFromConfig(ctx, cfg, clientSet, attestors, slog.Default())
+		set, err := NewSetFromConfig(ctx, cfg, clientSet, attestors, slog.Default(), SetOptions{})
 		require.NoError(t, err)
 
 		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
@@ -159,7 +159,7 @@ func TestNewSetFromConfig(t *testing.T) {
 
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
-		set, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		set, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default(), SetOptions{})
 		require.NoError(t, err, "an unreachable remote prover must not fail the set")
 
 		_, ok := set.Get(conn.ClientA.ChainID, conn.ClientA.ClientID)
@@ -184,7 +184,7 @@ func TestNewSetFromConfig(t *testing.T) {
 
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
-		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default(), SetOptions{})
 		require.ErrorContains(t, err, "tls")
 	})
 
@@ -202,7 +202,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 		// ACT
-		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default(), SetOptions{})
 
 		// ASSERT
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)

@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log/slog"
 	"os"
 )
 
@@ -42,11 +41,12 @@ type ClientTLS struct {
 // handshake so rotation on disk takes effect without restarting the process.
 // CA roots require a restart. Updating cert and key separately can briefly
 // cause handshakes to fail if they observe a mismatched pair.
+//
+// Callers building a client that will actually connect are responsible for
+// warning about InsecureSkipVerify themselves; this is also called during
+// config validation, where a warning here would be logged again at connect
+// time.
 func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
-	if opts.InsecureSkipVerify {
-		slog.Warn("TLS server certificate verification is disabled", "serverName", opts.ServerName)
-	}
-
 	minVersion, err := ParseTLSVersion(opts.MinVersion)
 	if err != nil {
 		return nil, err

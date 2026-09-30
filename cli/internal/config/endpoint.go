@@ -10,10 +10,14 @@ import (
 	"strings"
 )
 
+// errInvalidURL deliberately omits the raw value: providers commonly embed an
+// API key in the path, and url.Parse's own error echoes its whole input back.
+var errInvalidURL = fmt.Errorf("invalid URL")
+
 func validateRPCEndpoint(raw string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil {
-		return err
+		return errInvalidURL
 	}
 	// Match ethclient.Dial: scheme-less addresses are IPC paths, not URLs.
 	if parsed.Scheme == "" || parsed.Scheme == "stdio" {
@@ -26,7 +30,7 @@ func validateRPCEndpoint(raw string) error {
 func parseEndpoint(raw string, schemes ...string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil {
-		return nil, err
+		return nil, errInvalidURL
 	}
 	if !slices.Contains(schemes, parsed.Scheme) || parsed.Hostname() == "" {
 		return nil, fmt.Errorf("must be a %s:// URL with a host", strings.Join(schemes, ":// or "))

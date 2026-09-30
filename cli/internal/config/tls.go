@@ -4,6 +4,7 @@ package config
 
 import (
 	"crypto/tls"
+	"log/slog"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
@@ -51,6 +52,10 @@ type TLSClientConfig struct {
 func (c *TLSClientConfig) Validate() error {
 	if c == nil {
 		return nil
+	}
+
+	if c.InsecureSkipVerify {
+		slog.Warn("TLS server certificate verification is disabled", "serverName", c.ServerName)
 	}
 
 	switch {

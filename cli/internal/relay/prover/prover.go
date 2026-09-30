@@ -84,9 +84,8 @@ func NewSetFromConfig(
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
 	logger *slog.Logger,
-	opts ...SetOptions,
+	opts SetOptions,
 ) (*Set, error) {
-	requireReachable := len(opts) > 0 && opts[0].RequireReachable
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
@@ -99,7 +98,7 @@ func NewSetFromConfig(
 			clientSet,
 			attestors,
 			logger,
-			requireReachable,
+			opts.RequireReachable,
 		)
 	})
 	if err != nil {
