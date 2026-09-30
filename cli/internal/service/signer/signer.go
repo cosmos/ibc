@@ -5,6 +5,7 @@ package signer
 import (
 	"context"
 	"encoding/hex"
+	"log/slog"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -82,6 +83,10 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 		tlsConfig, err := cfg.TLS.TLSConfig()
 		if err != nil {
 			return nil, "", errors.Wrapf(err, "signer %q tls", cfg.Alias)
+		}
+
+		if cfg.TLS != nil && cfg.TLS.InsecureSkipVerify {
+			slog.Warn("TLS server certificate verification is disabled", "signer", cfg.Alias, "grpc", cfg.GRPC)
 		}
 
 		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID, tlsConfig)

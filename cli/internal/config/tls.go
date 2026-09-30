@@ -4,7 +4,6 @@ package config
 
 import (
 	"crypto/tls"
-	"log/slog"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
@@ -47,15 +46,13 @@ type TLSClientConfig struct {
 }
 
 // Validate reports whether the block is internally consistent and its files
-// are readable, so a bad mount fails at config load rather than at first use.
-// A nil block is valid and means plaintext.
+// are readable and well-formed, so a bad mount or a mismatched cert/key pair
+// fails at config load rather than at first use. A nil block is valid and
+// means plaintext. It does not warn about InsecureSkipVerify; the caller
+// that goes on to actually build a connection with the result does that.
 func (c *TLSClientConfig) Validate() error {
 	if c == nil {
 		return nil
-	}
-
-	if c.InsecureSkipVerify {
-		slog.Warn("TLS server certificate verification is disabled", "serverName", c.ServerName)
 	}
 
 	switch {
@@ -71,30 +68,36 @@ func (c *TLSClientConfig) Validate() error {
 		return errPath("minVersion", err)
 	}
 
-	for _, f := range []struct {
-		segment string
-		path    string
-	}{
-		{fieldCAFile, c.CAFile},
-		{fieldCertFile, c.CertFile},
-		{fieldKeyFile, c.KeyFile},
-	} {
-		if f.path == "" {
-			continue
-		}
-
-		expanded, err := ExpandHome(f.path)
+	if c.CAFile != "" {
+		caFile, err := ExpandHome(c.CAFile)
 		if err != nil {
-			return errPath(f.segment, err)
+			return errPath(fieldCAFile, err)
 		}
 
-		if err := fileExists(expanded); err != nil {
-			return errPath(f.segment, err)
+		if _, err := network.CAPool(caFile); err != nil {
+			return errPath(fieldCAFile, err)
 		}
 	}
 
-	_, err := c.TLSConfig()
-	return err
+	if c.CertFile == "" {
+		return nil
+	}
+
+	certFile, err := ExpandHome(c.CertFile)
+	if err != nil {
+		return errPath(fieldCertFile, err)
+	}
+
+	keyFile, err := ExpandHome(c.KeyFile)
+	if err != nil {
+		return errPath(fieldKeyFile, err)
+	}
+
+	if _, err := tls.LoadX509KeyPair(certFile, keyFile); err != nil {
+		return errPath(fieldCertFile, err)
+	}
+
+	return nil
 }
 
 // TLSConfig resolves the block into a *tls.Config, or nil when the block is

@@ -6,7 +6,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log/slog"
 	"os"
+	"sync"
 )
 
 // TLS version names accepted in configuration. Anything lower cannot carry
@@ -39,13 +41,14 @@ type ClientTLS struct {
 // BuildClientTLS resolves opts into a *tls.Config. A client certificate is
 // loaded once here so a bad pair fails immediately, then reloaded per
 // handshake so rotation on disk takes effect without restarting the process.
-// CA roots require a restart. Updating cert and key separately can briefly
-// cause handshakes to fail if they observe a mismatched pair.
+// CA roots require a restart. A reload that fails (for example, because it
+// raced a separate cert and key update) falls back to the last certificate
+// that loaded successfully, so a handshake never fails over a transient,
+// self-correcting read.
 //
-// Callers building a client that will actually connect are responsible for
-// warning about InsecureSkipVerify themselves; this is also called during
-// config validation, where a warning here would be logged again at connect
-// time.
+// This does not warn about InsecureSkipVerify: it runs both at config
+// validation and at connect time, so the caller that knows it's about to
+// actually use the result is responsible for that warning.
 func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	minVersion, err := ParseTLSVersion(opts.MinVersion)
 	if err != nil {
@@ -59,7 +62,7 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	}
 
 	if opts.CAFile != "" {
-		pool, err := certPool(opts.CAFile)
+		pool, err := CAPool(opts.CAFile)
 		if err != nil {
 			return nil, err
 		}
@@ -72,15 +75,30 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	}
 
 	certFile, keyFile := opts.CertFile, opts.KeyFile
-	if _, err := tls.LoadX509KeyPair(certFile, keyFile); err != nil {
+
+	last, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
 		return nil, fmt.Errorf("load client certificate: %w", err)
 	}
+
+	var mu sync.Mutex
 
 	cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			return nil, fmt.Errorf("reload client certificate: %w", err)
+			mu.Lock()
+			defer mu.Unlock()
+
+			slog.Warn(
+				"Reloading client certificate failed, using last loaded certificate",
+				"certFile", certFile, "keyFile", keyFile, "err", err,
+			)
+			return &last, nil
 		}
+
+		mu.Lock()
+		last = cert
+		mu.Unlock()
 
 		return &cert, nil
 	}
@@ -104,7 +122,10 @@ func ParseTLSVersion(raw string) (uint16, error) {
 	}
 }
 
-func certPool(caFile string) (*x509.CertPool, error) {
+// CAPool loads caFile into a cert pool verifying a TLS server, exported so
+// config validation can surface a parse failure against the caFile field
+// without duplicating this logic.
+func CAPool(caFile string) (*x509.CertPool, error) {
 	bz, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, fmt.Errorf("read CA file: %w", err)

@@ -94,7 +94,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, checkAttestorQuorum(ctx, cfg, clientSet))
+		require.NoError(t, checkQuorumAndProverReachability(ctx, cfg, clientSet))
 	})
 
 	t.Run("insufficientMatchingAttestorsErrors", func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 			},
 		}
 
-		err := checkAttestorQuorum(ctx, cfg, clientSet)
+		err := checkQuorumAndProverReachability(ctx, cfg, clientSet)
 
 		require.ErrorContains(t, err, `only 0 reachable/matching attestors for chain "8453"`)
 		require.ErrorContains(t, err, "on-chain quorum requires 2")
@@ -138,7 +138,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
-		err := checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil))
+		err := checkQuorumAndProverReachability(ctx, cfg, chains.NewClientSet(nil))
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
 	})
 }
@@ -150,7 +150,7 @@ func TestCheckAttestorQuorumRejectsUnreachableRemoteProver(t *testing.T) {
 	conn.ClientB.Type = config.ClientTypeRemote
 	conn.ClientB.Params = conn.ClientA.Params
 	cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
-	err := checkAttestorQuorum(context.Background(), cfg, chains.NewClientSet(nil))
+	err := checkQuorumAndProverReachability(context.Background(), cfg, chains.NewClientSet(nil))
 	require.ErrorContains(t, err, "remote prover")
 	require.ErrorContains(t, err, conn.Alias)
 }

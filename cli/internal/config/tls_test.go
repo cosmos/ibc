@@ -47,12 +47,12 @@ func TestTLSClientConfigValidate(t *testing.T) {
 		{
 			name:        "malformed client certificate",
 			cfg:         &TLSClientConfig{CertFile: badPEM, KeyFile: keyFile},
-			errContains: "load client certificate",
+			errContains: "certFile: tls:",
 		},
 		{
 			name:        "mismatched key pair",
 			cfg:         &TLSClientConfig{CertFile: certFile, KeyFile: otherKey},
-			errContains: "load client certificate",
+			errContains: "certFile: tls:",
 		},
 		{
 			name: "full mTLS block",
@@ -313,7 +313,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 		{
 			name:        "schemeless url is rejected",
 			params:      RemoteParams{URL: "prover.example.com:9090"},
-			errContains: "url: must be",
+			errContains: "url: must start with",
 		},
 		{
 			name: "https url with tls",
@@ -329,12 +329,12 @@ func TestRemoteParamsValidate(t *testing.T) {
 		{
 			name:        "unsupported scheme",
 			params:      RemoteParams{URL: "ftp://prover.example.com"},
-			errContains: "url: must be",
+			errContains: "url: must start with",
 		},
 		{
 			name:        "missing host",
 			params:      RemoteParams{URL: "https:///path"},
-			errContains: "url: must be",
+			errContains: "url: must start with",
 		},
 		{
 			name:        "empty url",
@@ -358,7 +358,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 				URL: "prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
-			errContains: "url: must be",
+			errContains: "url: must start with",
 		},
 		{
 			name: "bad tls block on an https url",

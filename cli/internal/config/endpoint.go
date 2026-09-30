@@ -3,6 +3,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -12,7 +13,7 @@ import (
 
 // errInvalidURL deliberately omits the raw value: providers commonly embed an
 // API key in the path, and url.Parse's own error echoes its whole input back.
-var errInvalidURL = fmt.Errorf("invalid URL")
+var errInvalidURL = errors.New("invalid URL")
 
 func validateRPCEndpoint(raw string) error {
 	parsed, err := url.Parse(raw)
@@ -33,19 +34,23 @@ func parseEndpoint(raw string, schemes ...string) (*url.URL, error) {
 		return nil, errInvalidURL
 	}
 	if !slices.Contains(schemes, parsed.Scheme) || parsed.Hostname() == "" {
-		return nil, fmt.Errorf("must be a %s:// URL with a host", strings.Join(schemes, ":// or "))
+		prefixes := make([]string, len(schemes))
+		for i, s := range schemes {
+			prefixes[i] = s + "://"
+		}
+		return nil, fmt.Errorf("must start with %s and include a host", strings.Join(prefixes, " or "))
 	}
 	if strings.HasSuffix(parsed.Host, ":") {
-		return nil, fmt.Errorf("port must not be empty")
+		return nil, errors.New("port must not be empty")
 	}
 	if port := parsed.Port(); port != "" {
 		n, parseErr := strconv.Atoi(port)
 		if parseErr != nil || n < 1 || n > 65535 {
-			return nil, fmt.Errorf("port must be between 1 and 65535")
+			return nil, errors.New("port must be between 1 and 65535")
 		}
 	}
 	if strings.Contains(raw, "#") {
-		return nil, fmt.Errorf("must not contain a fragment")
+		return nil, errors.New("must not contain a fragment")
 	}
 	return parsed, nil
 }

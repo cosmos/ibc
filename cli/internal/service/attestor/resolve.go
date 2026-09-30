@@ -75,6 +75,10 @@ func resolveRemote(ctx context.Context, entry config.AttestorConfig) (Attestor, 
 		return nil, errors.Wrap(err, "tls")
 	}
 
+	if entry.TLS != nil && entry.TLS.InsecureSkipVerify {
+		slog.Warn("TLS server certificate verification is disabled", "attestor", entry.Name, "grpc", entry.GRPC)
+	}
+
 	scheme := "http://"
 	if tlsConfig != nil {
 		scheme = "https://"
