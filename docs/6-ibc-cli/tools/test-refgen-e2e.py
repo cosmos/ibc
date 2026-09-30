@@ -305,12 +305,16 @@ def _():
 @case("a new config struct reachable from Config is discovered, not listed")
 def _():
     with Sandbox() as box:
+        # Anchor on the field line rather than the struct's closing brace: the
+        # brace moved when an unexported field was added below Signers, and the
+        # mutation went stale rather than testing anything.
         box.edit("cli/internal/config/config.go",
-                 '\tSigners   Signers       `yaml:"signers"`\n}',
+                 '\tSigners   Signers       `yaml:"signers"`\n',
                  '\tSigners   Signers       `yaml:"signers"`\n'
-                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n}\n\n'
-                 'type MetricsConfig struct {\n'
-                 '\tListenAddress string `yaml:"listenAddr"`\n}')
+                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n')
+        box.append("cli/internal/config/config.go",
+                   '\n\ntype MetricsConfig struct {\n'
+                   '\tListenAddress string `yaml:"listenAddr"`\n}\n')
         page = box.page("config", own=True)
         try:
             refgen.run("config", page, check=True)
@@ -324,13 +328,14 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/config.go",
-                 '\tSigners   Signers       `yaml:"signers"`\n}',
+                 '\tSigners   Signers       `yaml:"signers"`\n',
                  '\tSigners   Signers       `yaml:"signers"`\n'
-                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n}\n\n'
-                 '// MetricsConfig config for the metrics endpoint.\n'
-                 'type MetricsConfig struct {\n'
-                 '\t// ListenAddress is where metrics are served.\n'
-                 '\tListenAddress string `yaml:"listenAddr"`\n}')
+                 '\tMetrics   MetricsConfig `yaml:"metrics"`\n')
+        box.append("cli/internal/config/config.go",
+                   '\n\n// MetricsConfig config for the metrics endpoint.\n'
+                   'type MetricsConfig struct {\n'
+                   '\t// ListenAddress is where metrics are served.\n'
+                   '\tListenAddress string `yaml:"listenAddr"`\n}\n')
         page = box.page("config", own=True)
         p = refgen.plan("config", page)
         new = [m for m in p["missing_marker"] if m["region"] == "config:metrics"]
