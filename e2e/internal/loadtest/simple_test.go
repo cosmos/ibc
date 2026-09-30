@@ -65,6 +65,39 @@ func TestRunLoad(t *testing.T) {
 		assert.Zero(t, result.Dropped)
 	})
 
+	t.Run("accountsForCallFinishingAfterRunEnds", func(t *testing.T) {
+		// ARRANGE
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+
+		started := make(chan struct{})
+		spec := Spec{
+			Duration:      time.Second,
+			RatePerSecond: 1,
+			Concurrency:   1,
+		}
+		call := func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			return nil
+		}
+
+		go func() {
+			<-started
+			cancel()
+		}()
+
+		// ACT
+		result := SimpleLoad(ctx, spec, call)
+
+		// ASSERT
+		assert.Equal(t, int64(1), result.Succeeded)
+		assert.Zero(t, result.Failed)
+		assert.Zero(t, result.TimedOut)
+		assert.Zero(t, result.Dropped)
+		assert.Len(t, result.Latencies, 1)
+	})
+
 	t.Run("dropsWhenWorkersBusy", func(t *testing.T) {
 		// ARRANGE
 		spec := Spec{

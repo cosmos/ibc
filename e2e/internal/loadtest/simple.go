@@ -60,11 +60,6 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 		err := call(callCtx)
 		latency := time.Since(start)
 
-		// The run ended while this call was in flight.
-		if ctx.Err() != nil {
-			return
-		}
-
 		switch {
 		case errors.Is(err, context.DeadlineExceeded):
 			timedOut.Add(1)
