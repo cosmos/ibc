@@ -188,9 +188,10 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 		return nil, errors.Errorf("no contract code at %s", to)
 	}
 
+	// Simulate the full intent, including light-client verification, before signing.
 	gasLimit, err := c.eth.EstimateGas(ctx, ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data})
 	if err != nil {
-		return nil, errors.Wrap(err, "estimating gas")
+		return nil, errors.Wrap(explainRevert(err), "estimating gas")
 	}
 
 	nonce, err := c.eth.PendingNonceAt(ctx, c.address)

@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -12,8 +13,12 @@ import (
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
+	ClientTypeBesuQBFT    ClientType = "besu-qbft"
 	ClientTypeRemote      ClientType = "remote"
 )
+
+// clientTypes are the values ClientEnd.Type accepts.
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
@@ -106,6 +111,10 @@ type RemoteParams struct {
 
 // AttestationParams is empty
 type AttestationParams struct{}
+
+// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
+// the two chains and the light client itself.
+type BesuQBFTParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -244,7 +253,7 @@ func (c ClientEnd) Validate() error {
 		return errPathf("clientId", "required")
 	case c.Signer == "":
 		return errPathf("signer", "required")
-	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
+	case !slices.Contains(clientTypes, c.Type):
 		return errPathf("type", "unknown client type: %q", c.Type)
 	}
 
@@ -265,6 +274,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		return decodeYAML[AttestationParams](c.Params)
+	case ClientTypeBesuQBFT:
+		return decodeYAML[BesuQBFTParams](c.Params)
 	case ClientTypeRemote:
 		return decodeYAML[RemoteParams](c.Params)
 	default:
@@ -293,6 +304,8 @@ func (p RemoteParams) Validate() error {
 }
 
 func (AttestationParams) Validate() error { return nil }
+
+func (BesuQBFTParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -348,6 +361,7 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 
 func (RemoteParams) isClientParams()      {}
 func (AttestationParams) isClientParams() {}
+func (BesuQBFTParams) isClientParams()    {}
 
 func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	var params T
