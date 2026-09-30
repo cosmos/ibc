@@ -47,12 +47,12 @@ func TestTLSClientConfigValidate(t *testing.T) {
 		{
 			name:        "malformed client certificate",
 			cfg:         &TLSClientConfig{CertFile: badPEM, KeyFile: keyFile},
-			errContains: "certFile: tls:",
+			errContains: "tls: failed to find any PEM data",
 		},
 		{
 			name:        "mismatched key pair",
 			cfg:         &TLSClientConfig{CertFile: certFile, KeyFile: otherKey},
-			errContains: "certFile: tls:",
+			errContains: "tls: private key does not match public key",
 		},
 		{
 			name: "full mTLS block",

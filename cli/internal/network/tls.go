@@ -86,14 +86,19 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
+			// Return a copy, not &last: last keeps getting overwritten by
+			// later successful reloads, so a pointer to it would let a
+			// concurrent handshake observe it change, or a partial write,
+			// out from under this one.
 			mu.Lock()
-			defer mu.Unlock()
+			fallback := last
+			mu.Unlock()
 
 			slog.Warn(
 				"Reloading client certificate failed, using last loaded certificate",
 				"certFile", certFile, "keyFile", keyFile, "err", err,
 			)
-			return &last, nil
+			return &fallback, nil
 		}
 
 		mu.Lock()

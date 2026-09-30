@@ -4,6 +4,7 @@ package config
 
 import (
 	"crypto/tls"
+	"os"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
@@ -93,8 +94,21 @@ func (c *TLSClientConfig) Validate() error {
 		return errPath(fieldKeyFile, err)
 	}
 
-	if _, err := tls.LoadX509KeyPair(certFile, keyFile); err != nil {
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
 		return errPath(fieldCertFile, err)
+	}
+
+	keyPEM, err := os.ReadFile(keyFile)
+	if err != nil {
+		return errPath(fieldKeyFile, err)
+	}
+
+	// Unattributed: a mismatched pair or malformed PEM here could be either
+	// file's fault, and both read cleanly above, so blaming certFile
+	// specifically would mislead as often as it'd help.
+	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {
+		return err
 	}
 
 	return nil

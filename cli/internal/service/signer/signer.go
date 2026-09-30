@@ -86,7 +86,9 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 		}
 
 		if cfg.TLS != nil && cfg.TLS.InsecureSkipVerify {
-			slog.Warn("TLS server certificate verification is disabled", "signer", cfg.Alias, "grpc", cfg.GRPC)
+			// Not logging cfg.GRPC: unlike the attestor's grpc field, nothing
+			// rejects a "://" URL here, so it could carry userinfo.
+			slog.Warn("TLS server certificate verification is disabled", "signer", cfg.Alias)
 		}
 
 		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID, tlsConfig)

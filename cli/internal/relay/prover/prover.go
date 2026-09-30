@@ -198,7 +198,10 @@ func buildRemoteProver(connAlias string, client config.ClientEnd, logger *slog.L
 	}
 
 	if remoteParams.TLS != nil && remoteParams.TLS.InsecureSkipVerify {
-		logger.Warn("TLS server certificate verification is disabled", "connection", connAlias, "url", remoteParams.URL)
+		// Not logging the URL: RemoteParams.Validate doesn't reject userinfo,
+		// so it can carry a credential. chainID/clientID (via logger) and
+		// connAlias already identify the endpoint without that risk.
+		logger.Warn("TLS server certificate verification is disabled", "connection", connAlias)
 	}
 
 	prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, tlsConfig, logger)
