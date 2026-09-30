@@ -17,9 +17,15 @@
 #
 # The tiers order the report; nothing is dropped. `moved` requires the added and removed
 # packages to share a final path element, so an unrelated removal elsewhere in the diff
-# cannot explain away a real finding. A high-signal capability stays in `high` even when a
-# move pairing is found: the pairing is a heuristic and `high` is the count the CI gate
-# reads, so the entry names the package the capability left and a reviewer decides.
+# cannot explain away a real finding.
+#
+# A high-signal capability is demoted to `moved` only on an exact pairing: the two import
+# paths are equal once version elements are dropped, as in semconv/v1.41.0/otelconv ->
+# semconv/v1.43.0/otelconv or a /v2 major bump. That is a package the compiler resolves
+# differently, not a package that gained privilege, and it recurs on every dependency
+# bump that crosses a version directory. A merely like-named pairing still stays in
+# `high`, named but not acted on: `high` is the count the CI gate reads, and a rename is
+# the shape an attacker would pick to disarm it.
 #
 # With --counts, writes `key=value` lines (high, moved, low, added, removed) suitable for
 # sourcing or for appending to $GITHUB_OUTPUT.
@@ -72,17 +78,34 @@ function basename(path,    n, parts) {
   return parts[n]
 }
 
+# Two import paths address the same package when they differ only in version elements:
+# semconv/v1.41.0/otelconv and semconv/v1.43.0/otelconv, or foo/bar and foo/v2/bar.
+# Dropping those elements is what makes a pairing exact rather than merely plausible.
+function canonical(path,    i, n, parts, out) {
+  n = split(path, parts, "/")
+  for (i = 1; i <= n; i++) {
+    if (parts[i] ~ /^v[0-9]+(\.[0-9]+)*$/) continue
+    out = (out == "" ? parts[i] : out "/" parts[i])
+  }
+  return out
+}
+
 # A capability that left another package only explains this addition if the two packages
 # plausibly are the same package under a new path, which vendoring and renames produce.
 # Requiring a matching final path element keeps an unrelated removal elsewhere in the diff
-# from explaining away a genuinely new capability.
-function find_move(cap, pkg,    i, n, parts, base) {
+# from explaining away a genuinely new capability. An exact pairing is preferred over a
+# like-named one, because only an exact pairing can demote a high-signal capability.
+function find_move(cap, pkg,    i, n, parts, base, canon, fallback) {
   if (!(cap in removed_list)) return ""
   base = basename(pkg)
+  canon = canonical(pkg)
   n = split(removed_list[cap], parts, " ")
-  for (i = 1; i <= n; i++)
-    if (parts[i] != pkg && basename(parts[i]) == base) return parts[i]
-  return ""
+  for (i = 1; i <= n; i++) {
+    if (parts[i] == pkg) continue
+    if (canonical(parts[i]) == canon) return parts[i]
+    if (fallback == "" && basename(parts[i]) == base) fallback = parts[i]
+  }
+  return fallback
 }
 
 function is_high(cap,    i, n, parts) {
@@ -148,11 +171,12 @@ END {
   for (i = 1; i <= n_add; i++) {
     cap = add_cap[i]
     moved_from[i] = find_move(cap, add_pkg[i])
-    # A high-signal capability is never demoted by the move heuristic: pairing on a shared
-    # final path element is a guess, and `high` is the count CI blocks on, so letting an
-    # unrelated removal produce a pairing would silently disarm the gate. The pairing is
-    # reported alongside the finding instead, for a reviewer to dismiss.
-    if (is_high(cap)) tier[i] = "high"
+    # Only an exact pairing demotes a high-signal capability. Pairing on a shared final
+    # path element alone is a guess, and `high` is the count CI blocks on, so letting an
+    # unrelated removal produce a pairing would silently disarm the gate; those are
+    # reported in `high` with the pairing named, for a reviewer to dismiss.
+    exact[i] = (moved_from[i] != "" && canonical(moved_from[i]) == canonical(add_pkg[i]))
+    if (is_high(cap) && !exact[i]) tier[i] = "high"
     else if (moved_from[i] != "") tier[i] = "moved"
     else tier[i] = "low"
     n_tier[tier[i]]++
@@ -177,10 +201,14 @@ END {
     printf "### Likely a package move: %d capability use(s)\n\n", n_tier["moved"]
     print "The same capability disappeared from another package in this diff, which is what a"
     print "vendored or renamed package looks like rather than new privilege. Heuristic, so"
-    print "confirm the pairing makes sense.\n"
+    print "confirm the pairing makes sense. Call paths are in the raw Capslock report.\n"
     for (i = 1; i <= n_add; i++)
-      if (tier[i] == "moved")
-        printf "- `%s` gained %s, which left `%s`\n", add_pkg[i], add_cap[i], moved_from[i]
+      if (tier[i] == "moved") {
+        printf "- `%s` gained %s, which left `%s`", add_pkg[i], add_cap[i], moved_from[i]
+        # Worth calling out which of these would otherwise have blocked the merge.
+        if (is_high(add_cap[i])) printf " (high-signal, demoted: the paths differ only in a version element)"
+        printf "\n"
+      }
     print ""
   }
 
