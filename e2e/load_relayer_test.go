@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package e2e_test
 
 import (
@@ -34,6 +36,9 @@ type relayerLoadIFT struct {
 	totalPackets    int
 	numWallets      int
 	packetsPerBlock int
+
+	// max time to wait for a packet to be relayed
+	relayCompletionTimeout time.Duration
 }
 
 type loadTestRelayer struct {
@@ -46,26 +51,38 @@ type loadTestRelayer struct {
 
 func TestLoad_RelayerBurst(t *testing.T) {
 	testLoadRelayer(t, relayerLoadIFT{
-		totalPackets:    1000,
-		numWallets:      200,
-		packetsPerBlock: 100,
+		totalPackets:           3000,
+		numWallets:             200,
+		packetsPerBlock:        150,
+		relayCompletionTimeout: 5 * time.Minute,
 	})
 }
 
 func TestLoad_RelayerLongRun(t *testing.T) {
 	testLoadRelayer(t, relayerLoadIFT{
-		totalPackets:    8000,
-		numWallets:      200,
-		packetsPerBlock: 20,
+		totalPackets:           8000,
+		numWallets:             200,
+		packetsPerBlock:        20,
+		relayCompletionTimeout: 10 * time.Minute,
 	})
 }
 
 func testLoadRelayer(t *testing.T, load relayerLoadIFT) {
 	t.Helper()
+
 	// ARRANGE
 	numWallets := load.numWallets
 	totalPackets := load.totalPackets
 	packetsPerBlock := load.packetsPerBlock
+	relayCompletionTimeout := load.relayCompletionTimeout
+
+	t.Logf(
+		"Running load test: %d wallets, %d packets, %d packets per block, %s relay timeout",
+		numWallets,
+		totalPackets,
+		packetsPerBlock,
+		relayCompletionTimeout,
+	)
 
 	// Given test suite
 	ts := newLoadTestRelayer(t)
@@ -140,10 +157,24 @@ func testLoadRelayer(t *testing.T, load relayerLoadIFT) {
 	var errAwaitAB, errAwaitBA error
 
 	wg.Go(func() {
-		errAwaitAB = loadtest.AwaitPacketsFromCatalyst(ctx, t, routeAB, ts.relayer, txsAB)
+		errAwaitAB = loadtest.AwaitPacketsFromCatalyst(
+			ctx,
+			routeAB,
+			ts.relayer,
+			txsAB,
+			relayCompletionTimeout,
+			t,
+		)
 	})
 	wg.Go(func() {
-		errAwaitBA = loadtest.AwaitPacketsFromCatalyst(ctx, t, routeBA, ts.relayer, txsBA)
+		errAwaitBA = loadtest.AwaitPacketsFromCatalyst(
+			ctx,
+			routeBA,
+			ts.relayer,
+			txsBA,
+			relayCompletionTimeout,
+			t,
+		)
 	})
 
 	wg.Wait()
