@@ -254,15 +254,15 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.chainId, connections[].clientB.chainId` | `string` | **required** | The chain this end's client lives on. |
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
-| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `remote` | **required** | Light client type. |
-| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings: empty for `attestation`, and `{url: <ProverService endpoint>}` for `remote`, where it is required. |
+| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `besu-qbft` \| `remote` | **required** | Light client type. |
+| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>}` for `remote`, where it is required. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L69](cli/internal/config/relayer.go#L69) -->
+<!-- [relayer.go:L74](cli/internal/config/relayer.go#L74) -->
 
 <!-- GEN:config:relayer:connections END -->
 
-Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [cli/cmd/ibc/deploy.go: deployClient] -->
+Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. The `ibc deploy client` subcommands do this by default. <!-- [cli/cmd/ibc/deploy.go: defaultClientID] -->
 
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [cli/internal/config/relayer.go: RelayerConfig.validateConnectionIdentities] -->
 
@@ -280,7 +280,7 @@ The relayer uses these defaults unless you override them.
 | `clearOnStart` | `bool` | `true` | Runs a clearing pass at startup. Unset runs it. |
 | `clearInterval` | `duration` | `5m` | How often a clearing pass runs; a chainOverrides entry wins. |
 
-<!-- [relayer.go:L34](cli/internal/config/relayer.go#L34) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L19](cli/internal/config/relayer.go#L19) --> <!-- [relayer.go:L22](cli/internal/config/relayer.go#L22) -->
+<!-- [relayer.go:L39](cli/internal/config/relayer.go#L39) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L21](cli/internal/config/relayer.go#L21) --> <!-- [relayer.go:L27](cli/internal/config/relayer.go#L27) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -297,7 +297,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L45](cli/internal/config/relayer.go#L45) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 

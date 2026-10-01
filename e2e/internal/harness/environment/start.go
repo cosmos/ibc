@@ -182,8 +182,8 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	}
 	for _, connection := range spec.Connections {
 		for _, declaration := range []ClientSpec{connection.A, connection.B} {
-			if client, ok := declaration.(NewClient); ok {
-				requiredAuthorities[client.Authority] = struct{}{}
+			if authority, ok := declaration.clientAuthority(); ok {
+				requiredAuthorities[authority] = struct{}{}
 			}
 			for _, attestor := range declaration.clientAttestors() {
 				requiredAuthorities[attestor.Authority] = struct{}{}
@@ -211,16 +211,17 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	}
 	for _, connection := range spec.Connections {
 		for _, end := range connection.ends() {
-			client, ok := end.declaration.(NewClient)
+			authorityID, ok := end.declaration.clientAuthority()
 			if !ok {
 				continue
 			}
-			instance, isNew := newInstances[client.IBCInstance]
+			instanceID := end.declaration.clientIBCInstance()
+			instance, isNew := newInstances[instanceID]
 			if !isNew {
 				continue
 			}
 			instanceAuthority, _ := runtime.evmAccount(instance.Authority)
-			clientAuthority, _ := runtime.evmAccount(client.Authority)
+			clientAuthority, _ := runtime.evmAccount(authorityID)
 			if instanceAuthority.Address() != clientAuthority.Address() {
 				return fmt.Errorf(
 					"environment: new IBC Client %q authority must resolve to the new IBC Instance %q admin address",

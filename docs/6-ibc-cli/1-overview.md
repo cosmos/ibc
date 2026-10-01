@@ -32,7 +32,7 @@ You can deploy the IBC Solidity contracts to an EVM chain with an RPC endpoint a
 It deploys the following contracts:
 
 - The core routing stack: an access manager and the [ICS26Router](../5-ibc-solidity-contracts/2-ics26-router.md) behind a proxy.
-- An [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md) on each chain tracking the other, registered on the router.
+- A light client on each chain tracking the other, registered on the router: an [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md), or a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md) when the tracked chain runs Besu QBFT.
 - The [ICS27GMP](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) app and its account logic.
 - [IFT](../5-ibc-solidity-contracts/4-ift-contracts.md) token contracts, and the bridges between them.
 
@@ -73,11 +73,13 @@ Packets heading the same way are batched and delivered together, rather than one
 
 ### Proof generation and transaction building
 
-Before it can deliver anything, the relayer needs proof of the packets for the light client. It runs one prover for each light client it submits to. Currently the only supported light client type is the attestation light client, with more light client types planned.
+Before it can deliver anything, the relayer needs proof of the packets for the light client. It runs one prover for each light client it submits to, and the prover depends on the client type.
 
-The generator asks the client's attestors to attest to the chain's state at a height. It checks the signatures, and once enough attestors have signed the same attestation to meet the client's threshold, it packages that attestation and its signatures together. That package is the proof.
+For an attestation light client, the prover asks the client's attestors to attest to the chain's state at a height. It checks the signatures, and once enough attestors have signed the same attestation to meet the client's threshold, it packages that attestation and its signatures together. That package is the proof.
 
-It returns a proof of the chain's state at a height, and a proof for each packet in the batch.
+For a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md), the prover reads the sealed header and an `eth_getProof` result from the Besu chain itself and packages the header with the account and storage proofs. The client's validator rules are checked when the transaction is simulated.
+
+Either way it returns the client updates for a height, and a proof for each packet in the batch.
 
 The relayer then turns each batch of packets heading to the same destination into one transaction. That transaction makes a single call to the router. It carries a list of operations: first an update advancing the light client to the height just proved, then one delivery for each packet in the batch.
 

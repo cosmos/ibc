@@ -67,7 +67,7 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	require.Equal(t, instance, attachedInstance)
 	grantCustomClientRole(ctx, t, setup, authority, instance, clientAuthority.Address())
 
-	prepared, err := setup.PrepareClient(ctx, clientAuthority, instance.Router, AttestationClientConfig{
+	prepared, err := setup.PrepareAttestationClient(ctx, clientAuthority, instance.Router, AttestationClientConfig{
 		ID:                    "eth-chain-b",
 		CounterpartyClientID:  "eth-chain-a",
 		Attestors:             []common.Address{attestor.Address(), secondAttestor.Address()},
@@ -83,16 +83,42 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	require.Equal(t, []common.Address{attestor.Address(), secondAttestor.Address()}, client.Attestors)
 	require.Equal(t, uint8(2), client.MinRequiredSignatures)
 
-	attachedClient, err := setup.AttachClient(ctx, instance.Router, client.ID, client.CounterpartyClientID)
+	attachedClient, err := setup.AttachClient(
+		ctx,
+		instance.Router,
+		client.ID,
+		client.CounterpartyClientID,
+		"attestation",
+	)
 	require.NoError(t, err)
 	require.Equal(t, client, attachedClient)
 
-	_, err = setup.AttachClient(ctx, instance.Router, client.ID, "wrong-counterparty")
+	_, err = setup.AttachClient(ctx, instance.Router, client.ID, "wrong-counterparty", "attestation")
 	require.ErrorContains(t, err, `counterparty id is "eth-chain-a", want "wrong-counterparty"`)
+
+	qbft, err := setup.PrepareBesuQBFTClient(ctx, clientAuthority, instance.Router, BesuQBFTClientConfig{
+		ID: "qbft-b", CounterpartyClientID: "qbft-a", CounterpartyRouter: instance.Router,
+		InitialHeight: 1, InitialTimestamp: 1_700_000_000, TrustingPeriod: 14 * 24 * 60 * 60,
+		InitialValidators: []common.Address{attestor.Address()},
+	})
+	require.NoError(t, err)
+	qbftClient, err := qbft.Deploy(ctx)
+	require.NoError(t, err)
+	attachedQBFT, err := setup.AttachClient(
+		ctx,
+		instance.Router,
+		qbftClient.ID,
+		qbftClient.CounterpartyClientID,
+		"besu-qbft",
+	)
+	require.NoError(t, err)
+	require.Equal(t, qbftClient, attachedQBFT)
+	_, err = setup.AttachClient(ctx, instance.Router, qbftClient.ID, qbftClient.CounterpartyClientID, "attestation")
+	require.Error(t, err)
 
 	// Duplicate registration is rejected by a read-only vacancy check before a
 	// second light-client contract is deployed.
-	_, err = setup.PrepareClient(ctx, clientAuthority, instance.Router, AttestationClientConfig{
+	_, err = setup.PrepareAttestationClient(ctx, clientAuthority, instance.Router, AttestationClientConfig{
 		ID:                    "eth-chain-b",
 		CounterpartyClientID:  "eth-chain-a",
 		Attestors:             []common.Address{attestor.Address(), secondAttestor.Address()},
@@ -100,10 +126,10 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 		InitialHeight:         2,
 		InitialTimestamp:      1_700_000_001,
 	})
-	require.ErrorContains(t, err, `Client "eth-chain-b" is already registered`)
+	require.ErrorContains(t, err, `attestation Client "eth-chain-b": already registered`)
 }
 
-func TestPrepareClientRejectsInvalidConfigurationBeforeSideEffects(t *testing.T) {
+func TestPrepareAttestationClientRejectsInvalidConfigurationBeforeSideEffects(t *testing.T) {
 	authority, err := evm.NewAccount()
 	require.NoError(t, err)
 	backend := simulated.NewBackend(gethtypes.GenesisAlloc{
@@ -113,14 +139,19 @@ func TestPrepareClientRejectsInvalidConfigurationBeforeSideEffects(t *testing.T)
 	setup, err := newSetup(backend.Client(), big.NewInt(1337), testMiningTimeout)
 	require.NoError(t, err)
 
-	prepared, err := setup.PrepareClient(context.Background(), authority, common.Address{}, AttestationClientConfig{
-		ID:                    "client-0",
-		CounterpartyClientID:  "remote",
-		Attestors:             []common.Address{authority.Address()},
-		MinRequiredSignatures: 1,
-		InitialHeight:         1,
-		InitialTimestamp:      1,
-	})
+	prepared, err := setup.PrepareAttestationClient(
+		context.Background(),
+		authority,
+		common.Address{},
+		AttestationClientConfig{
+			ID:                    "client-0",
+			CounterpartyClientID:  "remote",
+			Attestors:             []common.Address{authority.Address()},
+			MinRequiredSignatures: 1,
+			InitialHeight:         1,
+			InitialTimestamp:      1,
+		},
+	)
 	require.ErrorContains(t, err, "not a valid Solidity IBC custom client identifier")
 	require.Nil(t, prepared)
 }

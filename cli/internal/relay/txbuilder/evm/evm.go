@@ -53,27 +53,30 @@ func New(router common.Address) *TxBuilder {
 	return &TxBuilder{router: router}
 }
 
-// BuildRelayTxs packs clientUpdate and every packetRelayItems entry into a
-// single ICS26Router.multicall transaction. EVM router calldata has no
-// meaningful size limit for the batch sizes the relayer forms, so this
-// always returns exactly one tx.
+// BuildRelayTxs packs the clientUpdate payloads and every packetRelayItems
+// entry into a single ICS26Router.multicall transaction. EVM router calldata
+// has no meaningful size limit for the batch sizes the relayer forms, so this
+// always returns exactly one tx. Provers rely on that: a batch's proofs are
+// built to be verified together in one transaction, in order (the Besu QBFT
+// prover carries the router account proof only in the first one, and the
+// light client caches the proven storage root for the rest of the transaction).
 func (c *TxBuilder) BuildRelayTxs(
 	clientUpdate v2.ClientUpdate,
 	packetRelayItems []v2.PacketRelayItem,
 ) ([]v2.RelayTx, error) {
-	calls := make([][]byte, 0, len(packetRelayItems)+1)
+	calls := make([][]byte, 0, len(clientUpdate.Payloads)+len(packetRelayItems))
 
-	updateCall, err := packUpdateClient(clientUpdate.ClientID, clientUpdate.StateProof)
-	if err != nil {
-		return nil, err
+	for _, payload := range clientUpdate.Payloads {
+		updateCall, err := packUpdateClient(clientUpdate.ClientID, payload)
+		if err != nil {
+			return nil, err
+		}
+
+		calls = append(calls, updateCall)
 	}
 
-	calls = append(calls, updateCall)
-
 	for _, item := range packetRelayItems {
-		var call []byte
-
-		call, err = packRelayItem(item)
+		call, err := packRelayItem(item)
 		if err != nil {
 			return nil, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
 		}
@@ -123,7 +126,7 @@ func height(h uint64) ics26router.IICS02ClientMsgsHeight {
 }
 
 // packUpdateClient packs a call to updateClient(clientId, updateMsg), where
-// updateMsg is the already-encoded proof produced by prover.Prover.StateProof.
+// updateMsg is the already-encoded payload produced by prover.Prover.ClientUpdatePayloads.
 func packUpdateClient(clientID string, updateMsg []byte) ([]byte, error) {
 	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return router.UpdateClient(opts, clientID, updateMsg)

@@ -53,7 +53,7 @@ func stubChainClient(t *testing.T, chainID string) *mocks.MockClient {
 	return client
 }
 
-func TestCheckAttestorQuorum(t *testing.T) {
+func TestCheckProvers(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("resolvesBothDirections", func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, checkAttestorQuorum(ctx, cfg, clientSet))
+		require.NoError(t, checkProvers(ctx, cfg, clientSet))
 	})
 
 	t.Run("insufficientMatchingAttestorsErrors", func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 			},
 		}
 
-		err := checkAttestorQuorum(ctx, cfg, clientSet)
+		err := checkProvers(ctx, cfg, clientSet)
 
 		require.ErrorContains(t, err, `only 0 reachable/matching attestors for chain "8453"`)
 		require.ErrorContains(t, err, "on-chain quorum requires 2")
@@ -138,7 +138,7 @@ func TestCheckAttestorQuorum(t *testing.T) {
 
 		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
-		err := checkAttestorQuorum(ctx, cfg, chains.NewClientSet(nil))
+		err := checkProvers(ctx, cfg, chains.NewClientSet(nil))
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
 	})
 }
