@@ -34,6 +34,8 @@ const (
 	envLoad        = "E2E_LOAD"
 	testLoadPrefix = "TestLoad"
 
+	flagNameLoad = "e2e.load"
+
 	anvilChainIDBase = 31337
 	besuChainIDBase  = 32337
 )
@@ -66,7 +68,7 @@ const protocolAuthorityKeyHex = "00000000000000000000000000000000000000000000000
 
 var modeFlag = flag.String("e2e.mode", "", "e2e mode to run: fast, complete, or production; overrides E2E_MODE")
 
-var loadFlag = flag.Bool("e2e.load", false, "run load tests; overrides E2E_LOAD")
+var loadFlag = flag.Bool(flagNameLoad, false, "run load tests; overrides E2E_LOAD")
 
 type evmResolution struct {
 	chains     []environment.ChainSpec
@@ -114,10 +116,22 @@ func resolveMode(flagValue, envValue string) (Mode, error) {
 }
 
 // cli flag has precedence over env value
-func resolveLoadTest(flagValue bool, envValue string) (bool, error) {
+func loadTestEnabled() (bool, error) {
+	var (
+		hasCliFlag   = false
+		cliFlagValue = *loadFlag
+		envValue     = os.Getenv(envLoad)
+	)
+
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == flagNameLoad {
+			hasCliFlag = true
+		}
+	})
+
 	switch {
-	case flagValue:
-		return true, nil
+	case hasCliFlag:
+		return cliFlagValue, nil
 	case envValue != "":
 		return strconv.ParseBool(envValue)
 	default:
@@ -208,7 +222,7 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 func guardLoadTest(t testing.TB) bool {
 	isLoadTest := strings.HasPrefix(t.Name(), testLoadPrefix)
 
-	wantLoadTest, err := resolveLoadTest(*loadFlag, os.Getenv(envLoad))
+	wantLoadTest, err := loadTestEnabled()
 	require.NoError(t, err, "e2etest: resolve load test")
 
 	println("guardLoadTest (cli flag, env)", *loadFlag, os.Getenv(envLoad))
@@ -218,7 +232,7 @@ func guardLoadTest(t testing.TB) bool {
 	}
 
 	if isLoadTest && !wantLoadTest {
-		t.Skipf("e2etest: load tests are skipped when %s is not specified", envLoad)
+		t.Skipf("e2etest: load tests are skipped when %s or -%s is not specified", envLoad, flagNameLoad)
 	}
 
 	// expected invariants
