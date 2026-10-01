@@ -64,13 +64,9 @@ const ProtocolAuthorityID environment.AuthorityID = "protocol-deployer"
 // Deterministic deployer key used by test protocol realization; funded by managed Chains.
 const protocolAuthorityKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
-var modeFlag = flag.String(
-	"e2e.mode",
-	"",
-	"e2e mode to run: fast, complete, or production; overrides E2E_MODE",
-)
+var modeFlag = flag.String("e2e.mode", "", "e2e mode to run: fast, complete, or production; overrides E2E_MODE")
 
-var loadFlag = flag.Bool("e2e.load", false, "run load tests; also enabled by E2E_LOAD=1")
+var loadFlag = flag.Bool("e2e.load", false, "run load tests; overrides E2E_LOAD")
 
 type evmResolution struct {
 	chains     []environment.ChainSpec
@@ -117,13 +113,16 @@ func resolveMode(flagValue, envValue string) (Mode, error) {
 	}
 }
 
+// cli flag has precedence over env value
 func resolveLoadTest(flagValue bool, envValue string) (bool, error) {
-	println("resolveLoadTest", flagValue, envValue)
-	if envValue != "" {
+	switch {
+	case flagValue:
+		return true, nil
+	case envValue != "":
 		return strconv.ParseBool(envValue)
+	default:
+		return false, nil
 	}
-
-	return flagValue, nil
 }
 
 func resolveEVMChains(
@@ -211,6 +210,8 @@ func guardLoadTest(t testing.TB) bool {
 
 	wantLoadTest, err := resolveLoadTest(*loadFlag, os.Getenv(envLoad))
 	require.NoError(t, err, "e2etest: resolve load test")
+
+	println("guardLoadTest (cli flag, env)", *loadFlag, os.Getenv(envLoad))
 
 	if !isLoadTest && wantLoadTest {
 		t.Skipf("e2etest: only load tests are allowed when %s enabled", envLoad)

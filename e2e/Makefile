@@ -87,10 +87,10 @@ _build-cli:
 	$(MAKE) -C ../cli build build-test-bin
 
 _ensure-observability-stack:
-ifeq ($(E2E_LOAD),true)
-	@echo "==== Ensuring observability stack is running ===="
-	$(MAKE) -C ../cli/scripts/otel up
-endif
+	@if [ "$(E2E_LOAD)" = true ] || [ "$(E2E_LOAD)" = 1 ] || echo "$(E2E_FLAGS)" | grep -qF e2e.load; then \
+		echo "==== Ensuring observability stack is running ===="; \
+		$(MAKE) -C ../cli/scripts/otel up; \
+	fi
 
 .PHONY: help doctor doctor-tools lint lint-fix
 .PHONY: test-harness test-apps test

@@ -48,7 +48,7 @@ make -C e2e test E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'
 make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1'
 ```
 
-`-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. After a hard crash, use
+`-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`. After a hard crash, use
 `make -C e2e clean-dry-run` and then `make -C e2e clean`.
 
 Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
@@ -131,11 +131,15 @@ output without modifying the committed file.
 
 ## Load Testing
 
-Load tests use the `TestLoad*` naming convention and are disabled by default. Enable and run them with:
+Load tests use the `TestLoad*` naming convention and are disabled by default. 
+Enable them with `E2E_LOAD=true`, `E2E_LOAD=1`, or `-e2e.load`:
 
 ```sh
-make -C e2e test E2E_LOAD=true E2E_FLAGS='-run TestLoad -count=1'
+make -C e2e test E2E_LOAD=true E2E_FLAGS='-run TestLoad_RelayerBurst -count=1 -v -parallel 1'
+# make -C e2e test E2E_FLAGS='-e2e.load -run TestLoad_RelayerBurst -count=1 -v -parallel 1'
 ```
+
+`-e2e.load` overrides `E2E_LOAD`.
 
 Load mode starts the local OTEL stack and automatically configures attestors and relayers to export metrics.
 Grafana is available at http://localhost:3001

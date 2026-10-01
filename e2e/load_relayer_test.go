@@ -18,6 +18,9 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/loadtest"
 )
 
+// E2E_LOAD=true, E2E_LOAD=1, or -e2e.load required
+// Note these tests are NOT parallel on purpose.
+
 const (
 	baseMnemonic       = "rotate stumble once topic possible message powder recall turkey legend depart brick"
 	packetBatchSize    = 64
