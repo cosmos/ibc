@@ -25,6 +25,9 @@ const (
 	baseMnemonic       = "rotate stumble once topic possible message powder recall turkey legend depart brick"
 	packetBatchSize    = 64
 	packetBatchTimeout = 1 * time.Second
+
+	// the gas balance and IFT amount given to each load-test wallet.
+	walletFundingCoins = 10
 )
 
 type relayerLoadIFT struct {
@@ -111,18 +114,19 @@ func testLoadRelayer(t *testing.T, load relayerLoadIFT) {
 
 	// ACT
 	// Run two catalysts in parallel
+	timeout := loadtest.TestTimeout(t)
+	t.Logf("Running Catalyst load test with timeout %s", timeout.String())
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	var (
 		resultAB, resultBA catalyst.LoadTestResult
 		txsAB, txsBA       []*catalystevm.SentTx
 		errAB, errBA       error
 	)
 
-	wg.Go(func() {
-		resultAB, txsAB, errAB = loadSpecAB.Run(ctx, t)
-	})
-	wg.Go(func() {
-		resultBA, txsBA, errBA = loadSpecBA.Run(ctx, t)
-	})
+	wg.Go(func() { resultAB, txsAB, errAB = loadSpecAB.Run(ctx, t) })
+	wg.Go(func() { resultBA, txsBA, errBA = loadSpecBA.Run(ctx, t) })
 
 	wg.Wait()
 
@@ -133,9 +137,6 @@ func testLoadRelayer(t *testing.T, load relayerLoadIFT) {
 	require.Equal(t, totalPackets/2, resultBA.Overall.TotalTransactions, "Catalyst B->A")
 
 	// ASSERT #2
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-
 	var errAwaitAB, errAwaitBA error
 
 	wg.Go(func() {
@@ -226,7 +227,7 @@ func (ts *loadTestRelayer) fundGas(chainID environment.ChainID, wallets []common
 	require.NoError(ts.t, err)
 
 	ctx := ts.t.Context()
-	desiredBalance := e2etest.Coins(10)
+	desiredBalance := e2etest.Coins(walletFundingCoins)
 
 	ts.t.Logf("Funding %d wallets on chain %s", len(wallets), chainID)
 	start := time.Now()
@@ -253,7 +254,7 @@ func (ts *loadTestRelayer) fundIFT(chainID environment.ChainID, wallets []common
 
 	app := e2etest.NewIFT(ts.t, ts.env, ts.deployment, ts.sender, route)
 
-	amount := e2etest.Coins(10)
+	amount := e2etest.Coins(walletFundingCoins)
 	requests := make([]e2etest.ERCTransferRequest, len(wallets))
 	for i, wallet := range wallets {
 		requests[i] = e2etest.ERCTransferRequest{Address: wallet, Amount: amount}
