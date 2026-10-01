@@ -105,6 +105,8 @@ type AutoRelayConfig struct {
 type RemoteParams struct {
 	// URL is the ProverService endpoint.
 	URL string `yaml:"url"`
+
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // AttestationParams is empty
@@ -286,7 +288,19 @@ func (p RemoteParams) Validate() error {
 		return errPathf("url", "required")
 	}
 
-	return nil
+	parsed, err := parseEndpoint(p.URL, "http", "https")
+	if err != nil {
+		return errPath("url", err)
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return errPathf("url", "must not contain a query")
+	}
+
+	if p.TLS != nil && parsed.Scheme != "https" {
+		return errPathf("tls", "requires an https:// url, got %q", p.URL)
+	}
+
+	return errPath("tls", p.TLS.Validate())
 }
 
 func (AttestationParams) Validate() error { return nil }

@@ -157,6 +157,9 @@ type AttestorConfig struct {
 
 	// GRPC required for type: remote only. Bare host:port.
 	GRPC string `yaml:"grpc,omitempty"`
+
+	// TLS remote only. Present enables TLS to this attestor.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // Signers is the list of configured signer backends.
@@ -178,6 +181,9 @@ type SignerConfig struct {
 
 	// RemoteKeyID KMS key ID for a remote signer
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
+
+	// TLS remote only. Present enables TLS to the KMS.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // ChainSignerPair one (chain, signer alias) pair a client end submits with.
@@ -484,16 +490,24 @@ func (c ChainConfig) Type() ChainType {
 }
 
 func (c EVMChainConfig) Validate(validateICS26Router bool) error {
-	switch {
-	case c.RPC == "":
+	if c.RPC == "" {
 		return errPathf("rpc", "required")
-	case c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://"):
-		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
-	case validateICS26Router:
-		return errPath("ics26Router", c.validateICS26Router())
-	default:
-		return nil
 	}
+	if err := validateRPCEndpoint(c.RPC); err != nil {
+		return errPath("rpc", err)
+	}
+
+	if c.WS != "" {
+		if _, err := parseEndpoint(c.WS, "ws", "wss"); err != nil {
+			return errPath("ws", err)
+		}
+	}
+
+	if validateICS26Router {
+		return errPath("ics26Router", c.validateICS26Router())
+	}
+
+	return nil
 }
 
 // Validate validates the attestors list. Allows empty.
@@ -523,6 +537,8 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("signer", "required for local attestors")
 		case c.GRPC != "":
 			return errPathf("grpc", "must not be set for local attestors")
+		case c.TLS != nil:
+			return errPathf("tls", "must not be set for local attestors")
 		}
 	case AttestorTypeRemote:
 		switch {
@@ -536,6 +552,10 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("signer", "must not be set for remote attestors")
 		case c.FinalityOffset != 0:
 			return errPathf("finalityOffset", "must not be set for remote attestors")
+		}
+
+		if err := c.TLS.Validate(); err != nil {
+			return errPath("tls", err)
 		}
 	}
 
@@ -576,6 +596,12 @@ func (c SignerConfig) Validate() error {
 		return errPathf("grpc", "required for remote signer")
 	case c.Type == SignerRemote && c.RemoteKeyID == "":
 		return errPathf("remoteKeyId", "required for remote signer")
+	case c.Type == SignerLocal && c.TLS != nil:
+		return errPathf("tls", "must not be set for local signer")
+	}
+
+	if err := c.TLS.Validate(); err != nil {
+		return errPath("tls", err)
 	}
 
 	if c.Type == SignerLocal {

@@ -6,6 +6,7 @@ package remote
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
+	"github.com/cosmos/ibc/cli/internal/network"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -38,18 +40,30 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *s
 	}
 }
 
-// NewFromURL dials url with a client that can negotiate h2c, which gRPC
-// requires over plaintext.
-func NewFromURL(url, chainID, clientID string, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(), url, chainID, clientID, logger)
+// NewFromEndpoint dials endpoint over TLS when endpoint.TLS is set, and
+// otherwise with a client that can negotiate h2c, which gRPC requires over
+// plaintext.
+func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger *slog.Logger) *Prover {
+	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, logger)
 }
 
-func newHTTPClient() *http.Client {
+func (p *Prover) Probe(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
+		Client: p.target(),
+	}))
+
+	return errors.Wrap(err, "remote prover: probe")
+}
+
+func newHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig}}
 }
 
 func (p *Prover) target() *proverv2.Client {
