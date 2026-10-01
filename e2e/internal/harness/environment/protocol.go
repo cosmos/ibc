@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -52,6 +53,7 @@ type IBCClient struct {
 	label                 string
 	instance              *IBCInstance
 	id                    string
+	kind                  clientkind.Kind
 	lightClient           EVMAddress
 	counterpartyID        string
 	attestors             []EVMAddress
@@ -59,6 +61,7 @@ type IBCClient struct {
 }
 
 func (c *IBCClient) ID() string                      { return c.id }
+func (c *IBCClient) Kind() clientkind.Kind           { return c.kind }
 func (c *IBCClient) IBCInstance() *IBCInstance       { return c.instance }
 func (c *IBCClient) LightClientAddress() EVMAddress  { return c.lightClient }
 func (c *IBCClient) CounterpartyID() string          { return c.counterpartyID }
