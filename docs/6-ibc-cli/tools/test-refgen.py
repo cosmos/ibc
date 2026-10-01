@@ -728,18 +728,18 @@ def _():
         assert f"cli:cmd:{path}" in b, path
         if path == "keys-list":            # no own flags and nothing inherited
             assert "| Flag |" not in b[f"cli:cmd:{path}"]
-    assert len([k for k in b if k.startswith("cli:cmd:")]) == 28
+    assert len([k for k in b if k.startswith("cli:cmd:")]) == 29
 
 
 @case("cli: a command lists every flag it accepts, its own first")
 def _():
     b = refgen.gen_cli()
     assert not [k for k in b if "inherited" in k], "group flags inline, no separate table"
-    rows = [l for l in b["cli:cmd:deploy-client"].split("\n") if l.startswith("| `--")]
+    rows = [l for l in b["cli:cmd:deploy-client-attestation"].split("\n") if l.startswith("| `--")]
     own = [i for i, l in enumerate(rows) if "--threshold" in l][0]
     got = [i for i, l in enumerate(rows) if "--manifest-dir" in l][0]
     assert own < got, "a command's own flags come before the ones it inherits"
-    assert len(rows) == 13, rows                      # eight own, five inherited
+    assert len(rows) == 12, rows                      # seven own, five inherited
     # a command with no flags of its own still shows what it inherits
     core = b["cli:cmd:deploy-core"]
     assert "`--manifest-dir <string>`" in core and "`--chain <string>`" in core
@@ -748,7 +748,7 @@ def _():
 @case("cli: the type rides in the flag signature, and a bool has none")
 def _():
     b = refgen.gen_cli()
-    assert "`--threshold <uint8>`" in b["cli:cmd:deploy-client"]
+    assert "`--threshold <uint8>`" in b["cli:cmd:deploy-client-attestation"]
     assert "`--dry-run`" in b["cli:cmd:deploy-core"]
     assert "| Flag | Default | Description |" in b["cli:global-flags"]
     assert "`bool`" not in b["cli:cmd:deploy-core"]
@@ -758,7 +758,7 @@ def _():
 def _():
     b = refgen.gen_cli()
     assert "| `--tx-hash <string>` | required |" in b["cli:cmd:relayer-relay"]
-    assert "| `--counterparty-chain <string>` | required |" in b["cli:cmd:deploy-client"]
+    assert "| `--counterparty-chain <string>` | required |" in b["cli:cmd:deploy-client-attestation"]
 
 
 @case("cli: angle brackets are fenced, so MDX cannot read one as a tag")
@@ -775,7 +775,7 @@ def _():
     b = refgen.gen_cli()
     assert "| `--home <string>` | `~/.ibc` |" in b["cli:global-flags"]
     assert "`deployments`" in b["cli:cmd:deploy-core"]
-    assert "`cli-<a>-<b>`" in b["cli:cmd:deploy-client"]
+    assert "`cli-<a>-<b>`" in b["cli:cmd:deploy-client-attestation"]
 
 
 @case("no generated table carries the retired product name")

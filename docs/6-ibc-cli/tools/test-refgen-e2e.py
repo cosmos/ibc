@@ -260,9 +260,9 @@ def raises(box, kind, expect_in_message, expect_kind=None):
 def _():
     with Sandbox() as box:
         box.edit("cli/cmd/ibc/main.go",
-                 '"attestation signature threshold"',
-                 '"attestation signature threshold, at least 1"')
-        red_then_healed(box, "cli", "Attestation signature threshold, at least 1")
+                 '"signature threshold"',
+                 '"signature threshold, at least 1"')
+        red_then_healed(box, "cli", "Signature threshold, at least 1")
 
 
 @case("a new flag on a flagless command reaches the page")
@@ -329,7 +329,7 @@ def _():
                  '\tdpf.Bool("fake-inherited", false, "a flag every deploy command gains")')
         blocks = refgen.gen_cli()
         under = [k for k in blocks if k.startswith("cli:cmd:deploy-")]
-        assert len(under) == 8, under
+        assert len(under) == 9, under
         for k in under:
             assert "`--fake-inherited`" in blocks[k], k
 
@@ -521,12 +521,12 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/cmd/ibc/main.go",
-                 '\tcmdDeployClient.Flags().Uint8Var(&flagDeployThreshold, "threshold", 1, '
-                 '"attestation signature threshold")\n', "")
+                 '\tdaf.Uint8Var(&flagDeployThreshold, "threshold", 1, '
+                 '"signature threshold")\n', "")
         page = box.page("cli")
         assert refgen.run("cli", page, check=True) == 1
         assert refgen.run("cli", page, check=False) == 0
-        assert "Attestation signature threshold" not in open(page).read()
+        assert "Signature threshold" not in open(page).read()
 
 
 @case("a removed command orphans its section, and that raises")

@@ -1466,7 +1466,7 @@ def parse_go_config():
 RULELESS_VALIDATORS = {
     "Attestors", "Chains", "Signers",        # check cross-references, delegate the rest
     "Config", "ServerConfig",
-    "AttestationParams",                     # `return nil`, satisfies an interface
+    "AttestationParams", "BesuQBFTParams",   # `return nil`, satisfies an interface
 }
 
 
