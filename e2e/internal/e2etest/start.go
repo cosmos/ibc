@@ -225,8 +225,6 @@ func guardLoadTest(t testing.TB) bool {
 	wantLoadTest, err := loadTestEnabled()
 	require.NoError(t, err, "e2etest: resolve load test")
 
-	println("guardLoadTest (cli flag, env)", *loadFlag, os.Getenv(envLoad))
-
 	if !isLoadTest && wantLoadTest {
 		t.Skipf("e2etest: only load tests are allowed when %s enabled", envLoad)
 	}

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // TEST APPLICATION ONLY — not a product contract.
+// USE FOR LOCALNETS ONLY AS ANYONE CAN TRANSFER FROM THIS CONTRACT (E2E TESTS)
 pragma solidity 0.8.28;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
