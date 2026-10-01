@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	proto "github.com/cosmos/ibc/cli/api/v2/attestor"
+	"github.com/cosmos/ibc/cli/internal/network"
 )
 
 // RemoteAttestor provides attestation data from a remote gRPC service.
@@ -29,12 +30,12 @@ var _ Attestor = &RemoteAttestor{}
 
 const remoteRequestTimeout = 5 * time.Second
 
-// NewRemoteFromURL connects to the attestor at grpcURL and queries its Info
-// RPC to resolve its chain and address.
-func NewRemoteFromURL(ctx context.Context, grpcURL, name string, tlsConfig *tls.Config) (*RemoteAttestor, error) {
+// NewRemoteFromEndpoint connects to the attestor at endpoint and queries its
+// Info RPC to resolve its chain and address.
+func NewRemoteFromEndpoint(ctx context.Context, name string, endpoint network.Endpoint) (*RemoteAttestor, error) {
 	var (
-		httpClient  = newConnectHTTPClient(tlsConfig)
-		protoClient = proto.NewAttestationServiceClient(httpClient, grpcURL, connect.WithGRPC())
+		httpClient  = newConnectHTTPClient(endpoint.TLS)
+		protoClient = proto.NewAttestationServiceClient(httpClient, endpoint.URL, connect.WithGRPC())
 	)
 
 	info, err := queryAttestorInfo(ctx, protoClient, name)

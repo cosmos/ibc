@@ -70,19 +70,18 @@ func resolveRemote(ctx context.Context, entry config.AttestorConfig) (Attestor, 
 		return nil, errors.New("no grpc address configured")
 	}
 
-	tlsConfig, err := entry.TLS.TLSConfig()
-	if err != nil {
-		return nil, errors.Wrap(err, "tls")
-	}
-
-	if entry.TLS != nil && entry.TLS.InsecureSkipVerify {
-		slog.Warn("TLS server certificate verification is disabled", "attestor", entry.Name, "grpc", entry.GRPC)
-	}
-
+	// grpc is a bare host:port, so the tls block's presence picks the scheme.
 	scheme := "http://"
-	if tlsConfig != nil {
+	if entry.TLS != nil {
 		scheme = "https://"
 	}
 
-	return NewRemoteFromURL(ctx, scheme+entry.GRPC, entry.Name, tlsConfig)
+	endpoint, err := config.ResolveEndpoint(
+		scheme+entry.GRPC, entry.TLS, nil, "attestor", entry.Name, "grpc", entry.GRPC,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewRemoteFromEndpoint(ctx, entry.Name, endpoint)
 }

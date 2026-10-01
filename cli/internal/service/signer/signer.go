@@ -5,7 +5,6 @@ package signer
 import (
 	"context"
 	"encoding/hex"
-	"log/slog"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -80,18 +79,14 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 
 		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
 	case config.SignerRemote:
-		tlsConfig, err := cfg.TLS.TLSConfig()
+		// Not logging cfg.GRPC: nothing rejects a "://" URL there, so it could
+		// carry userinfo.
+		endpoint, err := config.ResolveEndpoint(cfg.GRPC, cfg.TLS, nil, "signer", cfg.Alias)
 		if err != nil {
-			return nil, "", errors.Wrapf(err, "signer %q tls", cfg.Alias)
+			return nil, "", errors.Wrapf(err, "signer %q", cfg.Alias)
 		}
 
-		if cfg.TLS != nil && cfg.TLS.InsecureSkipVerify {
-			// Not logging cfg.GRPC: unlike the attestor's grpc field, nothing
-			// rejects a "://" URL here, so it could carry userinfo.
-			slog.Warn("TLS server certificate verification is disabled", "signer", cfg.Alias)
-		}
-
-		s, err := NewRemoteFromURL(ctx, cfg.GRPC, cfg.RemoteKeyID, tlsConfig)
+		s, err := NewRemoteFromEndpoint(ctx, cfg.RemoteKeyID, endpoint)
 		if err != nil {
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}

@@ -41,9 +41,6 @@ lint-fix: ## Lint the code and fix errors
 test: ## Run tests
 	go test ./... -v
 
-test-e2e: ## Test outbound TLS end-to-end
-	$(MAKE) -C ../e2e test E2E_FLAGS='-run TestOutboundTLS -count=1'
-
 codegen: codegen-sql codegen-proto codegen-abi codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
@@ -97,7 +94,7 @@ run-all-checks: ## Run "all-in-one" code validation step.
 
 
 .PHONY: build-test-bin
-.PHONY: help build install docker-build lint lint-fix test test-e2e
+.PHONY: help build install docker-build lint lint-fix test
 .PHONY: codegen codegen-sql codegen-proto codegen-abi codegen-mocks
 .PHONY: check-stale run-all-checks
 

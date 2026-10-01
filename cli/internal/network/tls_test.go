@@ -52,7 +52,7 @@ func TestBuildClientTLS(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint16(tls.VersionTLS12), cfg.MinVersion)
 		require.Nil(t, cfg.RootCAs)
-		require.Nil(t, cfg.GetClientCertificate)
+		require.Empty(t, cfg.Certificates)
 		require.False(t, cfg.InsecureSkipVerify)
 	})
 
@@ -72,7 +72,7 @@ func TestBuildClientTLS(t *testing.T) {
 		require.Equal(t, "attestor.example.com", cfg.ServerName)
 		require.True(t, cfg.InsecureSkipVerify)
 		require.NotNil(t, cfg.RootCAs)
-		require.NotNil(t, cfg.GetClientCertificate)
+		require.Len(t, cfg.Certificates, 1)
 	})
 
 	t.Run("rejects a bad version", func(t *testing.T) {
@@ -108,29 +108,4 @@ func TestBuildClientTLS(t *testing.T) {
 		})
 		require.ErrorContains(t, err, "load client certificate")
 	})
-}
-
-// The certificate is reloaded per handshake so rotation on disk takes effect
-// without restarting the process.
-func TestBuildClientTLSReloadsCertificate(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	certFile, keyFile := certs.WriteSelfSigned(t, dir, "first")
-
-	cfg, err := network.BuildClientTLS(network.ClientTLS{CertFile: certFile, KeyFile: keyFile})
-	require.NoError(t, err)
-
-	first, err := cfg.GetClientCertificate(&tls.CertificateRequestInfo{})
-	require.NoError(t, err)
-
-	// Rotate the pair in place, as a cert manager would.
-	rotatedCert, rotatedKey := certs.WriteSelfSigned(t, dir, "second")
-	require.NoError(t, os.Rename(rotatedCert, certFile))
-	require.NoError(t, os.Rename(rotatedKey, keyFile))
-
-	second, err := cfg.GetClientCertificate(&tls.CertificateRequestInfo{})
-	require.NoError(t, err)
-
-	require.NotEqual(t, first.Certificate[0], second.Certificate[0], "expected the rotated certificate")
 }

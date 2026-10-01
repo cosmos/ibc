@@ -36,7 +36,6 @@
 | `TestIFTTransfer_RemoteSigner` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestIFTTransfer_TwoTokensSameClientPair` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestManualRelay_RequestSurvivesRestart` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
-| `TestOutboundTLS` | None | No environment | No environment | No environment |
 | `TestPendingPacketStatusWhileDestinationMiningPaused` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestQBFTMesh` | None | No environment | No environment | No environment |
 | `TestRelay_FilteredSequences` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |

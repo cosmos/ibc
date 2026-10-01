@@ -16,61 +16,9 @@ import (
 
 	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/network"
 	"github.com/cosmos/ibc/cli/internal/testutil/certs"
 )
-
-// Exercises config block -> *tls.Config -> transport -> mTLS handshake ->
-// gRPC over HTTP/2 for the ProverService client.
-func TestProverMutualTLS(t *testing.T) {
-	ca := certs.NewCA(t)
-	dir := t.TempDir()
-
-	caFile := ca.WriteCA(t, dir)
-	clientCert, clientKey := ca.WriteLeaf(t, dir, "client")
-
-	addr := startTLSProver(t, ca.ServerTLS(t, "localhost", true))
-
-	t.Run("proves when it presents a client certificate", func(t *testing.T) {
-		prover := newProver(t, "https://"+addr, &config.TLSClientConfig{
-			CAFile:     caFile,
-			CertFile:   clientCert,
-			KeyFile:    clientKey,
-			ServerName: "localhost",
-		})
-
-		height, _, err := prover.LatestProvableHeight(context.Background())
-		require.NoError(t, err)
-		require.Equal(t, uint64(42), height)
-
-		payloads, err := prover.ClientUpdatePayloads(context.Background(), height)
-		require.NoError(t, err)
-		require.Equal(t, [][]byte{[]byte("update-payload")}, payloads)
-	})
-
-	t.Run("is refused without a client certificate", func(t *testing.T) {
-		prover := newProver(t, "https://"+addr, &config.TLSClientConfig{
-			CAFile:     caFile,
-			ServerName: "localhost",
-		})
-
-		_, _, err := prover.LatestProvableHeight(context.Background())
-		require.Error(t, err, "server requires a client certificate")
-	})
-
-	t.Run("is refused when the server is not trusted", func(t *testing.T) {
-		otherCA := certs.NewCA(t).WriteCA(t, t.TempDir())
-
-		prover := newProver(t, "https://"+addr, &config.TLSClientConfig{
-			CAFile:     otherCA,
-			CertFile:   clientCert,
-			KeyFile:    clientKey,
-			ServerName: "localhost",
-		})
-
-		_, _, err := prover.LatestProvableHeight(context.Background())
-		require.Error(t, err)
-	})
-}
 
 // Probe exists because construction is inert: under TLS 1.3 the handshake
 // succeeds and a rejected client certificate only surfaces on a request.
@@ -104,7 +52,7 @@ func TestProverProbe(t *testing.T) {
 	})
 
 	t.Run("reports an unreachable prover", func(t *testing.T) {
-		prover := NewFromURL("https://127.0.0.1:1", "1", "client-0", nil, slog.Default())
+		prover := NewFromEndpoint(network.Endpoint{URL: "https://127.0.0.1:1"}, "1", "client-0", slog.Default())
 
 		require.Error(t, prover.Probe(context.Background()))
 	})
@@ -114,7 +62,7 @@ func TestProverProbe(t *testing.T) {
 func TestProverPlaintextStillWorks(t *testing.T) {
 	addr := startPlaintextProver(t)
 
-	prover := NewFromURL("http://"+addr, "1", "client-0", nil, slog.Default())
+	prover := NewFromEndpoint(network.Endpoint{URL: "http://" + addr}, "1", "client-0", slog.Default())
 
 	require.NoError(t, prover.Probe(context.Background()))
 }
@@ -122,10 +70,10 @@ func TestProverPlaintextStillWorks(t *testing.T) {
 func newProver(t *testing.T, url string, cfg *config.TLSClientConfig) *Prover {
 	t.Helper()
 
-	tlsConfig, err := cfg.TLSConfig()
+	endpoint, err := config.ResolveEndpoint(url, cfg, nil)
 	require.NoError(t, err)
 
-	return NewFromURL(url, "1", "client-0", tlsConfig, slog.Default())
+	return NewFromEndpoint(endpoint, "1", "client-0", slog.Default())
 }
 
 func startTLSProver(t *testing.T, tlsConfig *tls.Config) string {

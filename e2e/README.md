@@ -10,7 +10,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-`outbound_tls_test.go` (`TestOutboundTLS`) is the exception to most of the above: it's a black-box test of the CLI's outbound TLS/mTLS config against local service fixtures, not a packet-relay scenario, and needs no Docker or blockchain nodes.
+Besu QBFT light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestDeployBesuQBFTConnection` deploys the clients through `ibc deploy client besu-qbft`. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
 
 ## Running the acceptance tests
 

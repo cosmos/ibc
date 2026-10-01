@@ -16,6 +16,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
+	"github.com/cosmos/ibc/cli/internal/network"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -39,10 +40,11 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *s
 	}
 }
 
-// NewFromURL dials url with a client that can negotiate h2c, which gRPC
-// requires over plaintext.
-func NewFromURL(url, chainID, clientID string, tlsConfig *tls.Config, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(tlsConfig), url, chainID, clientID, logger)
+// NewFromEndpoint dials endpoint over TLS when endpoint.TLS is set, and
+// otherwise with a client that can negotiate h2c, which gRPC requires over
+// plaintext.
+func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger *slog.Logger) *Prover {
+	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, logger)
 }
 
 func (p *Prover) Probe(ctx context.Context) error {

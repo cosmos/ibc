@@ -127,7 +127,7 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, uint16(tls.VersionTLS12), got.MinVersion)
-		require.Nil(t, got.GetClientCertificate)
+		require.Empty(t, got.Certificates)
 	})
 
 	t.Run("client certificate is wired for mTLS", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 		}).TLSConfig()
 		require.NoError(t, err)
 		require.Equal(t, uint16(tls.VersionTLS13), got.MinVersion)
-		require.NotNil(t, got.GetClientCertificate)
+		require.Len(t, got.Certificates, 1)
 	})
 
 	t.Run("serverName and skip-verify carry through", func(t *testing.T) {
@@ -181,7 +181,7 @@ func TestTLSClientConfigExpandsHome(t *testing.T) {
 
 	got, err := cfg.TLSConfig()
 	require.NoError(t, err)
-	require.NotNil(t, got.GetClientCertificate)
+	require.Len(t, got.Certificates, 1)
 	require.NotNil(t, got.RootCAs)
 }
 

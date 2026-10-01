@@ -4,6 +4,7 @@ package config
 
 import (
 	"crypto/tls"
+	"log/slog"
 	"os"
 
 	"github.com/cosmos/ibc/cli/internal/network"
@@ -148,4 +149,30 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 	}
 
 	return network.BuildClientTLS(opts)
+}
+
+// ResolveEndpoint pairs url with the resolved form of tlsCfg (nil meaning
+// plaintext) and warns through logger when server verification is disabled.
+// logAttrs identify the endpoint in that warning; keep URLs out of them, since
+// a URL can carry credentials in its userinfo.
+func ResolveEndpoint(
+	url string,
+	tlsCfg *TLSClientConfig,
+	logger *slog.Logger,
+	logAttrs ...any,
+) (network.Endpoint, error) {
+	tlsConfig, err := tlsCfg.TLSConfig()
+	if err != nil {
+		return network.Endpoint{}, errPath("tls", err)
+	}
+
+	if tlsConfig != nil && tlsConfig.InsecureSkipVerify {
+		if logger == nil {
+			logger = slog.Default()
+		}
+
+		logger.Warn("TLS server certificate verification is disabled", logAttrs...)
+	}
+
+	return network.Endpoint{URL: url, TLS: tlsConfig}, nil
 }

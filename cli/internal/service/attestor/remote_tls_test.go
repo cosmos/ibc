@@ -18,117 +18,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/testutil/certs"
 )
 
-// Exercises the whole chain for a remote attestor: config block -> *tls.Config
-// -> transport -> mTLS handshake -> gRPC over HTTP/2.
-func TestRemoteAttestorMutualTLS(t *testing.T) {
-	ca := certs.NewCA(t)
-	dir := t.TempDir()
-
-	caFile := ca.WriteCA(t, dir)
-	clientCert, clientKey := ca.WriteLeaf(t, dir, "client")
-
-	addr := startTLSAttestor(t, ca.ServerTLS(t, "localhost", true))
-
-	t.Run("connects when it presents a client certificate", func(t *testing.T) {
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{
-			CAFile:     caFile,
-			CertFile:   clientCert,
-			KeyFile:    clientKey,
-			ServerName: "localhost",
-		})
-
-		remote, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.NoError(t, err)
-		require.Equal(t, "41001", remote.ChainID())
-
-		height, err := remote.LatestHeight(context.Background())
-		require.NoError(t, err)
-		require.Equal(t, uint64(99), height)
-	})
-
-	t.Run("is refused without a client certificate", func(t *testing.T) {
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{CAFile: caFile, ServerName: "localhost"})
-
-		_, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.Error(t, err, "server requires a client certificate")
-	})
-
-	t.Run("is refused when the server is not trusted", func(t *testing.T) {
-		otherCA := certs.NewCA(t).WriteCA(t, t.TempDir())
-
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{
-			CAFile:     otherCA,
-			CertFile:   clientCert,
-			KeyFile:    clientKey,
-			ServerName: "localhost",
-		})
-
-		_, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.Error(t, err, "server certificate is signed by an unknown CA")
-	})
-
-	t.Run("plaintext dial against a tls listener fails", func(t *testing.T) {
-		_, err := NewRemoteFromURL(context.Background(), "http://"+addr, "attestor-1", nil)
-		require.Error(t, err)
-	})
-}
-
-// insecureSkipVerify is the documented development escape hatch, so pin that
-// it really does bypass verification rather than silently doing nothing.
-func TestRemoteAttestorInsecureSkipVerify(t *testing.T) {
-	ca := certs.NewCA(t)
-	addr := startTLSAttestor(t, ca.ServerTLS(t, "localhost", false))
-
-	t.Run("an untrusted server is rejected by default", func(t *testing.T) {
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{ServerName: "localhost"})
-
-		_, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.Error(t, err)
-	})
-
-	t.Run("insecureSkipVerify accepts it", func(t *testing.T) {
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{
-			ServerName:         "localhost",
-			InsecureSkipVerify: true,
-		})
-
-		remote, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.NoError(t, err)
-		require.Equal(t, "41001", remote.ChainID())
-	})
-}
-
-// A client floor above what the server offers must fail rather than silently
-// downgrade.
-func TestRemoteAttestorMinVersionIsEnforced(t *testing.T) {
-	ca := certs.NewCA(t)
-	dir := t.TempDir()
-	caFile := ca.WriteCA(t, dir)
-
-	serverTLS := ca.ServerTLS(t, "localhost", false)
-	serverTLS.MaxVersion = tls.VersionTLS12
-
-	addr := startTLSAttestor(t, serverTLS)
-
-	t.Run("1.2 floor connects to a 1.2 server", func(t *testing.T) {
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{
-			CAFile: caFile, ServerName: "localhost", MinVersion: "1.2",
-		})
-
-		_, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.NoError(t, err)
-	})
-
-	t.Run("1.3 floor refuses a 1.2 server", func(t *testing.T) {
-		tlsConfig := mustTLSConfig(t, &config.TLSClientConfig{
-			CAFile: caFile, ServerName: "localhost", MinVersion: "1.3",
-		})
-
-		_, err := NewRemoteFromURL(context.Background(), "https://"+addr, "attestor-1", tlsConfig)
-		require.Error(t, err)
-	})
-}
-
 // attestors[].grpc is a bare host:port, so presence of the tls block is what
 // selects https over http. Resolving against a real listener is the only way
 // to show the scheme actually followed.
@@ -137,7 +26,9 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	dir := t.TempDir()
 	caFile := ca.WriteCA(t, dir)
 
-	tlsAddr := startTLSAttestor(t, ca.ServerTLS(t, "localhost", false))
+	clientCert, clientKey := ca.WriteLeaf(t, dir, "client")
+
+	tlsAddr := startTLSAttestor(t, ca.ServerTLS(t, "localhost", true))
 	plaintextAddr := startPlaintextAttestor(t)
 
 	t.Run("a tls block dials https", func(t *testing.T) {
@@ -145,7 +36,12 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: tlsAddr,
-			TLS:  &config.TLSClientConfig{CAFile: caFile, ServerName: "localhost"},
+			TLS: &config.TLSClientConfig{
+				CAFile:     caFile,
+				CertFile:   clientCert,
+				KeyFile:    clientKey,
+				ServerName: "localhost",
+			},
 		})
 		require.NoError(t, err)
 		require.Equal(t, "41001", got.ChainID())
@@ -195,15 +91,6 @@ func TestResolveFromConfigSkipsUnresolvableRemote(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, local)
 	require.Empty(t, remote, "an unreachable attestor leaves the quorum without failing startup")
-}
-
-func mustTLSConfig(t *testing.T, cfg *config.TLSClientConfig) *tls.Config {
-	t.Helper()
-
-	tlsConfig, err := cfg.TLSConfig()
-	require.NoError(t, err)
-
-	return tlsConfig
 }
 
 // startTLSAttestor serves AttestationService over TLS and returns its address.

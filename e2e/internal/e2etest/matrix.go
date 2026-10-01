@@ -77,17 +77,6 @@ func newMatrixCollector(out io.Writer) *matrixCollector {
 
 func matrixDiscoveryEnabled() bool { return *matrixFlag }
 
-// UnderMatrixDiscovery reports whether the test binary is running as part of
-// check-matrix's discovery pass (go test -args -e2e.matrix). Tests with no
-// chain topology to record and that cannot safely run under discovery (for
-// example because a build artifact discovery doesn't produce isn't
-// available) should return early rather than call t.Skip: a skip doesn't
-// satisfy check-matrix's requirement that every test either emits a matrix
-// record or passes in every mode.
-func UnderMatrixDiscovery() bool {
-	return matrixDiscoveryEnabled()
-}
-
 func recordEVMSelection(
 	t testing.TB,
 	mode Mode,

@@ -6,9 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log/slog"
 	"os"
-	"sync"
 )
 
 // TLS version names accepted in configuration. Anything lower cannot carry
@@ -38,13 +36,15 @@ type ClientTLS struct {
 	InsecureSkipVerify bool
 }
 
-// BuildClientTLS resolves opts into a *tls.Config. A client certificate is
-// loaded once here so a bad pair fails immediately, then reloaded per
-// handshake so rotation on disk takes effect without restarting the process.
-// CA roots require a restart. A reload that fails (for example, because it
-// raced a separate cert and key update) falls back to the last certificate
-// that loaded successfully, so a handshake never fails over a transient,
-// self-correcting read.
+// Endpoint is a remote service address paired with its resolved TLS
+// settings. A nil TLS means plaintext.
+type Endpoint struct {
+	URL string
+	TLS *tls.Config
+}
+
+// BuildClientTLS resolves opts into a *tls.Config. Files are read once, so
+// rotating a certificate or CA on disk requires a restart.
 //
 // This does not warn about InsecureSkipVerify: it runs both at config
 // validation and at connect time, so the caller that knows it's about to
@@ -74,39 +74,12 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 		return cfg, nil
 	}
 
-	certFile, keyFile := opts.CertFile, opts.KeyFile
-
-	last, err := tls.LoadX509KeyPair(certFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(opts.CertFile, opts.KeyFile)
 	if err != nil {
 		return nil, fmt.Errorf("load client certificate: %w", err)
 	}
 
-	var mu sync.Mutex
-
-	cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			// Return a copy, not &last: last keeps getting overwritten by
-			// later successful reloads, so a pointer to it would let a
-			// concurrent handshake observe it change, or a partial write,
-			// out from under this one.
-			mu.Lock()
-			fallback := last
-			mu.Unlock()
-
-			slog.Warn(
-				"Reloading client certificate failed, using last loaded certificate",
-				"certFile", certFile, "keyFile", keyFile, "err", err,
-			)
-			return &fallback, nil
-		}
-
-		mu.Lock()
-		last = cert
-		mu.Unlock()
-
-		return &cert, nil
-	}
+	cfg.Certificates = []tls.Certificate{cert}
 
 	return cfg, nil
 }
