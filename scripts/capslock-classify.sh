@@ -1,34 +1,71 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Turns `capslock -output=compare` output into a review-ordered markdown report, so that a
-# dependency newly gaining EXEC, NETWORK or FILES is not buried among analysis noise.
+# Turns `capslock -output=compare` output into a short, review-ordered markdown report, so
+# that a dependency newly gaining EXEC, NETWORK or FILES is not buried among analysis noise.
 #
-#   ./scripts/capslock-classify.sh <report.txt>                     # markdown to stdout
-#   ./scripts/capslock-classify.sh <report.txt> --counts counts.env # also write counts
+#   ./scripts/capslock-classify.sh <report.txt>                       # markdown to stdout
+#   ./scripts/capslock-classify.sh <report.txt> --counts counts.env   # also write counts
+#   ./scripts/capslock-classify.sh <report.txt> --local example.com/  # first-party prefixes
 #
-# Additions are sorted into three tiers:
+# Additions are sorted into four tiers:
 #
-#   high   a capability class a compromised release typically gains. Read the call path.
+#   high   a capability class a compromised release typically gains. One line per finding,
+#          grouped by capability, naming the ends of the call path.
 #   moved  the same capability disappeared from a like-named package in this diff, which
-#          is what a vendored or renamed package looks like, not new privilege.
+#          is what a vendored or renamed package looks like, not new privilege. Counted,
+#          not listed.
 #   low    capabilities that say more about Capslock's analysis than about privilege
-#          (UNANALYZED, REFLECT, UNSAFE_POINTER, CGO, RUNTIME).
+#          (UNANALYZED, REFLECT, UNSAFE_POINTER, CGO, RUNTIME). One line per capability.
+#   local  the package whose capability set changed is this repository's own, not a
+#          dependency. Counted, not listed, and excluded from `high` so it cannot gate.
 #
-# The tiers order the report; nothing is dropped. `moved` requires the added and removed
-# packages to share a final path element, so an unrelated removal elsewhere in the diff
-# cannot explain away a real finding. A high-signal capability stays in `high` even when a
-# move pairing is found: the pairing is a heuristic and `high` is the count the CI gate
-# reads, so the entry names the package the capability left and a reviewer decides.
+# The point of the gate is a dependency that gained a capability without a matching change
+# in what it does -- the signature of a compromised release. First-party code gaining a
+# capability is just the pull request doing its job, and is reviewed as part of the diff, so
+# `--local` takes the import path prefixes that identify this repository's own packages
+# (repeat the flag or separate them with spaces) and drops those findings.
 #
-# With --counts, writes `key=value` lines (high, moved, low, added, removed) suitable for
-# sourcing or for appending to $GITHUB_OUTPUT.
+# A finding is judged local by the package Capslock attributes it to, which is the package
+# whose capability set changed. Judging by the call path origin instead -- the frame that
+# makes the capability call -- was tried and does not work: that frame is inside a
+# dependency almost every time, because the code that finally reaches os/exec or
+# golang.org/x/sys/unix is a library even when first-party code is what newly reaches it.
+# On a feature branch that added five first-party packages it filtered 1 finding of 36.
+#
+# The accepted cost is that a compromised dependency whose new capability is attributed
+# ONLY to first-party packages would be dropped. That needs every dependency package on the
+# call chain to already hold the capability while ours does not, and the untouched Capslock
+# report still has the finding.
+#
+# The report is a triage aid, not an archive: the untouched Capslock report is kept next to
+# it (job log plus artifact in CI, a file path locally), so every finding here is one line
+# and the full call paths are read there. Listing `moved` was dropped for the same reason --
+# the pairing fires on routine dependency churn and crowded out the findings worth reading.
+#
+# `moved` requires the added and removed packages to share a final path element, so an
+# unrelated removal elsewhere in the diff cannot explain away a real finding. A high-signal
+# capability stays in `high` even when a move pairing is found: the pairing is a heuristic
+# and `high` is the count the CI gate reads, so the entry notes the package the capability
+# left and a reviewer decides.
+#
+# With --counts, writes `key=value` lines (high, moved, low, local, added, removed) suitable
+# for sourcing or for appending to $GITHUB_OUTPUT. All of them except `local` count only
+# changes in dependencies, so `high` is what the CI gate can block on.
 
 set -euo pipefail
 
 # Capability classes that justify blocking a dependency update until someone reads the
 # call path. MODIFY_SYSTEM_STATE matches its subcategories too (/ENV, /SIGNALS, ...).
 HIGH_SIGNAL="EXEC NETWORK FILES ARBITRARY_EXECUTION SYSTEM_CALLS MODIFY_SYSTEM_STATE"
+
+# How many packages to name per capability in the one-line tiers before summarising the
+# rest as "+N more". Enough to recognise the change, short enough to stay one line.
+PKG_LIMIT=6
+
+# Import path prefixes belonging to this repository. Empty means every finding is treated as
+# a dependency's, which is the safe default for a caller that does not know the module paths.
+LOCAL_PREFIXES=""
 
 REPORT=""
 COUNTS=""
@@ -55,6 +92,8 @@ while (($# > 0)); do
   case "$1" in
     --counts) need_value "$@"; COUNTS="$2"; shift 2 ;;
     --high-signal) need_value "$@"; HIGH_SIGNAL="$2"; shift 2 ;;
+    --packages) need_value "$@"; PKG_LIMIT="$2"; shift 2 ;;
+    --local) need_value "$@"; LOCAL_PREFIXES="${LOCAL_PREFIXES:+${LOCAL_PREFIXES} }$2"; shift 2 ;;
     -h | --help) usage; exit 0 ;;
     -*) die "unknown argument '$1'" ;;
     *) REPORT="$1"; shift ;;
@@ -63,10 +102,12 @@ done
 
 [[ -n "${REPORT}" ]] || die "usage: capslock-classify.sh <report.txt> [--counts <file>]"
 [[ -f "${REPORT}" ]] || die "report '${REPORT}' does not exist"
+[[ "${PKG_LIMIT}" =~ ^[0-9]+$ ]] || die "--packages must be a number"
 
 # The report is read twice: once to learn which capabilities disappeared (so additions can
-# be recognised as moves), then again to emit findings with their call paths.
-awk -v high_signal="${HIGH_SIGNAL}" -v counts_file="${COUNTS}" '
+# be recognised as moves), then again to emit findings.
+awk -v high_signal="${HIGH_SIGNAL}" -v pkg_limit="${PKG_LIMIT}" \
+    -v local_prefixes="${LOCAL_PREFIXES}" -v counts_file="${COUNTS}" '
 function basename(path,    n, parts) {
   n = split(path, parts, "/")
   return parts[n]
@@ -107,6 +148,68 @@ function parse(line, phrase, suffix,    n, rest) {
   return 1
 }
 
+function trim(s) {
+  gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+  return s
+}
+
+# A call path line is "<file>:<line>:<col><padding><symbol>", except the first, which is
+# the entry point and carries no location. The location only helps while reading the path
+# in full, which happens in the Capslock report, so the summary keeps just the symbol.
+function raw_symbol(line) {
+  line = trim(line)
+  sub(/^[^[:space:]]+:[0-9]+:[0-9]+[[:space:]]+/, "", line)
+  return trim(line)
+}
+
+function frame_symbol(line) {
+  line = raw_symbol(line)
+  # Display only: the package column already carries the fully qualified import path.
+  gsub(/github\.com\//, "", line)
+  return line
+}
+
+
+# Prefixes are expected to end in "/" so that "github.com/cosmos/ibc/" does not also match
+# "github.com/cosmos/ibc-go/v11", which is a dependency.
+function is_local(pkg,    i, n, parts) {
+  if (local_prefixes == "") return 0
+  n = split(local_prefixes, parts, " ")
+  for (i = 1; i <= n; i++)
+    if (index(pkg, parts[i]) == 1) return 1
+  return 0
+}
+
+# The ends of a path are what a reviewer triages on: which of our own entry points reaches
+# the dependency, and where the capability actually lands. The frames between them are in
+# the Capslock report.
+function path_summary(i,    n, from, to) {
+  n = path_n[i]
+  if (n == 0) return "no call path reported"
+  from = frame_symbol(path[i, 1])
+  if (n == 1) return sprintf("`%s`", from)
+  to = frame_symbol(path[i, n])
+  if (n == 2) return sprintf("`%s` -> `%s`", from, to)
+  return sprintf("`%s` -> %d frame%s -> `%s`", from, n - 2, (n == 3 ? "" : "s"), to)
+}
+
+# Collects "`pkg`, `pkg`, +N more" for the tiers that get one line per capability.
+function add_to_group(cap, pkg, order, seen, count, list,    n) {
+  if (!(cap in seen)) {
+    seen[cap] = 1
+    order[++order[0]] = cap
+  }
+  n = ++count[cap]
+  if (n <= pkg_limit)
+    list[cap] = list[cap] (n > 1 ? ", " : "") "`" pkg "`"
+}
+
+function group_line(cap, count, list,    extra) {
+  extra = count[cap] - pkg_limit
+  return sprintf("- **%s** (%d): %s%s\n", cap, count[cap], list[cap],
+                 (extra > 0 ? sprintf(", +%d more", extra) : ""))
+}
+
 FNR == NR {
   if (index($0, "Package ") == 1 && index($0, " no longer has capability ") > 0) {
     if (parse($0, " no longer has capability ", " which was in the baseline\\.$")) {
@@ -133,20 +236,26 @@ FNR == NR {
       n_rem++
       rem_pkg[n_rem] = cur_pkg
       rem_cap[n_rem] = cur_cap
-      current = "rem"
-      idx = n_rem
+      # Removals are summarised by capability, so their call paths are not collected.
+      current = ""
       next
     }
   }
   # Blank lines separate findings; anything else belongs to the current call path.
   if ($0 ~ /^[[:space:]]*$/) { current = ""; next }
-  if (current == "add") add_path[idx] = add_path[idx] $0 "\n"
-  else if (current == "rem") rem_path[idx] = rem_path[idx] $0 "\n"
+  if (current == "add") path[idx, ++path_n[idx]] = $0
 }
 
 END {
   for (i = 1; i <= n_add; i++) {
     cap = add_cap[i]
+    # Judged before the capability class: our own package gaining EXEC is the pull request,
+    # not a supply chain event, and must not reach `high` where it would fail the gate.
+    if (is_local(add_pkg[i])) {
+      tier[i] = "local"
+      n_tier["local"]++
+      continue
+    }
     moved_from[i] = find_move(cap, add_pkg[i])
     # A high-signal capability is never demoted by the move heuristic: pairing on a shared
     # final path element is a guess, and `high` is the count CI blocks on, so letting an
@@ -156,60 +265,82 @@ END {
     else if (moved_from[i] != "") tier[i] = "moved"
     else tier[i] = "low"
     n_tier[tier[i]]++
+
+    if (tier[i] == "high" && !(cap in high_seen)) {
+      high_seen[cap] = 1
+      high_order[++n_high_caps] = cap
+    }
+    if (tier[i] == "low") add_to_group(cap, add_pkg[i], low_order, low_seen, low_n, low_list)
+  }
+  for (i = 1; i <= n_rem; i++) {
+    # Removals carry no security question either way, so the cheaper test on the attributed
+    # package is enough here; no call path is collected for them.
+    if (is_local(rem_pkg[i])) {
+      n_local_rem++
+      continue
+    }
+    n_rem_dep++
+    add_to_group(rem_cap[i], rem_pkg[i], rem_order, rem_seen, rem_n, rem_list)
   }
 
   if (n_tier["high"] > 0) {
-    printf "### :rotating_light: Review closely: %d new high-signal capability use(s)\n\n", n_tier["high"]
+    printf "### :rotating_light: %d new high-signal capability use(s)\n\n", n_tier["high"]
     print "A dependency gaining one of these without a matching change in what it does is the"
-    print "signature of a compromised release. Read each call path before merging.\n"
-    for (i = 1; i <= n_add; i++)
-      if (tier[i] == "high") {
-        printf "- `%s` gained **%s**", add_pkg[i], add_cap[i]
+    print "signature of a compromised release. Each line names the ends of the call path; read"
+    print "the path in full in the Capslock report before merging.\n"
+    for (c = 1; c <= n_high_caps; c++) {
+      printf "**%s**\n", high_order[c]
+      for (i = 1; i <= n_add; i++) {
+        if (tier[i] != "high" || add_cap[i] != high_order[c]) continue
+        printf "- `%s`: %s", add_pkg[i], path_summary(i)
         # Noted, not acted on: the same capability leaving a like-named package often means
         # a move, but only a reviewer can confirm the two packages are the same code.
         if (moved_from[i] != "")
-          printf " (the same capability left `%s` in this diff, so this may be a package move -- confirm the pairing)", moved_from[i]
-        printf "\n\n```\n%s```\n\n", add_path[i]
+          printf " (left `%s` in this diff -- may be a package move)", moved_from[i]
+        printf "\n"
       }
-  }
-
-  if (n_tier["moved"] > 0) {
-    printf "### Likely a package move: %d capability use(s)\n\n", n_tier["moved"]
-    print "The same capability disappeared from another package in this diff, which is what a"
-    print "vendored or renamed package looks like rather than new privilege. Heuristic, so"
-    print "confirm the pairing makes sense.\n"
-    for (i = 1; i <= n_add; i++)
-      if (tier[i] == "moved")
-        printf "- `%s` gained %s, which left `%s`\n", add_pkg[i], add_cap[i], moved_from[i]
-    print ""
+      print ""
+    }
   }
 
   if (n_tier["low"] > 0) {
     printf "### Lower signal: %d capability use(s)\n\n", n_tier["low"]
     print "These describe the Capslock analysis more than they describe privilege.\n"
-    for (i = 1; i <= n_add; i++)
-      if (tier[i] == "low")
-        printf "- `%s` gained %s\n", add_pkg[i], add_cap[i]
+    for (c = 1; c <= low_order[0]; c++) printf "%s", group_line(low_order[c], low_n, low_list)
     print ""
   }
 
-  if (n_rem > 0) {
-    printf "### No longer present: %d capability use(s)\n\n", n_rem
+  if (n_rem_dep > 0) {
+    printf "### No longer present: %d capability use(s)\n\n", n_rem_dep
     print "Reported for completeness; removing code legitimately drops capabilities.\n"
-    for (i = 1; i <= n_rem; i++)
-      printf "- `%s` no longer uses %s\n", rem_pkg[i], rem_cap[i]
+    for (c = 1; c <= rem_order[0]; c++) printf "%s", group_line(rem_order[c], rem_n, rem_list)
     print ""
   }
 
-  if (n_add == 0 && n_rem == 0)
-    print ":white_check_mark: No capability changes compared to the baseline."
+  if (n_tier["local"] + n_local_rem > 0) {
+    n_local = n_tier["local"] + n_local_rem
+    plural = (n_local == 1 ? "" : "s")
+    printf "_Not listed: %d capability change%s in packages belonging to this repository\nrather than to a dependency, which the pull request diff already shows._\n\n", n_local, plural
+  }
+
+  if (n_tier["moved"] > 0) {
+    # Kept out of the printf argument list: a bare relational operator there is ambiguous
+    # with output redirection, which some awks reject outright.
+    plural = (n_tier["moved"] == 1 ? "" : "s")
+    printf "_Not listed: %d addition%s where the same capability left a like-named package in\nthis diff, which is what a vendored or renamed package looks like._\n\n", n_tier["moved"], plural
+  }
+
+  n_add_dep = n_add - n_tier["local"]
+  if (n_add_dep == 0 && n_rem_dep == 0)
+    print ":white_check_mark: No capability changes in dependencies compared to the baseline."
 
   if (counts_file != "") {
     printf "high=%d\n",    n_tier["high"] + 0 > counts_file
     printf "moved=%d\n",   n_tier["moved"] + 0 > counts_file
     printf "low=%d\n",     n_tier["low"] + 0 > counts_file
-    printf "added=%d\n",   n_add + 0 > counts_file
-    printf "removed=%d\n", n_rem + 0 > counts_file
+    printf "local=%d\n",   n_tier["local"] + n_local_rem + 0 > counts_file
+    printf "added=%d\n",   n_add_dep + 0 > counts_file
+    printf "removed=%d\n", n_rem_dep + 0 > counts_file
   }
 }
 ' "${REPORT}" "${REPORT}"

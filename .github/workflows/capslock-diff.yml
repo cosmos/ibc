@@ -15,6 +15,7 @@ permissions: read-all
 env:
   CAPSLOCK_VERSION: v0.3.3
   CAPSLOCK_FLAGS: -packages=./... -granularity=intermediate
+  CAPSLOCK_LOCAL: ${{ vars.CAPSLOCK_LOCAL || format('github.com/{0}/', github.repository) }}
 
 jobs:
   changes:
@@ -149,7 +150,7 @@ jobs:
           BASE_REF: ${{ steps.base.outputs.ref }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
           COMPARE_OK: ${{ steps.compare.outputs.ok }}
-          SOURCE: ${{ steps.baseline-cache.outputs.cache-matched-key || 'generated from base revision' }}
+          CACHE_HIT: ${{ steps.baseline-cache.outputs.cache-hit }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ARTIFACT: capslock-diff-${{ matrix.name }}-pr${{ github.event.pull_request.number || github.run_id }}
         run: |
@@ -160,28 +161,25 @@ jobs:
           findings="$RUNNER_TEMP/findings-${NAME}.md"
 
           if [ "${COMPARE_OK:-}" = "true" ]; then
-            ./scripts/capslock-classify.sh "$REPORT" --counts "$counts" > "$findings"
+            ./scripts/capslock-classify.sh "$REPORT" --local "$CAPSLOCK_LOCAL" \
+              --counts "$counts" > "$findings"
             cat "$counts" >> "$GITHUB_OUTPUT"
-            # shellcheck disable=SC1090
-            . "$counts"
           else
             printf ':x: capslock did not complete, see the [job log](%s).\n' "$RUN_URL" > "$findings"
-            : > "$counts"
-            high=""; moved=""; low=""; added=""; removed=""
           fi
+
+          baseline='cached'
+          [ "${CACHE_HIT:-}" = 'true' ] || baseline='generated from the base revision'
 
           size="$(wc -c < "$findings" | tr -d '[:space:]')"
           {
             printf '<!-- capslock-diff:%s -->\n' "$NAME"
             printf '## Capslock capability diff: `%s`\n\n' "$NAME"
-            printf -- '- Base: `%s` (`%s`)\n' "$BASE_REF" "$BASE_SHA"
-            printf -- '- Baseline: `%s`\n' "$SOURCE"
-            if [ -n "$added" ]; then
-              # Lead with the high-signal count: it is the only number that should block.
-              printf -- '- New high-signal capabilities (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE): **%s**\n' "$high"
-              printf -- '- Likely package moves: %s, lower signal: %s, no longer present: %s\n' "$moved" "$low" "$removed"
-            fi
-            printf '\n'
+            # The findings carry their own counts in each section heading, so this line is
+            # just the provenance needed to trust them plus where the full call paths are:
+            # the classifier trims each finding to one line and the raw report keeps them.
+            printf 'Base `%s` (`%.12s`), baseline %s. Full call paths: [job log](%s) or the `%s` artifact.\n\n' \
+              "$BASE_REF" "$BASE_SHA" "$baseline" "$RUN_URL" "$ARTIFACT"
             head -c "$LIMIT" "$findings" || printf '(findings unavailable)\n'
             if [ "$size" -gt "$LIMIT" ]; then
               printf '\n\nTruncated (%s of %s bytes shown). Full report: `%s` artifact on the [run](%s).\n' \
@@ -232,7 +230,7 @@ jobs:
           HIGH: ${{ steps.report.outputs.high }}
           BASE_REF: ${{ steps.base.outputs.ref }}
         run: |
-          echo "::error::${HIGH} new high-signal capability use(s) (EXEC / NETWORK / FILES / SYSTEM_CALLS / ARBITRARY_EXECUTION / MODIFY_SYSTEM_STATE) relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- read the call paths in the job summary."
+          echo "::error::${HIGH} new high-signal capability use(s) in dependencies, relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- the job summary lists them."
           exit 1
 
       - name: Note non-blocking capability changes
@@ -241,8 +239,7 @@ jobs:
           && steps.report.outputs.added != '0'
           && steps.report.outputs.added != ''
         env:
-          MOVED: ${{ steps.report.outputs.moved }}
           LOW: ${{ steps.report.outputs.low }}
           BASE_REF: ${{ steps.base.outputs.ref }}
         run: |
-          echo "::notice::No high-signal capability changes relative to ${BASE_REF}. ${MOVED:-0} likely package move(s) and ${LOW:-0} lower-signal change(s) are recorded in the job summary."
+          echo "::notice::No high-signal capability changes relative to ${BASE_REF}; ${LOW:-0} lower-signal change(s) in the job summary."
