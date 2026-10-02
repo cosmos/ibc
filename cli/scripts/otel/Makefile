@@ -6,3 +6,11 @@ up:
 
 down:
 	docker compose down
+
+dashboard-export:
+	bash dashboard.sh export
+
+dashboard-import:
+	bash dashboard.sh import $(if $(filter 1,$(OVERWRITE)),--overwrite)
+
+.PHONY: up down dashboard-export dashboard-import
