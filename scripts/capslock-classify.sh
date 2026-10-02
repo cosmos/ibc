@@ -19,7 +19,10 @@
 # a changed module, and it is listed under the last such module on the path. Everything
 # else -- this repository's own code newly calling into unchanged code -- is counted, not
 # listed. The function report should come from the base code built against the new
-# dependencies, so that the pull request's own new functions are not findings at all.
+# dependencies, so that the pull request's own new functions are not findings at all, and
+# it alone covers this repository's packages: intermediate findings about them are not
+# counted, since a pull request that bumps a dependency and newly calls into what it
+# already had would otherwise gate.
 #
 # Not gated either: a capability that left a package whose path differs only in version
 # elements (/v2, /v1.43.0, .v3), which is a move; and a new package reached from a package
@@ -77,6 +80,7 @@ FNR == 1 { file = (FILENAME == modules_file) ? 1 : (FILENAME == intermediate_fil
 file == 1 {
   split($0, f, "\t")
   status[f[1]] = f[2]
+  if (f[3] == "main" && f[4] == "main") is_main[f[1]] = 1
   if (f[2] == "changed") {
     changed_order[++n_changed] = f[1]
     from[f[1]] = f[3]; to[f[1]] = f[4]
@@ -194,6 +198,11 @@ END {
   for (i = 1; i <= n; i++) {
     # Attributed to the last changed module on the path: the dependency closest to where
     # the capability is used. An intermediate finding is first of all about its package.
+    # Packages of this repository are left to the function report, which compares the code
+    # of main built against the new dependencies. At intermediate granularity they would gate
+    # a pull request that bumps a dependency and newly calls into what it already had.
+    if (gran[i] == 2 && (module_of(key[i]) in is_main)) { tier["unrelated"]++; continue }
+
     via = ""
     for (j = 1; j <= n_frames[i]; j++) if ((m = changed_module(frames[i, j])) != "") via = m
     if (gran[i] == 2 && (m = changed_module(key[i])) != "") via = m

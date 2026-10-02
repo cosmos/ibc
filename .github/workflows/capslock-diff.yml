@@ -17,7 +17,8 @@ concurrency:
 permissions:
   contents: read
 
-# Same values as capslock.yml.
+# Same values as capslock.yml. The version and cgo setting are part of the artifact name, and
+# any module missing from it is analysed from the base commit, so a mismatch costs time only.
 env:
   CAPSLOCK_VERSION: v0.3.3
   CAPSLOCK_MODULES: cli e2e
@@ -83,6 +84,12 @@ jobs:
                 }' > "capslock-out/$m-modules.tsv"
             if cut -f2 "capslock-out/$m-modules.tsv" | grep -qx changed; then modules="$modules $m"; fi
           done
+          # A change to the gate itself runs it in full, so that it is tested before it guards main.
+          if ! git diff --quiet 'HEAD^1' HEAD -- .github/workflows/capslock.yml .github/workflows/capslock-diff.yml \
+            scripts/capslock-classify.sh; then
+            modules="$CAPSLOCK_MODULES"
+            echo "The gate itself changed; analysing every module."
+          fi
           echo "Base $base. Modules with changed dependencies:${modules:- none}"
           printf 'base=%s\nmodules=%s\n' "$base" "${modules# }" >> "$GITHUB_OUTPUT"
 
@@ -99,27 +106,33 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE: ${{ steps.deps.outputs.base }}
           MODULES: ${{ steps.deps.outputs.modules }}
-          NAME: capslock-baseline-${{ env.CAPSLOCK_VERSION }}
+          NAME: capslock-baseline-${{ env.CAPSLOCK_VERSION }}-cgo${{ env.CGO_ENABLED }}
         run: |
           set -euo pipefail
+          source="baseline from main"
           if run="$(gh run list --workflow capslock.yml --branch main --commit "$BASE" --limit 5 \
                 --json databaseId,conclusion \
                 --jq 'map(select(.conclusion == "" or .conclusion == "success"))[0].databaseId // empty')" \
             && [ -n "$run" ] && gh run watch "$run" --interval 30 >/dev/null \
             && gh run download "$run" --name "$NAME" --dir baseline; then
-            printf 'source=baseline from main ([run %s](%s/%s/actions/runs/%s))\n' \
-              "$run" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$run" >> "$GITHUB_OUTPUT"
-            exit 0
+            source="$source ([run $run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run))"
           fi
-          echo "::warning::No baseline artifact $NAME from main for $BASE; analysing the base commit here."
+          # Whatever the artifact lacks is analysed from the base commit.
           mkdir -p baseline
+          built=""
           for m in $MODULES; do
             for g in intermediate function; do
+              [ ! -s "baseline/$m-$g.json" ] || continue
               (cd "$RUNNER_TEMP/base/$m" && capslock -packages=./... -granularity="$g" -output=json) \
                 > "baseline/$m-$g.json"
+              built="$built $m-$g"
             done
           done
-          echo 'source=:warning: baseline built in this job, main had none' >> "$GITHUB_OUTPUT"
+          if [ -n "$built" ]; then
+            echo "::warning::$NAME from main lacked${built} for $BASE; analysed the base commit here."
+            source=":warning: baseline built in this job for${built}"
+          fi
+          echo "source=$source" >> "$GITHUB_OUTPUT"
 
       # Intermediate granularity analyses the pull request, so a new dependency only its
       # code imports is covered. Function granularity analyses main's code built against
@@ -173,17 +186,24 @@ jobs:
           cat "$body" >> "$GITHUB_STEP_SUMMARY"
           echo "high=$high" >> "$GITHUB_OUTPUT"
 
+      # Also when an earlier step failed, so a previous comment is never left looking green.
       - name: Comment on the pull request
-        if: github.event.pull_request.head.repo.full_name == github.repository
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          FAILED: ${{ steps.deps.outcome == 'failure' || steps.baseline.outcome == 'failure' || steps.compare.outcome == 'failure' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           body=capslock-out/comment.md
+          mkdir -p capslock-out
           id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq '.[] | select(.user.type == "Bot" and (.body | startswith("<!-- capslock-diff"))) | .id' | tail -n 1)"
-          if [ ! -s "$body" ]; then
+          if [ "$FAILED" = true ]; then
+            printf '<!-- capslock-diff -->\n### Capslock dependency check\n\n:x: The check could not finish, so dependencies are unchecked. See the [job log](%s).\n' \
+              "$RUN_URL" > "$body"
+          elif [ ! -s "$body" ]; then
             # No dependency changed: only an earlier comment needs updating, so it is not left stale.
             [ -n "$id" ] || exit 0
             printf '<!-- capslock-diff -->\n### Capslock dependency check\n\n:white_check_mark: No dependency changed.\n' > "$body"

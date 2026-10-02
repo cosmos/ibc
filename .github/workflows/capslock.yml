@@ -12,8 +12,8 @@ on:
 permissions:
   contents: read
 
-# Same values as capslock-diff.yml. If they differ, pull requests find no matching
-# artifact and analyse their base themselves.
+# Same values as capslock-diff.yml. If they differ, pull requests analyse whatever the
+# artifact lacks from their base commit themselves.
 env:
   CAPSLOCK_VERSION: v0.3.3
   CAPSLOCK_MODULES: cli e2e
@@ -50,7 +50,7 @@ jobs:
       # Kept for the longest a public repository allows, for when main is quiet.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: capslock-baseline-${{ env.CAPSLOCK_VERSION }}
+          name: capslock-baseline-${{ env.CAPSLOCK_VERSION }}-cgo${{ env.CGO_ENABLED }}
           path: capslock-out/
           if-no-files-found: error
           retention-days: 90
