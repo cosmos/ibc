@@ -23,6 +23,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
+	go.opentelemetry.io/contrib/instrumentation/host v0.68.0
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.68.0
 	go.opentelemetry.io/contrib/otelconf v0.23.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.65.0
@@ -150,7 +151,6 @@ require (
 	github.com/zondax/ledger-go v1.0.1 // indirect
 	go.opentelemetry.io/contrib/bridges/otelslog v0.18.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.68.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/host v0.68.0 // indirect
 	go.opentelemetry.io/contrib/propagators/autoprop v0.68.0 // indirect
 	go.opentelemetry.io/contrib/propagators/aws v1.43.0 // indirect
 	go.opentelemetry.io/contrib/propagators/b3 v1.43.0 // indirect
