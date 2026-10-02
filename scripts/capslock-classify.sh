@@ -5,7 +5,7 @@
 # report of the capabilities its changed dependencies newly bring in.
 #
 #   ./scripts/capslock-classify.sh --modules m.tsv --intermediate i.txt --function f.txt
-#       [--dependency d.txt --reachable fns.txt] [--name cli] [--base-packages pkgs.txt]
+#       [--dependency d.txt] [--imports imports.txt] [--name cli] [--base-packages pkgs.txt]
 #       [--counts counts.env]
 #
 # --modules lists the module's build list as "path<TAB>status<TAB>base<TAB>head" lines, with
@@ -15,11 +15,12 @@
 # and -granularity=function, where it is a first-party function newly reaching one. The
 # second catches a dependency that already held a capability adding a new use of it, such
 # as an init() that reads a file and posts it. --dependency is a third, -granularity=function
-# report run on the bumped dependencies' own packages, old version against new, so that a
-# new use inside a function of the dependency shows even when everything above it already
-# had the capability; a function that only changed version path counts as a move, and one
-# missing from --reachable, the functions on any path from this code to a capability
-# (capslock -output=graph), cannot be called from here and is only counted.
+# report run on the bumped dependencies' own packages that the pull request's code imports,
+# old version against new, so that a new use inside a function of the dependency shows even
+# when everything above it already had the capability, and also when only the pull
+# request's new calls reach it. A function that only changed version path counts as a move.
+# --imports, "module package" lines from `go list -deps`, names changed dependencies that
+# only tests import: Capslock does not load tests, so the report says they are unchecked.
 #
 # The gate is about dependencies, so a finding counts only when its call path goes through
 # a changed module, and it is listed under the last such module on the path. Everything
@@ -40,13 +41,14 @@
 # The report is one line per module, then one line per changed dependency that brings in a
 # capability, with an example path to the most severe one; full paths stay in the reports.
 #
-# Not seen: a new use of a capability inside a dependency function that already had it; a
-# new use that only this pull request's new code reaches; a finding whose one example path,
-# the shortest, avoids the changed dependency while a longer one goes through it; code
-# built only for platforms other than the runner's; and calls made through reflection or
-# unsafe (REFLECT, UNSAFE_POINTER), which are listed but do not gate.
+# Not seen: a new use of a capability inside a dependency function that already had it, or
+# inside a method of a generic type the dependency never instantiates itself; a finding
+# whose one example path, the shortest, avoids the changed dependency while a longer one
+# goes through it; dependencies only tests import; code built only for platforms other
+# than the runner's; and calls made through reflection or unsafe (REFLECT, UNSAFE_POINTER),
+# which are listed but do not gate.
 #
-# --counts writes high, low, moved, held, unreached, unrelated and changed as key=value
+# --counts writes high, low, moved, held, unrelated and changed as key=value
 # lines; `high` is what CI blocks on.
 
 set -euo pipefail
@@ -54,7 +56,7 @@ set -euo pipefail
 # Capability classes that block until someone reads the call path. MODIFY_SYSTEM_STATE
 # matches its subcategories too (/ENV, /SIGNALS, ...).
 HIGH_SIGNAL="EXEC NETWORK FILES ARBITRARY_EXECUTION SYSTEM_CALLS MODIFY_SYSTEM_STATE"
-NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" REACHABLE="" COUNTS="" BASE_PACKAGES=""
+NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" IMPORTS="" COUNTS="" BASE_PACKAGES=""
 
 die() { echo "capslock-classify: $*" >&2; exit 2; }
 usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
@@ -62,14 +64,14 @@ usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
 while (($# > 0)); do
   case "$1" in
     -h | --help) usage; exit 0 ;;
-    --name | --modules | --intermediate | --function | --dependency | --reachable | --counts | --high-signal | --base-packages)
+    --name | --modules | --intermediate | --function | --dependency | --imports | --counts | --high-signal | --base-packages)
       [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
       case "$1" in
         --modules) MODULES="$2" ;;
         --intermediate) INTERMEDIATE="$2" ;;
         --function) FUNCTION="$2" ;;
         --dependency) DEPENDENCY="$2" ;;
-        --reachable) REACHABLE="$2" ;;
+        --imports) IMPORTS="$2" ;;
         --counts) COUNTS="$2" ;;
         --name) NAME="$2" ;;
         --high-signal) HIGH_SIGNAL="$2" ;;
@@ -84,15 +86,15 @@ for f in "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}"; do
   [[ -n "$f" ]] || die "--modules, --intermediate and --function are required (see --help)"
   [[ -f "$f" ]] || die "'$f' does not exist"
 done
-for f in "${DEPENDENCY}" "${REACHABLE}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
+for f in "${DEPENDENCY}" "${IMPORTS}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
 
 awk -v high_signal="${HIGH_SIGNAL}" -v name="${NAME}" -v counts_file="${COUNTS}" \
     -v modules_file="${MODULES}" -v intermediate_file="${INTERMEDIATE}" -v base_packages_file="${BASE_PACKAGES}" \
-    -v dependency_file="${DEPENDENCY}" -v reachable_file="${REACHABLE}" '
+    -v dependency_file="${DEPENDENCY}" -v imports_file="${IMPORTS}" '
 # Packages the base build loaded, from the packageInfo of the intermediate baseline.
 BEGIN {
   if (base_packages_file != "") while ((getline line < base_packages_file) > 0) in_base[line] = 1
-  if (reachable_file != "") while ((getline line < reachable_file) > 0) reachable[line] = 1
+  if (imports_file != "") while ((getline line < imports_file) > 0) { split(line, w, " "); imported[w[1]] = 1 }
 }
 
 # Files are told apart by name: an empty report has no first record to count.
@@ -102,7 +104,9 @@ FNR == 1 { file = (FILENAME == modules_file) ? 1 : (FILENAME == intermediate_fil
 file == 1 {
   split($0, f, "\t")
   status[f[1]] = f[2]
-  if (f[3] == "main" && f[4] == "main") is_main[f[1]] = 1
+  # This repository: the main module and modules replaced by a relative path, whose code is
+  # analysed in their own module run.
+  if (f[2] == "unchanged" && (f[4] == "main" || f[4] ~ / => \.\.?\//)) is_main[f[1]] = 1
   if (f[2] == "changed") {
     changed_order[++n_changed] = f[1]
     from[f[1]] = f[3]; to[f[1]] = f[4]
@@ -132,15 +136,11 @@ function module_of(s,    i, c, best) {
   return best
 }
 
-# The package of a symbol: its path up to the first "." after the last "/", or the module
-# path when that is longer, as for gopkg.in/yaml.v3.Unmarshal.
-function package_of(s,    dir, rest, m) {
-  sub(/^\(\*?/, "", s); sub(/\[.*/, "", s)
-  dir = ""; rest = s
-  if (match(s, /.*\//)) { dir = substr(s, 1, RLENGTH); rest = substr(s, RLENGTH + 1) }
-  sub(/\..*/, "", rest)
-  m = module_of(s)
-  return length(m) > length(dir rest) ? m : dir rest
+# The package of a symbol: its path up to the last "." before the name, once receiver
+# parentheses, type arguments and closure suffixes are removed.
+function package_of(s) {
+  sub(/^\(\*?/, "", s); sub(/[[$)].*/, "", s); sub(/\.[^.\/]*$/, "", s)
+  return s
 }
 
 function changed_module(s,    m) {
@@ -171,7 +171,7 @@ function unversioned(p,    i, n, parts, out) {
 
 # A function name with version elements dropped, as unversioned() does for packages.
 function unversioned_fn(s) {
-  while (match(s, /\/v[0-9]+(\.[0-9]+)*[\/.]/)) s = substr(s, 1, RSTART) substr(s, RSTART + RLENGTH - 1)
+  while (match(s, /\/v[0-9]+(\.[0-9]+)*[\/.]/)) s = substr(s, 1, RSTART - 1) substr(s, RSTART + RLENGTH - 1)
   while (match(s, /\.v[0-9]+[\/.]/)) s = substr(s, 1, RSTART - 1) substr(s, RSTART + RLENGTH - 1)
   return s
 }
@@ -239,7 +239,6 @@ END {
     if (via == "") { tier["unrelated"]++; continue }
 
     if (gran[i] == 4 && (cap[i], unversioned_fn(key[i])) in removed_fn) { tier["moved"]++; continue }
-    if (gran[i] == 4 && reachable_file != "" && !(key[i] in reachable)) { tier["unreached"]++; continue }
 
     # Only a package the base build did not load can be where a capability moved to.
     if (gran[i] == 2 && cap[i] in removed && !(key[i] in in_base)) {
@@ -276,14 +275,19 @@ END {
     }
   }
 
+  # Changed dependencies that only tests import, which none of the reports cover.
+  if (imports_file != "")
+    for (c = 1; c <= n_changed; c++)
+      if (!(changed_order[c] in imported)) untested = untested (untested == "" ? "" : ", ") "`" short(changed_order[c]) "`"
+
   for (c = 1; c <= n_deps; c++) if (high_caps[dep_order[c]] != "") n_high_deps++
   if (n_changed == 0) printf ":white_check_mark: **`%s`**: no dependency changed.\n", name
   else if (n_high_deps > 0)
     printf ":rotating_light: **`%s`**: %d changed dependenc%s, %d with new high-signal capabilities.\n",
       name, n_changed, (n_changed == 1 ? "y" : "ies"), n_high_deps
   else
-    printf ":white_check_mark: **`%s`**: %d changed dependenc%s, no new high-signal capabilities.\n",
-      name, n_changed, (n_changed == 1 ? "y" : "ies")
+    printf "%s **`%s`**: %d changed dependenc%s, no new high-signal capabilities.\n",
+      (untested == "" ? ":white_check_mark:" : ":warning:"), name, n_changed, (n_changed == 1 ? "y" : "ies")
 
   # Dependencies that gate first, then those with only lower-signal capabilities.
   for (pass = 1; pass <= 2; pass++)
@@ -299,17 +303,18 @@ END {
       } else printf "%s\n", low_caps[m]
     }
 
-  if (tier["moved"] + tier["held"] + tier["unreached"] + tier["unrelated"] > 0) {
+  if (untested != "") printf "\n_Not checked, only tests import them: %s._\n", untested
+
+  if (tier["moved"] + tier["held"] + tier["unrelated"] > 0) {
     sep = "\n_Not gated: "
     if (tier["moved"]) { printf "%s%d version move%s", sep, tier["moved"], (tier["moved"] == 1 ? "" : "s"); sep = ", " }
     if (tier["held"]) { printf "%s%d new package%s reached from one that already had the capability", sep, tier["held"], (tier["held"] == 1 ? "" : "s"); sep = ", " }
-    if (tier["unreached"]) { printf "%s%d in dependency functions nothing here calls", sep, tier["unreached"]; sep = ", " }
     if (tier["unrelated"]) printf "%s%d change%s outside the changed dependencies", sep, tier["unrelated"], (tier["unrelated"] == 1 ? "" : "s")
     print "._"
   }
 
   if (counts_file != "")
-    printf "high=%d\nlow=%d\nmoved=%d\nheld=%d\nunreached=%d\nunrelated=%d\nchanged=%d\n", tier["high"],
-      tier["low"], tier["moved"], tier["held"], tier["unreached"], tier["unrelated"], n_changed > counts_file
+    printf "high=%d\nlow=%d\nmoved=%d\nheld=%d\nunrelated=%d\nchanged=%d\n", tier["high"], tier["low"],
+      tier["moved"], tier["held"], tier["unrelated"], n_changed > counts_file
 }
 ' "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}" ${DEPENDENCY:+"${DEPENDENCY}"}

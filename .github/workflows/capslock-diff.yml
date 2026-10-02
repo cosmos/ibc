@@ -65,7 +65,7 @@ jobs:
           # capslock-out/<module>-modules.tsv: path, status, base, head. A module is changed
           # when added, bumped, or given a new replace or go.work use, local ones included;
           # a changed vendor/ tree marks them all, since it is what gets built.
-          mkdir -p capslock-out
+          rm -rf capslock-out && mkdir -p capslock-out
           modules=""
           for m in $CAPSLOCK_MODULES; do
             # Captured first, so that a failing go list fails the step rather than passing it.
@@ -82,7 +82,9 @@ jobs:
                   else s = (vendor || $2 != $3) ? "changed" : "unchanged"
                   print $1, s, $2, $3
                 }' > "capslock-out/$m-modules.tsv"
-            if cut -f2 "capslock-out/$m-modules.tsv" | grep -qx changed; then modules="$modules $m"; fi
+            if awk -F '\t' '$2 == "changed" { f = 1 } END { exit !f }' "capslock-out/$m-modules.tsv"; then
+              modules="$modules $m"
+            fi
           done
           # A change to the gate itself runs it in full, so that it is tested before it guards main.
           if ! git diff --quiet 'HEAD^1' HEAD -- .github/workflows/capslock.yml .github/workflows/capslock-diff.yml \
@@ -114,17 +116,18 @@ jobs:
                 --json databaseId,conclusion \
                 --jq 'map(select(.conclusion == "" or .conclusion == "success"))[0].databaseId // empty')" \
             && [ -n "$run" ] && gh run watch "$run" --interval 30 >/dev/null \
-            && gh run download "$run" --name "$NAME" --dir baseline; then
+            && gh run download "$run" --name "$NAME" --dir "$RUNNER_TEMP/baseline"; then
             source="$source ([run $run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run))"
           fi
-          # Whatever the artifact lacks is analysed from the base commit.
-          mkdir -p baseline
+          # Whatever the artifact lacks is analysed from the base commit. Kept out of the
+          # checkout, which the pull request controls.
+          mkdir -p "$RUNNER_TEMP/baseline"
           built=""
           for m in $MODULES; do
             for g in intermediate function; do
-              [ ! -s "baseline/$m-$g.json" ] || continue
+              [ ! -s "$RUNNER_TEMP/baseline/$m-$g.json" ] || continue
               (cd "$RUNNER_TEMP/base/$m" && capslock -packages=./... -granularity="$g" -output=json) \
-                > "baseline/$m-$g.json"
+                > "$RUNNER_TEMP/baseline/$m-$g.json"
               built="$built $m-$g"
             done
           done
@@ -159,31 +162,35 @@ jobs:
           compare() {
             local status=0
             (cd "$1" && capslock -packages=./... -granularity="$2" -output=compare \
-              "$GITHUB_WORKSPACE/baseline/$m-$2.json") > "capslock-out/$m-$2.txt" 2>&1 || status=$?
+              "$RUNNER_TEMP/baseline/$m-$2.json") > "capslock-out/$m-$2.txt" 2>&1 || status=$?
             return "$status"
           }
 
-          # Packages of each bumped dependency that the analysed code imports, base and head;
-          # a major-version move is compared as the pair it is.
+          # Each bumped dependency's own functions, old version against new, for the packages
+          # the pull request imports, so that a function only its new calls reach is covered;
+          # loading a dependency never loads this code, so findings are still the dependency's.
+          # A package the old version lacks is new code, all of it compared against nothing.
+          # A major-version move is compared as the pair it is.
           dependency() {
             local f="capslock-out/$m-dependency.txt" old new b h status
             : > "$f"
-            imports() { (cd "$1" && go list -deps -f '{{with .Module}}{{.Path}} {{$.ImportPath}}{{end}}' ./...); }
             # Called as a condition, where set -e is off, so every failure returns explicitly.
-            imports "$RUNNER_TEMP/base/$m" > "$RUNNER_TEMP/$m-base.imports" || return 2
-            imports "$1" > "$RUNNER_TEMP/$m-head.imports" || return 2
-            # Every function on a path from this code to a capability: a dependency function
-            # outside it cannot be reached from here, so only functions inside it count.
-            (cd "$1" && capslock -packages=./... -output=graph) > "$RUNNER_TEMP/$m.graph" || return 2
-            grep -o '"[^"]*"' "$RUNNER_TEMP/$m.graph" | tr -d '"' | sort -u > "capslock-out/$m-reachable.txt"
+            (cd "$m" && go list -deps -f '{{with .Module}}{{.Path}} {{$.ImportPath}}{{end}}' ./...) \
+              > "capslock-out/$m-imports.txt" || return 2
             while read -r old new; do
-              b="$(awk -v m="$old" '$1 == m { print $2 }' "$RUNNER_TEMP/$m-base.imports" | paste -sd, -)"
-              h="$(awk -v m="$new" '$1 == m { print $2 }' "$RUNNER_TEMP/$m-head.imports" | paste -sd, -)"
-              [ -n "$b" ] && [ -n "$h" ] || continue
-              (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$b" -granularity=function \
-                -output=json) > "$RUNNER_TEMP/dependency.json" || return 2
+              h="$(awk -v m="$new" '$1 == m { print $2 }' "capslock-out/$m-imports.txt" | paste -sd, -)"
+              [ -n "$h" ] || continue
+              b="$(printf '%s\n' "$h" | tr , '\n' | awk -v o="$old" -v n="$new" '{ print o substr($0, length(n) + 1) }')"
+              # shellcheck disable=SC2086 # one argument per package
+              b="$(cd "$RUNNER_TEMP/base/$m" && go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' $b | paste -sd, -)"
+              if [ -n "$b" ]; then
+                (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$b" -granularity=function \
+                  -output=json) > "$RUNNER_TEMP/dependency.json" || return 2
+              else
+                echo '{}' > "$RUNNER_TEMP/dependency.json"
+              fi
               status=0
-              (cd "$1" && capslock -force_local_module -packages="$h" -granularity=function \
+              (cd "$m" && capslock -force_local_module -packages="$h" -granularity=function \
                 -output=compare "$RUNNER_TEMP/dependency.json") >> "$f" 2>&1 || status=$?
               [ "$status" -le 1 ] || return 2
               echo >> "$f"
@@ -200,24 +207,24 @@ jobs:
             "$BASE" "$HEAD_SHA" "$SOURCE" "$RUN_URL" > "$body"
           high=0
           for m in $MODULES; do
-            note="" dir="$deps/$m"
+            note=""
             compare "$m" intermediate || [ $? -eq 1 ] || { cat "capslock-out/$m-intermediate.txt"; echo "::error::capslock failed on $m"; exit 1; }
             if ! { compare "$deps/$m" function || [ $? -eq 1 ]; }; then
               note="Main's code does not build against the new dependencies, so the function report covers this pull request's code too."
               echo "::warning::$m: $note"
-              note="_${note}_" dir="$m"
+              note="_${note}_"
               compare "$m" function || [ $? -eq 1 ] || { cat "capslock-out/$m-function.txt"; echo "::error::capslock failed on $m"; exit 1; }
             fi
-            dependency "$dir" || { cat "capslock-out/$m-dependency.txt"; echo "::error::capslock failed on a dependency of $m"; exit 1; }
+            dependency || { cat "capslock-out/$m-dependency.txt"; echo "::error::capslock failed on a dependency of $m"; exit 1; }
             for g in intermediate function dependency; do
               echo "::group::$m, $g"; cat "capslock-out/$m-$g.txt"; echo "::endgroup::"
             done
             echo >> "$body"
-            jq -r '.packageInfo[].path' "baseline/$m-intermediate.json" > "capslock-out/$m-base-packages.txt"
+            jq -r '.packageInfo[].path' "$RUNNER_TEMP/baseline/$m-intermediate.json" > "capslock-out/$m-base-packages.txt"
             ./scripts/capslock-classify.sh --name "$m" --modules "capslock-out/$m-modules.tsv" \
               --base-packages "capslock-out/$m-base-packages.txt" \
               --intermediate "capslock-out/$m-intermediate.txt" --function "capslock-out/$m-function.txt" \
-              --dependency "capslock-out/$m-dependency.txt" --reachable "capslock-out/$m-reachable.txt" --counts "capslock-out/$m.counts" >> "$body"
+              --dependency "capslock-out/$m-dependency.txt" --imports "capslock-out/$m-imports.txt" --counts "capslock-out/$m.counts" >> "$body"
             [ -z "$note" ] || printf '\n%s\n' "$note" >> "$body"
             high=$((high + $(sed -n 's/^high=//p' "capslock-out/$m.counts")))
           done
