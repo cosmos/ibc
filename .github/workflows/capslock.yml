@@ -2,55 +2,29 @@
 
 name: Capslock Capability Baseline
 
+# Analyses main and publishes it as the artifact capslock-diff.yml compares pull requests
+# against, looked up by commit.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
-permissions: read-all
-
+# Same values as capslock-diff.yml. If they differ, pull requests analyse whatever the
+# artifact lacks from their base commit themselves.
 env:
   CAPSLOCK_VERSION: v0.3.3
-  CAPSLOCK_FLAGS: -packages=./... -granularity=intermediate
+  CAPSLOCK_MODULES: cli e2e
+  # How cli is released; cgo also widens what a dependency can do unseen.
+  CGO_ENABLED: "0"
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      go: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.go }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-        id: filter
-        with:
-          filters: |
-            go:
-              - 'cli/**'
-              - 'e2e/**'
-              - 'gen/go/solidity-abi/**'
-              - '.github/workflows/capslock.yml'
-
   baseline:
-    name: Baseline ${{ matrix.name }}
-    needs: changes
-    if: needs.changes.outputs.go == 'true'
+    name: Baseline
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: cli
-            dir: cli
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -62,35 +36,21 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
 
-      - name: Compute ref slug
-        id: slug
-        env:
-          REF: ${{ github.ref_name }}
+      - name: Analyse
         run: |
-          printf 'slug=%s\n' "$(printf '%s' "$REF" | tr '/' '-' | tr -c '[:alnum:]_.-' '-')" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
+          mkdir -p capslock-out
+          for m in $CAPSLOCK_MODULES; do
+            for g in intermediate function; do
+              (cd "$m" && capslock -packages=./... -granularity="$g" -output=json) > "capslock-out/$m-$g.json"
+            done
+          done
 
-      - name: Install Capslock
-        run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
-
-      - name: Generate baseline
-        working-directory: ${{ matrix.dir }}
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/capslock-out"
-          capslock $CAPSLOCK_FLAGS -output=json \
-            > "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
-          ls -lh "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
-
-      - name: Save baseline to branch cache
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Kept for the longest a public repository allows, for when main is quiet.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          path: capslock-out/${{ matrix.name }}.json
-          key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.slug.outputs.slug }}-${{ github.sha }}
-
-      - name: Upload baseline artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: capslock-baseline-${{ matrix.name }}-${{ steps.slug.outputs.slug }}
-          path: capslock-out/${{ matrix.name }}.json
+          name: capslock-baseline-${{ env.CAPSLOCK_VERSION }}-cgo${{ env.CGO_ENABLED }}
+          path: capslock-out/
           if-no-files-found: error
-          retention-days: 30
-          overwrite: true
+          retention-days: 90
