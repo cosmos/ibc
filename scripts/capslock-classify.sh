@@ -7,6 +7,8 @@
 #   ./scripts/capslock-classify.sh <report.txt>                       # markdown to stdout
 #   ./scripts/capslock-classify.sh <report.txt> --counts counts.env   # also write counts
 #   ./scripts/capslock-classify.sh <report.txt> --local example.com/  # first-party prefixes
+#   ./scripts/capslock-classify.sh <report.txt> --packages 10         # names per line (6)
+#   ./scripts/capslock-classify.sh <report.txt> --high-signal EXEC    # capabilities that gate
 #
 # Additions are sorted into four tiers:
 #
@@ -38,8 +40,8 @@
 # be attributed only to that package, and dropping it would let the exact event this gate
 # exists for pass unreviewed. Deciding that needs the pull request's file list, which this
 # script does not have, so the decision belongs to the caller: pass --local only when no
-# dependency manifest changed. Both callers in this repository do that -- see the paths
-# filter in .github/workflows/capslock-diff.yml and the manifest check in capslock-diff.sh.
+# dependency manifest (go.mod, go.sum, go.work, go.work.sum or a vendor/ tree) changed. The
+# CI caller does that -- see the `deps` paths filter in .github/workflows/capslock-diff.yml.
 #
 # The report is a triage aid, not an archive: the untouched Capslock report is kept next to
 # it (job log plus artifact in CI, a file path locally), so every finding here is one line
@@ -105,9 +107,10 @@ while (($# > 0)); do
   esac
 done
 
-[[ -n "${REPORT}" ]] || die "usage: capslock-classify.sh <report.txt> [--counts <file>]"
+[[ -n "${REPORT}" ]] || die "usage: capslock-classify.sh <report.txt> [--counts <file>] [--local <prefix>]... [--packages <n>] [--high-signal <caps>] (see --help)"
 [[ -f "${REPORT}" ]] || die "report '${REPORT}' does not exist"
-[[ "${PKG_LIMIT}" =~ ^[0-9]+$ ]] || die "--packages must be a number"
+# Zero would leave the one-line tiers listing nothing but "+N more".
+[[ "${PKG_LIMIT}" =~ ^[1-9][0-9]*$ ]] || die "--packages must be a positive integer"
 
 # The report is read twice: once to learn which capabilities disappeared (so additions can
 # be recognised as moves), then again to emit findings.
@@ -170,6 +173,8 @@ function raw_symbol(line) {
 function frame_symbol(line) {
   line = raw_symbol(line)
   # Display only: the package column already carries the fully qualified import path.
+  # Every occurrence, not just a leading one: methods are reported as
+  # "(*github.com/x/y.T).M" and generic instantiations name their type arguments.
   gsub(/github\.com\//, "", line)
   return line
 }

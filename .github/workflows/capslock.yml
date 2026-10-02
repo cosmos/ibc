@@ -2,14 +2,23 @@
 
 name: Capslock Capability Baseline
 
-# Only main is baselined.
+# Only main is baselined, so capslock-diff.yml only runs for pull requests into main.
+#
+# Baselines are artifacts kept for 30 days and looked up by exact commit. If main sees no
+# push for longer than that, pull requests fall back to analysing the base commit
+# themselves until the next push to main, or a manual run here, publishes a fresh one.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+# Keyed on the commit, not the branch. With one group per branch, GitHub keeps a single
+# pending run and cancels it when a newer one queues, so of three quick merges the middle
+# commit would never get a baseline. Pull requests look baselines up by exact commit, so
+# every push head needs its own run. Runs for different commits never share a group; a
+# manual run for a commit that is already being analysed waits for it instead.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.sha }}
   cancel-in-progress: false
 
 permissions: read-all
@@ -42,12 +51,17 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
 
-      - name: Compute ref slug
-        id: slug
+      # The name records what produced the analysis. The diff workflow only accepts a
+      # baseline made by the same Capslock version and flags it compares with, because
+      # anything else would report the analyser's differences as the pull request's.
+      # Computed the same way in capslock-diff.yml; change both together.
+      - name: Compute artifact name
+        id: artifact
         env:
-          REF: ${{ github.ref_name }}
+          NAME: ${{ matrix.name }}
         run: |
-          printf 'slug=%s\n' "$(printf '%s' "$REF" | tr '/' '-' | tr -c '[:alnum:]_.-' '-')" >> "$GITHUB_OUTPUT"
+          printf 'name=capslock-baseline-%s-%s-%s\n' "$NAME" "$CAPSLOCK_VERSION" \
+            "$(printf '%s' "$CAPSLOCK_FLAGS" | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
       - name: Install Capslock
         run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
@@ -63,7 +77,7 @@ jobs:
       - name: Upload baseline artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: capslock-baseline-${{ matrix.name }}-${{ steps.slug.outputs.slug }}
+          name: ${{ steps.artifact.outputs.name }}
           path: capslock-out/${{ matrix.name }}.json
           if-no-files-found: error
           retention-days: 30
