@@ -13,8 +13,8 @@
 #   high   a capability class a compromised release typically gains. One line per finding,
 #          grouped by capability, naming the ends of the call path.
 #   moved  the same capability disappeared from a like-named package in this diff, which
-#          is what a vendored or renamed package looks like, not new privilege. Counted,
-#          not listed.
+#          is what a vendored or renamed package looks like, not new privilege. One line
+#          per package pair, naming both sides, because the pairing is a guess.
 #   low    capabilities that say more about Capslock's analysis than about privilege
 #          (UNANALYZED, REFLECT, UNSAFE_POINTER, CGO, RUNTIME). One line per capability.
 #   local  the package whose capability set changed is this repository's own, not a
@@ -33,15 +33,20 @@
 # golang.org/x/sys/unix is a library even when first-party code is what newly reaches it.
 # On a feature branch that added five first-party packages it filtered 1 finding of 36.
 #
-# The accepted cost is that a compromised dependency whose new capability is attributed
-# ONLY to first-party packages would be dropped. That needs every dependency package on the
-# call chain to already hold the capability while ours does not, and the untouched Capslock
-# report still has the finding.
+# Suppressing first-party findings is only sound while the dependency set is unchanged. A
+# dependency update can make a first-party package newly reach a high-signal capability and
+# be attributed only to that package, and dropping it would let the exact event this gate
+# exists for pass unreviewed. Deciding that needs the pull request's file list, which this
+# script does not have, so the decision belongs to the caller: pass --local only when no
+# dependency manifest changed. Both callers in this repository do that -- see the paths
+# filter in .github/workflows/capslock-diff.yml and the manifest check in capslock-diff.sh.
 #
 # The report is a triage aid, not an archive: the untouched Capslock report is kept next to
 # it (job log plus artifact in CI, a file path locally), so every finding here is one line
-# and the full call paths are read there. Listing `moved` was dropped for the same reason --
-# the pairing fires on routine dependency churn and crowded out the findings worth reading.
+# and the full call paths are read there. `moved` is the exception to one line per finding:
+# it collapses to one line per package pair, since what a reviewer checks is whether the two
+# packages are the same code, which is answered once however many capabilities moved with
+# it. A count alone would not be checkable without opening the raw report.
 #
 # `moved` requires the added and removed packages to share a final path element, so an
 # unrelated removal elsewhere in the diff cannot explain away a real finding. A high-signal
@@ -271,6 +276,16 @@ END {
       high_order[++n_high_caps] = cap
     }
     if (tier[i] == "low") add_to_group(cap, add_pkg[i], low_order, low_seen, low_n, low_list)
+    if (tier[i] == "moved") {
+      pair = add_pkg[i] SUBSEP moved_from[i]
+      if (!(pair in move_seen)) {
+        move_seen[pair] = 1
+        move_order[++n_move_pairs] = pair
+        move_to[n_move_pairs] = add_pkg[i]
+        move_from[n_move_pairs] = moved_from[i]
+      }
+      move_caps[pair] = move_caps[pair] (move_n[pair]++ ? ", " : "") cap
+    }
   }
   for (i = 1; i <= n_rem; i++) {
     # Removals carry no security question either way, so the cheaper test on the attributed
@@ -303,6 +318,20 @@ END {
     }
   }
 
+  if (n_tier["moved"] > 0) {
+    printf "### Likely package moves: %d capability use(s) across %d package pair(s)\n\n",
+           n_tier["moved"], n_move_pairs
+    print "The same capability left another package in this diff, which is what a vendored or"
+    print "renamed package looks like rather than new privilege. The two packages are matched"
+    print "on their final path element alone, so each pairing is a guess: unrelated packages"
+    print "that share a name produce one too. Both sides are named so it can be judged here.\n"
+    # Same "->" idiom as the high-signal call paths, and it reads the same whether one
+    # capability moved or several.
+    for (c = 1; c <= n_move_pairs; c++)
+      printf "- %s: `%s` -> `%s`\n", move_caps[move_order[c]], move_from[c], move_to[c]
+    print ""
+  }
+
   if (n_tier["low"] > 0) {
     printf "### Lower signal: %d capability use(s)\n\n", n_tier["low"]
     print "These describe the Capslock analysis more than they describe privilege.\n"
@@ -321,13 +350,6 @@ END {
     n_local = n_tier["local"] + n_local_rem
     plural = (n_local == 1 ? "" : "s")
     printf "_Not listed: %d capability change%s in packages belonging to this repository\nrather than to a dependency, which the pull request diff already shows._\n\n", n_local, plural
-  }
-
-  if (n_tier["moved"] > 0) {
-    # Kept out of the printf argument list: a bare relational operator there is ambiguous
-    # with output redirection, which some awks reject outright.
-    plural = (n_tier["moved"] == 1 ? "" : "s")
-    printf "_Not listed: %d addition%s where the same capability left a like-named package in\nthis diff, which is what a vendored or renamed package looks like._\n\n", n_tier["moved"], plural
   }
 
   n_add_dep = n_add - n_tier["local"]

@@ -26,6 +26,9 @@ jobs:
       pull-requests: read
     outputs:
       go: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.go }}
+      # Defaults to true for workflow_dispatch, where there is no diff to inspect: that is
+      # the conservative direction, since it only ever adds findings to the gate.
+      deps: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.deps }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -38,6 +41,16 @@ jobs:
               - 'gen/go/solidity-abi/**'
               - '.github/workflows/capslock.yml'
               - '.github/workflows/capslock-diff.yml'
+              # The classifier decides which findings block, so a change to it has to run
+              # the job it governs. Matched as a glob rather than by name so that a script
+              # added beside it is covered without this list having to be remembered.
+              - 'scripts/capslock-*.sh'
+            # Whether this pull request moves the dependency set at all. It decides whether
+            # a capability gained by a first-party package can be the pull request's own
+            # work or could have come from a dependency -- see the Build report step.
+            deps:
+              - '**/go.mod'
+              - '**/go.sum'
 
   diff:
     name: Diff ${{ matrix.name }}
@@ -47,6 +60,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      # Listing and downloading the baseline artifact published by another workflow run.
+      actions: read
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -57,8 +72,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          # Full history so the baseline can be regenerated from the base commit
-          # when no cached baseline is available.
+          # The base commit is resolved from the merge ref's parents, and the
+          # workflow_dispatch path fetches the default branch to find its tip.
           fetch-depth: 0
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -92,34 +107,71 @@ jobs:
           echo "Base revision: $sha (event payload reported '${BASE_SHA:-none}')"
           printf 'ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
-          printf 'slug=%s\n' "$(printf '%s' "$BASE_REF" | tr '/' '-' | tr -c '[:alnum:]_.-' '-')" >> "$GITHUB_OUTPUT"
 
       - name: Install Capslock
         run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
 
-      - name: Restore baseline from cache
-        id: baseline-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: capslock-out/${{ matrix.name }}.json
-          key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.base.outputs.slug }}-${{ steps.base.outputs.sha }}
-
-      - name: Generate baseline from base revision
-        if: steps.baseline-cache.outputs.cache-hit != 'true'
+      # The "Capslock Capability Baseline" workflow analyses every commit it sees and
+      # publishes the result as an artifact, which is where the baseline comes from. The
+      # Actions cache is deliberately not used: it is evicted once the repository passes its
+      # 10 GB cache allowance, which silently sent every pull request back to regenerating
+      # the baseline from source.
+      - name: Fetch baseline artifact for the base revision
+        id: baseline
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           BASE_REF: ${{ steps.base.outputs.ref }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
           NAME: ${{ matrix.name }}
-          DIR: ${{ matrix.dir }}
+          WORKFLOW: capslock.yml
         run: |
           set -euo pipefail
-          echo "::notice::No cached Capslock baseline for ${BASE_REF}; generating one from ${BASE_SHA}"
-          git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --no-tags origin "$BASE_SHA"
-          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
-          mkdir -p "$GITHUB_WORKSPACE/capslock-out"
-          cd "$RUNNER_TEMP/base/$DIR"
-          capslock $CAPSLOCK_FLAGS -output=json \
-            > "$GITHUB_WORKSPACE/capslock-out/${NAME}.json"
+          mkdir -p capslock-out
+          target="$GITHUB_WORKSPACE/capslock-out/${NAME}.json"
+
+          # Selected by head SHA rather than by taking the newest run on the base branch: a
+          # baseline built from a later commit would report that commit's capability changes
+          # as this pull request's. Candidates are the baseline workflow's run for the push
+          # that landed this commit on main, plus any manual dispatch for the same commit,
+          # so the most recent run holding an artifact wins.
+          runs="$(gh api "repos/${REPO}/actions/workflows/${WORKFLOW}/runs?head_sha=${BASE_SHA}&per_page=20" \
+            --jq '.workflow_runs[].id' || true)"
+
+          for run_id in ${runs}; do
+            # The artifact name carries the ref slug of the run that produced it, so it is
+            # matched on the module prefix. Expired artifacts are listed but cannot be
+            # downloaded, so they are filtered out rather than attempted.
+            artifact="$(gh api "repos/${REPO}/actions/runs/${run_id}/artifacts" \
+              --jq '[.artifacts[] | select(.expired == false)
+                     | select(.name | startswith("capslock-baseline-" + env.NAME + "-"))]
+                    | first | .name // empty' || true)"
+            [ -n "${artifact}" ] || continue
+            gh run download "${run_id}" --repo "${REPO}" --name "${artifact}" --dir capslock-out || continue
+            if [ -s "${target}" ]; then
+              echo "::notice::Baseline from artifact ${artifact} (run ${run_id})"
+              printf 'source=artifact `%s` from [run %s](%s/%s/actions/runs/%s)\n' \
+                "${artifact}" "${run_id}" "${GITHUB_SERVER_URL}" "${REPO}" "${run_id}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::warning::${artifact} (run ${run_id}) did not contain ${NAME}.json"
+            rm -f "${target}"
+          done
+          cat >&2 <<EOF
+          No Capslock baseline artifact was published for ${BASE_SHA}.
+
+          The "Capslock Capability Baseline" workflow publishes one for every commit it
+          analyses, and it is the only thing this check compares against. Without it there
+          is nothing to diff, and analysing the base commit here instead would quietly cost
+          every pull request the full analysis.
+
+          To fix: run the "Capslock Capability Baseline" workflow on ${BASE_REF} (Actions ->
+          Capslock Capability Baseline -> Run workflow), then re-run this job. If ${BASE_REF}
+          has moved on since, re-running this job alone is enough -- it resolves the base
+          commit again and will find the newer baseline.
+          EOF
+          echo "::error title=Missing Capslock baseline::No baseline artifact for ${BASE_SHA} (${BASE_REF}). Run the 'Capslock Capability Baseline' workflow on ${BASE_REF}, then re-run this job."
+          exit 1
 
       # Exit status 0 means no difference, 1 means a difference was found, and 2 or above
       # means capslock itself failed.
@@ -150,7 +202,8 @@ jobs:
           BASE_REF: ${{ steps.base.outputs.ref }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
           COMPARE_OK: ${{ steps.compare.outputs.ok }}
-          CACHE_HIT: ${{ steps.baseline-cache.outputs.cache-hit }}
+          DEPS_CHANGED: ${{ needs.changes.outputs.deps }}
+          BASELINE_SOURCE: ${{ steps.baseline.outputs.source }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ARTIFACT: capslock-diff-${{ matrix.name }}-pr${{ github.event.pull_request.number || github.run_id }}
         run: |
@@ -160,16 +213,32 @@ jobs:
           counts="$RUNNER_TEMP/counts-${NAME}.env"
           findings="$RUNNER_TEMP/findings-${NAME}.md"
 
+          # First-party findings are only excluded from the gate while the dependency set
+          # is untouched, because then a capability gained by one of this repository's own
+          # packages can only come from its own changed code, which the diff already shows.
+          #
+          # Once a manifest moves, that reasoning fails: a dependency update can make a
+          # first-party package newly reach EXEC or NETWORK and Capslock can attribute the
+          # finding to that package alone. Excluding it would let the event this gate exists
+          # for pass unreviewed, so nothing is excluded and every finding counts towards the
+          # blocking total.
+          scope='dependencies only; findings against this repository are not gated'
+          classify=(./scripts/capslock-classify.sh "$REPORT" --local "$CAPSLOCK_LOCAL")
+          if [ "${DEPS_CHANGED:-true}" = 'true' ]; then
+            scope='dependencies and first-party packages, because a dependency manifest changed'
+            classify=(./scripts/capslock-classify.sh "$REPORT")
+          fi
+
           if [ "${COMPARE_OK:-}" = "true" ]; then
-            ./scripts/capslock-classify.sh "$REPORT" --local "$CAPSLOCK_LOCAL" \
-              --counts "$counts" > "$findings"
+            "${classify[@]}" --counts "$counts" > "$findings"
             cat "$counts" >> "$GITHUB_OUTPUT"
           else
             printf ':x: capslock did not complete, see the [job log](%s).\n' "$RUN_URL" > "$findings"
           fi
 
-          baseline='cached'
-          [ "${CACHE_HIT:-}" = 'true' ] || baseline='generated from the base revision'
+          # Naming the run that produced the baseline makes the comparison auditable: a
+          # reviewer can see which analysis the findings are relative to.
+          baseline="${BASELINE_SOURCE:-generated from the base revision}"
 
           size="$(wc -c < "$findings" | tr -d '[:space:]')"
           {
@@ -178,8 +247,9 @@ jobs:
             # The findings carry their own counts in each section heading, so this line is
             # just the provenance needed to trust them plus where the full call paths are:
             # the classifier trims each finding to one line and the raw report keeps them.
-            printf 'Base `%s` (`%.12s`), baseline %s. Full call paths: [job log](%s) or the `%s` artifact.\n\n' \
-              "$BASE_REF" "$BASE_SHA" "$baseline" "$RUN_URL" "$ARTIFACT"
+            printf 'Base `%s` (`%.12s`), baseline %s.\n\n' "$BASE_REF" "$BASE_SHA" "$baseline"
+            printf 'Scope: %s. Full call paths: [job log](%s) or the `%s` artifact.\n\n' \
+              "$scope" "$RUN_URL" "$ARTIFACT"
             head -c "$LIMIT" "$findings" || printf '(findings unavailable)\n'
             if [ "$size" -gt "$LIMIT" ]; then
               printf '\n\nTruncated (%s of %s bytes shown). Full report: `%s` artifact on the [run](%s).\n' \
@@ -230,7 +300,7 @@ jobs:
           HIGH: ${{ steps.report.outputs.high }}
           BASE_REF: ${{ steps.base.outputs.ref }}
         run: |
-          echo "::error::${HIGH} new high-signal capability use(s) in dependencies, relative to ${BASE_REF}. A dependency reaching these without a matching change in what it does is the signature of a compromised release -- the job summary lists them."
+          echo "::error::${HIGH} new high-signal capability use(s) relative to ${BASE_REF}. Code reaching these without a matching change in what it does is the signature of a compromised release -- the job summary lists them, and its scope line says whether first-party packages are included."
           exit 1
 
       - name: Note non-blocking capability changes

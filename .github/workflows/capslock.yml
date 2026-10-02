@@ -2,14 +2,15 @@
 
 name: Capslock Capability Baseline
 
+# Only main is baselined.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions: read-all
 
@@ -18,29 +19,8 @@ env:
   CAPSLOCK_FLAGS: -packages=./... -granularity=intermediate
 
 jobs:
-  changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      go: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.go }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-        id: filter
-        with:
-          filters: |
-            go:
-              - 'cli/**'
-              - 'e2e/**'
-              - 'gen/go/solidity-abi/**'
-              - '.github/workflows/capslock.yml'
-
   baseline:
     name: Baseline ${{ matrix.name }}
-    needs: changes
-    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,12 +59,6 @@ jobs:
           capslock $CAPSLOCK_FLAGS -output=json \
             > "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
           ls -lh "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
-
-      - name: Save baseline to branch cache
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: capslock-out/${{ matrix.name }}.json
-          key: capslock-${{ env.CAPSLOCK_VERSION }}-${{ runner.os }}-${{ matrix.name }}-${{ steps.slug.outputs.slug }}-${{ github.sha }}
 
       - name: Upload baseline artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
