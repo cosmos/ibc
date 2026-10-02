@@ -2,44 +2,29 @@
 
 name: Capslock Capability Baseline
 
-# Only main is baselined, so capslock-diff.yml only runs for pull requests into main.
-#
-# Baselines are artifacts kept for 30 days and looked up by exact commit. If main sees no
-# push for longer than that, pull requests fall back to analysing the base commit
-# themselves until the next push to main, or a manual run here, publishes a fresh one.
+# Analyses main and publishes it as the artifact capslock-diff.yml compares pull requests
+# against, looked up by commit.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Keyed on the commit, not the branch. With one group per branch, GitHub keeps a single
-# pending run and cancels it when a newer one queues, so of three quick merges the middle
-# commit would never get a baseline. Pull requests look baselines up by exact commit, so
-# every push head needs its own run. Runs for different commits never share a group; a
-# manual run for a commit that is already being analysed waits for it instead.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: false
+permissions:
+  contents: read
 
-permissions: read-all
-
+# Same values as capslock-diff.yml. If they differ, pull requests find no matching
+# artifact and analyse their base themselves.
 env:
   CAPSLOCK_VERSION: v0.3.3
-  CAPSLOCK_FLAGS: -packages=./... -granularity=intermediate
+  CAPSLOCK_MODULES: cli e2e
+  # How cli is released; cgo also widens what a dependency can do unseen.
+  CGO_ENABLED: "0"
 
 jobs:
   baseline:
-    name: Baseline ${{ matrix.name }}
+    name: Baseline
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: cli
-            dir: cli
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -51,34 +36,21 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
 
-      # The name records what produced the analysis. The diff workflow only accepts a
-      # baseline made by the same Capslock version and flags it compares with, because
-      # anything else would report the analyser's differences as the pull request's.
-      # Computed the same way in capslock-diff.yml; change both together.
-      - name: Compute artifact name
-        id: artifact
-        env:
-          NAME: ${{ matrix.name }}
+      - name: Analyse
         run: |
-          printf 'name=capslock-baseline-%s-%s-%s\n' "$NAME" "$CAPSLOCK_VERSION" \
-            "$(printf '%s' "$CAPSLOCK_FLAGS" | sha256sum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
+          mkdir -p capslock-out
+          for m in $CAPSLOCK_MODULES; do
+            for g in intermediate function; do
+              (cd "$m" && capslock -packages=./... -granularity="$g" -output=json) > "capslock-out/$m-$g.json"
+            done
+          done
 
-      - name: Install Capslock
-        run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
-
-      - name: Generate baseline
-        working-directory: ${{ matrix.dir }}
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/capslock-out"
-          capslock $CAPSLOCK_FLAGS -output=json \
-            > "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
-          ls -lh "$GITHUB_WORKSPACE/capslock-out/${{ matrix.name }}.json"
-
-      - name: Upload baseline artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      # Kept for the longest a public repository allows, for when main is quiet.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: ${{ steps.artifact.outputs.name }}
-          path: capslock-out/${{ matrix.name }}.json
+          name: capslock-baseline-${{ env.CAPSLOCK_VERSION }}
+          path: capslock-out/
           if-no-files-found: error
-          retention-days: 30
-          overwrite: true
+          retention-days: 90
