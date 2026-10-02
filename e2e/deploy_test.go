@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
@@ -58,105 +59,135 @@ func (m deployManifest) token(symbol string) (string, bool) {
 	return "", false
 }
 
-// TestDeployConnection drives `ibc deploy` as a black box: two bare managed
-// chains (no protocol resources — the deploy CLI provisions IBC itself),
-// a temporary CLI home with an imported deployer key, and assertions against
-// the CLI's JSON step output and the manifests it writes.
-func TestDeployConnection(t *testing.T) {
-	t.Parallel()
+const deployerAlias = "deployer"
 
+// deployCLI is a temporary CLI home with an imported, funded deployer key on
+// two bare managed chains: no protocol resources, the deploy CLI provisions
+// IBC itself.
+type deployCLI struct {
+	driver             *ibccli.Driver
+	home, configPath   string
+	chainA, chainB     *environment.Chain
+	chainAID, chainBID string
+	rpcA, rpcB         string
+	deployer           common.Address
+}
+
+func startDeployCLI(t *testing.T, requirements e2etest.EVMRequirements) *deployCLI {
+	t.Helper()
 	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+		Chains: e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB),
 	}
 	env := e2etest.Start(t, spec, environment.Runtime{})
 
-	chainA, err := env.Chain(e2etest.ChainA)
+	d := &deployCLI{home: t.TempDir()}
+	var err error
+	d.chainA, err = env.Chain(e2etest.ChainA)
 	require.NoError(t, err)
-	chainB, err := env.Chain(e2etest.ChainB)
+	d.chainB, err = env.Chain(e2etest.ChainB)
 	require.NoError(t, err)
-	chainAID := strconv.FormatUint(chainA.EVMChainID(), 10)
-	chainBID := strconv.FormatUint(chainB.EVMChainID(), 10)
+	d.chainAID = strconv.FormatUint(d.chainA.EVMChainID(), 10)
+	d.chainBID = strconv.FormatUint(d.chainB.EVMChainID(), 10)
 
-	home := t.TempDir()
-	configPath := filepath.Join(home, "ibc.yml")
-	driver, err := ibccli.NewDriver(configPath)
+	d.configPath = filepath.Join(d.home, "ibc.yml")
+	d.driver, err = ibccli.NewDriver(d.configPath)
 	require.NoError(t, err)
-	require.NoError(t, env.BindCLI(driver))
+	require.NoError(t, env.BindCLI(d.driver))
 
 	deployerKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
-	deployerHex := hex.EncodeToString(crypto.FromECDSA(deployerKey))
-	deployerAddress := crypto.PubkeyToAddress(deployerKey.PublicKey)
-
+	d.deployer = crypto.PubkeyToAddress(deployerKey.PublicKey)
 	minimum := e2etest.RequiredSignerBalance()
-	for _, chain := range []*environment.Chain{chainA, chainB} {
+	for _, chain := range []*environment.Chain{d.chainA, d.chainB} {
 		funding, fundingErr := chain.Funding()
 		require.NoError(t, fundingErr)
-		require.NoError(t, funding.EnsureEOABalance(t.Context(), deployerAddress, minimum))
+		require.NoError(t, funding.EnsureEOABalance(t.Context(), d.deployer, minimum))
 	}
 
-	rpcA, err := driver.ChainRPC(string(e2etest.ChainA))
+	d.rpcA, err = d.driver.ChainRPC(string(e2etest.ChainA))
 	require.NoError(t, err)
-	rpcB, err := driver.ChainRPC(string(e2etest.ChainB))
+	d.rpcB, err = d.driver.ChainRPC(string(e2etest.ChainB))
 	require.NoError(t, err)
+	d.writeConfig(t, "", "")
+	require.NoError(
+		t,
+		d.driver.KeysImportECDSA(t.Context(), deployerAlias, hex.EncodeToString(crypto.FromECDSA(deployerKey))),
+	)
+	return d
+}
 
-	const deployerAlias = "deployer"
-	err = ibccli.WriteDeployConfig(configPath, ibccli.DeployConfig{
-		DBPath:        filepath.Join(home, "unused.db"),
+// writeConfig declares both chains with the given routers, or placeholders
+// before they are deployed.
+func (d *deployCLI) writeConfig(t *testing.T, routerA, routerB string) {
+	t.Helper()
+	require.NoError(t, ibccli.WriteDeployConfig(d.configPath, ibccli.DeployConfig{
+		DBPath:        filepath.Join(d.home, "unused.db"),
 		SignerAlias:   deployerAlias,
-		SignerKeyFile: driver.KeyFilePath(deployerAlias),
+		SignerKeyFile: d.driver.KeyFilePath(deployerAlias),
 		Chains: []ibccli.DeployChain{
-			{ChainID: chainAID, RPC: rpcA},
-			{ChainID: chainBID, RPC: rpcB},
+			{ChainID: d.chainAID, RPC: d.rpcA, ICS26Router: routerA},
+			{ChainID: d.chainBID, RPC: d.rpcB, ICS26Router: routerB},
 		},
-	})
-	require.NoError(t, err)
+	}))
+}
 
-	ctx := t.Context()
-	require.NoError(t, driver.KeysImportECDSA(ctx, deployerAlias, deployerHex))
+// deploy runs each command and requires every step it reports to have taken
+// action ("executed" or "skipped").
+func (d *deployCLI) deploy(t *testing.T, commands [][]string, action string) {
+	t.Helper()
+	for _, args := range commands {
+		stdout, err := d.driver.Deploy(t.Context(), args...)
+		require.NoErrorf(t, err, "deploy %v", args)
+		results := decodeStepResults(t, stdout)
+		require.NotEmptyf(t, results, "deploy %v", args)
+		for _, r := range results {
+			require.Equalf(t, action, r.Action, "step %q of %v", r.Name, args)
+		}
+	}
+}
+
+func (d *deployCLI) manifest(t *testing.T, chainID string) deployManifest {
+	t.Helper()
+	return readManifest(t, filepath.Join(d.home, "deployments"), chainID)
+}
+
+func (d *deployCLI) renderConfig(t *testing.T) string {
+	t.Helper()
+	rendered, err := d.driver.Deploy(t.Context(), "render-config", d.chainAID, d.chainBID,
+		"--signer-a", deployerAlias, "--signer-b", deployerAlias)
+	require.NoError(t, err)
+	return string(rendered)
+}
+
+// TestDeployConnection drives `ibc deploy` as a black box, asserting against
+// the CLI's JSON step output and the manifests it writes.
+func TestDeployConnection(t *testing.T) {
+	t.Parallel()
+	d := startDeployCLI(t, e2etest.EVMRequirements{})
 
 	// the connection is four separate idempotent commands: core on each
 	// chain, then a client on each chain tracking the other. Both client
 	// invocations derive the same shared client id.
-	sharedClientID := "cli-" + chainAID + "-" + chainBID
-	deployCommands := [][]string{
-		{"core", "--chain", chainAID, "--yes"},
-		{"core", "--chain", chainBID, "--yes"},
-		{
-			"client",
-			"--chain",
-			chainAID,
-			"--counterparty-chain",
-			chainBID,
-			"--attestors",
-			deployerAddress.Hex(),
+	sharedClientID := "cli-" + d.chainAID + "-" + d.chainBID
+	client := func(chainID, counterparty string) []string {
+		return []string{
+			"client", "attestation",
+			"--chain", chainID,
+			"--counterparty-chain", counterparty,
+			"--attestors", d.deployer.Hex(),
 			"--yes",
-		},
-		{
-			"client",
-			"--chain",
-			chainBID,
-			"--counterparty-chain",
-			chainAID,
-			"--attestors",
-			deployerAddress.Hex(),
-			"--yes",
-		},
-	}
-
-	for _, args := range deployCommands {
-		stdout, deployErr := driver.Deploy(ctx, args...)
-		require.NoErrorf(t, deployErr, "deploy %v", args)
-		results := decodeStepResults(t, stdout)
-		require.NotEmpty(t, results)
-		for _, r := range results {
-			require.Equalf(t, "executed", r.Action, "step %q", r.Name)
 		}
 	}
+	deployCommands := [][]string{
+		{"core", "--chain", d.chainAID, "--yes"},
+		{"core", "--chain", d.chainBID, "--yes"},
+		client(d.chainAID, d.chainBID),
+		client(d.chainBID, d.chainAID),
+	}
+	d.deploy(t, deployCommands, "executed")
 
-	manifestDir := filepath.Join(home, "deployments")
-	manifestA := readManifest(t, manifestDir, chainAID)
-	manifestB := readManifest(t, manifestDir, chainBID)
+	manifestA := d.manifest(t, d.chainAID)
+	manifestB := d.manifest(t, d.chainBID)
 	require.NotEmpty(t, manifestA.Core.Router)
 	require.NotEmpty(t, manifestB.Core.Router)
 
@@ -164,37 +195,61 @@ func TestDeployConnection(t *testing.T) {
 	// prove an unrelated address can call recvPacket on each router. The
 	// driver's ChainRPC values are env-var templates only the CLI process
 	// expands, so dial the chains' real RPC URLs.
-	assertPublicRelaying(ctx, t, chainA.RPCURL(), manifestA)
-	assertPublicRelaying(ctx, t, chainB.RPCURL(), manifestB)
+	ctx := t.Context()
+	assertPublicRelaying(ctx, t, d.chainA.RPCURL(), manifestA)
+	assertPublicRelaying(ctx, t, d.chainB.RPCURL(), manifestB)
 
 	// Idempotency: rerunning every identical command skips its step.
-	for _, args := range deployCommands {
-		stdout, deployErr := driver.Deploy(ctx, args...)
-		require.NoErrorf(t, deployErr, "rerun %v", args)
-		rerun := decodeStepResults(t, stdout)
-		require.NotEmpty(t, rerun)
-		for _, r := range rerun {
-			require.Equalf(t, "skipped", r.Action, "step %q", r.Name)
-		}
-	}
+	d.deploy(t, deployCommands, "skipped")
 
-	_, err = driver.Deploy(ctx, "status")
+	_, err := d.driver.Deploy(ctx, "status")
 	require.NoError(t, err)
 
 	// render-config pairs the two manifests into one relayer.connections[]
 	// entry: clientA/clientB, each end's counterparty implied by the other.
-	rendered, err := driver.Deploy(ctx, "render-config", chainAID, chainBID,
-		"--signer-a", deployerAlias, "--signer-b", deployerAlias)
-	require.NoError(t, err)
+	rendered := d.renderConfig(t)
 	for _, want := range []string{
-		"alias: " + chainAID + "-" + chainBID,
+		"alias: " + d.chainAID + "-" + d.chainBID,
 		"clientId: " + sharedClientID,
-		`chainId: "` + chainAID + `"`,
-		`chainId: "` + chainBID + `"`,
+		`chainId: "` + d.chainAID + `"`,
+		`chainId: "` + d.chainBID + `"`,
 		"signer: " + deployerAlias,
 	} {
-		require.Contains(t, string(rendered), want)
+		require.Contains(t, rendered, want)
 	}
+}
+
+// TestDeployBesuQBFTConnection deploys besu-qbft clients through the CLI on
+// two Besu chains. Each trusts the other chain's head and needs its router,
+// so the config carries the routers core deployed.
+func TestDeployBesuQBFTConnection(t *testing.T) {
+	t.Parallel()
+	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu})
+
+	d.deploy(t, [][]string{
+		{"core", "--chain", d.chainAID, "--yes"},
+		{"core", "--chain", d.chainBID, "--yes"},
+	}, "executed")
+	d.writeConfig(t, d.manifest(t, d.chainAID).Core.Router, d.manifest(t, d.chainBID).Core.Router)
+
+	client := func(chainID, counterparty string) []string {
+		return []string{
+			"client", "besu-qbft",
+			"--chain", chainID,
+			"--counterparty-chain", counterparty,
+			"--trusting-period", "336h",
+			"--max-clock-drift", "1m",
+			"--yes",
+		}
+	}
+	clients := [][]string{client(d.chainAID, d.chainBID), client(d.chainBID, d.chainAID)}
+	d.deploy(t, clients, "executed")
+	// the heads have moved on, but a rerun compares only the recorded params
+	d.deploy(t, clients, "skipped")
+
+	_, err := d.driver.Deploy(t.Context(), "status")
+	require.NoError(t, err)
+	require.Equal(t, 2, strings.Count(d.renderConfig(t), "type: besu-qbft"))
 }
 
 // TestDeployIFTBridge drives the app-layer deploy commands end-to-end: core +
@@ -203,86 +258,28 @@ func TestDeployConnection(t *testing.T) {
 // status passes.
 func TestDeployIFTBridge(t *testing.T) {
 	t.Parallel()
-
-	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
-	}
-	env := e2etest.Start(t, spec, environment.Runtime{})
-
-	chainA, err := env.Chain(e2etest.ChainA)
-	require.NoError(t, err)
-	chainB, err := env.Chain(e2etest.ChainB)
-	require.NoError(t, err)
-	chainAID := strconv.FormatUint(chainA.EVMChainID(), 10)
-	chainBID := strconv.FormatUint(chainB.EVMChainID(), 10)
-
-	home := t.TempDir()
-	configPath := filepath.Join(home, "ibc.yml")
-	driver, err := ibccli.NewDriver(configPath)
-	require.NoError(t, err)
-	require.NoError(t, env.BindCLI(driver))
-
-	deployerKey, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	deployerHex := hex.EncodeToString(crypto.FromECDSA(deployerKey))
-	deployerAddress := crypto.PubkeyToAddress(deployerKey.PublicKey)
-
-	minimum := e2etest.RequiredSignerBalance()
-	for _, chain := range []*environment.Chain{chainA, chainB} {
-		funding, fundingErr := chain.Funding()
-		require.NoError(t, fundingErr)
-		require.NoError(t, funding.EnsureEOABalance(t.Context(), deployerAddress, minimum))
-	}
-
-	rpcA, err := driver.ChainRPC(string(e2etest.ChainA))
-	require.NoError(t, err)
-	rpcB, err := driver.ChainRPC(string(e2etest.ChainB))
-	require.NoError(t, err)
-
-	const deployerAlias = "deployer"
-	require.NoError(t, ibccli.WriteDeployConfig(configPath, ibccli.DeployConfig{
-		DBPath:        filepath.Join(home, "unused.db"),
-		SignerAlias:   deployerAlias,
-		SignerKeyFile: driver.KeyFilePath(deployerAlias),
-		Chains: []ibccli.DeployChain{
-			{ChainID: chainAID, RPC: rpcA},
-			{ChainID: chainBID, RPC: rpcB},
-		},
-	}))
-
-	ctx := t.Context()
-	require.NoError(t, driver.KeysImportECDSA(ctx, deployerAlias, deployerHex))
+	d := startDeployCLI(t, e2etest.EVMRequirements{})
 
 	// per-chain bring-up: core, client, gmp, ift
 	perChain := func(chainID, counterparty string) [][]string {
 		return [][]string{
 			{"core", "--chain", chainID, "--yes"},
 			{
-				"client",
-				"--chain",
-				chainID,
-				"--counterparty-chain",
-				counterparty,
-				"--attestors",
-				deployerAddress.Hex(),
+				"client", "attestation",
+				"--chain", chainID,
+				"--counterparty-chain", counterparty,
+				"--attestors", d.deployer.Hex(),
 				"--yes",
 			},
 			{"gmp", "--chain", chainID, "--yes"},
 			{"ift", "--chain", chainID, "--name", "Foo", "--symbol", "FOO", "--yes"},
 		}
 	}
-	bringUp := append(perChain(chainAID, chainBID), perChain(chainBID, chainAID)...)
-	for _, args := range bringUp {
-		stdout, deployErr := driver.Deploy(ctx, args...)
-		require.NoErrorf(t, deployErr, "deploy %v", args)
-		for _, r := range decodeStepResults(t, stdout) {
-			require.Equalf(t, "executed", r.Action, "step %q", r.Name)
-		}
-	}
+	bringUp := append(perChain(d.chainAID, d.chainBID), perChain(d.chainBID, d.chainAID)...)
+	d.deploy(t, bringUp, "executed")
 
-	manifestDir := filepath.Join(home, "deployments")
-	manifestA := readManifest(t, manifestDir, chainAID)
-	manifestB := readManifest(t, manifestDir, chainBID)
+	manifestA := d.manifest(t, d.chainAID)
+	manifestB := d.manifest(t, d.chainBID)
 	iftA, ok := manifestA.token("FOO")
 	require.True(t, ok)
 	iftB, ok := manifestB.token("FOO")
@@ -294,26 +291,16 @@ func TestDeployIFTBridge(t *testing.T) {
 	// sorted name `deploy client` derived.
 	bridge := []string{
 		"ift-bridge",
-		"--chain-a", chainAID, "--ift-a", iftA,
-		"--chain-b", chainBID, "--ift-b", iftB,
+		"--chain-a", d.chainAID, "--ift-a", iftA,
+		"--chain-b", d.chainBID, "--ift-b", iftB,
 		"--yes",
 	}
-	stdout, deployErr := driver.Deploy(ctx, bridge...)
-	require.NoErrorf(t, deployErr, "deploy %v", bridge)
-	for _, r := range decodeStepResults(t, stdout) {
-		require.Equalf(t, "executed", r.Action, "step %q", r.Name)
-	}
+	d.deploy(t, [][]string{bridge}, "executed")
 
 	// idempotency: rerun bring-up + bridge, everything skips
-	for _, args := range append(bringUp, bridge) {
-		stdout, deployErr := driver.Deploy(ctx, args...)
-		require.NoErrorf(t, deployErr, "rerun %v", args)
-		for _, r := range decodeStepResults(t, stdout) {
-			require.Equalf(t, "skipped", r.Action, "step %q", r.Name)
-		}
-	}
+	d.deploy(t, append(bringUp, bridge), "skipped")
 
-	_, err = driver.Deploy(ctx, "status")
+	_, err := d.driver.Deploy(t.Context(), "status")
 	require.NoError(t, err)
 }
 
