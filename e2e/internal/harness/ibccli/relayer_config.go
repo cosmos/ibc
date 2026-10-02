@@ -17,8 +17,9 @@ import (
 // RelayerConfig describes one relayer process configuration for the black-box
 // binary. An empty Attestors list runs without attestors.
 type RelayerConfig struct {
-	DBPath      string
-	SignerAlias string
+	DBPath        string
+	SignerAlias   string
+	Observability bool
 	// SignerType defaults to RelayerSignerLocal. A remote transaction signer is
 	// shared by both ends of every route.
 	SignerType string
@@ -129,9 +130,10 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		processSigner.File = cfg.SignerKeyFile
 	}
 	file := fileConfig{
-		Server:  serverConfig{ListenAddress: loopbackAnyPort},
-		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
-		Signers: []signerConfig{processSigner},
+		Server:        serverConfig{ListenAddress: loopbackAnyPort},
+		DB:            dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
+		Observability: otelFileConfig(cfg.Observability),
+		Signers:       []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{
 			DispatchPollInterval: "100ms",

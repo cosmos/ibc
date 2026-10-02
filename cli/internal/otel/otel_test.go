@@ -6,9 +6,11 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,39 @@ import (
 )
 
 func TestProvider(t *testing.T) {
+	t.Run("exportsRuntimeAndProcessMetrics", func(t *testing.T) {
+		// ARRANGE
+		cfg := config.Observability{
+			Type:                    config.ObservabilitySimple,
+			SimpleMetricsListenAddr: availableListenAddress(t),
+		}
+		provider, err := New(t.Context(), cfg, testLogger())
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			require.NoError(t, provider.Stop())
+		})
+		client := &http.Client{Timeout: 5 * time.Second}
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			"http://"+cfg.SimpleMetricsListenAddr+simpleMetricsPath, nil)
+		require.NoError(t, err)
+
+		// ACT
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		// ASSERT
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, string(body), "go_goroutine_count{")
+		assert.Contains(t, string(body), "process_cpu_time_seconds_total{")
+		assert.Contains(t, string(body), `cpu_mode="user"`)
+		assert.Contains(t, string(body), `cpu_mode="system"`)
+	})
+
 	t.Run("rejectsUnsupportedType", func(t *testing.T) {
 		// ARRANGE
 		cfg := config.Observability{Type: "unsupported"}

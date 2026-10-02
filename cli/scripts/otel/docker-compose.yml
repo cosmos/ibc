@@ -11,5 +11,7 @@ services:
       - ./otelcol-config.yaml:/otel-lgtm/otelcol-config.yaml:ro
       - ./prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
       - ./grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
+
+      - ./data/grafana:/data/grafana
     healthcheck:
       disable: true
