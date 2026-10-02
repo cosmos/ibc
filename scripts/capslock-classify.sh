@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 #
-# Turns two `capslock -output=compare` reports for one Go module into a short markdown
+# Turns the `capslock -output=compare` reports for one Go module into a short markdown
 # report of the capabilities its changed dependencies newly bring in.
 #
 #   ./scripts/capslock-classify.sh --modules m.tsv --intermediate i.txt --function f.txt
-#       [--name cli] [--counts counts.env] [--high-signal "EXEC NETWORK ..."]
+#       [--dependency d.txt --reachable fns.txt] [--name cli] [--base-packages pkgs.txt]
+#       [--counts counts.env]
 #
 # --modules lists the module's build list as "path<TAB>status<TAB>base<TAB>head" lines, with
 # status `changed` for added, bumped or newly replaced modules; the "Find changed
@@ -13,7 +14,12 @@
 # -granularity=intermediate, where a finding is a package newly on a path to a capability,
 # and -granularity=function, where it is a first-party function newly reaching one. The
 # second catches a dependency that already held a capability adding a new use of it, such
-# as an init() that reads a file and posts it.
+# as an init() that reads a file and posts it. --dependency is a third, -granularity=function
+# report run on the bumped dependencies' own packages, old version against new, so that a
+# new use inside a function of the dependency shows even when everything above it already
+# had the capability; a function that only changed version path counts as a move, and one
+# missing from --reachable, the functions on any path from this code to a capability
+# (capslock -output=graph), cannot be called from here and is only counted.
 #
 # The gate is about dependencies, so a finding counts only when its call path goes through
 # a changed module, and it is listed under the last such module on the path. Everything
@@ -24,26 +30,31 @@
 # counted, since a pull request that bumps a dependency and newly calls into what it
 # already had would otherwise gate.
 #
-# Not gated either: a capability that left a package whose path differs only in version
-# elements (/v2, /v1.43.0, .v3), which is a move; and a new package reached from a package
-# of the same dependency that already had the capability, such as a helper split out of
-# it, since the same code in that caller would not show at this granularity either.
+# Not gated either: a capability that left a package for one whose path differs only in
+# version elements (/v2, /v1.43.0, .v3) and that the base build did not load, which is a
+# move; and a non-standard package reached through a package of the same dependency that
+# already had the capability, such as a helper split out of it, since the same code in
+# that caller would not show at this granularity either. --base-packages lists the
+# packages the base build loaded; without it every version-sibling counts as a move.
 #
 # The report is one line per module, then one line per changed dependency that brings in a
-# capability, with the shortest example path; full paths stay in the Capslock reports.
+# capability, with an example path to the most severe one; full paths stay in the reports.
 #
-# Not seen: a new path to a capability that both the package and every first-party caller
-# already had, or that only this pull request's new code reaches; a finding whose one
-# example path, the shortest, avoids the changed dependency while a longer one goes
-# through it; code built only for platforms other than the runner's; and calls made
-# through reflection or unsafe (REFLECT, UNSAFE_POINTER), which are listed but do not gate.
+# Not seen: a new use of a capability inside a dependency function that already had it; a
+# new use that only this pull request's new code reaches; a finding whose one example path,
+# the shortest, avoids the changed dependency while a longer one goes through it; code
+# built only for platforms other than the runner's; and calls made through reflection or
+# unsafe (REFLECT, UNSAFE_POINTER), which are listed but do not gate.
+#
+# --counts writes high, low, moved, held, unreached, unrelated and changed as key=value
+# lines; `high` is what CI blocks on.
 
 set -euo pipefail
 
 # Capability classes that block until someone reads the call path. MODIFY_SYSTEM_STATE
 # matches its subcategories too (/ENV, /SIGNALS, ...).
 HIGH_SIGNAL="EXEC NETWORK FILES ARBITRARY_EXECUTION SYSTEM_CALLS MODIFY_SYSTEM_STATE"
-NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" COUNTS=""
+NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" REACHABLE="" COUNTS="" BASE_PACKAGES=""
 
 die() { echo "capslock-classify: $*" >&2; exit 2; }
 usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
@@ -51,15 +62,18 @@ usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
 while (($# > 0)); do
   case "$1" in
     -h | --help) usage; exit 0 ;;
-    --name | --modules | --intermediate | --function | --counts | --high-signal)
+    --name | --modules | --intermediate | --function | --dependency | --reachable | --counts | --high-signal | --base-packages)
       [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
       case "$1" in
         --modules) MODULES="$2" ;;
         --intermediate) INTERMEDIATE="$2" ;;
         --function) FUNCTION="$2" ;;
+        --dependency) DEPENDENCY="$2" ;;
+        --reachable) REACHABLE="$2" ;;
         --counts) COUNTS="$2" ;;
         --name) NAME="$2" ;;
         --high-signal) HIGH_SIGNAL="$2" ;;
+        --base-packages) BASE_PACKAGES="$2" ;;
       esac
       shift 2 ;;
     *) die "unknown argument '$1' (see --help)" ;;
@@ -70,11 +84,19 @@ for f in "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}"; do
   [[ -n "$f" ]] || die "--modules, --intermediate and --function are required (see --help)"
   [[ -f "$f" ]] || die "'$f' does not exist"
 done
+for f in "${DEPENDENCY}" "${REACHABLE}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
 
 awk -v high_signal="${HIGH_SIGNAL}" -v name="${NAME}" -v counts_file="${COUNTS}" \
-    -v modules_file="${MODULES}" -v intermediate_file="${INTERMEDIATE}" '
+    -v modules_file="${MODULES}" -v intermediate_file="${INTERMEDIATE}" -v base_packages_file="${BASE_PACKAGES}" \
+    -v dependency_file="${DEPENDENCY}" -v reachable_file="${REACHABLE}" '
+# Packages the base build loaded, from the packageInfo of the intermediate baseline.
+BEGIN {
+  if (base_packages_file != "") while ((getline line < base_packages_file) > 0) in_base[line] = 1
+  if (reachable_file != "") while ((getline line < reachable_file) > 0) reachable[line] = 1
+}
+
 # Files are told apart by name: an empty report has no first record to count.
-FNR == 1 { file = (FILENAME == modules_file) ? 1 : (FILENAME == intermediate_file) ? 2 : 3 }
+FNR == 1 { file = (FILENAME == modules_file) ? 1 : (FILENAME == intermediate_file) ? 2 : (FILENAME == dependency_file) ? 4 : 3 }
 
 # Module list: path, status, base version, head version.
 file == 1 {
@@ -147,6 +169,13 @@ function unversioned(p,    i, n, parts, out) {
   return out
 }
 
+# A function name with version elements dropped, as unversioned() does for packages.
+function unversioned_fn(s) {
+  while (match(s, /\/v[0-9]+(\.[0-9]+)*[\/.]/)) s = substr(s, 1, RSTART) substr(s, RSTART + RLENGTH - 1)
+  while (match(s, /\.v[0-9]+[\/.]/)) s = substr(s, 1, RSTART - 1) substr(s, RSTART + RLENGTH - 1)
+  return s
+}
+
 function short(s) { gsub(/github\.com\//, "", s); sub(/\[.*\]/, "", s); return s }
 
 # A version as shown in the report: a replace is noted, not spelled out, and a pseudo-version
@@ -188,6 +217,7 @@ function parse(line, phrase,    i) {
 /^Package .* no longer has capability / {
   parse($0, " no longer has capability ")
   if (file == 2) removed[parsed_cap] = removed[parsed_cap] " " parsed_key
+  if (file == 4) removed_fn[parsed_cap, unversioned_fn(parsed_key)] = 1
   current = 0
   next
 }
@@ -205,10 +235,14 @@ END {
 
     via = ""
     for (j = 1; j <= n_frames[i]; j++) if ((m = changed_module(frames[i, j])) != "") via = m
-    if (gran[i] == 2 && (m = changed_module(key[i])) != "") via = m
+    if (gran[i] != 3 && (m = changed_module(key[i])) != "") via = m
     if (via == "") { tier["unrelated"]++; continue }
 
-    if (gran[i] == 2 && cap[i] in removed) {
+    if (gran[i] == 4 && (cap[i], unversioned_fn(key[i])) in removed_fn) { tier["moved"]++; continue }
+    if (gran[i] == 4 && reachable_file != "" && !(key[i] in reachable)) { tier["unreached"]++; continue }
+
+    # Only a package the base build did not load can be where a capability moved to.
+    if (gran[i] == 2 && cap[i] in removed && !(key[i] in in_base)) {
       k = split(removed[cap[i]], gone, " ")
       for (j = 1; j <= k; j++)
         if (gone[j] != key[i] && unversioned(gone[j]) == unversioned(key[i])) break
@@ -217,7 +251,9 @@ END {
 
     # Upstream of its own package only: below it, a package of the same dependency that
     # already had the capability is what this finding newly reaches, not where it came from.
-    if (gran[i] == 2) {
+    # Not for the standard library, whose first path element has no dot: those packages
+    # would show however the dependency arranged its own code.
+    if (gran[i] == 2 && key[i] ~ /^[^\/]*\./) {
       for (j = 1; j <= n_frames[i] && (p = package_of(frames[i, j])) != key[i]; j++)
         if (module_of(p) == via && !((cap[i], p) in is_new)) break
       if (j <= n_frames[i] && p != key[i]) { tier["held"]++; continue }
@@ -263,16 +299,17 @@ END {
       } else printf "%s\n", low_caps[m]
     }
 
-  if (tier["moved"] + tier["held"] + tier["unrelated"] > 0) {
+  if (tier["moved"] + tier["held"] + tier["unreached"] + tier["unrelated"] > 0) {
     sep = "\n_Not gated: "
     if (tier["moved"]) { printf "%s%d version move%s", sep, tier["moved"], (tier["moved"] == 1 ? "" : "s"); sep = ", " }
     if (tier["held"]) { printf "%s%d new package%s reached from one that already had the capability", sep, tier["held"], (tier["held"] == 1 ? "" : "s"); sep = ", " }
+    if (tier["unreached"]) { printf "%s%d in dependency functions nothing here calls", sep, tier["unreached"]; sep = ", " }
     if (tier["unrelated"]) printf "%s%d change%s outside the changed dependencies", sep, tier["unrelated"], (tier["unrelated"] == 1 ? "" : "s")
     print "._"
   }
 
   if (counts_file != "")
-    printf "high=%d\nlow=%d\nmoved=%d\nheld=%d\nunrelated=%d\nchanged=%d\n", tier["high"], tier["low"],
-      tier["moved"], tier["held"], tier["unrelated"], n_changed > counts_file
+    printf "high=%d\nlow=%d\nmoved=%d\nheld=%d\nunreached=%d\nunrelated=%d\nchanged=%d\n", tier["high"],
+      tier["low"], tier["moved"], tier["held"], tier["unreached"], tier["unrelated"], n_changed > counts_file
 }
-' "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}"
+' "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}" ${DEPENDENCY:+"${DEPENDENCY}"}

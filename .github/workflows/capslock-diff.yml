@@ -130,7 +130,7 @@ jobs:
           done
           if [ -n "$built" ]; then
             echo "::warning::$NAME from main lacked${built} for $BASE; analysed the base commit here."
-            source=":warning: baseline built in this job for${built}"
+            source=":warning: baseline built in this job"
           fi
           echo "source=$source" >> "$GITHUB_OUTPUT"
 
@@ -138,6 +138,8 @@ jobs:
       # code imports is covered. Function granularity analyses main's code built against
       # the new dependencies, so the pull request's own new functions are not findings;
       # if main's code does not build against them, the pull request is analysed instead.
+      # The dependency pass compares each bumped dependency's own functions, old version
+      # against new, for a new use of a capability the dependency already had.
       - name: Compare
         id: compare
         if: steps.deps.outputs.modules != ''
@@ -145,6 +147,7 @@ jobs:
           BASE: ${{ steps.deps.outputs.base }}
           MODULES: ${{ steps.deps.outputs.modules }}
           SOURCE: ${{ steps.baseline.outputs.source }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -160,26 +163,61 @@ jobs:
             return "$status"
           }
 
+          # Packages of each bumped dependency that the analysed code imports, base and head;
+          # a major-version move is compared as the pair it is.
+          dependency() {
+            local f="capslock-out/$m-dependency.txt" old new b h status
+            : > "$f"
+            imports() { (cd "$1" && go list -deps -f '{{with .Module}}{{.Path}} {{$.ImportPath}}{{end}}' ./...); }
+            # Called as a condition, where set -e is off, so every failure returns explicitly.
+            imports "$RUNNER_TEMP/base/$m" > "$RUNNER_TEMP/$m-base.imports" || return 2
+            imports "$1" > "$RUNNER_TEMP/$m-head.imports" || return 2
+            # Every function on a path from this code to a capability: a dependency function
+            # outside it cannot be reached from here, so only functions inside it count.
+            (cd "$1" && capslock -packages=./... -output=graph) > "$RUNNER_TEMP/$m.graph" || return 2
+            grep -o '"[^"]*"' "$RUNNER_TEMP/$m.graph" | tr -d '"' | sort -u > "capslock-out/$m-reachable.txt"
+            while read -r old new; do
+              b="$(awk -v m="$old" '$1 == m { print $2 }' "$RUNNER_TEMP/$m-base.imports" | paste -sd, -)"
+              h="$(awk -v m="$new" '$1 == m { print $2 }' "$RUNNER_TEMP/$m-head.imports" | paste -sd, -)"
+              [ -n "$b" ] && [ -n "$h" ] || continue
+              (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$b" -granularity=function \
+                -output=json) > "$RUNNER_TEMP/dependency.json" || return 2
+              status=0
+              (cd "$1" && capslock -force_local_module -packages="$h" -granularity=function \
+                -output=compare "$RUNNER_TEMP/dependency.json") >> "$f" 2>&1 || status=$?
+              [ "$status" -le 1 ] || return 2
+              echo >> "$f"
+            done < <(awk -F '\t' '
+              function u(p) { sub(/\/v[0-9]+$/, "", p); sub(/\.v[0-9]+$/, "", p); return p }
+              $2 == "changed" && $3 != "" && $4 != "" { print $1, $1 }
+              $2 == "removed" { gone[u($1)] = $1 }
+              $2 == "changed" && $3 == "" { added[u($1)] = $1 }
+              END { for (k in added) if (k in gone) print gone[k], added[k] }' "capslock-out/$m-modules.tsv")
+          }
+
           body=capslock-out/comment.md
-          printf '<!-- capslock-diff -->\n### Capslock dependency check\n\nBase `%.12s` · %s · [call paths](%s)\n' \
-            "$BASE" "$SOURCE" "$RUN_URL" > "$body"
+          printf '<!-- capslock-diff -->\n### Capslock dependency check\n\nmain `%.12s` → PR `%.12s` · %s · [call paths](%s)\n' \
+            "$BASE" "$HEAD_SHA" "$SOURCE" "$RUN_URL" > "$body"
           high=0
           for m in $MODULES; do
-            note=""
+            note="" dir="$deps/$m"
             compare "$m" intermediate || [ $? -eq 1 ] || { cat "capslock-out/$m-intermediate.txt"; echo "::error::capslock failed on $m"; exit 1; }
             if ! { compare "$deps/$m" function || [ $? -eq 1 ]; }; then
               note="Main's code does not build against the new dependencies, so the function report covers this pull request's code too."
               echo "::warning::$m: $note"
-              note="_${note}_"
+              note="_${note}_" dir="$m"
               compare "$m" function || [ $? -eq 1 ] || { cat "capslock-out/$m-function.txt"; echo "::error::capslock failed on $m"; exit 1; }
             fi
-            for g in intermediate function; do
-              echo "::group::$m, $g granularity"; cat "capslock-out/$m-$g.txt"; echo "::endgroup::"
+            dependency "$dir" || { cat "capslock-out/$m-dependency.txt"; echo "::error::capslock failed on a dependency of $m"; exit 1; }
+            for g in intermediate function dependency; do
+              echo "::group::$m, $g"; cat "capslock-out/$m-$g.txt"; echo "::endgroup::"
             done
             echo >> "$body"
+            jq -r '.packageInfo[].path' "baseline/$m-intermediate.json" > "capslock-out/$m-base-packages.txt"
             ./scripts/capslock-classify.sh --name "$m" --modules "capslock-out/$m-modules.tsv" \
+              --base-packages "capslock-out/$m-base-packages.txt" \
               --intermediate "capslock-out/$m-intermediate.txt" --function "capslock-out/$m-function.txt" \
-              --counts "capslock-out/$m.counts" >> "$body"
+              --dependency "capslock-out/$m-dependency.txt" --reachable "capslock-out/$m-reachable.txt" --counts "capslock-out/$m.counts" >> "$body"
             [ -z "$note" ] || printf '\n%s\n' "$note" >> "$body"
             high=$((high + $(sed -n 's/^high=//p' "capslock-out/$m.counts")))
           done
@@ -192,7 +230,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          FAILED: ${{ steps.deps.outcome == 'failure' || steps.baseline.outcome == 'failure' || steps.compare.outcome == 'failure' }}
+          # Any earlier step, setup included, so a failure never reads as "No dependency changed".
+          FAILED: ${{ job.status != 'success' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
