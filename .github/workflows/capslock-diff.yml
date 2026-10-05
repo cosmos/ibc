@@ -170,13 +170,17 @@ jobs:
           # the pull request imports, so that a function only its new calls reach is covered;
           # loading a dependency never loads this code, so findings are still the dependency's.
           # A package the old version lacks is new code, all of it compared against nothing.
-          # A major-version move is compared as the pair it is.
+          # A major-version move is compared as the pair it is. One Capslock run per side covers
+          # every changed dependency; function names carry their package, so they do not mix.
           dependency() {
-            local f="capslock-out/$m-dependency.txt" old new b h status
+            local f="capslock-out/$m-dependency.txt" old new b h bs="" hs="" status
             : > "$f"
             # Called as a condition, where set -e is off, so every failure returns explicitly.
             (cd "$m" && go list -deps -f '{{with .Module}}{{.Path}} {{$.ImportPath}}{{end}}' ./...) \
               > "capslock-out/$m-imports.txt" || return 2
+            # Tests included, to tell a module only tests import from one nothing imports.
+            (cd "$m" && go list -deps -test -f '{{with .Module}}{{.Path}}{{end}}' ./...) \
+              > "capslock-out/$m-test-imports.txt" || return 2
             # Functions the binaries and test binaries link, built without inlining: what can
             # run, callbacks from the standard library and generic instantiations included.
             rm -rf "$RUNNER_TEMP/$m-bin" && mkdir -p "$RUNNER_TEMP/$m-bin"
@@ -191,26 +195,27 @@ jobs:
             while read -r old new; do
               h="$(awk -v m="$new" '$1 == m { print $2 }' "capslock-out/$m-imports.txt" | paste -sd, -)"
               [ -n "$h" ] || continue
-              b="$(printf '%s\n' "$h" | tr , '\n' | awk -v o="$old" -v n="$new" '{ print o substr($0, length(n) + 1) }')"
-              # shellcheck disable=SC2086 # one argument per package
-              b="$(cd "$RUNNER_TEMP/base/$m" && go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' $b | paste -sd, -)"
-              if [ -n "$b" ]; then
-                (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$b" -granularity=function \
-                  -output=json) > "$RUNNER_TEMP/dependency.json" || return 2
-              else
-                echo '{}' > "$RUNNER_TEMP/dependency.json"
-              fi
-              status=0
-              (cd "$m" && capslock -force_local_module -packages="$h" -granularity=function \
-                -output=compare "$RUNNER_TEMP/dependency.json") >> "$f" 2>&1 || status=$?
-              [ "$status" -le 1 ] || return 2
-              echo >> "$f"
+              hs="$hs${hs:+,}$h"
+              bs="$bs $(printf '%s\n' "$h" | tr , '\n' | awk -v o="$old" -v n="$new" '{ print o substr($0, length(n) + 1) }')"
             done < <(awk -F '\t' '
               function u(p) { sub(/\/v[0-9]+$/, "", p); sub(/\.v[0-9]+$/, "", p); return p }
               $2 == "changed" && $3 != "" && $4 != "" { print $1, $1 }
               $2 == "removed" { gone[u($1)] = $1 }
               $2 == "changed" && $3 == "" { added[u($1)] = $1 }
               END { for (k in added) if (k in gone) print gone[k], added[k] }' "capslock-out/$m-modules.tsv")
+            [ -n "$hs" ] || return 0
+            # shellcheck disable=SC2086 # one argument per package
+            b="$(cd "$RUNNER_TEMP/base/$m" && go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' $bs | paste -sd, -)"
+            if [ -n "$b" ]; then
+              (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$b" -granularity=function \
+                -output=json) > "$RUNNER_TEMP/dependency.json" || return 2
+            else
+              echo '{}' > "$RUNNER_TEMP/dependency.json"
+            fi
+            status=0
+            (cd "$m" && capslock -force_local_module -packages="$hs" -granularity=function \
+              -output=compare "$RUNNER_TEMP/dependency.json") > "$f" 2>&1 || status=$?
+            [ "$status" -le 1 ] || return 2
           }
 
           body=capslock-out/comment.md
@@ -236,6 +241,7 @@ jobs:
               --base-packages "capslock-out/$m-base-packages.txt" \
               --intermediate "capslock-out/$m-intermediate.txt" --function "capslock-out/$m-function.txt" \
               --dependency "capslock-out/$m-dependency.txt" --imports "capslock-out/$m-imports.txt" \
+              --test-imports "capslock-out/$m-test-imports.txt" \
               --linked "capslock-out/$m-linked.txt" --counts "capslock-out/$m.counts" >> "$body"
             [ -z "$note" ] || printf '\n%s\n' "$note" >> "$body"
             high=$((high + $(sed -n 's/^high=//p' "capslock-out/$m.counts")))

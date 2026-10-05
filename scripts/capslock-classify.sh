@@ -5,7 +5,8 @@
 # report of the capabilities its changed dependencies newly bring in.
 #
 #   ./scripts/capslock-classify.sh --modules m.tsv --intermediate i.txt --function f.txt
-#       [--dependency d.txt --imports imports.txt --linked symbols.txt] [--name cli]
+#       [--dependency d.txt --imports imports.txt --test-imports test-imports.txt]
+#       [--linked symbols.txt] [--name cli]
 #       [--base-packages pkgs.txt]
 #       [--counts counts.env]
 #
@@ -24,8 +25,10 @@
 # with -gcflags=all=-l so nothing is inlined away); a dependency function missing from it
 # cannot run here, so it is counted, not gated. The linker also keeps what the standard
 # library calls back and generic instantiations, which a call graph from here misses.
-# --imports, "module package" lines from `go list -deps`, names changed dependencies that
-# only tests import: Capslock does not load tests, so the report says they are unchecked.
+# --imports, "module package" lines from `go list -deps`, and --test-imports, module paths
+# from `go list -deps -test`, name changed dependencies that only tests import: Capslock does
+# not load tests, so the report says they are unchecked. A changed module nothing imports,
+# such as one only version resolution needs, is in neither and goes unmentioned.
 #
 # The gate is about dependencies, so a finding counts only when its call path goes through
 # a changed module, and it is listed under the last such module on the path. Everything
@@ -61,7 +64,7 @@ set -euo pipefail
 # Capability classes that block until someone reads the call path. MODIFY_SYSTEM_STATE
 # matches its subcategories too (/ENV, /SIGNALS, ...).
 HIGH_SIGNAL="EXEC NETWORK FILES ARBITRARY_EXECUTION SYSTEM_CALLS MODIFY_SYSTEM_STATE"
-NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" IMPORTS="" LINKED="" COUNTS="" BASE_PACKAGES=""
+NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" IMPORTS="" TEST_IMPORTS="" LINKED="" COUNTS="" BASE_PACKAGES=""
 
 die() { echo "capslock-classify: $*" >&2; exit 2; }
 usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
@@ -69,7 +72,7 @@ usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
 while (($# > 0)); do
   case "$1" in
     -h | --help) usage; exit 0 ;;
-    --name | --modules | --intermediate | --function | --dependency | --imports | --linked | --counts | --high-signal | --base-packages)
+    --name | --modules | --intermediate | --function | --dependency | --imports | --test-imports | --linked | --counts | --high-signal | --base-packages)
       [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
       case "$1" in
         --modules) MODULES="$2" ;;
@@ -77,6 +80,7 @@ while (($# > 0)); do
         --function) FUNCTION="$2" ;;
         --dependency) DEPENDENCY="$2" ;;
         --imports) IMPORTS="$2" ;;
+        --test-imports) TEST_IMPORTS="$2" ;;
         --linked) LINKED="$2" ;;
         --counts) COUNTS="$2" ;;
         --name) NAME="$2" ;;
@@ -92,15 +96,16 @@ for f in "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}"; do
   [[ -n "$f" ]] || die "--modules, --intermediate and --function are required (see --help)"
   [[ -f "$f" ]] || die "'$f' does not exist"
 done
-for f in "${DEPENDENCY}" "${IMPORTS}" "${LINKED}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
+for f in "${DEPENDENCY}" "${IMPORTS}" "${TEST_IMPORTS}" "${LINKED}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
 
 awk -v high_signal="${HIGH_SIGNAL}" -v name="${NAME}" -v counts_file="${COUNTS}" \
     -v modules_file="${MODULES}" -v intermediate_file="${INTERMEDIATE}" -v base_packages_file="${BASE_PACKAGES}" \
-    -v dependency_file="${DEPENDENCY}" -v imports_file="${IMPORTS}" -v linked_file="${LINKED}" '
+    -v dependency_file="${DEPENDENCY}" -v imports_file="${IMPORTS}" -v test_imports_file="${TEST_IMPORTS}" -v linked_file="${LINKED}" '
 # Packages the base build loaded, from the packageInfo of the intermediate baseline.
 BEGIN {
   if (base_packages_file != "") while ((getline line < base_packages_file) > 0) in_base[line] = 1
   if (imports_file != "") while ((getline line < imports_file) > 0) { split(line, w, " "); imported[w[1]] = 1 }
+  if (test_imports_file != "") while ((getline line < test_imports_file) > 0) test_imported[line] = 1
   if (linked_file != "") while ((getline line < linked_file) > 0) { linked[from_linker(line)] = 1; n_linked++ }
 }
 
@@ -301,9 +306,9 @@ END {
   }
 
   # Changed dependencies that only tests import, which none of the reports cover.
-  if (imports_file != "")
+  if (imports_file != "" && test_imports_file != "")
     for (c = 1; c <= n_changed; c++)
-      if (!(changed_order[c] in imported)) untested = untested (untested == "" ? "" : ", ") "`" short(changed_order[c]) "`"
+      if ((changed_order[c] in test_imported) && !(changed_order[c] in imported)) untested = untested (untested == "" ? "" : ", ") "`" short(changed_order[c]) "`"
 
   for (c = 1; c <= n_deps; c++) if (high_caps[dep_order[c]] != "") n_high_deps++
   if (n_changed == 0) printf ":white_check_mark: **`%s`**: no dependency changed.\n", name
