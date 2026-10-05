@@ -36,7 +36,7 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           # Publish results to the OpenSSF REST API for the README badge and
-          # https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc-go
+          # https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc
           publish_results: true
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
