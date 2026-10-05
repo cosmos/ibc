@@ -5,7 +5,8 @@
 # report of the capabilities its changed dependencies newly bring in.
 #
 #   ./scripts/capslock-classify.sh --modules m.tsv --intermediate i.txt --function f.txt
-#       [--dependency d.txt] [--imports imports.txt] [--name cli] [--base-packages pkgs.txt]
+#       [--dependency d.txt --imports imports.txt --linked symbols.txt] [--name cli]
+#       [--base-packages pkgs.txt]
 #       [--counts counts.env]
 #
 # --modules lists the module's build list as "path<TAB>status<TAB>base<TAB>head" lines, with
@@ -19,6 +20,10 @@
 # old version against new, so that a new use inside a function of the dependency shows even
 # when everything above it already had the capability, and also when only the pull
 # request's new calls reach it. A function that only changed version path counts as a move.
+# --linked lists the functions the binaries and test binaries link (`go tool nm`, built
+# with -gcflags=all=-l so nothing is inlined away); a dependency function missing from it
+# cannot run here, so it is counted, not gated. The linker also keeps what the standard
+# library calls back and generic instantiations, which a call graph from here misses.
 # --imports, "module package" lines from `go list -deps`, names changed dependencies that
 # only tests import: Capslock does not load tests, so the report says they are unchecked.
 #
@@ -48,7 +53,7 @@
 # than the runner's; and calls made through reflection or unsafe (REFLECT, UNSAFE_POINTER),
 # which are listed but do not gate.
 #
-# --counts writes high, low, moved, held, unrelated and changed as key=value
+# --counts writes high, low, moved, held, unlinked, unrelated and changed as key=value
 # lines; `high` is what CI blocks on.
 
 set -euo pipefail
@@ -56,7 +61,7 @@ set -euo pipefail
 # Capability classes that block until someone reads the call path. MODIFY_SYSTEM_STATE
 # matches its subcategories too (/ENV, /SIGNALS, ...).
 HIGH_SIGNAL="EXEC NETWORK FILES ARBITRARY_EXECUTION SYSTEM_CALLS MODIFY_SYSTEM_STATE"
-NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" IMPORTS="" COUNTS="" BASE_PACKAGES=""
+NAME="module" MODULES="" INTERMEDIATE="" FUNCTION="" DEPENDENCY="" IMPORTS="" LINKED="" COUNTS="" BASE_PACKAGES=""
 
 die() { echo "capslock-classify: $*" >&2; exit 2; }
 usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
@@ -64,7 +69,7 @@ usage() { sed -n '3,${/^#/!q; s|^# \{0,1\}||; p;}' "${BASH_SOURCE[0]}"; }
 while (($# > 0)); do
   case "$1" in
     -h | --help) usage; exit 0 ;;
-    --name | --modules | --intermediate | --function | --dependency | --imports | --counts | --high-signal | --base-packages)
+    --name | --modules | --intermediate | --function | --dependency | --imports | --linked | --counts | --high-signal | --base-packages)
       [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
       case "$1" in
         --modules) MODULES="$2" ;;
@@ -72,6 +77,7 @@ while (($# > 0)); do
         --function) FUNCTION="$2" ;;
         --dependency) DEPENDENCY="$2" ;;
         --imports) IMPORTS="$2" ;;
+        --linked) LINKED="$2" ;;
         --counts) COUNTS="$2" ;;
         --name) NAME="$2" ;;
         --high-signal) HIGH_SIGNAL="$2" ;;
@@ -86,15 +92,16 @@ for f in "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}"; do
   [[ -n "$f" ]] || die "--modules, --intermediate and --function are required (see --help)"
   [[ -f "$f" ]] || die "'$f' does not exist"
 done
-for f in "${DEPENDENCY}" "${IMPORTS}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
+for f in "${DEPENDENCY}" "${IMPORTS}" "${LINKED}"; do [[ -z "$f" || -f "$f" ]] || die "'$f' does not exist"; done
 
 awk -v high_signal="${HIGH_SIGNAL}" -v name="${NAME}" -v counts_file="${COUNTS}" \
     -v modules_file="${MODULES}" -v intermediate_file="${INTERMEDIATE}" -v base_packages_file="${BASE_PACKAGES}" \
-    -v dependency_file="${DEPENDENCY}" -v imports_file="${IMPORTS}" '
+    -v dependency_file="${DEPENDENCY}" -v imports_file="${IMPORTS}" -v linked_file="${LINKED}" '
 # Packages the base build loaded, from the packageInfo of the intermediate baseline.
 BEGIN {
   if (base_packages_file != "") while ((getline line < base_packages_file) > 0) in_base[line] = 1
   if (imports_file != "") while ((getline line < imports_file) > 0) { split(line, w, " "); imported[w[1]] = 1 }
+  if (linked_file != "") while ((getline line < linked_file) > 0) { linked[from_linker(line)] = 1; n_linked++ }
 }
 
 # Files are told apart by name: an empty report has no first record to count.
@@ -176,6 +183,23 @@ function unversioned_fn(s) {
   return s
 }
 
+# Function names as Capslock and the linker write them, reduced to one form: no type
+# arguments, closures folded into their function, and "pkg.T.M" for methods. The linker
+# escapes a "." in the last import path element, as in "gopkg.in/yaml%2ev3"; left as it is,
+# every function of such a package would count as unlinked and never gate.
+function untyped(s) { while (gsub(/\[[^][]*\]/, "", s)) ; return s }
+function from_capslock(s) {
+  s = untyped(s); sub(/\$.*/, "", s); sub(/#[0-9]+$/, "", s)
+  if (sub(/^\(\*?/, "", s)) sub(/\)\./, ".", s)
+  return s
+}
+function from_linker(s) {
+  gsub(/%2e/, ".", s); gsub(/%22/, "\"", s); gsub(/%25/, "%", s)
+  s = untyped(s); gsub(/\.(func|gowrap|deferwrap)[0-9]+(\.[0-9]+)*/, "", s)
+  sub(/-fm$/, "", s); sub(/\.init\.[0-9]+$/, ".init", s); sub(/\(\*?/, "", s); sub(/\)/, "", s)
+  return s
+}
+
 function short(s) { gsub(/github\.com\//, "", s); sub(/\[.*\]/, "", s); return s }
 
 # A version as shown in the report: a replace is noted, not spelled out, and a pseudo-version
@@ -239,6 +263,7 @@ END {
     if (via == "") { tier["unrelated"]++; continue }
 
     if (gran[i] == 4 && (cap[i], unversioned_fn(key[i])) in removed_fn) { tier["moved"]++; continue }
+    if (gran[i] == 4 && n_linked && !(from_capslock(key[i]) in linked)) { tier["unlinked"]++; continue }
 
     # Only a package the base build did not load can be where a capability moved to.
     if (gran[i] == 2 && cap[i] in removed && !(key[i] in in_base)) {
@@ -305,16 +330,17 @@ END {
 
   if (untested != "") printf "\n_Not checked, only tests import them: %s._\n", untested
 
-  if (tier["moved"] + tier["held"] + tier["unrelated"] > 0) {
+  if (tier["moved"] + tier["held"] + tier["unlinked"] + tier["unrelated"] > 0) {
     sep = "\n_Not gated: "
     if (tier["moved"]) { printf "%s%d version move%s", sep, tier["moved"], (tier["moved"] == 1 ? "" : "s"); sep = ", " }
     if (tier["held"]) { printf "%s%d new package%s reached from one that already had the capability", sep, tier["held"], (tier["held"] == 1 ? "" : "s"); sep = ", " }
+    if (tier["unlinked"]) { printf "%s%d in dependency functions no binary here links", sep, tier["unlinked"]; sep = ", " }
     if (tier["unrelated"]) printf "%s%d change%s outside the changed dependencies", sep, tier["unrelated"], (tier["unrelated"] == 1 ? "" : "s")
     print "._"
   }
 
   if (counts_file != "")
-    printf "high=%d\nlow=%d\nmoved=%d\nheld=%d\nunrelated=%d\nchanged=%d\n", tier["high"], tier["low"],
-      tier["moved"], tier["held"], tier["unrelated"], n_changed > counts_file
+    printf "high=%d\nlow=%d\nmoved=%d\nheld=%d\nunlinked=%d\nunrelated=%d\nchanged=%d\n", tier["high"],
+      tier["low"], tier["moved"], tier["held"], tier["unlinked"], tier["unrelated"], n_changed > counts_file
 }
 ' "${MODULES}" "${INTERMEDIATE}" "${FUNCTION}" ${DEPENDENCY:+"${DEPENDENCY}"}

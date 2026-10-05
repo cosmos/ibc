@@ -177,6 +177,17 @@ jobs:
             # Called as a condition, where set -e is off, so every failure returns explicitly.
             (cd "$m" && go list -deps -f '{{with .Module}}{{.Path}} {{$.ImportPath}}{{end}}' ./...) \
               > "capslock-out/$m-imports.txt" || return 2
+            # Functions the binaries and test binaries link, built without inlining: what can
+            # run, callbacks from the standard library and generic instantiations included.
+            rm -rf "$RUNNER_TEMP/$m-bin" && mkdir -p "$RUNNER_TEMP/$m-bin"
+            # Test binaries one package at a time: go test -c refuses two packages of one name.
+            (cd "$m" && go build -gcflags=all=-l -o "$RUNNER_TEMP/$m-bin/" ./... \
+              && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... \
+              | xargs -P "$(getconf _NPROCESSORS_ONLN)" -I{} sh -c 'go test -gcflags=all=-l -c -o "$1/$(echo "$2" | tr / _).test" "$2"' _ \
+                "$RUNNER_TEMP/$m-bin" {}) || return 2
+            # The name is everything after the address and type; generic ones contain spaces.
+            find "$RUNNER_TEMP/$m-bin" -type f -exec go tool nm {} \; \
+              | awk '$2 ~ /^[Tt]$/ { $1 = $2 = ""; sub(/^ +/, ""); print }' | sort -u > "capslock-out/$m-linked.txt" || return 2
             while read -r old new; do
               h="$(awk -v m="$new" '$1 == m { print $2 }' "capslock-out/$m-imports.txt" | paste -sd, -)"
               [ -n "$h" ] || continue
@@ -224,7 +235,8 @@ jobs:
             ./scripts/capslock-classify.sh --name "$m" --modules "capslock-out/$m-modules.tsv" \
               --base-packages "capslock-out/$m-base-packages.txt" \
               --intermediate "capslock-out/$m-intermediate.txt" --function "capslock-out/$m-function.txt" \
-              --dependency "capslock-out/$m-dependency.txt" --imports "capslock-out/$m-imports.txt" --counts "capslock-out/$m.counts" >> "$body"
+              --dependency "capslock-out/$m-dependency.txt" --imports "capslock-out/$m-imports.txt" \
+              --linked "capslock-out/$m-linked.txt" --counts "capslock-out/$m.counts" >> "$body"
             [ -z "$note" ] || printf '\n%s\n' "$note" >> "$body"
             high=$((high + $(sed -n 's/^high=//p' "capslock-out/$m.counts")))
           done
