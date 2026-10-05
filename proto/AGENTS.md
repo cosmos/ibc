@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 ## Documentation generated from this code
 
 The reference pages under `docs/6-ibc-cli/` carry tables generated from this
