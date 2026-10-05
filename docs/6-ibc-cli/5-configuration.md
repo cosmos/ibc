@@ -181,15 +181,15 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.chainId, connections[].clientB.chainId` | `string` | **required** | The chain this end's client lives on. |
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
-| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `remote` | **required** | Light client type. |
+| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `besu-qbft` \| `remote` | **required** | Light client type. |
 | `connections[].clientA.params, connections[].clientB.params` | `yaml.RawMessage` | optional | This client type's settings. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L51](cli/internal/config/relayer.go#L51) -->
+<!-- [relayer.go:L52](cli/internal/config/relayer.go#L52) -->
 
 <!-- GEN:config:relayer:connections END -->
 
-Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L256-L262](cli/cmd/ibc/deploy.go#L256-L262) -->
+Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. `ibc deploy client` does this by default. <!-- [deploy.go:L400-L406](cli/cmd/ibc/deploy.go#L400-L406) -->
 
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [relayer.go:L149-L176](cli/internal/config/relayer.go#L149-L176) -->
 
@@ -211,7 +211,7 @@ The relayer uses these defaults unless you override them.
 | `clearOnStart` | `bool` | `true` | Whether a clearing pass runs at startup. `ibc relayer run --clear-on-start=false` overrides it for that process, and only when passed explicitly. |
 | `clearInterval` | `duration` | `5m` | How often a clearing pass runs after startup. Overridable per chain. |
 
-<!-- [relayer.go:L28](cli/internal/config/relayer.go#L28) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
+<!-- [relayer.go:L29](cli/internal/config/relayer.go#L29) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -228,7 +228,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides `clearInterval` for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | `false` | Stops re-probing packets whose send log the endpoint will not serve. |
 
-<!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L36](cli/internal/config/relayer.go#L36) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 
