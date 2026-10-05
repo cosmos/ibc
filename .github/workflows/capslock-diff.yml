@@ -3,9 +3,10 @@
 name: Capslock Capability Diff
 
 # Guards against malicious dependency releases: fails when a pull request changes a
-# dependency and code reached through it gains a capability such as EXEC, NETWORK or
-# FILES. It runs on every pull request so that "Capslock" can be a required check; one
-# that changes no dependency stops after comparing the module lists.
+# dependency and a function of it that this repository's builds link newly reaches a
+# capability such as EXEC, NETWORK or FILES. It runs on every pull request so that
+# "Capslock" can be a required check; one that changes no dependency stops after comparing
+# the module lists.
 on:
   pull_request:
     branches: [main]
@@ -17,8 +18,6 @@ concurrency:
 permissions:
   contents: read
 
-# Same values as capslock.yml. The version and cgo setting are part of the artifact name, and
-# any module missing from it is analysed from the base commit, so a mismatch costs time only.
 env:
   CAPSLOCK_VERSION: v0.3.3
   CAPSLOCK_MODULES: cli e2e
@@ -33,8 +32,6 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      # Main's baseline artifact.
-      actions: read
     steps:
       # The merge commit and its first parent, the main commit it merges onto.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -87,8 +84,7 @@ jobs:
             fi
           done
           # A change to the gate itself runs it in full, so that it is tested before it guards main.
-          if ! git diff --quiet 'HEAD^1' HEAD -- .github/workflows/capslock.yml .github/workflows/capslock-diff.yml \
-            scripts/capslock-classify.sh; then
+          if ! git diff --quiet 'HEAD^1' HEAD -- .github/workflows/capslock-diff.yml scripts/capslock-compare.sh; then
             modules="$CAPSLOCK_MODULES"
             echo "The gate itself changed; analysing every module."
           fi
@@ -99,159 +95,20 @@ jobs:
         if: steps.deps.outputs.modules != ''
         run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
 
-      # Main's baseline for the base commit, waiting for its run if main only just moved.
-      # Analysing the base commit here is the fallback, and the comment says so.
-      - name: Fetch baseline
-        id: baseline
-        if: steps.deps.outputs.modules != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BASE: ${{ steps.deps.outputs.base }}
-          MODULES: ${{ steps.deps.outputs.modules }}
-          NAME: capslock-baseline-${{ env.CAPSLOCK_VERSION }}-cgo${{ env.CGO_ENABLED }}
-        run: |
-          set -euo pipefail
-          source="baseline from main"
-          if run="$(gh run list --workflow capslock.yml --branch main --commit "$BASE" --limit 5 \
-                --json databaseId,conclusion \
-                --jq 'map(select(.conclusion == "" or .conclusion == "success"))[0].databaseId // empty')" \
-            && [ -n "$run" ] && gh run watch "$run" --interval 30 >/dev/null \
-            && gh run download "$run" --name "$NAME" --dir "$RUNNER_TEMP/baseline"; then
-            source="$source ([run $run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run))"
-          fi
-          # Whatever the artifact lacks is analysed from the base commit. Kept out of the
-          # checkout, which the pull request controls.
-          mkdir -p "$RUNNER_TEMP/baseline"
-          built=""
-          for m in $MODULES; do
-            for g in intermediate function; do
-              [ ! -s "$RUNNER_TEMP/baseline/$m-$g.json" ] || continue
-              (cd "$RUNNER_TEMP/base/$m" && capslock -packages=./... -granularity="$g" -output=json) \
-                > "$RUNNER_TEMP/baseline/$m-$g.json"
-              built="$built $m-$g"
-            done
-          done
-          if [ -n "$built" ]; then
-            echo "::warning::$NAME from main lacked${built} for $BASE; analysed the base commit here."
-            source=":warning: baseline built in this job"
-          fi
-          echo "source=$source" >> "$GITHUB_OUTPUT"
-
-      # Intermediate granularity analyses the pull request, so a new dependency only its
-      # code imports is covered. Function granularity analyses main's code built against
-      # the new dependencies, so the pull request's own new functions are not findings;
-      # if main's code does not build against them, the pull request is analysed instead.
-      # The dependency pass compares each bumped dependency's own functions, old version
-      # against new, for a new use of a capability the dependency already had.
       - name: Compare
         id: compare
         if: steps.deps.outputs.modules != ''
         env:
           BASE: ${{ steps.deps.outputs.base }}
           MODULES: ${{ steps.deps.outputs.modules }}
-          SOURCE: ${{ steps.baseline.outputs.source }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          deps="$RUNNER_TEMP/deps"
-          cp -R "$RUNNER_TEMP/base" "$deps"
-          git ls-files -z -- '*go.mod' '*go.sum' go.work go.work.sum | tar --null -T - -cf - | tar -xf - -C "$deps"
+        run: ./scripts/capslock-compare.sh
 
-          # Exit status 1 means differences were found, 2 or above that capslock failed.
-          compare() {
-            local status=0
-            (cd "$1" && capslock -packages=./... -granularity="$2" -output=compare \
-              "$RUNNER_TEMP/baseline/$m-$2.json") > "capslock-out/$m-$2.txt" 2>&1 || status=$?
-            return "$status"
-          }
-
-          # Each bumped dependency's own functions, old version against new, for the packages
-          # the pull request imports, so that a function only its new calls reach is covered;
-          # loading a dependency never loads this code, so findings are still the dependency's.
-          # A package the old version lacks is new code, all of it compared against nothing.
-          # A major-version move is compared as the pair it is. One Capslock run per side covers
-          # every changed dependency; function names carry their package, so they do not mix.
-          dependency() {
-            local f="capslock-out/$m-dependency.txt" old new b h bs="" hs="" status
-            : > "$f"
-            # Called as a condition, where set -e is off, so every failure returns explicitly.
-            (cd "$m" && go list -deps -f '{{with .Module}}{{.Path}} {{$.ImportPath}}{{end}}' ./...) \
-              > "capslock-out/$m-imports.txt" || return 2
-            # Tests included, to tell a module only tests import from one nothing imports.
-            (cd "$m" && go list -deps -test -f '{{with .Module}}{{.Path}}{{end}}' ./...) \
-              > "capslock-out/$m-test-imports.txt" || return 2
-            # Functions the binaries and test binaries link, built without inlining: what can
-            # run, callbacks from the standard library and generic instantiations included.
-            rm -rf "$RUNNER_TEMP/$m-bin" && mkdir -p "$RUNNER_TEMP/$m-bin"
-            # Test binaries one package at a time: go test -c refuses two packages of one name.
-            (cd "$m" && go build -gcflags=all=-l -o "$RUNNER_TEMP/$m-bin/" ./... \
-              && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... \
-              | xargs -P "$(getconf _NPROCESSORS_ONLN)" -I{} sh -c 'go test -gcflags=all=-l -c -o "$1/$(echo "$2" | tr / _).test" "$2"' _ \
-                "$RUNNER_TEMP/$m-bin" {}) || return 2
-            # The name is everything after the address and type; generic ones contain spaces.
-            find "$RUNNER_TEMP/$m-bin" -type f -exec go tool nm {} \; \
-              | awk '$2 ~ /^[Tt]$/ { $1 = $2 = ""; sub(/^ +/, ""); print }' | sort -u > "capslock-out/$m-linked.txt" || return 2
-            while read -r old new; do
-              h="$(awk -v m="$new" '$1 == m { print $2 }' "capslock-out/$m-imports.txt" | paste -sd, -)"
-              [ -n "$h" ] || continue
-              hs="$hs${hs:+,}$h"
-              bs="$bs $(printf '%s\n' "$h" | tr , '\n' | awk -v o="$old" -v n="$new" '{ print o substr($0, length(n) + 1) }')"
-            done < <(awk -F '\t' '
-              function u(p) { sub(/\/v[0-9]+$/, "", p); sub(/\.v[0-9]+$/, "", p); return p }
-              $2 == "changed" && $3 != "" && $4 != "" { print $1, $1 }
-              $2 == "removed" { gone[u($1)] = $1 }
-              $2 == "changed" && $3 == "" { added[u($1)] = $1 }
-              END { for (k in added) if (k in gone) print gone[k], added[k] }' "capslock-out/$m-modules.tsv")
-            [ -n "$hs" ] || return 0
-            # shellcheck disable=SC2086 # one argument per package
-            b="$(cd "$RUNNER_TEMP/base/$m" && go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' $bs | paste -sd, -)"
-            if [ -n "$b" ]; then
-              (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$b" -granularity=function \
-                -output=json) > "$RUNNER_TEMP/dependency.json" || return 2
-            else
-              echo '{}' > "$RUNNER_TEMP/dependency.json"
-            fi
-            status=0
-            (cd "$m" && capslock -force_local_module -packages="$hs" -granularity=function \
-              -output=compare "$RUNNER_TEMP/dependency.json") > "$f" 2>&1 || status=$?
-            [ "$status" -le 1 ] || return 2
-          }
-
-          body=capslock-out/comment.md
-          printf '<!-- capslock-diff -->\n### Capslock dependency check\n\nmain `%.12s` → PR `%.12s` · %s · [call paths](%s)\n' \
-            "$BASE" "$HEAD_SHA" "$SOURCE" "$RUN_URL" > "$body"
-          high=0
-          for m in $MODULES; do
-            note=""
-            compare "$m" intermediate || [ $? -eq 1 ] || { cat "capslock-out/$m-intermediate.txt"; echo "::error::capslock failed on $m"; exit 1; }
-            if ! { compare "$deps/$m" function || [ $? -eq 1 ]; }; then
-              note="Main's code does not build against the new dependencies, so the function report covers this pull request's code too."
-              echo "::warning::$m: $note"
-              note="_${note}_"
-              compare "$m" function || [ $? -eq 1 ] || { cat "capslock-out/$m-function.txt"; echo "::error::capslock failed on $m"; exit 1; }
-            fi
-            dependency || { cat "capslock-out/$m-dependency.txt"; echo "::error::capslock failed on a dependency of $m"; exit 1; }
-            for g in intermediate function dependency; do
-              echo "::group::$m, $g"; cat "capslock-out/$m-$g.txt"; echo "::endgroup::"
-            done
-            echo >> "$body"
-            jq -r '.packageInfo[].path' "$RUNNER_TEMP/baseline/$m-intermediate.json" > "capslock-out/$m-base-packages.txt"
-            ./scripts/capslock-classify.sh --name "$m" --modules "capslock-out/$m-modules.tsv" \
-              --base-packages "capslock-out/$m-base-packages.txt" \
-              --intermediate "capslock-out/$m-intermediate.txt" --function "capslock-out/$m-function.txt" \
-              --dependency "capslock-out/$m-dependency.txt" --imports "capslock-out/$m-imports.txt" \
-              --test-imports "capslock-out/$m-test-imports.txt" \
-              --linked "capslock-out/$m-linked.txt" --counts "capslock-out/$m.counts" >> "$body"
-            [ -z "$note" ] || printf '\n%s\n' "$note" >> "$body"
-            high=$((high + $(sed -n 's/^high=//p' "capslock-out/$m.counts")))
-          done
-          cat "$body" >> "$GITHUB_STEP_SUMMARY"
-          echo "high=$high" >> "$GITHUB_OUTPUT"
-
-      # Also when an earlier step failed, so a previous comment is never left looking green.
+      # Also when an earlier step failed, so a previous comment is never left looking green;
+      # not when a newer push cancelled the run, which would post a false failure.
       - name: Comment on the pull request
-        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
