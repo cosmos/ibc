@@ -5,6 +5,7 @@ package deploy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"math/big"
 	"testing"
@@ -30,6 +31,7 @@ type fakeTarget struct {
 	ctorProvisions int
 	rateLimits     map[string]IFTRateLimit // ift -> limit
 	rateLimitSets  int
+	rateLimitErr   error // returned by SetIFTRateLimit when set
 }
 
 func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error) {
@@ -88,6 +90,9 @@ func (f *fakeTarget) IFTRateLimit(_ context.Context, ift string) (IFTRateLimit, 
 
 func (f *fakeTarget) SetIFTRateLimit(_ context.Context, ift string, limit IFTRateLimit) error {
 	f.rateLimitSets++
+	if f.rateLimitErr != nil {
+		return f.rateLimitErr
+	}
 	f.rateLimits[ift] = limit
 	return nil
 }
@@ -436,6 +441,36 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
 	require.Len(t, m.Tokens, 2)
+}
+
+func TestIFTStepsRepairFailedRateLimit(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.GMP = &manifest.GMP{Address: "0xgmp", Port: GMPPortID}
+	require.NoError(t, m.Save(dir))
+
+	spec := iftSpec("Foo")
+
+	// the token deploys but setting its rate limit fails
+	target.rateLimitErr = errors.New("setIFTRateLimit reverted")
+	_, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+	require.ErrorIs(t, err, target.rateLimitErr)
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	_, ok := m.TokenByAddress("0xift-FOO")
+	require.True(t, ok)
+
+	// a rerun sets the limit on the recorded token instead of deploying another
+	target.rateLimitErr = nil
+	res, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, "executed", res[1].Action)
+	require.Equal(t, 1, target.iftProvisions)
+	require.Equal(t, spec.RateLimit, target.rateLimits["0xift-FOO"])
 }
 
 func TestIFTStepsRequiresGMP(t *testing.T) {
