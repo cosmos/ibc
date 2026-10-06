@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"io"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
@@ -312,6 +313,28 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 
 	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
 	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+}
+
+func TestIFTRateLimit(t *testing.T) {
+	limit, err := iftRateLimit("1000", 90*time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 5400}, limit)
+
+	for _, tc := range []struct {
+		capacity string
+		window   time.Duration
+		wantErr  string
+	}{
+		{capacity: "abc", window: time.Hour, wantErr: "--rate-limit-capacity"},
+		{capacity: "0", window: time.Hour, wantErr: "--rate-limit-capacity"},
+		{capacity: "-1", window: time.Hour, wantErr: "--rate-limit-capacity"},
+		{capacity: new(big.Int).Lsh(big.NewInt(1), 208).String(), window: time.Hour, wantErr: "--rate-limit-capacity"},
+		{capacity: "1", window: 0, wantErr: "--rate-limit-window"},
+		{capacity: "1", window: -time.Second, wantErr: "--rate-limit-window"},
+	} {
+		_, err := iftRateLimit(tc.capacity, tc.window)
+		require.ErrorContains(t, err, tc.wantErr, "capacity %q window %s", tc.capacity, tc.window)
+	}
 }
 
 func TestWholeSeconds(t *testing.T) {

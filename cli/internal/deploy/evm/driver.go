@@ -347,6 +347,36 @@ func (d *Driver) ProvisionIFT(ctx context.Context, gmp string, spec deploy.IFTSp
 	return deploy.IFTRef{Address: proxyAddr.Hex()}, nil
 }
 
+// IFTRateLimit reads the rate limit set on the IFT token at iftAddr.
+func (d *Driver) IFTRateLimit(ctx context.Context, iftAddr string) (deploy.IFTRateLimit, error) {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return deploy.IFTRateLimit{}, err
+	}
+	limit, err := contract.GetIFTRateLimit(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return deploy.IFTRateLimit{}, fmt.Errorf("getIFTRateLimit on %s: %w", iftAddr, err)
+	}
+	return deploy.IFTRateLimit{Capacity: limit.Capacity, Window: limit.Window.Uint64()}, nil
+}
+
+// SetIFTRateLimit sets the rate limit on the IFT token at iftAddr.
+func (d *Driver) SetIFTRateLimit(ctx context.Context, iftAddr string, limit deploy.IFTRateLimit) error {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return err
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := contract.SetIFTRateLimit(opts, limit.Capacity, new(big.Int).SetUint64(limit.Window))
+	if err != nil {
+		return fmt.Errorf("setIFTRateLimit on %s: %w", iftAddr, err)
+	}
+	return d.awaitMined(ctx, "setIFTRateLimit", tx)
+}
+
 // ProvisionSendCallConstructor deploys the stateless EVM IFT send-call
 // constructor.
 func (d *Driver) ProvisionSendCallConstructor(ctx context.Context) (string, error) {

@@ -54,8 +54,8 @@ make build
 ./bin/ibc deploy gmp --chain <chainB> --yes
 
 # deploy an IFT token on each chain, then register the bridge between the two
-./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainA> --yes
-./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainB> --yes
+./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainA> --rate-limit-capacity <baseUnits> --yes
+./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainB> --rate-limit-capacity <baseUnits> --yes
 ./bin/ibc deploy ift-bridge --chain-a <chainA> --ift-a <addressA> --chain-b <chainB> --ift-b <addressB> --yes
 
 # mint the token, then send it across a connection

@@ -247,44 +247,78 @@ func GMPSteps(t Target, dir, chainID string) []Step {
 	}}
 }
 
-// IFTSteps provisions one IFT token on chainID and records it in the manifest.
+// IFTSteps provisions one IFT token on chainID, records it in the manifest,
+// and sets its rate limit, without which the token rejects every transfer.
 // Requires the gmp step to have run.
 func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
-	return []Step{{
-		Name: fmt.Sprintf("ift token %s on chain %s", spec.Symbol, chainID),
-		Done: func(ctx context.Context) (bool, error) {
-			m, err := manifest.Load(dir, chainID)
-			if err != nil || m == nil {
-				return false, err
-			}
-			tok, ok := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
-			if !ok || tok.Address == "" {
-				return false, nil
-			}
-			return t.HasCode(ctx, tok.Address)
+	// deployed returns the recorded token address if its code is on chain.
+	deployed := func(ctx context.Context) (string, bool, error) {
+		m, err := manifest.Load(dir, chainID)
+		if err != nil || m == nil {
+			return "", false, err
+		}
+		tok, ok := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
+		if !ok || tok.Address == "" {
+			return "", false, nil
+		}
+		hasCode, err := t.HasCode(ctx, tok.Address)
+		return tok.Address, hasCode, err
+	}
+	return []Step{
+		{
+			Name: fmt.Sprintf("ift token %s on chain %s", spec.Symbol, chainID),
+			Done: func(ctx context.Context) (bool, error) {
+				_, ok, err := deployed(ctx)
+				return ok, err
+			},
+			Run: func(ctx context.Context) error {
+				m, err := manifest.Load(dir, chainID)
+				if err != nil {
+					return err
+				}
+				if m == nil || m.GMP == nil || m.GMP.Address == "" {
+					return fmt.Errorf("no gmp deployment recorded for chain %s: run `ibc deploy gmp` first", chainID)
+				}
+				ref, err := t.ProvisionIFT(ctx, m.GMP.Address, spec)
+				if err != nil {
+					return err
+				}
+				slog.Info("ift token deployed", "chain", chainID, "symbol", spec.Symbol, "address", ref.Address)
+				m.UpsertToken(manifest.Token{
+					Symbol:  spec.Symbol,
+					Name:    spec.Name,
+					Address: ref.Address,
+					Owner:   spec.Owner,
+				})
+				return m.Save(dir)
+			},
 		},
-		Run: func(ctx context.Context) error {
-			m, err := manifest.Load(dir, chainID)
-			if err != nil {
-				return err
-			}
-			if m == nil || m.GMP == nil || m.GMP.Address == "" {
-				return fmt.Errorf("no gmp deployment recorded for chain %s: run `ibc deploy gmp` first", chainID)
-			}
-			ref, err := t.ProvisionIFT(ctx, m.GMP.Address, spec)
-			if err != nil {
-				return err
-			}
-			slog.Info("ift token deployed", "chain", chainID, "symbol", spec.Symbol, "address", ref.Address)
-			m.UpsertToken(manifest.Token{
-				Symbol:  spec.Symbol,
-				Name:    spec.Name,
-				Address: ref.Address,
-				Owner:   spec.Owner,
-			})
-			return m.Save(dir)
+		{
+			Name: fmt.Sprintf("ift token %s rate limit %s per %ds on chain %s",
+				spec.Symbol, spec.RateLimit.Capacity, spec.RateLimit.Window, chainID),
+			Done: func(ctx context.Context) (bool, error) {
+				addr, ok, err := deployed(ctx)
+				if err != nil || !ok {
+					return false, err
+				}
+				got, err := t.IFTRateLimit(ctx, addr)
+				if err != nil {
+					return false, err
+				}
+				return got.Capacity.Cmp(spec.RateLimit.Capacity) == 0 && got.Window == spec.RateLimit.Window, nil
+			},
+			Run: func(ctx context.Context) error {
+				addr, ok, err := deployed(ctx)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("no ift token %s deployed on chain %s", spec.Symbol, chainID)
+				}
+				return t.SetIFTRateLimit(ctx, addr, spec.RateLimit)
+			},
 		},
-	}}
+	}
 }
 
 // IFTBridgeSteps deploys the EVM send-call constructor (unless an override is
