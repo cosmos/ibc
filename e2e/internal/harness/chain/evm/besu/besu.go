@@ -143,6 +143,8 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 				config.User = hostUser
 			},
 			HostConfigModifier: func(config *containertypes.HostConfig) {
+				// The generator only writes files; disable publishing the image's exposed ports.
+				config.NetworkMode = "none"
 				config.Mounts = append(config.Mounts, mount.Mount{
 					Type:   mount.TypeBind,
 					Source: chainDir,
@@ -237,10 +239,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			"--host-allowlist=*",
 		},
 	}
-	bc.container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: request,
-		Started:          true,
-	})
+	bc.container, err = container.Start(ctx, request)
 	if err != nil {
 		return nil, fmt.Errorf("start besu container %s: %w", namePrefix, err)
 	}
