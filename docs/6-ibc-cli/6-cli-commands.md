@@ -3,6 +3,20 @@ title: "CLI commands"
 description: "IBC CLI command reference"
 ---
 
+<!-- GEN:notice START -->
+
+<!--
+Tables between GEN markers on this page are generated from this
+repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
+run overwrites whatever is there, so a hand edit looks like a fix and is not.
+The prose around them is written by hand and is yours to change.
+
+After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
+before opening a pull request.
+-->
+
+<!-- GEN:notice END -->
+
 The IBC CLI contains commands for configuring, deploying, running, and monitoring IBC deployments, relayers, and attestors.
 
 Commands are grouped here the way the binary groups them, so any of them prints its own flags with `--help`. The sections run in the order a reader meets them: `config` and `keys`, then `deploy`, then `relayer` and `attestor`, then `tx` and `query`, then `migrate`.
@@ -24,7 +38,7 @@ Commands are grouped here the way the binary groups them, so any of them prints 
 
 <!-- GEN:cli:global-flags END -->
 
-`--home` is where the config file, the keystore, the manifests, and the relayer's database live. A command that reads the config changes into that directory first, so a config naming `keys/alice.json` finds `~/.ibc/keys/alice.json`. <!-- [config.go:L142-L160](cli/cmd/ibc/config.go#L142-L160) -->
+`--home` is where the config file, the keystore, the manifests, and the relayer's database live. A command that reads the config changes into that directory first, so a config naming `keys/alice.json` finds `~/.ibc/keys/alice.json`. <!-- [cli/cmd/ibc/config.go: setupHomeWithConfig] -->
 
 ## `config`
 
@@ -52,7 +66,7 @@ Add a chain entry to the config.
 ibc config add-chain --chain-id 41001 --rpc http://localhost:8545
 ```
 
-Leave `--router` out until the chain has a router to point at. `ibc deploy render-config` prints the finished chain entries, with the router addresses filled in from the manifests.
+Leave `--router` out until the chain has a router to point at. `ibc deploy render-config` prints the finished chain entries, with the router addresses filled in from the manifests. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
 ### `ibc config new`
 
@@ -68,7 +82,7 @@ Create new config file.
 
 <!-- GEN:cli:cmd:config-new END -->
 
-The command refuses to overwrite an existing file, so it is safe to run twice. <!-- [config.go:L95-L112](cli/cmd/ibc/config.go#L95-L112) -->
+The command refuses to overwrite an existing file, so it is safe to run twice. <!-- [cli/cmd/ibc/config.go: configNew] -->
 
 ### `ibc config validate`
 
@@ -84,7 +98,7 @@ Validate config structure and cross-references.
 
 <!-- GEN:cli:cmd:config-validate END -->
 
-`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. Unknown fields and unresolved cross-references always fail at load.
+`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> Unknown fields and unresolved cross-references always fail at load. <!-- [cli/internal/config/file.go: LoadFromFile] -->
 
 ```bash
 ibc config validate
@@ -101,7 +115,7 @@ With a target, the response also includes `"relayer": "valid"` or `"attestor": "
 
 ## `keys`
 
-Keys live in `<ibc-home>/keys/`, one file each. These can be named by signers in the config file. <!-- [keys.go:L157-L162](cli/cmd/ibc/keys.go#L157-L162) -->
+Keys live in `<ibc-home>/keys/`, one file each. These can be named by signers in the config file. <!-- [cli/cmd/ibc/keys.go: saveNamedKey] -->
 
 ### `ibc keys import`
 
@@ -160,13 +174,13 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 ## `deploy`
 
-Deploying a working connection between two chains takes `deploy core` on both, then `deploy client` on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
+Deploying a working connection between two chains takes `deploy core` on both, then a `deploy client` subcommand on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
 
-`--chain` is required by the commands that provision something, and the table cannot show it: they check it themselves rather than declaring it required. <!-- [deploy.go:L263-L265](cli/cmd/ibc/deploy.go#L263-L265) -->
+`--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu-qbft`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
-`--dry-run` prints the steps a command would take and submits nothing.
+`--dry-run` prints the steps a command would take and submits nothing. <!-- [cli/internal/deploy/steps.go: RunSteps] -->
 
-Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [steps.go:L73-L95](cli/internal/deploy/steps.go#L73-L95) -->
+Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [cli/internal/deploy/steps.go: CoreSteps] -->
 
 > **Warning:** Do not edit a manifest by hand. A deploy command decides what to skip from it, and an edit that disagrees with the chain either is overwritten or makes the next run fail.
 
@@ -185,7 +199,7 @@ Deploy and register an attestation light client.
 | `--height <uint>` | counterparty head | Initial trusted height. |
 | `--threshold <uint8>` | `1` | Signature threshold. |
 | `--timestamp <uint>` | counterparty head | Initial trusted timestamp seconds. |
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -199,9 +213,9 @@ Deploy and register an attestation light client.
 ibc deploy client attestation --chain 41001 --counterparty-chain 41002 --threshold 1 --yes
 ```
 
-The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [attestors.go:L15-L30](cli/cmd/ibc/attestors.go#L15-L30) --> Left out entirely, the command fails when the config lists no attestors for the counterparty chain. <!-- [attestors.go:L32-L42](cli/cmd/ibc/attestors.go#L32-L42) -->
+The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` names the attestors watching the counterparty, since those are the signatures this client verifies. For `remote` attestors, pass the address instead of names. <!-- [cli/cmd/ibc/attestors.go: resolveAttestorToken] --> Left out entirely, the command fails when the config lists no attestors for the counterparty chain. <!-- [cli/cmd/ibc/attestors.go: attestorsForChain] -->
 
-Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [steps.go:L130-L142](cli/internal/deploy/steps.go#L130-L142) -->
+Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [cli/internal/deploy/steps.go: clientConflicts] -->
 
 ### `ibc deploy client besu-qbft`
 
@@ -240,7 +254,7 @@ Deploy the core IBC routing stack on one chain.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -258,7 +272,7 @@ Deploy the ICS27-GMP app on one chain.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -279,7 +293,7 @@ Deploy an IFT token on one chain.
 | `--name <string>` | required | ERC20 token name. |
 | `--owner <string>` | `deployer` | Token owner address. |
 | `--symbol <string>` | required | ERC20 token symbol (need not be unique). |
-| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
@@ -343,18 +357,6 @@ Print the existing config plus the settings to relay between two chains.
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
-Re-running against an existing config is safe: connections are matched by their
-client pair and local attestors by chain and signer, so aliases, names and other
-settings you have changed are kept. `--signer-a` and `--signer-b` replace the
-relay signers only when passed. An incomplete config is still written, with a
-warning listing what is missing.
-
-Automatic client-type changes are not supported, even when replacing a router.
-If a manifest's client type differs from an existing non-remote client, rendering
-fails without writing. Explicitly update that client's type and compatible
-`params` in the config before rerunning. Existing remote-prover settings are
-preserved rather than compared to the manifest's on-chain client type.
-
 ### `ibc deploy show`
 
 <!-- GEN:cli:cmd:deploy-show START -->
@@ -415,7 +417,7 @@ Trigger relaying of the packets emitted by a source transaction.
 ibc relayer relay --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-The command asks for every packet in that transaction. The relayer takes the ones it has a configured client and route for.
+The command asks for every packet in that transaction. <!-- [cli/cmd/ibc/relayer.go: relayerRelay] --> The relayer takes the ones it has a configured client and route for.
 
 ### `ibc relayer run`
 
@@ -432,7 +434,7 @@ Run the relayer.
 
 <!-- GEN:cli:cmd:relayer-run END -->
 
-One process can be both. `relayer run` serves the relayer API and also runs every attestor the config marks `local`. <!-- [bootstrap.go:L59-L79](cli/internal/bootstrap/bootstrap.go#L59-L79) --> It applies pending database migrations at startup, and `--no-migrate` skips that.
+One process can be both. `relayer run` serves the relayer API and also runs every attestor the config marks `local`. <!-- [cli/internal/bootstrap/bootstrap.go: BuildRelayer] --> It applies pending database migrations at startup, and `--no-migrate` skips that. <!-- [cli/cmd/ibc/relayer.go: relayerRun] -->
 
 ### `ibc relayer packets`
 
@@ -462,11 +464,11 @@ List the packets the relayer is aware of, most recent first.
 ibc relayer packets --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. [API](7-api.md) lists the states `--state` accepts.
+Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. <!-- [cli/cmd/ibc/relayer.go: relayerPacketsAll] --> [API](7-api.md) lists the states `--state` accepts.
 
 ## `attestor`
 
-The attestor also runs in the foreground and serves gRPC on `server.listenAddr`. The query commands take an attestor's name as an argument rather than a flag, and `--host` dials an address directly instead of resolving that name through the config.
+The attestor also runs in the foreground and serves gRPC on `server.listenAddr`. The query commands take an attestor's name as an argument rather than a flag, and `--host` dials an address directly instead of resolving that name through the config. <!-- [cli/cmd/ibc/attestor.go: attestorCall] -->
 
 ### `ibc attestor info`
 
@@ -604,7 +606,7 @@ Migrate DB down.
 
 <!-- GEN:cli:cmd:migrate-down END -->
 
-`migrate down` reverses one migration, the most recent. <!-- [store_postgres.go:L110-L114](cli/internal/store/store_postgres.go#L110-L114) -->
+`migrate down` reverses one migration, the most recent. <!-- [cli/internal/store/store_postgres.go: PostgresDB.MigrateDown] --> <!-- [cli/internal/store/store_sqlite.go: SqliteDB.MigrateDown] -->
 
 ### `ibc migrate status`
 
@@ -626,7 +628,7 @@ Migrate DB up.
 
 <!-- GEN:cli:cmd:migrate-up END -->
 
-Migrations run against the `db` block, so `--db` picks a different database for one invocation.
+Migrations run against the `db` block, so `--db` picks a different database for one invocation. <!-- [cli/cmd/ibc/config.go: setupHomeWithConfig] -->
 
 ## Next steps
 
