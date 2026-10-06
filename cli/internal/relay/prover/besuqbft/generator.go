@@ -74,9 +74,10 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 }
 
 // ClientUpdatePayloads returns one updateMsg from the client's latest
-// consensus state to target, or none when target is the latest height. After
-// full verification the contract installs a target below the latest height as
-// a historical consensus state, or no-ops when it already stores it.
+// consensus state to target, or none when target is not above it. The
+// contract only accepts headers above the trusted height; a target a
+// concurrent update left behind must already be stored, which the packet
+// proofs check when the relay is simulated.
 func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, error) {
 	state, err := g.host.BesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
@@ -84,7 +85,7 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 	}
 
 	trustedHeight := state.LatestHeight.RevisionHeight
-	if target == trustedHeight {
+	if target <= trustedHeight {
 		return nil, nil
 	}
 

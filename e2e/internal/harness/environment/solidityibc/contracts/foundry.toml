@@ -8,7 +8,7 @@ remappings = [
   "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
   "@openzeppelin-contracts/=node_modules/@openzeppelin/contracts/",
   "@openzeppelin-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
-  "solidity-ibc-eureka/=node_modules/@cosmos/solidity-ibc-eureka/",
+  "solidity-ibc-eureka/=node_modules/@cosmos/solidity-ibc-eureka/ibc-solidity/",
 ]
 auto_detect_solc = false
 solc = "0.8.28"

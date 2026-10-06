@@ -14,6 +14,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// TrustLevel is the fraction of the validators trusted at the trusted height
+// that must seal an update. It matches Besu's own two-thirds commit-seal
+// quorum but is a separate check, against the trusted validator set.
+var TrustLevel = besuqbft.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}
+
 var (
 	messageBindings     = besumsgs.NewBindings()
 	ibcStoreStorageSlot = common.HexToHash(ics26router.IbcStoreStorageSlot)

@@ -298,7 +298,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 			IBCRouter:             fixture.RouterAddress,
 			InitialHeight:         fixture.InitialTrustedHeight,
 			InitialConsensusState: fixture.InitialConsensusState(),
-			TrustingPeriod:        fixture.TrustingPeriod,
+			TrustingPeriod:        besutest.DeployableTrustingPeriod,
 			MaxClockDrift:         fixture.MaxClockDrift,
 		},
 	}
@@ -324,8 +324,9 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	require.Equal(t, besumsgs.IBesuLightClientMsgsClientState{
 		IbcRouter:      fixture.RouterAddress,
 		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
-		TrustingPeriod: fixture.TrustingPeriod,
+		TrustingPeriod: besutest.DeployableTrustingPeriod,
 		MaxClockDrift:  fixture.MaxClockDrift,
+		TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
 	}, state)
 
 	lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())

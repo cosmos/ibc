@@ -168,23 +168,17 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 	assert.Empty(t, payloads, "no update needed")
 }
 
-// The contract stores a consensus state at the header's own height and only
-// raises latestHeight when the header is newer, so a height below the latest
-// one is updated from the latest trusted state.
-func TestClientUpdatePayloadBackfillBelowTrusted(t *testing.T) {
+// A concurrent update can leave the target below the latest height. The
+// contract only accepts headers above the trusted height, so no update is
+// sent; the packet proofs check that the target is stored.
+func TestClientUpdatePayloadBelowLatest(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
-	anchor := update.Height + 5
-	env.setAnchor(t, anchor, env.fixture.InitialConsensusState())
-	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
+	env.setAnchor(t, update.Height+5, env.fixture.InitialConsensusState())
 
 	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
-	require.Len(t, payloads, 1)
-
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
-	require.NoError(t, err)
-	assert.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: anchor}, decoded.TrustedHeight)
+	assert.Empty(t, payloads)
 }
 
 func (e *fixtureEnv) expectProofAt(

@@ -96,9 +96,12 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	_, err = setup.AttachClient(ctx, instance.Router, client.ID, "wrong-counterparty", "attestation")
 	require.ErrorContains(t, err, `counterparty id is "eth-chain-a", want "wrong-counterparty"`)
 
+	// the constructor rejects an expired initial state, so trust the current head
+	head, err := backend.Client().HeaderByNumber(ctx, nil)
+	require.NoError(t, err)
 	qbft, err := setup.PrepareBesuQBFTClient(ctx, clientAuthority, instance.Router, BesuQBFTClientConfig{
 		ID: "qbft-b", CounterpartyClientID: "qbft-a", CounterpartyRouter: instance.Router,
-		InitialHeight: 1, InitialTimestamp: 1_700_000_000, TrustingPeriod: 14 * 24 * 60 * 60,
+		InitialHeight: 1, InitialTimestamp: head.Time, TrustingPeriod: 14 * 24 * 60 * 60,
 		InitialValidators: []common.Address{attestor.Address()},
 	})
 	require.NoError(t, err)
