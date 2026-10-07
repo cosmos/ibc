@@ -31,6 +31,18 @@ func TestProverRequestTimeout(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestLogSafeURL(t *testing.T) {
+	for raw, want := range map[string]string{
+		"https://prover.example.com:9090":                   "https://prover.example.com:9090",
+		"https://ghp_TOKEN@prover.example.com/grpc":         "https://prover.example.com",
+		"https://user:secret@prover.example.com/key/ABC123": "https://prover.example.com",
+		"http://127.0.0.1:8080/grpc":                        "http://127.0.0.1:8080",
+		"://bad":                                            "(unparseable)",
+	} {
+		require.Equal(t, want, LogSafeURL(raw), raw)
+	}
+}
+
 type timeoutProverClient struct {
 	t *testing.T
 }

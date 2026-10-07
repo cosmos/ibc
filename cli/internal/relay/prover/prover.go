@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/internal/chains"
@@ -76,23 +77,63 @@ func (s *Set) Get(chainID, clientID string) (Prover, bool) {
 	return generator, ok
 }
 
+// SetOptions controls remote prover checks during construction.
+type SetOptions struct {
+	// RequireReachable probes every remote prover and fails on the first
+	// unreachable one, as needed by live validation. Without it remote
+	// provers aren't probed.
+	RequireReachable bool
+}
+
 // NewSetFromConfig resolves a Prover for every client end of every
 // configured connection, matching against attestors (this process's own
 // local attestors plus every resolved remote one).
+//
+// Client ends resolve in order, failing fast on the first bad one. With
+// opts.RequireReachable, remote provers are then probed concurrently (see
+// probeRemoteProvers).
 func NewSetFromConfig(
 	ctx context.Context,
 	cfg config.Config,
 	clientSet *chains.ClientSet,
 	attestors []attestor.Attestor,
 	logger *slog.Logger,
+	opts SetOptions,
 ) (*Set, error) {
 	generators := make(map[string]Prover, len(cfg.Relayer.Connections)*2)
+	// Keyed like generators, so a client end shared by several connections
+	// is probed once.
+	remoteProvers := make(map[string]remoteProver)
 
 	err := forEachClientEnd(cfg, func(connAlias string, self, counterparty config.ClientEnd) error {
-		return addGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		switch self.Type {
+		case config.ClientTypeAttestation:
+			return addAttestationGenerator(ctx, generators, connAlias, self, counterparty, clientSet, attestors, logger)
+		case config.ClientTypeBesuQBFT:
+			return addBesuQBFTGenerator(ctx, generators, connAlias, self, counterparty, clientSet)
+		case config.ClientTypeRemote:
+			p, err := buildRemoteProver(connAlias, self, logger)
+			if err != nil {
+				return err
+			}
+
+			key := Key(self.ChainID, self.ClientID)
+			generators[key] = metricsWrapper(p.prover, self.ChainID, self.ClientID, self.Type)
+			remoteProvers[key] = p
+
+			return nil
+		default:
+			return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, self.Type)
+		}
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.RequireReachable {
+		if err := probeRemoteProvers(ctx, remoteProvers); err != nil {
+			return nil, err
+		}
 	}
 
 	return NewSet(generators), nil
@@ -117,7 +158,7 @@ func forEachClientEnd(cfg config.Config, fn func(connAlias string, self, counter
 	return nil
 }
 
-func addGenerator(
+func addAttestationGenerator(
 	ctx context.Context,
 	generators map[string]Prover,
 	connAlias string,
@@ -128,55 +169,95 @@ func addGenerator(
 ) error {
 	logger = logger.With("module", "prover", "chainID", client.ChainID, "clientID", client.ClientID)
 
-	switch client.Type {
-	case config.ClientTypeAttestation:
-		meteredAttestors := make([]attestor.Attestor, len(attestors))
-		for i, a := range attestors {
-			meteredAttestors[i] = attestor.MetricsWrapper(a)
-		}
-
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
-		if err != nil {
-			return err
-		}
-
-		meteredProver := metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
-		generators[Key(client.ChainID, client.ClientID)] = meteredProver
-
-		return nil
-	case config.ClientTypeBesuQBFT:
-		gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
-			gen,
-			client.ChainID,
-			client.ClientID,
-			client.Type,
-		)
-
-		return nil
-	case config.ClientTypeRemote:
-		params, err := client.ClientParams()
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		remoteParams, ok := params.(*config.RemoteParams)
-		if !ok {
-			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
-		}
-
-		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, logger)
-		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
-		generators[Key(client.ChainID, client.ClientID)] = meteredProver
-
-		return nil
-	default:
-		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
+	meteredAttestors := make([]attestor.Attestor, len(attestors))
+	for i, a := range attestors {
+		meteredAttestors[i] = attestor.MetricsWrapper(a)
 	}
+
+	gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
+	if err != nil {
+		return errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
+
+	return nil
+}
+
+func addBesuQBFTGenerator(
+	ctx context.Context,
+	generators map[string]Prover,
+	connAlias string,
+	client, clientCounterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+) error {
+	gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
+	if err != nil {
+		return errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
+
+	return nil
+}
+
+// remoteProver is a remote client end resolved into a *remote.Prover.
+type remoteProver struct {
+	connAlias string
+	client    config.ClientEnd
+	prover    *remote.Prover
+}
+
+func buildRemoteProver(connAlias string, client config.ClientEnd, logger *slog.Logger) (remoteProver, error) {
+	logger = logger.With("module", "prover", "chainID", client.ChainID, "clientID", client.ClientID)
+
+	params, err := client.ClientParams()
+	if err != nil {
+		return remoteProver{}, errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	remoteParams, ok := params.(*config.RemoteParams)
+	if !ok {
+		return remoteProver{}, errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
+	}
+
+	// Not logging the URL: RemoteParams.Validate doesn't reject userinfo, so
+	// it can carry a credential. chainID/clientID (via logger) and connAlias
+	// already identify the endpoint.
+	endpoint, err := config.ResolveEndpoint(
+		remoteParams.EndpointURL(),
+		remoteParams.TLS,
+		logger,
+		"connection",
+		connAlias,
+	)
+	if err != nil {
+		return remoteProver{}, errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	prover := remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger)
+
+	return remoteProver{connAlias: connAlias, client: client, prover: prover}, nil
+}
+
+// probeRemoteProvers probes every remote prover concurrently, since a single
+// probe can take up to a minute, and cancels the rest on the first failure.
+func probeRemoteProvers(ctx context.Context, provers map[string]remoteProver) error {
+	g, gctx := errgroup.WithContext(ctx)
+
+	for _, p := range provers {
+		g.Go(func() error {
+			return errors.Wrapf(
+				p.prover.Probe(gctx),
+				"connection %q: remote prover %s/%s",
+				p.connAlias,
+				p.client.ChainID,
+				p.client.ClientID,
+			)
+		})
+	}
+
+	return g.Wait()
 }
 
 func besuQBFTGenerator(

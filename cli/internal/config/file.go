@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 )
 
@@ -31,6 +33,10 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 		return Config{}, err
 	}
 
+	if err := rejectNullTLS([]byte(expanded)); err != nil {
+		return Config{}, err
+	}
+
 	if validate {
 		if err := config.Validate(); err != nil {
 			return Config{}, err
@@ -40,6 +46,48 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 	config.originalFilePath = path
 
 	return config, nil
+}
+
+// rejectNullTLS fails on a `tls:` key with no value. It decodes to the same
+// nil as an absent block, so a block whose fields are all commented out would
+// otherwise silently mean plaintext.
+func rejectNullTLS(bz []byte) error {
+	file, err := parser.ParseBytes(bz, 0)
+	if err != nil {
+		return err
+	}
+
+	var found nullTLSFinder
+	for _, doc := range file.Docs {
+		ast.Walk(&found, doc)
+	}
+
+	if found.path != "" {
+		return errors.Errorf(
+			"%s: empty; use `tls: {}` for TLS with default settings, or remove it for plaintext",
+			strings.TrimPrefix(found.path, "$."),
+		)
+	}
+
+	return nil
+}
+
+// nullTLSFinder records the path of the first null `tls` value it visits.
+type nullTLSFinder struct {
+	path string
+}
+
+func (f *nullTLSFinder) Visit(node ast.Node) ast.Visitor {
+	if f.path != "" {
+		return nil
+	}
+
+	if mv, ok := node.(*ast.MappingValueNode); ok && mv.Key.String() == "tls" && mv.Value.Type() == ast.NullType {
+		f.path = mv.Value.GetPath()
+		return nil
+	}
+
+	return f
 }
 
 // KeyFileFallbacks returns the paths tried for a local signer key file.

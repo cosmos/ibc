@@ -425,7 +425,7 @@ chains:
 signers:
   - alias: signer-a
     type: remote
-    grpc: https://kms.example.com
+    grpc: kms.example.com:9090
     remoteKeyId: key-a
 attestors:
   - name: attestation-a
@@ -449,7 +449,7 @@ attestors:
 signers:
   - alias: signer-a
     type: remote
-    grpc: https://kms.example.com
+    grpc: kms.example.com:9090
     remoteKeyId: key-a
 attestors:
   - name: attestation-a
@@ -820,7 +820,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			signers: Signers{{
 				Alias:       "remote",
 				Type:        SignerRemote,
-				GRPC:        "https://kms.example.com",
+				GRPC:        "kms.example.com:9090",
 				RemoteKeyID: "key-1",
 			}},
 		},
@@ -875,11 +875,21 @@ func TestSignerConfigValidate(t *testing.T) {
 			errContains: ".grpc: required",
 		},
 		{
+			name: "url grpc rejected",
+			signers: Signers{{
+				Alias:       "remote",
+				Type:        SignerRemote,
+				GRPC:        "https://kms.example.com",
+				RemoteKeyID: "key-1",
+			}},
+			errContains: ".grpc: must be a gRPC target",
+		},
+		{
 			name: "remote key id required",
 			signers: Signers{{
 				Alias: "remote",
 				Type:  SignerRemote,
-				GRPC:  "https://kms.example.com",
+				GRPC:  "kms.example.com:9090",
 			}},
 			errContains: ".remoteKeyId: required",
 		},
@@ -894,7 +904,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				{
 					Alias:       "same",
 					Type:        SignerRemote,
-					GRPC:        "https://kms.example.com",
+					GRPC:        "kms.example.com:9090",
 					RemoteKeyID: "key-1",
 				},
 			},
