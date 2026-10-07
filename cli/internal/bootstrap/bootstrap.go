@@ -64,7 +64,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Attestors
-	local, remote, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers)
+	local, remote, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers, attestor.ResolveOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Provers
-	provers, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...), logger)
+	provers, err := prover.NewSetFromConfig(ctx, cfg, clientSet, append(local, remote...), logger, prover.SetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}
 
 	// Attestors
-	local, _, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers)
+	local, _, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers, attestor.ResolveOptions{})
 	if err != nil {
 		return nil, err
 	}
