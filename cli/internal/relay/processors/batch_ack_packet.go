@@ -28,7 +28,6 @@ type BatchAckPacket struct {
 	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
-	storage                TxStorage
 	logger                 *slog.Logger
 }
 
@@ -36,7 +35,6 @@ func NewBatchAckPacket(
 	chainClients ChainClients,
 	provers Provers,
 	txBuilders TxBuilders,
-	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 	logger *slog.Logger,
@@ -70,7 +68,6 @@ func NewBatchAckPacket(
 		prover:                 prover,
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
-		storage:                storage,
 		logger:                 logger,
 	}, nil
 }
@@ -125,51 +122,18 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 		return transfers, nil
 	}
 
-	submission, err := relayPackets(
+	err = relayPackets(
 		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, v2.RelayKindAck,
+		p.route.SourceClientID, p.route.SourceChainID, v2.RelayKindAck,
 		proofHeight, events,
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	tx := store.PacketTx{
-		Hash:           submission.TxHash,
-		Time:           submission.SubmittedAt,
-		RelayerAddress: submission.RelayerAddress,
-	}
-
-	err = p.storage.Transact(ctx, func(repo store.Repository) error {
-		for _, tr := range transfers {
-			if tr.ProcessingError != nil {
-				continue
-			}
-
-			if errRecord := repo.UpdatePacketAckTx(ctx, tr.Key(), tx); errRecord != nil {
-				return errors.Wrapf(
-					errRecord,
-					"recording relay tx %s for sequence %d",
-					tx.Hash,
-					tr.PacketSequenceNumber,
-				)
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "recording batch relay txs")
-	}
-
 	for _, tr := range transfers {
-		if tr.ProcessingError != nil {
-			continue
+		if tr.ProcessingError == nil {
+			tr.ProcessingError = ErrSubmissionPending
 		}
-
-		tr.AckTxHash = &tx.Hash
-		tr.AckTxTime = &tx.Time
-		tr.AckTxRelayerAddress = &tx.RelayerAddress
 	}
 
 	return transfers, nil

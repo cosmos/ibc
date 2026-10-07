@@ -4,7 +4,6 @@ package processors
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -23,13 +22,8 @@ const (
 )
 
 type instrumentation struct {
-	RelaysCompleted       metric.Int64Counter
-	RelayDuration         metric.Float64Histogram
-	TransactionRetries    metric.Int64Counter
-	TransactionsSubmitted metric.Int64Counter
-	TransactionsConfirmed metric.Int64Counter
-
-	submittedTransactions sync.Map
+	RelaysCompleted metric.Int64Counter
+	RelayDuration   metric.Float64Histogram
 }
 
 type completedRelayLeg struct {
@@ -51,28 +45,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	transactionRetries, err := m.Int64Counter("transaction_retries_total")
-	if err != nil {
-		return nil, err
-	}
-
-	transactionsSubmitted, err := m.Int64Counter("transactions_submitted_total")
-	if err != nil {
-		return nil, err
-	}
-
-	transactionsConfirmed, err := m.Int64Counter("transactions_confirmed_total")
-	if err != nil {
-		return nil, err
-	}
-
-	return &instrumentation{
-		RelaysCompleted:       relaysCompleted,
-		RelayDuration:         relayDuration,
-		TransactionRetries:    transactionRetries,
-		TransactionsSubmitted: transactionsSubmitted,
-		TransactionsConfirmed: transactionsConfirmed,
-	}, nil
+	return &instrumentation{RelaysCompleted: relaysCompleted, RelayDuration: relayDuration}, nil
 }
 
 func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
@@ -88,48 +61,6 @@ func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
 		duration := leg.finishedAt.Sub(*leg.startedAt)
 		m.RelayDuration.Record(ctx, duration.Seconds(), attrs)
 	}
-}
-
-func (m *instrumentation) txSubmitted(ctx context.Context, chainID, clientID, txHash string) {
-	key := txKey(chainID, txHash)
-	m.submittedTransactions.Store(key, struct{}{})
-	m.TransactionsSubmitted.Add(ctx, 1, txMetricAttributes(chainID, clientID))
-}
-
-func (m *instrumentation) txConfirmed(ctx context.Context, chainID, clientID, txHash string) {
-	key := txKey(chainID, txHash)
-	if _, submitted := m.submittedTransactions.LoadAndDelete(key); !submitted {
-		return
-	}
-
-	m.TransactionsConfirmed.Add(ctx, 1, txMetricAttributes(chainID, clientID))
-}
-
-// one txHash might carry multiple transfers
-func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType, txHash string) {
-	chainID := tr.SourceChainID
-	if kind == relayTypeSendToRecv {
-		chainID = tr.DestinationChainID
-	}
-
-	key := txKey(chainID, txHash)
-	if _, submitted := m.submittedTransactions.LoadAndDelete(key); !submitted {
-		return
-	}
-
-	m.TransactionRetries.Add(ctx, 1, txAttributes(tr, otel.AttrType.String(string(kind))))
-}
-
-func txKey(chainID, txHash string) string {
-	return chainID + ":" + txHash
-}
-
-// chain receiving the transaction, client updated by that transaction
-func txMetricAttributes(chainID, clientID string) metric.MeasurementOption {
-	return metric.WithAttributes(
-		otel.AttrChainID.String(chainID),
-		otel.AttrClientID.String(clientID),
-	)
 }
 
 func txAttributes(tr *Transfer, extra ...attribute.KeyValue) metric.MeasurementOption {

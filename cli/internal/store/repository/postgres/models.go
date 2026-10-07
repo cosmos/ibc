@@ -56,14 +56,17 @@ type PacketTxSubmission struct {
 }
 
 type RelayerTxSubmission struct {
-	ID             int64
-	TxHash         string
-	ChainID        string
-	TxType         string
-	RelayerAddress string
-	SubmittedAt    pgtype.Timestamptz
-	ResolvedAt     pgtype.Timestamptz
-	GasCostAmount  pgtype.Numeric
-	Status         string
-	ExecutionError *string
+	ID              int64
+	TxHash          string
+	ChainID         string
+	TxType          string
+	RelayerAddress  string
+	SubmittedAt     pgtype.Timestamptz
+	ResolvedAt      pgtype.Timestamptz
+	GasCostAmount   pgtype.Numeric
+	Status          string
+	ExecutionError  *string
+	Nonce           int64
+	SignedTx        []byte
+	LastBroadcastAt pgtype.Timestamptz
 }

@@ -77,10 +77,11 @@ func relayPackets(
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,
+	sourceChainID string,
 	relayKind v2.RelayKind,
 	proofHeight uint64,
 	events []v2.PacketEvent,
-) (*v2.Submission, error) {
+) error {
 	sequences := make([]uint64, len(events))
 	for i, event := range events {
 		sequences[i] = event.Packet.Sequence
@@ -91,7 +92,7 @@ func relayPackets(
 
 	clientUpdatePayloads, err := prover.ClientUpdatePayloads(ctx, proofHeight)
 	if err != nil {
-		return nil, errors.Wrap(err, "generating client update payloads")
+		return errors.Wrap(err, "generating client update payloads")
 	}
 
 	packets := make([]channeltypesv2.Packet, len(events))
@@ -108,7 +109,7 @@ func relayPackets(
 
 	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets, acknowledgements)
 	if err != nil {
-		return nil, errors.Wrap(err, "generating packet proofs")
+		return errors.Wrap(err, "generating packet proofs")
 	}
 
 	items := make([]v2.PacketRelayItem, len(events))
@@ -122,38 +123,35 @@ func relayPackets(
 		}
 	}
 
-	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
-		ClientID: clientID,
-		Payloads: clientUpdatePayloads,
-	}, items)
-	if err != nil {
-		return nil, errors.Wrap(err, "building relay tx")
-	}
-
-	if len(relayTxs) != 1 {
-		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
-	}
-
-	relayTx := relayTxs[0]
-
 	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
 	defer cancel()
-
 	if err = chainClient.WaitForChain(waitCtx); err != nil {
-		return nil, errors.Wrap(err, "waiting for chain")
+		return errors.Wrap(err, "waiting for chain")
 	}
 
-	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
-		To:   common.BytesToAddress(relayTx.To).Hex(),
-		Data: relayTx.Data,
+	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{ClientID: clientID, Payloads: clientUpdatePayloads}, items)
+	if err != nil {
+		return errors.Wrap(err, "building relay tx")
+	}
+	if len(relayTxs) != 1 {
+		return errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
+	}
+	operations := make([]v2.OperationMetadata, len(items))
+	for i, item := range items {
+		operations[i] = v2.OperationMetadata{
+			SourceChainID:  sourceChainID,
+			SourceClientID: item.Packet.SourceClient,
+			Sequence:       item.Packet.Sequence,
+			Kind:           relayKind,
+		}
+	}
+	err = txSubmitter.Submit(ctx, v2.TxIntent{
+		To:         common.BytesToAddress(relayTxs[0].To).Hex(),
+		Data:       relayTxs[0].Data,
+		Operations: operations,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "submitting relay tx")
+		return errors.Wrap(err, "submitting relay tx")
 	}
-
-	logger.Info("Relayed packets", "txHash", submission.TxHash)
-
-	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
-
-	return submission, nil
+	return nil
 }

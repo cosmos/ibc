@@ -42,10 +42,14 @@ chains:
 relayer:
     dispatchPollInterval: 100ms
     chainOverrides:
-        - chainId: "1"
+        - evm:
+            confirmations: 1
+          chainId: "1"
           txSubmissionDelay: 10ms
           packetBatchSize: 1
-        - chainId: "2"
+        - evm:
+            confirmations: 1
+          chainId: "2"
           txSubmissionDelay: 10ms
           packetBatchSize: 1
     connections:
@@ -115,7 +119,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "2s", file.Relayer.ClearInterval)
 	require.Equal(t, chainOverrideFileConfig{
-		ChainID: "1", TxSubmissionDelay: "10ms", PacketBatchSize: 7,
+		ChainID: "1", TxSubmissionDelay: "10ms", PacketBatchSize: 7, EVM: txManagerFileConfig{Confirmations: 1},
 		PacketBatchTimeout: 250 * time.Millisecond,
 	}, file.Relayer.ChainOverrides[0])
 	require.Equal(t, []signerConfig{

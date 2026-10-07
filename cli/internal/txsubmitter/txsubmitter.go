@@ -5,12 +5,13 @@ package txsubmitter
 
 import (
 	"context"
-	"time"
+	"math/big"
 
 	"github.com/cockroachdb/errors"
 
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
+	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter/evm"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -18,12 +19,14 @@ import (
 // TxSubmitter signs and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
-	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
+	Start(ctx context.Context) error
+	Stop() error
 
-	// ShouldRetry reports whether a transaction submitted at sentAt is failed
-	// or has been pending past the implementation's retry expiry and should be
-	// resubmitted.
-	ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error)
+	// Submit prepares and journals synchronously. Cancellation cannot revoke journaled work.
+	Submit(ctx context.Context, intent v2.TxIntent) error
+
+	// HasPending reports unresolved journaled work, not packet completion.
+	HasPending(ctx context.Context, operation v2.OperationMetadata) (bool, error)
 }
 
 var _ TxSubmitter = (*evm.TxSubmitter)(nil)
@@ -52,7 +55,7 @@ func (s *Set) Get(chainID, signerAlias string) (TxSubmitter, bool) {
 // the configured routes. Routes naming the same pair share a tx submitter; a
 // chain carries several when different clients on it are relayed with
 // different signers.
-func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
+func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set, error) {
 	pairs := config.RelayerChainSignerPairs(cfg)
 
 	txSubmitters := make(map[config.ChainSignerPair]TxSubmitter, len(pairs))
@@ -74,12 +77,17 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 				opts.TxSubmissionDelay = *override.TxSubmissionDelay
 			}
 			if override.EVM != nil {
+				e := override.EVM
+				opts.Confirmations = e.Confirmations
+				if e.MaxFeePerGas != nil {
+					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
+				}
 				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
 				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
 			}
 		}
 
-		txSubmitter, err := evm.NewFromRPC(pair.ChainID, chain.EVM.RPC, chainSigner, opts)
+		txSubmitter, err := evm.NewFromRPC(pair.ChainID, chain.EVM.RPC, chainSigner, db, opts)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating tx submitter for chain %q", pair.ChainID)
 		}
@@ -88,4 +96,24 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 	}
 
 	return NewSet(txSubmitters), nil
+}
+
+// Start restores nonce ownership before the relay dispatcher starts accepting work.
+func (s *Set) Start(ctx context.Context) error {
+	for _, submitter := range s.txSubmitters {
+		if err := submitter.Start(ctx); err != nil {
+			_ = s.Stop()
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Set) Stop() error {
+	for _, submitter := range s.txSubmitters {
+		if err := submitter.Stop(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
