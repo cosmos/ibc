@@ -7,9 +7,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
-	"sync/atomic"
 	"time"
 )
 
@@ -20,8 +20,8 @@ const (
 	TLSVersion13 = "1.3"
 )
 
-// ErrCAFile marks a BuildClientTLS or CAPool failure caused by the CA file, so
-// a caller can attribute it to its own config field.
+// ErrCAFile marks a BuildClientTLS failure caused by the CA file, so a caller
+// can attribute it to its own config field.
 var ErrCAFile = errors.New("CA file")
 
 // ClientTLS describes an outbound TLS connection, decoupled from config file
@@ -52,18 +52,10 @@ type Endpoint struct {
 	TLS *tls.Config
 }
 
-// BuildClientTLS resolves opts into a *tls.Config. A client certificate is
-// loaded once here so a bad pair fails immediately, then reloaded per
-// handshake so short-lived certificates rotated on disk are presented on the
-// next connection without restarting the process. CA roots require a
-// restart. A reload that fails (for example, because it raced a separate
-// cert and key update) falls back to the certificate from the latest-started
-// reload that succeeded, until that one expires; from then on the handshake
-// fails with the reload error, so a rotation that stays broken surfaces its
-// cause. A reload that reads an expired certificate fails the handshake
-// naming it, rather than presenting it for the server to reject with a
-// generic alert. Loading one here is not an error, so a process started
-// before renewal picks up the renewed pair on its next connection.
+// BuildClientTLS resolves opts into a *tls.Config. The CA bundle and client
+// certificate are read once here, so a rotated certificate takes effect only
+// after a restart. An expired client certificate is rejected here rather than
+// presented for the server to reject with a generic alert.
 //
 // This does not warn about InsecureSkipVerify: it runs both at config
 // validation and at connect time, so the caller that knows it's about to
@@ -81,7 +73,7 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 	}
 
 	if opts.CAFile != "" {
-		pool, poolErr := CAPool(opts.CAFile)
+		pool, poolErr := caPool(opts.CAFile)
 		if poolErr != nil {
 			return nil, poolErr
 		}
@@ -89,72 +81,45 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 		cfg.RootCAs = pool
 	}
 
-	if opts.CertFile == "" {
+	switch {
+	case opts.CertFile == "" && opts.KeyFile == "":
 		return cfg, nil
+	case opts.CertFile == "" || opts.KeyFile == "":
+		return nil, errors.New("client certificate and key must be set together")
 	}
 
-	certFile, keyFile := opts.CertFile, opts.KeyFile
-
-	first, err := tls.LoadX509KeyPair(certFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(opts.CertFile, opts.KeyFile)
 	if err != nil {
 		return nil, fmt.Errorf("load client certificate: %w", err)
 	}
 
-	// loaded is a pair and the order its reload started in. None is modified
-	// after being stored, so concurrent handshakes can share whichever one
-	// they load.
-	type loaded struct {
-		cert *tls.Certificate
-		seq  uint64
-	}
-
-	var (
-		reloads atomic.Uint64
-		last    atomic.Pointer[loaded]
-	)
-	last.Store(&loaded{cert: &first})
-
-	cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-		seq := reloads.Add(1)
-
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err == nil && cert.Leaf != nil && time.Now().After(cert.Leaf.NotAfter) {
-			return nil, fmt.Errorf(
-				"client certificate %s expired %s",
-				certFile, cert.Leaf.NotAfter.Format(time.RFC3339),
-			)
-		}
-
-		if err == nil {
-			// Overlapping reloads can finish out of order, so one doesn't
-			// replace a pair stored by a reload that started after it.
-			next := &loaded{cert: &cert, seq: seq}
-			for cur := last.Load(); cur.seq < seq; cur = last.Load() {
-				if last.CompareAndSwap(cur, next) {
-					break
-				}
-			}
-
-			return &cert, nil
-		}
-
-		fallback := last.Load().cert
-		if fallback.Leaf != nil && time.Now().After(fallback.Leaf.NotAfter) {
-			return nil, fmt.Errorf(
-				"reload client certificate (last loaded one expired %s): %w",
-				fallback.Leaf.NotAfter.Format(time.RFC3339), err,
-			)
-		}
-
-		slog.Warn(
-			"Reloading client certificate failed, using last loaded certificate",
-			"certFile", certFile, "keyFile", keyFile, "err", err,
+	if cert.Leaf != nil && time.Now().After(cert.Leaf.NotAfter) {
+		return nil, fmt.Errorf(
+			"client certificate %s expired %s",
+			opts.CertFile, cert.Leaf.NotAfter.Format(time.RFC3339),
 		)
-
-		return fallback, nil
 	}
+
+	cfg.Certificates = []tls.Certificate{cert}
 
 	return cfg, nil
+}
+
+// NewGRPCHTTPClient returns a client for connect's gRPC protocol to endpoint.
+// Over TLS it offers HTTP/2 and HTTP/1.1 and the server picks. Plaintext has
+// no negotiation and Go would always pick HTTP/1.1 there, which standard gRPC
+// servers reject, so it is h2c only.
+func NewGRPCHTTPClient(endpoint Endpoint) *http.Client {
+	protocols := new(http.Protocols)
+
+	if u, err := url.Parse(endpoint.URL); err == nil && u.Scheme == "https" {
+		protocols.SetHTTP1(true)
+		protocols.SetHTTP2(true)
+	} else {
+		protocols.SetUnencryptedHTTP2(true)
+	}
+
+	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: endpoint.TLS}}
 }
 
 // ParseTLSVersion maps a configured version name to its tls constant. Empty
@@ -173,10 +138,8 @@ func ParseTLSVersion(raw string) (uint16, error) {
 	}
 }
 
-// CAPool loads caFile into a cert pool verifying a TLS server, exported so
-// config validation can surface a parse failure against the caFile field
-// without duplicating this logic.
-func CAPool(caFile string) (*x509.CertPool, error) {
+// caPool loads caFile into a cert pool verifying a TLS server.
+func caPool(caFile string) (*x509.CertPool, error) {
 	bz, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, fmt.Errorf("read %w: %w", ErrCAFile, err)

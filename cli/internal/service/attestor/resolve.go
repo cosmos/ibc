@@ -11,20 +11,22 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/network"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
 
-// ResolveOptions controls how unresolvable remote attestors are handled.
+// ResolveOptions controls how unreachable remote attestors are handled.
 type ResolveOptions struct {
 	// RequireReachable fails on the first remote attestor that can't be
-	// resolved, as needed by live validation. Without it such an attestor is
+	// reached, as needed by live validation. Without it such an attestor is
 	// skipped with a warning.
 	RequireReachable bool
 }
 
 // ResolveFromConfig resolves every entry in the unified attestors[] config
 // list into a live Attestor, split by whether it runs in this process
-// (local) or is queried over gRPC (remote).
+// (local) or is queried over gRPC (remote). A bad remote endpoint config is
+// always an error; an unreachable remote attestor is handled per opts.
 func ResolveFromConfig(
 	ctx context.Context,
 	entries config.Attestors,
@@ -42,7 +44,12 @@ func ResolveFromConfig(
 
 			local = append(local, a)
 		case config.AttestorTypeRemote:
-			a, errRemote := resolveRemote(ctx, entry)
+			endpoint, errEndpoint := remoteEndpoint(entry)
+			if errEndpoint != nil {
+				return nil, nil, fmt.Errorf("attestor %s: %w", entry.Name, errEndpoint)
+			}
+
+			a, errRemote := NewRemoteFromEndpoint(ctx, entry.Name, endpoint)
 			if errRemote != nil {
 				if opts.RequireReachable {
 					return nil, nil, fmt.Errorf("attestor %s: %w", entry.Name, errRemote)
@@ -78,23 +85,13 @@ func resolveLocal(entry config.AttestorConfig, clients *chains.ClientSet, signer
 	return NewLocal(entry, client, s)
 }
 
-func resolveRemote(ctx context.Context, entry config.AttestorConfig) (Attestor, error) {
+// remoteEndpoint resolves entry's address and TLS settings. The name, not the
+// address, identifies it in logs: with validation off the address may carry
+// userinfo.
+func remoteEndpoint(entry config.AttestorConfig) (network.Endpoint, error) {
 	if entry.GRPC == "" {
-		return nil, errors.New("no grpc address configured")
+		return network.Endpoint{}, errors.New("no grpc address configured")
 	}
 
-	// grpc is a bare host:port, so the tls block's presence picks the scheme.
-	scheme := "http://"
-	if entry.TLS != nil {
-		scheme = "https://"
-	}
-
-	endpoint, err := config.ResolveEndpoint(
-		scheme+entry.GRPC, entry.TLS, nil, "attestor", entry.Name, "grpc", entry.GRPC,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRemoteFromEndpoint(ctx, entry.Name, endpoint)
+	return config.ResolveEndpoint(entry.EndpointURL(), entry.TLS, nil, "attestor", entry.Name)
 }

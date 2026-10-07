@@ -4,9 +4,7 @@ package attestor
 
 import (
 	"context"
-	"crypto/tls"
 	"log/slog"
-	"net/http"
 	"time"
 
 	"connectrpc.com/connect"
@@ -34,7 +32,7 @@ const remoteRequestTimeout = 5 * time.Second
 // Info RPC to resolve its chain and address.
 func NewRemoteFromEndpoint(ctx context.Context, name string, endpoint network.Endpoint) (*RemoteAttestor, error) {
 	var (
-		httpClient  = newConnectHTTPClient(endpoint.TLS)
+		httpClient  = network.NewGRPCHTTPClient(endpoint)
 		protoClient = proto.NewAttestationServiceClient(httpClient, endpoint.URL, connect.WithGRPC())
 	)
 
@@ -173,18 +171,5 @@ func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
 		return CommitmentTypeReceipt, nil
 	default:
 		return CommitmentTypeInvalid, errors.Errorf("unsupported commitment type: %s", ct)
-	}
-}
-
-// https://connectrpc.com/docs/go/getting-started/#make-requests
-// todo: revisit these params
-func newConnectHTTPClient(tlsConfig *tls.Config) *http.Client {
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetHTTP2(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	return &http.Client{
-		Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig},
 	}
 }

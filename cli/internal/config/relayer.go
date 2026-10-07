@@ -119,17 +119,9 @@ type RemoteParams struct {
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
-// EndpointURL returns URL with a scheme, adding https:// to a bare host:port
-// when a tls block is present and http:// otherwise.
+// EndpointURL returns URL with a scheme, see endpointURL.
 func (p RemoteParams) EndpointURL() string {
-	switch {
-	case strings.Contains(p.URL, "://"):
-		return p.URL
-	case p.TLS != nil:
-		return "https://" + p.URL
-	default:
-		return "http://" + p.URL
-	}
+	return endpointURL(p.URL, p.TLS)
 }
 
 // AttestationParams is empty

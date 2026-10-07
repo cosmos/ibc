@@ -28,6 +28,19 @@ func validateRPCEndpoint(raw string) error {
 	return err
 }
 
+// endpointURL returns addr with a scheme, adding https:// to a bare host:port
+// when a tls block is present and http:// otherwise.
+func endpointURL(addr string, tls *TLSClientConfig) string {
+	switch {
+	case strings.Contains(addr, "://"):
+		return addr
+	case tls != nil:
+		return "https://" + addr
+	default:
+		return "http://" + addr
+	}
+}
+
 func parseEndpoint(raw string, schemes ...string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil {

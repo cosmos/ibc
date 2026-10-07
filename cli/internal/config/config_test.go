@@ -736,6 +736,14 @@ func TestAttestorsValidate(t *testing.T) {
 			errContains: ".grpc: must be a bare host:port, not a URL",
 		},
 		{
+			name: "remote grpc includes userinfo",
+			attestors: Attestors{{
+				Name: "attestor-a", Type: AttestorTypeRemote,
+				GRPC: "user:token@attestor-a.example.com:3000",
+			}},
+			errContains: ".grpc: must be a bare host:port without userinfo",
+		},
+		{
 			name: "remote with chainId set",
 			attestors: Attestors{{
 				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,

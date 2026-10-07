@@ -140,14 +140,6 @@ func WriteSelfSigned(t testing.TB, dir, name string) (certFile, keyFile string) 
 	return writeSelfSigned(t, dir, name, time.Now().Add(-validity), time.Now().Add(validity))
 }
 
-// WriteSelfSignedIssuedAt is WriteSelfSigned with the given issue time, for
-// tests that depend on which of two certificates is newer.
-func WriteSelfSignedIssuedAt(t testing.TB, dir, name string, notBefore time.Time) (certFile, keyFile string) {
-	t.Helper()
-
-	return writeSelfSigned(t, dir, name, notBefore, time.Now().Add(validity))
-}
-
 // WriteExpiredSelfSigned is WriteSelfSigned with a certificate that has
 // already expired, which still loads but fails verification.
 func WriteExpiredSelfSigned(t testing.TB, dir, name string) (certFile, keyFile string) {

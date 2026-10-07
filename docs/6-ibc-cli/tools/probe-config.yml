@@ -10,6 +10,7 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "relayer-key-id"
+    tls: {}
   - alias: "attestor-dan-key"
     type: remote
     grpc: cosmos-kms.example.com:9090
@@ -60,6 +61,7 @@ relayer:
         type: "remote"
         params:
           url: "https://prover.example.com"
+          tls: {}
         chainId: "8453"
         signer: "relayer-key"
         clientId: "ethereum-0"
@@ -69,6 +71,7 @@ attestors:
   - name: "attestor-alice-base"
     type: remote
     grpc: attestor-alice.example.com:3000
+    tls: {}
   - name: "attestor-bob-base"
     type: remote
     grpc: attestor-bob.example.com:3000
