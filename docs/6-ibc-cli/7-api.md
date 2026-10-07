@@ -477,12 +477,13 @@ with a remote one, so a light client the CLI does not implement can be supported
 by serving these three calls. Every request names the client it is scoped to, so
 one service can serve many clients across many chains.
 
-The relayer calls it over gRPC. Over plaintext the service must accept HTTP/2
-without TLS (h2c); over TLS it can choose HTTP/2 or HTTP/1.1. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
+The relayer calls it over gRPC, so the service must speak HTTP/2: negotiated
+during the TLS handshake, or HTTP/2 without TLS (h2c) over plaintext. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
 `ibc config validate --live` calls `LatestProvableHeight` to check the service
-answers. An error the service itself returns still counts as reachable, except
-`Unauthenticated`, `PermissionDenied`, `Unimplemented` and `Unavailable`, which
-is also what a proxy in front of a stopped service returns. <!-- [cli/internal/relay/prover/remote/remote.go: Prover.Probe] -->
+answers. Besides success, only `NotFound` and `FailedPrecondition` count as
+reachable, for a service that is up but can't serve that client yet. Any other
+code, including what a gateway in front of a stopped service returns, fails
+validation. <!-- [cli/internal/relay/prover/remote/remote.go: Prover.Probe] -->
 
 ### `Client`
 

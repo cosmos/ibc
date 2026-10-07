@@ -106,9 +106,9 @@ func BuildClientTLS(opts ClientTLS) (*tls.Config, error) {
 }
 
 // NewGRPCHTTPClient returns a client for connect's gRPC protocol to endpoint.
-// Over TLS it offers HTTP/2 and HTTP/1.1 and the server picks. Plaintext has
-// no negotiation and Go would always pick HTTP/1.1 there, which standard gRPC
-// servers reject, so it is h2c only.
+// gRPC needs HTTP/2. Over TLS it is negotiated, with HTTP/1.1 also offered for
+// servers that serve gRPC over it, such as connect-go. Plaintext has no
+// negotiation and Go would always pick HTTP/1.1 there, so it is h2c only.
 func NewGRPCHTTPClient(endpoint Endpoint) *http.Client {
 	protocols := new(http.Protocols)
 

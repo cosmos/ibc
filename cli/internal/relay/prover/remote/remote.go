@@ -49,10 +49,11 @@ func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger
 	return New(network.NewGRPCHTTPClient(endpoint), endpoint.URL, chainID, clientID, logger)
 }
 
-// Probe checks that the prover answers. An error the prover itself returned
-// still counts as reachable (e.g. NotFound while it syncs), unless it rejects
-// this caller, doesn't serve the ProverService, or is Unavailable, which is
-// also what a proxy in front of a down prover answers with.
+// Probe checks that the prover answers. Besides success, only NotFound and
+// FailedPrecondition from the prover count as reachable: it answered but can't
+// serve this client yet (e.g. it is still syncing, or the client isn't on
+// chain yet). Any other code could come from a gateway in front of a stopped
+// prover.
 func (p *Prover) Probe(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -60,21 +61,18 @@ func (p *Prover) Probe(ctx context.Context) error {
 	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
 		Client: p.target(),
 	}))
-	if err == nil || (connect.IsWireError(err) && !rejectsProbe(connect.CodeOf(err))) {
+	if err == nil {
 		return nil
 	}
 
-	return errors.Wrap(err, "remote prover: probe")
-}
-
-func rejectsProbe(code connect.Code) bool {
-	switch code {
-	case connect.CodeUnauthenticated, connect.CodePermissionDenied, connect.CodeUnimplemented,
-		connect.CodeUnavailable:
-		return true
-	default:
-		return false
+	if connect.IsWireError(err) {
+		switch connect.CodeOf(err) {
+		case connect.CodeNotFound, connect.CodeFailedPrecondition:
+			return nil
+		}
 	}
+
+	return errors.Wrap(err, "remote prover: probe")
 }
 
 // LogSafeURL reduces raw to scheme://host[:port] so it is safe to log.

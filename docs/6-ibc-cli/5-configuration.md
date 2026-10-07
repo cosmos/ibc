@@ -443,7 +443,7 @@ The block's presence turns TLS on; there is no separate flag. A remote attestor'
 
 Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. An expired client certificate fails validation. <!-- [cli/internal/network/tls.go: BuildClientTLS] -->
 
-Remote attestors and provers are called over gRPC. Over TLS the server can choose HTTP/2 or HTTP/1.1. Over plaintext the server must accept HTTP/2 without TLS (h2c), as standard gRPC servers do. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
+Remote attestors and provers are called over gRPC, which needs HTTP/2. Over TLS it is negotiated during the handshake. Over plaintext the server must accept HTTP/2 without TLS (h2c), as standard gRPC servers do. The client also offers HTTP/1.1 over TLS, which only servers that serve gRPC over HTTP/1.1, such as connect-go, can use. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
 
 TLS here covers outbound connections only. The CLI's own API server on `server.listenAddr` listens without TLS. <!-- [cli/internal/server/server.go: New] -->
 
