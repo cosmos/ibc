@@ -31,11 +31,6 @@ var qbftFixtureJSON []byte
 
 var messageBindings = besumsgs.NewBindings()
 
-// DeployableTrustingPeriod keeps the captured initial state unexpired, which
-// the light client constructor requires; the fixture's own TrustingPeriod
-// elapsed soon after capture.
-const DeployableTrustingPeriod = 100 * 365 * 24 * 60 * 60
-
 // Fixture mirrors the qbft.json layout.
 //
 // TODO(FOU-1406): Move fixture generation from ibc-contracts into this repo's

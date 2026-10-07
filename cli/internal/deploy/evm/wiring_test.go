@@ -290,6 +290,13 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
 	require.NoError(t, err)
 
+	// the constructor rejects an expired initial state, so trust the fixture's
+	// state at the current head time
+	head, err := sim.Client().HeaderByNumber(ctx, nil)
+	require.NoError(t, err)
+	consensusState := fixture.InitialConsensusState()
+	consensusState.Timestamp = head.Time
+
 	spec := deploy.ClientSpec{
 		ClientID:             "besu-2",
 		CounterpartyChainID:  "2",
@@ -297,8 +304,8 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 		Params: deploy.BesuQBFTParams{
 			IBCRouter:             fixture.RouterAddress,
 			InitialHeight:         fixture.InitialTrustedHeight,
-			InitialConsensusState: fixture.InitialConsensusState(),
-			TrustingPeriod:        besutest.DeployableTrustingPeriod,
+			InitialConsensusState: consensusState,
+			TrustingPeriod:        fixture.TrustingPeriod,
 			MaxClockDrift:         fixture.MaxClockDrift,
 		},
 	}
@@ -324,7 +331,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	require.Equal(t, besumsgs.IBesuLightClientMsgsClientState{
 		IbcRouter:      fixture.RouterAddress,
 		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
-		TrustingPeriod: besutest.DeployableTrustingPeriod,
+		TrustingPeriod: fixture.TrustingPeriod,
 		MaxClockDrift:  fixture.MaxClockDrift,
 		TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
 	}, state)
@@ -334,7 +341,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
 	require.NoError(t, err)
 
-	want, err := besutest.HashConsensusState(fixture.InitialConsensusState())
+	want, err := besutest.HashConsensusState(consensusState)
 	require.NoError(t, err)
 	require.Equal(t, want, common.Hash(hash))
 }
