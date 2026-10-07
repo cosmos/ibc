@@ -4,13 +4,13 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
-	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 )
 
@@ -50,44 +50,52 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 
 // rejectNullTLS fails on a `tls:` key with no value. It decodes to the same
 // nil as an absent block, so a block whose fields are all commented out would
-// otherwise silently mean plaintext.
+// otherwise silently mean plaintext. It walks the generically decoded document
+// so quoted keys, tags and aliases resolve exactly as they do for the config.
 func rejectNullTLS(bz []byte) error {
-	file, err := parser.ParseBytes(bz, 0)
-	if err != nil {
+	var doc any
+	if err := yaml.Unmarshal(bz, &doc); err != nil {
 		return err
 	}
 
-	var found nullTLSFinder
-	for _, doc := range file.Docs {
-		ast.Walk(&found, doc)
-	}
-
-	if found.path != "" {
+	if path := findNullTLS(doc, ""); path != "" {
 		return errors.Errorf(
 			"%s: empty; use `tls: {}` for TLS with default settings, or remove it for plaintext",
-			strings.TrimPrefix(found.path, "$."),
+			path,
 		)
 	}
 
 	return nil
 }
 
-// nullTLSFinder records the path of the first null `tls` value it visits.
-type nullTLSFinder struct {
-	path string
-}
+// findNullTLS returns the path of the first null `tls` value under node, in
+// key order so the result is deterministic.
+func findNullTLS(node any, path string) string {
+	switch n := node.(type) {
+	case map[string]any:
+		for _, key := range slices.Sorted(maps.Keys(n)) {
+			child := key
+			if path != "" {
+				child = path + "." + key
+			}
 
-func (f *nullTLSFinder) Visit(node ast.Node) ast.Visitor {
-	if f.path != "" {
-		return nil
+			if key == "tls" && n[key] == nil {
+				return child
+			}
+
+			if found := findNullTLS(n[key], child); found != "" {
+				return found
+			}
+		}
+	case []any:
+		for i, v := range n {
+			if found := findNullTLS(v, fmt.Sprintf("%s[%d]", path, i)); found != "" {
+				return found
+			}
+		}
 	}
 
-	if mv, ok := node.(*ast.MappingValueNode); ok && mv.Key.String() == "tls" && mv.Value.Type() == ast.NullType {
-		f.path = mv.Value.GetPath()
-		return nil
-	}
-
-	return f
+	return ""
 }
 
 // KeyFileFallbacks returns the paths tried for a local signer key file.

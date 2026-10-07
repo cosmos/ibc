@@ -10,13 +10,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/network"
 )
 
-// yaml field names, used to attach a config path to a validation error.
-const (
-	fieldCAFile   = "caFile"
-	fieldCertFile = "certFile"
-	fieldKeyFile  = "keyFile"
-)
-
 // TLSClientConfig configures an outbound TLS connection.
 //
 // Presence of the block is what enables TLS; there is no separate flag. For an
@@ -28,11 +21,12 @@ const (
 // client certificate, and the default version floor.
 type TLSClientConfig struct {
 	// CAFile is a PEM bundle verifying the server. Empty uses system roots.
+	// Read at startup, so a changed bundle needs a restart.
 	CAFile string `yaml:"caFile,omitempty"`
 
 	// CertFile is the client certificate presented for mTLS. Required with
-	// keyFile. Omit both for one-way TLS. Reloaded on every new connection,
-	// so a rotated short-lived certificate needs no restart.
+	// keyFile. Omit both for one-way TLS. Read at startup, so a rotated
+	// certificate needs a restart.
 	CertFile string `yaml:"certFile,omitempty"`
 
 	// KeyFile is the private key for certFile. Required with certFile.
@@ -46,7 +40,8 @@ type TLSClientConfig struct {
 	// HTTP/2, and HTTP/2 needs at least TLS 1.2.
 	MinVersion string `yaml:"minVersion,omitempty"`
 
-	// InsecureSkipVerify disables server certificate verification. Development only.
+	// InsecureSkipVerify disables server certificate verification and logs a
+	// warning. Development only. Must not be combined with caFile.
 	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty"`
 }
 
@@ -60,13 +55,8 @@ func (c *TLSClientConfig) Validate() error {
 		return nil
 	}
 
-	switch {
-	case c.InsecureSkipVerify && c.CAFile != "":
-		return errPathf(fieldCAFile, "must not be set when insecureSkipVerify is enabled")
-	case c.CertFile != "" && c.KeyFile == "":
-		return errPathf(fieldKeyFile, "required when certFile is set")
-	case c.KeyFile != "" && c.CertFile == "":
-		return errPathf(fieldCertFile, "required when keyFile is set")
+	if c.InsecureSkipVerify && c.CAFile != "" {
+		return errPathf("caFile", "must not be set when insecureSkipVerify is enabled")
 	}
 
 	_, err := c.TLSConfig()
@@ -84,6 +74,15 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 		return nil, nil
 	}
 
+	// Checked here rather than in Validate, which a load can skip, so a
+	// half-configured client certificate never yields one-way TLS.
+	switch {
+	case c.CertFile != "" && c.KeyFile == "":
+		return nil, errPathf("keyFile", "required when certFile is set")
+	case c.KeyFile != "" && c.CertFile == "":
+		return nil, errPathf("certFile", "required when keyFile is set")
+	}
+
 	minVersion, err := network.ParseTLSVersion(c.MinVersion)
 	if err != nil {
 		return nil, errPath("minVersion", err)
@@ -91,17 +90,17 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 
 	caFile, err := ExpandHome(c.CAFile)
 	if err != nil {
-		return nil, errPath(fieldCAFile, err)
+		return nil, errPath("caFile", err)
 	}
 
 	certFile, err := ExpandHome(c.CertFile)
 	if err != nil {
-		return nil, errPath(fieldCertFile, err)
+		return nil, errPath("certFile", err)
 	}
 
 	keyFile, err := ExpandHome(c.KeyFile)
 	if err != nil {
-		return nil, errPath(fieldKeyFile, err)
+		return nil, errPath("keyFile", err)
 	}
 
 	cfg, err := network.BuildClientTLS(network.ClientTLS{
@@ -113,7 +112,7 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 		InsecureSkipVerify: c.InsecureSkipVerify,
 	})
 	if errors.Is(err, network.ErrCAFile) {
-		return nil, errPath(fieldCAFile, err)
+		return nil, errPath("caFile", err)
 	}
 
 	return cfg, err

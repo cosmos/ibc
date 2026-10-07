@@ -16,11 +16,11 @@ import (
 )
 
 // checkQuorumAndProverReachability resolves every configured attestor
-// (local and remote, failing on an unreachable remote one) and confirms every attestation-type client end of every
-// configured connection can currently satisfy its attestor quorum against
-// on-chain state. Resolving every prover as a side effect also probes every
-// remote prover's reachability, which is why a remote-prover-only config
-// exercises this too.
+// (local and remote, failing on an unreachable remote one) and confirms every
+// attestation-type client end of every configured connection can currently
+// satisfy its attestor quorum against on-chain state. Resolving every prover
+// as a side effect also probes every remote prover's reachability, which is
+// why a remote-prover-only config exercises this too.
 func checkQuorumAndProverReachability(ctx context.Context, cfg config.Config, clientSet *chains.ClientSet) error {
 	signers, err := signer.NewSetFromConfig(ctx, cfg.Signers)
 	if err != nil {

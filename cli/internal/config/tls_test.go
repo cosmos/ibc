@@ -127,7 +127,7 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		require.Equal(t, uint16(tls.VersionTLS12), got.MinVersion)
-		require.Nil(t, got.GetClientCertificate)
+		require.Empty(t, got.Certificates)
 	})
 
 	t.Run("client certificate is wired for mTLS", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 		}).TLSConfig()
 		require.NoError(t, err)
 		require.Equal(t, uint16(tls.VersionTLS13), got.MinVersion)
-		require.NotNil(t, got.GetClientCertificate)
+		require.Len(t, got.Certificates, 1)
 	})
 
 	t.Run("serverName and skip-verify carry through", func(t *testing.T) {
@@ -154,6 +154,21 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 	t.Run("a bad file is reported rather than silently dropped", func(t *testing.T) {
 		_, err := (&TLSClientConfig{CAFile: filepath.Join(dir, "absent.crt")}).TLSConfig()
 		require.Error(t, err)
+	})
+
+	// TLSConfig runs at connect time even when validation was skipped, so a
+	// lone key must not quietly degrade mTLS to one-way TLS.
+	t.Run("a key without a certificate is rejected", func(t *testing.T) {
+		_, err := (&TLSClientConfig{KeyFile: keyFile}).TLSConfig()
+		require.ErrorContains(t, err, "certFile: required when keyFile is set")
+	})
+
+	// The pair is read once, so an expired one fails validation instead of
+	// every handshake.
+	t.Run("an expired client certificate is rejected", func(t *testing.T) {
+		expiredCert, expiredKey := certs.WriteExpiredSelfSigned(t, dir, "expired")
+		err := (&TLSClientConfig{CertFile: expiredCert, KeyFile: expiredKey}).Validate()
+		require.ErrorContains(t, err, "client certificate "+expiredCert+" expired")
 	})
 }
 
@@ -181,7 +196,7 @@ func TestTLSClientConfigExpandsHome(t *testing.T) {
 
 	got, err := cfg.TLSConfig()
 	require.NoError(t, err)
-	require.NotNil(t, got.GetClientCertificate)
+	require.Len(t, got.Certificates, 1)
 	require.NotNil(t, got.RootCAs)
 }
 
@@ -398,6 +413,15 @@ func TestRemoteParamsEndpointURL(t *testing.T) {
 	}
 }
 
+func TestAttestorConfigEndpointURL(t *testing.T) {
+	require.Equal(t, "http://attestor:3000", AttestorConfig{GRPC: "attestor:3000"}.EndpointURL())
+	require.Equal(
+		t,
+		"https://attestor:3000",
+		AttestorConfig{GRPC: "attestor:3000", TLS: &TLSClientConfig{}}.EndpointURL(),
+	)
+}
+
 // A tls error must surface with its full config path so an operator can find
 // the offending block.
 func TestLoadFromFileRejectsNullTLS(t *testing.T) {
@@ -443,6 +467,55 @@ relayer:
           tls: null
 `,
 			errContains: "relayer.connections[0].clientA.params.tls: empty",
+		},
+		{
+			name: "quoted key",
+			yaml: `
+attestors:
+  - name: attestor-1
+    type: remote
+    grpc: attestor.example.com:3000
+    "tls":
+`,
+			errContains: "attestors[0].tls: empty",
+		},
+		{
+			name: "tagged null",
+			yaml: `
+attestors:
+  - name: attestor-1
+    type: remote
+    grpc: attestor.example.com:3000
+    tls: !!null
+`,
+			errContains: "where mapping is expected",
+		},
+		{
+			name: "explicit key",
+			yaml: `
+attestors:
+  - name: attestor-1
+    type: remote
+    grpc: attestor.example.com:3000
+    ? tls
+`,
+			errContains: "attestors[0].tls: empty",
+		},
+		{
+			name: "alias to null",
+			yaml: `
+signers:
+  - alias: kms
+    type: remote
+    grpc: kms.example.com:9090
+    remoteKeyId: &nothing ~
+attestors:
+  - name: attestor-1
+    type: remote
+    grpc: attestor.example.com:3000
+    tls: *nothing
+`,
+			errContains: "attestors[0].tls: empty",
 		},
 		{
 			name: "empty mapping is TLS with defaults",

@@ -57,6 +57,20 @@ func TestResolveFromConfig(t *testing.T) {
 		require.ErrorContains(t, err, "attestor bob")
 	})
 
+	t.Run("remoteBadTLSConfigErrorsFatally", func(t *testing.T) {
+		entries := config.Attestors{{
+			Name: "bob",
+			Type: config.AttestorTypeRemote,
+			GRPC: "127.0.0.1:0",
+			TLS:  &config.TLSClientConfig{CAFile: "/nonexistent/ca.pem"},
+		}}
+
+		_, _, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet(), ResolveOptions{})
+
+		require.ErrorContains(t, err, "attestor bob")
+		require.ErrorContains(t, err, "caFile")
+	})
+
 	t.Run("localMissingClientErrorsFatally", func(t *testing.T) {
 		signers := signer.NewSet()
 		s, err := signer.GenerateLocalSecp256k1Signer()
@@ -102,7 +116,7 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	plaintextAddr := startPlaintextAttestor(t)
 
 	t.Run("a tls block dials https", func(t *testing.T) {
-		got, err := resolveRemote(context.Background(), config.AttestorConfig{
+		got, err := resolveRemote(t, config.AttestorConfig{
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: tlsAddr,
@@ -118,7 +132,7 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	})
 
 	t.Run("no tls block dials http", func(t *testing.T) {
-		got, err := resolveRemote(context.Background(), config.AttestorConfig{
+		got, err := resolveRemote(t, config.AttestorConfig{
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: plaintextAddr,
@@ -128,7 +142,7 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	})
 
 	t.Run("a tls block against a plaintext listener fails", func(t *testing.T) {
-		_, err := resolveRemote(context.Background(), config.AttestorConfig{
+		_, err := resolveRemote(t, config.AttestorConfig{
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: plaintextAddr,
@@ -136,6 +150,15 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 		})
 		require.Error(t, err)
 	})
+}
+
+func resolveRemote(t *testing.T, entry config.AttestorConfig) (Attestor, error) {
+	t.Helper()
+
+	endpoint, err := remoteEndpoint(entry)
+	require.NoError(t, err)
+
+	return NewRemoteFromEndpoint(context.Background(), entry.Name, endpoint)
 }
 
 // startTLSAttestor serves AttestationService over TLS and returns its address.
@@ -165,6 +188,7 @@ func startPlaintextAttestor(t *testing.T) string {
 
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
 
 	srv := newAttestorServer(protocols)
 

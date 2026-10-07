@@ -62,16 +62,6 @@ func TestValidateOutboundMutualTLS(t *testing.T) {
 		require.ErrorContains(t, f.validate(t, "attestor"), "attestor")
 		require.Zero(t, f.attestor.calls.Load())
 	})
-
-	t.Run("expired client certificate fails", func(t *testing.T) {
-		f.reset()
-		cert, key := f.cert, f.key
-		f.cert, f.key = certs.WriteExpiredSelfSigned(t, t.TempDir(), "expired")
-		t.Cleanup(func() { f.cert, f.key = cert, key })
-
-		require.ErrorContains(t, f.validate(t, ""), "client certificate "+f.cert+" expired")
-		require.Zero(t, f.signer.calls.Load())
-	})
 }
 
 type tlsFixture struct {

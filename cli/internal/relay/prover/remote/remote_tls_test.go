@@ -5,6 +5,7 @@ package remote
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -67,6 +68,30 @@ func TestProverPlaintextStillWorks(t *testing.T) {
 	require.NoError(t, prover.Probe(context.Background()))
 }
 
+func TestProverProbeServerErrors(t *testing.T) {
+	for code, reachable := range map[connect.Code]bool{
+		connect.CodeNotFound:           true,
+		connect.CodeFailedPrecondition: true,
+		connect.CodeInternal:           true,
+		connect.CodeUnauthenticated:    false,
+		connect.CodePermissionDenied:   false,
+		connect.CodeUnimplemented:      false,
+		connect.CodeUnavailable:        false,
+	} {
+		t.Run(code.String(), func(t *testing.T) {
+			addr := startPlaintextProverWith(t, failingProverService{code: code})
+			prover := NewFromEndpoint(network.Endpoint{URL: "http://" + addr}, "1", "client-0", slog.Default())
+
+			err := prover.Probe(context.Background())
+			if reachable {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, "probe")
+			}
+		})
+	}
+}
+
 func newProver(t *testing.T, url string, cfg *config.TLSClientConfig) *Prover {
 	t.Helper()
 
@@ -98,11 +123,17 @@ func startTLSProver(t *testing.T, tlsConfig *tls.Config) string {
 func startPlaintextProver(t *testing.T) string {
 	t.Helper()
 
+	return startPlaintextProverWith(t, stubProverService{})
+}
+
+func startPlaintextProverWith(t *testing.T, svc proverv2.ProverServiceHandler) string {
+	t.Helper()
+
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	srv := newProverServer(protocols)
+	srv := newProverServerWith(protocols, svc)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -114,7 +145,11 @@ func startPlaintextProver(t *testing.T) string {
 }
 
 func newProverServer(protocols *http.Protocols) *http.Server {
-	path, handler := proverv2.NewProverServiceHandler(stubProverService{})
+	return newProverServerWith(protocols, stubProverService{})
+}
+
+func newProverServerWith(protocols *http.Protocols, svc proverv2.ProverServiceHandler) *http.Server {
+	path, handler := proverv2.NewProverServiceHandler(svc)
 	mux := http.NewServeMux()
 	mux.Handle(path, handler)
 
@@ -155,4 +190,16 @@ func (stubProverService) PacketProofs(
 	}
 
 	return connect.NewResponse(&proverv2.PacketProofsResponse{Proofs: proofs}), nil
+}
+
+// failingProverService answers LatestProvableHeight with code.
+type failingProverService struct {
+	stubProverService
+	code connect.Code
+}
+
+func (s failingProverService) LatestProvableHeight(
+	context.Context, *connect.Request[proverv2.LatestProvableHeightRequest],
+) (*connect.Response[proverv2.LatestProvableHeightResponse], error) {
+	return nil, connect.NewError(s.code, errors.New("stub"))
 }

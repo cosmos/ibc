@@ -6,9 +6,7 @@ package remote
 
 import (
 	"context"
-	"crypto/tls"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -46,16 +44,15 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *s
 	}
 }
 
-// NewFromEndpoint dials endpoint over TLS when endpoint.TLS is set, and
-// otherwise with a client that can negotiate h2c, which gRPC requires over
-// plaintext.
+// NewFromEndpoint dials endpoint with network.NewGRPCHTTPClient.
 func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, logger)
+	return New(network.NewGRPCHTTPClient(endpoint), endpoint.URL, chainID, clientID, logger)
 }
 
-// Probe checks that the prover answers. NotFound and FailedPrecondition still
-// count as reachable: the prover responded, it just can't serve this client
-// yet (e.g. it is still syncing or the client doesn't exist on chain yet).
+// Probe checks that the prover answers. An error the prover itself returned
+// still counts as reachable (e.g. NotFound while it syncs), unless it rejects
+// this caller, doesn't serve the ProverService, or is Unavailable, which is
+// also what a proxy in front of a down prover answers with.
 func (p *Prover) Probe(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -63,13 +60,21 @@ func (p *Prover) Probe(ctx context.Context) error {
 	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
 		Client: p.target(),
 	}))
-
-	switch connect.CodeOf(err) {
-	case connect.CodeNotFound, connect.CodeFailedPrecondition:
+	if err == nil || (connect.IsWireError(err) && !rejectsProbe(connect.CodeOf(err))) {
 		return nil
 	}
 
 	return errors.Wrap(err, "remote prover: probe")
+}
+
+func rejectsProbe(code connect.Code) bool {
+	switch code {
+	case connect.CodeUnauthenticated, connect.CodePermissionDenied, connect.CodeUnimplemented,
+		connect.CodeUnavailable:
+		return true
+	default:
+		return false
+	}
 }
 
 // LogSafeURL reduces raw to scheme://host[:port] so it is safe to log.
@@ -85,14 +90,6 @@ func LogSafeURL(raw string) string {
 	}
 
 	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
-}
-
-func newHTTPClient(tlsConfig *tls.Config) *http.Client {
-	protocols := new(http.Protocols)
-	protocols.SetHTTP2(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig}}
 }
 
 func (p *Prover) target() *proverv2.Client {
