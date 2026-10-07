@@ -185,11 +185,11 @@ The next steps deploy the General Message Passing (GMP) app and the Interchain F
 2. Deploy an IFT contract on each chain. This is the token that will be transferred between the chains. Each token limits how much may flow in and out of the chain, and rejects every transfer until a limit is set. Here the limit is 1,000 DEMO per direction, refilling over a day:
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --rate-limit-capacity 1000000000000000000000 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --rate-limit-capacity 1000000000000000000000 --rate-limit-window 24h --yes
 ```
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --rate-limit-capacity 1000000000000000000000 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --rate-limit-capacity 1000000000000000000000 --rate-limit-window 24h --yes
 ```
 
 ```

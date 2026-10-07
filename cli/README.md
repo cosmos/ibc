@@ -53,7 +53,8 @@ make build
 ./bin/ibc deploy gmp --chain <chainA> --yes
 ./bin/ibc deploy gmp --chain <chainB> --yes
 
-# deploy an IFT token on each chain, then register the bridge between the two
+# deploy an IFT token on each chain, then register the bridge between the two.
+# --rate-limit-capacity base units may flow each way at once, refilling over --rate-limit-window (default 24h)
 ./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainA> --rate-limit-capacity <baseUnits> --yes
 ./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainB> --rate-limit-capacity <baseUnits> --yes
 ./bin/ibc deploy ift-bridge --chain-a <chainA> --ift-a <addressA> --chain-b <chainB> --ift-b <addressB> --yes
