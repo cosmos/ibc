@@ -136,6 +136,8 @@ With both chains registered, deploy the IBC contracts on each.
 Each run sends four transactions: an access manager, the router implementation, the router behind a proxy, and one call that opens the packet-delivery methods to any caller. Your deployer key is the access manager's admin.
 
 ```
+level=INFO msg="would execute" dryRun=true step="core stack on chain 41001"
+level=INFO msg=executing dryRun=false step="core stack on chain 41001"
 level=INFO msg="transaction mined" label="deploy AccessManager" tx=0xa1c9fe97... block=38 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router implementation" tx=0x23988e80... block=39 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router proxy" tx=0x064d03a3... block=40 chain=41001
@@ -299,19 +301,28 @@ It will read `PACKET_STATE_PENDING` for up to a minute, then it should read `PAC
 
 ```json
 {
-  "packets":  [
+  "packets": [
     {
-      "state":  "PACKET_STATE_SUCCEEDED",
-      "sequenceNumber":  "1",
-      "sourceClientId":  "cli-41001-41002",
-      "sendTx":  {"txHash":  "0xf1fa599e...", "chainId":  "41001"},
-      "recvTx":  {"txHash":  "0xf8281f04...", "chainId":  "41002"},
-      "ackTx":  {"txHash":  "0x0f56d3f0...", "chainId":  "41001"},
-      "timeoutTx":  null
+      "state": "PACKET_STATE_SUCCEEDED",
+      "sequenceNumber": "1",
+      "sourceClientId": "cli-41001-41002",
+      "sendTx": {
+        "txHash": "0xf1fa599e...",
+        "chainId": "41001"
+      },
+      "recvTx": {
+        "txHash": "0xf8281f04...",
+        "chainId": "41002"
+      },
+      "ackTx": {
+        "txHash": "0x0f56d3f0...",
+        "chainId": "41001"
+      },
+      "timeoutTx": null
     }
   ],
-  "hasMore":  false,
-  "nextCursor":  ""
+  "hasMore": false,
+  "nextCursor": ""
 }
 ```
 
