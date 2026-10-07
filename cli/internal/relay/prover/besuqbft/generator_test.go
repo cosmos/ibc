@@ -31,6 +31,7 @@ type fakeChain struct {
 	sealed         map[uint64]*besu.ParsedHeader
 	clientState    besumsgs.IBesuLightClientMsgsClientState
 	clientStateErr error
+	stored         map[uint64]common.Hash
 	proof          func(height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
 
@@ -65,6 +66,14 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots []com
 
 func (f *fakeChain) BesuQBFTClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	return f.clientState, f.clientStateErr
+}
+
+func (f *fakeChain) BesuQBFTConsensusStateHash(_ context.Context, _ string, height uint64) (common.Hash, error) {
+	hash, ok := f.stored[height]
+	if !ok {
+		return common.Hash{}, fmt.Errorf("execution reverted: ConsensusStateNotFound(%d)", height)
+	}
+	return hash, nil
 }
 
 type fixtureEnv struct {
@@ -170,15 +179,29 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 
 // A concurrent update can leave the target below the latest height. The
 // contract only accepts headers above the trusted height, so no update is
-// sent; the packet proofs check that the target is stored.
-func TestClientUpdatePayloadBelowLatest(t *testing.T) {
+// sent when the client already stores the target.
+func TestClientUpdatePayloadBelowLatestStored(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
 	env.setAnchor(t, update.Height+5, env.fixture.InitialConsensusState())
+	env.host.stored = map[uint64]common.Hash{update.Height: common.HexToHash("0x01")}
 
 	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
 	assert.Empty(t, payloads)
+}
+
+// When the client does not store a target below its latest height, proofs at
+// target would revert, so the update fails with the reason instead.
+func TestClientUpdatePayloadBelowLatestNotStored(t *testing.T) {
+	env := newFixtureEnv(t)
+	update := env.fixture.NonAdjacentUpdate
+	latest := update.Height + 5
+	env.setAnchor(t, latest, env.fixture.InitialConsensusState())
+
+	_, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
+	require.ErrorContains(t, err, fmt.Sprintf("client advanced to height %d past target %d", latest, update.Height))
+	require.ErrorContains(t, err, "ConsensusStateNotFound")
 }
 
 func (e *fixtureEnv) expectProofAt(
