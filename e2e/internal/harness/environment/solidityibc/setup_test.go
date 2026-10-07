@@ -101,7 +101,7 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	require.NoError(t, err)
 	qbft, err := setup.PrepareBesuQBFTClient(ctx, clientAuthority, instance.Router, BesuQBFTClientConfig{
 		ID: "qbft-b", CounterpartyClientID: "qbft-a", CounterpartyRouter: instance.Router,
-		InitialHeight: 1, InitialTimestamp: head.Time, TrustingPeriod: 14 * 24 * 60 * 60,
+		InitialHeight: 1, InitialTimestamp: head.Time, TrustingPeriod: BesuQBFTTrustingPeriod,
 		InitialValidators: []common.Address{attestor.Address()},
 	})
 	require.NoError(t, err)
