@@ -113,7 +113,7 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info
-      - run: make -C e2e test
+      - run: make -C e2e test E2E_FLAGS='-count=1 -v'
 
   matrix:
     runs-on: ubuntu-latest

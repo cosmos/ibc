@@ -12,17 +12,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/containerd/errdefs"
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/log"
 )
 
 var nameRe = regexp.MustCompile(`[^a-z0-9_.-]+`)
 
 const startAttempts = 3
 
-// Start recreates containers whose Docker-assigned host ports collide with host sockets.
+// Start retries managed chain startup with a fresh container after each failed start.
+// Requests must have no wait strategy or custom lifecycle hooks; callers check RPC readiness separately.
 func Start(ctx context.Context, request testcontainers.ContainerRequest) (testcontainers.Container, error) {
 	return start(ctx, request, testcontainers.GenericContainer)
 }
@@ -30,35 +31,41 @@ func Start(ctx context.Context, request testcontainers.ContainerRequest) (testco
 func start(
 	ctx context.Context,
 	request testcontainers.ContainerRequest,
-	run func(context.Context, testcontainers.GenericContainerRequest) (testcontainers.Container, error),
+	create func(context.Context, testcontainers.GenericContainerRequest) (testcontainers.Container, error),
 ) (testcontainers.Container, error) {
-	for attempt := 1; ; attempt++ {
+	var lastErr error
+	for attempt := 1; attempt <= startAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, errors.Join(lastErr, err)
 		}
-		c, err := run(ctx, testcontainers.GenericContainerRequest{ContainerRequest: request, Started: true})
-		if err == nil {
+		if attempt > 1 {
+			log.Printf("Retrying container %s (attempt %d/%d): %v", request.Name, attempt, startAttempts, lastErr)
+		}
+		c, err := create(ctx, testcontainers.GenericContainerRequest{ContainerRequest: request})
+		if err != nil {
+			cleanupErr := Terminate(c)
+			return nil, errors.Join(lastErr, err, cleanupErr, ctx.Err())
+		}
+		lastErr = c.Start(ctx)
+		if lastErr == nil {
 			return c, nil
 		}
-		if c != nil {
-			// Cleanup must finish before reusing the fixed name, even if startup was canceled.
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			cleanupErr := c.Terminate(cleanupCtx, testcontainers.StopTimeout(time.Second))
-			cancel()
-			if cleanupErr != nil {
-				return nil, errors.Join(err, fmt.Errorf("remove failed container: %w", cleanupErr))
-			}
-		}
-		if attempt == startAttempts || !isPortConflict(err) {
-			return nil, fmt.Errorf("container start attempt %d/%d: %w", attempt, startAttempts, err)
+		// Restarting after a failed port bind can succeed without networking; remove before recreating the same name.
+		if cleanupErr := Terminate(c); cleanupErr != nil {
+			return nil, errors.Join(lastErr, fmt.Errorf("remove failed container: %w", cleanupErr), ctx.Err())
 		}
 	}
+	return nil, fmt.Errorf("start container after %d attempts: %w", startAttempts, errors.Join(lastErr, ctx.Err()))
 }
 
-func isPortConflict(err error) bool {
-	// Docker's HTTP 500 networking-setup response includes the kernel's EADDRINUSE text.
-	return errdefs.IsInternal(err) && strings.Contains(err.Error(), "failed to set up container networking") &&
-		strings.Contains(err.Error(), "address already in use")
+// Terminate discards a container even when the startup context has been canceled.
+func Terminate(c testcontainers.Container) error {
+	if c == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return c.Terminate(ctx, testcontainers.StopTimeout(time.Second))
 }
 
 func Labels(runID string) map[string]string {
