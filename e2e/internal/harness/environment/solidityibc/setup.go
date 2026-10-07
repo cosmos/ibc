@@ -473,7 +473,7 @@ func (s *Setup) PrepareBesuQBFTClient(
 					LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
 					TrustingPeriod: config.TrustingPeriod,
 					MaxClockDrift:  config.MaxClockDrift,
-					TrustLevel:     besu.TrustLevel,
+					TrustLevel:     besu.DefaultTrustLevel,
 				},
 				besuqbft.IBesuLightClientMsgsConsensusState{
 					Timestamp:  config.InitialTimestamp,

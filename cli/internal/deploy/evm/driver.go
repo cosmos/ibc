@@ -240,7 +240,7 @@ func (d *Driver) provisionBesuQBFT(
 			LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
 			TrustingPeriod: params.TrustingPeriod,
 			MaxClockDrift:  params.MaxClockDrift,
-			TrustLevel:     besu.TrustLevel,
+			TrustLevel:     besu.DefaultTrustLevel,
 		},
 		besuqbft.IBesuLightClientMsgsConsensusState(params.InitialConsensusState),
 		common.HexToAddress(router),
