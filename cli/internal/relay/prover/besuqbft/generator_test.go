@@ -31,7 +31,6 @@ type fakeChain struct {
 	sealed         map[uint64]*besu.ParsedHeader
 	clientState    besumsgs.IBesuLightClientMsgsClientState
 	clientStateErr error
-	stored         map[uint64]common.Hash
 	proof          func(height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
 
@@ -66,14 +65,6 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots []com
 
 func (f *fakeChain) BesuQBFTClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	return f.clientState, f.clientStateErr
-}
-
-func (f *fakeChain) BesuQBFTConsensusStateHash(_ context.Context, _ string, height uint64) (common.Hash, error) {
-	hash, ok := f.stored[height]
-	if !ok {
-		return common.Hash{}, fmt.Errorf("execution reverted: ConsensusStateNotFound(%d)", height)
-	}
-	return hash, nil
 }
 
 type fixtureEnv struct {
@@ -151,9 +142,10 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 	env.expectInitialAnchor(t)
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	payloads, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
+	payloads, proofHeight, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
 	require.NoError(t, err)
 	require.Len(t, payloads, 1)
+	assert.Equal(t, update.Height, proofHeight)
 
 	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
 	require.NoError(t, err)
@@ -172,36 +164,26 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
 	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
 
-	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
+	payloads, proofHeight, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
 	assert.Empty(t, payloads, "no update needed")
+	assert.Equal(t, update.Height, proofHeight)
 }
 
 // A concurrent update can leave the target below the latest height. The
 // contract only accepts headers above the trusted height, so no update is
-// sent when the client already stores the target.
-func TestClientUpdatePayloadBelowLatestStored(t *testing.T) {
-	env := newFixtureEnv(t)
-	update := env.fixture.NonAdjacentUpdate
-	env.setAnchor(t, update.Height+5, env.fixture.InitialConsensusState())
-	env.host.stored = map[uint64]common.Hash{update.Height: common.HexToHash("0x01")}
-
-	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
-	require.NoError(t, err)
-	assert.Empty(t, payloads)
-}
-
-// When the client does not store a target below its latest height, proofs at
-// target would revert, so the update fails with the reason instead.
-func TestClientUpdatePayloadBelowLatestNotStored(t *testing.T) {
+// sent and the packets are proven at the latest height, which the client
+// always stores.
+func TestClientUpdatePayloadBelowLatest(t *testing.T) {
 	env := newFixtureEnv(t)
 	update := env.fixture.NonAdjacentUpdate
 	latest := update.Height + 5
 	env.setAnchor(t, latest, env.fixture.InitialConsensusState())
 
-	_, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
-	require.ErrorContains(t, err, fmt.Sprintf("client advanced to height %d past target %d", latest, update.Height))
-	require.ErrorContains(t, err, "ConsensusStateNotFound")
+	payloads, proofHeight, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
+	require.NoError(t, err)
+	assert.Empty(t, payloads)
+	assert.Equal(t, latest, proofHeight)
 }
 
 func (e *fixtureEnv) expectProofAt(

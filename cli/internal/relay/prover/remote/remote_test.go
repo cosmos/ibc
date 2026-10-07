@@ -24,11 +24,26 @@ func TestProverRequestTimeout(t *testing.T) {
 	_, _, err := prover.LatestProvableHeight(ctx)
 	require.NoError(t, err)
 
-	_, err = prover.ClientUpdatePayloads(ctx, 1)
+	_, _, err = prover.ClientUpdatePayloads(ctx, 1)
 	require.NoError(t, err)
 
 	_, err = prover.PacketProofs(ctx, 1, v2.ProofKindPacketCommitment, []channeltypesv2.Packet{{Sequence: 1}})
 	require.NoError(t, err)
+}
+
+// A prover that predates proof_height leaves it zero, meaning the requested
+// height.
+func TestClientUpdatePayloadsDefaultsProofHeight(t *testing.T) {
+	prover := &Prover{
+		client:   timeoutProverClient{t: t},
+		chainID:  "chain-a",
+		clientID: "client-0",
+		logger:   slog.Default(),
+	}
+
+	_, proofHeight, err := prover.ClientUpdatePayloads(context.Background(), 42)
+	require.NoError(t, err)
+	require.Equal(t, uint64(42), proofHeight)
 }
 
 type timeoutProverClient struct {
