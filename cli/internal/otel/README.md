@@ -72,13 +72,13 @@ Shared label: `{otel_scope_name="ibc.relayer"}`
 - `processor`: `recv`, `ack`, or `timeout`.
 - Batch `chain_id`: destination for `recv`; source for `ack` and `timeout`.
 - Transaction `chain_id`: chain receiving the transaction.
-- Transaction `client_id`: client updated by the transaction; destination for `recv`, source for `ack` and `timeout`.
+- Transaction `wallet`: the configured signer address.
 - Processor `type`: `send_to_recv`, `send_to_timeout`, or `recv_to_ack`.
 
 In metrics that label both packet sides, `chain_id` / `client_id` refer to the packet's **source** side and
 `dest_chain_id` / `dest_client_id` to its destination.
 
-Confirmations count only successful receipts for transactions broadcast by this process and are deduplicated in memory by chain and tx hash.
+Transaction attempt and recovery metrics are owned by the transaction manager; see [EVM transaction recovery](../../docs/transaction-submission.md#monitoring).
 Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
 EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
 Collections inside that threshold re-emit the last observed value. A failed query is logged and reported as `-1`.
@@ -89,9 +89,6 @@ Collections inside that threshold re-emit the last observed value. A failed quer
 | pipeline    | `batch_size_*`                  | histogram          | `chain_id`, `processor`, `result`                                   | Packet count in the batch; `batch_size_count` counts batches   |
 | processors  | `relays_completed_total`        | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                           |
 | processors  | `relay_duration_*`              | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
-| processors  | `transactions_submitted_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
-| processors  | `transactions_confirmed_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
-| processors  | `transaction_retries_total`     | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
 | txsubmitter | `evm_gas_spent`                 | observable counter | `chain_id`, `wallet`                                                | Cumulative mined cost of txs this submitter sent, including failed txs, in native-token units |
 | txsubmitter | `evm_gas_balance`               | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
 | watcher     | `watcher_events_total`          | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |

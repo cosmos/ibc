@@ -115,6 +115,14 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	if err = app.TxSubmitters.Start(ctx); err != nil {
+		return err
+	}
+	defer func() {
+		if stopErr := app.TxSubmitters.Stop(); stopErr != nil {
+			app.Logger.Error("Stopping transaction managers", "error", stopErr)
+		}
+	}()
 	app.Logger.Info("Starting relayer")
 
 	address, err := app.Server.Start()
@@ -142,6 +150,7 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 
 	// executes from last to first
 	graceful.AddCallback(app.Store.Close)
+	graceful.AddCallback(app.TxSubmitters.Stop)
 	graceful.AddCallback(app.Server.Stop)
 	graceful.AddCallback(app.RelayerService.Stop)
 

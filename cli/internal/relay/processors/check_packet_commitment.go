@@ -126,8 +126,8 @@ func (p CheckPacketCommitment) Cancel(tr *Transfer, err error) {
 	tr.GetLogger().Error("Checking packet commitment", "err", err)
 }
 
-func (p CheckPacketCommitment) ShouldProcess(tr *Transfer) bool {
-	return tr.AckTxHash == nil && tr.TimeoutTxHash == nil
+func (p CheckPacketCommitment) ShouldProcess(_ *Transfer) bool {
+	return true
 }
 
 func (p CheckPacketCommitment) Status() store.RelayStatus {

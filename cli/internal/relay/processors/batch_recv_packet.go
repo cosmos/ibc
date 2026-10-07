@@ -28,7 +28,6 @@ type BatchRecvPacket struct {
 	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
 	txSubmitter            txsubmitter.TxSubmitter
-	storage                TxStorage
 	logger                 *slog.Logger
 }
 
@@ -36,7 +35,6 @@ func NewBatchRecvPacket(
 	chainClients ChainClients,
 	provers Provers,
 	txBuilders TxBuilders,
-	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 	logger *slog.Logger,
@@ -72,7 +70,6 @@ func NewBatchRecvPacket(
 		prover:                 prover,
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
-		storage:                storage,
 		logger:                 logger,
 	}, nil
 }
@@ -119,51 +116,18 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		return transfers, nil
 	}
 
-	submission, err := relayPackets(
+	err = relayPackets(
 		ctx, p.logger, p.destinationChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.DestinationClientID, v2.RelayKindRecv,
+		p.route.DestinationClientID, p.route.SourceChainID, v2.RelayKindRecv,
 		proofHeight, events,
 	)
 	if err != nil {
 		return nil, err
 	}
-
-	tx := store.PacketTx{
-		Hash:           submission.TxHash,
-		Time:           submission.SubmittedAt,
-		RelayerAddress: submission.RelayerAddress,
-	}
-
-	err = p.storage.Transact(ctx, func(repo store.Repository) error {
-		for _, tr := range transfers {
-			if tr.ProcessingError != nil {
-				continue
-			}
-
-			if errRecord := repo.UpdatePacketRecvTx(ctx, tr.Key(), tx); errRecord != nil {
-				return errors.Wrapf(
-					errRecord,
-					"recording relay tx %s for sequence %d",
-					tx.Hash,
-					tr.PacketSequenceNumber,
-				)
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "recording batch relay txs")
-	}
-
 	for _, tr := range transfers {
-		if tr.ProcessingError != nil {
-			continue
+		if tr.ProcessingError == nil {
+			tr.ProcessingError = ErrSubmissionPending
 		}
-
-		tr.RecvTxHash = &tx.Hash
-		tr.RecvTxTime = &tx.Time
-		tr.RecvTxRelayerAddress = &tx.RelayerAddress
 	}
 
 	return transfers, nil

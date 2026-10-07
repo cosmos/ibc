@@ -125,15 +125,17 @@ type Tx struct {
 	RelayerAddress string
 }
 
-// TxIntent a transaction for the relayer to submit.
+// TxIntent groups operations of one relay kind into a transaction.
 type TxIntent struct {
-	To   string
-	Data []byte
+	Operations []OperationMetadata
+	To         string
+	Data       []byte
 }
 
-// Submission a transaction broadcast by the relayer.
-type Submission struct {
-	TxHash         string
-	SubmittedAt    time.Time
-	RelayerAddress string
+// OperationMetadata identifies a packet and the relay action to perform on it.
+type OperationMetadata struct {
+	SourceChainID  string
+	SourceClientID string
+	Sequence       uint64
+	Kind           RelayKind
 }

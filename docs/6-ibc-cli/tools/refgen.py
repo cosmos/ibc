@@ -680,6 +680,7 @@ DEFAULTS_FUNC = r"^func [A-Z]\w*\(\s*\)\s*\*?" + CONFIG_ROOT + r"\s*\{"
 # The constant names it: a package that moves costs nothing, and a constant
 # that is renamed or deleted is a real change that says so by name.
 DEFAULT_CONSTS = {
+    ("RelayerEVMConfig", "maxFeePerGas"): [("", "DefaultMaxFeePerGas")],
     ("RelayerConfig", "dispatchPollInterval"): [("", "DefaultPollInterval")],
     ("RelayerChainOverride", "txSubmissionDelay"): [("", "DefaultTxSubmissionDelay")],
     ("RelayerChainOverride", "packetBatchSize"): [("", "DefaultBatchSize")],
