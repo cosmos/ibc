@@ -72,7 +72,8 @@ func TestProverProbeServerErrors(t *testing.T) {
 	for code, reachable := range map[connect.Code]bool{
 		connect.CodeNotFound:           true,
 		connect.CodeFailedPrecondition: true,
-		connect.CodeInternal:           true,
+		connect.CodeInternal:           false,
+		connect.CodeUnknown:            false,
 		connect.CodeUnauthenticated:    false,
 		connect.CodePermissionDenied:   false,
 		connect.CodeUnimplemented:      false,
