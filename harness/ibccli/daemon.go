@@ -33,6 +33,8 @@ const (
 	// Backstop: an RPC endpoint that accepts but never responds would hang an unbounded ctx forever.
 	statusHTTPTimeout = 30 * time.Second
 	killTimeout       = 5 * time.Second
+	// maxPacketsPage is the largest page the Packets RPC serves.
+	maxPacketsPage = 1000
 
 	zeroTxHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
@@ -284,30 +286,38 @@ func (d *Relayer) PacketStatuses(
 	if err != nil {
 		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	request := &relayerv2.PacketsRequest{
-		Filter: &relayerv2.PacketFilter{
-			SourceChainId: &chainID,
-			SourceTxHash:  &sourceTxHash,
-		},
+	return d.listPackets(ctx, &relayerv2.PacketFilter{SourceChainId: &chainID, SourceTxHash: &sourceTxHash})
+}
+
+// ClientPackets returns the relayer's status for every packet it knows sent
+// from sourceClientID on sourceChainID, most recent first.
+func (d *Relayer) ClientPackets(
+	ctx context.Context,
+	sourceChainID string,
+	sourceClientID string,
+) ([]*relayerv2.PacketStatus, error) {
+	chainID, err := d.wireChainID(sourceChainID)
+	if err != nil {
+		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
+	return d.listPackets(ctx, &relayerv2.PacketFilter{SourceChainId: &chainID, SourceClientId: &sourceClientID})
+}
 
-	// A transaction can emit more packets than one page holds. Stopping at the
-	// first page would report the rest as absent, which callers read as "not
-	// indexed yet" and poll on until their budget expires.
+// listPackets follows every page of the Packets RPC for filter. Stopping at
+// the first page would report the rest as absent, which callers read as "not
+// indexed yet" and poll on until their budget expires.
+func (d *Relayer) listPackets(ctx context.Context, filter *relayerv2.PacketFilter) ([]*relayerv2.PacketStatus, error) {
+	request := &relayerv2.PacketsRequest{Filter: filter, Limit: maxPacketsPage}
 	var statuses []*relayerv2.PacketStatus
-
 	for {
 		response, err := d.client.Packets(ctx, connect.NewRequest(request))
 		if err != nil {
 			return nil, fmt.Errorf("ibc packets: %w", err)
 		}
-
 		statuses = append(statuses, response.Msg.GetPackets()...)
-
 		if !response.Msg.GetHasMore() {
 			return statuses, nil
 		}
-
 		request.Cursor = response.Msg.GetNextCursor()
 	}
 }
