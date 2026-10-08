@@ -27,10 +27,10 @@ import (
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	attestoribc "github.com/cosmos/ibc/cli/attestor/evm/ibc"
 	"github.com/cosmos/ibc/harness/environment"
+	"github.com/cosmos/ibc/harness/internal/loadtest/session"
+	"github.com/cosmos/ibc/harness/internal/loadtest/simpleload"
+	"github.com/cosmos/ibc/harness/internal/loadtest/textout"
 	"github.com/cosmos/ibc/harness/traffic"
-	"github.com/cosmos/ibc/loadtest/internal/session"
-	"github.com/cosmos/ibc/loadtest/internal/simpleload"
-	"github.com/cosmos/ibc/loadtest/internal/textout"
 )
 
 const (

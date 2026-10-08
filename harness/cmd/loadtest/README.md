@@ -4,28 +4,28 @@
 
 # Load tests
 
-`github.com/cosmos/ibc/loadtest` is a command-line binary that puts load on a local IBC
-environment built by the [harness](../harness): two managed EVM Chains (Anvil by default,
+`github.com/cosmos/ibc/harness/cmd/loadtest` is a command-line binary that puts load on a local IBC
+environment built by the [harness](../..): two managed EVM Chains (Anvil by default,
 Besu with `--provider besu`) joined by an attested mesh with one Attestor per Client, the
 traffic test applications, and the real `ibc` relayer with auto-relay. Every run starts a
 fresh environment and tears it down at the end, including on Ctrl-C.
 
 The scenarios are not `go test` tests and never run in CI; CI only builds the binary and
-runs its unit tests (`make -C loadtest build test`).
+runs its unit tests (`make -C harness build test`).
 
 ## Running
 
 Docker must be running. From the repository root:
 
 ```bash
-make -C loadtest run-relayer                                      # burst preset
-make -C loadtest run-relayer LOADTEST_FLAGS='--preset longrun'
-make -C loadtest run-attestor
-make -C loadtest run-relayer LOADTEST_FLAGS='--packets 40 --wallets 10 --per-block 5'  # smoke
+make -C harness run-relayer                                       # burst preset
+make -C harness run-relayer LOADTEST_FLAGS='--preset longrun'
+make -C harness run-attestor
+make -C harness run-relayer LOADTEST_FLAGS='--packets 40 --wallets 10 --per-block 5'   # smoke
 ```
 
-`run-*` builds `cli/bin/ibc` and `loadtest/bin/loadtest` first. To call the binary directly,
-`make -C loadtest build` and run `loadtest/bin/loadtest <scenario> [flags]`
+`run-*` builds `cli/bin/ibc` and `harness/bin/loadtest` first. To call the binary directly,
+`make -C harness build` and run `harness/bin/loadtest <scenario> [flags]`
 (`-h` lists every flag). The binary finds `cli/bin/ibc` through the harness source path it
 was built from; `--ibc-bin` or `IBC_BIN` overrides it.
 
@@ -116,17 +116,17 @@ busy, an offered call is counted as `dropped`. A phase fails if no request succe
 metrics to the local LGTM stack:
 
 ```bash
-make -C cli/scripts/otel up               # Grafana on http://localhost:3001 (admin/admin)
-make -C cli/scripts/otel dashboard-import # load the load-test dashboard
-make -C loadtest run-relayer LOADTEST_FLAGS='--observability'
+make -C cli/scripts/otel up    # Grafana on http://localhost:3001 (admin/admin)
+make -C harness run-relayer LOADTEST_FLAGS='--observability'
 make -C cli/scripts/otel down
 ```
 
-The stack must be running before the load test starts. See
-[cli/scripts/otel](../cli/scripts/otel/README.md).
+The "IBC Local Metrics" dashboard is provisioned automatically when the stack starts. The
+stack must be running before the load test starts. See
+[cli/scripts/otel](../../../cli/scripts/otel/README.md).
 
 ## After a crash
 
 A run that is killed hard (second Ctrl-C, `kill -9`) can leave containers and processes
 behind. They carry the harness labels: `make -C e2e clean-dry-run`, then `make -C e2e clean`
-(also `make -C loadtest clean`).
+(also `make -C harness clean`).

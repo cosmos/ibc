@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cosmos/ibc/loadtest/internal/stats"
-	"github.com/cosmos/ibc/loadtest/internal/textout"
+	"github.com/cosmos/ibc/harness/internal/loadtest/stats"
+	"github.com/cosmos/ibc/harness/internal/loadtest/textout"
 )
 
 // DirectionReport is the outcome of one direction of the relayer scenario.

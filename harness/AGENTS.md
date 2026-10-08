@@ -3,7 +3,7 @@
 # Harness Development Guide for AI Agents
 
 This module (`github.com/cosmos/ibc/harness`) is the black-box harness, used by the e2e tests and
-the load-test binary (`../loadtest`). Its IBC CLI adapter observes the `ibc` binary only through
+the load-test binary (`cmd/loadtest`). Its IBC CLI adapter observes the `ibc` binary only through
 its public wire surface — CLI commands with JSON output, config YAML, and the status API — and
 corroborates outcomes by reading chain state with its own clients.
 
@@ -25,5 +25,18 @@ corroborates outcomes by reading chain state with its own clients.
   with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and shutdown is prompt
   instead of waiting out the kill grace). Don't reintroduce a shell-wrapped entrypoint.
   StopNode/StartNode fault injection is docker pause/unpause; chain state stays in memory.
+- **Load-test binary.** `cmd/loadtest` (packages under `internal/loadtest/`) drives load against a
+  harness environment; `cmd/loadtest/README.md` covers usage and the generator design. It is not a
+  `go test` suite and must not grow `go test` entry points for scenarios. `session` starts and tears
+  down the environment, deployment, and relayer; `relayerload` is the head-paced IFT generator,
+  receipt tracking, relay awaiting, and report; `attestorload` is attestor gRPC load; `simpleload`
+  a fixed-rate caller pool; `stats` percentiles. Raw-transaction helpers the generator needs live in
+  `traffic/traffic_ift_load.go` (calldata, receipt-to-`PacketTx` parsing, signing, terminal-state
+  waiting); keep signing keys inside `traffic`. Every run must tear down on success, failure, and
+  SIGINT: stop the relayer, close the Environment, then remove the deployment directory
+  (`session.Close`). Unit tests cover the logic only (wallet scheduling, backpressure, nonces,
+  percentiles, `SimpleLoad`). Verify a change by running the binary (`make -C harness build`): a
+  small relayer run (`--packets 40 --wallets 10 --per-block 5`) and `attestor --duration 5s`, then
+  check that `docker ps --filter label=ibc-cli-e2e=true` is empty afterwards.
 - Lint with `make -C harness lint` from the repository root; the shared root `.golangci.yml` covers the
   harness and excludes exported-doc mandates for this test-infrastructure surface.

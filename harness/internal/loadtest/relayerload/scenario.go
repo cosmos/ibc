@@ -20,9 +20,9 @@ import (
 
 	"github.com/cosmos/ibc/harness/environment"
 	"github.com/cosmos/ibc/harness/ibccli"
+	"github.com/cosmos/ibc/harness/internal/loadtest/session"
+	"github.com/cosmos/ibc/harness/internal/loadtest/stats"
 	"github.com/cosmos/ibc/harness/traffic"
-	"github.com/cosmos/ibc/loadtest/internal/session"
-	"github.com/cosmos/ibc/loadtest/internal/stats"
 )
 
 const (

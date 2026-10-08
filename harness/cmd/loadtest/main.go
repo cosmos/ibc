@@ -2,7 +2,7 @@
 
 // Command loadtest drives load against a local two-Chain IBC environment
 // built by the harness: Anvil (or Besu) Chains joined by an attested mesh,
-// the IBC CLI relayer, and its attestors. See loadtest/README.md.
+// the IBC CLI relayer, and its attestors. See README.md.
 package main
 
 import (
@@ -19,10 +19,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cosmos/ibc/loadtest/internal/attestorload"
-	"github.com/cosmos/ibc/loadtest/internal/relayerload"
-	"github.com/cosmos/ibc/loadtest/internal/session"
-	"github.com/cosmos/ibc/loadtest/internal/simpleload"
+	"github.com/cosmos/ibc/harness/internal/loadtest/attestorload"
+	"github.com/cosmos/ibc/harness/internal/loadtest/relayerload"
+	"github.com/cosmos/ibc/harness/internal/loadtest/session"
+	"github.com/cosmos/ibc/harness/internal/loadtest/simpleload"
 )
 
 const (

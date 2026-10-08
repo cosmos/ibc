@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cosmos/ibc/loadtest/internal/stats"
+	"github.com/cosmos/ibc/harness/internal/loadtest/stats"
 )
 
 // Spec shapes one load run.

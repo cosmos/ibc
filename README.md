@@ -20,6 +20,7 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 | [`cli/`](cli/README.md) | IBC CLI: deploys IBC onto a chain, and runs the relayer and attestor processes that carry packets across it. |
 | [`docs/`](docs/README.md) | How IBC works, the contracts, and the CLI: tutorials and reference.                                         |
 | [`e2e/`](e2e/README.md) | Repository-wide black-box acceptance tests.                                                                 |
+| [`harness/`](harness/AGENTS.md) | Black-box test harness shared by the e2e tests, and the [load-test binary](harness/cmd/loadtest/README.md). |
 | [`proto/`](proto/) | Canonical protobuf source files used across the services and implementations.                               |
 | [`gen/`](gen/README.md) | Committed code generated from canonical schemas and contract artifacts.                                     |
 | [`examples/`](examples/besu-to-besu/README.md) | Runnable local chain setups to develop against.                                                             |
