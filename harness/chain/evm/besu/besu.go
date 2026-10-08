@@ -247,7 +247,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("resolve besu websocket endpoint: %w", err)
 	}
 
-	client, err := ethclient.DialContext(ctx, bc.RPCURL())
+	client, err := evm.Dial(ctx, bc.RPCURL())
 	if err != nil {
 		return nil, fmt.Errorf("dial besu chain %s: %w", spec.ID, err)
 	}

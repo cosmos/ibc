@@ -16,7 +16,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethclient"
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
@@ -159,7 +158,7 @@ func launchAnvil(
 
 func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient, error) {
 	// HTTP dialing is lazy and succeeds on an unbound port; readiness is probed separately below.
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	client, err := evm.Dial(ctx, rpcURL)
 	if err != nil {
 		return nil, fmt.Errorf("dial anvil (chain %s): %w", spec.ID, err)
 	}

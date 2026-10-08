@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -45,6 +46,25 @@ func (w TransactionWait) context(ctx context.Context) (context.Context, context.
 		waitCtx, cancel := context.WithTimeout(ctx, w.Timeout)
 		return waitCtx, cancel, nil
 	}
+}
+
+// maxIdleConnsPerNode keeps HTTP connections to a node open for reuse. The
+// default of two makes many concurrent callers (the load test's senders)
+// dial and close a connection per request, which exhausts Docker Desktop's
+// port forwarding with "connection refused".
+const maxIdleConnsPerNode = 512
+
+// Dial connects to a node's JSON-RPC endpoint, reusing HTTP connections
+// across concurrent calls.
+func Dial(ctx context.Context, rawURL string) (*ethclient.Client, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = maxIdleConnsPerNode
+	client, err := rpc.DialOptions(ctx, rawURL, rpc.WithHTTPClient(&http.Client{Transport: transport}))
+	if err != nil {
+		return nil, err
+	}
+	return ethclient.NewClient(client), nil
 }
 
 type EVMClient struct {

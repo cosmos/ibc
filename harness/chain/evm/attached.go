@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-
 	chainpkg "github.com/cosmos/ibc/harness/chain"
 )
 
@@ -37,7 +35,7 @@ func ConnectAttached(ctx context.Context, spec AttachedSpec) (*AttachedChain, er
 		return nil, fmt.Errorf("attached chain %s: rpc url is empty", spec.ID)
 	}
 
-	client, err := ethclient.DialContext(ctx, spec.RPCURL)
+	client, err := Dial(ctx, spec.RPCURL)
 	if err != nil {
 		return nil, fmt.Errorf("dial attached chain %s at %s: %w", spec.ID, spec.RPCURL, err)
 	}
