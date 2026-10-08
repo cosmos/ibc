@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
@@ -93,7 +93,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 		return iftTransactor.IftTransfer(opts, i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: pack IFT iftTransfer: %w", err)
+		return nil, fmt.Errorf("traffic: pack IFT iftTransfer: %w", err)
 	}
 	receipt, sequence, err := send(
 		ctx,
@@ -104,7 +104,7 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 		sendPacketSequence(i.sourceRouter),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: send IFT on route %q: %w", i.routeID, err)
+		return nil, fmt.Errorf("traffic: send IFT on route %q: %w", i.routeID, err)
 	}
 	return &IFTSend{
 		sendResult:              newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
@@ -135,7 +135,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		}
 		if _, duplicate := seenReceivers[receiver]; duplicate {
 			return nil, fmt.Errorf(
-				"e2etest: IFT batch on route %q has duplicate receiver %s: "+
+				"traffic: IFT batch on route %q has duplicate receiver %s: "+
 					"per-packet VerifyDelivered assumes each receiver appears once in the batch",
 				i.routeID, receiver.Hex(),
 			)
@@ -170,11 +170,11 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: pack IFT batchIftTransfer: %w", err)
+		return nil, fmt.Errorf("traffic: pack IFT batchIftTransfer: %w", err)
 	}
 	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: send IFT batch on route %q: %w", i.routeID, err)
+		return nil, fmt.Errorf("traffic: send IFT batch on route %q: %w", i.routeID, err)
 	}
 	sequences, err := sendPacketSequences(i.sourceRouter, receipt)
 	if err != nil {
@@ -182,7 +182,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	}
 	if len(sequences) != len(requests) {
 		return nil, fmt.Errorf(
-			"e2etest: IFT batch on route %q emitted %d packets, want %d",
+			"traffic: IFT batch on route %q emitted %d packets, want %d",
 			i.routeID,
 			len(sequences),
 			len(requests),
@@ -278,7 +278,7 @@ func (b *IFTBatch) VerifyState(ctx context.Context, delivered, refunded []int) e
 	deliveredTotal := new(big.Int)
 	for _, index := range delivered {
 		if slices.Contains(refunded, index) {
-			return fmt.Errorf("e2etest: IFT batch packet index %d is both delivered and refunded", index)
+			return fmt.Errorf("traffic: IFT batch packet index %d is both delivered and refunded", index)
 		}
 		deliveredTotal.Add(deliveredTotal, b.packets[index].amount)
 	}
@@ -294,7 +294,7 @@ func (b *IFTBatch) VerifyState(ctx context.Context, delivered, refunded []int) e
 		return err
 	}
 	if gotSource.Cmp(wantSource) != 0 {
-		return fmt.Errorf("e2etest: IFT batch source balance: got %s, want %s", gotSource, wantSource)
+		return fmt.Errorf("traffic: IFT batch source balance: got %s, want %s", gotSource, wantSource)
 	}
 
 	for index, packet := range b.packets {
@@ -308,7 +308,7 @@ func (b *IFTBatch) VerifyState(ctx context.Context, delivered, refunded []int) e
 		}
 		if got.Cmp(want) != 0 {
 			return fmt.Errorf(
-				"e2etest: IFT batch destination balance for packet %d: got %s, want %s",
+				"traffic: IFT batch destination balance for packet %d: got %s, want %s",
 				index,
 				got,
 				want,
@@ -327,21 +327,21 @@ func (b *IFTBatch) VerifyState(ctx context.Context, delivered, refunded []int) e
 		if isDelivered || isRefunded {
 			if pendingErr == nil {
 				return fmt.Errorf(
-					"e2etest: IFT batch packet %d pending transfer still present, want cleared",
+					"traffic: IFT batch packet %d pending transfer still present, want cleared",
 					index,
 				)
 			}
 			if !isIFTPendingTransferNotFound(pendingErr) {
-				return fmt.Errorf("e2etest: IFT batch packet %d pending transfer: %w", index, pendingErr)
+				return fmt.Errorf("traffic: IFT batch packet %d pending transfer: %w", index, pendingErr)
 			}
 			continue
 		}
 		if pendingErr != nil {
-			return fmt.Errorf("e2etest: IFT batch packet %d pending transfer: %w", index, pendingErr)
+			return fmt.Errorf("traffic: IFT batch packet %d pending transfer: %w", index, pendingErr)
 		}
 		if record.Sender != b.app.batcher || record.Amount.Cmp(packet.amount) != 0 {
 			return fmt.Errorf(
-				"e2etest: IFT batch packet %d pending transfer: got sender %s amount %s, want sender %s amount %s",
+				"traffic: IFT batch packet %d pending transfer: got sender %s amount %s, want sender %s amount %s",
 				index,
 				record.Sender.Hex(),
 				record.Amount,
@@ -357,7 +357,7 @@ func (b *IFTBatch) VerifyState(ctx context.Context, delivered, refunded []int) e
 		return err
 	}
 	if gotSupply.Cmp(wantSupply) != 0 {
-		return fmt.Errorf("e2etest: IFT batch destination supply: got %s, want %s", gotSupply, wantSupply)
+		return fmt.Errorf("traffic: IFT batch destination supply: got %s, want %s", gotSupply, wantSupply)
 	}
 
 	return nil
@@ -373,7 +373,7 @@ func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
 	}
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
-			"e2etest: IFT batch batcher %s burned balance: got %s, want %s",
+			"traffic: IFT batch batcher %s burned balance: got %s, want %s",
 			b.app.batcher.Hex(),
 			got,
 			want,
@@ -396,7 +396,7 @@ func (i *IFT) WriteAcknowledgementSequences(ctx context.Context, txHash string) 
 		func(event *ics26router.ContractWriteAcknowledgement) uint64 { return event.Packet.Sequence },
 	)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: read IFT WriteAcknowledgement events: %w", err)
+		return nil, fmt.Errorf("traffic: read IFT WriteAcknowledgement events: %w", err)
 	}
 	return sequences, nil
 }
@@ -413,7 +413,7 @@ func (i *IFT) AckPacketSequences(ctx context.Context, txHash string) ([]uint64, 
 		func(event *ics26router.ContractAckPacket) uint64 { return event.Packet.Sequence },
 	)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: read IFT AckPacket events: %w", err)
+		return nil, fmt.Errorf("traffic: read IFT AckPacket events: %w", err)
 	}
 	return sequences, nil
 }
@@ -430,7 +430,7 @@ func (i *IFT) TimeoutPacketSequences(ctx context.Context, txHash string) ([]uint
 		func(event *ics26router.ContractTimeoutPacket) uint64 { return event.Packet.Sequence },
 	)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: read IFT TimeoutPacket events: %w", err)
+		return nil, fmt.Errorf("traffic: read IFT TimeoutPacket events: %w", err)
 	}
 	return sequences, nil
 }
@@ -444,7 +444,7 @@ func (p *IFTSend) VerifyBurned(ctx context.Context) error {
 	}
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s burned balance of %s: got %s, want %s",
+			"traffic: IFT packet %s burned balance of %s: got %s, want %s",
 			p.packetTx.reference(),
 			p.app.sender.Address().Hex(),
 			got,
@@ -476,7 +476,7 @@ func (p *IFTSend) VerifyNotMinted(ctx context.Context) error {
 	}
 	if got.Cmp(p.destinationBefore) != 0 {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s not minted balance of %s: got %s, want %s",
+			"traffic: IFT packet %s not minted balance of %s: got %s, want %s",
 			p.packetTx.reference(),
 			p.receiver.Hex(),
 			got,
@@ -489,7 +489,7 @@ func (p *IFTSend) VerifyNotMinted(ctx context.Context) error {
 	}
 	if supply.Cmp(p.destinationSupplyBefore) != 0 {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s destination total supply: got %s, want %s",
+			"traffic: IFT packet %s destination total supply: got %s, want %s",
 			p.packetTx.reference(),
 			supply,
 			p.destinationSupplyBefore,
@@ -557,11 +557,11 @@ func (p *IFTSend) VerifyPending(ctx context.Context) error {
 		p.packetTx.Sequence,
 	)
 	if err != nil {
-		return fmt.Errorf("e2etest: IFT packet %s pending transfer: %w", p.packetTx.reference(), err)
+		return fmt.Errorf("traffic: IFT packet %s pending transfer: %w", p.packetTx.reference(), err)
 	}
 	if record.Sender != p.app.sender.Address() {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s pending transfer sender: got %s, want %s",
+			"traffic: IFT packet %s pending transfer sender: got %s, want %s",
 			p.packetTx.reference(),
 			record.Sender.Hex(),
 			p.app.sender.Address().Hex(),
@@ -569,7 +569,7 @@ func (p *IFTSend) VerifyPending(ctx context.Context) error {
 	}
 	if record.Amount.Cmp(p.amount) != 0 {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s pending transfer amount: got %s, want %s",
+			"traffic: IFT packet %s pending transfer amount: got %s, want %s",
 			p.packetTx.reference(),
 			record.Amount,
 			p.amount,
@@ -584,13 +584,13 @@ func (p *IFTSend) VerifyPendingCleared(ctx context.Context) error {
 	_, err := p.app.pendingTransfer(ctx, p.app.source.evm, p.app.sourceIFT, p.app.sourceClientID, p.packetTx.Sequence)
 	if err == nil {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s pending transfer still present, want cleared",
+			"traffic: IFT packet %s pending transfer still present, want cleared",
 			p.packetTx.reference(),
 		)
 	}
 	if !isIFTPendingTransferNotFound(err) {
 		return fmt.Errorf(
-			"e2etest: IFT packet %s pending transfer lookup: want IFTPendingTransferNotFound, got: %w",
+			"traffic: IFT packet %s pending transfer lookup: want IFTPendingTransferNotFound, got: %w",
 			p.packetTx.reference(),
 			err,
 		)
@@ -601,13 +601,13 @@ func (p *IFTSend) VerifyPendingCleared(ctx context.Context) error {
 func (i *IFT) receiver(value string) (common.Address, error) {
 	if value != "" {
 		if !common.IsHexAddress(value) {
-			return common.Address{}, fmt.Errorf("e2etest: IFT receiver %q is not an EVM address", value)
+			return common.Address{}, fmt.Errorf("traffic: IFT receiver %q is not an EVM address", value)
 		}
 		return common.HexToAddress(value), nil
 	}
 	account, err := evm.NewAccount()
 	if err != nil {
-		return common.Address{}, fmt.Errorf("e2etest: generate IFT receiver: %w", err)
+		return common.Address{}, fmt.Errorf("traffic: generate IFT receiver: %w", err)
 	}
 	return account.Address(), nil
 }
@@ -622,13 +622,13 @@ func (i *IFT) balance(
 	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := ift.NewContractCaller(contract, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind IFT %s: %w", contract, err)
+			return fmt.Errorf("traffic: bind IFT %s: %w", contract, err)
 		}
 		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: query IFT balance of %s: %w", holder.Hex(), err)
+		return nil, fmt.Errorf("traffic: query IFT balance of %s: %w", holder.Hex(), err)
 	}
 	return balance, nil
 }
@@ -642,13 +642,13 @@ func (i *IFT) totalSupply(
 	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := ift.NewContractCaller(contract, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind IFT %s: %w", contract, err)
+			return fmt.Errorf("traffic: bind IFT %s: %w", contract, err)
 		}
 		supply, err = bound.TotalSupply(&bind.CallOpts{Context: ctx})
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: query IFT total supply: %w", err)
+		return nil, fmt.Errorf("traffic: query IFT total supply: %w", err)
 	}
 	return supply, nil
 }
@@ -664,7 +664,7 @@ func (i *IFT) pendingTransfer(
 	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := ift.NewContractCaller(contract, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind IFT %s: %w", contract, err)
+			return fmt.Errorf("traffic: bind IFT %s: %w", contract, err)
 		}
 		record, err = bound.GetPendingTransfer(&bind.CallOpts{Context: ctx}, clientID, sequence)
 		return err

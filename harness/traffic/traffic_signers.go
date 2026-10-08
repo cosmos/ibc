@@ -1,26 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/keyfile"
 	"github.com/cosmos/ibc/harness/chain/evm"
 	"github.com/cosmos/ibc/harness/environment"
 )
 
-const relayerSignerAlias = "e2etest-relayer"
+const relayerSignerAlias = "traffic-relayer"
 
-// Signer is an independent local identity used by the acceptance tests. Its
+// Signer is an independent local identity that drives traffic. Its
 // credentials remain private to this package.
 type Signer struct {
 	key     *ecdsa.PrivateKey
@@ -28,26 +26,29 @@ type Signer struct {
 }
 
 // NewSigner generates a randomly-keyed local identity.
-func NewSigner(t testing.TB) Signer {
-	t.Helper()
+func NewSigner() (Signer, error) {
 	key, err := crypto.GenerateKey()
-	require.NoError(t, err, "e2etest: generate signer key")
-	return signerFromKey(t, key)
+	if err != nil {
+		return Signer{}, fmt.Errorf("traffic: generate signer key: %w", err)
+	}
+	return signerFromKey(key)
 }
 
 // NewSignerFromHex creates a deterministically keyed local identity.
-func NewSignerFromHex(t testing.TB, privateKeyHex string) Signer {
-	t.Helper()
+func NewSignerFromHex(privateKeyHex string) (Signer, error) {
 	key, err := crypto.HexToECDSA(privateKeyHex)
-	require.NoError(t, err, "e2etest: parse signer key")
-	return signerFromKey(t, key)
+	if err != nil {
+		return Signer{}, fmt.Errorf("traffic: parse signer key: %w", err)
+	}
+	return signerFromKey(key)
 }
 
-func signerFromKey(t testing.TB, key *ecdsa.PrivateKey) Signer {
-	t.Helper()
+func signerFromKey(key *ecdsa.PrivateKey) (Signer, error) {
 	account, err := evm.AccountFromHex(hex.EncodeToString(crypto.FromECDSA(key)))
-	require.NoError(t, err, "e2etest: create signer account")
-	return Signer{key: key, account: account}
+	if err != nil {
+		return Signer{}, fmt.Errorf("traffic: create signer account: %w", err)
+	}
+	return Signer{key: key, account: account}, nil
 }
 
 // Address returns the signer's public identity.
@@ -68,7 +69,7 @@ func (s Signer) BroadcastTx(
 
 // String renders only the public signer address.
 func (s Signer) String() string {
-	return fmt.Sprintf("e2etest signer %s", s.Address())
+	return fmt.Sprintf("traffic signer %s", s.Address())
 }
 
 // GoString renders only the public signer address, including for %#v formatting.

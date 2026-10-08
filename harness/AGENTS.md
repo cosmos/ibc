@@ -10,9 +10,16 @@ corroborates outcomes by reading chain state with its own clients.
 - **The wall:** the harness never imports `cli/internal/...` or the stub's guts. It may import
   public IBC CLI command transport types, generated RPC clients, and the signer-keyfile package, while
   behavior remains observable only through the executable and HTTP surface.
+- `traffic` is the workflow layer above `environment`: it deploys the test applications, writes the
+  relayer configuration, starts the relayer and prover, creates and funds signers, and sends and awaits
+  ICS20, GMP, and IFT packets. It never imports `testing`: functions that do I/O take a
+  `context.Context`, failures are returned as errors, files go under a caller-supplied directory, and
+  started processes are returned to the caller, who stops them before removing that directory and
+  closing the Environment. E2e consumes it through thin
+  `testing.TB` wrappers in `e2e/internal/e2etest`; the upcoming load-test binary consumes it directly.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and
-  stability observation lives with the e2e-only bindings that interpret those effects.
+  stability observation lives in `traffic`, with the bindings that interpret those effects.
 - **Docker discipline.** Containers/networks carry the `ibc-cli-e2e=true` and
   `ibc-cli-run=<runid>` labels and the `ibc-cli-e2e-` name prefix, with pinned images. Anvil runs
   with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and shutdown is prompt

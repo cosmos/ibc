@@ -5,7 +5,6 @@ module github.com/cosmos/ibc/e2e
 go 1.26.6
 
 require (
-	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
 	github.com/cosmos/ibc/harness v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
 	github.com/ethereum/go-ethereum v1.17.5
@@ -56,6 +55,7 @@ require (
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/gogoproto v1.7.2 // indirect
 	github.com/cosmos/iavl v1.2.8 // indirect
+	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa // indirect
 	github.com/cosmos/ics23/go v0.11.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v1.0.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
@@ -265,7 +265,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cosmos/ibc/cli v0.0.0
-	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
+	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0 // indirect
 	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20261006113229-b9ceb3c5518a
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect

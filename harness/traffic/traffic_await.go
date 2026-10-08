@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"

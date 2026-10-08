@@ -4,7 +4,7 @@
 
 This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients and, between two Besu chains, through Besu QBFT light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
 
-`../harness/environment` (the separate `github.com/cosmos/ibc/harness` module) realizes Chains and protocol resources, including the IBC contract stack, attestation and Besu QBFT light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
+`../harness/environment` (the separate `github.com/cosmos/ibc/harness` module) realizes Chains and protocol resources, including the IBC contract stack, attestation and Besu QBFT light clients, and attestor processes. `../harness/traffic` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes, without depending on `testing`; `internal/e2etest` resolves each test's provider requirements into an Environment and wraps the traffic layer for `testing.TB`, failing the test on error and registering cleanup. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
 ## Acceptance coverage
 
@@ -83,9 +83,11 @@ func TestTransfer_AutoRelay(t *testing.T) {
 }
 ```
 
-`Environment` owns Chain clients and protocol resources. A route-scoped `e2etest` application hides only application ABI, transaction, event, and state mechanics. The test keeps deployment, relayer status, fault injection, manual relay, and application assertions visibly ordered; there is no second aggregate beside the Environment.
+`Environment` owns Chain clients and protocol resources. A route-scoped traffic application hides only application ABI, transaction, event, and state mechanics. The test keeps deployment, relayer status, fault injection, manual relay, and application assertions visibly ordered; there is no second aggregate beside the Environment.
 
 `e2etest.NewSigner` creates an independent identity; tests create one per role and pass them explicitly — `Deploy` takes the deployer and relayer signers, the app constructors take the sender (the signer that deployed the apps). Managed Chains fund them through their resolved funding capability; an attached Chain must fund the public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary IBC CLI configuration.
+
+The `e2etest` wrappers keep ownership in `t.Cleanup`: the directory holding the IBC CLI configuration comes from `t.TempDir()`, and `StartRelayer` and `StartProver` register their stops, so cleanup stops processes before removing their directories and before closing the Environment. Code outside `go test` calls `../harness/traffic` directly and owns those steps itself: it passes the directory, stops the relayer it started, and closes the Environment.
 
 Declare capabilities instead of naming a provider. For example, a controlled-mining test uses:
 

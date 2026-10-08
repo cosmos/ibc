@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
@@ -81,7 +81,7 @@ type TransferSend struct {
 	destinationBefore *big.Int
 }
 
-var errTransferAlreadySubmitted = errors.New("e2etest: prepared Transfer has already been submitted")
+var errTransferAlreadySubmitted = errors.New("traffic: prepared Transfer has already been submitted")
 
 func (i *Transfer) Send(ctx context.Context, request TransferRequest) (*TransferSend, error) {
 	prepared, err := i.Prepare(ctx, request)
@@ -135,7 +135,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		return testERC20Transactor.Approve(opts, p.app.sourceICS20, p.request.Amount)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: pack ERC20 approve: %w", err)
+		return nil, fmt.Errorf("traffic: pack ERC20 approve: %w", err)
 	}
 	if _, approveErr := p.app.source.evm.BroadcastTx(
 		ctx,
@@ -144,7 +144,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		approve,
 		nil,
 	); approveErr != nil {
-		return nil, fmt.Errorf("e2etest: approve ICS20 spender on route %q: %w", p.app.routeID, approveErr)
+		return nil, fmt.Errorf("traffic: approve ICS20 spender on route %q: %w", p.app.routeID, approveErr)
 	}
 
 	msg := ics20transfer.IICS20TransferMsgsSendTransferMsg{
@@ -160,7 +160,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		return ics20Transactor.SendTransfer(opts, msg)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: pack ICS20 sendTransfer: %w", err)
+		return nil, fmt.Errorf("traffic: pack ICS20 sendTransfer: %w", err)
 	}
 	receipt, sequence, err := send(
 		ctx,
@@ -171,7 +171,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		sendPacketSequence(p.app.sourceRouter),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: send Transfer on route %q: %w", p.app.routeID, err)
+		return nil, fmt.Errorf("traffic: send Transfer on route %q: %w", p.app.routeID, err)
 	}
 	return &TransferSend{
 		sendResult: newSendResult(
@@ -199,10 +199,10 @@ func (t *TransferSend) VerifyCommitmentCreated(ctx context.Context) error {
 		new(big.Int).SetUint64(t.packetTx.SourceBlockNumber),
 	)
 	if err != nil {
-		return fmt.Errorf("e2etest: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
+		return fmt.Errorf("traffic: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
 	}
 	if commitment == ([32]byte{}) {
-		return fmt.Errorf("e2etest: Transfer packet %s source commitment was not created", t.packetTx.reference())
+		return fmt.Errorf("traffic: Transfer packet %s source commitment was not created", t.packetTx.reference())
 	}
 	return nil
 }
@@ -217,10 +217,10 @@ func (t *TransferSend) VerifyReceiptCreated(ctx context.Context) error {
 		nil,
 	)
 	if err != nil {
-		return fmt.Errorf("e2etest: query Transfer packet %s destination receipt: %w", t.packetTx.reference(), err)
+		return fmt.Errorf("traffic: query Transfer packet %s destination receipt: %w", t.packetTx.reference(), err)
 	}
 	if receipt == ([32]byte{}) {
-		return fmt.Errorf("e2etest: Transfer packet %s destination receipt was not created", t.packetTx.reference())
+		return fmt.Errorf("traffic: Transfer packet %s destination receipt was not created", t.packetTx.reference())
 	}
 	return nil
 }
@@ -235,10 +235,10 @@ func (t *TransferSend) VerifyCommitmentCleared(ctx context.Context) error {
 		nil,
 	)
 	if err != nil {
-		return fmt.Errorf("e2etest: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
+		return fmt.Errorf("traffic: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
 	}
 	if commitment != ([32]byte{}) {
-		return fmt.Errorf("e2etest: Transfer packet %s source commitment was not cleared", t.packetTx.reference())
+		return fmt.Errorf("traffic: Transfer packet %s source commitment was not cleared", t.packetTx.reference())
 	}
 	return nil
 }
@@ -252,13 +252,13 @@ func (t *TransferSend) successfulReceipt(
 	receipt, err := target.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
 		return nil, fmt.Errorf(
-			"e2etest: fetch Transfer packet %s %s transaction %s: %w",
+			"traffic: fetch Transfer packet %s %s transaction %s: %w",
 			t.packetTx.reference(), action, txHash, err,
 		)
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		return nil, fmt.Errorf(
-			"e2etest: Transfer packet %s %s transaction %s failed",
+			"traffic: Transfer packet %s %s transaction %s failed",
 			t.packetTx.reference(), action, txHash,
 		)
 	}
@@ -275,7 +275,7 @@ func (t *TransferSend) VerifyAcknowledgementWritten(ctx context.Context, txHash 
 	parser := mustBinding(ics26router.NewContractFilterer(t.app.destRouter, nil))
 	events, err := receiptEvents(receipt, t.app.destRouter, parser.ParseWriteAcknowledgement)
 	if err != nil {
-		return fmt.Errorf("e2etest: decode WriteAcknowledgement: %w", err)
+		return fmt.Errorf("traffic: decode WriteAcknowledgement: %w", err)
 	}
 	matches := 0
 	for _, event := range events {
@@ -285,7 +285,7 @@ func (t *TransferSend) VerifyAcknowledgementWritten(ctx context.Context, txHash 
 	}
 	if matches != 1 {
 		return fmt.Errorf(
-			"e2etest: Transfer packet %s receive transaction %s emitted %d matching "+
+			"traffic: Transfer packet %s receive transaction %s emitted %d matching "+
 				"WriteAcknowledgement events, want 1",
 			t.packetTx.reference(), txHash, matches,
 		)
@@ -303,7 +303,7 @@ func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash
 	parser := mustBinding(ics26router.NewContractFilterer(t.app.sourceRouter, nil))
 	events, err := receiptEvents(receipt, t.app.sourceRouter, parser.ParseAckPacket)
 	if err != nil {
-		return fmt.Errorf("e2etest: decode AckPacket: %w", err)
+		return fmt.Errorf("traffic: decode AckPacket: %w", err)
 	}
 	matches := 0
 	for _, event := range events {
@@ -313,7 +313,7 @@ func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash
 	}
 	if matches != 1 {
 		return fmt.Errorf(
-			"e2etest: Transfer packet %s acknowledgement transaction %s emitted %d matching AckPacket events, want 1",
+			"traffic: Transfer packet %s acknowledgement transaction %s emitted %d matching AckPacket events, want 1",
 			t.packetTx.reference(), txHash, matches,
 		)
 	}
@@ -362,7 +362,7 @@ func (t *TransferSend) VerifyEscrowed(ctx context.Context) error {
 	}
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
-			"e2etest: Transfer packet %s escrowed balance of %s: got %s, want %s",
+			"traffic: Transfer packet %s escrowed balance of %s: got %s, want %s",
 			t.packetTx.reference(),
 			t.app.sender.Address().Hex(),
 			got,
@@ -379,7 +379,7 @@ func (t *TransferSend) VerifyNotMinted(ctx context.Context) error {
 	}
 	if got.Cmp(t.destinationBefore) != 0 {
 		return fmt.Errorf(
-			"e2etest: Transfer packet %s not minted balance of %s: got %s, want %s",
+			"traffic: Transfer packet %s not minted balance of %s: got %s, want %s",
 			t.packetTx.reference(),
 			t.receiver,
 			got,
@@ -409,14 +409,14 @@ func (t *TransferSend) VerifyRefunded(ctx context.Context, txHash string) error 
 
 func validAmount(amount *big.Int) (*big.Int, error) {
 	if amount == nil {
-		return nil, errors.New("e2etest: Transfer amount is required")
+		return nil, errors.New("traffic: Transfer amount is required")
 	}
 	owned := new(big.Int).Set(amount)
 	if owned.Sign() <= 0 {
-		return nil, fmt.Errorf("e2etest: Transfer amount must be positive, got %s", owned)
+		return nil, fmt.Errorf("traffic: Transfer amount must be positive, got %s", owned)
 	}
 	if owned.BitLen() > 256 {
-		return nil, fmt.Errorf("e2etest: Transfer amount %s exceeds uint256", owned)
+		return nil, fmt.Errorf("traffic: Transfer amount %s exceeds uint256", owned)
 	}
 	return owned, nil
 }
@@ -427,7 +427,7 @@ func (i *Transfer) receiver(value string) (string, error) {
 	}
 	account, err := evm.NewAccount()
 	if err != nil {
-		return "", fmt.Errorf("e2etest: generate Transfer receiver: %w", err)
+		return "", fmt.Errorf("traffic: generate Transfer receiver: %w", err)
 	}
 	return account.Address().Hex(), nil
 }
@@ -442,7 +442,7 @@ func destinationTimeout(
 	header, err := destination.evm.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf(
-			"e2etest: read destination Chain %q head for packet timeout: %w",
+			"traffic: read destination Chain %q head for packet timeout: %w",
 			destination.chain.ID(),
 			err,
 		)
@@ -471,22 +471,22 @@ func (i *Transfer) voucherBalance(ctx context.Context, holder string) (*big.Int,
 	err := i.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := ics20transfer.NewContractCaller(i.destICS20, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind destination ICS20 %s: %w", i.destICS20, err)
+			return fmt.Errorf("traffic: bind destination ICS20 %s: %w", i.destICS20, err)
 		}
 		voucher, err := bound.IbcERC20Contract(&bind.CallOpts{Context: ctx}, i.voucherDenom())
 		if err != nil {
 			if isICS20DenomNotFound(err) {
 				return nil
 			}
-			return fmt.Errorf("e2etest: query destination ICS20 voucher: %w", err)
+			return fmt.Errorf("traffic: query destination ICS20 voucher: %w", err)
 		}
 		token, err := ibcerc20.NewContractCaller(voucher, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind IBCERC20 %s: %w", voucher, err)
+			return fmt.Errorf("traffic: bind IBCERC20 %s: %w", voucher, err)
 		}
 		got, err := token.BalanceOf(&bind.CallOpts{Context: ctx}, holderAddr)
 		if err != nil {
-			return fmt.Errorf("e2etest: query IBCERC20 %s balance: %w", voucher, err)
+			return fmt.Errorf("traffic: query IBCERC20 %s balance: %w", voucher, err)
 		}
 		balance = got
 		return nil
@@ -519,16 +519,16 @@ func verifyPacketTimeout(
 ) error {
 	receipt, err := source.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
-		return fmt.Errorf("e2etest: fetch packet %s timeout transaction %s: %w", packetTx.reference(), txHash, err)
+		return fmt.Errorf("traffic: fetch packet %s timeout transaction %s: %w", packetTx.reference(), txHash, err)
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		return fmt.Errorf("e2etest: packet %s timeout transaction %s failed", packetTx.reference(), txHash)
+		return fmt.Errorf("traffic: packet %s timeout transaction %s failed", packetTx.reference(), txHash)
 	}
 
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	events, err := receiptEvents(receipt, router, parser.ParseTimeoutPacket)
 	if err != nil {
-		return fmt.Errorf("e2etest: decode TimeoutPacket: %w", err)
+		return fmt.Errorf("traffic: decode TimeoutPacket: %w", err)
 	}
 	matches := 0
 	for _, event := range events {
@@ -538,7 +538,7 @@ func verifyPacketTimeout(
 	}
 	if matches != 1 {
 		return fmt.Errorf(
-			"e2etest: packet %s timeout transaction %s emitted %d matching TimeoutPacket events, want 1",
+			"traffic: packet %s timeout transaction %s emitted %d matching TimeoutPacket events, want 1",
 			packetTx.reference(), txHash, matches,
 		)
 	}
@@ -564,7 +564,7 @@ func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint6
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
+		return nil, fmt.Errorf("traffic: decode SendPacket: %w", err)
 	}
 	sequences := make([]uint64, len(events))
 	for i, event := range events {

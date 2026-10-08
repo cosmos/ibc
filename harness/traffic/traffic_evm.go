@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
@@ -21,14 +21,14 @@ import (
 func mustABI(metadata *bind.MetaData) abi.ABI {
 	parsed, err := metadata.GetAbi()
 	if err != nil {
-		panic(fmt.Sprintf("e2etest: parse generated contract ABI: %v", err))
+		panic(fmt.Sprintf("traffic: parse generated contract ABI: %v", err))
 	}
 	return *parsed
 }
 
 func mustBinding[T any](binding T, err error) T {
 	if err != nil {
-		panic(fmt.Sprintf("e2etest: construct generated contract binding: %v", err))
+		panic(fmt.Sprintf("traffic: construct generated contract binding: %v", err))
 	}
 	return binding
 }
@@ -102,7 +102,7 @@ func transactionEventSequences[T any](
 func NewAddress() (common.Address, error) {
 	account, err := evm.NewAccount()
 	if err != nil {
-		return common.Address{}, fmt.Errorf("e2etest: generate address: %w", err)
+		return common.Address{}, fmt.Errorf("traffic: generate address: %w", err)
 	}
 	return account.Address(), nil
 }
@@ -117,13 +117,13 @@ func erc20BalanceOf(
 	err := client.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := testerc20.NewTestERC20Caller(contract, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind TestERC20 %s: %w", contract, err)
+			return fmt.Errorf("traffic: bind TestERC20 %s: %w", contract, err)
 		}
 		balance, err = bound.BalanceOf(&bind.CallOpts{Context: ctx}, holder)
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: query TestERC20 %s balance of %s: %w", contract, holder, err)
+		return nil, fmt.Errorf("traffic: query TestERC20 %s balance of %s: %w", contract, holder, err)
 	}
 	return balance, nil
 }
@@ -140,16 +140,16 @@ func deployContract(
 	if len(constructorArgs) > 0 {
 		packed, err := parsed.Pack("", constructorArgs...)
 		if err != nil {
-			return common.Address{}, fmt.Errorf("e2etest: pack constructor: %w", err)
+			return common.Address{}, fmt.Errorf("traffic: pack constructor: %w", err)
 		}
 		payload = append(payload, packed...)
 	}
 	receipt, err := client.BroadcastTx(ctx, sender, nil, payload, nil)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("e2etest: deploy contract: %w", err)
+		return common.Address{}, fmt.Errorf("traffic: deploy contract: %w", err)
 	}
 	if receipt.ContractAddress == (common.Address{}) {
-		return common.Address{}, errors.New("e2etest: deployment produced no contract address")
+		return common.Address{}, errors.New("traffic: deployment produced no contract address")
 	}
 	return receipt.ContractAddress, nil
 }
@@ -164,7 +164,7 @@ func send(
 ) (*types.Receipt, uint64, error) {
 	receipt, err := client.BroadcastTx(ctx, sender, &to, data, nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("e2etest: broadcast transaction: %w", err)
+		return nil, 0, fmt.Errorf("traffic: broadcast transaction: %w", err)
 	}
 	sequence, found, err := sequenceFromReceipt(receipt)
 	if err != nil {
@@ -172,7 +172,7 @@ func send(
 	}
 	if !found {
 		return nil, 0, fmt.Errorf(
-			"e2etest: source transaction %s emitted no application send event",
+			"traffic: source transaction %s emitted no application send event",
 			receipt.TxHash.Hex(),
 		)
 	}

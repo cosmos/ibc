@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+// Package traffic binds test applications and routes above an Environment:
+// it deploys the ERC20, Counter, and IFT applications, writes the IBC CLI
+// relayer configuration, starts the relayer, and sends ICS20, ICS27 GMP, and
+// IFT packets whose relayer status and effects it observes. It does not depend
+// on the testing package; resources it starts are returned to the caller, who
+// stops them, and files it writes live under caller-owned directories.
+package traffic
 
 import (
 	"errors"
@@ -83,28 +89,28 @@ func resolveRouteEndpoints(
 	source, destination *environment.Chain,
 ) (endpoint, endpoint, error) {
 	if routeID == "" {
-		return endpoint{}, endpoint{}, errors.New("e2etest: route id is required")
+		return endpoint{}, endpoint{}, errors.New("traffic: route id is required")
 	}
 	if source == nil {
-		return endpoint{}, endpoint{}, errors.New("e2etest: source Chain is required")
+		return endpoint{}, endpoint{}, errors.New("traffic: source Chain is required")
 	}
 	if destination == nil {
-		return endpoint{}, endpoint{}, errors.New("e2etest: destination Chain is required")
+		return endpoint{}, endpoint{}, errors.New("traffic: destination Chain is required")
 	}
 	if source.ID() == destination.ID() {
 		return endpoint{}, endpoint{}, fmt.Errorf(
-			"e2etest: route %q must connect different Chains",
+			"traffic: route %q must connect different Chains",
 			routeID,
 		)
 	}
 	sourceEVM, err := source.EVM()
 	if err != nil {
-		return endpoint{}, endpoint{}, fmt.Errorf("e2etest: source Chain %q: %w", source.ID(), err)
+		return endpoint{}, endpoint{}, fmt.Errorf("traffic: source Chain %q: %w", source.ID(), err)
 	}
 	destinationEVM, err := destination.EVM()
 	if err != nil {
 		return endpoint{}, endpoint{}, fmt.Errorf(
-			"e2etest: destination Chain %q: %w",
+			"traffic: destination Chain %q: %w",
 			destination.ID(),
 			err,
 		)

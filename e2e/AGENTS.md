@@ -16,8 +16,10 @@ managed attestors.
   Anvil, while production prefers Besu where the requirements allow it.
 - Tests start an `Environment` (which realizes Chains, the IBC contract stack, attestation light
   clients, and attestors), hold the temporary IBC CLI driver and relayer explicitly, and assert through
-  route-bound application bindings (ICS20 transfers, ICS27 GMP calls, IFT transfers). This e2e-only setup
-  lives in `internal/e2etest`; transport-contract tests may call the concrete driver or Relayer directly.
+  route-bound application bindings (ICS20 transfers, ICS27 GMP calls, IFT transfers). The bindings live in
+  `../harness/traffic`, which does not depend on `testing`; `internal/e2etest` holds only the `go test` concerns
+  (mode and requirement selection, the matrix, `-e2e.*` flags, skipping) and thin `testing.TB` wrappers that
+  fail on error and register cleanup. Transport-contract tests may call the concrete driver or Relayer directly.
 - E2e may import the IBC CLI's public command transport types, generated RPC clients, and signer-keyfile
   package for transport and provisioning, but it must not import `cli/internal` or invoke handlers
   in process.

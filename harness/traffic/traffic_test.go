@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
@@ -77,11 +77,11 @@ func TestRouteWaitPolicy(t *testing.T) {
 func TestAwaitStateRequiresRouteWaitPolicy(t *testing.T) {
 	_, err := AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
-	require.EqualError(t, err, "e2etest: packet sequence 7 has no route id")
+	require.EqualError(t, err, "traffic: packet sequence 7 has no route id")
 
 	_, err = AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{RouteID: "missing", Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
-	require.EqualError(t, err, `e2etest: packet missing-7 has no wait policy for route "missing"`)
+	require.EqualError(t, err, `traffic: packet missing-7 has no wait policy for route "missing"`)
 }
 
 func TestStatusForPacketMatchesTypedClientLocator(t *testing.T) {
@@ -177,7 +177,7 @@ func TestAwaitStableRevalidatesTerminalStatus(t *testing.T) {
 			}
 			return status, relayerv2.PacketState_PACKET_STATE_SUCCEEDED, true, nil
 		})
-	require.EqualError(t, err, "e2etest: PACKET_STATE_SUCCEEDED packet route-4 has no acknowledgement transaction")
+	require.EqualError(t, err, "traffic: PACKET_STATE_SUCCEEDED packet route-4 has no acknowledgement transaction")
 	require.Equal(t, 2, calls)
 }
 
@@ -193,7 +193,7 @@ func TestValidateTimedOutStatusRejectsDeliveryTransactions(t *testing.T) {
 				TimeoutTx: &relayerv2.TransactionInfo{TxHash: "timeout"},
 				RecvTx:    &relayerv2.TransactionInfo{TxHash: "recv"},
 			},
-			want: "e2etest: PACKET_STATE_TIMED_OUT packet route-5 has a receive transaction",
+			want: "traffic: PACKET_STATE_TIMED_OUT packet route-5 has a receive transaction",
 		},
 		{
 			name: "acknowledgement",
@@ -201,7 +201,7 @@ func TestValidateTimedOutStatusRejectsDeliveryTransactions(t *testing.T) {
 				TimeoutTx: &relayerv2.TransactionInfo{TxHash: "timeout"},
 				AckTx:     &relayerv2.TransactionInfo{TxHash: "ack"},
 			},
-			want: "e2etest: PACKET_STATE_TIMED_OUT packet route-5 has an acknowledgement transaction",
+			want: "traffic: PACKET_STATE_TIMED_OUT packet route-5 has an acknowledgement transaction",
 		},
 	}
 	for _, tt := range tests {

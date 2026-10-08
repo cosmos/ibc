@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package e2etest starts Environments and provides the traffic bindings the
-// acceptance tests drive against IBC CLI.
+// Package e2etest resolves test requirements into Environments and adapts the
+// harness traffic layer to testing.TB for the acceptance tests.
 package e2etest
 
 import (
@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -19,11 +18,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/harness/environment"
-)
-
-const (
-	ChainA environment.ChainID = "chain-a"
-	ChainB environment.ChainID = "chain-b"
 )
 
 const (
@@ -54,11 +48,6 @@ type EVMRequirements struct {
 	ControlledMining bool
 	NodeLifecycle    bool
 }
-
-const ProtocolAuthorityID environment.AuthorityID = "protocol-deployer"
-
-// Deterministic deployer key used by test protocol realization; funded by managed Chains.
-const protocolAuthorityKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
 var modeFlag = flag.String(
 	"e2e.mode",
@@ -189,20 +178,6 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 		}
 	}
 	return chains
-}
-
-// RuntimeWithProtocolDeployer returns runtime with the protocol deployer
-// authority, without retaining caller-owned maps.
-func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtime {
-	runtime.Endpoints = maps.Clone(runtime.Endpoints)
-	runtime.Authorities = maps.Clone(runtime.Authorities)
-	if runtime.Authorities == nil {
-		runtime.Authorities = map[environment.AuthorityID]environment.EVMAuthority{}
-	}
-	runtime.Authorities[ProtocolAuthorityID] = environment.EVMAuthority{
-		PrivateKeyHex: protocolAuthorityKeyHex,
-	}
-	return runtime
 }
 
 func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *environment.Environment {
