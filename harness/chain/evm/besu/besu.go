@@ -226,6 +226,9 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			"--rpc-http-enabled",
 			"--rpc-http-host=0.0.0.0",
 			"--rpc-http-api=ETH,NET,WEB3",
+			// The default of 80 closes connections (EOF) under the load
+			// test's hundreds of concurrent senders.
+			"--rpc-http-max-active-connections=1024",
 			"--rpc-ws-enabled",
 			"--rpc-ws-host=0.0.0.0",
 			"--rpc-ws-api=ETH,NET,WEB3",
