@@ -6,8 +6,6 @@ FORGE_BUILD_FLAGS ?=
 
 HARNESS_DIR := internal/harness
 GEN_SOLIDITY_ABI_DIR := ../gen/go/solidity-abi
-CONTRACT_BINDINGS := $(addprefix $(GEN_SOLIDITY_ABI_DIR)/,\
-	accessmanager escrow testerc20 counter iftsendcallconstructor iftbatchtransfershim)
 
 help: ## List e2e commands
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
@@ -57,7 +55,7 @@ clean-dry-run: ## Preview e2e processes and Docker resources
 check-stale: ## Run all checks for stale code
 	@echo "Checking for stale ABI Go bindings..."
 	$(MAKE) test-apps FORGE_BUILD_FLAGS=--force
-	@status="$$(git status --porcelain --untracked-files=all -- $(CONTRACT_BINDINGS))"; \
+	@status="$$(git status --porcelain --untracked-files=all -- $(GEN_SOLIDITY_ABI_DIR))"; \
 		test -z "$$status" || { \
 			echo "contract bindings are stale — run 'make -C e2e test-apps' and commit the result" >&2; \
 			echo "$$status" >&2; \

@@ -5,19 +5,17 @@
     "": {
       "name": "@ibc-cli/solidity-ibc-contract-artifacts",
       "dependencies": {
-        "@cosmos/solidity-ibc-eureka": "github:cosmos/ibc-contracts#39904319467b5fbdec8c34c43b66af6f1d256dba",
-        "@openzeppelin/contracts": "5.6.1",
-        "@openzeppelin/contracts-upgradeable": "5.6.1",
+        "@cosmos/solidity-ibc-eureka": "github:cosmos/ibc-contracts#b9ceb3c5518a0ad4d40cc1ce8a53c6d6f7210a93",
+        "@openzeppelin/contracts": "5.7.0",
+        "@openzeppelin/contracts-upgradeable": "5.7.0",
       },
     },
   },
   "packages": {
-    "@cosmos/solidity-ibc-eureka": ["@cosmos/solidity-ibc-eureka@github:cosmos/ibc-contracts#3990431", { "dependencies": { "@openzeppelin/contracts": "^5.6.1", "@openzeppelin/contracts-upgradeable": "^5.6.1", "@uniswap/permit2": "github:Uniswap/permit2#cc56ad0f3439c502c246fc5cfcc3db92bb8b7219" } }, "cosmos-ibc-contracts-3990431", "sha512-cOem1rCQyJGuc1EK1R57Lj22vbBB7ynDYUNgDAOMnOF/a/khiw1fBc37ly55yaJsL8VygLVNsTxvW5NoOTS4eA=="],
+    "@cosmos/solidity-ibc-eureka": ["ibc-contracts@github:cosmos/ibc-contracts#b9ceb3c", {}, "cosmos-ibc-contracts-b9ceb3c", "sha512-ABEGUVJhluHNA4EVp0YNDr8RjFiNC+hUzT0emL5j90WPt+YYkQ0MpR1uxwhvzcAJ3xsUXIJZnM5PPNNj8Z9xjQ=="],
 
-    "@openzeppelin/contracts": ["@openzeppelin/contracts@5.6.1", "", {}, "sha512-Ly6SlsVJ3mj+b18W3R8gNufB7dTICT105fJhodGAGgyC2oqnBAhqSiNDJ8V8DLY05cCz81GLI0CU5vNYA1EC/w=="],
+    "@openzeppelin/contracts": ["@openzeppelin/contracts@5.7.0", "", {}, "sha512-IL2AZpI+7THMzt1u6Cxmc1zLwVnudtUGvrqXQ/HnbLKfQ/8dIWMMQPDwPIjRQzNrlAo4cxZaCGRB/XvwPo9ILA=="],
 
-    "@openzeppelin/contracts-upgradeable": ["@openzeppelin/contracts-upgradeable@5.6.1", "", { "peerDependencies": { "@openzeppelin/contracts": "5.6.1" } }, "sha512-n4a/vfRs114lXyUdYg7pyY8LvFKWvCDF5lEcRRAVxap8g6ZEdLqm+9tmt2zTtRHcNMxTYp9y5t6KBof4tHp7Og=="],
-
-    "@uniswap/permit2": ["@uniswap/permit2@github:Uniswap/permit2#cc56ad0", {}, "Uniswap-permit2-cc56ad0", "sha512-7I5aiSPL34ZodpJeZAkzxlKDQtZVIp9WCanZ9DWc7Pw7hbVYCbVnmGOmPJa/a6UY2R0dSDfQY/IGMRP3uAZO7A=="],
+    "@openzeppelin/contracts-upgradeable": ["@openzeppelin/contracts-upgradeable@5.7.0", "", { "peerDependencies": { "@openzeppelin/contracts": "5.7.0" } }, "sha512-dHA/P3AFsnNXcv82Kge/v35kK0ByNe1EFv4vvOnl//lc8svwRcj5i/bdXd5mdMolD4rjSKy6EWOwc6+7h1gjaQ=="],
   }
 }

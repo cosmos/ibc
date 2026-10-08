@@ -207,7 +207,7 @@ func qbftMeshClient(chain environment.ChainID) environment.NewBesuQBFTClient {
 	return environment.NewBesuQBFTClient{
 		IBCInstance:    fixtureInstanceID(chain),
 		Authority:      e2etest.ProtocolAuthorityID,
-		TrustingPeriod: 14 * 24 * 60 * 60,
+		TrustingPeriod: environment.BesuQBFTTrustingPeriod,
 		MaxClockDrift:  60,
 	}
 }
