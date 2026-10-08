@@ -27,17 +27,22 @@ corroborates outcomes by reading chain state with its own clients.
   instead of waiting out the kill grace). Don't reintroduce a shell-wrapped entrypoint.
   StopNode/StartNode fault injection is docker pause/unpause; chain state stays in memory.
 - **Load-test binary.** `cmd/loadtest` (packages under `internal/loadtest/`) drives load against a
-  harness environment; `cmd/loadtest/README.md` covers usage and the generator design. It is not a
-  `go test` suite and must not grow `go test` entry points for scenarios. `session` starts and tears
-  down the environment, deployment, and relayer; `relayerload` is the head-paced IFT generator,
-  receipt tracking, relay awaiting, and report; `attestorload` is attestor gRPC load; `simpleload`
-  a fixed-rate caller pool; `stats` percentiles. Raw-transaction helpers the generator needs live in
-  `traffic/traffic_ift_load.go` (calldata, receipt-to-`PacketTx` parsing, signing, terminal-state
-  waiting); keep signing keys inside `traffic`. Every run must tear down on success, failure, and
-  SIGINT: stop the relayer, close the Environment, then remove the deployment directory
-  (`session.Close`). Unit tests cover the logic only (wallet scheduling, backpressure, nonces,
-  percentiles, `SimpleLoad`). Verify a change by running the binary (`make -C harness build`): a
-  small relayer run (`--packets 40 --wallets 10 --per-block 5`) and `attestor --duration 5s`, then
-  check that `docker ps --filter label=ibc-cli-e2e=true` is empty afterwards.
+  harness environment; `cmd/loadtest/README.md` covers usage and the design. It is not a
+  `go test` suite and must not grow `go test` entry points for scenarios. `main` validates flags
+  once at parse time, starts the `session` (environment, deployment, and optionally the
+  relayer), runs the scenario, and closes the session; a scenario takes the session, writes its
+  own report (text or JSON of the same structs), and returns an error (nil = pass), which `main`
+  maps to the exit code. `relayerload` paces IFT transfers with a block-interval token ticker,
+  one sender goroutine per wallet using `traffic.IFT.Transfer`, sweeps relayer status with
+  `ibccli.Relayer.ClientPackets`, and measures relay latency from receipts and block
+  timestamps; `attestorload` is attestor gRPC load over `simpleload`, a `rate.Limiter` with a
+  try-acquire caller semaphore; `stats.Summarize` gives percentiles. Every run must tear down on
+  success, failure, and SIGINT (stop the relayer, close the Environment, remove the deployment
+  directory: `Session.Close`), except a failed run with `--keep-on-failure`. Unit tests cover
+  the logic only (token pacing and backpressure, wallet retirement, sweep termination, latency
+  arithmetic, rate accounting, reports, flag validation). Verify a change by running the binary
+  (`make -C harness build`): a small relayer run (`--packets 40 --wallets 10 --per-block 5`) and
+  `attestor --duration 5s`, then check that `docker ps --filter label=ibc-cli-e2e=true` is empty
+  afterwards.
 - Lint with `make -C harness lint` from the repository root; the shared root `.golangci.yml` covers the
   harness and excludes exported-doc mandates for this test-infrastructure surface.
