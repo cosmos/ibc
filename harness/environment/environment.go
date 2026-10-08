@@ -23,12 +23,20 @@ type Environment struct {
 
 	lease *environmentLease
 
+	observability bool
+
 	closeMu sync.Mutex
 	closed  bool
 }
 
 func (e *Environment) RunID() string {
 	return e.ws.runID
+}
+
+// ObservabilityEnabled reports whether Runtime.Observability was set, so callers
+// that start further IBC CLI processes (the relayer) can opt them in as well.
+func (e *Environment) ObservabilityEnabled() bool {
+	return e.observability
 }
 
 func (e *Environment) Chain(id ChainID) (*Chain, error) {
