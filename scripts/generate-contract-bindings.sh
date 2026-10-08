@@ -29,5 +29,4 @@ generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" acce
 generate "$solidity_ibc/contracts/out/Escrow.sol/Escrow.json" escrow Escrow "$bindings/escrow/contract.go"
 generate "$solidity_ibc/contracts/out/TestERC20.sol/TestERC20.json" testerc20 TestERC20 "$bindings/testerc20/contract.go"
 generate "$solidity_ibc/contracts/out/Counter.sol/Counter.json" counter Counter "$bindings/counter/contract.go"
-generate "$solidity_ibc/contracts/out/EVMIFTSendCallConstructor.sol/EVMIFTSendCallConstructor.json" iftsendcallconstructor EVMIFTSendCallConstructor "$bindings/iftsendcallconstructor/contract.go"
 generate "$solidity_ibc/contracts/out/IFTBatchTransferShim.sol/IFTBatchTransferShim.json" iftbatchtransfershim IFTBatchTransferShim "$bindings/iftbatchtransfershim/contract.go"

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -53,6 +54,10 @@ type AttestationClientConfig struct {
 // QBFT light client. The initial trusted state describes the counterparty
 // chain at InitialHeight; RoleManager restricts proof submission to that
 // address (the host router), a zero value permits anyone.
+// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
+// Besu QBFT clients. Clients trust the current head, so it outlasts any run.
+const BesuQBFTTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
+
 type BesuQBFTClientConfig struct {
 	ID                   string
 	CounterpartyClientID string

@@ -72,4 +72,25 @@ func TestBesuQBFTClientState(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, state, got)
 	})
+
+	t.Run("consensus state hash", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		want := common.HexToHash("0x1234")
+
+		callData, err := clientABI.Pack("getConsensusStateHash", uint64(112))
+		require.NoError(t, err)
+
+		output, err := clientABI.Methods["getConsensusStateHash"].Outputs.Pack(want)
+		require.NoError(t, err)
+
+		eth.EXPECT().CallContract(ctx, ethereum.CallMsg{To: &routerAddr, Data: getClientCallData}, (*big.Int)(nil)).
+			Return(getClientOutput, nil).Once()
+		eth.EXPECT().CallContract(
+			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: callData}, (*big.Int)(nil),
+		).Return(output, nil).Once()
+
+		got, err := client.BesuQBFTConsensusStateHash(ctx, "besu-0", 112)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	})
 }
