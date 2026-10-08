@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,7 +26,6 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/iftbatchtransfershim"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/iftsendcallconstructor"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/testerc20"
 )
 
@@ -271,7 +271,7 @@ func deployApps(
 			t.Context(),
 			evmAccess,
 			deployer.account,
-			iftsendcallconstructor.EVMIFTSendCallConstructorMetaData,
+			evmiftsendcall.ContractMetaData,
 		)
 		require.NoError(t, err, "e2etest: deploy IFT send-call constructor on Chain %q", id)
 
@@ -541,8 +541,16 @@ func deployAndMintToken(
 	return token, nil
 }
 
+// IFT rate limit settings, generous so that e2e flows never hit them. IFT
+// rejects every transfer until a rate limit is set.
+var (
+	iftRateLimitCapacity = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+	iftRateLimitWindow   = big.NewInt(24 * 60 * 60)
+)
+
 // deployIFTToken deploys the IFT token (a UUPS implementation behind an
-// ERC1967 proxy) and mints the initial supply to the sender.
+// ERC1967 proxy), sets its rate limit and mints the initial supply to the
+// sender.
 func deployIFTToken(
 	ctx context.Context,
 	client *environment.EVM,
@@ -562,6 +570,15 @@ func deployIFTToken(
 	token, err := deployContract(ctx, client, sender, erc1967proxy.ContractMetaData, implementation, initialize)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: deploy IFT proxy: %w", err)
+	}
+	rateLimit, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.SetIFTRateLimit(opts, iftRateLimitCapacity, iftRateLimitWindow)
+	})
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: pack IFT setIFTRateLimit: %w", err)
+	}
+	if _, broadcastErr := client.BroadcastTx(ctx, sender, &token, rateLimit, nil); broadcastErr != nil {
+		return common.Address{}, fmt.Errorf("e2etest: set IFT rate limit: %w", broadcastErr)
 	}
 	mint, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return iftTransactor.Mint(opts, sender.Address(), initialTokenSupply)

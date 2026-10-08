@@ -108,7 +108,10 @@ func Start(ctx context.Context, spec Spec) (*Chain, error) {
 	}, nil
 }
 
-func launchAnvil(ctx context.Context, spec Spec) (testcontainers.Container, string, *evm.EVMClient, error) {
+func launchAnvil(
+	ctx context.Context,
+	spec Spec,
+) (result testcontainers.Container, rpcURL string, ec *evm.EVMClient, err error) {
 	args := []string{
 		"--port", "8545",
 		"--host", "0.0.0.0",
@@ -133,35 +136,25 @@ func launchAnvil(ctx context.Context, spec Spec) (testcontainers.Container, stri
 			container.BindPortsToLoopback(config, "8545/tcp")
 		},
 	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: request,
-	})
+	c, err := container.Start(ctx, request)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("create anvil container (chain %s): %w", spec.ID, err)
+		return nil, "", nil, fmt.Errorf("start anvil container (chain %s): %w", spec.ID, err)
 	}
-	if startErr := container.Start(ctx); startErr != nil {
-		startErr = fmt.Errorf("start anvil container (chain %s): %w", spec.ID, startErr)
-		return nil, "", nil, errors.Join(startErr, cleanupFailedStart(container))
-	}
-	host, err := container.Host(ctx)
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, container.Terminate(c))
+		}
+	}()
+	rpcURL, err = c.PortEndpoint(ctx, "8545/tcp", "http")
 	if err != nil {
-		return nil, "", nil, errors.Join(fmt.Errorf("resolve anvil host: %w", err), cleanupFailedStart(container))
+		return nil, "", nil, fmt.Errorf("resolve anvil RPC endpoint: %w", err)
 	}
-	port, err := container.MappedPort(ctx, "8545/tcp")
-	if err != nil {
-		return nil, "", nil, errors.Join(
-			fmt.Errorf("resolve anvil RPC port: %w", err),
-			cleanupFailedStart(container),
-		)
-	}
-	rpcURL := fmt.Sprintf("http://%s:%s", host, port.Port())
 
-	ec, err := connectAnvil(ctx, spec, rpcURL)
+	ec, err = connectAnvil(ctx, spec, rpcURL)
 	if err != nil {
-		startupErr := anvilStartupError(container, err)
-		return nil, "", nil, errors.Join(startupErr, cleanupFailedStart(container))
+		return nil, "", nil, anvilStartupError(c, err)
 	}
-	return container, rpcURL, ec, nil
+	return c, rpcURL, ec, nil
 }
 
 func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient, error) {
@@ -292,12 +285,6 @@ func anvilStartupError(container testcontainers.Container, err error) error {
 		return err
 	}
 	return fmt.Errorf("%w\npartial anvil logs:\n%s", err, evm.Tail(logs, anvilStartupTailBytes))
-}
-
-func cleanupFailedStart(container testcontainers.Container) error {
-	ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
-	defer cancel()
-	return container.Terminate(ctx, testcontainers.StopTimeout(anvilStopGrace))
 }
 
 func (ac *Chain) CollectLogs(ctx context.Context) map[string]string {
