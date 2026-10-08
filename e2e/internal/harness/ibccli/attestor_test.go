@@ -67,6 +67,7 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 		PrivateKeyHex: testPrivateKey,
 		RPCURL:        "http://127.0.0.1:8545",
 		ICS26Router:   "0x0000000000000000000000000000000000000001",
+		Observability: true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141"), process.SignerAddress())
@@ -77,6 +78,16 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	configInfo, err := os.Stat(filepath.Join(workDir, configFilename))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o600), configInfo.Mode().Perm())
+	configData, err := os.ReadFile(filepath.Join(workDir, configFilename))
+	require.NoError(t, err)
+	var config fileConfig
+	require.NoError(t, yaml.Unmarshal(configData, &config))
+	require.Equal(t, observabilityConfig{
+		Metrics:  true,
+		Type:     observabilityTypeOTEL,
+		OtelFile: defaultOTELConfigPath(),
+	}, config.Observability)
+	require.FileExists(t, config.Observability.OtelFile)
 	workDirInfo, err := os.Stat(workDir)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), workDirInfo.Mode().Perm())

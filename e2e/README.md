@@ -31,11 +31,11 @@ export DOCKER_HOST="$(docker context inspect | jq -r '.[0].Endpoints.docker.Host
 
 Execution modes choose providers from each test's declared requirements:
 
-| Mode | Provider policy | Unresolved requirement |
-|---|---|---|
-| `fast` (default) | Prefer Anvil | Skip |
-| `complete` | Prefer Anvil | Fail |
-| `production` | Prefer Besu, then Anvil | Fail |
+| Mode             | Provider policy         | Unresolved requirement |
+| ---------------- | ----------------------- | ---------------------- |
+| `fast` (default) | Prefer Anvil            | Skip                   |
+| `complete`       | Prefer Anvil            | Fail                   |
+| `production`     | Prefer Besu, then Anvil | Fail                   |
 
 Portable EVM tests therefore use Anvil in fast and complete modes and Besu in production mode.
 Tests requiring controlled mining or node lifecycle use Anvil in every mode because Besu does not
@@ -50,7 +50,7 @@ make -C e2e test E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'
 make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1'
 ```
 
-`-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. After a hard crash, use
+`-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`. After a hard crash, use
 `make -C e2e clean-dry-run` and then `make -C e2e clean`.
 
 Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
@@ -133,6 +133,25 @@ output without modifying the committed file.
 ## Extending the graph
 
 `attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains; `qbftMesh` builds the same graph with Besu QBFT Clients and no Attestors, and requires every chain to run Besu. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+
+## Load Testing
+
+Load tests use the `TestLoad*` naming convention and are disabled by default. 
+Enable them with `E2E_LOAD=true`, `E2E_LOAD=1`, or `-e2e.load`:
+
+```sh
+make -C e2e test E2E_LOAD=true E2E_FLAGS='-run TestLoad_RelayerBurst -count=1 -v -parallel 1'
+# make -C e2e test E2E_FLAGS='-e2e.load -run TestLoad_RelayerBurst -count=1 -v -parallel 1'
+```
+
+`-e2e.load` overrides `E2E_LOAD`.
+
+Load mode starts the local OTEL stack and automatically configures attestors and relayers to export metrics.
+Grafana is available at http://localhost:3001
+
+`service_runtime` label indicates which binary is being metered.
+
+See [the local OTEL documentation](../cli/scripts/otel/README.md) for more details.
 
 ## Debugging
 

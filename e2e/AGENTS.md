@@ -10,7 +10,7 @@ managed attestors.
 - Run from the repository root: `make -C e2e test` uses fast mode;
   `make -C e2e test E2E_MODE=complete|production` selects another mode, and
   `E2E_FLAGS='-run TestTransfer_AutoRelay -count=1'` focuses a run. `-e2e.mode` in `E2E_FLAGS`
-  overrides `E2E_MODE`.
+  overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`; `E2E_LOAD=true` also enables load tests.
 - Tests declare portable EVM, controlled-mining, or node-lifecycle requirements. Fast mode may
   skip an unresolved requirement; complete and production modes fail it. Fast and complete prefer
   Anvil, while production prefers Besu where the requirements allow it.

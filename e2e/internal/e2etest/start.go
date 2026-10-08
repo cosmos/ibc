@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
 const (
@@ -28,7 +30,11 @@ const (
 
 const (
 	cleanupTimeout = 30 * time.Second
-	modeEnv        = "E2E_MODE"
+	envMode        = "E2E_MODE"
+	envLoad        = "E2E_LOAD"
+	testLoadPrefix = "TestLoad"
+
+	flagNameLoad = "e2e.load"
 
 	anvilChainIDBase = 31337
 	besuChainIDBase  = 32337
@@ -60,11 +66,9 @@ const ProtocolAuthorityID environment.AuthorityID = "protocol-deployer"
 // Deterministic deployer key used by test protocol realization; funded by managed Chains.
 const protocolAuthorityKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
-var modeFlag = flag.String(
-	"e2e.mode",
-	"",
-	"e2e mode to run: fast, complete, or production; overrides E2E_MODE",
-)
+var modeFlag = flag.String("e2e.mode", "", "e2e mode to run: fast, complete, or production; overrides E2E_MODE")
+
+var loadFlag = flag.Bool(flagNameLoad, false, "run load tests; overrides E2E_LOAD")
 
 type evmResolution struct {
 	chains     []environment.ChainSpec
@@ -78,7 +82,7 @@ func EVMChains(
 	ids ...environment.ChainID,
 ) []environment.ChainSpec {
 	t.Helper()
-	mode, err := resolveMode(*modeFlag, os.Getenv(modeEnv))
+	mode, err := resolveMode(*modeFlag, os.Getenv(envMode))
 	if err != nil {
 		t.Fatalf("e2etest: %v", err)
 	}
@@ -107,7 +111,31 @@ func resolveMode(flagValue, envValue string) (Mode, error) {
 	case ModeFast, ModeComplete, ModeProduction:
 		return mode, nil
 	default:
-		return "", fmt.Errorf("unknown e2e mode %q; set %s or -e2e.mode to fast, complete, or production", raw, modeEnv)
+		return "", fmt.Errorf("unknown e2e mode %q; set %s or -e2e.mode to fast, complete, or production", raw, envMode)
+	}
+}
+
+// cli flag has precedence over env value
+func loadTestEnabled() (bool, error) {
+	var (
+		hasCliFlag   = false
+		cliFlagValue = *loadFlag
+		envValue     = os.Getenv(envLoad)
+	)
+
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == flagNameLoad {
+			hasCliFlag = true
+		}
+	})
+
+	switch {
+	case hasCliFlag:
+		return cliFlagValue, nil
+	case envValue != "":
+		return strconv.ParseBool(envValue)
+	default:
+		return false, nil
 	}
 }
 
@@ -191,6 +219,25 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 	return chains
 }
 
+func guardLoadTest(t testing.TB) bool {
+	isLoadTest := strings.HasPrefix(t.Name(), testLoadPrefix)
+
+	wantLoadTest, err := loadTestEnabled()
+	require.NoError(t, err, "e2etest: resolve load test")
+
+	if !isLoadTest && wantLoadTest {
+		t.Skipf("e2etest: only load tests are allowed when %s enabled", envLoad)
+	}
+
+	if isLoadTest && !wantLoadTest {
+		t.Skipf("e2etest: load tests are skipped when %s or -%s is not specified", envLoad, flagNameLoad)
+	}
+
+	// expected invariants
+
+	return isLoadTest
+}
+
 // RuntimeWithProtocolDeployer returns runtime with the protocol deployer
 // authority, without retaining caller-owned maps.
 func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtime {
@@ -207,8 +254,9 @@ func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtim
 
 func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *environment.Environment {
 	t.Helper()
+
 	if matrixDiscoveryEnabled() {
-		mode, err := resolveMode(*modeFlag, os.Getenv(modeEnv))
+		mode, err := resolveMode(*modeFlag, os.Getenv(envMode))
 		if err != nil {
 			t.Fatalf("e2etest: %v", err)
 		}
@@ -219,8 +267,13 @@ func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *en
 		t.SkipNow()
 		return nil
 	}
-	env, err := environment.Start(t.Context(), spec, runtime)
+
+	isLoadTest := guardLoadTest(t)
+	ctx := ibccli.WithObservability(t.Context(), isLoadTest)
+
+	env, err := environment.Start(ctx, spec, runtime)
 	require.NoError(t, err, "e2etest: start Environment")
+
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
