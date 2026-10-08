@@ -60,7 +60,9 @@ jobs:
 
           # capslock-out/<module>-modules.tsv: path, status, base, head. A module is changed
           # when added, bumped, or given a new replace or go.work use, local ones included;
-          # a changed vendor/ tree marks them all, since it is what gets built.
+          # a changed vendor/ tree marks them all, since it is what gets built. Not one replaced
+          # by another of $CAPSLOCK_MODULES (=> ../<module>): that is this repository's code,
+          # reviewed in the pull request, its dependencies checked under its own name.
           rm -rf capslock-out && mkdir -p capslock-out
           modules=""
           for m in $CAPSLOCK_MODULES; do
@@ -91,9 +93,12 @@ jobs:
               diff -rq "$RUNNER_TEMP/base/$m/vendor" "$m/vendor" >/dev/null 2>&1 || vendor=1
             fi
             join -t $'\t' -a 1 -a 2 -e '' -o 0,1.2,2.2 <(lines "$old") <(lines "$new") \
-              | awk -F '\t' -v OFS='\t' -v vendor="$vendor" '{
+              | awk -F '\t' -v OFS='\t' -v vendor="$vendor" -v siblings="$CAPSLOCK_MODULES" '
+                BEGIN { n = split(siblings, sib, " "); for (i = 1; i <= n; i++) sibling[" => ../" sib[i]] = 1 }
+                {
                   if ($3 == "") s = "removed"
                   else if ($3 == "main" && ($2 == "main" || $2 == "")) s = "unchanged"
+                  else if (index($3, " => ../") && substr($3, index($3, " => ../")) in sibling) s = "unchanged"
                   else s = (vendor || $2 != $3) ? "changed" : "unchanged"
                   print $1, s, $2, $3
                 }' > "capslock-out/$m-modules.tsv"
