@@ -22,33 +22,9 @@ import (
 // managed processes; it matches the e2e suite's cleanup budget.
 const closeTimeout = 30 * time.Second
 
-// Provider selects the managed EVM node implementation.
-type Provider string
-
-const (
-	ProviderAnvil Provider = "anvil"
-	ProviderBesu  Provider = "besu"
-)
-
-// EVM chain ids, matching the e2e suite's managed Chains.
-const (
-	anvilChainIDBase = 31337
-	besuChainIDBase  = 32337
-)
-
-// ParseProvider validates a --provider value.
-func ParseProvider(value string) (Provider, error) {
-	switch Provider(value) {
-	case ProviderAnvil, ProviderBesu:
-		return Provider(value), nil
-	default:
-		return "", fmt.Errorf("unknown provider %q: want anvil or besu", value)
-	}
-}
-
 // Options shape the environment.
 type Options struct {
-	Provider Provider
+	Provider environment.EVMProvider
 	// Observability exports OTel telemetry from every managed IBC CLI process
 	// (attestors and the relayer) to the local LGTM stack.
 	Observability bool
@@ -73,26 +49,15 @@ type Session struct {
 	keepOnFailure bool
 }
 
-// Chains returns the two managed Chain declarations for provider.
-func Chains(provider Provider) []environment.ChainSpec {
-	ids := []environment.ChainID{traffic.ChainA, traffic.ChainB}
-	chains := make([]environment.ChainSpec, len(ids))
-	for i, id := range ids {
-		switch provider {
-		case ProviderBesu:
-			chains[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
-		default:
-			chains[i] = environment.ManagedAnvil{ID: id, EVMChainID: anvilChainIDBase + uint64(i)}
-		}
-	}
-	return chains
-}
-
 // Start realizes the environment, deploys the applications and relayer
 // configuration for opts.Routes, and starts the relayer. On error every
 // resource acquired so far is released.
 func Start(ctx context.Context, opts Options) (_ *Session, err error) {
-	spec, runtime := traffic.AttestedMesh(Chains(opts.Provider)...)
+	chains, err := environment.ManagedEVMChains(opts.Provider, traffic.ChainA, traffic.ChainB)
+	if err != nil {
+		return nil, err
+	}
+	spec, runtime := traffic.AttestedMesh(chains...)
 	runtime.Observability = opts.Observability
 
 	dir, err := os.MkdirTemp("", "ibc-loadtest-")
@@ -176,11 +141,6 @@ func (s *Session) Close(ctx context.Context, failure error) error {
 		slog.InfoContext(ctx, "teardown complete")
 	}
 	return errors.Join(errs...)
-}
-
-// Chain resolves one of the session's Chains.
-func (s *Session) Chain(id environment.ChainID) (*environment.Chain, error) {
-	return s.Env.Chain(id)
 }
 
 func since(start time.Time) string {

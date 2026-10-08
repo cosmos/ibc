@@ -12,7 +12,6 @@ import (
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	chainevm "github.com/cosmos/ibc/harness/chain/evm"
 	"github.com/cosmos/ibc/harness/ibccli"
 )
 
@@ -129,7 +128,7 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 
 	// Given (!) websocket proxy for chain A that allows to cut off the relayer's websocket subscription.
 	// relayer <-> ws_proxy <-> chain A
-	chainWSProxy := chainevm.NewWebSocketProxy(t, chainA.WSURL())
+	chainWSProxy := e2etest.NewWebSocketProxy(t, chainA.WSURL())
 
 	// Given NO clearOnStart and long clearInterval
 	// (so the clearing pass is not triggered)

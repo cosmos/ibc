@@ -182,7 +182,7 @@ func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environm
 	// opt-on dump for debugging
 	dumpRelayer := func() {
 		if environment.DumpEnabled() && driver != nil && env != nil {
-			environment.DumpTestDirectory(t, env.RunID(), driver.ConfigHome())
+			environment.DumpDirectory(env.RunID(), driver.ConfigHome(), t.Name())
 		}
 	}
 

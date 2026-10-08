@@ -242,7 +242,7 @@ func fundGas(
 	wallets []traffic.Signer,
 	amount *big.Int,
 ) error {
-	chain, err := s.Chain(id)
+	chain, err := s.Env.Chain(id)
 	if err != nil {
 		return err
 	}
@@ -294,11 +294,11 @@ func runDirection(
 			generatorStats{}, awaitStats{}, 0, 0, err), nil, nil
 	}
 
-	source, err := s.Chain(route.Source)
+	source, err := s.Env.Chain(route.Source)
 	if err != nil {
 		return fail(err)
 	}
-	destination, err := s.Chain(route.Destination)
+	destination, err := s.Env.Chain(route.Destination)
 	if err != nil {
 		return fail(err)
 	}

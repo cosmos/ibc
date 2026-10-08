@@ -7,14 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/harness/environment"
 	"github.com/cosmos/ibc/harness/ibccli"
 )
 
@@ -39,45 +36,13 @@ func (s Signer) SignTx(chainID *big.Int, tx *types.Transaction) (*types.Transact
 	return signed, nil
 }
 
-// RouteID is the route this IFT app sends on.
-func (i *IFT) RouteID() RouteID { return i.routeID }
-
-// Source is the Chain the IFT app sends from.
-func (i *IFT) Source() environment.ChainID { return i.source.chain.ID() }
-
-// Destination is the Chain the IFT app sends to.
-func (i *IFT) Destination() environment.ChainID { return i.destination.chain.ID() }
-
 // SourceContract is the source IFT token: the target of transfer transactions.
 func (i *IFT) SourceContract() common.Address { return i.sourceIFT }
-
-// TransferTimeout derives an absolute packet timeout timestamp from the
-// destination Chain head, as Send does. Non-positive timeouts select Send's
-// far-future default.
-func (i *IFT) TransferTimeout(ctx context.Context, timeout time.Duration) (uint64, error) {
-	return destinationTimeout(ctx, i.destination, timeout)
-}
 
 // TransferCalldata packs the iftTransfer call Send submits, for a caller that
 // signs and submits the transaction itself to SourceContract.
 func (i *IFT) TransferCalldata(receiver common.Address, amount *big.Int, timeoutTimestamp uint64) ([]byte, error) {
-	amount, err := validAmount(amount)
-	if err != nil {
-		return nil, err
-	}
-	if receiver == (common.Address{}) {
-		return nil, errors.New("traffic: IFT receiver is required")
-	}
-	if timeoutTimestamp == 0 {
-		return nil, errors.New("traffic: IFT timeout timestamp is required")
-	}
-	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return iftTransactor.IftTransfer(opts, i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("traffic: pack IFT iftTransfer: %w", err)
-	}
-	return data, nil
+	return i.transferCalldata(receiver, amount, timeoutTimestamp)
 }
 
 // PacketTxsFromReceipt locates every packet a successful source transaction

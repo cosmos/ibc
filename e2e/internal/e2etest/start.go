@@ -23,9 +23,6 @@ import (
 const (
 	cleanupTimeout = 30 * time.Second
 	modeEnv        = "E2E_MODE"
-
-	anvilChainIDBase = 31337
-	besuChainIDBase  = 32337
 )
 
 type Mode string
@@ -36,15 +33,8 @@ const (
 	ModeProduction Mode = "production"
 )
 
-type EVMProvider string
-
-const (
-	EVMProviderAnvil EVMProvider = "anvil"
-	EVMProviderBesu  EVMProvider = "besu"
-)
-
 type EVMRequirements struct {
-	Provider         EVMProvider
+	Provider         environment.EVMProvider
 	ControlledMining bool
 	NodeLifecycle    bool
 }
@@ -57,7 +47,7 @@ var modeFlag = flag.String(
 
 type evmResolution struct {
 	chains     []environment.ChainSpec
-	provider   EVMProvider
+	provider   environment.EVMProvider
 	skipReason string
 }
 
@@ -112,14 +102,14 @@ func resolveEVMChains(
 		return evmResolution{}, err
 	}
 
-	var providers []EVMProvider
+	var providers []environment.EVMProvider
 	switch mode {
 	case ModeFast:
-		providers = []EVMProvider{EVMProviderAnvil}
+		providers = []environment.EVMProvider{environment.EVMProviderAnvil}
 	case ModeComplete:
-		providers = []EVMProvider{EVMProviderAnvil, EVMProviderBesu}
+		providers = []environment.EVMProvider{environment.EVMProviderAnvil, environment.EVMProviderBesu}
 	case ModeProduction:
-		providers = []EVMProvider{EVMProviderBesu, EVMProviderAnvil}
+		providers = []environment.EVMProvider{environment.EVMProviderBesu, environment.EVMProviderAnvil}
 	default:
 		return evmResolution{}, fmt.Errorf("unknown e2e mode %q", mode)
 	}
@@ -128,10 +118,14 @@ func resolveEVMChains(
 		if requirements.Provider != "" && requirements.Provider != provider {
 			continue
 		}
-		if (requirements.ControlledMining || requirements.NodeLifecycle) && provider != EVMProviderAnvil {
+		if (requirements.ControlledMining || requirements.NodeLifecycle) && provider != environment.EVMProviderAnvil {
 			continue
 		}
-		return evmResolution{chains: evmChainSpecs(provider, ids), provider: provider}, nil
+		chains, err := environment.ManagedEVMChains(provider, ids...)
+		if err != nil {
+			return evmResolution{}, err
+		}
+		return evmResolution{chains: chains, provider: provider}, nil
 	}
 
 	reason := fmt.Sprintf("no EVM provider satisfies requirements %+v in %s mode", requirements, mode)
@@ -142,12 +136,11 @@ func resolveEVMChains(
 }
 
 func validateEVMRequirements(requirements EVMRequirements) error {
-	switch requirements.Provider {
-	case "", EVMProviderAnvil, EVMProviderBesu:
+	if requirements.Provider == "" {
 		return nil
-	default:
-		return fmt.Errorf("unknown EVM provider %q", requirements.Provider)
 	}
+	_, err := environment.ParseEVMProvider(string(requirements.Provider))
+	return err
 }
 
 func validateChainIDs(ids []environment.ChainID) error {
@@ -165,19 +158,6 @@ func validateChainIDs(ids []environment.ChainID) error {
 		seen[id] = struct{}{}
 	}
 	return nil
-}
-
-func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environment.ChainSpec {
-	chains := make([]environment.ChainSpec, len(ids))
-	for i, id := range ids {
-		switch provider {
-		case EVMProviderAnvil:
-			chains[i] = environment.ManagedAnvil{ID: id, EVMChainID: anvilChainIDBase + uint64(i)}
-		case EVMProviderBesu:
-			chains[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
-		}
-	}
-	return chains
 }
 
 func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *environment.Environment {

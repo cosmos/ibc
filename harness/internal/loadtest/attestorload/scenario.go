@@ -19,7 +19,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
@@ -210,9 +209,13 @@ func seed(ctx context.Context, s *session.Session, route traffic.Route) ([]attes
 	}
 	slog.InfoContext(ctx, "seeded delivered packets", "count", len(sends))
 
+	source, ok := s.Deployment.Chain(route.Source)
+	if !ok {
+		return nil, fmt.Errorf("no deployment on Chain %q", route.Source)
+	}
 	packets := make([]attestablePacket, 0, len(sends))
 	for _, send := range sends {
-		packet, err := newAttestablePacket(send)
+		packet, err := newAttestablePacket(send, source.ICS26Router)
 		if err != nil {
 			return nil, err
 		}
@@ -221,24 +224,17 @@ func seed(ctx context.Context, s *session.Session, route traffic.Route) ([]attes
 	return packets, nil
 }
 
-func newAttestablePacket(send *traffic.TransferSend) (attestablePacket, error) {
-	filterer, err := ics26router.NewContractFilterer(common.Address{}, nil)
+func newAttestablePacket(send *traffic.TransferSend, router common.Address) (attestablePacket, error) {
+	tx := send.PacketTx()
+	sent, err := traffic.SentPackets(send.Receipt(), router)
 	if err != nil {
 		return attestablePacket{}, err
 	}
-	tx := send.PacketTx()
-	for _, log := range send.Receipt().Logs {
-		event, err := filterer.ParseSendPacket(*log)
-		if errors.Is(err, bind.ErrNoEventSignature) || errors.Is(err, bind.ErrEventSignatureMismatch) {
+	for _, packet := range sent {
+		if packet.SourceClient != tx.SourceClientID || packet.Sequence != tx.Sequence {
 			continue
 		}
-		if err != nil {
-			return attestablePacket{}, fmt.Errorf("parse SendPacket: %w", err)
-		}
-		if event.Packet.SourceClient != tx.SourceClientID || event.Packet.Sequence != tx.Sequence {
-			continue
-		}
-		encoded, err := attestoribc.EncodePacket(routerPacket(event.Packet))
+		encoded, err := attestoribc.EncodePacket(routerPacket(packet))
 		if err != nil {
 			return attestablePacket{}, fmt.Errorf("encode packet %s: %w", tx, err)
 		}

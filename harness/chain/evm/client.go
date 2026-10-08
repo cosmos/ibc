@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"sync"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -50,9 +51,10 @@ type EVMClient struct {
 	client  *ethclient.Client
 	chainID *big.Int
 
-	// Local sends must be serialized across nonce reads and submission,
-	// regardless of which account pays for the transaction.
-	txGate chan struct{}
+	// Local sends from one account are serialized across nonce reads and
+	// submission; sends from different accounts proceed concurrently.
+	txGatesMu sync.Mutex
+	txGates   map[common.Address]chan struct{}
 }
 
 // The caller remains responsible for readiness.
@@ -61,7 +63,7 @@ func NewConnectedClient(ctx context.Context, c *ethclient.Client) (*EVMClient, e
 	if err != nil {
 		return nil, fmt.Errorf("query chain id: %w", err)
 	}
-	return &EVMClient{client: c, chainID: id, txGate: make(chan struct{}, 1)}, nil
+	return &EVMClient{client: c, chainID: id, txGates: map[common.Address]chan struct{}{}}, nil
 }
 
 // It closes c on failure.
@@ -160,10 +162,11 @@ func (e *EVMClient) signAndSend(
 	data []byte,
 	value *big.Int,
 ) (*types.Transaction, error) {
-	if err := e.acquireTx(ctx); err != nil {
+	gate := e.txGate(from.addr)
+	if err := acquireTx(ctx, gate); err != nil {
 		return nil, err
 	}
-	defer func() { <-e.txGate }()
+	defer func() { <-gate }()
 
 	signed, err := e.buildSignedTx(ctx, from, to, data, value)
 	if err != nil {
@@ -175,11 +178,22 @@ func (e *EVMClient) signAndSend(
 	return signed, nil
 }
 
-func (e *EVMClient) acquireTx(ctx context.Context) error {
+func (e *EVMClient) txGate(from common.Address) chan struct{} {
+	e.txGatesMu.Lock()
+	defer e.txGatesMu.Unlock()
+	gate, ok := e.txGates[from]
+	if !ok {
+		gate = make(chan struct{}, 1)
+		e.txGates[from] = gate
+	}
+	return gate
+}
+
+func acquireTx(ctx context.Context, gate chan struct{}) error {
 	select {
-	case e.txGate <- struct{}{}:
+	case gate <- struct{}{}:
 		if err := ctx.Err(); err != nil {
-			<-e.txGate
+			<-gate
 			return fmt.Errorf("wait for transaction submission slot: %w", err)
 		}
 		return nil

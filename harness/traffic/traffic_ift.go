@@ -4,6 +4,7 @@ package traffic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -54,7 +55,7 @@ type IFT struct {
 // IFTSend is the result of an IFT Send: the packet it emitted plus the balance
 // baselines its Verify methods compare against.
 type IFTSend struct {
-	sendResult
+	SendResult
 	app                     *IFT
 	receiver                common.Address
 	amount                  *big.Int
@@ -85,15 +86,47 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 	if err != nil {
 		return nil, err
 	}
-	timeoutTimestamp, err := destinationTimeout(ctx, i.destination, request.Timeout)
+	timeoutTimestamp, err := i.TransferTimeout(ctx, request.Timeout)
 	if err != nil {
 		return nil, err
 	}
-	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return iftTransactor.IftTransfer(opts, i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
-	})
+	result, err := i.Transfer(ctx, receiver, amount, timeoutTimestamp)
 	if err != nil {
-		return nil, fmt.Errorf("traffic: pack IFT iftTransfer: %w", err)
+		return nil, err
+	}
+	return &IFTSend{
+		SendResult:              result,
+		app:                     i,
+		receiver:                receiver,
+		amount:                  amount,
+		sourceBefore:            sourceBefore,
+		destinationBefore:       destinationBefore,
+		destinationSupplyBefore: destinationSupplyBefore,
+		timeoutTimestamp:        timeoutTimestamp,
+	}, nil
+}
+
+// TransferTimeout derives an absolute packet timeout timestamp from the
+// destination Chain head, as Send does. Non-positive timeouts select Send's
+// far-future default.
+func (i *IFT) TransferTimeout(ctx context.Context, timeout time.Duration) (uint64, error) {
+	return destinationTimeout(ctx, i.destination, timeout)
+}
+
+// Transfer submits one iftTransfer of amount to receiver from the route's
+// sender and waits for its receipt. Unlike Send it takes no balance baselines
+// and reads no destination head: timeoutTimestamp is absolute, typically from
+// TransferTimeout. Concurrent calls are safe; calls from different senders
+// do not wait on one another.
+func (i *IFT) Transfer(
+	ctx context.Context,
+	receiver common.Address,
+	amount *big.Int,
+	timeoutTimestamp uint64,
+) (SendResult, error) {
+	data, err := i.transferCalldata(receiver, amount, timeoutTimestamp)
+	if err != nil {
+		return SendResult{}, err
 	}
 	receipt, sequence, err := send(
 		ctx,
@@ -104,18 +137,27 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 		sendPacketSequence(i.sourceRouter),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("traffic: send IFT on route %q: %w", i.routeID, err)
+		return SendResult{}, fmt.Errorf("traffic: send IFT on route %q: %w", i.routeID, err)
 	}
-	return &IFTSend{
-		sendResult:              newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
-		app:                     i,
-		receiver:                receiver,
-		amount:                  amount,
-		sourceBefore:            sourceBefore,
-		destinationBefore:       destinationBefore,
-		destinationSupplyBefore: destinationSupplyBefore,
-		timeoutTimestamp:        timeoutTimestamp,
-	}, nil
+	return newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence), nil
+}
+
+func (i *IFT) transferCalldata(receiver common.Address, amount *big.Int, timeoutTimestamp uint64) ([]byte, error) {
+	amount, err := validAmount(amount)
+	if err != nil {
+		return nil, err
+	}
+	// The zero receiver stays allowed: tests use it to force an error ack.
+	if timeoutTimestamp == 0 {
+		return nil, errors.New("traffic: IFT timeout timestamp is required")
+	}
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.IftTransfer(opts, i.sourceClientID, receiver.Hex(), amount, timeoutTimestamp)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("traffic: pack IFT iftTransfer: %w", err)
+	}
+	return data, nil
 }
 
 // SendBatch emits multiple IFT transfers from a single source transaction

@@ -22,12 +22,14 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	var output bytes.Buffer
 	collector := newMatrixCollector(&output)
 	if err := collector.recordSelection("TestMesh/subtest", ModeProduction, MatrixSelection{
-		Family: matrixFamilyEVM, Requirements: EVMRequirements{}, Provider: EVMProviderBesu,
+		Family: matrixFamilyEVM, Requirements: EVMRequirements{}, Provider: environment.EVMProviderBesu,
 	}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := collector.recordSelection("TestMesh/subtest", ModeProduction, MatrixSelection{
-		Family: matrixFamilyEVM, Requirements: EVMRequirements{NodeLifecycle: true}, Provider: EVMProviderAnvil,
+		Family:       matrixFamilyEVM,
+		Requirements: EVMRequirements{NodeLifecycle: true},
+		Provider:     environment.EVMProviderAnvil,
 	}, "", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +71,7 @@ func TestMatrixCollectorEmitsSkip(t *testing.T) {
 	var output bytes.Buffer
 	collector := newMatrixCollector(&output)
 	if err := collector.recordSelection("TestSkipped", ModeFast, MatrixSelection{
-		Family: matrixFamilyEVM, Requirements: EVMRequirements{Provider: EVMProviderBesu},
+		Family: matrixFamilyEVM, Requirements: EVMRequirements{Provider: environment.EVMProviderBesu},
 	}, "skip", "no compatible provider"); err != nil {
 		t.Fatal(err)
 	}

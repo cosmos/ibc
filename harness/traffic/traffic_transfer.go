@@ -73,7 +73,7 @@ type PreparedTransfer struct {
 // TransferSend is the result of a Transfer Send or Submit: the packet it
 // emitted plus the balance baselines its Verify methods compare against.
 type TransferSend struct {
-	sendResult
+	SendResult
 	app               *Transfer
 	receiver          string
 	amount            *big.Int
@@ -174,7 +174,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		return nil, fmt.Errorf("traffic: send Transfer on route %q: %w", p.app.routeID, err)
 	}
 	return &TransferSend{
-		sendResult: newSendResult(
+		SendResult: newSendResult(
 			p.app.routeID,
 			p.app.source,
 			p.app.sourceClientID,
@@ -558,17 +558,31 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 	}
 }
 
-// sendPacketSequences returns every SendPacket sequence emitted by the router
-// in one receipt, in log order
-func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
+// SentPackets decodes every packet that router emitted a SendPacket event for
+// in receipt, in log order. Logs from any other address are ignored, so only
+// the source ICS26 router's packets are returned.
+func SentPackets(receipt *types.Receipt, router common.Address) ([]ics26router.IICS26RouterMsgsPacket, error) {
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
 	if err != nil {
 		return nil, fmt.Errorf("traffic: decode SendPacket: %w", err)
 	}
-	sequences := make([]uint64, len(events))
+	packets := make([]ics26router.IICS26RouterMsgsPacket, len(events))
 	for i, event := range events {
-		sequences[i] = event.Packet.Sequence
+		packets[i] = event.Packet
+	}
+	return packets, nil
+}
+
+// sendPacketSequences returns the sequences of SentPackets.
+func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
+	packets, err := SentPackets(receipt, router)
+	if err != nil {
+		return nil, err
+	}
+	sequences := make([]uint64, len(packets))
+	for i, packet := range packets {
+		sequences[i] = packet.Sequence
 	}
 	return sequences, nil
 }

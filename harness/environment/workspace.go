@@ -42,7 +42,7 @@ func (w workspace) remove() error {
 
 func (w workspace) removePrivate() error {
 	if DumpEnabled() {
-		dumpDirectory(w.runID, w.privateDir)
+		DumpDirectory(w.runID, w.privateDir, "")
 	}
 
 	return removeDirectory("private environment work", w.privateDir)
@@ -50,7 +50,7 @@ func (w workspace) removePrivate() error {
 
 func (w workspace) removeDiagnostics() error {
 	if DumpEnabled() {
-		dumpDirectory(w.runID, w.diagnosticsDir)
+		DumpDirectory(w.runID, w.diagnosticsDir, "")
 	}
 
 	return removeDirectory("environment diagnostics", w.diagnosticsDir)

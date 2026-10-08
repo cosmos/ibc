@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cosmos/ibc/harness/environment"
 	"github.com/cosmos/ibc/harness/internal/loadtest/attestorload"
 	"github.com/cosmos/ibc/harness/internal/loadtest/relayerload"
 	"github.com/cosmos/ibc/harness/internal/loadtest/session"
@@ -78,7 +79,7 @@ type common struct {
 }
 
 func (c *common) register(fs *flag.FlagSet) {
-	fs.StringVar(&c.provider, "provider", string(session.ProviderAnvil), "managed EVM provider: anvil or besu")
+	fs.StringVar(&c.provider, "provider", string(environment.EVMProviderAnvil), "managed EVM provider: anvil or besu")
 	fs.BoolVar(&c.observability, "observability", false,
 		"export OTel telemetry from the relayer and attestors; start the stack first with "+
 			"make -C cli/scripts/otel up (Grafana on http://localhost:3001)")
@@ -91,7 +92,7 @@ func (c *common) register(fs *flag.FlagSet) {
 }
 
 func (c *common) sessionOptions() (session.Options, error) {
-	provider, err := session.ParseProvider(c.provider)
+	provider, err := environment.ParseEVMProvider(c.provider)
 	if err != nil {
 		return session.Options{}, err
 	}

@@ -26,7 +26,7 @@ func meshAttestorFor(chain, counterparty environment.ChainID) environment.Attest
 }
 
 func fixtureChainID(declaration environment.ChainSpec) environment.ChainID {
-	return traffic.ChainSpecID(declaration)
+	return declaration.ChainID()
 }
 
 func fixtureInstanceID(id environment.ChainID) environment.IBCInstanceID {

@@ -224,7 +224,7 @@ func TestDeployConnection(t *testing.T) {
 // so the config carries the routers core deployed.
 func TestDeployBesuQBFTConnection(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu})
+	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu})
 
 	d.deploy(t, [][]string{
 		{"core", "--chain", d.chainAID, "--yes"},

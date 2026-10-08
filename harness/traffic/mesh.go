@@ -21,7 +21,7 @@ func AttestedMesh(chains ...environment.ChainSpec) (environment.Spec, environmen
 	authorities := map[environment.AuthorityID]environment.EVMAuthority{}
 	chainIDs := make([]environment.ChainID, 0, len(chains))
 	for _, chain := range chains {
-		chainIDs = append(chainIDs, ChainSpecID(chain))
+		chainIDs = append(chainIDs, chain.ChainID())
 	}
 	slices.Sort(chainIDs)
 
@@ -74,21 +74,6 @@ func MeshConnectionID(a, b environment.ChainID) environment.ConnectionID {
 		a, b = b, a
 	}
 	return environment.ConnectionID(fmt.Sprintf("conn-%s-%s", a, b))
-}
-
-// ChainSpecID returns the identity a Chain declaration carries. It panics on
-// a declaration type it does not know, which is a programming error.
-func ChainSpecID(declaration environment.ChainSpec) environment.ChainID {
-	switch chain := declaration.(type) {
-	case environment.ManagedAnvil:
-		return chain.ID
-	case environment.ManagedBesu:
-		return chain.ID
-	case environment.AttachedEVM:
-		return chain.ID
-	default:
-		panic(fmt.Sprintf("traffic: unsupported Chain declaration %T", declaration))
-	}
 }
 
 func meshClient(chain environment.ChainID, attestor environment.AttestorID) environment.NewClient {

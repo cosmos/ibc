@@ -158,7 +158,7 @@ func DeployWithRelayerConfig(
 	case relayer.key == nil:
 		return nil, nil, errors.New("traffic: relayer signer is required")
 	}
-	if err := EnsureSignerBalances(ctx, env, deployer, relayer); err != nil {
+	if err := ensureSignerBalances(ctx, env, deployer, relayer); err != nil {
 		return nil, nil, err
 	}
 
@@ -666,11 +666,11 @@ func deployIFTBatchShim(
 	return shim, nil
 }
 
-// EnsureSignerBalances makes every signer hold at least RequiredSignerBalance
+// ensureSignerBalances makes every signer hold at least RequiredSignerBalance
 // on each Chain of env. Managed Chains fund them through their funding
 // capability; on an attached Chain the balance must already be provisioned
 // out of band, and a shortfall is an error.
-func EnsureSignerBalances(ctx context.Context, env *environment.Environment, signers ...Signer) error {
+func ensureSignerBalances(ctx context.Context, env *environment.Environment, signers ...Signer) error {
 	minimum := RequiredSignerBalance()
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)

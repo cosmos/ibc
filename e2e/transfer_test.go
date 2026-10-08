@@ -101,7 +101,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
 	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
+		t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
 	))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }
@@ -176,7 +176,7 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	t.Parallel()
 	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
+		t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
 	))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)

@@ -54,7 +54,7 @@ func (g *GMP) Token() common.Address { return g.destToken }
 // GMPCall is the result of a GMP Call: the packet it emitted plus the Counter
 // baseline its Verify methods compare against.
 type GMPCall struct {
-	sendResult
+	SendResult
 	app    *GMP
 	before *big.Int
 }
@@ -103,7 +103,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return nil, fmt.Errorf("traffic: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
-		sendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
+		SendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
 		app:        g,
 		before:     before,
 	}, nil
