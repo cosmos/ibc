@@ -4,6 +4,7 @@ package simpleload
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -13,121 +14,79 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunLoad(t *testing.T) {
-	t.Run("succeeds", func(t *testing.T) {
-		// ARRANGE
+func TestSimpleLoad(t *testing.T) {
+	t.Run("offersAtTheRate", func(t *testing.T) {
 		var calls atomic.Int64
-		spec := Spec{
-			Duration:      time.Second,
-			RatePerSecond: 50,
-			Concurrency:   8,
-		}
-		call := func(context.Context) error {
+		spec := Spec{Duration: 500 * time.Millisecond, RatePerSecond: 100, Concurrency: 8}
+
+		result := SimpleLoad(t.Context(), spec, func(context.Context) error {
 			calls.Add(1)
 			return nil
-		}
+		})
 
-		// ACT
-		result := SimpleLoad(t.Context(), spec, call)
-
-		// ASSERT
-		require.Equal(t, calls.Load(), result.Succeeded)
-		require.GreaterOrEqual(t, result.Succeeded, int64(50))
-		assert.Zero(t, result.Failed)
-		assert.Zero(t, result.TimedOut)
+		assert.Equal(t, calls.Load(), result.Sent)
+		assert.Equal(t, result.Sent, result.Succeeded)
+		assert.Equal(t, result.Sent+result.Dropped, result.Offered)
+		assert.InDelta(t, 50, result.Offered, 6, "100 rps for 0.5s")
 		assert.Zero(t, result.Dropped)
-		assert.Len(t, result.Latencies, int(result.Succeeded))
-		assert.Positive(t, result.Avg())
-		assert.GreaterOrEqual(t, result.Percentile(95), result.Percentile(50))
+		assert.Equal(t, int(result.Succeeded), result.Latency.Count)
 	})
 
-	t.Run("countsFailuresAndTimeouts", func(t *testing.T) {
-		// ARRANGE
+	t.Run("classifiesFailuresAndTimeouts", func(t *testing.T) {
 		var calls atomic.Int64
 		errs := []error{errors.New("boom"), context.DeadlineExceeded}
-		spec := Spec{
-			Duration:      time.Second,
-			RatePerSecond: 100,
-			Concurrency:   len(errs),
-		}
-		call := func(context.Context) error {
+		spec := Spec{Duration: 300 * time.Millisecond, RatePerSecond: 100, Concurrency: 4}
+
+		result := SimpleLoad(t.Context(), spec, func(context.Context) error {
 			return errs[int(calls.Add(1)-1)%len(errs)]
-		}
+		})
 
-		// ACT
-		result := SimpleLoad(t.Context(), spec, call)
-
-		// ASSERT
-		require.Equal(t, calls.Load(), result.Failed+result.TimedOut)
-		assert.Zero(t, result.Succeeded)
+		assert.Equal(t, result.Sent, result.Failed+result.TimedOut)
 		assert.Positive(t, result.Failed)
 		assert.Positive(t, result.TimedOut)
-		assert.Zero(t, result.Dropped)
+		assert.Zero(t, result.Succeeded)
+		assert.Zero(t, result.Latency.Count, "latency covers succeeded calls only")
 	})
 
-	t.Run("accountsForCallFinishingAfterRunEnds", func(t *testing.T) {
-		// ARRANGE
-		ctx, cancel := context.WithCancel(t.Context())
-		t.Cleanup(cancel)
+	t.Run("dropsOnlyWhenEveryCallerIsBusy", func(t *testing.T) {
+		spec := Spec{Duration: 200 * time.Millisecond, RatePerSecond: 500, Concurrency: 2}
 
-		started := make(chan struct{})
-		spec := Spec{
-			Duration:      time.Second,
-			RatePerSecond: 1,
-			Concurrency:   1,
-		}
-		call := func(ctx context.Context) error {
-			close(started)
-			<-ctx.Done()
+		result := SimpleLoad(t.Context(), spec, func(context.Context) error {
+			time.Sleep(400 * time.Millisecond)
 			return nil
-		}
+		})
 
-		go func() {
-			<-started
-			cancel()
-		}()
-
-		// ACT
-		result := SimpleLoad(ctx, spec, call)
-
-		// ASSERT
-		assert.Equal(t, int64(1), result.Succeeded)
-		assert.Zero(t, result.Failed)
-		assert.Zero(t, result.TimedOut)
-		assert.Zero(t, result.Dropped)
-		assert.Len(t, result.Latencies, 1)
+		assert.Equal(t, int64(2), result.Sent, "two callers, each busy past the phase")
+		assert.Equal(t, int64(2), result.Succeeded)
+		assert.Equal(t, result.Offered-2, result.Dropped)
+		assert.Greater(t, result.Offered, int64(50))
 	})
 
-	t.Run("dropsWhenWorkersBusy", func(t *testing.T) {
-		// ARRANGE
-		spec := Spec{
-			Duration:      time.Second,
-			RatePerSecond: 10_000,
-			Concurrency:   1,
-		}
-		call := func(ctx context.Context) error {
+	t.Run("callsInFlightOutliveThePhaseDeadline", func(t *testing.T) {
+		spec := Spec{Duration: 50 * time.Millisecond, RatePerSecond: 1, Concurrency: 1}
+		started := time.Now()
+
+		result := SimpleLoad(t.Context(), spec, func(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(time.Minute):
+			case <-time.After(200 * time.Millisecond):
 				return nil
 			}
-		}
+		})
 
-		// ACT
-		result := SimpleLoad(t.Context(), spec, call)
-
-		// ASSERT
-		assert.Zero(t, result.Succeeded)
-		assert.Positive(t, result.Dropped)
+		assert.Equal(t, int64(1), result.Succeeded, "the call's context is not the phase's")
+		assert.GreaterOrEqual(t, time.Since(started), 200*time.Millisecond, "waits for calls in flight")
 	})
-}
 
-func TestResult(t *testing.T) {
-	result := Result{Latencies: []time.Duration{10 * time.Millisecond, 20 * time.Millisecond, 60 * time.Millisecond}}
-
-	assert.Equal(t, 30*time.Millisecond, result.Avg())
-	assert.Equal(t, 20*time.Millisecond, result.Percentile(50))
-	assert.Equal(t, 3, result.Summary().Latency.Count)
-	assert.Zero(t, Result{}.Avg())
+	t.Run("encodesJSON", func(t *testing.T) {
+		result := Result{Spec: Spec{RatePerSecond: 5, Concurrency: 2}, Offered: 3, Sent: 2, Dropped: 1}
+		encoded, err := json.Marshal(result)
+		require.NoError(t, err)
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal(encoded, &decoded))
+		assert.InDelta(t, 5, decoded["rate_per_second"], 0)
+		assert.InDelta(t, 3, decoded["offered"], 0)
+		assert.Contains(t, decoded, "latency")
+	})
 }

@@ -4,62 +4,50 @@
 package stats
 
 import (
+	"fmt"
 	"slices"
 	"time"
 )
 
-// Percentile returns the nearest-rank-below p-th percentile of samples: the
-// sample at index (n-1)*p/100 of the sorted samples. It returns zero for no
-// samples or p outside [0, 100]. samples is not modified.
-func Percentile(samples []time.Duration, p int) time.Duration {
-	if len(samples) == 0 || p < 0 || p > 100 {
-		return 0
-	}
-	sorted := slices.Sorted(slices.Values(samples))
-	return sorted[(len(sorted)-1)*p/100]
+// Summary describes latency samples in milliseconds. Percentiles are
+// nearest-rank-below: the sample at index (n-1)*p/100 of the sorted samples.
+type Summary struct {
+	Count int     `json:"count"`
+	P50MS float64 `json:"p50_ms"`
+	P90MS float64 `json:"p90_ms"`
+	P95MS float64 `json:"p95_ms"`
+	P99MS float64 `json:"p99_ms"`
+	MaxMS float64 `json:"max_ms"`
 }
 
-// Mean returns the arithmetic mean of samples, or zero for none.
-func Mean(samples []time.Duration) time.Duration {
+// Summarize computes the Summary of samples without modifying them.
+func Summarize(samples []time.Duration) Summary {
 	if len(samples) == 0 {
-		return 0
-	}
-	var total time.Duration
-	for _, sample := range samples {
-		total += sample
-	}
-	return total / time.Duration(len(samples))
-}
-
-// Latency is a JSON-friendly summary of latency samples in milliseconds.
-type Latency struct {
-	Count  int     `json:"count"`
-	MeanMS float64 `json:"mean_ms"`
-	P50MS  float64 `json:"p50_ms"`
-	P90MS  float64 `json:"p90_ms"`
-	P95MS  float64 `json:"p95_ms"`
-	P99MS  float64 `json:"p99_ms"`
-	MaxMS  float64 `json:"max_ms"`
-}
-
-// Summarize computes the Latency summary of samples.
-func Summarize(samples []time.Duration) Latency {
-	if len(samples) == 0 {
-		return Latency{}
+		return Summary{}
 	}
 	sorted := slices.Sorted(slices.Values(samples))
 	at := func(p int) float64 { return ms(sorted[(len(sorted)-1)*p/100]) }
-	return Latency{
-		Count:  len(sorted),
-		MeanMS: ms(Mean(sorted)),
-		P50MS:  at(50),
-		P90MS:  at(90),
-		P95MS:  at(95),
-		P99MS:  at(99),
-		MaxMS:  ms(sorted[len(sorted)-1]),
+	return Summary{
+		Count: len(sorted),
+		P50MS: at(50),
+		P90MS: at(90),
+		P95MS: at(95),
+		P99MS: at(99),
+		MaxMS: at(100),
 	}
 }
 
-func ms(d time.Duration) float64 {
-	return float64(d.Microseconds()) / 1000
+// String renders the summary on one line.
+func (s Summary) String() string {
+	if s.Count == 0 {
+		return "n=0"
+	}
+	return fmt.Sprintf("n=%d p50=%s p90=%s p95=%s p99=%s max=%s",
+		s.Count, d(s.P50MS), d(s.P90MS), d(s.P95MS), d(s.P99MS), d(s.MaxMS))
+}
+
+func ms(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
+
+func d(ms float64) time.Duration {
+	return time.Duration(ms * float64(time.Millisecond)).Round(time.Millisecond)
 }

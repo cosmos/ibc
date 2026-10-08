@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -34,7 +33,7 @@ const (
 	usageHeader = `Usage: loadtest <scenario> [flags]
 
 Scenarios:
-  relayer    open-loop, block-paced IFT transfers in both directions; every packet must relay
+  relayer    paced IFT transfers from a wallet pool in both directions; every packet must relay
   attestor   fixed-rate packet and state attestation requests against one attestor
 
 Run "loadtest <scenario> -h" for the scenario's flags.
@@ -46,9 +45,9 @@ type relayerPreset struct {
 }
 
 var relayerPresets = map[string]relayerPreset{
-	// Short, dense bursts: 3000 packets at 150 per block.
+	// Short, dense bursts: 3000 packets at 150 per block interval.
 	"burst": {packets: 3000, wallets: 200, perBlock: 150},
-	// Sustained, light load: 8000 packets at 20 per block.
+	// Sustained, light load: 8000 packets at 20 per block interval.
 	"longrun": {packets: 8000, wallets: 200, perBlock: 20},
 }
 
@@ -87,7 +86,7 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.DurationVar(&c.timeout, "timeout", 30*time.Minute, "overall run budget, setup and teardown included")
 	fs.BoolVar(&c.jsonOut, "json", false, "print the report as JSON instead of text")
 	fs.BoolVar(&c.keepOnFailure, "keep-on-failure", false,
-		"keep the deployment directory (relayer config, database, log) when the run fails")
+		"leave the environment (containers, relayer, deployment directory) running when the run fails")
 	fs.BoolVar(&c.verbose, "v", false, "debug logging")
 }
 
@@ -96,11 +95,10 @@ func (c *common) sessionOptions() (session.Options, error) {
 	if err != nil {
 		return session.Options{}, err
 	}
-	return session.Options{
-		Provider:      provider,
-		Observability: c.observability,
-		KeepOnFailure: c.keepOnFailure,
-	}, nil
+	if c.timeout <= 0 {
+		return session.Options{}, errors.New("--timeout must be positive")
+	}
+	return session.Options{Provider: provider, Observability: c.observability}, nil
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -132,31 +130,50 @@ func newFlagSet(name, summary string, stderr io.Writer) *flag.FlagSet {
 	return fs
 }
 
+// parse parses args and returns the names of the flags set explicitly, so
+// presets fill only the others. The flag package reports its own errors.
+func parse(fs *flag.FlagSet, args []string) (map[string]bool, error) {
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+	if fs.NArg() > 0 {
+		err := fmt.Errorf("unexpected arguments: %q", fs.Args())
+		_, _ = fmt.Fprintln(fs.Output(), err)
+		return nil, err
+	}
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	return set, nil
+}
+
 func runRelayer(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("relayer", "Sends IFT transfers from a pool of wallets, paced per new head on each source\n"+
-		"Chain, and requires every packet to reach SUCCEEDED in the relayer status API.\n"+
+	fs := newFlagSet("relayer", "Sends IFT transfers from a wallet pool, --per-block per source block interval and\n"+
+		"direction, and requires every packet to reach SUCCEEDED in the relayer status API.\n"+
 		"Explicit flags override the preset.", stderr)
 	var c common
 	c.register(fs)
+	burst := relayerPresets["burst"]
 	preset := fs.String("preset", "burst", "load preset: burst (3000 packets, 200 wallets, 150/block) or "+
 		"longrun (8000 packets, 200 wallets, 20/block)")
-	packets := fs.Int("packets", 0, "total packets, split across directions (default from preset)")
-	wallets := fs.Int("wallets", 0, "wallet pool size; each wallet has at most one transaction in flight "+
-		"per Chain (default from preset)")
-	perBlock := fs.Int("per-block", 0, "transfers dispatched per new head and direction (default from preset)")
+	packets := fs.Int("packets", burst.packets, "total packets, split across directions (default from preset)")
+	wallets := fs.Int("wallets", burst.wallets, "wallet pool size, at least 2; each wallet has at most one "+
+		"transaction in flight per direction (default from preset)")
+	perBlock := fs.Int("per-block", burst.perBlock, "transfers offered per source block interval and direction "+
+		"(default from preset)")
 	directions := fs.String("directions", "both", "a-to-b, b-to-a, or both")
-	if err := fs.Parse(args); err != nil {
-		return usageExit(err)
+	set, err := parse(fs, args)
+	if err != nil {
+		return parseExit(err)
 	}
 	p, ok := relayerPresets[*preset]
 	if !ok {
-		_, _ = fmt.Fprintf(stderr, "unknown preset %q: want burst or longrun\n", *preset)
-		return exitUsage
+		return usageError(stderr, fmt.Errorf("unknown preset %q: want burst or longrun", *preset))
 	}
 	cfg := relayerload.Config{
-		Packets:  orDefault(*packets, p.packets),
-		Wallets:  orDefault(*wallets, p.wallets),
-		PerBlock: orDefault(*perBlock, p.perBlock),
+		Packets:  pick(set["packets"], *packets, p.packets),
+		Wallets:  pick(set["wallets"], *wallets, p.wallets),
+		PerBlock: pick(set["per-block"], *perBlock, p.perBlock),
+		JSON:     c.jsonOut,
 	}
 	switch *directions {
 	case "both":
@@ -164,99 +181,101 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 	case string(relayerload.DirectionAtoB), string(relayerload.DirectionBtoA):
 		cfg.Directions = []relayerload.Direction{relayerload.Direction(*directions)}
 	default:
-		_, _ = fmt.Fprintf(stderr, "unknown directions %q: want a-to-b, b-to-a, or both\n", *directions)
-		return exitUsage
+		return usageError(stderr, fmt.Errorf("unknown directions %q: want a-to-b, b-to-a, or both", *directions))
+	}
+	switch {
+	case cfg.Packets < len(cfg.Directions):
+		err = fmt.Errorf("--packets must be at least the number of directions (%d)", len(cfg.Directions))
+	case cfg.Wallets < 2:
+		err = errors.New("--wallets must be at least 2: receivers are pool wallets")
+	case cfg.PerBlock <= 0:
+		err = errors.New("--per-block must be positive")
+	}
+	if err != nil {
+		return usageError(stderr, err)
 	}
 	opts, err := c.sessionOptions()
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, err)
-		return exitUsage
+		return usageError(stderr, err)
 	}
-	cfg.Session = opts
-
-	return execute(c, stdout, stderr, func(ctx context.Context) (reporter, error) {
-		report, err := relayerload.Run(ctx, cfg)
-		if report == nil {
-			return nil, err
-		}
-		return report, err
+	return execute(c, stderr, relayerload.SessionOptions(opts), func(ctx context.Context, s *session.Session) error {
+		return relayerload.Run(ctx, s, cfg, stdout)
 	})
 }
 
 func runAttestor(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("attestor", "Seeds delivered transfers, then offers packet and state attestation requests\n"+
-		"at a fixed rate to the attestor observing chain-a. Explicit flags override the preset.", stderr)
+	fs := newFlagSet("attestor", "Seeds packets, then offers packet and state attestation requests at a fixed\n"+
+		"rate to the attestor observing chain-a. Explicit flags override the preset.", stderr)
 	var c common
 	c.register(fs)
+	burst := attestorPresets["burst"]
 	preset := fs.String("preset", "burst", "load preset: burst (packets 30s@500rps x32, state 30s@100rps x16)")
 	phases := fs.String("phases", "packets,state", "comma-separated phases to run: packets, state")
-	duration := fs.Duration("duration", 0, "duration of each phase (default from preset)")
-	packetsRPS := fs.Int("packets-rps", 0, "packet phase requests per second (default from preset)")
-	packetsConc := fs.Int("packets-concurrency", 0, "packet phase concurrent callers (default from preset)")
-	stateRPS := fs.Int("state-rps", 0, "state phase requests per second (default from preset)")
-	stateConc := fs.Int("state-concurrency", 0, "state phase concurrent callers (default from preset)")
-	if err := fs.Parse(args); err != nil {
-		return usageExit(err)
+	duration := fs.Duration("duration", burst.packets.Duration, "duration of each phase (default from preset)")
+	packetsRPS := fs.Int("packets-rps", burst.packets.RatePerSecond, "packet phase requests per second "+
+		"(default from preset)")
+	packetsConc := fs.Int("packets-concurrency", burst.packets.Concurrency, "packet phase concurrent callers "+
+		"(default from preset)")
+	stateRPS := fs.Int("state-rps", burst.state.RatePerSecond, "state phase requests per second (default from preset)")
+	stateConc := fs.Int("state-concurrency", burst.state.Concurrency, "state phase concurrent callers "+
+		"(default from preset)")
+	maxErrorRate := fs.Float64("max-error-rate", 0.01, "largest share of sent calls that may fail or time out "+
+		"in a passing phase, 0 to 1")
+	set, err := parse(fs, args)
+	if err != nil {
+		return parseExit(err)
 	}
 	p, ok := attestorPresets[*preset]
 	if !ok {
-		_, _ = fmt.Fprintf(stderr, "unknown preset %q: want burst\n", *preset)
-		return exitUsage
+		return usageError(stderr, fmt.Errorf("unknown preset %q: want burst", *preset))
 	}
 	cfg := attestorload.Config{
 		Packets: simpleload.Spec{
-			Duration:      orDefault(*duration, p.packets.Duration),
-			RatePerSecond: orDefault(*packetsRPS, p.packets.RatePerSecond),
-			Concurrency:   orDefault(*packetsConc, p.packets.Concurrency),
+			Duration:      pick(set["duration"], *duration, p.packets.Duration),
+			RatePerSecond: pick(set["packets-rps"], *packetsRPS, p.packets.RatePerSecond),
+			Concurrency:   pick(set["packets-concurrency"], *packetsConc, p.packets.Concurrency),
 		},
 		State: simpleload.Spec{
-			Duration:      orDefault(*duration, p.state.Duration),
-			RatePerSecond: orDefault(*stateRPS, p.state.RatePerSecond),
-			Concurrency:   orDefault(*stateConc, p.state.Concurrency),
+			Duration:      pick(set["duration"], *duration, p.state.Duration),
+			RatePerSecond: pick(set["state-rps"], *stateRPS, p.state.RatePerSecond),
+			Concurrency:   pick(set["state-concurrency"], *stateConc, p.state.Concurrency),
 		},
+		MaxErrorRate: *maxErrorRate,
+		JSON:         c.jsonOut,
 	}
 	for phase := range strings.SplitSeq(*phases, ",") {
 		phase = strings.TrimSpace(phase)
 		if phase != attestorload.PhasePackets && phase != attestorload.PhaseState {
-			_, _ = fmt.Fprintf(stderr, "unknown phase %q: want packets or state\n", phase)
-			return exitUsage
+			return usageError(stderr, fmt.Errorf("unknown phase %q: want packets or state", phase))
 		}
 		cfg.Phases = append(cfg.Phases, phase)
 	}
+	for _, spec := range []simpleload.Spec{cfg.Packets, cfg.State} {
+		if spec.Duration <= 0 || spec.RatePerSecond <= 0 || spec.Concurrency <= 0 {
+			return usageError(stderr, errors.New("--duration, rates, and concurrencies must be positive"))
+		}
+	}
+	if cfg.MaxErrorRate < 0 || cfg.MaxErrorRate > 1 {
+		return usageError(stderr, errors.New("--max-error-rate must be between 0 and 1"))
+	}
 	opts, err := c.sessionOptions()
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, err)
-		return exitUsage
+		return usageError(stderr, err)
 	}
-	cfg.Session = opts
-
-	return execute(c, stdout, stderr, func(ctx context.Context) (reporter, error) {
-		report, err := attestorload.Run(ctx, cfg)
-		if report == nil {
-			return nil, err
-		}
-		return report, err
+	return execute(c, stderr, attestorload.SessionOptions(opts), func(ctx context.Context, s *session.Session) error {
+		return attestorload.Run(ctx, s, cfg, stdout)
 	})
 }
 
-type reporter interface {
-	WriteText(io.Writer) error
-}
-
-func passed(r reporter) bool {
-	switch report := r.(type) {
-	case *relayerload.Report:
-		return report.Passed
-	case *attestorload.Report:
-		return report.Passed
-	default:
-		return false
-	}
-}
-
 // execute wires logging, the binary override, the run budget, and signal
-// handling around a scenario, then prints its report.
-func execute(c common, stdout, stderr io.Writer, scenario func(context.Context) (reporter, error)) int {
+// handling around a scenario, starts its session, and tears it down unless
+// the run failed and --keep-on-failure asks to keep it.
+func execute(
+	c common,
+	stderr io.Writer,
+	opts session.Options,
+	scenario func(context.Context, *session.Session) error,
+) int {
 	level := slog.LevelInfo
 	if c.verbose {
 		level = slog.LevelDebug
@@ -295,40 +314,45 @@ func execute(c common, stdout, stderr io.Writer, scenario func(context.Context) 
 		stop()
 	}()
 
-	report, err := scenario(ctx)
+	s, err := session.Start(ctx, opts)
+	if err != nil {
+		slog.Error("setup failed", "err", err)
+		return exitFailed
+	}
+	err = scenario(ctx, s)
 	if err != nil {
 		slog.Error("run failed", "err", err)
 	}
-	if report != nil {
-		if c.jsonOut {
-			encoder := json.NewEncoder(stdout)
-			encoder.SetIndent("", "  ")
-			if encodeErr := encoder.Encode(report); encodeErr != nil {
-				slog.Error("encode report", "err", encodeErr)
-				return exitFailed
-			}
-		} else if writeErr := report.WriteText(stdout); writeErr != nil {
-			slog.Error("write report", "err", writeErr)
-			return exitFailed
-		}
+	if err != nil && c.keepOnFailure {
+		slog.Warn("kept the environment for inspection; run `make -C e2e clean` when done", "dir", s.Dir())
+		return exitFailed
 	}
-	if err != nil || report == nil || !passed(report) {
+	if closeErr := s.Close(ctx); closeErr != nil {
+		slog.Error("teardown failed", "err", closeErr)
+		return exitFailed
+	}
+	if err != nil {
 		return exitFailed
 	}
 	return exitOK
 }
 
-func usageExit(err error) int {
+func parseExit(err error) int {
 	if errors.Is(err, flag.ErrHelp) {
 		return exitOK
 	}
 	return exitUsage
 }
 
-func orDefault[T comparable](value, fallback T) T {
-	var zero T
-	if value == zero {
-		return fallback
+func usageError(stderr io.Writer, err error) int {
+	_, _ = fmt.Fprintln(stderr, err)
+	return exitUsage
+}
+
+// pick returns value when its flag was set explicitly, else the preset's.
+func pick[T any](set bool, value, preset T) T {
+	if set {
+		return value
 	}
-	return value
+	return preset
 }

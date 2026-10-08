@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package relayerload is the relayer load scenario: an open-loop, block-paced
-// IFT transfer generator in each direction between two Chains, whose every
-// packet must be relayed to SUCCEEDED by an auto-relaying relayer.
+// Package relayerload is the relayer load scenario: paced IFT transfers from
+// a wallet pool in each direction between two Chains, whose every packet must
+// be relayed to SUCCEEDED by an auto-relaying relayer.
 package relayerload
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/big"
 	"sync"
 	"time"
 
-	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 
+	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/harness/ibccli"
 	"github.com/cosmos/ibc/harness/internal/loadtest/session"
 	"github.com/cosmos/ibc/harness/internal/loadtest/stats"
@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	// Relayer tuning, as in the e2e load tests this replaces.
 	packetBatchSize    = 64
 	packetBatchTimeout = time.Second
 	clearInterval      = time.Second
@@ -37,16 +36,6 @@ const (
 	transferAmount = 10_000
 	// packetTimeout keeps packets valid for the whole run.
 	packetTimeout = time.Hour
-
-	// gasHeadroomPercent pads the one-off gas estimate: every transfer
-	// writes fresh commitment and pending-transfer slots, and receivers with
-	// a zero balance cost more than the estimating pair.
-	gasHeadroomPercent = 50
-	fallbackTipCapWei  = 1_000_000_000
-
-	sendConcurrency = 16
-	// awaitWorkers bounds concurrent status waits per direction.
-	awaitWorkers = 8
 )
 
 // Direction names one traffic direction.
@@ -57,37 +46,6 @@ const (
 	DirectionBtoA Direction = "b-to-a"
 )
 
-// Config shapes one relayer scenario run.
-type Config struct {
-	// Packets is the total across all directions, split evenly.
-	Packets    int
-	Wallets    int
-	PerBlock   int
-	Directions []Direction
-	Session    session.Options
-}
-
-func (c Config) validate() error {
-	switch {
-	case c.Packets <= 0:
-		return errors.New("packets must be positive")
-	case c.Wallets < 2:
-		return errors.New("at least two wallets are required (receivers are pool wallets)")
-	case c.PerBlock <= 0:
-		return errors.New("per-block must be positive")
-	case len(c.Directions) == 0:
-		return errors.New("at least one direction is required")
-	case c.Packets < len(c.Directions):
-		return errors.New("packets must cover every direction")
-	}
-	for _, d := range c.Directions {
-		if d != DirectionAtoB && d != DirectionBtoA {
-			return fmt.Errorf("unknown direction %q", d)
-		}
-	}
-	return nil
-}
-
 func (d Direction) route() traffic.Route {
 	if d == DirectionBtoA {
 		return traffic.BtoA(traffic.ChainB, traffic.ChainA)
@@ -95,34 +53,22 @@ func (d Direction) route() traffic.Route {
 	return traffic.AtoB(traffic.ChainA, traffic.ChainB)
 }
 
-// splitPackets divides total across n directions, the remainder going to
-// the first ones.
-func splitPackets(total, n int) []int {
-	shares := make([]int, n)
-	for i := range shares {
-		shares[i] = total / n
-		if i < total%n {
-			shares[i]++
-		}
-	}
-	return shares
+// Config shapes one relayer scenario run. The CLI validates it.
+type Config struct {
+	// Packets is the total across all directions, split evenly.
+	Packets    int
+	Wallets    int
+	PerBlock   int
+	Directions []Direction
+	JSON       bool
 }
 
-// Run executes the scenario. It returns the report whenever the generator
-// ran, even on failure; err reports setup or teardown problems.
-func Run(ctx context.Context, cfg Config) (report *Report, err error) {
-	if err = cfg.validate(); err != nil {
-		return nil, err
-	}
-	if cfg.PerBlock > cfg.Wallets {
-		slog.WarnContext(ctx, "per-block exceeds wallets; every dispatch will report backpressure",
-			"per_block", cfg.PerBlock, "wallets", cfg.Wallets)
-	}
-	started := time.Now()
-
-	opts := cfg.Session
-	opts.Routes = []traffic.Route{DirectionAtoB.route(), DirectionBtoA.route()}
-	opts.ConfigureRelayer = func(config *ibccli.RelayerConfig) {
+// SessionOptions adds what the scenario needs to base: both routes and a
+// started relayer with load-sized batches.
+func SessionOptions(base session.Options) session.Options {
+	base.Routes = []traffic.Route{DirectionAtoB.route(), DirectionBtoA.route()}
+	base.StartRelayer = true
+	base.ConfigureRelayer = func(config *ibccli.RelayerConfig) {
 		config.ClearInterval = clearInterval
 		config.ClearOnStart = true
 		for i := range config.Chains {
@@ -130,82 +76,76 @@ func Run(ctx context.Context, cfg Config) (report *Report, err error) {
 			config.Chains[i].PacketBatchTimeout = packetBatchTimeout
 		}
 	}
-	s, err := session.Start(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		var failure error
-		if err != nil || report == nil || !report.Passed {
-			failure = errors.New("scenario failed")
+	return base
+}
+
+// Run funds a wallet pool, drives every direction concurrently, writes the
+// report to w, and returns nil only if every packet succeeded.
+func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error {
+	wallets := make([]traffic.Signer, cfg.Wallets)
+	for i := range wallets {
+		signer, err := traffic.NewSigner()
+		if err != nil {
+			return err
 		}
-		err = errors.Join(err, s.Close(ctx, failure))
-	}()
-
-	wallets, err := newWallets(cfg.Wallets)
-	if err != nil {
-		return nil, err
+		wallets[i] = signer
 	}
-	if err = fundWallets(ctx, s, wallets); err != nil {
-		return nil, err
+	if err := fundWallets(ctx, s, wallets); err != nil {
+		return err
 	}
 
-	shares := splitPackets(cfg.Packets, len(cfg.Directions))
-	reports := make([]DirectionReport, len(cfg.Directions))
-	sendSamples := make([][]time.Duration, len(cfg.Directions))
-	relaySamples := make([][]time.Duration, len(cfg.Directions))
+	report := &Report{
+		Scenario: "relayer",
+		Provider: string(s.Provider),
+		Wallets:  cfg.Wallets,
+		PerBlock: cfg.PerBlock,
+		Packets:  cfg.Packets,
+	}
+	errs := make([]error, len(cfg.Directions))
+	started := time.Now()
 	var wg sync.WaitGroup
 	for i, direction := range cfg.Directions {
+		route := direction.route()
+		d := &DirectionReport{
+			Route:       string(direction),
+			Source:      string(route.Source),
+			Destination: string(route.Destination),
+			Target:      cfg.Packets / len(cfg.Directions),
+		}
+		// The remainder goes to the first directions.
+		if i < cfg.Packets%len(cfg.Directions) {
+			d.Target++
+		}
+		report.Directions = append(report.Directions, d)
 		wg.Go(func() {
-			reports[i], sendSamples[i], relaySamples[i] = runDirection(
-				ctx, s, direction, wallets, shares[i], cfg.PerBlock,
-			)
+			if err := runDirection(ctx, s, route, wallets, cfg.PerBlock, d); err != nil {
+				errs[i] = fmt.Errorf("%s: %w", direction, err)
+			}
 		})
 	}
 	wg.Wait()
 
-	report = &Report{
-		Scenario:   "relayer",
-		Provider:   string(opts.Provider),
-		Wallets:    cfg.Wallets,
-		PerBlock:   cfg.PerBlock,
-		Directions: reports,
-		Total:      total(reports),
-		DurationMS: time.Since(started).Milliseconds(),
-	}
-	report.Total.SendToInclusion = stats.Summarize(concat(sendSamples))
-	report.Total.InclusionToSucceeded = stats.Summarize(concat(relaySamples))
-	report.Passed = true
-	for _, d := range reports {
-		if d.Failed() {
-			report.Passed = false
+	var succeeded int
+	var finished time.Time
+	for _, d := range report.Directions {
+		succeeded += d.Succeeded
+		if d.relayDone.After(finished) {
+			finished = d.relayDone
 		}
 	}
-	return report, nil
-}
-
-func concat(samples [][]time.Duration) []time.Duration {
-	var out []time.Duration
-	for _, s := range samples {
-		out = append(out, s...)
+	if !finished.IsZero() {
+		report.WallTimeMS = finished.Sub(started).Milliseconds()
+		report.Throughput = float64(succeeded) / finished.Sub(started).Seconds()
 	}
-	return out
-}
-
-func newWallets(n int) ([]traffic.Signer, error) {
-	wallets := make([]traffic.Signer, n)
-	for i := range wallets {
-		signer, err := traffic.NewSigner()
-		if err != nil {
-			return nil, err
-		}
-		wallets[i] = signer
+	err := errors.Join(errs...)
+	report.Passed = err == nil
+	if err != nil {
+		report.Error = err.Error()
 	}
-	return wallets, nil
+	return errors.Join(err, report.write(w, cfg.JSON))
 }
 
-// fundWallets gives every wallet gas and IFT on both Chains, one Chain per
-// direction's source, concurrently.
+// fundWallets gives every wallet gas and IFT on both Chains, concurrently.
 func fundWallets(ctx context.Context, s *session.Session, wallets []traffic.Signer) error {
 	addresses := make([]common.Address, len(wallets))
 	for i, wallet := range wallets {
@@ -235,174 +175,125 @@ func fundWallets(ctx context.Context, s *session.Session, wallets []traffic.Sign
 	return errors.Join(errs...)
 }
 
-// runDirection drives one direction end to end and never returns an error:
-// failures land in the report so the other direction still reports.
+// runDirection sends d.Target packets on route while sweeping the relayer
+// for their status, then measures the relay latency of those that succeeded.
 func runDirection(
 	ctx context.Context,
 	s *session.Session,
-	direction Direction,
-	signers []traffic.Signer,
-	packets, perBlock int,
-) (DirectionReport, []time.Duration, []time.Duration) {
-	route := direction.route()
-	label := string(direction)
-	fail := func(err error) (DirectionReport, []time.Duration, []time.Duration) {
-		slog.ErrorContext(ctx, "direction failed", "direction", label, "err", err)
-		return newDirectionReport(label, string(route.Source), string(route.Destination), packets,
-			generatorStats{}, awaitStats{}, 0, 0, err), nil, nil
-	}
-
+	route traffic.Route,
+	wallets []traffic.Signer,
+	perBlock int,
+	d *DirectionReport,
+) error {
 	source, err := s.Env.Chain(route.Source)
 	if err != nil {
-		return fail(err)
+		return err
 	}
 	destination, err := s.Env.Chain(route.Destination)
 	if err != nil {
-		return fail(err)
+		return err
 	}
-	app, err := traffic.NewIFT(s.Env, s.Deployment, s.Deployer, route)
+	sourceEVM, err := source.EVM()
 	if err != nil {
-		return fail(err)
+		return err
 	}
-	chain, err := dialChain(ctx, source)
+	destinationEVM, err := destination.EVM()
 	if err != nil {
-		return fail(err)
+		return err
 	}
-	defer chain.Close()
-
-	addresses := make([]common.Address, len(signers))
-	for i, signer := range signers {
-		addresses[i] = signer.Address()
-	}
-	prepare, err := newIFTPrepare(ctx, chain, app, signers, addresses)
-	if err != nil {
-		return fail(err)
-	}
-
-	routePolicy, ok := s.Relayer.WaitPolicy(string(route.ID))
+	clients, ok := s.Deployment.RouteClients(route.ID)
 	if !ok {
-		return fail(fmt.Errorf("relayer has no wait policy for route %q", route.ID))
+		return fmt.Errorf("deployment has no route %q", route.ID)
 	}
-	policy := packetAwaitPolicy(routePolicy, source.Timing(), destination.Timing(), packets, packetBatchSize)
-	timing := source.Timing()
-	gen, err := newGenerator(label, generatorConfig{
-		Packets:             packets,
-		PerBlock:            perBlock,
-		MinDispatchInterval: timing.BlockInterval,
-		StaleAfter:          timing.CompletionBudget,
-		DrainTimeout:        timing.CompletionBudget,
-		SendConcurrency:     sendConcurrency,
-	}, chain, addresses, prepare)
-	if err != nil {
-		return fail(err)
+	policy, ok := s.Relayer.WaitPolicy(string(route.ID))
+	if !ok {
+		return fmt.Errorf("relayer has no wait policy for route %q", route.ID)
 	}
 
-	heads := make(chan *types.Header, 1024)
-	subscription, err := chain.SubscribeNewHead(ctx, heads)
-	if err != nil {
-		return fail(fmt.Errorf("subscribe to new heads: %w", err))
-	}
-	defer subscription.Unsubscribe()
-
-	slog.InfoContext(ctx, "generating load", "direction", label, "packets", packets, "per_block", perBlock,
-		"wallets", len(signers), "dispatch_interval", timing.BlockInterval,
-		"await_poll", policy.StatusPoll, "await_budget", policy.CompletionBudget)
-
-	includedCh := make(chan included, packets)
-	packetsCh := make(chan trackedPacket, packets)
-	var located, missing int
-	var convert sync.WaitGroup
-	convert.Go(func() {
-		defer close(packetsCh)
-		for tx := range includedCh {
-			found, err := app.PacketTxsFromReceipt(tx.Receipt)
-			if err != nil || len(found) != 1 {
-				missing++
-				slog.WarnContext(ctx, "transfer did not emit exactly one packet", "direction", label,
-					"tx", tx.Receipt.TxHash, "packets", len(found), "err", err)
-			}
-			for _, packet := range found {
-				located++
-				packetsCh <- trackedPacket{packet: packet, includedAt: tx.IncludedAt}
-			}
+	// Each wallet sends as its own IFT sender; wallet i pays wallet i+1 on
+	// the destination, so every receiver is a funded pool wallet.
+	apps := make([]*traffic.IFT, len(wallets))
+	for i, wallet := range wallets {
+		if apps[i], err = traffic.NewIFT(s.Env, s.Deployment, wallet, route); err != nil {
+			return err
 		}
-	})
-
-	var await awaitStats
-	var awaiting sync.WaitGroup
-	awaiting.Go(func() {
-		await = awaitPackets(ctx, label, s.Relayer, policy, awaitWorkers, packetsCh)
-	})
-
-	genStats, genErr := gen.run(ctx, heads, subscription.Err(), includedCh)
-	close(includedCh)
-	slog.InfoContext(ctx, "send phase done", "direction", label, "sent", genStats.Sent,
-		"included", genStats.Included, "backpressure", genStats.Backpressure,
-		"elapsed", genStats.LastSend.Sub(genStats.FirstSend).Round(time.Millisecond).String())
-	convert.Wait()
-	awaiting.Wait()
-
-	report := newDirectionReport(label, string(route.Source), string(route.Destination), packets,
-		genStats, await, located, missing, genErr)
-	return report, genStats.SendToInclusion, await.InclusionToSucceeded
-}
-
-// newIFTPrepare estimates gas once and returns the per-dispatch builder of
-// signed iftTransfer transactions. Wallet i sends to wallet i+1's address on
-// the destination, so receivers are funded senders for the reverse direction.
-func newIFTPrepare(
-	ctx context.Context,
-	chain *ethChain,
-	app *traffic.IFT,
-	signers []traffic.Signer,
-	addresses []common.Address,
-) (prepareFunc, error) {
+	}
+	timeout, err := apps[0].TransferTimeout(ctx, packetTimeout)
+	if err != nil {
+		return err
+	}
 	amount := big.NewInt(transferAmount)
-	to := app.SourceContract()
-	receiver := func(wallet int) common.Address { return addresses[(wallet+1)%len(addresses)] }
-
-	timeout, err := app.TransferTimeout(ctx, packetTimeout)
-	if err != nil {
-		return nil, err
-	}
-	data, err := app.TransferCalldata(receiver(0), amount, timeout)
-	if err != nil {
-		return nil, err
-	}
-	estimate, err := chain.estimateGas(ctx, ethereum.CallMsg{From: addresses[0], To: &to, Data: data})
-	if err != nil {
-		return nil, fmt.Errorf("estimate IFT transfer gas: %w", err)
-	}
-	gas := estimate + estimate*gasHeadroomPercent/100
-	tip, err := chain.suggestTipCap(ctx)
-	if err != nil {
-		return nil, err
-	}
-	slog.InfoContext(ctx, "transfer gas", "chain", chain.id, "estimate", estimate, "limit", gas, "tip", tip)
-
-	return func(ctx context.Context, head *types.Header) (txBuilder, error) {
-		timeout, err := app.TransferTimeout(ctx, packetTimeout)
-		if err != nil {
-			return nil, err
+	send := func(ctx context.Context, wallet int) (sentPacket, error) {
+		receiver := wallets[(wallet+1)%len(wallets)].Address()
+		result, transferErr := apps[wallet].Transfer(ctx, receiver, amount, timeout)
+		if transferErr != nil {
+			return sentPacket{}, transferErr
 		}
-		feeCap := new(big.Int).Set(tip)
-		if head.BaseFee != nil && head.BaseFee.Sign() > 0 {
-			feeCap.Add(feeCap, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
-		}
-		return func(wallet int, nonce uint64) (*types.Transaction, error) {
-			data, err := app.TransferCalldata(receiver(wallet), amount, timeout)
-			if err != nil {
-				return nil, err
-			}
-			return signers[wallet].SignTx(chain.evmID, types.NewTx(&types.DynamicFeeTx{
-				ChainID:   chain.evmID,
-				Nonce:     nonce,
-				To:        &to,
-				Gas:       gas,
-				GasFeeCap: feeCap,
-				GasTipCap: tip,
-				Data:      data,
-			}))
+		packet := result.PacketTx()
+		return sentPacket{
+			key:   packetKey{clientID: packet.SourceClientID, sequence: packet.Sequence},
+			block: packet.SourceBlockNumber,
 		}, nil
-	}, nil
+	}
+	list := func(ctx context.Context) ([]*relayerv2.PacketStatus, error) {
+		return s.Relayer.ClientPackets(ctx, string(route.Source), clients.SourceClientID)
+	}
+
+	interval := source.Timing().BlockInterval
+	poll := max(policy.StatusPoll, interval, destination.Timing().BlockInterval)
+	slog.InfoContext(ctx, "generating load", "direction", d.Route, "packets", d.Target, "per_block", perBlock,
+		"wallets", len(wallets), "interval", interval, "poll", poll, "budget_per_batch", policy.CompletionBudget)
+
+	sent := make(chan sentPacket, d.Target)
+	var packets []*trackedPacket
+	var sweepErr error
+	var sweeping sync.WaitGroup
+	sweeping.Go(func() {
+		packets, sweepErr = sweep(ctx, d.Route, poll, policy.CompletionBudget, packetBatchSize, list, sent)
+	})
+	ticker := time.NewTicker(interval)
+	generate(ctx, ticker.C, perBlock, len(wallets), send, sent, d)
+	ticker.Stop()
+	slog.InfoContext(ctx, "send phase done", "direction", d.Route, "sent", d.Sent,
+		"send_failures", d.SendFailures, "backpressure", d.Backpressure)
+	sweeping.Wait()
+	d.relayDone = time.Now()
+	if !d.lastSend.IsZero() {
+		d.RelayDrainMS = d.relayDone.Sub(d.lastSend).Milliseconds()
+	}
+
+	var problems []error
+	if d.Sent != d.Target {
+		problems = append(problems, fmt.Errorf("sent %d of %d packets (%d send failures)",
+			d.Sent, d.Target, d.SendFailures))
+	}
+	if sweepErr != nil {
+		problems = append(problems, sweepErr)
+	}
+	for _, p := range packets {
+		switch p.state() {
+		case relayerv2.PacketState_PACKET_STATE_SUCCEEDED:
+			d.Succeeded++
+		case relayerv2.PacketState_PACKET_STATE_TIMED_OUT:
+			d.TimedOut++
+		case relayerv2.PacketState_PACKET_STATE_REJECTED:
+			d.Rejected++
+		case relayerv2.PacketState_PACKET_STATE_RELAY_FAILED:
+			d.RelayFailed++
+		default:
+			d.Unresolved++
+		}
+	}
+	if failed := d.TimedOut + d.Rejected + d.RelayFailed; failed > 0 {
+		problems = append(problems, fmt.Errorf("%d packets did not succeed: timed_out=%d rejected=%d relay_failed=%d",
+			failed, d.TimedOut, d.Rejected, d.RelayFailed))
+	}
+
+	sendToRecv, recvToAck, sendToAck, err := relayLatencies(ctx, sourceEVM, destinationEVM, packets)
+	if err != nil {
+		problems = append(problems, fmt.Errorf("relay latency: %w", err))
+	}
+	d.SendToRecv, d.RecvToAck, d.SendToAck = stats.Summarize(sendToRecv), stats.Summarize(recvToAck),
+		stats.Summarize(sendToAck)
+	return errors.Join(problems...)
 }

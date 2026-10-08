@@ -2,7 +2,7 @@
 
 // Package session starts and tears down the environment a load scenario runs
 // against: two managed EVM Chains joined by an attested mesh, the traffic
-// applications, and an auto-relaying relayer.
+// applications, and optionally an auto-relaying relayer.
 package session
 
 import (
@@ -28,30 +28,31 @@ type Options struct {
 	// Observability exports OTel telemetry from every managed IBC CLI process
 	// (attestors and the relayer) to the local LGTM stack.
 	Observability bool
-	// KeepOnFailure keeps the deployment directory (relayer config, database,
-	// and log) when the scenario fails, for post-mortems.
-	KeepOnFailure bool
-	// Routes the relayer serves. Empty means none.
+	// Routes the applications are deployed for and the relayer serves.
 	Routes []traffic.Route
 	// ConfigureRelayer adjusts the generated relayer configuration.
 	ConfigureRelayer func(*ibccli.RelayerConfig)
+	// StartRelayer starts the relayer after deployment. Without it the
+	// relayer configuration is written but no relayer runs.
+	StartRelayer bool
 }
 
 // Session holds every resource a scenario uses. Close releases them.
 type Session struct {
+	Provider   environment.EVMProvider
 	Env        *environment.Environment
 	Deployment *traffic.Deployment
-	Relayer    *ibccli.Relayer
+	// Relayer is nil unless Options.StartRelayer.
+	Relayer *ibccli.Relayer
 	// Deployer deployed the applications and holds the minted token supply.
 	Deployer traffic.Signer
 
-	dir           string
-	keepOnFailure bool
+	dir string
 }
 
 // Start realizes the environment, deploys the applications and relayer
-// configuration for opts.Routes, and starts the relayer. On error every
-// resource acquired so far is released.
+// configuration for opts.Routes, and starts the relayer if asked. On error
+// every resource acquired so far is released.
 func Start(ctx context.Context, opts Options) (_ *Session, err error) {
 	chains, err := environment.ManagedEVMChains(opts.Provider, traffic.ChainA, traffic.ChainB)
 	if err != nil {
@@ -64,10 +65,10 @@ func Start(ctx context.Context, opts Options) (_ *Session, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("create deployment directory: %w", err)
 	}
-	s := &Session{dir: dir, keepOnFailure: opts.KeepOnFailure}
+	s := &Session{Provider: opts.Provider, dir: dir}
 	defer func() {
 		if err != nil {
-			err = errors.Join(err, s.Close(ctx, err))
+			err = errors.Join(err, s.Close(ctx))
 		}
 	}()
 
@@ -98,6 +99,9 @@ func Start(ctx context.Context, opts Options) (_ *Session, err error) {
 	s.Deployment = deployment
 	slog.InfoContext(ctx, "applications deployed", "dir", dir, "elapsed", since(started))
 
+	if !opts.StartRelayer {
+		return s, nil
+	}
 	s.Relayer, err = traffic.StartRelayer(ctx, driver, s.Env)
 	if err != nil {
 		return nil, fmt.Errorf("start relayer: %w", err)
@@ -106,11 +110,13 @@ func Start(ctx context.Context, opts Options) (_ *Session, err error) {
 	return s, nil
 }
 
+// Dir is the deployment directory: relayer config, database, and log.
+func (s *Session) Dir() string { return s.dir }
+
 // Close stops the relayer, closes the Environment, and removes the
-// deployment directory — unless failure is non-nil and the session keeps
-// its directory on failure. It runs on a context detached from ctx's
+// deployment directory. It runs on a context detached from ctx's
 // cancellation so an interrupted run still tears down.
-func (s *Session) Close(ctx context.Context, failure error) error {
+func (s *Session) Close(ctx context.Context) error {
 	ctx = context.WithoutCancel(ctx)
 	var errs []error
 	if s.Relayer != nil {
@@ -130,9 +136,7 @@ func (s *Session) Close(ctx context.Context, failure error) error {
 		s.Env = nil
 	}
 	if s.dir != "" {
-		if failure != nil && s.keepOnFailure {
-			slog.WarnContext(ctx, "kept deployment directory for inspection", "dir", s.dir)
-		} else if err := os.RemoveAll(s.dir); err != nil {
+		if err := os.RemoveAll(s.dir); err != nil {
 			errs = append(errs, fmt.Errorf("remove deployment directory: %w", err))
 		}
 		s.dir = ""
