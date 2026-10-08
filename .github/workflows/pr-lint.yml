@@ -5,6 +5,7 @@ name: PR Lint
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  merge_group:
 
 permissions: read-all
 
@@ -16,6 +17,8 @@ jobs:
       pull-requests: read
     timeout-minutes: 5
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+      # The title was validated on the PR; report success so the merge queue sees this required check.
+      - if: github.event_name != 'merge_group'
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

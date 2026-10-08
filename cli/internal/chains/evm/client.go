@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -27,7 +28,6 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	"github.com/cosmos/ibc/cli/internal/chains/evm/contracts/attestation"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -357,7 +357,7 @@ func (c *Client) commitmentExists(ctx context.Context, clientID string, sequence
 // namespace, whose base is
 // keccak256(uint256(keccak256("ibc.storage.IBCStore")) - 1) & ~0xff.
 var prevSequenceSendsSlot = common.BigToHash(new(big.Int).Add(
-	common.HexToHash("0x1260944489272988d9df285149b5aa1b0f48f2136d6f416159f840a3e0747600").Big(),
+	common.HexToHash(ics26router.IbcStoreStorageSlot).Big(),
 	big.NewInt(1),
 ))
 
