@@ -2,8 +2,8 @@
 
 # Harness Development Guide for AI Agents
 
-This module (`github.com/cosmos/ibc/harness`) is the black-box harness, used by the e2e tests and,
-later, load tests. Its IBC CLI adapter observes the `ibc` binary only through
+This module (`github.com/cosmos/ibc/harness`) is the black-box harness, used by the e2e tests and
+the load-test binary (`../loadtest`). Its IBC CLI adapter observes the `ibc` binary only through
 its public wire surface — CLI commands with JSON output, config YAML, and the status API — and
 corroborates outcomes by reading chain state with its own clients.
 
@@ -16,7 +16,7 @@ corroborates outcomes by reading chain state with its own clients.
   `context.Context`, failures are returned as errors, files go under a caller-supplied directory, and
   started processes are returned to the caller, who stops them before removing that directory and
   closing the Environment. E2e consumes it through thin
-  `testing.TB` wrappers in `e2e/internal/e2etest`; the upcoming load-test binary consumes it directly.
+  `testing.TB` wrappers in `e2e/internal/e2etest`; the load-test binary consumes it directly.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and
   stability observation lives in `traffic`, with the bindings that interpret those effects.

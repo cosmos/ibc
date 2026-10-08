@@ -49,6 +49,7 @@ jobs:
             cli/go.sum
             e2e/go.sum
             harness/go.sum
+            loadtest/go.sum
             gen/go/solidity-abi/go.sum
 
       - name: Go vulnerability check

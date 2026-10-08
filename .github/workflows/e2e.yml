@@ -31,6 +31,7 @@ jobs:
             lint:
               - "e2e/**"
               - "harness/**"
+              - "loadtest/**"
               - "gen/go/solidity-abi/**"
               - ".golangci.yml"
               - ".github/workflows/e2e.yml"
@@ -38,6 +39,7 @@ jobs:
               - "cli/**"
               - "e2e/**"
               - "harness/**"
+              - "loadtest/**"
               - "gen/go/solidity-abi/**"
               - "proto/**"
               - "scripts/**"
@@ -56,6 +58,7 @@ jobs:
           cache-dependency-path: |
             e2e/go.sum
             harness/go.sum
+            loadtest/go.sum
             gen/go/solidity-abi/go.sum
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
@@ -65,6 +68,10 @@ jobs:
         with:
           version: v2.13.2
           working-directory: harness
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: loadtest
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13.2
@@ -83,11 +90,15 @@ jobs:
             cli/go.sum
             e2e/go.sum
             harness/go.sum
+            loadtest/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info
       - run: make -C e2e test-harness
         env:
           IBC_BIN: ${{ github.workspace }}/cli/bin/ibc
+      # Builds the load-test binary and runs its unit tests; the load
+      # scenarios themselves are run by hand, never in CI.
+      - run: make -C loadtest build test
 
   test-apps:
     needs: changes

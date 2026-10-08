@@ -11,7 +11,7 @@ GEN_SOLIDITY_ABI_DIR := gen/go/solidity-abi
 
 # Every Go module in the repository. There is deliberately no module at the root, so
 # anything that scans "the Go code" has to iterate these.
-GO_MODULE_DIRS := cli e2e harness $(GEN_SOLIDITY_ABI_DIR)
+GO_MODULE_DIRS := cli e2e harness loadtest $(GEN_SOLIDITY_ABI_DIR)
 
 lint-license: ## Check SPDX license headers
 	go run github.com/apache/skywalking-eyes/cmd/license-eye@v$(LICENSE_EYE_VERSION) \
