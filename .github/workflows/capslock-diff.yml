@@ -65,15 +65,27 @@ jobs:
           modules=""
           for m in $CAPSLOCK_MODULES; do
             # Captured first, so that a failing go list fails the step rather than passing it.
-            # A module the base commit lacks has an empty base build list: all of its
-            # dependencies count as added.
+            new="$(list "$m")"
             old=""
             if [ -e "$RUNNER_TEMP/base/$m/go.mod" ]; then
               old="$(list "$RUNNER_TEMP/base/$m")"
             else
-              echo "$m is not in the base commit; every dependency counts as added."
+              # A module the base commit lacks is compared with the union of the base build
+              # lists of the modules it has: only a dependency, or a version of one, that no
+              # module of the repository used counts as changed. One line per path, the head
+              # version when any base module has it. The base modules' own paths and their
+              # dependencies this module lacks show as removed.
+              echo "$m is not in the base commit; comparing it with the union of the base modules."
+              union=""
+              for b in $CAPSLOCK_MODULES; do
+                if [ -e "$RUNNER_TEMP/base/$b/go.mod" ]; then
+                  union="$union$(list "$RUNNER_TEMP/base/$b")"$'\n'
+                fi
+              done
+              old="$(awk -F '\t' 'NR == FNR { head[$1] = $2; next }
+                $0 != "" && (!($1 in pick) || $2 == head[$1]) { pick[$1] = $0 }
+                END { for (p in pick) print pick[p] }' <(lines "$new") <(printf '%s' "$union") | sort)"
             fi
-            new="$(list "$m")"
             vendor=0
             if [ -e "$m/vendor" ] || [ -e "$RUNNER_TEMP/base/$m/vendor" ]; then
               diff -rq "$RUNNER_TEMP/base/$m/vendor" "$m/vendor" >/dev/null 2>&1 || vendor=1

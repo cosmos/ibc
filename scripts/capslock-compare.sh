@@ -5,7 +5,9 @@
 # dependency's own functions, old version against new, for the packages the pull request
 # imports, and writes a markdown report of the capabilities they newly use. A package the old
 # version lacks, and every package of an added module, is new code, compared against nothing;
-# a major-version move is compared with the path it moved from.
+# a major-version move is compared with the path it moved from. A module the base commit lacks
+# is compared with the union of the modules it has: its changed dependencies are those whose
+# version no module of the repository used, and their old packages are looked up in each.
 #
 # A finding gates when its capability is high-signal. Not gated:
 #   - a move: a function whose path changed only in version elements (/v2, /v1.43.0, .v3),
@@ -20,9 +22,9 @@
 #
 # Run from the repository root after the "Find changed dependencies" step, which writes
 # capslock-out/<module>-modules.tsv ("path<TAB>status<TAB>base<TAB>head") and checks the base
-# commit out at $RUNNER_TEMP/base. A module the base commit lacks has only added dependencies,
-# compared against nothing. Environment: MODULES, BASE and HEAD_SHA (for the comment header),
-# RUN_URL, RUNNER_TEMP, GITHUB_STEP_SUMMARY and GITHUB_OUTPUT, which gets high=<count>.
+# commit out at $RUNNER_TEMP/base. Environment: MODULES, CAPSLOCK_MODULES (every module, for
+# the union baseline), BASE and HEAD_SHA (for the comment header), RUN_URL, RUNNER_TEMP,
+# GITHUB_STEP_SUMMARY and GITHUB_OUTPUT, which gets high=<count>.
 
 set -euo pipefail
 
@@ -255,15 +257,29 @@ for m in $MODULES; do
 
   : > "$out-dependency.txt"
   if [ -s "$tmp/new.txt" ]; then
-    # Of the old packages, those the base commit has.
+    # The baseline: the old packages the module has in the base commit, or, for a module the
+    # base commit lacks, those any module in $CAPSLOCK_MODULES has there, their capabilities
+    # merged.
+    bases=""
+    if [ -e "$RUNNER_TEMP/base/$m/go.mod" ]; then
+      bases="$m"
+    else
+      for b in $CAPSLOCK_MODULES; do
+        if [ -e "$RUNNER_TEMP/base/$b/go.mod" ]; then bases="$bases $b"; fi
+      done
+    fi
     echo '{}' > "$tmp/old.json"
-    old=""
-    if [ -s "$tmp/old.txt" ] && [ -e "$RUNNER_TEMP/base/$m/go.mod" ]; then
-      old="$(cd "$RUNNER_TEMP/base/$m" && xargs go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' < "$tmp/old.txt" | paste -sd, -)"
-    fi
-    if [ -n "$old" ]; then
-      (cd "$RUNNER_TEMP/base/$m" && capslock -force_local_module -packages="$old" -granularity=function -output=json) > "$tmp/old.json"
-    fi
+    for b in $bases; do
+      old=""
+      if [ -s "$tmp/old.txt" ]; then
+        old="$(cd "$RUNNER_TEMP/base/$b" && xargs go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' < "$tmp/old.txt" | paste -sd, -)"
+      fi
+      if [ -n "$old" ]; then
+        (cd "$RUNNER_TEMP/base/$b" && capslock -force_local_module -packages="$old" -granularity=function -output=json) > "$tmp/old-$b.json"
+        jq -s '{capabilityInfo: (map(.capabilityInfo // []) | add)}' "$tmp/old.json" "$tmp/old-$b.json" > "$tmp/old-merged.json"
+        mv "$tmp/old-merged.json" "$tmp/old.json"
+      fi
+    done
     # Exit status 1 means differences were found, 2 or above that capslock failed.
     status=0
     (cd "$m" && capslock -force_local_module -packages="$(paste -sd, - < "$tmp/new.txt")" -granularity=function \
