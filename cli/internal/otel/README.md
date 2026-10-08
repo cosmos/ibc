@@ -20,13 +20,7 @@ tolerated, so they do not prevent IBC from running.
 ## Available Metrics
 
 Default OpenTelemetry Go runtime metrics and ConnectRPC RPC metrics from
-  [otelconnect](https://github.com/connectrpc/otelconnect-go) are also exposed when observability is enabled.
-
-[OTEL host instrumentation](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/host)
-also exports `process.cpu.time` (user/system CPU seconds for this process) and
-host-wide CPU, memory, and network metrics in both metric modes. Use the rate of
-`process.cpu.time` for per-process CPU usage; host-wide metrics describe the same
-machine across processes and should not be summed across service runtimes.
+ [otelconnect](https://github.com/connectrpc/otelconnect-go) are also exposed when observability is enabled.
 
 ### Signer metrics
 

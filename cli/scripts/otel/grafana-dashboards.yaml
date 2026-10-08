@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Loads every dashboard JSON in ./dashboards on startup.
+apiVersion: 1
+providers:
+  - name: IBC
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /otel-lgtm/ibc-dashboards

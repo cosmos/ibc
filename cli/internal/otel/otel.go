@@ -17,7 +17,6 @@ import (
 	"connectrpc.com/otelconnect"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/contrib/instrumentation/host"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/contrib/otelconf"
 	"go.opentelemetry.io/otel"
@@ -74,10 +73,6 @@ func New(_ context.Context, cfg config.Observability, logger *slog.Logger) (prov
 	if err := runtime.Start(runtime.WithMeterProvider(meterProvider)); err != nil {
 		_ = meterStop()
 		return nil, fmt.Errorf("failed to start runtime metrics: %w", err)
-	}
-	if err := host.Start(host.WithMeterProvider(meterProvider)); err != nil {
-		_ = meterStop()
-		return nil, fmt.Errorf("failed to start host metrics: %w", err)
 	}
 
 	p := &Provider{
