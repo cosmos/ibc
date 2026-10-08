@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/cosmos/ibc/harness/environment"
 	"github.com/cosmos/ibc/harness/ibccli"
 	"github.com/cosmos/ibc/harness/internal/loadtest/session"
 	"github.com/cosmos/ibc/harness/internal/loadtest/stats"
@@ -32,8 +31,8 @@ const (
 	clearInterval      = time.Second
 
 	// walletFundingCoins is the gas balance and IFT amount each wallet gets
-	// on both Chains.
-	walletFundingCoins = 10
+	// on both Chains: ample for thousands of transfers per wallet.
+	walletFundingCoins = 1
 	// transferAmount is the IFT base units each transfer moves.
 	transferAmount = 10_000
 	// packetTimeout keeps packets valid for the whole run.
@@ -205,76 +204,35 @@ func newWallets(n int) ([]traffic.Signer, error) {
 	return wallets, nil
 }
 
-// fundWallets gives every wallet gas and IFT on both Chains, concurrently
-// per Chain and asset.
+// fundWallets gives every wallet gas and IFT on both Chains, one Chain per
+// direction's source, concurrently.
 func fundWallets(ctx context.Context, s *session.Session, wallets []traffic.Signer) error {
-	amount := traffic.Coins(walletFundingCoins)
-	jobs := []struct {
-		name string
-		run  func() error
-	}{
-		{"gas on " + string(traffic.ChainA), func() error { return fundGas(ctx, s, traffic.ChainA, wallets, amount) }},
-		{"gas on " + string(traffic.ChainB), func() error { return fundGas(ctx, s, traffic.ChainB, wallets, amount) }},
-		{"IFT on " + string(traffic.ChainA), func() error { return fundIFT(ctx, s, DirectionAtoB, wallets, amount) }},
-		{"IFT on " + string(traffic.ChainB), func() error { return fundIFT(ctx, s, DirectionBtoA, wallets, amount) }},
+	addresses := make([]common.Address, len(wallets))
+	for i, wallet := range wallets {
+		addresses[i] = wallet.Address()
 	}
-	errs := make([]error, len(jobs))
+	amount := traffic.Coins(walletFundingCoins)
+	directions := []Direction{DirectionAtoB, DirectionBtoA}
+	errs := make([]error, len(directions))
 	var wg sync.WaitGroup
-	for i, job := range jobs {
+	for i, direction := range directions {
 		wg.Go(func() {
 			started := time.Now()
-			if err := job.run(); err != nil {
-				errs[i] = fmt.Errorf("fund %s: %w", job.name, err)
+			route := direction.route()
+			app, err := traffic.NewIFT(s.Env, s.Deployment, s.Deployer, route)
+			if err == nil {
+				err = app.FundWallets(ctx, addresses, amount, amount)
+			}
+			if err != nil {
+				errs[i] = fmt.Errorf("fund wallets on %s: %w", route.Source, err)
 				return
 			}
-			slog.InfoContext(ctx, "funded wallets", "what", job.name, "wallets", len(wallets),
+			slog.InfoContext(ctx, "funded wallets", "chain", route.Source, "wallets", len(wallets),
 				"elapsed", time.Since(started).Round(time.Millisecond).String())
 		})
 	}
 	wg.Wait()
 	return errors.Join(errs...)
-}
-
-func fundGas(
-	ctx context.Context,
-	s *session.Session,
-	id environment.ChainID,
-	wallets []traffic.Signer,
-	amount *big.Int,
-) error {
-	chain, err := s.Env.Chain(id)
-	if err != nil {
-		return err
-	}
-	funding, err := chain.Funding()
-	if err != nil {
-		return err
-	}
-	for _, wallet := range wallets {
-		if err := funding.EnsureEOABalance(ctx, wallet.Address(), amount); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func fundIFT(
-	ctx context.Context,
-	s *session.Session,
-	direction Direction,
-	wallets []traffic.Signer,
-	amount *big.Int,
-) error {
-	app, err := traffic.NewIFT(s.Env, s.Deployment, s.Deployer, direction.route())
-	if err != nil {
-		return err
-	}
-	requests := make([]traffic.ERCTransferRequest, len(wallets))
-	for i, wallet := range wallets {
-		requests[i] = traffic.ERCTransferRequest{Address: wallet.Address(), Amount: amount}
-	}
-	_, err = app.TransferBatch(ctx, requests)
-	return err
 }
 
 // runDirection drives one direction end to end and never returns an error:

@@ -27,10 +27,14 @@ contract IFTBatchTransferShim {
         }
     }
 
-    /// @notice Moves ERC-20 balances from this shim to each local account.
-    function batchTransfer(address erc20, Recipient[] calldata recipients) external {
+    /// @notice Funds each local account with weiEach native coin from msg.value
+    /// and its ERC-20 amount from this shim's balance. LOCALNETS ONLY.
+    function fund(address erc20, Recipient[] calldata recipients, uint256 weiEach) external payable {
+        require(msg.value == weiEach * recipients.length, "msg.value must be weiEach per recipient");
         for (uint256 i = 0; i < recipients.length; i++) {
             require(IERC20(erc20).transfer(recipients[i].account, recipients[i].amount), "erc20 transfer failed");
+            (bool sent,) = payable(recipients[i].account).call{ value: weiEach }("");
+            require(sent, "native transfer failed");
         }
     }
 }

@@ -17,41 +17,52 @@ func TestCoins(t *testing.T) {
 	require.Zero(t, Coins(0).Sign())
 }
 
-func TestTransferBatchValidatesBeforeSending(t *testing.T) {
-	recipient := common.HexToAddress("0x0000000000000000000000000000000000000001")
-	for _, tc := range []struct {
-		name     string
-		requests []ERCTransferRequest
-		wantErr  string
+func TestFundWalletsValidatesBeforeSending(t *testing.T) {
+	wallet := common.HexToAddress("0x1")
+	tests := []struct {
+		name      string
+		wallets   []common.Address
+		tokenEach *big.Int
+		weiEach   *big.Int
+		want      string
 	}{
 		{
-			name:     "nil amount",
-			requests: []ERCTransferRequest{{Address: recipient}},
-			wantErr:  "ERC transfer 0: traffic: Transfer amount is required",
+			name:    "missing token amount",
+			wallets: []common.Address{wallet},
+			weiEach: big.NewInt(1),
+			want:    "amount is required",
 		},
 		{
-			name:     "non-positive amount",
-			requests: []ERCTransferRequest{{Address: recipient, Amount: big.NewInt(1)}, {Address: recipient, Amount: big.NewInt(0)}},
-			wantErr:  "ERC transfer 1: traffic: Transfer amount must be positive",
+			name:      "zero token amount",
+			wallets:   []common.Address{wallet},
+			tokenEach: big.NewInt(0),
+			weiEach:   big.NewInt(1),
+			want:      "must be positive",
+		},
+		{name: "missing wei", wallets: []common.Address{wallet}, tokenEach: big.NewInt(1), want: "non-negative"},
+		{
+			name:      "negative wei",
+			wallets:   []common.Address{wallet},
+			tokenEach: big.NewInt(1),
+			weiEach:   big.NewInt(-1),
+			want:      "non-negative",
 		},
 		{
-			name:     "zero address",
-			requests: []ERCTransferRequest{{Amount: big.NewInt(1)}},
-			wantErr:  "ERC transfer 0 has a zero address",
+			name:      "zero address",
+			wallets:   []common.Address{wallet, {}},
+			tokenEach: big.NewInt(1),
+			weiEach:   big.NewInt(1),
+			want:      "wallet 1 has a zero address",
 		},
-	} {
+	}
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// A zero IFT has no Chain: any attempt to send would panic, so an
-			// error here proves validation runs before the first transaction.
-			receipts, err := (&IFT{routeID: "route"}).TransferBatch(t.Context(), tc.requests)
-			require.ErrorContains(t, err, tc.wantErr)
-			require.Nil(t, receipts)
+			err := (&IFT{routeID: "route"}).FundWallets(t.Context(), tc.wallets, tc.tokenEach, tc.weiEach)
+			require.ErrorContains(t, err, tc.want)
 		})
 	}
 }
 
-func TestTransferBatchEmptyIsNoop(t *testing.T) {
-	receipts, err := (&IFT{routeID: "route"}).TransferBatch(t.Context(), nil)
-	require.NoError(t, err)
-	require.Empty(t, receipts)
+func TestFundWalletsEmptyIsNoop(t *testing.T) {
+	require.NoError(t, (&IFT{routeID: "route"}).FundWallets(t.Context(), nil, big.NewInt(1), big.NewInt(0)))
 }

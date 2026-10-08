@@ -63,8 +63,9 @@ with a 1s batch timeout.
 
 How the generator works, per direction:
 
-1. **Wallets.** A pool of fresh keys. Each gets 10 native coins of gas and 10 IFT on both
-   Chains before the run, so a wallet can send in both directions. Wallet *i* sends to wallet
+1. **Wallets.** A pool of fresh keys. Each gets 1 native coin of gas and 1 IFT on both
+   Chains before the run, from one payable shim call per 64 wallets, so a wallet can send in
+   both directions. Wallet *i* sends to wallet
    *i+1* on the destination Chain.
 2. **Pacing.** It subscribes to new heads over the source Chain's WebSocket. On a head it
    dispatches up to `--per-block` transfers, at most once per Chain block interval. Managed
