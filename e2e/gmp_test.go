@@ -10,23 +10,26 @@ import (
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/harness/traffic"
 )
 
 func TestGMPCall_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
+	gmp, err := traffic.NewGMP(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	call, err := gmp.Call(ctx, e2etest.GMPRequest{})
+	call, err := gmp.Call(ctx, traffic.GMPRequest{})
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterExecuted(ctx))
@@ -34,19 +37,20 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 
 func TestGMPCall_Timeout(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
+	gmp, err := traffic.NewGMP(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	require.NoError(t, relayer.Stop(ctx))
-	call, err := gmp.Call(ctx, e2etest.GMPRequest{Timeout: packetTimeout})
+	call, err := gmp.Call(ctx, traffic.GMPRequest{Timeout: packetTimeout})
 	require.NoError(t, err)
 
 	destination, err := env.Chain(route.Destination)
@@ -56,7 +60,7 @@ func TestGMPCall_Timeout(t *testing.T) {
 	require.NoError(t, mining.AdvanceTime(ctx, packetTimeoutAdvance))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	status, err := e2etest.AwaitState(ctx, relayer, call.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyTimeoutExecuted(ctx, status.GetTimeoutTx().GetTxHash()))
@@ -67,13 +71,15 @@ func TestGMPCall_Timeout(t *testing.T) {
 // erc20.transfer executed by the destination ICS27 account.
 func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
+	gmp, err := traffic.NewGMP(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -84,17 +90,17 @@ func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	require.NoError(t, err)
 
 	amount := big.NewInt(1_000)
-	target, err := e2etest.NewAddress()
+	target, err := traffic.NewAddress()
 	require.NoError(t, err)
 
 	require.NoError(t, gmp.FundERC20(ctx, account, amount))
 
-	payload, err := e2etest.PackERC20Transfer(target, amount)
+	payload, err := traffic.PackERC20Transfer(target, amount)
 	require.NoError(t, err)
 
-	call, err := gmp.Call(ctx, e2etest.GMPRequest{Receiver: token.Hex(), Salt: salt, Payload: payload})
+	call, err := gmp.Call(ctx, traffic.GMPRequest{Receiver: token.Hex(), Salt: salt, Payload: payload})
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
@@ -111,19 +117,21 @@ var invalidGMPPayload = []byte{0xde, 0xad, 0xbe, 0xef}
 
 func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	gmp := e2etest.NewGMP(t, env, deployment, sender, route)
+	gmp, err := traffic.NewGMP(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	call, err := gmp.Call(ctx, e2etest.GMPRequest{Payload: invalidGMPPayload})
+	call, err := gmp.Call(ctx, traffic.GMPRequest{Payload: invalidGMPPayload})
 	require.NoError(t, err)
-	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterUnchanged(ctx))

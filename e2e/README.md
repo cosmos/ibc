@@ -62,21 +62,23 @@ The setup sequence is deliberately explicit:
 ```go
 func TestTransfer_AutoRelay(t *testing.T) {
     t.Parallel()
-    spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+    chains := e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)
+    spec, runtime := traffic.AttestedMesh(chains...)
     env := e2etest.Start(t, spec, runtime)
     sender := e2etest.NewSigner(t)
     relayerSigner := e2etest.NewSigner(t)
-    route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+    route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
     driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-    transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+    transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
+    require.NoError(t, err)
     relayer := e2etest.StartRelayer(t, driver, env)
     ctx := t.Context()
 
-    transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)})
+    transfer, err := transferApp.Send(ctx, traffic.TransferRequest{Amount: big.NewInt(1_234_000)})
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-    _, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+    _, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
         relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
     require.NoError(t, err)
     require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -87,17 +89,17 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 `e2etest.NewSigner` creates an independent identity; tests create one per role and pass them explicitly — `Deploy` takes the deployer and relayer signers, the app constructors take the sender (the signer that deployed the apps). Managed Chains fund them through their resolved funding capability; an attached Chain must fund the public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary IBC CLI configuration.
 
-The `e2etest` wrappers keep ownership in `t.Cleanup`: the directory holding the IBC CLI configuration comes from `t.TempDir()`, and `StartRelayer` and `StartProver` register their stops, so cleanup stops processes before removing their directories and before closing the Environment. Code outside `go test` calls `../harness/traffic` directly and owns those steps itself: it passes the directory, stops the relayer it started, and closes the Environment.
+`e2etest` wraps only the calls that own resources (`Start`, `Deploy`, `StartRelayer`, `StartProver`) plus `NewSigner`, and keeps ownership in `t.Cleanup`: the directory holding the IBC CLI configuration comes from `t.TempDir()`, and `StartRelayer` and `StartProver` register their stops, so cleanup stops processes before removing their directories and before closing the Environment. Everything else — routes, app constructors, sends, status waits, manual relay — tests call on `../harness/traffic` directly and check with `require.NoError`. Code outside `go test` calls `../harness/traffic` for the resource-owning steps too and owns them itself: it passes the directory, stops the relayer it started, and closes the Environment.
 
 Declare capabilities instead of naming a provider. For example, a controlled-mining test uses:
 
 ```go
 chains := e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true},
-    e2etest.ChainA, e2etest.ChainB)
-spec, runtime := attestedMesh(chains)
+    traffic.ChainA, traffic.ChainB)
+spec, runtime := traffic.AttestedMesh(chains...)
 env := e2etest.Start(t, spec, runtime)
 
-chainB, err := env.Chain(e2etest.ChainB)
+chainB, err := env.Chain(traffic.ChainB)
 require.NoError(t, err)
 mining, err := chainB.Mining()
 require.NoError(t, err)
@@ -134,7 +136,7 @@ output without modifying the committed file.
 
 ## Extending the graph
 
-`attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains; `qbftMesh` builds the same graph with Besu QBFT Clients and no Attestors, and requires every chain to run Besu. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `../harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+`traffic.AttestedMesh` builds a fully connected attested mesh over the given chains; `qbftMesh` (fixtures_test.go) builds the same graph with Besu QBFT Clients and no Attestors, and requires every chain to run Besu. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `traffic.RuntimeWithProtocolDeployer` only when the spec references `traffic.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `../harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
 
 ## Debugging
 

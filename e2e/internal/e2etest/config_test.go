@@ -146,7 +146,7 @@ func TestResolveEVMChains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveEVMChains(tt.mode, tt.requirements, []environment.ChainID{ChainA})
+			got, err := resolveEVMChains(tt.mode, tt.requirements, []environment.ChainID{"chain-a"})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("resolveEVMChains() error = %v, wantErr %t", err, tt.wantErr)
 			}

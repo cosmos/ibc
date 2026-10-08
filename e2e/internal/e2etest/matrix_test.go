@@ -97,7 +97,7 @@ func TestMatrixStartValidatesInputs(t *testing.T) {
 
 func TestInvalidMatrixModeDoesNotEmitRecord(t *testing.T) {
 	if os.Getenv("E2E_MATRIX_INVALID_MODE_HELPER") == "1" {
-		EVMChains(t, EVMRequirements{}, ChainA)
+		EVMChains(t, EVMRequirements{}, "chain-a")
 		return
 	}
 
