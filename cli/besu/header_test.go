@@ -3,6 +3,7 @@
 package besu_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -25,6 +26,31 @@ func TestParseSealedHeaderFixture(t *testing.T) {
 		assert.Equal(t, update.ExpectedStateRoot, header.StateRoot)
 		assert.Equal(t, update.ExpectedValidators, header.Validators)
 		assert.Equal(t, []byte(update.HeaderRLP), header.RLP)
+	}
+}
+
+func TestParseSealedHeaderSortsCommitSeals(t *testing.T) {
+	fixture := besutest.MustFixture(t)
+
+	for _, update := range []besutest.UpdateFixture{fixture.AdjacentUpdate, fixture.NonAdjacentUpdate} {
+		var header types.Header
+		require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
+
+		var extraItems []rlp.RawValue
+		require.NoError(t, rlp.DecodeBytes(header.Extra, &extraItems))
+		var seals [][]byte
+		require.NoError(t, rlp.DecodeBytes(extraItems[4], &seals))
+		require.Greater(t, len(seals), 1)
+		slices.Reverse(seals)
+		var err error
+		extraItems[4], err = rlp.EncodeToBytes(seals)
+		require.NoError(t, err)
+		header.Extra, err = rlp.EncodeToBytes(extraItems)
+		require.NoError(t, err)
+
+		parsed, err := besu.ParseSealedHeader(&header)
+		require.NoError(t, err)
+		assert.Equal(t, []byte(update.HeaderRLP), parsed.RLP)
 	}
 }
 

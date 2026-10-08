@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 )
 
 // Graph identities are distinct types so references to different resource
@@ -249,6 +250,10 @@ func (c NewClient) clientAttestors() []AttestorSpec      { return c.Attestors }
 // no Attestors; the counterparty Chain must run Besu QBFT. Authority follows
 // the same rule as NewClient. Periods are seconds; the contract rejects a zero
 // TrustingPeriod at deploy time.
+// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
+// Besu QBFT clients.
+const BesuQBFTTrustingPeriod = solidityibc.BesuQBFTTrustingPeriod
+
 type NewBesuQBFTClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID

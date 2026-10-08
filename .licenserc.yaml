@@ -32,7 +32,6 @@ header:
     - "cli/internal/store/repository/**"
     - "cli/internal/tests/mocks/**"
     - "cli/internal/service/**/*.mock.go"
-    - "cli/internal/chains/evm/contracts/**"
     - "gen/go/solidity-abi/*/contract.go"
 
     # Third-party and test Solidity sources retain their own SPDX identifiers.
