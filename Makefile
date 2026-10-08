@@ -11,7 +11,7 @@ GEN_SOLIDITY_ABI_DIR := gen/go/solidity-abi
 
 # Every Go module in the repository. There is deliberately no module at the root, so
 # anything that scans "the Go code" has to iterate these.
-GO_MODULE_DIRS := cli e2e harness loadtest $(GEN_SOLIDITY_ABI_DIR)
+GO_MODULE_DIRS := cli e2e harness $(GEN_SOLIDITY_ABI_DIR)
 
 lint-license: ## Check SPDX license headers
 	go run github.com/apache/skywalking-eyes/cmd/license-eye@v$(LICENSE_EYE_VERSION) \
@@ -67,12 +67,30 @@ vulncheck-json: ## Write govulncheck JSON for every Go module to VULNCHECK_JSON
 	done; \
 	exit $$status
 
-run-all-checks: ## Run "all-in-one" code validation step.
-	$(MAKE) -C cli run-all-checks
-	$(MAKE) -C e2e run-all-checks
-	$(MAKE) lint-gen
-	$(MAKE) test-gen
+build: ## Build and vet every Go module
+	@set -e; for dir in $(GO_MODULE_DIRS); do \
+		echo "==> go build && go vet $$dir"; \
+		(cd $$dir && go build ./... && go vet ./...); \
+	done
+
+lint: ## Lint every Go module
+	@set -e; for dir in $(GO_MODULE_DIRS); do \
+		echo "==> golangci-lint $$dir"; \
+		(cd $$dir && golangci-lint run); \
+	done
+
+# A module whose Makefile has a run-all-checks target runs it (e2e's includes the Docker E2E
+# suite); any other module gets build, vet, lint, and its unit tests.
+run-all-checks: ## Run "all-in-one" code validation step for every Go module, then license headers.
+	@set -e; for dir in $(GO_MODULE_DIRS); do \
+		echo "==== $$dir ===="; \
+		if [ -f $$dir/Makefile ] && grep -q '^run-all-checks:' $$dir/Makefile; then \
+			$(MAKE) -C $$dir run-all-checks; \
+		else \
+			(cd $$dir && go build ./... && go vet ./... && golangci-lint run && go test ./... -count=1); \
+		fi; \
+	done
 	$(MAKE) lint-license
 
-.PHONY: help lint-license lint-fix-license lint-gen lint-fix-gen test-gen vulncheck \
+.PHONY: help build lint lint-license lint-fix-license lint-gen lint-fix-gen test-gen vulncheck \
 	vulncheck-json run-all-checks

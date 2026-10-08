@@ -20,8 +20,9 @@
 #
 # Run from the repository root after the "Find changed dependencies" step, which writes
 # capslock-out/<module>-modules.tsv ("path<TAB>status<TAB>base<TAB>head") and checks the base
-# commit out at $RUNNER_TEMP/base. Environment: MODULES, BASE and HEAD_SHA (for the comment
-# header), RUN_URL, RUNNER_TEMP, GITHUB_STEP_SUMMARY and GITHUB_OUTPUT, which gets high=<count>.
+# commit out at $RUNNER_TEMP/base. A module the base commit lacks has only added dependencies,
+# compared against nothing. Environment: MODULES, BASE and HEAD_SHA (for the comment header),
+# RUN_URL, RUNNER_TEMP, GITHUB_STEP_SUMMARY and GITHUB_OUTPUT, which gets high=<count>.
 
 set -euo pipefail
 
@@ -257,7 +258,7 @@ for m in $MODULES; do
     # Of the old packages, those the base commit has.
     echo '{}' > "$tmp/old.json"
     old=""
-    if [ -s "$tmp/old.txt" ]; then
+    if [ -s "$tmp/old.txt" ] && [ -e "$RUNNER_TEMP/base/$m/go.mod" ]; then
       old="$(cd "$RUNNER_TEMP/base/$m" && xargs go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' < "$tmp/old.txt" | paste -sd, -)"
     fi
     if [ -n "$old" ]; then

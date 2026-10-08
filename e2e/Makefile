@@ -28,8 +28,7 @@ lint: ## Lint code
 lint-fix: ## Lint & fix code
 	golangci-lint run --fix
 
-test-harness: _build-cli ## Run tests for the harness module and e2e's own helpers
-	$(MAKE) -C $(HARNESS_DIR) test
+test-internal: ## Run the unit tests for e2e's own helpers (the harness tests run from harness/)
 	go test ./internal/... ./cmd/... -count=1
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
@@ -66,13 +65,12 @@ check-stale: ## Run all checks for stale code
 run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 	@echo "==== 1. Linting ===="
 	$(MAKE) lint
-	$(MAKE) -C $(HARNESS_DIR) lint
 
 	@echo "==== 2. Checking for stale code ===="
 	$(MAKE) check-stale
 
-	@echo "==== 3. Testing harness ===="
-	$(MAKE) test-harness
+	@echo "==== 3. Testing e2e helpers ===="
+	$(MAKE) test-internal
 
 	@echo "==== 4. Running E2E ===="
 	$(MAKE) test
@@ -85,7 +83,7 @@ _build-cli:
 	$(MAKE) -C ../cli build build-test-bin
 
 .PHONY: help doctor doctor-tools lint lint-fix
-.PHONY: test-harness test-apps test
+.PHONY: test-internal test-apps test
 .PHONY: generate-matrix check-matrix
 .PHONY:	clean clean-dry-run check-stale run-all-checks
 .PHONY: _build-cli

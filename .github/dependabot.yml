@@ -13,7 +13,6 @@ updates:
       - "/cli"
       - "/e2e"
       - "/harness"
-      - "/loadtest"
       - "/gen/go/solidity-abi"
     target-branch: main
     schedule:

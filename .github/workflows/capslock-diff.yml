@@ -20,7 +20,7 @@ permissions:
 
 env:
   CAPSLOCK_VERSION: v0.3.3
-  CAPSLOCK_MODULES: cli e2e
+  CAPSLOCK_MODULES: cli e2e harness
   # How cli is released; cgo also widens what a dependency can do unseen.
   CGO_ENABLED: "0"
 
@@ -41,12 +41,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: cli/go.mod
-          cache-dependency-path: |
-            cli/go.sum
-            e2e/go.sum
-            harness/go.sum
-            loadtest/go.sum
-            gen/go/solidity-abi/go.sum
+          cache-dependency-path: "**/go.sum"
 
       - name: Find changed dependencies
         id: deps
@@ -60,6 +55,8 @@ jobs:
           list() {
             (cd "$1" && go list -mod=readonly -m -f '{{.Path}}{{"\t"}}{{if .Main}}main{{else}}{{.Version}}{{with .Replace}} => {{.Path}}{{with .Version}} {{.}}{{end}}{{end}}{{end}}' all) | sort
           }
+          # One line per entry of a captured list; none for an empty one, not a blank line.
+          lines() { [ -z "$1" ] || printf '%s\n' "$1"; }
 
           # capslock-out/<module>-modules.tsv: path, status, base, head. A module is changed
           # when added, bumped, or given a new replace or go.work use, local ones included;
@@ -68,13 +65,20 @@ jobs:
           modules=""
           for m in $CAPSLOCK_MODULES; do
             # Captured first, so that a failing go list fails the step rather than passing it.
-            old="$(list "$RUNNER_TEMP/base/$m")"
+            # A module the base commit lacks has an empty base build list: all of its
+            # dependencies count as added.
+            old=""
+            if [ -e "$RUNNER_TEMP/base/$m/go.mod" ]; then
+              old="$(list "$RUNNER_TEMP/base/$m")"
+            else
+              echo "$m is not in the base commit; every dependency counts as added."
+            fi
             new="$(list "$m")"
             vendor=0
             if [ -e "$m/vendor" ] || [ -e "$RUNNER_TEMP/base/$m/vendor" ]; then
               diff -rq "$RUNNER_TEMP/base/$m/vendor" "$m/vendor" >/dev/null 2>&1 || vendor=1
             fi
-            join -t $'\t' -a 1 -a 2 -e '' -o 0,1.2,2.2 <(printf '%s\n' "$old") <(printf '%s\n' "$new") \
+            join -t $'\t' -a 1 -a 2 -e '' -o 0,1.2,2.2 <(lines "$old") <(lines "$new") \
               | awk -F '\t' -v OFS='\t' -v vendor="$vendor" '{
                   if ($3 == "") s = "removed"
                   else if ($3 == "main" && ($2 == "main" || $2 == "")) s = "unchanged"
