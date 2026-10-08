@@ -133,35 +133,32 @@ func launchAnvil(ctx context.Context, spec Spec) (testcontainers.Container, stri
 			container.BindPortsToLoopback(config, "8545/tcp")
 		},
 	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+	ctr, err := container.Start(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: request,
 	})
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("create anvil container (chain %s): %w", spec.ID, err)
+		startErr := fmt.Errorf("start anvil container (chain %s): %w", spec.ID, err)
+		return nil, "", nil, errors.Join(startErr, cleanupFailedStart(ctr))
 	}
-	if startErr := container.Start(ctx); startErr != nil {
-		startErr = fmt.Errorf("start anvil container (chain %s): %w", spec.ID, startErr)
-		return nil, "", nil, errors.Join(startErr, cleanupFailedStart(container))
-	}
-	host, err := container.Host(ctx)
+	host, err := ctr.Host(ctx)
 	if err != nil {
-		return nil, "", nil, errors.Join(fmt.Errorf("resolve anvil host: %w", err), cleanupFailedStart(container))
+		return nil, "", nil, errors.Join(fmt.Errorf("resolve anvil host: %w", err), cleanupFailedStart(ctr))
 	}
-	port, err := container.MappedPort(ctx, "8545/tcp")
+	port, err := ctr.MappedPort(ctx, "8545/tcp")
 	if err != nil {
 		return nil, "", nil, errors.Join(
 			fmt.Errorf("resolve anvil RPC port: %w", err),
-			cleanupFailedStart(container),
+			cleanupFailedStart(ctr),
 		)
 	}
 	rpcURL := fmt.Sprintf("http://%s:%s", host, port.Port())
 
 	ec, err := connectAnvil(ctx, spec, rpcURL)
 	if err != nil {
-		startupErr := anvilStartupError(container, err)
-		return nil, "", nil, errors.Join(startupErr, cleanupFailedStart(container))
+		startupErr := anvilStartupError(ctr, err)
+		return nil, "", nil, errors.Join(startupErr, cleanupFailedStart(ctr))
 	}
-	return container, rpcURL, ec, nil
+	return ctr, rpcURL, ec, nil
 }
 
 func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient, error) {
@@ -297,7 +294,11 @@ func anvilStartupError(container testcontainers.Container, err error) error {
 func cleanupFailedStart(container testcontainers.Container) error {
 	ctx, cancel := context.WithTimeout(context.Background(), anvilStopTimeout)
 	defer cancel()
-	return container.Terminate(ctx, testcontainers.StopTimeout(anvilStopGrace))
+	return testcontainers.TerminateContainer(
+		container,
+		testcontainers.StopContext(ctx),
+		testcontainers.StopTimeout(anvilStopGrace),
+	)
 }
 
 func (ac *Chain) CollectLogs(ctx context.Context) map[string]string {

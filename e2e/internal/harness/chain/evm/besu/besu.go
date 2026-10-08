@@ -143,6 +143,9 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 				config.User = hostUser
 			},
 			HostConfigModifier: func(config *containertypes.HostConfig) {
+				// testcontainers publishes every port the image exposes when a request names none.
+				// The generator works offline, so give it no network and nothing to publish.
+				config.NetworkMode = "none"
 				config.Mounts = append(config.Mounts, mount.Mount{
 					Type:   mount.TypeBind,
 					Source: chainDir,
@@ -237,9 +240,8 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			"--host-allowlist=*",
 		},
 	}
-	bc.container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+	bc.container, err = container.Start(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: request,
-		Started:          true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("start besu container %s: %w", namePrefix, err)
