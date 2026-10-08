@@ -4,7 +4,7 @@ E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
 FORGE_BUILD_FLAGS ?=
 
-HARNESS_DIR := internal/harness
+HARNESS_DIR := ../harness
 GEN_SOLIDITY_ABI_DIR := ../gen/go/solidity-abi
 
 help: ## List e2e commands
@@ -28,7 +28,8 @@ lint: ## Lint code
 lint-fix: ## Lint & fix code
 	golangci-lint run --fix
 
-test-harness: _build-cli ## Run tests for e2e harness itself
+test-harness: _build-cli ## Run tests for the harness module and e2e's own helpers
+	$(MAKE) -C $(HARNESS_DIR) test
 	go test ./internal/... ./cmd/... -count=1
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
@@ -65,6 +66,7 @@ check-stale: ## Run all checks for stale code
 run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 	@echo "==== 1. Linting ===="
 	$(MAKE) lint
+	$(MAKE) -C $(HARNESS_DIR) lint
 
 	@echo "==== 2. Checking for stale code ===="
 	$(MAKE) check-stale

@@ -12,6 +12,7 @@ updates:
     directories:
       - "/cli"
       - "/e2e"
+      - "/harness"
       - "/gen/go/solidity-abi"
     target-branch: main
     schedule:

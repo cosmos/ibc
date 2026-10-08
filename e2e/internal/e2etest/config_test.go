@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/harness/environment"
 )
 
 func TestRuntimeWithProtocolDeployer(t *testing.T) {

@@ -44,6 +44,7 @@ jobs:
           cache-dependency-path: |
             cli/go.sum
             e2e/go.sum
+            harness/go.sum
             gen/go/solidity-abi/go.sum
 
       - name: Find changed dependencies

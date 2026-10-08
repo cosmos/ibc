@@ -13,9 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/testerc20"
+	"github.com/cosmos/ibc/harness/chain/evm"
+	"github.com/cosmos/ibc/harness/environment"
 )
 
 func mustABI(metadata *bind.MetaData) abi.ABI {

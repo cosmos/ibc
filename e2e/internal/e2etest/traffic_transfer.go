@@ -21,7 +21,7 @@ import (
 
 	transfertypes "github.com/cosmos/ibc-go/v11/modules/apps/transfer/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/harness/chain/evm"
 )
 
 const (

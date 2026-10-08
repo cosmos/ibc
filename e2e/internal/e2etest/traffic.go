@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/harness/environment"
 )
 
 type RouteID string

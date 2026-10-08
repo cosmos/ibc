@@ -23,7 +23,7 @@ generate() {
 		--abi "$abi_file" --bin "$bin_file" --pkg "$package" --type "$type_name" --out "$output"
 }
 
-solidity_ibc="$repo_root/e2e/internal/harness/environment/solidityibc"
+solidity_ibc="$repo_root/harness/environment/solidityibc"
 bindings="$repo_root/gen/go/solidity-abi"
 generate "$solidity_ibc/contracts/out/AccessManager.sol/AccessManager.json" accessmanager AccessManager "$bindings/accessmanager/contract.go"
 generate "$solidity_ibc/contracts/out/Escrow.sol/Escrow.json" escrow Escrow "$bindings/escrow/contract.go"

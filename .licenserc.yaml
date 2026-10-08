@@ -35,7 +35,7 @@ header:
     - "gen/go/solidity-abi/*/contract.go"
 
     # Third-party and test Solidity sources retain their own SPDX identifiers.
-    - "e2e/internal/harness/environment/solidityibc/contracts/src/**"
+    - "harness/environment/solidityibc/contracts/src/**"
 
   comment: never
   license-location-threshold: 80

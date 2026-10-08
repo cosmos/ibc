@@ -9,7 +9,7 @@ import (
 	"time"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/harness/ibccli"
 )
 
 // AwaitState waits for the packet to reach want. If want is pending and the

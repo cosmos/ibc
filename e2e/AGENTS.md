@@ -3,7 +3,7 @@
 # Repository E2E Tests Guide for AI Agents
 
 This module contains one root repository-level acceptance package: linear Go tests over the
-`internal/harness` surface. Tests relay real IBC packets through the real relayer and
+harness module (`../harness`) surface. Tests relay real IBC packets through the real relayer and
 Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP) with attestation light clients and
 managed attestors.
 
