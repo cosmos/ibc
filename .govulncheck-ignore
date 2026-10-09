@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Advisories that `make vulncheck` reports but that do not fail the Dependency Review
+# workflow. One advisory ID per line; everything after a `#` is a comment.
+#
+# Only add an advisory that has no fixed release to upgrade to. Anything with a fix
+# belongs in a dependency bump, not in this file. Every entry needs a reason and,
+# where one exists, a link to whatever would let us remove it again.
+
+# pion/dtls/v2: AES-GCM random nonce generation risks leaking the authentication key.
+# No fix on the v2 branch. Reaches us through libp2p -> pion/stun.
+# Tracking: https://github.com/libp2p/go-libp2p/issues/3464
+GO-2026-4479
+
+# golang.org/x/crypto/openpgp is unmaintained and unsafe by design, so it has no fixed
+# release. Reachable through cli/internal/types.
+GO-2026-5932

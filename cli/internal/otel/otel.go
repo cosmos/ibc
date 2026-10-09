@@ -44,7 +44,7 @@ const simpleMetricsPath = "/metrics"
 func GlobalSetup(ctx context.Context, cfg config.Observability, logger *slog.Logger) {
 	logger = logger.With("module", "otel")
 
-	if !cfg.Enabled() {
+	if !cfg.Metrics {
 		logger.Info("Observability is disabled")
 		return
 	}

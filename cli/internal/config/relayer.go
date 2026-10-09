@@ -4,10 +4,27 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/goccy/go-yaml"
 )
+
+// Client types
+const (
+	ClientTypeAttestation ClientType = "attestation"
+	ClientTypeBesuQBFT    ClientType = "besu-qbft"
+	ClientTypeRemote      ClientType = "remote"
+)
+
+// DefaultClearOnStart whether a clearing pass runs at startup when clearOnStart is unset.
+const DefaultClearOnStart = true
+
+// clientTypes are the values ClientEnd.Type accepts.
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
+
+// DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
+const DefaultClearInterval = 5 * time.Minute
 
 // ClientParams is a client type's decoded params
 type ClientParams interface {
@@ -15,20 +32,18 @@ type ClientParams interface {
 	Validate() error
 }
 
-// Client types
-const (
-	ClientTypeAttestation ClientType = "attestation"
-	ClientTypeRemote      ClientType = "remote"
-)
-
 // ClientType the light client type.
 type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	DispatchPollInterval *time.Duration         `yaml:"dispatchPollInterval,omitempty"`
-	ChainOverrides       []RelayerChainOverride `yaml:"chainOverrides"`
-	Connections          []ConnectionConfig     `yaml:"connections"`
+	DispatchPollInterval *time.Duration `yaml:"dispatchPollInterval,omitempty"`
+	// ClearOnStart runs a clearing pass at startup. Unset runs it.
+	ClearOnStart *bool `yaml:"clearOnStart,omitempty"`
+	// ClearInterval is how often a clearing pass runs; a chainOverrides entry wins.
+	ClearInterval  *time.Duration         `yaml:"clearInterval,omitempty"`
+	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
+	Connections    []ConnectionConfig     `yaml:"connections"`
 }
 
 // RelayerChainOverride relay settings for one chain.
@@ -38,6 +53,14 @@ type RelayerChainOverride struct {
 	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
+
+	// ClearInterval overrides relayer.clearInterval for packets sourced from this chain.
+	ClearInterval *time.Duration `yaml:"clearInterval,omitempty"`
+
+	// AbandonUnrecoverablePackets stops re-probing packets whose send log the
+	// endpoint will not serve. They are remembered but never looked at again,
+	// so turning it back off recovers them against an archive endpoint.
+	AbandonUnrecoverablePackets *bool `yaml:"abandonUnrecoverablePackets,omitempty"`
 }
 
 // RelayerEVMConfig EVM relaying settings.
@@ -62,12 +85,22 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// Params is this client type's settings.
+	// Params is this client type's settings, decoded per Type by ClientParams:
+	// empty for `attestation` and `besu-qbft`, and
+	// `{url: <ProverService endpoint>}` for `remote`, where it is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
+}
+
+// clientEndIdentity identifies a light client independent of aliases and
+// operational settings.
+type clientEndIdentity struct{ chainID, clientID string }
+
+func (c ClientEnd) identity() clientEndIdentity {
+	return clientEndIdentity{c.ChainID, c.ClientID}
 }
 
 // AutoRelayConfig automatic relaying settings.
@@ -84,10 +117,18 @@ type RemoteParams struct {
 // AttestationParams is empty
 type AttestationParams struct{}
 
+// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
+// the two chains and the light client itself.
+type BesuQBFTParams struct{}
+
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
 	if c.DispatchPollInterval != nil && *c.DispatchPollInterval <= 0 {
 		return errPathf("dispatchPollInterval", "must be positive")
+	}
+
+	if c.ClearInterval != nil && *c.ClearInterval <= 0 {
+		return errPathf("clearInterval", "must be positive")
 	}
 
 	if err := c.validateChainOverrides(); err != nil {
@@ -154,6 +195,8 @@ func (c RelayerChainOverride) Validate() error {
 		return errPathf("packetBatchSize", "must be positive")
 	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
 		return errPathf("packetBatchTimeout", "must be positive")
+	case c.ClearInterval != nil && *c.ClearInterval <= 0:
+		return errPathf("clearInterval", "must be positive")
 	}
 
 	if c.EVM != nil {
@@ -215,7 +258,7 @@ func (c ClientEnd) Validate() error {
 		return errPathf("clientId", "required")
 	case c.Signer == "":
 		return errPathf("signer", "required")
-	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
+	case !slices.Contains(clientTypes, c.Type):
 		return errPathf("type", "unknown client type: %q", c.Type)
 	}
 
@@ -236,6 +279,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		return decodeYAML[AttestationParams](c.Params)
+	case ClientTypeBesuQBFT:
+		return decodeYAML[BesuQBFTParams](c.Params)
 	case ClientTypeRemote:
 		return decodeYAML[RemoteParams](c.Params)
 	default:
@@ -252,6 +297,8 @@ func (p RemoteParams) Validate() error {
 }
 
 func (AttestationParams) Validate() error { return nil }
+
+func (BesuQBFTParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -273,15 +320,20 @@ func (c RelayerConfig) validateChainOverrides() error {
 }
 
 func (c RelayerConfig) validateConnections() error {
+	for i, conn := range c.Connections {
+		if err := conn.Validate(); err != nil {
+			return errPath(fmt.Sprintf("connections[%d]", i), err)
+		}
+	}
+	return c.validateConnectionIdentities()
+}
+
+func (c RelayerConfig) validateConnectionIdentities() error {
 	aliases := make(map[string]struct{})
-	clientEnds := make(map[string]struct{})
+	clientEnds := make(map[clientEndIdentity]struct{})
 
 	for i, conn := range c.Connections {
 		seg := fmt.Sprintf("connections[%d]", i)
-
-		if err := conn.Validate(); err != nil {
-			return errPath(seg, err)
-		}
 
 		if _, ok := aliases[conn.Alias]; ok {
 			return errPathf(seg, "duplicate alias: %q", conn.Alias)
@@ -289,7 +341,7 @@ func (c RelayerConfig) validateConnections() error {
 		aliases[conn.Alias] = struct{}{}
 
 		for _, end := range []ClientEnd{conn.ClientA, conn.ClientB} {
-			key := end.ChainID + "/" + end.ClientID
+			key := end.identity()
 			if _, ok := clientEnds[key]; ok {
 				return errPathf(seg, "duplicate client %q on chain %q", end.ClientID, end.ChainID)
 			}
@@ -302,6 +354,7 @@ func (c RelayerConfig) validateConnections() error {
 
 func (RemoteParams) isClientParams()      {}
 func (AttestationParams) isClientParams() {}
+func (BesuQBFTParams) isClientParams()    {}
 
 func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	var params T
@@ -315,4 +368,41 @@ func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	}
 
 	return &params, nil
+}
+
+// ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.
+func (c RelayerConfig) ClearOnStartEnabled() bool {
+	if c.ClearOnStart == nil {
+		return DefaultClearOnStart
+	}
+	return *c.ClearOnStart
+}
+
+// ClearIntervalFor resolves the clearing cadence for a chain, preferring its chain override.
+func (c RelayerConfig) ClearIntervalFor(chainID string) time.Duration {
+	// per chain
+	override, ok := c.ChainOverride(chainID)
+	if ok && override.ClearInterval != nil {
+		return *override.ClearInterval
+	}
+
+	// global
+	if c.ClearInterval != nil {
+		return *c.ClearInterval
+	}
+
+	// fallback
+	return DefaultClearInterval
+}
+
+// AbandonUnrecoverablePacketsFor reports whether a chain stops re-probing
+// packets whose send log no endpoint would serve. It defaults to false, which
+// keeps them in the probe set until an endpoint serves them.
+func (c RelayerConfig) AbandonUnrecoverablePacketsFor(chainID string) bool {
+	override, ok := c.ChainOverride(chainID)
+	if ok && override.AbandonUnrecoverablePackets != nil {
+		return *override.AbandonUnrecoverablePackets
+	}
+
+	return false
 }

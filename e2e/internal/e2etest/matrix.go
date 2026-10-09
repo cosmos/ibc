@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -49,6 +50,9 @@ type MatrixSpec struct {
 	IBCInstances int           `json:"ibc_instances"`
 	Connections  int           `json:"connections"`
 	Attestors    int           `json:"attestors"`
+	// BesuQBFTClients counts client ends that verify Besu QBFT headers instead
+	// of attestations.
+	BesuQBFTClients int `json:"besu_qbft_clients,omitempty"`
 }
 
 // MatrixRecord is the JSON record exchanged with the matrix generator.
@@ -156,6 +160,7 @@ func (c *matrixCollector) emit(record *MatrixRecord) error {
 func summarizeSpec(spec environment.Spec) MatrixSpec {
 	counts := make(map[string]int)
 	attestors := 0
+	besuQBFTClients := 0
 	for _, chain := range spec.Chains {
 		switch chain.(type) {
 		case environment.ManagedAnvil:
@@ -183,14 +188,21 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 			case environment.NewClient:
 				attestors += len(client.Attestors)
 			case environment.ExistingClient:
-				attestors += len(client.Attestors)
+				if client.Kind == clientkind.BesuQBFT {
+					besuQBFTClients++
+				} else {
+					attestors += len(client.Attestors)
+				}
+			case environment.NewBesuQBFTClient:
+				besuQBFTClients++
 			}
 		}
 	}
 	return MatrixSpec{
-		Chains:       chains,
-		IBCInstances: len(spec.IBCInstances),
-		Connections:  len(spec.Connections),
-		Attestors:    attestors,
+		Chains:          chains,
+		IBCInstances:    len(spec.IBCInstances),
+		Connections:     len(spec.Connections),
+		Attestors:       attestors,
+		BesuQBFTClients: besuQBFTClients,
 	}
 }

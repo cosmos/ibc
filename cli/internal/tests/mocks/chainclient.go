@@ -229,6 +229,80 @@ func (_c *MockClient_FindRecvTx_Call) RunAndReturn(run func(ctx context.Context,
 	return _c
 }
 
+// FindSendPackets provides a mock function for the type MockClient
+func (_mock *MockClient) FindSendPackets(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error) {
+	ret := _mock.Called(ctx, sourceClientID, sequences)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindSendPackets")
+	}
+
+	var r0 []v2.PacketEvent
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []uint64) ([]v2.PacketEvent, error)); ok {
+		return returnFunc(ctx, sourceClientID, sequences)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []uint64) []v2.PacketEvent); ok {
+		r0 = returnFunc(ctx, sourceClientID, sequences)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]v2.PacketEvent)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []uint64) error); ok {
+		r1 = returnFunc(ctx, sourceClientID, sequences)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_FindSendPackets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindSendPackets'
+type MockClient_FindSendPackets_Call struct {
+	*mock.Call
+}
+
+// FindSendPackets is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceClientID string
+//   - sequences []uint64
+func (_e *MockClient_Expecter) FindSendPackets(ctx any, sourceClientID any, sequences any) *MockClient_FindSendPackets_Call {
+	return &MockClient_FindSendPackets_Call{Call: _e.mock.On("FindSendPackets", ctx, sourceClientID, sequences)}
+}
+
+func (_c *MockClient_FindSendPackets_Call) Run(run func(ctx context.Context, sourceClientID string, sequences []uint64)) *MockClient_FindSendPackets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []uint64
+		if args[2] != nil {
+			arg2 = args[2].([]uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_FindSendPackets_Call) Return(packetEvents []v2.PacketEvent, err error) *MockClient_FindSendPackets_Call {
+	_c.Call.Return(packetEvents, err)
+	return _c
+}
+
+func (_c *MockClient_FindSendPackets_Call) RunAndReturn(run func(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error)) *MockClient_FindSendPackets_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindTimeoutTx provides a mock function for the type MockClient
 func (_mock *MockClient) FindTimeoutTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error) {
 	ret := _mock.Called(ctx, sourceClientID, sequence)
@@ -723,6 +797,158 @@ func (_c *MockClient_IsPacketReceived_Call) Return(b bool, err error) *MockClien
 }
 
 func (_c *MockClient_IsPacketReceived_Call) RunAndReturn(run func(ctx context.Context, destClientID string, sequence uint64) (bool, error)) *MockClient_IsPacketReceived_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// LatestPacketSequence provides a mock function for the type MockClient
+func (_mock *MockClient) LatestPacketSequence(ctx context.Context, sourceClientID string, height uint64) (uint64, error) {
+	ret := _mock.Called(ctx, sourceClientID, height)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LatestPacketSequence")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) (uint64, error)); ok {
+		return returnFunc(ctx, sourceClientID, height)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, uint64) uint64); ok {
+		r0 = returnFunc(ctx, sourceClientID, height)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, uint64) error); ok {
+		r1 = returnFunc(ctx, sourceClientID, height)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_LatestPacketSequence_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LatestPacketSequence'
+type MockClient_LatestPacketSequence_Call struct {
+	*mock.Call
+}
+
+// LatestPacketSequence is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceClientID string
+//   - height uint64
+func (_e *MockClient_Expecter) LatestPacketSequence(ctx any, sourceClientID any, height any) *MockClient_LatestPacketSequence_Call {
+	return &MockClient_LatestPacketSequence_Call{Call: _e.mock.On("LatestPacketSequence", ctx, sourceClientID, height)}
+}
+
+func (_c *MockClient_LatestPacketSequence_Call) Run(run func(ctx context.Context, sourceClientID string, height uint64)) *MockClient_LatestPacketSequence_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_LatestPacketSequence_Call) Return(v uint64, err error) *MockClient_LatestPacketSequence_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *MockClient_LatestPacketSequence_Call) RunAndReturn(run func(ctx context.Context, sourceClientID string, height uint64) (uint64, error)) *MockClient_LatestPacketSequence_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PacketCommitments provides a mock function for the type MockClient
+func (_mock *MockClient) PacketCommitments(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error) {
+	ret := _mock.Called(ctx, sourceClientID, sequences, height)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PacketCommitments")
+	}
+
+	var r0 []uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []uint64, uint64) ([]uint64, error)); ok {
+		return returnFunc(ctx, sourceClientID, sequences, height)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []uint64, uint64) []uint64); ok {
+		r0 = returnFunc(ctx, sourceClientID, sequences, height)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]uint64)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []uint64, uint64) error); ok {
+		r1 = returnFunc(ctx, sourceClientID, sequences, height)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_PacketCommitments_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PacketCommitments'
+type MockClient_PacketCommitments_Call struct {
+	*mock.Call
+}
+
+// PacketCommitments is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceClientID string
+//   - sequences []uint64
+//   - height uint64
+func (_e *MockClient_Expecter) PacketCommitments(ctx any, sourceClientID any, sequences any, height any) *MockClient_PacketCommitments_Call {
+	return &MockClient_PacketCommitments_Call{Call: _e.mock.On("PacketCommitments", ctx, sourceClientID, sequences, height)}
+}
+
+func (_c *MockClient_PacketCommitments_Call) Run(run func(ctx context.Context, sourceClientID string, sequences []uint64, height uint64)) *MockClient_PacketCommitments_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []uint64
+		if args[2] != nil {
+			arg2 = args[2].([]uint64)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_PacketCommitments_Call) Return(uint64s []uint64, err error) *MockClient_PacketCommitments_Call {
+	_c.Call.Return(uint64s, err)
+	return _c
+}
+
+func (_c *MockClient_PacketCommitments_Call) RunAndReturn(run func(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error)) *MockClient_PacketCommitments_Call {
 	_c.Call.Return(run)
 	return _c
 }

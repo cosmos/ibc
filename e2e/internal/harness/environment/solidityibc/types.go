@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -25,11 +26,13 @@ type AppStack struct {
 	ICS27GMP      common.Address // ERC1967 proxy
 }
 
-// Client is an attestation light client registered with one Instance.
+// Client is a light client registered with one Instance, with the attestation
+// set an attestation client's contract reports.
 type Client struct {
-	ID                    string
-	Address               common.Address
-	CounterpartyClientID  string
+	ID                   string
+	Address              common.Address
+	CounterpartyClientID string
+
 	Attestors             []common.Address
 	MinRequiredSignatures uint8
 }
@@ -45,6 +48,45 @@ type AttestationClientConfig struct {
 	InitialHeight         uint64
 	InitialTimestamp      uint64
 	RoleManager           common.Address
+}
+
+// BesuQBFTClientConfig contains the immutable constructor inputs for a Besu
+// QBFT light client. The initial trusted state describes the counterparty
+// chain at InitialHeight; RoleManager restricts proof submission to that
+// address (the host router), a zero value permits anyone.
+// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
+// Besu QBFT clients. Clients trust the current head, so it outlasts any run.
+const BesuQBFTTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
+
+type BesuQBFTClientConfig struct {
+	ID                   string
+	CounterpartyClientID string
+	CounterpartyRouter   common.Address
+	InitialHeight        uint64
+	InitialTimestamp     uint64
+	InitialStateRoot     common.Hash
+	InitialValidators    []common.Address
+	TrustingPeriod       uint64
+	MaxClockDrift        uint64
+	RoleManager          common.Address
+}
+
+func (c BesuQBFTClientConfig) snapshot() BesuQBFTClientConfig {
+	c.InitialValidators = slices.Clone(c.InitialValidators)
+	return c
+}
+
+func (c BesuQBFTClientConfig) validate() error {
+	if !validCustomClientID(c.ID) {
+		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", c.ID)
+	}
+	if c.CounterpartyClientID == "" {
+		return fmt.Errorf("client %q has an empty counterparty client id", c.ID)
+	}
+	if c.CounterpartyRouter == (common.Address{}) {
+		return fmt.Errorf("client %q has a zero counterparty router", c.ID)
+	}
+	return nil
 }
 
 func (c AttestationClientConfig) snapshot() AttestationClientConfig {

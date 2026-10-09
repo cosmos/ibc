@@ -152,14 +152,7 @@ func TestPipelineMetrics(t *testing.T) {
 			{name: "nilTransfer", output: []*processors.Transfer{nil}},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
-				// ARRANGE
-				var processErr error
-
-				// ACT
-				err := joinBatchError(processErr, tt.output)
-
-				// ASSERT
-				assert.NoError(t, err)
+				assert.NoError(t, batchError(tt.output))
 			})
 		}
 	})

@@ -14,9 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 
+	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -69,9 +69,9 @@ type ChainOptions struct {
 
 // NewFromRPC dials the chain's RPC and builds its tx submitter.
 func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOptions) (*TxSubmitter, error) {
-	eth, err := ethclient.Dial(rpcURL)
+	eth, err := chainsevm.Dial(chainID, rpcURL)
 	if err != nil {
-		return nil, errors.Wrapf(err, "dialing rpc for chain %q", chainID)
+		return nil, err
 	}
 
 	return New(chainID, eth, chainSigner, opts)
@@ -188,9 +188,10 @@ func (c *TxSubmitter) newTx(ctx context.Context, intent v2.TxIntent) (*types.Tra
 		return nil, errors.Errorf("no contract code at %s", to)
 	}
 
+	// Simulate the full intent, including light-client verification, before signing.
 	gasLimit, err := c.eth.EstimateGas(ctx, ethereum.CallMsg{From: c.address, To: &to, Data: intent.Data})
 	if err != nil {
-		return nil, errors.Wrap(err, "estimating gas")
+		return nil, errors.Wrap(explainRevert(err), "estimating gas")
 	}
 
 	nonce, err := c.eth.PendingNonceAt(ctx, c.address)
@@ -226,12 +227,9 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 		return false, v2.ErrTxNotFound
 	case err != nil:
 		return false, errors.Wrapf(err, "getting receipt for tx %s", txHash)
-	case receipt.Status != types.ReceiptStatusSuccessful:
-		metrics.endTx(c.chainID, receipt)
-		return true, nil
 	default:
 		metrics.endTx(c.chainID, receipt)
-		return false, nil
+		return receipt.Status != types.ReceiptStatusSuccessful, nil
 	}
 }
 

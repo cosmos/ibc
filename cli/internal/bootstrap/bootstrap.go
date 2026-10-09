@@ -117,7 +117,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 	dispatcher := dispatch.NewRelayDispatcher(db, pipelines, pollInterval, logger)
 
-	// Packet discovery (auto-relaying)
+	// Packet "auto-discovery" based on live subscriptions and triggered "clearings".
 	watchers, err := watcher.NewSetFromConfig(cfg, clientSet, db, logger)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	relayerHandler := server.NewRelayerHandler(relayerService)
 
 	// Server
-	srv := server.New(cfg.Server.ListenAddress, rpcEnableReflection, cfg.Observability.Enabled())
+	srv := server.New(cfg.Server.ListenAddress, rpcEnableReflection, cfg.Observability.Metrics)
 	srv.Register(relayerHandler)
 
 	if attestorHandler != nil {
@@ -185,7 +185,7 @@ func BuildAttestor(cfg config.Config) (*Services, error) {
 	}
 
 	// Server
-	srv := server.New(cfg.Server.ListenAddress, rpcEnableReflection, cfg.Observability.Enabled())
+	srv := server.New(cfg.Server.ListenAddress, rpcEnableReflection, cfg.Observability.Metrics)
 	srv.Register(attestorHandler)
 
 	return &Services{

@@ -1,0 +1,155 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Capslock Capability Diff
+
+# Guards against malicious dependency releases: fails when a pull request changes a
+# dependency and a function of it that this repository's builds link newly reaches a
+# capability such as EXEC, NETWORK or FILES. It runs on every pull request so that
+# "Capslock" can be a required check; one that changes no dependency stops after comparing
+# the module lists.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CAPSLOCK_VERSION: v0.3.3
+  CAPSLOCK_MODULES: cli e2e
+  # How cli is released; cgo also widens what a dependency can do unseen.
+  CGO_ENABLED: "0"
+
+jobs:
+  diff:
+    name: Capslock
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # The merge commit and its first parent, the main commit it merges onto.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+
+      - name: Find changed dependencies
+        id: deps
+        run: |
+          set -euo pipefail
+          base="$(git rev-parse 'HEAD^1')"
+          git worktree add -q --detach "$RUNNER_TEMP/base" "$base"
+
+          # The build list as go resolves it, one "path<TAB>version or replace" line per
+          # module. -mod=readonly lets go compute it even when vendor/ exists.
+          list() {
+            (cd "$1" && go list -mod=readonly -m -f '{{.Path}}{{"\t"}}{{if .Main}}main{{else}}{{.Version}}{{with .Replace}} => {{.Path}}{{with .Version}} {{.}}{{end}}{{end}}{{end}}' all) | sort
+          }
+
+          # capslock-out/<module>-modules.tsv: path, status, base, head. A module is changed
+          # when added, bumped, or given a new replace or go.work use, local ones included;
+          # a changed vendor/ tree marks them all, since it is what gets built.
+          rm -rf capslock-out && mkdir -p capslock-out
+          modules=""
+          for m in $CAPSLOCK_MODULES; do
+            # Captured first, so that a failing go list fails the step rather than passing it.
+            old="$(list "$RUNNER_TEMP/base/$m")"
+            new="$(list "$m")"
+            vendor=0
+            if [ -e "$m/vendor" ] || [ -e "$RUNNER_TEMP/base/$m/vendor" ]; then
+              diff -rq "$RUNNER_TEMP/base/$m/vendor" "$m/vendor" >/dev/null 2>&1 || vendor=1
+            fi
+            join -t $'\t' -a 1 -a 2 -e '' -o 0,1.2,2.2 <(printf '%s\n' "$old") <(printf '%s\n' "$new") \
+              | awk -F '\t' -v OFS='\t' -v vendor="$vendor" '{
+                  if ($3 == "") s = "removed"
+                  else if ($3 == "main" && ($2 == "main" || $2 == "")) s = "unchanged"
+                  else s = (vendor || $2 != $3) ? "changed" : "unchanged"
+                  print $1, s, $2, $3
+                }' > "capslock-out/$m-modules.tsv"
+            if awk -F '\t' '$2 == "changed" { f = 1 } END { exit !f }' "capslock-out/$m-modules.tsv"; then
+              modules="$modules $m"
+            fi
+          done
+          # A change to the gate itself runs it in full, so that it is tested before it guards main.
+          if ! git diff --quiet 'HEAD^1' HEAD -- .github/workflows/capslock-diff.yml scripts/capslock-compare.sh; then
+            modules="$CAPSLOCK_MODULES"
+            echo "The gate itself changed; analysing every module."
+          fi
+          echo "Base $base. Modules with changed dependencies:${modules:- none}"
+          printf 'base=%s\nmodules=%s\n' "$base" "${modules# }" >> "$GITHUB_OUTPUT"
+
+      - name: Install Capslock
+        if: steps.deps.outputs.modules != ''
+        run: go install github.com/google/capslock/cmd/capslock@"$CAPSLOCK_VERSION"
+
+      - name: Compare
+        id: compare
+        if: steps.deps.outputs.modules != ''
+        env:
+          BASE: ${{ steps.deps.outputs.base }}
+          MODULES: ${{ steps.deps.outputs.modules }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ./scripts/capslock-compare.sh
+
+      # Also when an earlier step failed, so a previous comment is never left looking green;
+      # not when a newer push cancelled the run, which would post a false failure.
+      - name: Comment on the pull request
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          # Any earlier step, setup included, so a failure never reads as "No dependency changed".
+          FAILED: ${{ job.status != 'success' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          body=capslock-out/comment.md
+          mkdir -p capslock-out
+          id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.type == "Bot" and (.body | startswith("<!-- capslock-diff"))) | .id' | tail -n 1)"
+          if [ "$FAILED" = true ]; then
+            printf '<!-- capslock-diff -->\n### Capslock dependency check\n\n:x: The check could not finish, so dependencies are unchecked. See the [job log](%s).\n' \
+              "$RUN_URL" > "$body"
+          elif [ ! -s "$body" ]; then
+            # No dependency changed: only an earlier comment needs updating, so it is not left stale.
+            [ -n "$id" ] || exit 0
+            printf '<!-- capslock-diff -->\n### Capslock dependency check\n\n:white_check_mark: No dependency changed.\n' > "$body"
+          fi
+          if [ -n "$id" ]; then
+            jq -n --rawfile body "$body" '{body: $body}' \
+              | gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" --input - --silent
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always() && steps.deps.outputs.modules != ''
+        with:
+          name: capslock-diff-${{ github.event.pull_request.number }}
+          path: |
+            capslock-out/*.txt
+            capslock-out/*.tsv
+          retention-days: 30
+          overwrite: true
+
+      - name: Fail on new capabilities
+        if: steps.compare.outputs.high != '' && steps.compare.outputs.high != '0'
+        env:
+          HIGH: ${{ steps.compare.outputs.high }}
+        run: |
+          echo "::error::${HIGH} new high-signal capability use(s) through changed dependencies; see the job summary."
+          exit 1
