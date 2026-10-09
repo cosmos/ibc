@@ -135,7 +135,7 @@ func NewPipeline(
 		stageConcurrency,
 		NewProcessorMW(
 			deps.Storage,
-			processors.NewRetryPacket(srcTxSubmitter, v2.RelayKindTimeout),
+			processors.NewRetryPacket(srcTxSubmitter, v2.OperationTypeTimeout),
 		),
 		output,
 	)
@@ -159,7 +159,7 @@ func NewPipeline(
 	)
 
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryPacket(dstTxSubmitter, v2.RelayKindRecv)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryPacket(dstTxSubmitter, v2.OperationTypeRecv)), output)
 
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
@@ -198,7 +198,7 @@ func NewPipeline(
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryPacket(srcTxSubmitter, v2.RelayKindAck)), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryPacket(srcTxSubmitter, v2.OperationTypeAck)), output)
 
 	// deliver acks in batches on the source chain
 	batchAckPacket, err := processors.NewBatchAckPacket(

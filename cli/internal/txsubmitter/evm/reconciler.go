@@ -48,16 +48,16 @@ func (r *transactionReconciler) run(ctx context.Context) {
 }
 
 func (r *transactionReconciler) reconcile(ctx context.Context) {
-	state, err := r.minedState(ctx)
+	state, err := r.latestMinedState(ctx)
 	if err != nil {
 		r.logger.Warn("Reading mined account state", "error", err)
 		return
 	}
-	if err = r.reopen(ctx, state); err != nil {
+	if err = r.reopenReorgedTransactions(ctx, state); err != nil {
 		r.logger.Warn("Reopening unmined transactions", "error", err)
 		return
 	}
-	pending, err := r.loadPending(ctx)
+	pending, err := r.loadUnresolvedTransactions(ctx, state.nonce)
 	if err != nil {
 		r.logger.Warn("Loading transaction journal", "error", err)
 		return
@@ -70,16 +70,29 @@ func (r *transactionReconciler) reconcile(ctx context.Context) {
 	for _, nonce := range slices.Sorted(maps.Keys(pending)) {
 		p := pending[nonce]
 		if nonce < state.nonce {
-			if err := r.resolveNonce(ctx, p, state); err != nil {
+			if err := r.resolveTransactionState(ctx, p, state); err != nil {
 				r.logger.Warn("Resolving transaction nonce", "nonce", nonce, "error", err)
 			}
 			continue
 		}
-		r.retryPending(ctx, p, state.nonce)
+		r.retryPendingTransactions(ctx, p, state.nonce)
 	}
 }
 
-func (r *transactionReconciler) retryPending(ctx context.Context, p *pendingTx, minedNonce uint64) {
+func (r *transactionReconciler) retryPendingTransactions(ctx context.Context, p *pendingTx, minedNonce uint64) {
+	if r.now().Sub(p.attempts[0].SubmittedAt) >= r.opts.AbandonAfter {
+		requestCtx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
+		defer cancel()
+		if err := r.db.AbandonTxAttempts(requestCtx, r.chainID, r.address.Hex(), p.latest().Nonce); err != nil {
+			r.logger.Warn("Abandoning expired transaction", "nonce", p.latest().Nonce, "error", err)
+			return
+		}
+		for _, a := range p.attempts {
+			metrics.forgetTx(r.chainID, a.Hash)
+		}
+		r.logger.Warn("Transaction abandoned; operations available for retry", "nonce", p.latest().Nonce)
+		return
+	}
 	if p.latest().LastBroadcastAt != nil && p.latest().Nonce == minedNonce &&
 		r.now().Sub(p.latest().SubmittedAt) >= r.opts.RepriceInterval &&
 		r.now().Sub(r.lastReprice) >= r.opts.RepriceInterval {
@@ -94,10 +107,10 @@ func (r *transactionReconciler) retryPending(ctx context.Context, p *pendingTx, 
 	}
 }
 
-func (r *transactionReconciler) reopen(ctx context.Context, state minedState) error {
-	resolutions, err := call(ctx, r.opts.RequestTimeout, func(ctx context.Context) ([]store.TxResolution, error) {
-		return r.db.ListTxResolutionsFrom(ctx, r.chainID, r.address.Hex(), state.nonce)
-	})
+func (r *transactionReconciler) reopenReorgedTransactions(ctx context.Context, state minedState) error {
+	requestCtx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
+	resolutions, err := r.db.ListTxResolutionsFrom(requestCtx, r.chainID, r.address.Hex(), state.nonce)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -106,7 +119,7 @@ func (r *transactionReconciler) reopen(ctx context.Context, state minedState) er
 			continue
 		}
 		requestCtx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
-		err := r.reopenNonce(requestCtx, resolution, state)
+		err := r.db.ReopenTxAttempts(requestCtx, r.chainID, r.address.Hex(), resolution)
 		cancel()
 		if err != nil {
 			return err
@@ -115,22 +128,7 @@ func (r *transactionReconciler) reopen(ctx context.Context, state minedState) er
 	return nil
 }
 
-func (r *transactionReconciler) reopenNonce(
-	ctx context.Context,
-	resolution store.TxResolution,
-	state minedState,
-) error {
-	hash, err := r.blockHashByNumber(ctx, resolution.BlockNumber)
-	if err != nil || hash == common.HexToHash(resolution.BlockHash) {
-		return err
-	}
-	if err := r.checkCanonical(ctx, state); err != nil {
-		return err
-	}
-	return r.db.ReopenTxAttempts(ctx, r.chainID, r.address.Hex(), resolution)
-}
-
-func (r *transactionReconciler) resolveNonce(ctx context.Context, p *pendingTx, state minedState) error {
+func (r *transactionReconciler) resolveTransactionState(ctx context.Context, p *pendingTx, state minedState) error {
 	ctx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
 	defer cancel()
 	receipt, err := r.minedReceipt(ctx, p.hashes(), state)
@@ -148,7 +146,7 @@ func (r *transactionReconciler) resolveNonce(ctx context.Context, p *pendingTx, 
 		outcome.Hash = receipt.TxHash.Hex()
 		outcome.Status = store.TxConfirmed
 		if receipt.Status == types.ReceiptStatusFailed {
-			outcome.Status = store.TxReverted
+			outcome.Status = store.TxFailed
 		}
 	}
 	if err := r.db.ResolveTxNonce(ctx, outcome); err != nil {
@@ -172,7 +170,7 @@ func (r *transactionReconciler) reprice(ctx context.Context, p *pendingTx) error
 	ctx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
 	defer cancel()
 	return saveAttempt(ctx, r.db, signed, store.TxAttempt{
-		ChainID: r.chainID, Sender: r.address.Hex(), Kind: p.latest().Kind, SubmittedAt: r.now().UTC(),
+		ChainID: r.chainID, Sender: r.address.Hex(), SubmittedAt: r.now().UTC(),
 	}, p)
 }
 
@@ -182,7 +180,7 @@ type minedState struct {
 	nonce       uint64
 }
 
-func (r *transactionReconciler) minedState(ctx context.Context) (minedState, error) {
+func (r *transactionReconciler) latestMinedState(ctx context.Context) (minedState, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
 	defer cancel()
 	head, err := r.eth.HeaderByNumber(ctx, nil)
@@ -314,10 +312,13 @@ func maxBig(a, b *big.Int) *big.Int {
 	return b
 }
 
-func (r *transactionReconciler) loadPending(ctx context.Context) (map[uint64]*pendingTx, error) {
+func (r *transactionReconciler) loadUnresolvedTransactions(
+	ctx context.Context,
+	minedNonce uint64,
+) (map[uint64]*pendingTx, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.opts.RequestTimeout)
 	defer cancel()
-	attempts, err := r.db.ListPendingTxAttempts(ctx, r.chainID, r.address.Hex())
+	attempts, err := r.db.ListUnresolvedTxAttempts(ctx, r.chainID, r.address.Hex(), minedNonce)
 	if err != nil {
 		return nil, err
 	}
@@ -329,17 +330,20 @@ func (r *transactionReconciler) loadPending(ctx context.Context) (map[uint64]*pe
 			return nil, err
 		}
 		if tx.Hash().Hex() != a.Hash || tx.Nonce() != a.Nonce {
-			return nil, errors.New("invalid signed transaction in journal")
+			return nil, errors.New("invalid signed transaction in db")
 		}
 		if p == nil {
-			packets, err := r.db.ListTxPackets(ctx, a.ID)
-			if err != nil {
-				return nil, err
-			}
-			p = &pendingTx{packets: packets}
+			p = &pendingTx{}
 			pending[a.Nonce] = p
 		}
 		p.attempts = append(p.attempts, signedAttempt{TxAttempt: a, tx: tx})
+	}
+	for _, p := range pending {
+		operations, loadErr := r.db.ListTxOperations(ctx, p.latest().ID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		p.operations = operations
 	}
 
 	return pending, nil

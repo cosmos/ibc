@@ -20,8 +20,8 @@ import (
 )
 
 type pendingTx struct {
-	attempts []signedAttempt
-	packets  []store.PacketKey
+	attempts   []signedAttempt
+	operations []store.TxOperation
 }
 
 type signedAttempt struct {
@@ -40,16 +40,18 @@ func (p *pendingTx) hashes() []common.Hash {
 }
 
 func estimateFees(ctx context.Context, eth ETHClient, opts *ChainOptions) (fee, tip *big.Int, err error) {
-	head, err := call(ctx, opts.RequestTimeout, func(ctx context.Context) (*types.Header, error) {
-		return eth.HeaderByNumber(ctx, nil)
-	})
+	requestCtx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
+	head, err := eth.HeaderByNumber(requestCtx, nil)
+	cancel()
 	if err != nil {
 		return nil, nil, err
 	}
 	if head.BaseFee == nil {
 		return nil, nil, errors.New("chain must support EIP-1559")
 	}
-	tip, err = call(ctx, opts.RequestTimeout, eth.SuggestGasTipCap)
+	requestCtx, cancel = context.WithTimeout(ctx, opts.RequestTimeout)
+	tip, err = eth.SuggestGasTipCap(requestCtx)
+	cancel()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,11 +71,9 @@ func signTransaction(
 		tx.GasTipCap().Cmp(tx.GasFeeCap()) > 0 {
 		return nil, errors.New("transaction exceeds gas or fee cap")
 	}
-	sig, err := call(
-		ctx,
-		opts.RequestTimeout,
-		func(ctx context.Context) ([]byte, error) { return chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes()) },
-	)
+	ctx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
+	defer cancel()
+	sig, err := chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func saveAttempt(
 	a.Nonce = signed.Nonce()
 	a.SignedTx = raw
 	a.Status = store.TxPending
-	a.ID, err = store.SaveTxAttempt(ctx, db, a, p.packets)
+	a.ID, err = store.SaveTxAttempt(ctx, db, a, p.operations)
 	if err != nil {
 		return err
 	}
@@ -175,11 +175,9 @@ func (c *TxSubmitter) buildAndSignTransaction(
 		return nil, errors.New("invalid transaction destination")
 	}
 	to := common.HexToAddress(destination)
-	code, err := call(
-		ctx,
-		c.opts.RequestTimeout,
-		func(ctx context.Context) ([]byte, error) { return c.eth.PendingCodeAt(ctx, to) },
-	)
+	requestCtx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
+	code, err := c.eth.PendingCodeAt(requestCtx, to)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -190,12 +188,12 @@ func (c *TxSubmitter) buildAndSignTransaction(
 	if err != nil {
 		return nil, err
 	}
-	gas, err := call(ctx, c.opts.RequestTimeout, func(ctx context.Context) (uint64, error) {
-		return c.eth.EstimateGas(
-			ctx,
-			ethereum.CallMsg{From: c.address, To: &to, Data: data, GasFeeCap: fee, GasTipCap: tip},
-		)
-	})
+	requestCtx, cancel = context.WithTimeout(ctx, c.opts.RequestTimeout)
+	gas, err := c.eth.EstimateGas(
+		requestCtx,
+		ethereum.CallMsg{From: c.address, To: &to, Data: data, GasFeeCap: fee, GasTipCap: tip},
+	)
+	cancel()
 	if err != nil {
 		return nil, err
 	}

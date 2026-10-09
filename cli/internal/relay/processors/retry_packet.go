@@ -17,12 +17,12 @@ var ErrSubmissionPending = errors.New("waiting for packet submission or chain re
 
 // RetryPacket checks submission ownership before the packet enters a batch.
 type RetryPacket struct {
-	submitter txsubmitter.TxSubmitter
-	kind      v2.RelayKind
+	submitter     txsubmitter.TxSubmitter
+	operationType v2.OperationType
 }
 
-func NewRetryPacket(s txsubmitter.TxSubmitter, kind v2.RelayKind) RetryPacket {
-	return RetryPacket{submitter: s, kind: kind}
+func NewRetryPacket(s txsubmitter.TxSubmitter, operationType v2.OperationType) RetryPacket {
+	return RetryPacket{submitter: s, operationType: operationType}
 }
 
 func (p RetryPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -30,7 +30,7 @@ func (p RetryPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, erro
 		SourceChainID:  tr.SourceChainID,
 		SourceClientID: tr.PacketSourceClientID,
 		Sequence:       tr.PacketSequenceNumber,
-		Kind:           p.kind,
+		Type:           p.operationType,
 	}
 	pending, err := p.submitter.HasPending(ctx, op)
 	if err != nil {
@@ -43,11 +43,11 @@ func (p RetryPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, erro
 }
 
 func (p RetryPacket) ShouldProcess(tr *Transfer) bool {
-	switch p.kind {
-	case v2.RelayKindRecv:
+	switch p.operationType {
+	case v2.OperationTypeRecv:
 		return tr.WriteAckTxHash == nil && tr.AckTxHash == nil && tr.TimeoutTxHash == nil &&
 			(!tr.IsTimedOut() || tr.RecvTxHash != nil)
-	case v2.RelayKindAck:
+	case v2.OperationTypeAck:
 		return tr.WriteAckTxHash != nil && tr.TimeoutTxHash == nil
 	default:
 		return tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
@@ -56,17 +56,17 @@ func (p RetryPacket) ShouldProcess(tr *Transfer) bool {
 
 func (p RetryPacket) Cancel(tr *Transfer, err error) {
 	if errors.Is(err, ErrSubmissionPending) {
-		tr.GetLogger().Debug("Waiting for packet submission", "kind", p.kind)
+		tr.GetLogger().Debug("Waiting for packet submission", "kind", p.operationType)
 		return
 	}
-	tr.GetLogger().Error("Checking packet submission", "kind", p.kind, "err", err)
+	tr.GetLogger().Error("Checking packet submission", "kind", p.operationType, "err", err)
 }
 
 func (p RetryPacket) Status() store.RelayStatus {
-	switch p.kind {
-	case v2.RelayKindRecv:
+	switch p.operationType {
+	case v2.OperationTypeRecv:
 		return store.RelayStatusDeliverRecvPacket
-	case v2.RelayKindAck:
+	case v2.OperationTypeAck:
 		return store.RelayStatusDeliverAckPacket
 	default:
 		return store.RelayStatusDeliverTimeoutPacket

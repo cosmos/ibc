@@ -344,6 +344,11 @@ func (d *Relayer) Stop(ctx context.Context) error {
 	return d.h.signalAndWait(ctx, syscall.SIGTERM, stopGrace)
 }
 
+// Crash terminates the process without allowing graceful shutdown.
+func (d *Relayer) Crash(ctx context.Context) error {
+	return d.h.signalAndWait(ctx, syscall.SIGKILL, 0)
+}
+
 func (d *Relayer) kill() error {
 	ctx, cancel := context.WithTimeout(context.Background(), killTimeout)
 	defer cancel()

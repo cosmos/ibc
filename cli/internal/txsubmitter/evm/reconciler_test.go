@@ -43,7 +43,12 @@ type reconciliationStoreStub struct {
 	broadcasts map[string]time.Time
 }
 
-func (s *reconciliationStoreStub) ListPendingTxAttempts(context.Context, string, string) ([]store.TxAttempt, error) {
+func (s *reconciliationStoreStub) ListUnresolvedTxAttempts(
+	context.Context,
+	string,
+	string,
+	uint64,
+) ([]store.TxAttempt, error) {
 	return s.attempts, nil
 }
 
@@ -61,7 +66,7 @@ func (s *reconciliationStoreStub) InsertTxAttempt(_ context.Context, a store.TxA
 	return a.ID, nil
 }
 
-func (s *reconciliationStoreStub) ListTxPackets(context.Context, int64) ([]store.PacketKey, error) {
+func (s *reconciliationStoreStub) ListTxOperations(context.Context, int64) ([]store.TxOperation, error) {
 	return nil, nil
 }
 
@@ -113,7 +118,8 @@ func newTestReconciler(t *testing.T) (*transactionReconciler, *testRPC, *reconci
 		db: db, logger: slog.Default(), now: func() time.Time { return now },
 		opts: &ChainOptions{
 			PollInterval: time.Second, RepriceInterval: time.Minute, RequestTimeout: time.Second,
-			MaxGas: DefaultMaxGas, MaxFeePerGas: big.NewInt(DefaultMaxFeePerGas),
+			AbandonAfter: DefaultAbandonAfter,
+			MaxGas:       DefaultMaxGas, MaxFeePerGas: big.NewInt(DefaultMaxFeePerGas),
 		},
 	}
 	return r, rpc, db, &now
@@ -133,7 +139,7 @@ func pendingAttempt(t *testing.T, r *transactionReconciler, nonce uint64, submit
 		tx: tx,
 		TxAttempt: store.TxAttempt{
 			ChainID: r.chainID, Sender: r.address.Hex(), Hash: tx.Hash().Hex(), Nonce: nonce,
-			Kind: store.TxKindRecv, SubmittedAt: submittedAt, SignedTx: raw,
+			SubmittedAt: submittedAt, SignedTx: raw,
 		},
 	}}}
 }
@@ -141,8 +147,8 @@ func pendingAttempt(t *testing.T, r *transactionReconciler, nonce uint64, submit
 func TestReconcilerBroadcastsBeforeRepricing(t *testing.T) {
 	r, rpc, db, now := newTestReconciler(t)
 	key := r.signer.(*countingSigner)
-	first := pendingAttempt(t, r, 0, now.Add(-time.Hour))
-	second := pendingAttempt(t, r, 1, now.Add(-time.Hour))
+	first := pendingAttempt(t, r, 0, now.Add(-2*time.Minute))
+	second := pendingAttempt(t, r, 1, now.Add(-2*time.Minute))
 	db.attempts = []store.TxAttempt{first.latest().TxAttempt, second.latest().TxAttempt}
 	original := first.latest().tx
 	later := second.latest().tx
@@ -187,7 +193,7 @@ func TestReconcilerBacksOffFailedReplacement(t *testing.T) {
 		t.Run(failure, func(t *testing.T) {
 			r, rpc, db, now := newTestReconciler(t)
 			key := r.signer.(*countingSigner)
-			p := pendingAttempt(t, r, 0, now.Add(-time.Hour))
+			p := pendingAttempt(t, r, 0, now.Add(-2*time.Minute))
 			broadcastAt := *now
 			p.latest().LastBroadcastAt = &broadcastAt
 			db.attempts = []store.TxAttempt{p.latest().TxAttempt}
@@ -219,7 +225,7 @@ func TestReconcilerBacksOffFailedReplacement(t *testing.T) {
 }
 
 func TestReconcilerResolvesMinedNonce(t *testing.T) {
-	for _, status := range []string{store.TxConfirmed, store.TxReverted, store.TxConsumed} {
+	for _, status := range []string{store.TxConfirmed, store.TxFailed, store.TxConsumed} {
 		t.Run(status, func(t *testing.T) {
 			r, rpc, db, now := newTestReconciler(t)
 			key := r.signer.(*countingSigner)
@@ -233,7 +239,7 @@ func TestReconcilerResolvesMinedNonce(t *testing.T) {
 					TxHash: p.latest().tx.Hash(), Status: types.ReceiptStatusSuccessful,
 					BlockNumber: rpc.head.Number, BlockHash: rpc.head.Hash(),
 				}
-				if status == store.TxReverted {
+				if status == store.TxFailed {
 					rpc.receipts[p.latest().tx.Hash()].Status = types.ReceiptStatusFailed
 				}
 			}
@@ -249,30 +255,20 @@ func TestReconcilerResolvesMinedNonce(t *testing.T) {
 	}
 }
 
-func TestReconcilerReopensOnlyReplacedBlocks(t *testing.T) {
+func TestReconcilerReopeningRequiresResolutionHeight(t *testing.T) {
 	for _, tc := range []struct {
-		name            string
-		height          uint64
-		hash            common.Hash
-		reorgDuringPass bool
-		reopen          bool
+		name   string
+		height uint64
+		reopen bool
 	}{
-		{name: "lagging node", height: 9, hash: common.HexToHash("0x20")},
-		{name: "unchanged block", height: 10, hash: common.HexToHash("0x10")},
-		{name: "replaced block", height: 10, hash: common.HexToHash("0x20"), reopen: true},
-		{name: "head changed during pass", height: 10, hash: common.HexToHash("0x20"), reorgDuringPass: true},
+		{name: "older block", height: 9},
+		{name: "same height", height: 10, reopen: true},
+		{name: "newer block", height: 11, reopen: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, rpc, db, _ := newTestReconciler(t)
 			db.resolved = []store.TxResolution{{Nonce: 0, BlockNumber: 10, BlockHash: common.HexToHash("0x10").Hex()}}
 			rpc.head.Number = new(big.Int).SetUint64(tc.height)
-			rpc.reportedHash = tc.hash
-			if tc.reorgDuringPass {
-				rpc.afterNonce = func() {
-					rpc.reportedHash = common.HexToHash("0x30")
-				}
-			}
-
 			r.reconcile(t.Context())
 			if tc.reopen {
 				require.Equal(t, db.resolved, db.reopened)
@@ -287,7 +283,7 @@ func TestReconcilerMinedStateRequiresCanonicalBlock(t *testing.T) {
 	r, rpc, _, _ := newTestReconciler(t)
 	rpc.reportedHash = common.HexToHash("0xbe5a")
 	rpc.mined = 7
-	state, err := r.minedState(t.Context())
+	state, err := r.latestMinedState(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, minedState{blockNumber: 10, blockHash: rpc.reportedHash, nonce: 7}, state)
 	require.Equal(t, &rpc.reportedHash, rpc.nonceBlock.BlockHash)

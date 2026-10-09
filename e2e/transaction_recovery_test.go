@@ -17,10 +17,11 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
@@ -102,6 +103,10 @@ func newAcceptThenFail(t *testing.T, endpoint string, before func(context.Contex
 }
 
 func (f *acceptThenFail) configure(t *testing.T, chainID uint64) func(*ibccli.RelayerConfig) {
+	return configureTransactionRPC(t, chainID, f.server.URL)
+}
+
+func configureTransactionRPC(t *testing.T, chainID uint64, endpoint string) func(*ibccli.RelayerConfig) {
 	return func(cfg *ibccli.RelayerConfig) {
 		logPath := filepath.Join(filepath.Dir(cfg.DBPath), "relayer.log")
 		t.Cleanup(func() {
@@ -115,7 +120,7 @@ func (f *acceptThenFail) configure(t *testing.T, chainID uint64) func(*ibccli.Re
 		})
 		for i := range cfg.Chains {
 			if cfg.Chains[i].ChainID == strconv.FormatUint(chainID, 10) {
-				cfg.Chains[i].RPC = f.server.URL
+				cfg.Chains[i].RPC = endpoint
 			}
 		}
 	}
@@ -124,7 +129,9 @@ func (f *acceptThenFail) configure(t *testing.T, chainID uint64) func(*ibccli.Re
 func TestTransactionRecovery_ReceiveAfterLostResponseAndRestart(t *testing.T) {
 	t.Parallel()
 	spec, runtime := attestedMesh(
-		e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB),
+		e2etest.EVMChains(t, e2etest.EVMRequirements{
+			Provider: e2etest.EVMProviderAnvil, ControlledMining: true,
+		}, e2etest.ChainA, e2etest.ChainB),
 	)
 	env := e2etest.Start(t, spec, runtime)
 	destination, err := env.Chain(e2etest.ChainB)
@@ -157,14 +164,20 @@ func TestTransactionRecovery_ReceiveAfterLostResponseAndRestart(t *testing.T) {
 	}
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, relayer.Stop(ctx))
+	client := recoveryClient(t, destination)
+	require.NoError(t, client.Client().CallContext(ctx, nil, "anvil_dropAllTransactions"))
+	_, _, err = client.TransactionByHash(ctx, accepted.Hash())
+	require.ErrorIs(t, err, ethereum.NotFound)
 	relayer = e2etest.StartRelayer(t, driver, env)
+	deadline, _ := ctx.Deadline()
+	require.Eventually(t, func() bool {
+		_, pending, lookupErr := client.TransactionByHash(ctx, accepted.Hash())
+		return lookupErr == nil && pending
+	}, time.Until(deadline), destination.Timing().PollInterval, "restart must rebroadcast the dropped transaction")
 	require.NoError(t, mining.Resume(ctx))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
-	client, err := ethclient.Dial(destination.RPCURL())
-	require.NoError(t, err)
-	defer client.Close()
 	receipt, err := client.TransactionReceipt(ctx, accepted.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)

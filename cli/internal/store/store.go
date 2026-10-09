@@ -32,14 +32,15 @@ type Store interface {
 type Repository interface {
 	SetTxBroadcast(ctx context.Context, chainID, hash string, at time.Time) error
 	InsertTxAttempt(ctx context.Context, attempt TxAttempt) (int64, error)
-	LinkTxPacket(ctx context.Context, attemptID int64, key PacketKey) error
-	ListTxPackets(ctx context.Context, attemptID int64) ([]PacketKey, error)
-	ListPendingTxAttempts(ctx context.Context, chainID, sender string) ([]TxAttempt, error)
+	InsertTxOperation(ctx context.Context, attemptID int64, operation TxOperation) error
+	ListTxOperations(ctx context.Context, attemptID int64) ([]TxOperation, error)
+	ListUnresolvedTxAttempts(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxAttempt, error)
+	AbandonTxAttempts(ctx context.Context, chainID, sender string, nonce uint64) error
 	ListTxNoncesFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]uint64, error)
 	ListTxResolutionsFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxResolution, error)
 	ReopenTxAttempts(ctx context.Context, chainID, sender string, resolution TxResolution) error
 	GetTxAttempt(ctx context.Context, chainID, hash string) (TxAttempt, error)
-	HasPendingPacketSubmission(ctx context.Context, key PacketKey, kind string) (bool, error)
+	HasPendingOperation(ctx context.Context, operation TxOperation) (bool, error)
 	ResolveTxNonce(ctx context.Context, outcome TxOutcome) error
 
 	// UpsertPacket records a packet. A new packet is inserted; an existing

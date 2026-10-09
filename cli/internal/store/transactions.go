@@ -9,16 +9,17 @@ import (
 	"time"
 )
 
-// Transaction kinds and journal states.
+// Operation types and journal states.
 const (
-	TxKindRecv    = "recv"
-	TxKindAck     = "ack"
-	TxKindTimeout = "timeout"
-	TxPending     = "PENDING"
-	TxConfirmed   = "CONFIRMED"
-	TxReverted    = "REVERTED"
-	TxReplaced    = "REPLACED"
-	TxConsumed    = "CONSUMED"
+	OperationTypeRecv    = "recv"
+	OperationTypeAck     = "ack"
+	OperationTypeTimeout = "timeout"
+	TxPending            = "PENDING"
+	TxAbandoned          = "ABANDONED"
+	TxConfirmed          = "CONFIRMED"
+	TxFailed             = "FAILED"
+	TxReplaced           = "REPLACED"
+	TxConsumed           = "CONSUMED"
 )
 
 // TxAttempt retains the signed bytes of one broadcast or fee replacement.
@@ -27,12 +28,29 @@ type TxAttempt struct {
 	ChainID         string
 	Sender          string
 	Hash            string
-	Kind            string
 	Nonce           uint64
 	SignedTx        []byte
 	SubmittedAt     time.Time
 	LastBroadcastAt *time.Time
 	Status          string
+}
+
+// TxOperation associates a packet action with a transaction attempt.
+type TxOperation struct {
+	PacketKey
+	Type string
+}
+
+func (o TxOperation) Validate() error {
+	if o.SourceChainID == "" || o.SourceClientID == "" || o.Sequence == 0 || o.Sequence > math.MaxInt64 {
+		return fmt.Errorf("invalid operation packet key")
+	}
+	switch o.Type {
+	case OperationTypeRecv, OperationTypeAck, OperationTypeTimeout:
+		return nil
+	default:
+		return fmt.Errorf("invalid operation type %q", o.Type)
+	}
 }
 
 // TxOutcome resolves a nonce, optionally identifying the mined attempt.
@@ -68,7 +86,7 @@ func (o TxOutcome) Validate() error {
 		return err
 	}
 	switch o.Status {
-	case TxConfirmed, TxReverted:
+	case TxConfirmed, TxFailed:
 		if o.Hash != "" {
 			return nil
 		}
@@ -85,16 +103,11 @@ func (a TxAttempt) Validate() error {
 		a.Nonce > math.MaxInt64 {
 		return fmt.Errorf("invalid transaction attempt")
 	}
-	switch a.Kind {
-	case TxKindRecv, TxKindAck, TxKindTimeout:
-		return nil
-	default:
-		return fmt.Errorf("invalid transaction kind %q", a.Kind)
-	}
+	return nil
 }
 
-// SaveTxAttempt commits nonce ownership and packet links before any broadcast.
-func SaveTxAttempt(ctx context.Context, db Store, attempt TxAttempt, packets []PacketKey) (int64, error) {
+// SaveTxAttempt commits nonce ownership and operations before any broadcast.
+func SaveTxAttempt(ctx context.Context, db Store, attempt TxAttempt, operations []TxOperation) (int64, error) {
 	var id int64
 	err := db.Transact(ctx, func(repo Repository) error {
 		var err error
@@ -102,8 +115,8 @@ func SaveTxAttempt(ctx context.Context, db Store, attempt TxAttempt, packets []P
 		if err != nil {
 			return err
 		}
-		for _, key := range packets {
-			if err = repo.LinkTxPacket(ctx, id, key); err != nil {
+		for _, operation := range operations {
+			if err = repo.InsertTxOperation(ctx, id, operation); err != nil {
 				return err
 			}
 		}

@@ -113,7 +113,7 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 
 	err = relayPackets(
 		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, p.route.SourceChainID, v2.RelayKindTimeout,
+		p.route.SourceClientID, p.route.SourceChainID, v2.OperationTypeTimeout,
 		proofHeight, events,
 	)
 	if err != nil {
