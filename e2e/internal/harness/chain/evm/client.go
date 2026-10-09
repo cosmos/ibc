@@ -91,8 +91,8 @@ func Retry[T any](ctx context.Context, w TransactionWait, f func(context.Context
 }
 
 // jsonRPCInternalError is the JSON-RPC 2.0 internal error, the node's
-// equivalent of HTTP 500. Besu answers it under load, for calls that succeed
-// when repeated.
+// equivalent of HTTP 500. Besu answered it to both Chains' gas estimates at
+// once in a sustained load run.
 const jsonRPCInternalError = -32603
 
 // transient reports whether a request is worth repeating: the node gave no
@@ -383,9 +383,11 @@ func (e *EVMClient) buildSignedTx(
 	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
 	est, err := Retry(ctx, wait, func(ctx context.Context) (uint64, error) {
 		est, estimateErr := e.client.EstimateGas(ctx, msg)
-		if estimateErr != nil && !transient(estimateErr) {
+		var nodeErr rpc.Error
+		if errors.As(estimateErr, &nodeErr) {
 			// Besu can reject otherwise-valid short-lived transactions because its
-			// pending estimate uses a future timestamp. Retry against latest.
+			// pending estimate uses a future timestamp, and fail internally on
+			// it under load. Retry against latest.
 			est, estimateErr = e.client.EstimateGasAtBlock(ctx, msg, nil)
 		}
 		return est, estimateErr

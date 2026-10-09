@@ -42,6 +42,8 @@ type fakeNode struct {
 	// sentHashes and lookedUp are the hashes of the raw transactions sent
 	// and of the transactions asked for by hash, in order.
 	sentHashes, lookedUp []common.Hash
+	// estimateBlocks are the blocks gas was estimated at, "" for none given.
+	estimateBlocks []string
 }
 
 func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +64,13 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			n.sentNonces = append(n.sentNonces, tx.Nonce())
 			n.sentHashes = append(n.sentHashes, tx.Hash())
 		}
+	}
+	if req.Method == "eth_estimateGas" {
+		var block string
+		if len(req.Params) > 1 {
+			_ = json.Unmarshal(req.Params[1], &block)
+		}
+		n.estimateBlocks = append(n.estimateBlocks, block)
 	}
 	var hash common.Hash
 	if req.Method == "eth_getTransactionByHash" && len(req.Params) == 1 && json.Unmarshal(req.Params[0], &hash) == nil {
@@ -204,6 +213,17 @@ func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
 		"the unanswered lookup is repeated, for the transaction sent")
 }
 
+func TestBroadcastTxFallsBackOnAnInternalEstimateError(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_estimateGas": {{nodeErr: "Internal error", code: -32603}, {result: "0x5208"}},
+	})
+
+	require.NoError(t, broadcast(t, client))
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	assert.Equal(t, []string{"", "latest"}, node.estimateBlocks, "the latest block answers at once")
+}
+
 func TestBroadcastTxRepeatsAnInternalError(t *testing.T) {
 	node, client := newFakeNode(t, map[string][]reply{
 		"eth_getTransactionCount": {{nodeErr: "Internal error", code: -32603}, {result: "0x0"}},
@@ -237,7 +257,7 @@ func TestBroadcastTxRetriesOnlyTheHTTPStatusesThatAskTo(t *testing.T) {
 
 	node.script("eth_estimateGas", reply{status: http.StatusNotFound})
 	require.ErrorContains(t, broadcast(t, client), "404")
-	assert.Equal(t, 5, node.count("eth_estimateGas"), "one call and Besu's fallback")
+	assert.Equal(t, 4, node.count("eth_estimateGas"), "one call: only a node error falls back")
 }
 
 func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
