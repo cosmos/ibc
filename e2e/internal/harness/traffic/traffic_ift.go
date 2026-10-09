@@ -218,23 +218,25 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	if err != nil {
 		return nil, fmt.Errorf("traffic: send IFT batch on route %q: %w", i.routeID, err)
 	}
-	sequences, err := sendPacketSequences(i.sourceRouter, receipt)
+	sent, err := sentPackets(receipt, i.sourceRouter)
 	if err != nil {
 		return nil, err
 	}
-	if len(sequences) != len(requests) {
+	if len(sent) != len(requests) {
 		return nil, fmt.Errorf(
 			"traffic: IFT batch on route %q emitted %d packets, want %d",
 			i.routeID,
-			len(sequences),
+			len(sent),
 			len(requests),
 		)
 	}
 
 	packets := make([]iftBatchPacket, len(requests))
-	for k, sequence := range sequences {
+	for k, event := range sent {
+		sequence := event.Packet.Sequence
 		packets[k] = iftBatchPacket{
 			packetTx:          newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence).PacketTx(),
+			encoded:           event.Raw.Data,
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
 			destinationBefore: destinationsBefore[k],
@@ -252,7 +254,9 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 }
 
 type iftBatchPacket struct {
-	packetTx          PacketTx
+	packetTx PacketTx
+	// encoded is the packet's ABI encoding, as attestors attest it.
+	encoded           []byte
 	receiver          common.Address
 	amount            *big.Int
 	destinationBefore *big.Int
@@ -278,6 +282,16 @@ func (b *IFTBatch) PacketTxs() []PacketTx {
 		packetTxs[k] = packet.packetTx
 	}
 	return packetTxs
+}
+
+// EncodedPackets returns every packet's ABI encoding, the form attestors
+// attest, in send order.
+func (b *IFTBatch) EncodedPackets() [][]byte {
+	encoded := make([][]byte, len(b.packets))
+	for k, packet := range b.packets {
+		encoded[k] = packet.encoded
+	}
+	return encoded
 }
 
 // TxHash is the hex hash of the one source transaction that emitted the batch.

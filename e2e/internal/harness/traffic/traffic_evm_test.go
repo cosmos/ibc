@@ -77,7 +77,7 @@ func TestSentPacketsOnlyDecodesRouterLogs(t *testing.T) {
 	}
 	router := common.HexToAddress("0x1")
 
-	events, err := SentPackets(&types.Receipt{Logs: []*types.Log{
+	events, err := sentPackets(&types.Receipt{Logs: []*types.Log{
 		sendPacketLog(common.HexToAddress("0x2"), 1),
 		sendPacketLog(router, 2),
 		{Address: router, Topics: []common.Hash{common.HexToHash("0x3")}},

@@ -4,7 +4,6 @@ package traffic
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -26,28 +25,20 @@ func Coins(n int64) *big.Int {
 
 // FundWallets pays every wallet tokenEach of the route's source IFT, out of
 // the batch shim's IFT balance (the shim is minted the initial supply at
-// deployment), and weiEach native coin, on the source Chain. The route's
-// sender submits one payable fund transaction per 64 wallets and pays their
-// native value; before each it tops its own balance up through the Chain's
-// funding capability, so the source Chain must be managed. Every input is
-// validated before any transaction is sent; a failed chunk stops funding,
-// leaving earlier chunks paid.
+// deployment), and weiEach native coin (none if nil), on the source Chain.
+// The route's sender first tops its own balance up to cover every wallet's
+// native value through the Chain's funding capability, so the source Chain
+// must be managed, then submits one payable fund transaction per 64
+// wallets. A failed chunk stops funding, leaving earlier chunks paid.
 func (i *IFT) FundWallets(ctx context.Context, wallets []common.Address, tokenEach, weiEach *big.Int) error {
 	tokenEach, err := validAmount(tokenEach)
 	if err != nil {
 		return err
 	}
-	if weiEach == nil || weiEach.Sign() < 0 {
-		return errors.New("traffic: native funding per wallet must be non-negative")
+	if weiEach == nil {
+		weiEach = new(big.Int)
 	}
-	recipients := make([]iftbatchtransfershim.IFTBatchTransferShimRecipient, len(wallets))
-	for k, wallet := range wallets {
-		if wallet == (common.Address{}) {
-			return fmt.Errorf("traffic: wallet %d has a zero address", k)
-		}
-		recipients[k] = iftbatchtransfershim.IFTBatchTransferShimRecipient{Account: wallet, Amount: tokenEach}
-	}
-	if len(recipients) == 0 {
+	if len(wallets) == 0 {
 		return nil
 	}
 
@@ -55,22 +46,27 @@ func (i *IFT) FundWallets(ctx context.Context, wallets []common.Address, tokenEa
 	if err != nil {
 		return fmt.Errorf("traffic: fund wallets on route %q: %w", i.routeID, err)
 	}
-	for start := 0; start < len(recipients); start += fundChunk {
-		end := min(start+fundChunk, len(recipients))
-		value := new(big.Int).Mul(weiEach, big.NewInt(int64(end-start)))
-		// The sender keeps its documented minimum after paying the chunk's value.
-		minimum := new(big.Int).Add(value, RequiredSignerBalance())
-		if err := funding.EnsureEOABalance(ctx, i.sender.Address(), minimum); err != nil {
-			return fmt.Errorf("traffic: fund wallet funder %s on route %q: %w", i.sender.Address(), i.routeID, err)
+	// The sender keeps its documented minimum after paying every wallet.
+	minimum := new(big.Int).Mul(weiEach, big.NewInt(int64(len(wallets))))
+	minimum.Add(minimum, RequiredSignerBalance())
+	if err := funding.EnsureEOABalance(ctx, i.sender.Address(), minimum); err != nil {
+		return fmt.Errorf("traffic: fund wallet funder %s on route %q: %w", i.sender.Address(), i.routeID, err)
+	}
+	for start := 0; start < len(wallets); start += fundChunk {
+		chunk := wallets[start:min(start+fundChunk, len(wallets))]
+		recipients := make([]iftbatchtransfershim.IFTBatchTransferShimRecipient, len(chunk))
+		for k, wallet := range chunk {
+			recipients[k] = iftbatchtransfershim.IFTBatchTransferShimRecipient{Account: wallet, Amount: tokenEach}
 		}
 		data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-			return iftBatchShimTransactor.Fund(opts, i.sourceIFT, recipients[start:end], weiEach)
+			return iftBatchShimTransactor.Fund(opts, i.sourceIFT, recipients, weiEach)
 		})
 		if err != nil {
 			return fmt.Errorf("traffic: pack IFT batch shim fund on route %q: %w", i.routeID, err)
 		}
+		value := new(big.Int).Mul(weiEach, big.NewInt(int64(len(chunk))))
 		if _, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, value); err != nil {
-			return fmt.Errorf("traffic: fund wallets %d:%d on route %q: %w", start, end, i.routeID, err)
+			return fmt.Errorf("traffic: fund wallets %d:%d on route %q: %w", start, start+len(chunk), i.routeID, err)
 		}
 	}
 	return nil

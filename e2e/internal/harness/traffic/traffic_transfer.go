@@ -558,11 +558,11 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 	}
 }
 
-// SentPackets decodes every SendPacket event router emitted in receipt, in
+// sentPackets decodes every SendPacket event router emitted in receipt, in
 // log order. Logs from any other address are ignored, so only the source
 // ICS26 router's packets are returned. Each event's Raw.Data is its packet's
 // ABI encoding, the form attestors attest.
-func SentPackets(receipt *types.Receipt, router common.Address) ([]*ics26router.ContractSendPacket, error) {
+func sentPackets(receipt *types.Receipt, router common.Address) ([]*ics26router.ContractSendPacket, error) {
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
 	if err != nil {
@@ -571,9 +571,9 @@ func SentPackets(receipt *types.Receipt, router common.Address) ([]*ics26router.
 	return events, nil
 }
 
-// sendPacketSequences returns the sequences of SentPackets.
+// sendPacketSequences returns the sequences of sentPackets.
 func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
-	events, err := SentPackets(receipt, router)
+	events, err := sentPackets(receipt, router)
 	if err != nil {
 		return nil, err
 	}
