@@ -12,7 +12,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,10 +19,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
-const (
-	cleanupTimeout = 30 * time.Second
-	modeEnv        = "E2E_MODE"
-)
+const modeEnv = "E2E_MODE"
 
 type Mode string
 
@@ -177,7 +173,7 @@ func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *en
 	env, err := environment.Start(t.Context(), spec, runtime)
 	require.NoError(t, err, "e2etest: start Environment")
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), environment.CloseTimeout)
 		defer cancel()
 		assert.NoError(t, env.Close(ctx), "e2etest: close Environment")
 	})

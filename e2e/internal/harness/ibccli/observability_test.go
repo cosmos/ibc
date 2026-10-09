@@ -10,23 +10,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEnabledObservability(t *testing.T) {
+func TestOTelFileConfig(t *testing.T) {
 	require.Equal(t, observabilityConfig{
 		Metrics:  true,
 		Type:     observabilityTypeOTEL,
 		OtelFile: defaultOTELConfigPath(),
 	}, otelFileConfig(true))
-
-	cmd := exec.Command("unused")
-	otelEnvApply(cmd, true, "relayer", "test")
-	require.Contains(t, cmd.Env, otelServiceRuntimeEnv+"=relayer/test")
-	require.Contains(t, cmd.Env, "PATH="+os.Getenv("PATH"))
+	require.Empty(t, otelFileConfig(false))
 }
 
-func TestDisabledObservability(t *testing.T) {
+func TestOTelEnvApplyKeepsTheInheritedEnvironment(t *testing.T) {
 	cmd := exec.Command("unused")
-	otelEnvApply(cmd, false, "relayer")
-
-	require.Empty(t, otelFileConfig(false))
-	require.Nil(t, cmd.Env)
+	otelEnvApply(cmd, "attestor", "test")
+	require.Contains(t, cmd.Env, otelServiceRuntimeEnv+"=attestor/test")
+	require.Contains(t, cmd.Env, "PATH="+os.Getenv("PATH"))
 }

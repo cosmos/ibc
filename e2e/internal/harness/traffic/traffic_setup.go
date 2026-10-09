@@ -422,12 +422,10 @@ func buildConfig(
 		FinalityOffset: ibccli.HarnessFinalityOffset,
 		ClearOnStart:   false,
 		ClearInterval:  5 * time.Second,
-		Observability:  env.ObservabilityEnabled(),
 	}
 	options := ibccli.RelayerOptions{
-		ChainIDs:      make(map[string]string, len(env.Chains())),
-		WaitPolicies:  make(map[string]ibccli.WaitPolicy, len(routes)),
-		Observability: env.ObservabilityEnabled(),
+		ChainIDs:     make(map[string]string, len(env.Chains())),
+		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)

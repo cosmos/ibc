@@ -30,7 +30,6 @@ const (
 	exitOK      = 0
 	exitFailed  = 1
 	exitUsage   = 2
-	ibcBinEnv   = "IBC_BIN"
 	usageHeader = `Usage: loadtest <scenario> [flags]
 
 Scenarios:
@@ -49,7 +48,6 @@ func main() {
 type common struct {
 	provider      string
 	observability bool
-	ibcBin        string
 	timeout       time.Duration
 	jsonOut       bool
 	keepOnFailure bool
@@ -61,8 +59,8 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.observability, "observability", false,
 		"export OTel telemetry from the relayer and attestors; start the stack first with "+
 			"make -C cli/scripts/otel up (Grafana on http://localhost:3001)")
-	fs.StringVar(&c.ibcBin, "ibc-bin", "", "path to the ibc binary (default: $IBC_BIN, else cli/bin/ibc)")
-	fs.DurationVar(&c.timeout, "timeout", 30*time.Minute, "overall run budget, setup and teardown included")
+	fs.DurationVar(&c.timeout, "timeout", 30*time.Minute, "budget for setup and the run; teardown follows "+
+		"with its own bound")
 	fs.BoolVar(&c.jsonOut, "json", false, "print the report as JSON instead of text")
 	fs.BoolVar(&c.keepOnFailure, "keep-on-failure", false,
 		"leave the environment (containers, relayer, deployment directory) running when the run fails")
@@ -230,7 +228,7 @@ type report interface {
 	WriteText(w io.Writer) error
 }
 
-// execute wires logging, the binary override, the run budget, and signal
+// execute wires logging, the run budget, and signal
 // handling around a scenario, starts its session, writes the scenario's
 // report to stdout, and tears the session down unless setup or the run
 // failed and --keep-on-failure asks to keep it.
@@ -246,12 +244,6 @@ func execute(
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level})))
 
-	if c.ibcBin != "" {
-		if err := os.Setenv(ibcBinEnv, c.ibcBin); err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
-			return exitUsage
-		}
-	}
 	if c.observability {
 		slog.Info("observability enabled: expects the stack from `make -C cli/scripts/otel up`; " +
 			"Grafana at http://localhost:3001")
@@ -295,7 +287,11 @@ func execute(
 		return exitFailed
 	}
 	if err != nil && c.keepOnFailure {
-		slog.Warn("kept the environment for inspection; run `make -C e2e clean` when done", "dir", s.Dir())
+		kept := []any{"run_id", s.Env.RunID()}
+		if s.Dir() != "" {
+			kept = append(kept, "dir", s.Dir())
+		}
+		slog.Warn("kept the environment for inspection; run `make -C e2e clean` when done", kept...)
 		return exitFailed
 	}
 	if closeErr := s.Close(ctx); closeErr != nil {

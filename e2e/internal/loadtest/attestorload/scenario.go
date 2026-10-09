@@ -68,11 +68,9 @@ type Report struct {
 // SessionOptions adds what cfg needs to base: the A-to-B route's applications
 // when the packets phase seeds packets, and no relayer.
 func SessionOptions(base session.Options, cfg Config) session.Options {
-	base.Routes = nil
 	if slices.Contains(cfg.Phases, PhasePackets) {
 		base.Routes = []traffic.Route{traffic.AtoB(traffic.ChainA, traffic.ChainB)}
 	}
-	base.StartRelayer = false
 	return base
 }
 

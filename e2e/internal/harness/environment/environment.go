@@ -8,7 +8,12 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 )
+
+// CloseTimeout is the budget callers give Close, which stops containers and
+// managed processes.
+const CloseTimeout = 30 * time.Second
 
 // Environment is returned only after every supported declaration is ready. It
 // is the sole owner of acquired local handles and environment-owned resources.
@@ -23,20 +28,12 @@ type Environment struct {
 
 	lease *environmentLease
 
-	observability bool
-
 	closeMu sync.Mutex
 	closed  bool
 }
 
 func (e *Environment) RunID() string {
 	return e.ws.runID
-}
-
-// ObservabilityEnabled reports whether Runtime.Observability was set, so callers
-// that start further IBC CLI processes (the relayer) can opt them in as well.
-func (e *Environment) ObservabilityEnabled() bool {
-	return e.observability
 }
 
 func (e *Environment) Chain(id ChainID) (*Chain, error) {

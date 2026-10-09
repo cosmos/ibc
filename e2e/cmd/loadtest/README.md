@@ -29,7 +29,7 @@ make -C e2e run-attestor LOADTEST_FLAGS='--duration 5s'                         
 `run-*` builds `cli/bin/ibc` and `e2e/bin/loadtest` first. To call the binary directly,
 `make -C e2e build-loadtest` and run `e2e/bin/loadtest <scenario> [flags]`
 (`-h` lists every flag). The binary finds `cli/bin/ibc` through the harness source path it
-was built from; `--ibc-bin` or `IBC_BIN` overrides it.
+was built from; `IBC_BIN` overrides it.
 
 The report goes to stdout (text, or JSON with `--json`) and progress logs to stderr. The exit
 status is 0 only when the scenario met its target, 1 when it did not or setup failed, and 2 on
@@ -42,10 +42,9 @@ or exceeds `--timeout` still reports what it measured.
 | --- | --- | --- |
 | `--provider` | `anvil` | Managed EVM provider: `anvil` or `besu`. |
 | `--observability` | off | Export OTel telemetry from the relayer and attestors (see below). |
-| `--ibc-bin` | `$IBC_BIN`, else `cli/bin/ibc` | The `ibc` binary under test. |
-| `--timeout` | `30m` | Overall budget, setup and teardown included. |
+| `--timeout` | `30m` | Budget for setup and the run. Teardown follows it with its own bound (relayer stop, then 30s for the environment). |
 | `--json` | off | Print the report as JSON instead of text. |
-| `--keep-on-failure` | off | When setup or the run fails, skip teardown: containers, the relayer, and the deployment directory (relayer config, database, `relayer.log`, path logged) stay up for inspection. Clean up with `make -C e2e clean`. |
+| `--keep-on-failure` | off | When setup or the run fails, skip teardown: containers, the relayer, and the deployment directory (relayer config, database, `relayer.log`; run id and path logged) stay up for inspection. Clean up with `make -C e2e clean`. |
 | `-v` | off | Debug logging. |
 
 ## Relayer scenario

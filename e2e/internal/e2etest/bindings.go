@@ -14,11 +14,11 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
-// This file wraps the traffic calls tests use through testing.TB: each fails
-// the test on error, and those that start resources register their cleanup,
-// so t.Cleanup's LIFO order stops processes before their directories are
-// removed and before the Environment closes. Tests call the rest of the
-// traffic layer directly.
+// This file wraps for testing.TB the traffic calls that own resources, plus
+// NewSigner, which nearly every test calls: each fails the test on error, and
+// those that start resources register their cleanup, so t.Cleanup's LIFO
+// order stops processes before their directories are removed and before the
+// Environment closes. Tests call the rest of the traffic layer directly.
 
 // NewSigner generates a randomly-keyed local identity.
 func NewSigner(t testing.TB) traffic.Signer {

@@ -63,14 +63,14 @@ type Config struct {
 }
 
 // SessionOptions adds what cfg needs to base: the routes of its directions and
-// a started relayer with load-sized batches.
+// a started relayer with load-sized batches, exporting telemetry if base does.
 func SessionOptions(base session.Options, cfg Config) session.Options {
-	base.Routes = nil
 	for _, direction := range cfg.Directions {
 		base.Routes = append(base.Routes, direction.route())
 	}
 	base.StartRelayer = true
 	base.ConfigureRelayer = func(config *ibccli.RelayerConfig) {
+		config.Observability = base.Observability
 		config.ClearInterval = clearInterval
 		config.ClearOnStart = true
 		for i := range config.Chains {

@@ -25,11 +25,9 @@ func otelFileConfig(enabled bool) observabilityConfig {
 	}
 }
 
-func otelEnvApply(cmd *exec.Cmd, enabled bool, runtimeParts ...string) {
-	if !enabled {
-		return
-	}
-
+// otelEnvApply names the process for the service.runtime OTel attribute. It
+// has no effect unless the process's configuration enables OTel.
+func otelEnvApply(cmd *exec.Cmd, runtimeParts ...string) {
 	withEnv(cmd, otelServiceRuntimeEnv, strings.Join(runtimeParts, "/"))
 }
 
@@ -40,8 +38,7 @@ func defaultOTELConfigPath() string {
 }
 
 type observabilityConfig struct {
-	Metrics                 bool   `yaml:"metrics"`
-	Type                    string `yaml:"type"`
-	SimpleMetricsListenAddr string `yaml:"simpleMetricsListenAddr"`
-	OtelFile                string `yaml:"otelFile"`
+	Metrics  bool   `yaml:"metrics"`
+	Type     string `yaml:"type"`
+	OtelFile string `yaml:"otelFile"`
 }

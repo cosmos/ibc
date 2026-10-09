@@ -110,8 +110,6 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 		effects:     effects,
 		ws:          ws,
 		lease:       lease,
-
-		observability: runtime.Observability,
 	}, nil
 }
 

@@ -18,10 +18,6 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
-// closeTimeout bounds Environment teardown, which stops containers and
-// managed processes; it matches the e2e suite's cleanup budget.
-const closeTimeout = 30 * time.Second
-
 // Options shape the environment.
 type Options struct {
 	Provider environment.EVMProvider
@@ -64,18 +60,14 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	spec, runtime := traffic.AttestedMesh(chains...)
 	runtime.Observability = opts.Observability
 
-	dir, err := os.MkdirTemp("", "ibc-loadtest-")
-	if err != nil {
-		return nil, fmt.Errorf("create deployment directory: %w", err)
-	}
-	s := &Session{Provider: opts.Provider, dir: dir}
-
 	started := time.Now()
 	slog.InfoContext(ctx, "starting environment", "provider", opts.Provider, "observability", opts.Observability)
-	s.Env, err = environment.Start(ctx, spec, runtime)
+	// A failed environment start releases what it acquired.
+	env, err := environment.Start(ctx, spec, runtime)
 	if err != nil {
-		return s, fmt.Errorf("start environment: %w", err)
+		return nil, fmt.Errorf("start environment: %w", err)
 	}
+	s := &Session{Provider: opts.Provider, Env: env}
 	slog.InfoContext(ctx, "environment started", "run_id", s.Env.RunID(), "elapsed", since(started))
 
 	s.Deployer, err = traffic.NewSigner()
@@ -99,14 +91,17 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	if err != nil {
 		return s, err
 	}
+	if s.dir, err = os.MkdirTemp("", "ibc-loadtest-"); err != nil {
+		return s, fmt.Errorf("create deployment directory: %w", err)
+	}
 	driver, deployment, err := traffic.Deploy(
-		ctx, s.Env, dir, s.Deployer, relayerSigner, opts.ConfigureRelayer, opts.Routes...,
+		ctx, s.Env, s.dir, s.Deployer, relayerSigner, opts.ConfigureRelayer, opts.Routes...,
 	)
 	if err != nil {
 		return s, fmt.Errorf("deploy: %w", err)
 	}
 	s.Deployment = deployment
-	slog.InfoContext(ctx, "applications deployed", "dir", dir, "elapsed", since(started))
+	slog.InfoContext(ctx, "applications deployed", "dir", s.dir, "elapsed", since(started))
 
 	s.Relayer, err = traffic.StartRelayer(ctx, driver, s.Env)
 	if err != nil {
@@ -116,7 +111,8 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	return s, nil
 }
 
-// Dir is the deployment directory: relayer config, database, and log.
+// Dir is the relayer's deployment directory (config, database, and log), or
+// "" without a relayer.
 func (s *Session) Dir() string { return s.dir }
 
 // Close stops the relayer, closes the Environment, and removes the
@@ -134,7 +130,7 @@ func (s *Session) Close(ctx context.Context) error {
 		s.Relayer = nil
 	}
 	if s.Env != nil {
-		closeCtx, cancel := context.WithTimeout(ctx, closeTimeout)
+		closeCtx, cancel := context.WithTimeout(ctx, environment.CloseTimeout)
 		if err := s.Env.Close(closeCtx); err != nil {
 			errs = append(errs, fmt.Errorf("close environment: %w", err))
 		}

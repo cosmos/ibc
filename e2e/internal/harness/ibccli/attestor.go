@@ -130,7 +130,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	)
 	cmd.Dir = paths.dir
 
-	otelEnvApply(cmd, launch.Observability, "attestor", launch.Name)
+	otelEnvApply(cmd, "attestor", launch.Name)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stderr, err := cmd.StderrPipe()

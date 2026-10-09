@@ -13,10 +13,10 @@ import (
 type Runtime struct {
 	Endpoints   map[EndpointBindingID]EndpointBinding
 	Authorities map[AuthorityID]EVMAuthority
-	// Observability enables OTel metrics export for every managed IBC CLI
-	// process (attestors here, the relayer through the traffic layer). The
-	// processes push to the local LGTM stack configured by
-	// cli/scripts/otel/ibc-otel.yaml; start it with `make -C cli/scripts/otel up`.
+	// Observability enables OTel metrics export from the attestors (a
+	// relayer opts in through its RelayerConfig). They push to the local
+	// LGTM stack configured by cli/scripts/otel/ibc-otel.yaml; start it with
+	// `make -C cli/scripts/otel up`.
 	Observability bool
 }
 
