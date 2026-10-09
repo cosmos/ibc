@@ -80,6 +80,18 @@ func TestSimpleLoad(t *testing.T) {
 		assert.GreaterOrEqual(t, time.Since(started), 200*time.Millisecond, "waits for calls in flight")
 	})
 
+	t.Run("endsWithAnEarlierRunDeadline", func(t *testing.T) {
+		// The next slot (200ms) falls past the run deadline (100ms): the phase
+		// must last until the run reports its end, not stop at once.
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+		defer cancel()
+		spec := Spec{Duration: time.Second, RatePerSecond: 5, Concurrency: 1}
+
+		SimpleLoad(ctx, spec, func(context.Context) error { return nil })
+
+		require.ErrorIs(t, ctx.Err(), context.DeadlineExceeded, "ended by the run, which reports it")
+	})
+
 	t.Run("encodesJSON", func(t *testing.T) {
 		result := Result{Spec: Spec{RatePerSecond: 5, Concurrency: 2}, Offered: 3, Sent: 2, Dropped: 1}
 		encoded, err := json.Marshal(result)

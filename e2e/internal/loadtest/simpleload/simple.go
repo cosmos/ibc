@@ -54,8 +54,13 @@ type Result struct {
 // from the phase deadline, so calls in flight at the deadline run to
 // completion (bounded by Timeout) and SimpleLoad waits for them.
 func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
-	phase, cancel := context.WithTimeout(ctx, spec.Duration)
+	// The phase has its own deadline and ends early only when ctx ends: the
+	// limiter fails a Wait whose slot would fall past a deadline, so
+	// inheriting an earlier ctx deadline would end the phase before ctx
+	// reports it, as if the phase had run its full duration.
+	phase, cancel := context.WithTimeout(context.WithoutCancel(ctx), spec.Duration)
 	defer cancel()
+	defer context.AfterFunc(ctx, cancel)()
 	limiter := rate.NewLimiter(rate.Limit(spec.RatePerSecond), 1)
 	callers := make(chan struct{}, spec.Concurrency)
 
