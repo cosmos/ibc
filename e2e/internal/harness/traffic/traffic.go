@@ -9,7 +9,6 @@
 package traffic
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -82,38 +81,4 @@ func (s SendResult) Receipt() *types.Receipt { return s.receipt }
 type endpoint struct {
 	chain *environment.Chain
 	evm   *environment.EVM
-}
-
-func resolveRouteEndpoints(
-	routeID RouteID,
-	source, destination *environment.Chain,
-) (endpoint, endpoint, error) {
-	if routeID == "" {
-		return endpoint{}, endpoint{}, errors.New("traffic: route id is required")
-	}
-	if source == nil {
-		return endpoint{}, endpoint{}, errors.New("traffic: source Chain is required")
-	}
-	if destination == nil {
-		return endpoint{}, endpoint{}, errors.New("traffic: destination Chain is required")
-	}
-	if source.ID() == destination.ID() {
-		return endpoint{}, endpoint{}, fmt.Errorf(
-			"traffic: route %q must connect different Chains",
-			routeID,
-		)
-	}
-	sourceEVM, err := source.EVM()
-	if err != nil {
-		return endpoint{}, endpoint{}, fmt.Errorf("traffic: source Chain %q: %w", source.ID(), err)
-	}
-	destinationEVM, err := destination.EVM()
-	if err != nil {
-		return endpoint{}, endpoint{}, fmt.Errorf(
-			"traffic: destination Chain %q: %w",
-			destination.ID(),
-			err,
-		)
-	}
-	return endpoint{chain: source, evm: sourceEVM}, endpoint{chain: destination, evm: destinationEVM}, nil
 }

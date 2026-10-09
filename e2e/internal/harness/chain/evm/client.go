@@ -48,19 +48,23 @@ func (w TransactionWait) context(ctx context.Context) (context.Context, context.
 	}
 }
 
-// maxIdleConnsPerNode keeps HTTP connections to a node open for reuse. The
+// nodeTransport is shared by every Dial, so idle connections are pooled per
+// node rather than per client: geth's Close does not release a client's
+// transport. It keeps up to 512 idle connections per node for reuse; the
 // default of two makes many concurrent callers (the load test's senders)
 // dial and close a connection per request, which exhausts Docker Desktop's
 // port forwarding with "connection refused".
-const maxIdleConnsPerNode = 512
+var nodeTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = 512
+	return transport
+}()
 
 // Dial connects to a node's JSON-RPC endpoint, reusing HTTP connections
 // across concurrent calls.
 func Dial(ctx context.Context, rawURL string) (*ethclient.Client, error) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConns = 0
-	transport.MaxIdleConnsPerHost = maxIdleConnsPerNode
-	client, err := rpc.DialOptions(ctx, rawURL, rpc.WithHTTPClient(&http.Client{Transport: transport}))
+	client, err := rpc.DialOptions(ctx, rawURL, rpc.WithHTTPClient(&http.Client{Transport: nodeTransport}))
 	if err != nil {
 		return nil, err
 	}

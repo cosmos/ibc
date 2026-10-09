@@ -14,11 +14,11 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
-// This file adapts the harness traffic calls that own resources to
-// testing.TB: each wrapper fails the test on error and registers the cleanup
-// of whatever it started, so t.Cleanup's LIFO order stops processes before
-// their directories are removed and before the Environment closes. Tests call
-// the rest of the traffic layer directly.
+// This file wraps the traffic calls tests use through testing.TB: each fails
+// the test on error, and those that start resources register their cleanup,
+// so t.Cleanup's LIFO order stops processes before their directories are
+// removed and before the Environment closes. Tests call the rest of the
+// traffic layer directly.
 
 // NewSigner generates a randomly-keyed local identity.
 func NewSigner(t testing.TB) traffic.Signer {
@@ -52,7 +52,7 @@ func DeployWithRelayerConfig(
 	routes ...traffic.Route,
 ) (*ibccli.Driver, *traffic.Deployment) {
 	t.Helper()
-	driver, deployment, err := traffic.DeployWithRelayerConfig(
+	driver, deployment, err := traffic.Deploy(
 		t.Context(), env, t.TempDir(), deployer, relayer, configure, routes...,
 	)
 	require.NoError(t, err)

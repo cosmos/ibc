@@ -121,25 +121,14 @@ func (d *Deployment) RouteClients(id RouteID) (RouteClients, bool) {
 	return clients, ok
 }
 
-// Deploy writes a black-box configuration under dir, runs its migration, and
-// deploys the test applications on each Chain. It does not start the relayer.
-// The caller owns dir: the returned driver's configuration, keys, and database
-// live there, so remove it only after every process started from the driver
-// has stopped.
+// Deploy deploys the test applications on each Chain (DeployApps), writes a
+// black-box relayer configuration under dir, and runs its migration. It does
+// not start the relayer. configure, when not nil, adjusts the resolved
+// relayer configuration after environment Attestors are assigned. The caller
+// owns dir: the returned driver's configuration, keys, and database live
+// there, so remove it only after every process started from the driver has
+// stopped.
 func Deploy(
-	ctx context.Context,
-	env *environment.Environment,
-	dir string,
-	deployer Signer,
-	relayer Signer,
-	routes ...Route,
-) (*ibccli.Driver, *Deployment, error) {
-	return DeployWithRelayerConfig(ctx, env, dir, deployer, relayer, nil, routes...)
-}
-
-// DeployWithRelayerConfig is Deploy with a hook that adjusts the resolved
-// relayer configuration after environment Attestors are assigned.
-func DeployWithRelayerConfig(
 	ctx context.Context,
 	env *environment.Environment,
 	dir string,
@@ -149,16 +138,16 @@ func DeployWithRelayerConfig(
 	routes ...Route,
 ) (*ibccli.Driver, *Deployment, error) {
 	switch {
-	case env == nil:
-		return nil, nil, errors.New("traffic: Environment is required")
 	case dir == "":
 		return nil, nil, errors.New("traffic: deployment directory is required")
-	case deployer.key == nil:
-		return nil, nil, errors.New("traffic: deployer signer is required")
 	case relayer.key == nil:
 		return nil, nil, errors.New("traffic: relayer signer is required")
 	}
-	if err := ensureSignerBalances(ctx, env, deployer, relayer); err != nil {
+	deployment, err := DeployApps(ctx, env, deployer, routes...)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = ensureSignerBalances(ctx, env, relayer); err != nil {
 		return nil, nil, err
 	}
 
@@ -170,11 +159,6 @@ func DeployWithRelayerConfig(
 	}
 	if err = env.BindCLI(driver); err != nil {
 		return nil, nil, fmt.Errorf("traffic: bind IBC CLI process: %w", err)
-	}
-
-	deployment, err := deployApps(ctx, env, deployer, routes)
-	if err != nil {
-		return nil, nil, err
 	}
 	config, options, err := buildConfig(
 		env, driver, routes, deployment, signerKeyPath, filepath.Join(dir, "relayer.db"),
@@ -248,12 +232,24 @@ func verifyRelayerConnected(relayer *ibccli.Relayer, env *environment.Environmen
 	return nil
 }
 
-func deployApps(
+// DeployApps funds deployer and deploys the test applications on each Chain
+// for routes: no relayer configuration, keys, or database. The deployer holds
+// the minted token supplies.
+func DeployApps(
 	ctx context.Context,
 	env *environment.Environment,
 	deployer Signer,
-	routes []Route,
+	routes ...Route,
 ) (*Deployment, error) {
+	switch {
+	case env == nil:
+		return nil, errors.New("traffic: Environment is required")
+	case deployer.key == nil:
+		return nil, errors.New("traffic: deployer signer is required")
+	}
+	if err := ensureSignerBalances(ctx, env, deployer); err != nil {
+		return nil, err
+	}
 	deployment := &Deployment{
 		chains: make(map[environment.ChainID]ChainDeployment, len(env.Chains())),
 		routes: make(map[RouteID]RouteClients, len(routes)),

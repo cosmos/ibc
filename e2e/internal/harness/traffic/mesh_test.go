@@ -82,3 +82,25 @@ func TestAttestedMeshConnectsEveryChainPair(t *testing.T) {
 	}, connectionIDs)
 	require.NoError(t, environment.Validate(spec, runtime))
 }
+
+func TestQBFTMesh(t *testing.T) {
+	spec, runtime := QBFTMesh(
+		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2},
+		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
+	)
+
+	require.NoError(t, environment.Validate(spec, runtime))
+	require.Len(t, spec.Chains, 2)
+	require.Len(t, spec.IBCInstances, 2)
+	require.Len(t, spec.Connections, 1)
+	ends := []environment.ClientSpec{spec.Connections[0].A, spec.Connections[0].B}
+	for i, chain := range []environment.ChainID{"chain-a", "chain-b"} {
+		instance, ok := spec.IBCInstances[i].(environment.NewIBCInstance)
+		require.True(t, ok)
+		require.Equal(t, chain, instance.Chain)
+		// QBFT endpoints carry no attestors and follow the sorted host instances.
+		client, ok := ends[i].(environment.NewBesuQBFTClient)
+		require.True(t, ok)
+		require.Equal(t, instance.ID, client.IBCInstance)
+	}
+}

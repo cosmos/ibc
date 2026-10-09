@@ -105,9 +105,9 @@ func TestTransferTimeout_Refund(t *testing.T) {
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
+	spec, runtime := traffic.QBFTMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu}, traffic.ChainA, traffic.ChainB,
-	))
+	)...)
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }
 
@@ -181,9 +181,9 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 // fast mode, so this skips there.
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
+	spec, runtime := traffic.QBFTMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu}, traffic.ChainA, traffic.ChainB,
-	))
+	)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

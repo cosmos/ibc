@@ -10,13 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCoins(t *testing.T) {
-	want, ok := new(big.Int).SetString("3000000000000000000", 10)
-	require.True(t, ok)
-	require.Equal(t, want, Coins(3))
-	require.Zero(t, Coins(0).Sign())
-}
-
 func TestFundWalletsValidatesBeforeSending(t *testing.T) {
 	wallet := common.HexToAddress("0x1")
 	tests := []struct {

@@ -173,7 +173,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.90, sum by (le, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.90, sum by (le, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval])))",
                         "instant": false,
                         "key": "Q-panel-10-relayer",
                         "legendFormat": "{{ rpc_method }}",
@@ -291,7 +291,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[5s]))",
+                        "expr": "sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[5s]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -1369,7 +1369,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, operation, client_id) (rate(prover_operation_milliseconds_count{service_runtime=\"relayer\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, operation, client_id) (rate(prover_operation_milliseconds_count[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -1500,7 +1500,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, operation, client_id) (rate(prover_operation_milliseconds_count{service_runtime=\"relayer\", result=\"error\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, operation, client_id) (rate(prover_operation_milliseconds_count{result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -1630,7 +1630,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.90, sum by (le, chain_id, operation, client_id) (rate(prover_operation_milliseconds_bucket{service_runtime=\"relayer\", result=\"ok\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.90, sum by (le, chain_id, operation, client_id) (rate(prover_operation_milliseconds_bucket{result=\"ok\"}[$__rate_interval])))",
                         "instant": false,
                         "key": "Q-panel-22-prover",
                         "legendFormat": "{{ chain_id }} - {{ operation }} - {{ client_id }}",
@@ -1760,7 +1760,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, proof_kind, client_id) (rate(packet_batch_size_sum{service_runtime=\"relayer\"}[$__rate_interval])) / sum by (chain_id, proof_kind, client_id) (rate(packet_batch_size_count{service_runtime=\"relayer\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, proof_kind, client_id) (rate(packet_batch_size_sum[$__rate_interval])) / sum by (chain_id, proof_kind, client_id) (rate(packet_batch_size_count[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -1891,7 +1891,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relays_completed_total{service_runtime=\"relayer\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relays_completed_total[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2022,7 +2022,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, dest_chain_id, client_id, dest_client_id) (packets_pending{service_runtime=\"relayer\"})",
+                        "expr": "sum by (chain_id, dest_chain_id, client_id, dest_client_id) (packets_pending)",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2154,7 +2154,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, client_id) (rate(transactions_submitted_total{service_runtime=\"relayer\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, client_id) (rate(transactions_submitted_total[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2284,7 +2284,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.90, sum by (le, chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relay_duration_seconds_bucket{service_runtime=\"relayer\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.90, sum by (le, chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relay_duration_seconds_bucket[$__rate_interval])))",
                         "instant": false,
                         "key": "Q-panel-27-relay",
                         "legendFormat": "{{ type }}: {{ chain_id }} ({{ client_id }}) -> {{ dest_chain_id }} ({{ dest_client_id }})",
@@ -2410,7 +2410,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(transaction_retries_total{service_runtime=\"relayer\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(transaction_retries_total[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2540,7 +2540,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relay_duration_seconds_sum{service_runtime=\"relayer\"}[$__rate_interval])) / sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relay_duration_seconds_count{service_runtime=\"relayer\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relay_duration_seconds_sum[$__rate_interval])) / sum by (chain_id, dest_chain_id, type, client_id, dest_client_id) (rate(relay_duration_seconds_count[$__rate_interval]))",
                         "instant": false,
                         "key": "Q-panel-29-relay-duration-avg",
                         "legendFormat": "{{ type }}: {{ chain_id }} ({{ client_id }}) -> {{ dest_chain_id }} ({{ dest_client_id }})",
@@ -3260,7 +3260,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum(rate(rpc_server_duration_milliseconds_count{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\"}[$__rate_interval]))",
+                        "expr": "sum(rate(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -3380,7 +3380,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (rpc_method) (rate(rpc_server_duration_milliseconds_sum{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval])) / sum by (rpc_method) (rate(rpc_server_duration_milliseconds_count{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval]))",
+                        "expr": "sum by (rpc_method) (rate(rpc_server_duration_milliseconds_sum{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval])) / sum by (rpc_method) (rate(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
