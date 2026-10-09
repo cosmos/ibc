@@ -494,24 +494,16 @@ func (c ChainConfig) Type() ChainType {
 }
 
 func (c EVMChainConfig) Validate(validateICS26Router bool) error {
-	if c.RPC == "" {
+	switch {
+	case c.RPC == "":
 		return errPathf("rpc", "required")
-	}
-	if err := validateRPCEndpoint(c.RPC); err != nil {
-		return errPath("rpc", err)
-	}
-
-	if c.WS != "" {
-		if _, err := parseEndpoint(c.WS, "ws", "wss"); err != nil {
-			return errPath("ws", err)
-		}
-	}
-
-	if validateICS26Router {
+	case c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://"):
+		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
+	case validateICS26Router:
 		return errPath("ics26Router", c.validateICS26Router())
+	default:
+		return nil
 	}
-
-	return nil
 }
 
 // Validate validates the attestors list. Allows empty.

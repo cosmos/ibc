@@ -121,7 +121,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Chains[0].EVM.WS = "http://ethereum-rpc.example.com"
 				},
-				errContains: ".evm.ws: must start with ws:// or wss://",
+				errContains: ".evm.ws: must be a ws:// or wss:// URL",
 			},
 			{
 				name: "unencrypted websocket endpoint",

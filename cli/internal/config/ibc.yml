@@ -89,7 +89,6 @@ attestors:
 #      caFile: /etc/ibc/tls/ca.crt
 #      certFile: /etc/ibc/tls/client.crt
 #      keyFile: /etc/ibc/tls/client.key
-#      minVersion: "1.2"
   - name: "attestor-ethereum"
     type: remote
     grpc: attestor.example.com:3000

@@ -15,19 +15,6 @@ import (
 // API key in the path, and url.Parse's own error echoes its whole input back.
 var errInvalidURL = errors.New("invalid URL")
 
-func validateRPCEndpoint(raw string) error {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return errInvalidURL
-	}
-	// Match ethclient.Dial: scheme-less addresses are IPC paths, not URLs.
-	if parsed.Scheme == "" || parsed.Scheme == "stdio" {
-		return nil
-	}
-	_, err = parseEndpoint(raw, "http", "https", "ws", "wss")
-	return err
-}
-
 // endpointURL returns addr with a scheme, adding https:// to a bare host:port
 // when a tls block is present and http:// otherwise.
 func endpointURL(addr string, tls *TLSClientConfig) string {
