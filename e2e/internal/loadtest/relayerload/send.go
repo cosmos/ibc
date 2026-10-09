@@ -27,38 +27,61 @@ type sentPacket struct {
 	block uint64
 }
 
-// sendFunc submits one transfer from wallet and waits for its receipt.
-type sendFunc func(ctx context.Context, wallet int) (sentPacket, error)
+// sendFunc submits one transaction of n transfers from wallet, waits for
+// its receipt, and returns the packets it emitted.
+type sendFunc func(ctx context.Context, wallet, n int) ([]sentPacket, error)
 
-// generate sends r.Target packets from one sender goroutine per wallet. Each
-// tick of ticks opens a pacing interval of perBlock tokens; a sender takes a
-// token, claims a packet slot, and sends, so every wallet has at most one
-// transaction in flight. A sender whose transfer fails is retired and hands
-// its slot back for another wallet to send, so the target falls short only
-// if every wallet retires. Every sent packet goes to out, which generate
-// closes when it returns; out must have room for r.Target packets or be
-// drained concurrently.
+// pacing shapes how one direction sends.
+type pacing struct {
+	// perBlock is the transfers offered per interval, in transactions of
+	// batch transfers; batch divides it.
+	perBlock, batch int
+	wallets         int
+	// window, when not nil, ends sending when it fires.
+	window <-chan time.Time
+}
+
+// generate sends from one sender goroutine per wallet until r.Target packets
+// are sent or, with no target, until p.window fires. Each tick of ticks opens
+// a pacing interval of p.perBlock/p.batch tokens; a sender takes a token,
+// claims up to p.batch packet slots, and sends them in one transaction, so
+// every wallet has at most one transaction in flight. A sender whose
+// transaction fails is retired and hands its slots back for another wallet
+// to send, so the target falls short only if every wallet retires. Sends in
+// flight when the window ends complete. Every sent packet goes to out, which
+// generate closes when it returns; out must have room for every packet sent
+// or be drained concurrently.
 func generate(
 	ctx context.Context,
 	ticks <-chan time.Time,
-	perBlock, wallets int,
+	p pacing,
 	send sendFunc,
 	out chan<- sentPacket,
 	r *DirectionReport,
 ) {
 	defer close(out)
-	tokens := make(chan struct{}, perBlock)
+	tokens := make(chan struct{}, p.perBlock/p.batch)
 	var claimed, sent atomic.Int64
 	target := int64(r.Target)
-	claim := func() bool {
-		if claimed.Add(1) <= target {
-			return true
+	batch := int64(p.batch)
+	// claim takes up to a batch of the unclaimed packet slots.
+	claim := func() int64 {
+		for {
+			c := claimed.Load()
+			n := batch
+			if target > 0 {
+				n = min(batch, target-c)
+			}
+			if n <= 0 {
+				return 0
+			}
+			if claimed.CompareAndSwap(c, c+n) {
+				return n
+			}
 		}
-		claimed.Add(-1)
-		return false
 	}
-	open := func() bool { return claimed.Load() < target }
-	exhausted := func() bool { return sent.Load() >= target }
+	open := func() bool { return target == 0 || claimed.Load() < target }
+	exhausted := func() bool { return target > 0 && sent.Load() >= target }
 
 	var (
 		mu        sync.Mutex
@@ -66,7 +89,7 @@ func generate(
 		perBlocks = map[uint64]int{}
 		started   = time.Now()
 	)
-	record := func(packet sentPacket, submitted time.Time, err error) {
+	record := func(packets []sentPacket, submitted time.Time, err error) {
 		now := time.Now()
 		mu.Lock()
 		defer mu.Unlock()
@@ -82,17 +105,19 @@ func generate(
 			slog.WarnContext(ctx, "transfer failed; retiring wallet", "direction", r.Route, "err", err)
 			return
 		}
-		r.Sent++
-		sent.Add(1)
+		r.Sent += len(packets)
+		sent.Add(int64(len(packets)))
 		samples = append(samples, now.Sub(submitted))
-		perBlocks[packet.block]++
 		r.lastSend = now
-		out <- packet
+		for _, packet := range packets {
+			perBlocks[packet.block]++
+			out <- packet
+		}
 	}
 
 	stop := make(chan struct{})
 	var senders sync.WaitGroup
-	for wallet := range wallets {
+	for wallet := range p.wallets {
 		senders.Go(func() {
 			for {
 				select {
@@ -102,15 +127,16 @@ func generate(
 					return
 				case <-tokens:
 				}
-				if !claim() {
-					// Every slot is taken, but a failing send may hand one back.
+				n := claim()
+				if n == 0 {
+					// Every slot is taken, but a failing send may hand some back.
 					continue
 				}
 				submitted := time.Now()
-				packet, err := send(ctx, wallet)
-				record(packet, submitted, err)
+				packets, err := send(ctx, wallet, int(n))
+				record(packets, submitted, err)
 				if err != nil {
-					claimed.Add(-1)
+					claimed.Add(-n)
 					return
 				}
 			}
@@ -122,7 +148,7 @@ func generate(
 		close(retired)
 	}()
 
-	r.Backpressure = pace(ctx, ticks, retired, tokens, open, exhausted)
+	r.Backpressure = p.batch * pace(ctx, ticks, retired, p.window, tokens, open, exhausted)
 	close(stop)
 	senders.Wait()
 
@@ -135,14 +161,15 @@ func generate(
 
 // pace fills tokens with cap(tokens) tokens now and on every tick while open
 // reports unclaimed packet slots, until exhausted reports that every packet
-// was sent, quit closes, or ctx ends. Tokens still unused when the next tick
-// arrives, with slots still open, count as backpressure: no wallet was free
-// to send them within their interval. They are discarded so an interval
-// never offers more than cap(tokens) sends.
+// was sent, quit closes, window fires, or ctx ends. Tokens still unused when
+// the next tick arrives, with slots still open, count as backpressure: no
+// wallet was free to send them within their interval. They are discarded so
+// an interval never offers more than cap(tokens) sends.
 func pace(
 	ctx context.Context,
 	ticks <-chan time.Time,
 	quit <-chan struct{},
+	window <-chan time.Time,
 	tokens chan struct{},
 	open, exhausted func() bool,
 ) (backpressure int) {
@@ -167,6 +194,16 @@ func pace(
 		case <-ctx.Done():
 			return backpressure
 		case <-quit:
+			return backpressure
+		case <-window:
+			// No send starts after the window: its unused tokens go.
+			for drained := false; !drained; {
+				select {
+				case <-tokens:
+				default:
+					drained = true
+				}
+			}
 			return backpressure
 		case <-ticks:
 		}

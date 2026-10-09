@@ -127,13 +127,17 @@ func parse(fs *flag.FlagSet, args []string) error {
 func runRelayer(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("relayer", "Sends IFT transfers from a wallet pool, --per-block per source block interval and\n"+
 		"direction, and requires every packet to reach SUCCEEDED in the relayer status API.\n"+
-		"The defaults are a short, dense burst; --packets 8000 --per-block 20 is a sustained, light run.", stderr)
+		"The defaults are a short, dense burst; --duration 20m --per-block 10 is a long, moderate run.", stderr)
 	var c common
 	c.register(fs)
 	packets := fs.Int("packets", 3000, "total packets, split across directions")
+	duration := fs.Duration("duration", 0, "send for this long in every direction instead of a packet count "+
+		"(not with --packets); it counts against --timeout")
 	wallets := fs.Int("wallets", 200, "wallet pool size; each wallet has at most one transaction "+
 		"in flight per direction")
 	perBlock := fs.Int("per-block", 150, "transfers offered per source block interval and direction")
+	batch := fs.Int("batch", 1, "transfers per transaction, sent through the IFT batch shim when above 1; "+
+		"it must divide --per-block")
 	directions := fs.String("directions", "both", "a-to-b, b-to-a, or both")
 	lightClient := fs.String("light-client", string(relayerload.LightClientAttested),
 		"light clients between the Chains: attested, or besu-qbft (needs --provider besu)")
@@ -143,15 +147,25 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 	cfg := relayerload.Config{
 		LightClient: relayerload.LightClient(*lightClient),
 		Packets:     *packets,
+		Duration:    *duration,
 		Wallets:     *wallets,
 		PerBlock:    *perBlock,
+		Batch:       *batch,
 		Directions:  []relayerload.Direction{relayerload.Direction(*directions)},
 	}
 	if *directions == "both" {
 		cfg.Directions = []relayerload.Direction{relayerload.DirectionAtoB, relayerload.DirectionBtoA}
 	}
+	// A duration replaces the default packet count, but not one given.
+	if cfg.Duration != 0 && !flagSet(fs, "packets") {
+		cfg.Packets = 0
+	}
 	opts, err := c.sessionOptions()
-	if err == nil {
+	switch {
+	case err != nil:
+	case cfg.Duration >= c.timeout:
+		err = fmt.Errorf("--duration %s leaves no time within --timeout %s", cfg.Duration, c.timeout)
+	default:
 		err = cfg.Validate(opts.Provider)
 	}
 	if err != nil {
@@ -316,6 +330,13 @@ func parseExit(err error) int {
 		return exitOK
 	}
 	return exitUsage
+}
+
+// flagSet reports whether name was given on the command line.
+func flagSet(fs *flag.FlagSet, name string) bool {
+	given := false
+	fs.Visit(func(f *flag.Flag) { given = given || f.Name == name })
+	return given
 }
 
 func usageError(stderr io.Writer, err error) int {

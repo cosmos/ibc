@@ -17,18 +17,21 @@ type DirectionReport struct {
 	Route       string `json:"route"`
 	Source      string `json:"source"`
 	Destination string `json:"destination"`
-	Target      int    `json:"target"`
+	// Target is the packets to send; zero in a duration run.
+	Target int `json:"target"`
 
 	// Sending.
 	Sent         int `json:"sent"`
 	SendFailures int `json:"send_failures"`
 	// FirstSendError is the error that retired the first wallet.
 	FirstSendError string `json:"first_send_error,omitempty"`
-	Backpressure   int    `json:"backpressure"`
+	// Backpressure is the transfers offered but not sent within their
+	// interval because no wallet was free.
+	Backpressure int `json:"backpressure"`
 	// SendPhaseMS runs from the first offered send to the last receipt.
 	SendPhaseMS int64 `json:"send_phase_ms"`
-	// SubmitToReceipt is wall clock from submitting a transfer to holding
-	// its receipt.
+	// SubmitToReceipt is wall clock from submitting a transaction to
+	// holding its receipt.
 	SubmitToReceipt stats.Summary `json:"submit_to_receipt"`
 
 	// Achieved pacing, from the blocks that included the transfers.
@@ -66,15 +69,20 @@ type Report struct {
 	LightClient string `json:"light_client"`
 	Wallets     int    `json:"wallets"`
 	PerBlock    int    `json:"per_block"`
+	// Batch is the transfers per transaction.
+	Batch int `json:"batch"`
 	// Passed reports that the relayer relayed every packet sent to
 	// SUCCEEDED, without a stall or an interruption.
 	Passed bool `json:"passed"`
-	// LoadDelivered reports that every direction sent its target, whether
-	// or not the relayer passed; a run that Passed without it is
+	// LoadDelivered reports that every direction kept a wallet sending, so
+	// none stopped short of its target or duration for lack of wallets,
+	// whether or not the relayer passed; a run that Passed without it is
 	// inconclusive.
 	LoadDelivered bool `json:"load_delivered"`
-	// Packets is the target across directions.
-	Packets int `json:"packets"`
+	// Packets is the target across directions, and DurationMS how long each
+	// direction sends; a run has one of the two.
+	Packets    int   `json:"packets,omitempty"`
+	DurationMS int64 `json:"duration_ms,omitempty"`
 	// WallTimeMS runs from the start of sending to the end of the last
 	// direction's relay sweep.
 	WallTimeMS int64 `json:"wall_time_ms"`
@@ -94,19 +102,29 @@ func (r *Report) WriteText(w io.Writer) error {
 	case !r.LoadDelivered:
 		verdict = "INCONCLUSIVE (load not delivered)"
 	}
-	succeeded := 0
+	succeeded, sent := 0, 0
 	for _, d := range r.Directions {
 		succeeded += d.Succeeded
+		sent += d.Sent
+	}
+	load := fmt.Sprintf("%d packets", r.Packets)
+	if r.DurationMS > 0 {
+		load = "sending for " + ms(r.DurationMS).String()
 	}
 	wall := time.Duration(r.WallTimeMS) * time.Millisecond
 	fmt.Fprintf(&out,
-		"\nRelayer load: %s (%s, %s clients, %d wallets, %d per block interval): "+
-			"%d of %d packets succeeded in %s, %.1f packets/s\n",
-		verdict, r.Provider, r.LightClient, r.Wallets, r.PerBlock, succeeded, r.Packets, wall, r.Throughput)
+		"\nRelayer load: %s (%s, %s clients, %s, %d wallets, %d per block interval in batches of %d): "+
+			"%d of %d sent packets succeeded in %s, %.1f packets/s\n",
+		verdict, r.Provider, r.LightClient, load, r.Wallets, r.PerBlock, r.Batch, succeeded, sent, wall,
+		r.Throughput)
 	for _, d := range r.Directions {
 		fmt.Fprintf(&out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)
-		fmt.Fprintf(&out, "  sends:    target=%d sent=%d send_failures=%d backpressure=%d send_phase=%s\n",
-			d.Target, d.Sent, d.SendFailures, d.Backpressure, ms(d.SendPhaseMS))
+		target := ""
+		if d.Target > 0 {
+			target = fmt.Sprintf("target=%d ", d.Target)
+		}
+		fmt.Fprintf(&out, "  sends:    %ssent=%d send_failures=%d backpressure=%d send_phase=%s\n",
+			target, d.Sent, d.SendFailures, d.Backpressure, ms(d.SendPhaseMS))
 		fmt.Fprintf(&out, "  blocks:   with_txs=%d span=%d per_block min=%d p50=%d max=%d\n",
 			d.BlocksWithTxs, d.BlockSpan, d.PerBlockMin, d.PerBlockP50, d.PerBlockMax)
 		fmt.Fprintf(&out, "  packets:  succeeded=%d timed_out=%d rejected=%d relay_failed=%d unresolved=%d "+

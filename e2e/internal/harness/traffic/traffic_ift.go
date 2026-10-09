@@ -161,6 +161,56 @@ func (i *IFT) transferCalldata(receiver common.Address, amount *big.Int, timeout
 	return data, nil
 }
 
+// TransferBatch submits one transaction from the route's sender that moves
+// amount to each receiver through the batch shim, out of the shim's IFT
+// balance, and waits for its receipt. It returns one SendResult per packet,
+// in receivers' order. Like Transfer it takes no balance baselines.
+func (i *IFT) TransferBatch(
+	ctx context.Context,
+	receivers []common.Address,
+	amount *big.Int,
+	timeoutTimestamp uint64,
+) ([]SendResult, error) {
+	amount, err := validAmount(amount)
+	switch {
+	case err != nil:
+		return nil, err
+	case len(receivers) == 0:
+		return nil, errors.New("traffic: IFT batch needs a receiver")
+	case timeoutTimestamp == 0:
+		return nil, errors.New("traffic: IFT timeout timestamp is required")
+	}
+	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(receivers))
+	for k, receiver := range receivers {
+		transfers[k] = iftbatchtransfershim.IFTBatchTransferShimTransfer{
+			Receiver: receiver.Hex(), Amount: amount, TimeoutTimestamp: timeoutTimestamp,
+		}
+	}
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("traffic: pack IFT batchIftTransfer: %w", err)
+	}
+	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
+	if err != nil {
+		return nil, fmt.Errorf("traffic: send IFT batch on route %q: %w", i.routeID, err)
+	}
+	sent, err := sentPackets(receipt, i.sourceRouter)
+	if err != nil {
+		return nil, err
+	}
+	if len(sent) != len(receivers) {
+		return nil, fmt.Errorf("traffic: IFT batch on route %q emitted %d packets, want %d",
+			i.routeID, len(sent), len(receivers))
+	}
+	results := make([]SendResult, len(sent))
+	for k, event := range sent {
+		results[k] = newSendResult(i.routeID, i.source, i.sourceClientID, receipt, event.Packet.Sequence)
+	}
+	return results, nil
+}
+
 // SendBatch emits multiple IFT transfers from a single source transaction
 func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
 	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))

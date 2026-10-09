@@ -3,7 +3,7 @@
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
 FORGE_BUILD_FLAGS ?=
-# Flags passed to a load-test scenario, e.g. LOADTEST_FLAGS='--packets 8000 --per-block 20 --json'.
+# Flags passed to a load-test scenario, e.g. LOADTEST_FLAGS='--duration 20m --per-block 10 --json'.
 LOADTEST_FLAGS ?=
 
 HARNESS_DIR := internal/harness

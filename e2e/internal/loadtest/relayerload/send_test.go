@@ -20,7 +20,7 @@ func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 	var claimed, exhausted atomic.Bool
 	open := func() bool { return !claimed.Load() }
 	done := make(chan int)
-	go func() { done <- pace(t.Context(), ticks, nil, tokens, open, exhausted.Load) }()
+	go func() { done <- pace(t.Context(), ticks, nil, nil, tokens, open, exhausted.Load) }()
 
 	// Interval 1: the first fill happens at once; one token is used.
 	require.Eventually(t, func() bool { return len(tokens) == 3 }, time.Second, time.Millisecond)
@@ -43,7 +43,7 @@ func TestPaceStopsWhenEverySenderRetired(t *testing.T) {
 	quit := make(chan struct{})
 	close(quit)
 	never := func() bool { return false }
-	assert.Zero(t, pace(t.Context(), nil, quit, make(chan struct{}, 2), never, never))
+	assert.Zero(t, pace(t.Context(), nil, quit, nil, make(chan struct{}, 2), never, never))
 }
 
 // fakeTicks ticks every interval until the test ends.
@@ -58,13 +58,13 @@ func TestGenerateSendsTargetWithOneTransactionPerWallet(t *testing.T) {
 	var inFlight [wallets]atomic.Int32
 	var block atomic.Uint64
 	var sequence atomic.Uint64
-	send := func(_ context.Context, wallet int) (sentPacket, error) {
+	send := func(_ context.Context, wallet, n int) ([]sentPacket, error) {
 		if inFlight[wallet].Add(1) != 1 {
 			t.Errorf("wallet %d has two transactions in flight", wallet)
 		}
 		defer inFlight[wallet].Add(-1)
 		time.Sleep(2 * time.Millisecond)
-		return sentPacket{key: packetKey{"client-0", sequence.Add(1)}, block: block.Load()}, nil
+		return packets(&sequence, block.Load(), n), nil
 	}
 	r := &DirectionReport{Route: "test", Target: target}
 	out := make(chan sentPacket, target)
@@ -81,7 +81,7 @@ func TestGenerateSendsTargetWithOneTransactionPerWallet(t *testing.T) {
 		}
 	}()
 
-	generate(t.Context(), ticks, 3, wallets, send, out, r)
+	generate(t.Context(), ticks, pacing{perBlock: 3, batch: 1, wallets: wallets}, send, out, r)
 
 	var received []sentPacket
 	for packet := range out {
@@ -99,17 +99,18 @@ func TestGenerateRetiresFailingWallet(t *testing.T) {
 	const wallets, target = 3, 12
 	var calls [wallets]atomic.Int32
 	var sequence atomic.Uint64
-	send := func(_ context.Context, wallet int) (sentPacket, error) {
+	send := func(_ context.Context, wallet, n int) ([]sentPacket, error) {
 		calls[wallet].Add(1)
 		if wallet == 0 {
-			return sentPacket{}, errors.New("nonce too low")
+			return nil, errors.New("nonce too low")
 		}
-		return sentPacket{key: packetKey{"client-0", sequence.Add(1)}, block: 1}, nil
+		return packets(&sequence, 1, n), nil
 	}
 	r := &DirectionReport{Route: "test", Target: target}
 	out := make(chan sentPacket, target)
 
-	generate(t.Context(), fakeTicks(t, time.Millisecond), wallets, wallets, send, out, r)
+	generate(t.Context(), fakeTicks(t, time.Millisecond), pacing{perBlock: wallets, batch: 1, wallets: wallets}, send,
+		out, r)
 
 	assert.Equal(t, int32(1), calls[0].Load(), "a failed wallet sends no more")
 	assert.Equal(t, 1, r.SendFailures)
@@ -118,13 +119,13 @@ func TestGenerateRetiresFailingWallet(t *testing.T) {
 }
 
 func TestGenerateEndsWhenEveryWalletRetired(t *testing.T) {
-	send := func(context.Context, int) (sentPacket, error) { return sentPacket{}, errors.New("insufficient funds") }
+	send := func(context.Context, int, int) ([]sentPacket, error) { return nil, errors.New("insufficient funds") }
 	r := &DirectionReport{Route: "test", Target: 100}
 	out := make(chan sentPacket, r.Target)
 
 	finished := make(chan struct{})
 	go func() {
-		generate(t.Context(), fakeTicks(t, time.Millisecond), 5, 2, send, out, r)
+		generate(t.Context(), fakeTicks(t, time.Millisecond), pacing{perBlock: 5, batch: 1, wallets: 2}, send, out, r)
 		close(finished)
 	}()
 	select {
@@ -149,13 +150,91 @@ func TestBlockCounts(t *testing.T) {
 func TestGenerateStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	var once sync.Once
-	send := func(ctx context.Context, _ int) (sentPacket, error) {
+	send := func(ctx context.Context, _, _ int) ([]sentPacket, error) {
 		once.Do(cancel)
 		<-ctx.Done()
-		return sentPacket{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 	r := &DirectionReport{Route: "test", Target: 10}
-	generate(ctx, fakeTicks(t, time.Millisecond), 2, 2, send, make(chan sentPacket, 10), r)
+	generate(ctx, fakeTicks(t, time.Millisecond), pacing{perBlock: 2, batch: 1, wallets: 2}, send,
+		make(chan sentPacket, 10), r)
 	assert.Zero(t, r.Sent)
+	assert.Zero(t, r.SendFailures)
+}
+
+// packets returns n packets with the next sequences, included in block.
+func packets(sequence *atomic.Uint64, block uint64, n int) []sentPacket {
+	out := make([]sentPacket, n)
+	for k := range out {
+		out[k] = sentPacket{key: packetKey{"client-0", sequence.Add(1)}, block: block}
+	}
+	return out
+}
+
+func TestPaceEndsWithTheWindowAndDropsItsTokens(t *testing.T) {
+	window := make(chan time.Time, 1)
+	window <- time.Now()
+	tokens := make(chan struct{}, 3)
+	always, never := func() bool { return true }, func() bool { return false }
+
+	assert.Zero(t, pace(t.Context(), nil, nil, window, tokens, always, never))
+	assert.Empty(t, tokens, "no send starts after the window")
+}
+
+func TestGenerateSendsTheTargetInBatchesWithAShortLast(t *testing.T) {
+	var sizes []int
+	var mu sync.Mutex
+	var sequence atomic.Uint64
+	send := func(_ context.Context, _, n int) ([]sentPacket, error) {
+		mu.Lock()
+		sizes = append(sizes, n)
+		mu.Unlock()
+		return packets(&sequence, 1, n), nil
+	}
+	r := &DirectionReport{Route: "test", Target: 12}
+	out := make(chan sentPacket, r.Target)
+
+	generate(t.Context(), fakeTicks(t, time.Millisecond), pacing{perBlock: 10, batch: 5, wallets: 1}, send, out, r)
+
+	assert.Equal(t, []int{5, 5, 2}, sizes)
+	assert.Equal(t, 12, r.Sent)
+	assert.Len(t, out, 12)
+	assert.Equal(t, 3, r.SubmitToReceipt.Count, "one sample per transaction")
+}
+
+func TestGenerateWithoutATargetSendsUntilTheWindowEnds(t *testing.T) {
+	var sequence atomic.Uint64
+	release := make(chan struct{})
+	var inFlight atomic.Int32
+	send := func(_ context.Context, _, n int) ([]sentPacket, error) {
+		inFlight.Add(1)
+		<-release
+		return packets(&sequence, 1, n), nil
+	}
+	window := make(chan time.Time)
+	r := &DirectionReport{Route: "test"}
+	out := make(chan sentPacket, 100)
+	finished := make(chan struct{})
+	go func() {
+		generate(t.Context(), fakeTicks(t, time.Millisecond), pacing{
+			perBlock: 4, batch: 2, wallets: 3,
+			window: window,
+		}, send, out, r)
+		close(finished)
+	}()
+
+	// Every wallet has a transaction in flight; the window ends meanwhile.
+	require.Eventually(t, func() bool { return inFlight.Load() == 3 }, time.Second, time.Millisecond)
+	window <- time.Now()
+	// pace drops the window's tokens before the senders are free again.
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("generate did not return after the window")
+	}
+	assert.Equal(t, int32(3), inFlight.Load(), "no transaction starts after the window")
+	assert.Equal(t, 6, r.Sent, "the transactions in flight at the end still count")
 	assert.Zero(t, r.SendFailures)
 }

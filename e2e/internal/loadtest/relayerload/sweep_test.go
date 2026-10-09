@@ -296,30 +296,32 @@ func TestRetryingRepeatsAnUnansweredRead(t *testing.T) {
 }
 
 func TestVerdictSeparatesTheRelayerFromTheLoad(t *testing.T) {
-	short := func() *Report {
-		return &Report{Directions: []*DirectionReport{
-			{Route: "a-to-b", Target: 5, Sent: 5},
-			{Route: "b-to-a", Target: 5, Sent: 4, SendFailures: 1, FirstSendError: "boom"},
+	retired := func() *Report {
+		return &Report{Wallets: 2, Directions: []*DirectionReport{
+			{Route: "a-to-b", Target: 5, Sent: 5, SendFailures: 1, FirstSendError: "busy"},
+			{Route: "b-to-a", Target: 5, Sent: 4, SendFailures: 2, FirstSendError: "boom"},
 		}}
 	}
 
-	report := short()
+	report := retired()
 	err := verdict(report, nil)
 	require.ErrorIs(t, err, ErrLoadNotDelivered)
-	require.ErrorContains(t, err, "b-to-a: sent 4 of 5 packets (1 send failures, first: boom)")
+	require.ErrorContains(t, err, "b-to-a: every wallet retired after sending 4 packets (2 send failures, first: boom)")
+	require.NotContains(t, err.Error(), "a-to-b", "a direction that kept a wallet delivered its load")
 	assert.True(t, report.Passed, "the relayer relayed every packet sent")
 	assert.False(t, report.LoadDelivered)
 
-	report = short()
+	report = retired()
 	err = verdict(report, errors.New("b-to-a: 1 packets did not succeed"))
 	require.NotErrorIs(t, err, ErrLoadNotDelivered, "a relayer failure is the verdict")
 	assert.False(t, report.Passed)
 
-	report = &Report{Directions: []*DirectionReport{{Target: 5, Sent: 5}}}
+	report = &Report{Wallets: 2, Directions: []*DirectionReport{{Target: 5, Sent: 5}}}
 	require.Error(t, verdict(report, errors.New("a-to-b: 1 packets did not succeed")))
 	assert.True(t, report.LoadDelivered, "the load was delivered though the relayer failed")
 
-	report = &Report{Directions: []*DirectionReport{{Target: 5, Sent: 5}}}
+	// A duration run has no target.
+	report = &Report{Wallets: 2, Directions: []*DirectionReport{{Sent: 7, SendFailures: 1}}}
 	require.NoError(t, verdict(report, nil))
 	assert.True(t, report.Passed)
 	assert.True(t, report.LoadDelivered)
@@ -327,7 +329,8 @@ func TestVerdictSeparatesTheRelayerFromTheLoad(t *testing.T) {
 
 func TestReportJSONAndText(t *testing.T) {
 	report := &Report{
-		Scenario: "relayer", Provider: "anvil", LightClient: "attested", Wallets: 4, PerBlock: 2, Packets: 10,
+		Scenario: "relayer", Provider: "anvil", LightClient: "attested", Wallets: 4, PerBlock: 2, Batch: 1,
+		Packets:    10,
 		WallTimeMS: 5000, Throughput: 2, Error: "b-to-a: sent 4 of 5 packets",
 		Directions: []*DirectionReport{{
 			Route: "a-to-b", Source: "chain-a", Destination: "chain-b", Target: 5, Sent: 5, Succeeded: 5,
@@ -352,9 +355,23 @@ func TestReportJSONAndText(t *testing.T) {
 	assert.Contains(
 		t,
 		text,
-		"Relayer load: FAIL (anvil, attested clients, 4 wallets, 2 per block interval): 5 of 10 packets succeeded in 5s, 2.0 packets/s",
+		"Relayer load: FAIL (anvil, attested clients, 10 packets, 4 wallets, 2 per block interval in batches of 1): "+
+			"5 of 5 sent packets succeeded in 5s, 2.0 packets/s",
 	)
 	assert.Contains(t, text, "[a-to-b] chain-a -> chain-b")
+	assert.Contains(t, text, "sends:    target=5 sent=5")
 	assert.Regexp(t, `send->recv +\(block time\): +n=1 p50=1s`, text)
 	assert.Contains(t, text, "b-to-a: sent 4 of 5 packets")
+
+	// A duration run names its duration and has no targets.
+	report.Packets, report.DurationMS = 0, (20 * time.Minute).Milliseconds()
+	report.Directions[0].Target = 0
+	encoded, err = json.Marshal(report)
+	require.NoError(t, err)
+	assert.Contains(t, string(encoded), `"duration_ms":1200000`)
+	assert.NotContains(t, string(encoded), `"packets":`)
+	out.Reset()
+	require.NoError(t, report.WriteText(&out))
+	assert.Contains(t, out.String(), "(anvil, attested clients, sending for 20m0s, 4 wallets")
+	assert.Contains(t, out.String(), "sends:    sent=5 ")
 }

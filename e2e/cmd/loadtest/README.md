@@ -21,7 +21,7 @@ Docker must be running. From the repository root:
 
 ```bash
 make -C e2e run-relayer                                       # burst
-make -C e2e run-relayer LOADTEST_FLAGS='--packets 8000 --per-block 20'    # long run
+make -C e2e run-relayer LOADTEST_FLAGS='--duration 20m --per-block 10'    # long run
 make -C e2e run-attestor
 make -C e2e run-relayer LOADTEST_FLAGS='--packets 40 --wallets 10 --per-block 5'   # smoke
 make -C e2e run-attestor LOADTEST_FLAGS='--duration 5s'                           # smoke
@@ -56,8 +56,13 @@ reports what it measured.
 `loadtest relayer` sends IFT transfers in both directions (A to B and B to A, or one with
 `--directions a-to-b|b-to-a`) and requires every packet to reach `SUCCEEDED` in the relayer
 status API. The defaults are a short, dense burst: `--packets 3000` (split evenly across
-directions), `--wallets 200`, and `--per-block 150`. `--packets 8000 --per-block 20` is a
-sustained, light run. Only the selected directions' routes are deployed and relayed.
+directions), `--wallets 200`, and `--per-block 150`. `--duration 20m --per-block 10` is a
+long, moderate run: with `--duration`, every direction sends until the duration passes,
+however many packets that takes, instead of a packet count (the two do not combine, and the
+duration counts against `--timeout`). `--batch N` sends N transfers per transaction through
+the IFT batch shim, so each transaction emits N packets; it must divide `--per-block`, which
+stays a count of transfers. The default `--batch 1` sends a plain `iftTransfer` from the
+wallet, without the shim. Only the selected directions' routes are deployed and relayed.
 `--light-client besu-qbft` (with `--provider besu`) joins the Chains with Besu QBFT light
 clients, which verify each other's sealed headers, instead of attested ones.
 
@@ -69,20 +74,23 @@ How a direction runs:
 1. **Wallets.** A pool of fresh keys. Each gets 1 native coin of gas and 1 IFT on the source
    Chain of every direction before the run, from one payable shim call per 64 wallets.
    Wallet *i* sends to wallet *i+1* on the destination Chain (itself in a pool of one).
-2. **Pacing.** A ticker at the source Chain's block interval puts `--per-block` tokens into a
-   bucket of that size, so the offered rate is `--per-block` transfers per block interval, not
-   per mined block. Tokens still unused when the next tick arrives are counted as
-   `backpressure` (no wallet was free to send them) and discarded.
-3. **Senders.** One goroutine per wallet takes a token, claims one of the direction's packet
-   slots, and submits a transfer through the harness sender, which waits for its receipt. So
+2. **Pacing.** A ticker at the source Chain's block interval puts `--per-block`/`--batch`
+   tokens, one per transaction, into a bucket of that size, so the offered rate is
+   `--per-block` transfers per block interval, not per mined block. Tokens still unused when
+   the next tick arrives are counted, in transfers, as `backpressure` (no wallet was free to
+   send them) and discarded. With `--duration`, no token is offered once it passes, and
+   transactions in flight then complete and count.
+3. **Senders.** One goroutine per wallet takes a token, claims up to `--batch` of the
+   direction's packet slots (the last transaction of a count run may carry fewer), and
+   submits them in one transaction through the harness sender, which waits for its receipt. So
    each wallet has at most one transaction in flight, which Besu's per-sender pool limit
    needs. The sender retries requests the node leaves unanswered (a dropped connection, a
    stalled request, an empty latest block, an HTTP 5xx or 429) or fails internally
    (JSON-RPC -32603, which Besu answers under load), and gives submission and inclusion one
    completion budget each. A node that refuses a resend after an unanswered attempt is
-   believed only if it answers that it does not hold the transaction. A transfer that still fails
-   (the node refuses it, it reverts, or it is not included in time) counts as a
-   `send_failure` and retires that wallet, whose packet slot goes back for another wallet to
+   believed only if it answers that it does not hold the transaction. A transaction that still
+   fails (the node refuses it, it reverts, or it is not included in time) counts as a
+   `send_failure` and retires that wallet, whose packet slots go back for another wallet to
    send; the first such error is reported. One cut short by an interruption does not count.
 4. **Achieved pacing.** The receipts' block numbers show how the sends landed: blocks with at
    least one send, the span from the first to the last of them, and the min/p50/max sends
@@ -110,19 +118,21 @@ How a direction runs:
    With `--observability`, the relayer's own `relay_duration` metric (`send_to_recv`,
    `recv_to_ack`) is in Grafana.
 
-The report has one overall line (pass or fail, packets, wall time from the first send to the
-end of the last sweep, and succeeded packets per second) and, per direction: sends (target,
-sent, send failures, backpressure, send phase), achieved pacing, packet outcomes
+The report has one overall line (pass or fail, the packet count or duration, succeeded of
+sent packets, wall time from the first send to the end of the last sweep, and succeeded
+packets per second) and, per direction: sends (target in a count run, sent, send failures,
+backpressure, send phase), achieved pacing, packet outcomes
 (succeeded, timed out, rejected, relay failed, unresolved, relay drain after the last send),
-and p50/p90/p95/p99/max latency for submit to receipt (wall clock, from the senders) and send
+and p50/p90/p95/p99/max latency for submit to receipt (wall clock per transaction, from the
+senders) and send
 to receive, receive to acknowledgement, and send to acknowledgement (block time).
 
 The verdict judges the relayer on the packets that were sent. It is `PASS` when every one
-succeeded and every direction sent its target, and `FAIL` when a sent packet did not succeed,
-the relay stalled, the relayer exited, or the run was interrupted. When the relayer relayed
-everything sent but every wallet of a direction retired before its target was sent, the load
-was not delivered and the run is `INCONCLUSIVE` (exit status 3): it says nothing about the
-relayer at the asked load.
+succeeded and every direction kept a wallet sending, and `FAIL` when a sent packet did not
+succeed, the relay stalled, the relayer exited, or the run was interrupted. When the relayer
+relayed everything sent but every wallet of a direction retired, so it stopped short of its
+target or duration, the load was not delivered and the run is `INCONCLUSIVE` (exit status
+3): it says nothing about the relayer at the asked load.
 
 ## Attestor scenario
 

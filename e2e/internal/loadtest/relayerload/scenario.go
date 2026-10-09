@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -67,22 +68,44 @@ const (
 	LightClientBesuQBFT LightClient = "besu-qbft"
 )
 
-// Config shapes one relayer scenario run.
+// Config shapes one relayer scenario run. It sends either Packets or for
+// Duration.
 type Config struct {
 	LightClient LightClient
 	// Packets is the total across all directions, split evenly.
-	Packets    int
-	Wallets    int
+	Packets int
+	// Duration is how long every direction sends, however many packets
+	// that takes.
+	Duration time.Duration
+	Wallets  int
+	// PerBlock is the transfers each direction offers per block interval,
+	// in transactions of Batch transfers.
 	PerBlock   int
+	Batch      int
 	Directions []Direction
 }
 
 // Validate rejects a Config that Run cannot run on Chains of provider: an
 // unknown direction or light client, Besu QBFT clients between other Chains,
-// fewer packets than directions, or no wallets or sends per block.
+// both or neither of Packets and Duration, fewer packets than directions, no
+// wallets, or transfers per block that are not a positive multiple of the
+// batch.
 func (c Config) Validate(provider environment.EVMProvider) error {
 	if len(c.Directions) == 0 {
 		return errors.New("no directions")
+	}
+	switch {
+	case c.Packets > 0 && c.Duration > 0:
+		return errors.New("give a packet count or a duration, not both")
+	case c.Packets <= 0 && c.Duration <= 0:
+		return errors.New("give a positive packet count or duration")
+	case c.Packets > 0 && c.Packets < len(c.Directions):
+		return fmt.Errorf("%d packets is fewer than the %d directions", c.Packets, len(c.Directions))
+	case c.Batch <= 0:
+		return errors.New("the batch size must be positive")
+	case c.PerBlock <= 0 || c.PerBlock%c.Batch != 0:
+		return fmt.Errorf("the transfers per block (%d) must be a positive multiple of the batch size (%d)",
+			c.PerBlock, c.Batch)
 	}
 	for _, d := range c.Directions {
 		if d != DirectionAtoB && d != DirectionBtoA {
@@ -95,12 +118,8 @@ func (c Config) Validate(provider environment.EVMProvider) error {
 			c.LightClient, LightClientAttested, LightClientBesuQBFT)
 	case c.LightClient == LightClientBesuQBFT && provider != environment.EVMProviderBesu:
 		return fmt.Errorf("%s light clients need %s Chains", LightClientBesuQBFT, environment.EVMProviderBesu)
-	case c.Packets < len(c.Directions):
-		return fmt.Errorf("%d packets is fewer than the %d directions", c.Packets, len(c.Directions))
 	case c.Wallets <= 0:
 		return errors.New("the wallet count must be positive")
-	case c.PerBlock <= 0:
-		return errors.New("the transfers per block must be positive")
 	}
 	return nil
 }
@@ -127,14 +146,15 @@ func SessionOptions(base session.Options, cfg Config) session.Options {
 }
 
 // ErrLoadNotDelivered marks a run in which the relayer relayed every packet
-// sent, but every wallet of a direction retired before its target was sent.
+// sent, but every wallet of a direction retired, so the direction stopped
+// short of its target or its duration.
 var ErrLoadNotDelivered = errors.New("load not delivered")
 
 // Run funds a wallet pool, drives every direction concurrently, and returns
 // the report. Its error is the relayer's failures, if any: a packet sent but
 // not SUCCEEDED, a stalled relay, the relayer process exiting, or an
-// interruption. Otherwise it wraps ErrLoadNotDelivered if a direction sent
-// fewer packets than its target.
+// interruption. Otherwise it wraps ErrLoadNotDelivered if every wallet of a
+// direction retired.
 func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
 	ctx, stop := cancelOnExit(ctx, s.Relayer.Done(), s.Relayer.Err)
 	defer stop()
@@ -144,21 +164,25 @@ func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
 		LightClient: string(cfg.LightClient),
 		Wallets:     cfg.Wallets,
 		PerBlock:    cfg.PerBlock,
+		Batch:       cfg.Batch,
 		Packets:     cfg.Packets,
+		DurationMS:  cfg.Duration.Milliseconds(),
 	}
 	err := verdict(report, run(ctx, s, cfg, report))
 	return report, err
 }
 
 // verdict records in report whether the relayer passed, given its failures,
-// and whether every direction sent its target, and returns Run's error.
+// and whether every direction kept a wallet sending, and returns Run's
+// error. One failed transaction retires one wallet.
 func verdict(report *Report, failures error) error {
 	report.Passed = failures == nil
 	var shortfalls []error
 	for _, d := range report.Directions {
-		if d.Sent != d.Target {
-			shortfalls = append(shortfalls, fmt.Errorf("%s: sent %d of %d packets (%d send failures, first: %s)",
-				d.Route, d.Sent, d.Target, d.SendFailures, d.FirstSendError))
+		if d.SendFailures >= report.Wallets {
+			shortfalls = append(shortfalls, fmt.Errorf(
+				"%s: every wallet retired after sending %d packets (%d send failures, first: %s)",
+				d.Route, d.Sent, d.SendFailures, d.FirstSendError))
 		}
 	}
 	report.LoadDelivered = len(shortfalls) == 0
@@ -207,6 +231,7 @@ func run(ctx context.Context, s *session.Session, cfg Config, report *Report) er
 		if i < cfg.Packets%len(cfg.Directions) {
 			d.Target++
 		}
+		// A duration run has no target: Packets is zero.
 		report.Directions = append(report.Directions, d)
 	}
 
@@ -231,7 +256,7 @@ func run(ctx context.Context, s *session.Session, cfg Config, report *Report) er
 	var wg sync.WaitGroup
 	for i, d := range report.Directions {
 		wg.Go(func() {
-			if err := runDirection(ctx, s, routes[i], wallets, cfg.PerBlock, d); err != nil {
+			if err := runDirection(ctx, s, routes[i], wallets, cfg, d); err != nil {
 				errs[i] = fmt.Errorf("%s: %w", d.Route, err)
 			}
 		})
@@ -305,14 +330,15 @@ func topUp(ctx context.Context, s *session.Session, chainID environment.ChainID,
 	return funding.EnsureEOABalance(ctx, s.Deployer.Address(), minimum)
 }
 
-// runDirection sends d.Target packets on route while sweeping the relayer
-// for their status, then measures the relay latency of those that succeeded.
+// runDirection sends d.Target packets, or for cfg.Duration, on route while
+// sweeping the relayer for their status, then measures the relay latency of
+// those that succeeded.
 func runDirection(
 	ctx context.Context,
 	s *session.Session,
 	route traffic.Route,
 	wallets []traffic.Signer,
-	perBlock int,
+	cfg Config,
 	d *DirectionReport,
 ) error {
 	source, err := s.Env.Chain(route.Source)
@@ -356,17 +382,33 @@ func runDirection(
 		return err
 	}
 	amount := big.NewInt(transferAmount)
-	send := func(ctx context.Context, wallet int) (sentPacket, error) {
+	// A single transfer is a plain iftTransfer from the wallet's own IFT; a
+	// batch goes through the batch shim, out of the shim's.
+	send := func(ctx context.Context, wallet, n int) ([]sentPacket, error) {
 		receiver := wallets[(wallet+1)%len(wallets)].Address()
-		result, transferErr := apps[wallet].Transfer(ctx, receiver, amount, timeout)
-		if transferErr != nil {
-			return sentPacket{}, transferErr
+		var results []traffic.SendResult
+		if n == 1 {
+			result, err := apps[wallet].Transfer(ctx, receiver, amount, timeout)
+			if err != nil {
+				return nil, err
+			}
+			results = []traffic.SendResult{result}
+		} else {
+			var err error
+			if results, err = apps[wallet].TransferBatch(ctx, slices.Repeat([]common.Address{receiver}, n), amount,
+				timeout); err != nil {
+				return nil, err
+			}
 		}
-		packet := result.PacketTx()
-		return sentPacket{
-			key:   packetKey{clientID: packet.SourceClientID, sequence: packet.Sequence},
-			block: packet.SourceBlockNumber,
-		}, nil
+		packets := make([]sentPacket, len(results))
+		for k, result := range results {
+			packet := result.PacketTx()
+			packets[k] = sentPacket{
+				key:   packetKey{clientID: packet.SourceClientID, sequence: packet.Sequence},
+				block: packet.SourceBlockNumber,
+			}
+		}
+		return packets, nil
 	}
 	list := func(ctx context.Context) ([]*relayerv2.PacketStatus, error) {
 		return s.Relayer.ClientPackets(ctx, string(route.Source), clients.SourceClientID)
@@ -374,10 +416,22 @@ func runDirection(
 
 	interval := source.Timing().BlockInterval
 	poll := max(interval, destination.Timing().BlockInterval)
-	slog.InfoContext(ctx, "generating load", "direction", d.Route, "packets", d.Target, "per_block", perBlock,
-		"wallets", len(wallets), "interval", interval, "poll", poll, "stall", policy.CompletionBudget)
+	slog.InfoContext(ctx, "generating load", "direction", d.Route, "packets", d.Target, "duration", cfg.Duration,
+		"per_block", cfg.PerBlock, "batch", cfg.Batch, "wallets", len(wallets), "interval", interval, "poll", poll,
+		"stall", policy.CompletionBudget)
 
-	sent := make(chan sentPacket, d.Target)
+	p := pacing{perBlock: cfg.PerBlock, batch: cfg.Batch, wallets: len(wallets)}
+	// sent holds every packet a run can send, so a slow sweep never holds
+	// up a sender: the target, or one full interval per tick of the window
+	// and the first.
+	capacity := d.Target
+	if cfg.Duration > 0 {
+		window := time.NewTimer(cfg.Duration)
+		defer window.Stop()
+		p.window = window.C
+		capacity = cfg.PerBlock * (int(cfg.Duration/interval) + 2)
+	}
+	sent := make(chan sentPacket, capacity)
 	var packets []*trackedPacket
 	var sweepErr error
 	var sweeping sync.WaitGroup
@@ -391,7 +445,7 @@ func runDirection(
 		}
 	})
 	ticker := time.NewTicker(interval)
-	generate(sendCtx, ticker.C, perBlock, len(wallets), send, sent, d)
+	generate(sendCtx, ticker.C, p, send, sent, d)
 	ticker.Stop()
 	slog.InfoContext(ctx, "send phase done", "direction", d.Route, "sent", d.Sent,
 		"send_failures", d.SendFailures, "backpressure", d.Backpressure)
