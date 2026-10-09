@@ -18,12 +18,13 @@ import (
 )
 
 // reply is one scripted answer: a result, a node error, an HTTP error
-// status, or a dropped connection.
+// status, a dropped connection, or no answer until the client gives up.
 type reply struct {
 	result  any
 	nodeErr string
 	status  int
 	drop    bool
+	stall   bool
 }
 
 // fakeNode answers JSON-RPC requests from per-method scripts; a script's last
@@ -63,6 +64,9 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case len(script) == 0:
 		response["error"] = map[string]any{"code": -32601, "message": "method not found: " + req.Method}
+	case script[min(call, len(script)-1)].stall:
+		<-r.Context().Done()
+		return
 	case script[min(call, len(script)-1)].drop:
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err == nil {
@@ -159,6 +163,17 @@ func TestBroadcastTxRetriesUnansweredRequests(t *testing.T) {
 
 	require.NoError(t, broadcast(t, client))
 	assert.Equal(t, 4, node.count("eth_getTransactionReceipt"), "a failed poll is retried at the next")
+}
+
+func TestBroadcastTxRepeatsAStalledRequest(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_estimateGas": {{stall: true}, {result: "0x5208"}},
+	})
+	started := time.Now()
+
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 2, node.count("eth_estimateGas"))
+	assert.Less(t, time.Since(started), testWait.Timeout/2, "the stalled attempt gave up after its quarter")
 }
 
 func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
@@ -271,4 +286,16 @@ func TestBroadcastTxRefusalReportsTheNonce(t *testing.T) {
 
 	require.ErrorContains(t, err, "nonce 3 (nonce floor 0)")
 	require.ErrorContains(t, err, "Nonce too low")
+}
+
+func TestWaitForReceiptBlamesOnlyTheLatestPoll(t *testing.T) {
+	_, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionReceipt": {{drop: true}, {result: nil}},
+	})
+	wait := TransactionWait{Timeout: 200 * time.Millisecond, PollInterval: 10 * time.Millisecond}
+
+	_, err := client.WaitForReceipt(t.Context(), common.HexToHash("0x01"), wait)
+
+	require.ErrorContains(t, err, "not found in time")
+	require.NotContains(t, err.Error(), "last poll error", "the node answered after the dropped poll")
 }

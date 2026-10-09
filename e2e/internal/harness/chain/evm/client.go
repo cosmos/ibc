@@ -54,12 +54,21 @@ func (w TransactionWait) context(ctx context.Context) (context.Context, context.
 	}
 }
 
-// retry calls f until it succeeds, fails definitively, or ctx ends, and
-// returns its last result. Each attempt gets a quarter of w.Timeout, so a
-// stalled request is retried on another connection instead of using up ctx.
-func retry[T any](ctx context.Context, w TransactionWait, f func(context.Context) (T, error)) (T, error) {
+// attempt bounds a single request to a quarter of w.Timeout, so a stalled
+// request is given up and repeated before the wait runs out.
+func (w TransactionWait) attempt(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, w.Timeout/4)
+}
+
+// Retry calls f until it succeeds, fails definitively, or ctx ends, and
+// returns its last result. Each attempt is bounded by a quarter of w.Timeout,
+// so a stalled request is retried on another connection instead of using up
+// ctx, and attempts are spaced by w.PollInterval. Only a node's answer is
+// definitive: a transport failure, a timed-out attempt, a null where a value
+// must exist (ethereum.NotFound included), and HTTP 5xx and 429 are retried.
+func Retry[T any](ctx context.Context, w TransactionWait, f func(context.Context) (T, error)) (T, error) {
 	for {
-		attempt, cancel := context.WithTimeout(ctx, w.Timeout/4)
+		attempt, cancel := w.attempt(ctx)
 		v, err := f(attempt)
 		cancel()
 		if !transient(err) {
@@ -288,7 +297,7 @@ func (e *EVMClient) signAndSend(
 // wait, only if the node knows the transaction.
 func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *types.Transaction) error {
 	unanswered := false
-	_, err := retry(ctx, wait, func(ctx context.Context) (struct{}, error) {
+	_, err := Retry(ctx, wait, func(ctx context.Context) (struct{}, error) {
 		err := e.client.SendTransaction(ctx, signed)
 		unanswered = unanswered || transient(err)
 		return struct{}{}, err
@@ -296,7 +305,7 @@ func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *type
 	if err == nil || !unanswered || transient(err) {
 		return err
 	}
-	attempt, cancel := context.WithTimeout(ctx, wait.Timeout/4)
+	attempt, cancel := wait.attempt(ctx)
 	defer cancel()
 	if _, _, lookupErr := e.client.TransactionByHash(attempt, signed.Hash()); lookupErr == nil {
 		return nil
@@ -336,7 +345,7 @@ func (e *EVMClient) buildSignedTx(
 	data []byte,
 	value *big.Int,
 ) (*types.Transaction, error) {
-	nonce, err := retry(ctx, wait, func(ctx context.Context) (uint64, error) {
+	nonce, err := Retry(ctx, wait, func(ctx context.Context) (uint64, error) {
 		return e.client.PendingNonceAt(ctx, from.addr)
 	})
 	if err != nil {
@@ -350,7 +359,7 @@ func (e *EVMClient) buildSignedTx(
 	}
 
 	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
-	est, err := retry(ctx, wait, func(ctx context.Context) (uint64, error) {
+	est, err := Retry(ctx, wait, func(ctx context.Context) (uint64, error) {
 		est, estimateErr := e.client.EstimateGas(ctx, msg)
 		if estimateErr != nil && !transient(estimateErr) {
 			// Besu can reject otherwise-valid short-lived transactions because its
@@ -367,14 +376,14 @@ func (e *EVMClient) buildSignedTx(
 		gas = defaultGasLimit
 	}
 
-	tipCap, err := retry(ctx, wait, e.client.SuggestGasTipCap)
+	tipCap, err := Retry(ctx, wait, e.client.SuggestGasTipCap)
 	if err != nil {
 		return nil, fmt.Errorf("suggest gas tip cap: %w", err)
 	}
 	if tipCap == nil || tipCap.Sign() <= 0 {
 		tipCap = big.NewInt(fallbackTipCapWei)
 	}
-	head, err := retry(ctx, wait, func(ctx context.Context) (*types.Header, error) {
+	head, err := Retry(ctx, wait, func(ctx context.Context) (*types.Header, error) {
 		return e.client.HeaderByNumber(ctx, nil)
 	})
 	if err != nil {
@@ -468,14 +477,18 @@ func (e *EVMClient) waitForReceipt(
 		pollErr error
 	)
 	err := poll.Until(ctx, wait.PollInterval, func(ctx context.Context) (bool, error) {
-		attempt, cancel := context.WithTimeout(ctx, wait.Timeout/4)
+		attempt, cancel := wait.attempt(ctx)
 		defer cancel()
 		r, err := e.client.TransactionReceipt(attempt, hash)
 		switch {
 		case err == nil && r != nil:
 			receipt = r
 			return true, nil
-		case err != nil && !errors.Is(err, ethereum.NotFound):
+		case errors.Is(err, ethereum.NotFound):
+			// The node answered; an earlier failure no longer explains a timeout.
+			pollErr = nil
+		case err != nil && ctx.Err() == nil:
+			// A poll cut short by the wait's own end explains nothing.
 			pollErr = err
 		}
 		return false, nil
