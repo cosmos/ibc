@@ -27,10 +27,19 @@ const (
 	gasPaddingFixed   = 10_000
 	// Anvil may suggest no priority fee on an empty mempool.
 	fallbackTipCapWei = 1_000_000_000
+	// feeMaxAge is how long concurrent senders share one fee reading. The
+	// fee cap's doubled base fee covers several blocks of base-fee growth.
+	feeMaxAge = time.Second
+	// maxConnsPerNode bounds open connections to one node; callers beyond it
+	// queue for a connection instead of piling more onto Docker Desktop's
+	// port forwarding.
+	maxConnsPerNode = 128
 )
 
-// TransactionWait bounds transaction submission and observation. Both fields
-// must be positive; PollInterval controls pending-pool and receipt probes.
+// TransactionWait bounds a transaction's submission and, separately, its
+// inclusion. Both fields must be positive; PollInterval spaces pending-pool
+// and receipt probes and retries of failed requests, and a single request
+// gets at most a quarter of Timeout.
 type TransactionWait struct {
 	Timeout      time.Duration
 	PollInterval time.Duration
@@ -48,6 +57,34 @@ func (w TransactionWait) context(ctx context.Context) (context.Context, context.
 	}
 }
 
+// retry calls f until it succeeds, fails definitively, or ctx ends, and
+// returns its last result. Each attempt gets a quarter of w.Timeout, so a
+// stalled request is retried on another connection instead of using up ctx.
+func retry[T any](ctx context.Context, w TransactionWait, f func(context.Context) (T, error)) (T, error) {
+	for {
+		attempt, cancel := context.WithTimeout(ctx, w.Timeout/4)
+		v, err := f(attempt)
+		cancel()
+		if !transient(err) || ctx.Err() != nil {
+			return v, err
+		}
+		select {
+		case <-ctx.Done():
+			return v, err
+		case <-time.After(w.PollInterval):
+		}
+	}
+}
+
+// transient reports whether a request is worth repeating: the node gave no
+// answer (a transport failure or a timed-out attempt), or answered null where
+// a value must exist, as Besu briefly can for the latest block. An error the
+// node returned, such as a revert, is definitive.
+func transient(err error) bool {
+	var nodeErr rpc.Error
+	return err != nil && !errors.As(err, &nodeErr)
+}
+
 // nodeTransport is shared by every Dial, so idle connections are pooled per
 // node rather than per client: geth's Close does not release a client's
 // transport. It keeps up to 512 idle connections per node for reuse; the
@@ -58,6 +95,7 @@ var nodeTransport = func() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 0
 	transport.MaxIdleConnsPerHost = 512
+	transport.MaxConnsPerHost = maxConnsPerNode
 	return transport
 }()
 
@@ -79,6 +117,12 @@ type EVMClient struct {
 	// submission; sends from different accounts proceed concurrently.
 	txGatesMu sync.Mutex
 	txGates   map[common.Address]chan struct{}
+
+	// The last fee reading, shared by concurrent senders for feeMaxAge.
+	feeMu      sync.Mutex
+	feeRead    time.Time
+	feeTip     *big.Int
+	feeBaseFee *big.Int
 }
 
 // The caller remains responsible for readiness.
@@ -150,7 +194,9 @@ func (e *EVMClient) RequireEOA(ctx context.Context, address common.Address) erro
 	return nil
 }
 
-// It returns only after mining and treats reverts as errors.
+// It returns only after mining and treats reverts as errors. Submission and
+// inclusion each get wait.Timeout, so a slow submission does not shorten the
+// wait for inclusion.
 func (e *EVMClient) BroadcastTx(
 	ctx context.Context,
 	wait TransactionWait,
@@ -159,17 +205,11 @@ func (e *EVMClient) BroadcastTx(
 	data []byte,
 	value *big.Int,
 ) (*types.Receipt, error) {
-	waitCtx, cancel, err := wait.context(ctx)
+	signed, err := e.submit(ctx, wait, from, to, data, value)
 	if err != nil {
 		return nil, err
 	}
-	defer cancel()
-
-	signed, err := e.signAndSend(waitCtx, from, to, data, value)
-	if err != nil {
-		return nil, normalizeWaitError(waitCtx, err)
-	}
-	receipt, err := e.waitForReceipt(waitCtx, signed.Hash(), wait)
+	receipt, err := e.WaitForReceipt(ctx, signed.Hash(), wait)
 	if err != nil {
 		return nil, err
 	}
@@ -179,8 +219,30 @@ func (e *EVMClient) BroadcastTx(
 	return receipt, nil
 }
 
+// submit builds, signs, and sends a transaction within wait.Timeout.
+func (e *EVMClient) submit(
+	ctx context.Context,
+	wait TransactionWait,
+	from Account,
+	to *common.Address,
+	data []byte,
+	value *big.Int,
+) (*types.Transaction, error) {
+	submitCtx, cancel, err := wait.context(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cancel()
+	signed, err := e.signAndSend(submitCtx, wait, from, to, data, value)
+	if err != nil {
+		return nil, normalizeWaitError(submitCtx, err)
+	}
+	return signed, nil
+}
+
 func (e *EVMClient) signAndSend(
 	ctx context.Context,
+	wait TransactionWait,
 	from Account,
 	to *common.Address,
 	data []byte,
@@ -192,14 +254,31 @@ func (e *EVMClient) signAndSend(
 	}
 	defer func() { <-gate }()
 
-	signed, err := e.buildSignedTx(ctx, from, to, data, value)
+	signed, err := e.buildSignedTx(ctx, wait, from, to, data, value)
 	if err != nil {
 		return nil, err
 	}
-	if err := e.client.SendTransaction(ctx, signed); err != nil {
+	if err := e.send(ctx, wait, signed); err != nil {
 		return nil, fmt.Errorf("send tx: %w", err)
 	}
 	return signed, nil
+}
+
+// send submits signed until the node answers. Resending the same bytes is
+// safe. Once an attempt went unanswered, the node may already hold the
+// transaction, so a later refusal ("already known", or "nonce too low" once
+// it is mined) is left to the receipt wait to settle.
+func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *types.Transaction) error {
+	unanswered := false
+	_, err := retry(ctx, wait, func(ctx context.Context) (struct{}, error) {
+		err := e.client.SendTransaction(ctx, signed)
+		unanswered = unanswered || transient(err)
+		return struct{}{}, err
+	})
+	if err != nil && unanswered && !transient(err) {
+		return nil
+	}
+	return err
 }
 
 func (e *EVMClient) txGate(from common.Address) chan struct{} {
@@ -228,12 +307,15 @@ func acquireTx(ctx context.Context, gate chan struct{}) error {
 
 func (e *EVMClient) buildSignedTx(
 	ctx context.Context,
+	wait TransactionWait,
 	from Account,
 	to *common.Address,
 	data []byte,
 	value *big.Int,
 ) (*types.Transaction, error) {
-	nonce, err := e.client.PendingNonceAt(ctx, from.addr)
+	nonce, err := retry(ctx, wait, func(ctx context.Context) (uint64, error) {
+		return e.client.PendingNonceAt(ctx, from.addr)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("pending nonce: %w", err)
 	}
@@ -244,12 +326,15 @@ func (e *EVMClient) buildSignedTx(
 	}
 
 	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
-	est, err := e.client.EstimateGas(ctx, msg)
-	if err != nil {
-		// Besu can reject otherwise-valid short-lived transactions because its
-		// pending estimate uses a future timestamp. Retry against latest.
-		est, err = e.client.EstimateGasAtBlock(ctx, msg, nil)
-	}
+	est, err := retry(ctx, wait, func(ctx context.Context) (uint64, error) {
+		est, estimateErr := e.client.EstimateGas(ctx, msg)
+		if estimateErr != nil && !transient(estimateErr) {
+			// Besu can reject otherwise-valid short-lived transactions because its
+			// pending estimate uses a future timestamp. Retry against latest.
+			est, estimateErr = e.client.EstimateGasAtBlock(ctx, msg, nil)
+		}
+		return est, estimateErr
+	})
 	if err != nil {
 		return nil, fmt.Errorf("estimate gas: %w", err)
 	}
@@ -258,21 +343,13 @@ func (e *EVMClient) buildSignedTx(
 		gas = defaultGasLimit
 	}
 
-	tipCap, err := e.client.SuggestGasTipCap(ctx)
+	tipCap, baseFee, err := e.fees(ctx, wait)
 	if err != nil {
-		return nil, fmt.Errorf("suggest gas tip cap: %w", err)
-	}
-	if tipCap == nil || tipCap.Sign() <= 0 {
-		tipCap = big.NewInt(fallbackTipCapWei)
-	}
-
-	hdr, err := e.client.HeaderByNumber(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("latest header: %w", err)
+		return nil, err
 	}
 	feeCap := new(big.Int).Set(tipCap)
-	if hdr.BaseFee != nil && hdr.BaseFee.Sign() > 0 {
-		feeCap.Add(new(big.Int).Mul(hdr.BaseFee, big.NewInt(2)), tipCap)
+	if baseFee != nil && baseFee.Sign() > 0 {
+		feeCap.Add(new(big.Int).Mul(baseFee, big.NewInt(2)), tipCap)
 	}
 
 	tx := types.NewTx(&types.DynamicFeeTx{
@@ -290,6 +367,30 @@ func (e *EVMClient) buildSignedTx(
 		return nil, fmt.Errorf("sign tx: %w", err)
 	}
 	return signed, nil
+}
+
+// fees returns the tip and the latest base fee (nil before EIP-1559), read at
+// most once per feeMaxAge across concurrent senders.
+func (e *EVMClient) fees(ctx context.Context, wait TransactionWait) (tip, baseFee *big.Int, err error) {
+	e.feeMu.Lock()
+	defer e.feeMu.Unlock()
+	if e.feeTip == nil || time.Since(e.feeRead) >= feeMaxAge {
+		tip, err := retry(ctx, wait, e.client.SuggestGasTipCap)
+		if err != nil {
+			return nil, nil, fmt.Errorf("suggest gas tip cap: %w", err)
+		}
+		if tip == nil || tip.Sign() <= 0 {
+			tip = big.NewInt(fallbackTipCapWei)
+		}
+		header, err := retry(ctx, wait, func(ctx context.Context) (*types.Header, error) {
+			return e.client.HeaderByNumber(ctx, nil)
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("latest header: %w", err)
+		}
+		e.feeRead, e.feeTip, e.feeBaseFee = time.Now(), tip, header.BaseFee
+	}
+	return new(big.Int).Set(e.feeTip), e.feeBaseFee, nil
 }
 
 func (e *EVMClient) WaitNextPendingTx(ctx context.Context, wait TransactionWait) error {
@@ -319,7 +420,8 @@ func (e *EVMClient) WaitNextPendingTx(ctx context.Context, wait TransactionWait)
 	return nil
 }
 
-// WaitForReceipt polls until hash is mined or the configured wait expires.
+// WaitForReceipt polls until hash is mined or wait.Timeout expires. A failed
+// poll is retried at the next one.
 func (e *EVMClient) WaitForReceipt(
 	ctx context.Context,
 	hash common.Hash,
@@ -338,24 +440,29 @@ func (e *EVMClient) waitForReceipt(
 	hash common.Hash,
 	wait TransactionWait,
 ) (*types.Receipt, error) {
-	var receipt *types.Receipt
+	var (
+		receipt *types.Receipt
+		pollErr error
+	)
 	err := poll.Until(ctx, wait.PollInterval, func(ctx context.Context) (bool, error) {
-		r, err := e.client.TransactionReceipt(ctx, hash)
-		if err == nil && r != nil {
+		attempt, cancel := context.WithTimeout(ctx, wait.Timeout/4)
+		defer cancel()
+		r, err := e.client.TransactionReceipt(attempt, hash)
+		switch {
+		case err == nil && r != nil:
 			receipt = r
 			return true, nil
-		}
-		if err != nil && !errors.Is(err, ethereum.NotFound) {
-			return false, err
+		case err != nil && !errors.Is(err, ethereum.NotFound):
+			pollErr = err
 		}
 		return false, nil
 	})
 	if err != nil {
-		err = normalizeWaitError(ctx, err)
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return nil, fmt.Errorf("receipt for %s not found in time: %w", hash, err)
+		err = fmt.Errorf("receipt for %s not found in time: %w", hash, normalizeWaitError(ctx, err))
+		if pollErr != nil {
+			err = fmt.Errorf("%w (last poll error: %w)", err, pollErr)
 		}
-		return nil, fmt.Errorf("poll receipt %s: %w", hash, err)
+		return nil, err
 	}
 	return receipt, nil
 }
