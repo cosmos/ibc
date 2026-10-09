@@ -28,7 +28,7 @@ The attestor's API serves the attestations a light client verifies. A relayer is
 
 Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`. <!-- [cli/internal/config/config.go: DefaultConfig] -->
 
-A third service is described at the end of this page, and the CLI does not serve it: `ProverService` is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. <!-- [cli/internal/relay/prover/prover.go: addGenerator] -->
+A third service is described at the end of this page, and the CLI does not serve it: `ProverService` is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. <!-- [cli/internal/relay/prover/prover.go: NewSetFromConfig] -->
 
 To list running services:
 
@@ -476,6 +476,14 @@ submits to. Pointing a client end at this service replaces the built-in prover
 with a remote one, so a light client the CLI does not implement can be supported
 by serving these three calls. Every request names the client it is scoped to, so
 one service can serve many clients across many chains.
+
+The relayer calls it over gRPC, so the service must speak HTTP/2: negotiated
+during the TLS handshake, or HTTP/2 without TLS (h2c) over plaintext. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
+`ibc config validate --live` calls `LatestProvableHeight` to check the service
+answers. Besides success, only `NotFound` and `FailedPrecondition` count as
+reachable, for a service that is up but can't serve that client yet. Any other
+code, including what a gateway in front of a stopped service returns, fails
+validation. <!-- [cli/internal/relay/prover/remote/remote.go: Prover.Probe] -->
 
 ### `Client`
 

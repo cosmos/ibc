@@ -79,7 +79,9 @@ func NewAttestationServer(ctx context.Context, configPath string) (*http.Server,
 		return nil, errors.Wrap(err, "build signers")
 	}
 
-	local, remoteAttestors, err := attestorservice.ResolveFromConfig(ctx, cfg.Attestors, clients, signers)
+	local, remoteAttestors, err := attestorservice.ResolveFromConfig(
+		ctx, cfg.Attestors, clients, signers, attestorservice.ResolveOptions{},
+	)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolve attestors")
 	}

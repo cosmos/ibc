@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -87,7 +88,8 @@ type ClientEnd struct {
 
 	// Params is this client type's settings, decoded per Type by ClientParams:
 	// empty for `attestation` and `besu-qbft`, and
-	// `{url: <ProverService endpoint>}` for `remote`, where it is required.
+	// `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it
+	// is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
@@ -110,8 +112,17 @@ type AutoRelayConfig struct {
 
 // RemoteParams is the params block a remote client declares.
 type RemoteParams struct {
-	// URL is the ProverService endpoint.
+	// URL is the ProverService endpoint: an http(s):// URL, whose scheme
+	// decides TLS, or a bare host:port, which is https with a tls block and
+	// http without one.
 	URL string `yaml:"url"`
+
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
+}
+
+// EndpointURL returns URL with a scheme, see endpointURL.
+func (p RemoteParams) EndpointURL() string {
+	return endpointURL(p.URL, p.TLS)
 }
 
 // AttestationParams is empty
@@ -293,7 +304,23 @@ func (p RemoteParams) Validate() error {
 		return errPathf("url", "required")
 	}
 
-	return nil
+	parsed, err := parseEndpoint(p.EndpointURL(), "http", "https")
+	if err != nil {
+		return errPath("url", err)
+	}
+	// Either would swallow the RPC path connect appends to the base URL.
+	if parsed.RawQuery != "" || parsed.ForceQuery {
+		return errPathf("url", "must not contain a query")
+	}
+	if strings.Contains(p.URL, "#") {
+		return errPathf("url", "must not contain a fragment")
+	}
+
+	if p.TLS != nil && parsed.Scheme != "https" {
+		return errPathf("tls", "requires an https:// url, got scheme %q", parsed.Scheme)
+	}
+
+	return errPath("tls", p.TLS.Validate())
 }
 
 func (AttestationParams) Validate() error { return nil }

@@ -98,7 +98,7 @@ Validate config structure and cross-references.
 
 <!-- GEN:cli:cmd:config-validate END -->
 
-`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> Unknown fields and unresolved cross-references always fail at load. <!-- [cli/internal/config/file.go: LoadFromFile] -->
+`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> It also connects to every remote signer, remote attestor, and remote prover, and fails on one that can't be reached. <!-- [cli/internal/livevalidate/provers.go: checkQuorumAndProverReachability] --> Relayer startup is more lenient: it skips an unreachable remote attestor with a warning and does not probe remote provers. <!-- [cli/internal/bootstrap/bootstrap.go: BuildRelayer] --> Unknown fields and unresolved cross-references always fail at load. <!-- [cli/internal/config/file.go: LoadFromFile] -->
 
 ```bash
 ibc config validate

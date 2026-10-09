@@ -7,7 +7,7 @@ package remote
 import (
 	"context"
 	"log/slog"
-	"net/http"
+	"net/url"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,6 +15,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
+	"github.com/cosmos/ibc/cli/internal/network"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -34,22 +35,59 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *s
 		client:   proverv2.NewProverServiceClient(httpClient, url, connect.WithGRPC()),
 		chainID:  chainID,
 		clientID: clientID,
-		logger:   logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
+		logger: logger.With(
+			"module", "remoteProver",
+			"chainID", chainID,
+			"clientID", clientID,
+			"url", LogSafeURL(url),
+		),
 	}
 }
 
-// NewFromURL dials url with a client that can negotiate h2c, which gRPC
-// requires over plaintext.
-func NewFromURL(url, chainID, clientID string, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(), url, chainID, clientID, logger)
+// NewFromEndpoint dials endpoint with network.NewGRPCHTTPClient.
+func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger *slog.Logger) *Prover {
+	return New(network.NewGRPCHTTPClient(endpoint), endpoint.URL, chainID, clientID, logger)
 }
 
-func newHTTPClient() *http.Client {
-	protocols := new(http.Protocols)
-	protocols.SetHTTP2(true)
-	protocols.SetUnencryptedHTTP2(true)
+// Probe checks that the prover answers. Besides success, only NotFound and
+// FailedPrecondition from the prover count as reachable: it answered but can't
+// serve this client yet (e.g. it is still syncing, or the client isn't on
+// chain yet). Any other code could come from a gateway in front of a stopped
+// prover.
+func (p *Prover) Probe(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 
-	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	_, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
+		Client: p.target(),
+	}))
+	if err == nil {
+		return nil
+	}
+
+	if connect.IsWireError(err) {
+		switch connect.CodeOf(err) {
+		case connect.CodeNotFound, connect.CodeFailedPrecondition:
+			return nil
+		}
+	}
+
+	return errors.Wrap(err, "remote prover: probe")
+}
+
+// LogSafeURL reduces raw to scheme://host[:port] so it is safe to log.
+// Validation doesn't reject userinfo, and providers commonly carry a
+// credential either there (a token as the username, which url.Redacted
+// leaves intact) or in the path, so neither is kept. Falls back to a fixed
+// placeholder on a parse failure, which shouldn't happen for a URL that
+// already passed config validation.
+func LogSafeURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return "(unparseable)"
+	}
+
+	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
 }
 
 func (p *Prover) target() *proverv2.Client {

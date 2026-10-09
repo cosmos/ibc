@@ -1076,11 +1076,13 @@ def _():
         # rendered `optional` with nothing raising. The binary does not care
         # which function the rule lives in.
         box.edit("cli/internal/config/config.go",
-                 """	case c.RPC == "":
+                 """	if c.RPC == "" {
 		return errPathf("rpc", "required")
+	}
 """,
-                 """	case c.validateRPC() != nil:
-		return c.validateRPC()
+                 """	if err := c.validateRPC(); err != nil {
+		return err
+	}
 """)
         box.edit("cli/internal/config/config.go",
                  "func (c EVMChainConfig) Validate(validateICS26Router bool) error {",
@@ -1279,7 +1281,7 @@ def _():
 @case("renaming an error constructor changes nothing")
 def _():
     with Sandbox() as box:
-        for f in ("errors.go", "config.go", "relayer.go"):
+        for f in ("errors.go", "config.go", "relayer.go", "tls.go"):
             box.edit(f"cli/internal/config/{f}", "errPathf", "cfgErrorf", count=-1)
         unchanged(box, "config")
 
