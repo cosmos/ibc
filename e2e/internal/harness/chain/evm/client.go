@@ -31,8 +31,8 @@ const (
 	// fee cap's doubled base fee covers several blocks of base-fee growth.
 	feeMaxAge = time.Second
 	// maxConnsPerNode bounds open connections to one node; callers beyond it
-	// queue for a connection instead of piling more onto Docker Desktop's
-	// port forwarding.
+	// queue for a connection instead of piling more onto the container
+	// runtime's port forwarding.
 	maxConnsPerNode = 128
 )
 
@@ -89,8 +89,8 @@ func transient(err error) bool {
 // node rather than per client: geth's Close does not release a client's
 // transport. It keeps up to 512 idle connections per node for reuse; the
 // default of two makes many concurrent callers (the load test's senders)
-// dial and close a connection per request, which exhausts Docker Desktop's
-// port forwarding with "connection refused".
+// dial and close a connection per request, which leaves the host's local
+// ports in TIME_WAIT until new connections fail.
 var nodeTransport = func() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 0
