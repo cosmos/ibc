@@ -103,7 +103,7 @@ type EVM struct {
 
 func (e *EVM) WaitNextPendingTx(ctx context.Context) error {
 	return e.use(func(client *chainevm.EVMClient) error {
-		return client.WaitNextPendingTx(ctx, e.transactionWait())
+		return client.WaitNextPendingTx(ctx, e.chain.timing.TransactionWait())
 	})
 }
 
@@ -117,7 +117,7 @@ func (e *EVM) BroadcastTx(
 	var receipt *types.Receipt
 	err := e.use(func(client *chainevm.EVMClient) error {
 		var err error
-		receipt, err = client.BroadcastTx(ctx, e.transactionWait(), from, to, data, value)
+		receipt, err = client.BroadcastTx(ctx, e.chain.timing.TransactionWait(), from, to, data, value)
 		return err
 	})
 	return receipt, err
@@ -149,17 +149,16 @@ func (e *EVM) AwaitTransactionReceipt(ctx context.Context, hash common.Hash) (*t
 	var receipt *types.Receipt
 	err := e.use(func(client *chainevm.EVMClient) error {
 		var err error
-		receipt, err = client.WaitForReceipt(ctx, hash, e.transactionWait())
+		receipt, err = client.WaitForReceipt(ctx, hash, e.chain.timing.TransactionWait())
 		return err
 	})
 	return receipt, err
 }
 
-func (e *EVM) transactionWait() chainevm.TransactionWait {
-	return chainevm.TransactionWait{
-		Timeout:      e.chain.timing.CompletionBudget,
-		PollInterval: e.chain.timing.PollInterval,
-	}
+// TransactionWait is the Chain's completion budget for one transaction or
+// read, polled at its poll interval.
+func (t Timing) TransactionWait() chainevm.TransactionWait {
+	return chainevm.TransactionWait{Timeout: t.CompletionBudget, PollInterval: t.PollInterval}
 }
 
 func (e *EVM) Logs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {

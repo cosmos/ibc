@@ -77,9 +77,10 @@ How a direction runs:
    slots, and submits a transfer through the harness sender, which waits for its receipt. So
    each wallet has at most one transaction in flight, which Besu's per-sender pool limit
    needs. The sender retries requests the node leaves unanswered (a dropped connection, a
-   stalled request, an empty latest block, an HTTP 5xx or 429) and gives submission and
-   inclusion one completion budget each. A node that refuses a resend after an unanswered
-   attempt is believed only if it does not hold the transaction. A transfer that still fails
+   stalled request, an empty latest block, an HTTP 5xx or 429) or fails internally
+   (JSON-RPC -32603, which Besu answers under load), and gives submission and inclusion one
+   completion budget each. A node that refuses a resend after an unanswered attempt is
+   believed only if it answers that it does not hold the transaction. A transfer that still fails
    (the node refuses it, it reverts, or it is not included in time) counts as a
    `send_failure` and retires that wallet, whose packet slot goes back for another wallet to
    send; the first such error is reported. One cut short by an interruption does not count.

@@ -29,30 +29,23 @@ type chainReader interface {
 }
 
 // retryingReader repeats a read the node did not answer, as a send does,
-// for at most wait.Timeout.
+// within the Chain's completion budget.
 type retryingReader struct {
 	chain chainReader
 	wait  evm.TransactionWait
 }
 
-// retrying reads chain with the retries of a send, within timing's
-// completion budget.
 func retrying(chain chainReader, timing environment.Timing) chainReader {
-	wait := evm.TransactionWait{Timeout: timing.CompletionBudget, PollInterval: timing.PollInterval}
-	return retryingReader{chain: chain, wait: wait}
+	return retryingReader{chain: chain, wait: timing.TransactionWait()}
 }
 
 func (r retryingReader) TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.wait.Timeout)
-	defer cancel()
 	return evm.Retry(ctx, r.wait, func(ctx context.Context) (*types.Receipt, error) {
 		return r.chain.TransactionReceipt(ctx, hash)
 	})
 }
 
 func (r retryingReader) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.wait.Timeout)
-	defer cancel()
 	return evm.Retry(ctx, r.wait, func(ctx context.Context) (*types.Header, error) {
 		return r.chain.HeaderByNumber(ctx, number)
 	})

@@ -3,6 +3,8 @@
 package evm
 
 import (
+	"cmp"
+	"context"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -17,11 +19,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// reply is one scripted answer: a result, a node error, an HTTP error
-// status, a dropped connection, or no answer until the client gives up.
+// reply is one scripted answer: a result, a node error (code -32000 unless
+// set), an HTTP error status, a dropped connection, or no answer until the
+// client gives up.
 type reply struct {
 	result  any
 	nodeErr string
+	code    int
 	status  int
 	drop    bool
 	stall   bool
@@ -35,6 +39,9 @@ type fakeNode struct {
 	calls   map[string]int
 	// sentNonces are the nonces of the raw transactions sent, in order.
 	sentNonces []uint64
+	// sentHashes and lookedUp are the hashes of the raw transactions sent
+	// and of the transactions asked for by hash, in order.
+	sentHashes, lookedUp []common.Hash
 }
 
 func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +60,12 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var tx types.Transaction
 		if json.Unmarshal(req.Params[0], &raw) == nil && tx.UnmarshalBinary(common.FromHex(raw)) == nil {
 			n.sentNonces = append(n.sentNonces, tx.Nonce())
+			n.sentHashes = append(n.sentHashes, tx.Hash())
 		}
+	}
+	var hash common.Hash
+	if req.Method == "eth_getTransactionByHash" && len(req.Params) == 1 && json.Unmarshal(req.Params[0], &hash) == nil {
+		n.lookedUp = append(n.lookedUp, hash)
 	}
 	script := n.scripts[req.Method]
 	call := n.calls[req.Method]
@@ -77,7 +89,8 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(script[min(call, len(script)-1)].status)
 		return
 	case script[min(call, len(script)-1)].nodeErr != "":
-		response["error"] = map[string]any{"code": -32000, "message": script[min(call, len(script)-1)].nodeErr}
+		code := cmp.Or(script[min(call, len(script)-1)].code, -32000)
+		response["error"] = map[string]any{"code": code, "message": script[min(call, len(script)-1)].nodeErr}
 	default:
 		response["result"] = script[min(call, len(script)-1)].result
 	}
@@ -179,12 +192,25 @@ func TestBroadcastTxRepeatsAStalledRequest(t *testing.T) {
 func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
 	node, client := newFakeNode(t, map[string][]reply{
 		"eth_sendRawTransaction":   {{drop: true}, {nodeErr: "already known"}},
-		"eth_getTransactionByHash": {knownTxReply(t)},
+		"eth_getTransactionByHash": {{drop: true}, knownTxReply(t)},
 	})
 
 	require.NoError(t, broadcast(t, client), "the unanswered first send arrived")
 	assert.Equal(t, 2, node.count("eth_sendRawTransaction"))
 	assert.Positive(t, node.count("eth_getTransactionReceipt"))
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	assert.Equal(t, []common.Hash{node.sentHashes[0], node.sentHashes[0]}, node.lookedUp,
+		"the unanswered lookup is repeated, for the transaction sent")
+}
+
+func TestBroadcastTxRepeatsAnInternalError(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionCount": {{nodeErr: "Internal error", code: -32603}, {result: "0x0"}},
+	})
+
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 2, node.count("eth_getTransactionCount"))
 }
 
 func TestBroadcastTxReportsARefusalOfATransactionTheNodeLacks(t *testing.T) {
@@ -298,4 +324,14 @@ func TestWaitForReceiptBlamesOnlyTheLatestPoll(t *testing.T) {
 
 	require.ErrorContains(t, err, "not found in time")
 	require.NotContains(t, err.Error(), "last poll error", "the node answered after the dropped poll")
+}
+
+func TestRetryRejectsAWaitThatIsNotPositive(t *testing.T) {
+	calls := 0
+	_, err := Retry(t.Context(), TransactionWait{}, func(context.Context) (int, error) {
+		calls++
+		return 0, nil
+	})
+	require.ErrorContains(t, err, "must be greater than zero")
+	assert.Zero(t, calls)
 }

@@ -60,16 +60,24 @@ func (w TransactionWait) attempt(ctx context.Context) (context.Context, context.
 	return context.WithTimeout(ctx, w.Timeout/4)
 }
 
-// Retry calls f until it succeeds, fails definitively, or ctx ends, and
-// returns its last result. Each attempt is bounded by a quarter of w.Timeout,
-// so a stalled request is retried on another connection instead of using up
-// ctx, and attempts are spaced by w.PollInterval. Only a node's answer is
-// definitive: a transport failure, a timed-out attempt, a null where a value
-// must exist (ethereum.NotFound included), and HTTP 5xx and 429 are retried.
+// Retry calls f until it succeeds, fails definitively, w.Timeout passes, or
+// ctx ends, and returns its last result; a w that is not positive fails at
+// once. Each attempt is bounded by a quarter of w.Timeout, so a stalled
+// request is retried on another connection instead of using up the wait, and
+// attempts are spaced by w.PollInterval. Only a node's answer is definitive,
+// except an internal error: a transport failure, a timed-out attempt, a null
+// where a value must exist (ethereum.NotFound included), JSON-RPC -32603, and
+// HTTP 5xx and 429 are retried.
 func Retry[T any](ctx context.Context, w TransactionWait, f func(context.Context) (T, error)) (T, error) {
+	var v T
+	ctx, cancel, err := w.context(ctx)
+	if err != nil {
+		return v, err
+	}
+	defer cancel()
 	for {
 		attempt, cancel := w.attempt(ctx)
-		v, err := f(attempt)
+		v, err = f(attempt)
 		cancel()
 		if !transient(err) {
 			return v, err
@@ -82,19 +90,27 @@ func Retry[T any](ctx context.Context, w TransactionWait, f func(context.Context
 	}
 }
 
+// jsonRPCInternalError is the JSON-RPC 2.0 internal error, the node's
+// equivalent of HTTP 500. Besu answers it under load, for calls that succeed
+// when repeated.
+const jsonRPCInternalError = -32603
+
 // transient reports whether a request is worth repeating: the node gave no
 // answer (a transport failure or a timed-out attempt), answered null where a
-// value must exist, as Besu briefly can for the latest block, or answered
-// with an HTTP status that asks to come back (5xx, 429). An error the node
-// returned, such as a revert, and any other HTTP status are definitive.
+// value must exist, as Besu briefly can for the latest block, failed
+// internally, or answered with an HTTP status that asks to come back (5xx,
+// 429). Any other error the node returned, such as a revert, and any other
+// HTTP status are definitive.
 func transient(err error) bool {
 	var (
 		nodeErr rpc.Error
 		httpErr rpc.HTTPError
 	)
 	switch {
-	case err == nil, errors.As(err, &nodeErr):
+	case err == nil:
 		return false
+	case errors.As(err, &nodeErr):
+		return nodeErr.ErrorCode() == jsonRPCInternalError
 	case errors.As(err, &httpErr):
 		return httpErr.StatusCode >= http.StatusInternalServerError || httpErr.StatusCode == http.StatusTooManyRequests
 	default:
@@ -294,7 +310,7 @@ func (e *EVMClient) signAndSend(
 // safe. Once an attempt went unanswered, the node may already hold the
 // transaction, and then refuses a resend ("already known", or "nonce too
 // low" once it is mined); a refusal is accepted, and left to the receipt
-// wait, only if the node knows the transaction.
+// wait, only if the node answers that it knows the transaction.
 func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *types.Transaction) error {
 	unanswered := false
 	_, err := Retry(ctx, wait, func(ctx context.Context) (struct{}, error) {
@@ -305,9 +321,15 @@ func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *type
 	if err == nil || !unanswered || transient(err) {
 		return err
 	}
-	attempt, cancel := wait.attempt(ctx)
-	defer cancel()
-	if _, _, lookupErr := e.client.TransactionByHash(attempt, signed.Hash()); lookupErr == nil {
+	known, lookupErr := Retry(ctx, wait, func(ctx context.Context) (bool, error) {
+		_, _, err := e.client.TransactionByHash(ctx, signed.Hash())
+		if errors.Is(err, ethereum.NotFound) {
+			// The node answered that it lacks the transaction.
+			return false, nil
+		}
+		return err == nil, err
+	})
+	if lookupErr == nil && known {
 		return nil
 	}
 	return err
@@ -467,6 +489,10 @@ func (e *EVMClient) WaitForReceipt(
 	return e.waitForReceipt(waitCtx, hash, wait)
 }
 
+// waitForReceipt polls with its own policy rather than Retry's: it repeats
+// any failed poll, a node's error included, because nodes answer receipt
+// queries with errors that pass, such as geth's "transaction indexing is in
+// progress".
 func (e *EVMClient) waitForReceipt(
 	ctx context.Context,
 	hash common.Hash,
