@@ -77,10 +77,10 @@ func signedPacketAttestor(
 	return a
 }
 
-func TestGeneratorStateProof(t *testing.T) {
+func TestGeneratorClientUpdatePayloads(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("returnsEncodedProofAtRequestedHeight", func(t *testing.T) {
+	t.Run("returnsEncodedPayloadAtRequestedHeight", func(t *testing.T) {
 		attestors := []attestor.Attestor{
 			signedStateAttestor(t, "a1", 10),
 			signedStateAttestor(t, "a2", 10),
@@ -93,9 +93,10 @@ func TestGeneratorStateProof(t *testing.T) {
 			Once()
 		gen := New("client-chain", "client-0", attestors, 2, chain, slog.Default())
 
-		proof, err := gen.StateProof(ctx, 10)
+		payloads, err := gen.ClientUpdatePayloads(ctx, 10)
 		require.NoError(t, err)
-		require.NotEmpty(t, proof)
+		require.Len(t, payloads, 1)
+		require.NotEmpty(t, payloads[0])
 	})
 
 	t.Run("mismatchedHeightErrors", func(t *testing.T) {
@@ -111,7 +112,7 @@ func TestGeneratorStateProof(t *testing.T) {
 			Once()
 		gen := New("client-chain", "client-0", attestors, 2, chain, slog.Default())
 
-		_, err := gen.StateProof(ctx, 11)
+		_, err := gen.ClientUpdatePayloads(ctx, 11)
 		require.Error(t, err)
 	})
 }
@@ -287,9 +288,9 @@ func TestGeneratorStateTimestampMismatch(t *testing.T) {
 		slog.Default(),
 	)
 
-	proof, err := gen.StateProof(context.Background(), 10)
+	payloads, err := gen.ClientUpdatePayloads(context.Background(), 10)
 	require.ErrorContains(t, err, "attested data does not match expected claim")
-	require.Nil(t, proof)
+	require.Nil(t, payloads)
 }
 
 func TestGeneratorExpectedClaimLookupFailure(t *testing.T) {
@@ -298,9 +299,9 @@ func TestGeneratorExpectedClaimLookupFailure(t *testing.T) {
 		chain.EXPECT().GetBlockHeader(mock.Anything, uint64(10)).Return(v2.BlockHeader{}, assert.AnError).Once()
 		gen := New("client-chain", "client-0", nil, 1, chain, slog.Default())
 
-		proof, err := gen.StateProof(context.Background(), 10)
+		payloads, err := gen.ClientUpdatePayloads(context.Background(), 10)
 		require.ErrorIs(t, err, assert.AnError)
-		require.Nil(t, proof)
+		require.Nil(t, payloads)
 	})
 }
 

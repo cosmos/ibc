@@ -17,6 +17,7 @@ import (
 
 	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -230,10 +231,12 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "attached-connection",
 			A: environment.ExistingClient{
+				Kind:        clientkind.Attestation,
 				IBCInstance: "attached-ibc-a", ID: createdConnection.A().ID(),
 				Attestors: []environment.AttestorSpec{{ID: "attached-attestor-a", Authority: signerA}},
 			},
 			B: environment.ExistingClient{
+				Kind:        clientkind.Attestation,
 				IBCInstance: "attached-ibc-b", ID: createdConnection.B().ID(),
 				Attestors: []environment.AttestorSpec{{ID: "attached-attestor-b", Authority: signerB}},
 			},
@@ -273,6 +276,7 @@ func TestStartAttachesExistingSolidityIBCResources(t *testing.T) {
 		Connections: []environment.ConnectionSpec{{
 			ID: "created-connection",
 			A: environment.ExistingClient{
+				Kind:        clientkind.Attestation,
 				IBCInstance: "created-ibc-a", ID: createdConnection.A().ID(),
 			},
 			B: environment.NewClient{

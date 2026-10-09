@@ -24,40 +24,56 @@ import (
 )
 
 func TestEVMGasSpent(t *testing.T) {
-	t.Run("recordsSuccessfulBroadcastFromReceiptOnce", func(t *testing.T) {
+	// a batch shares one tx hash across its transfers, and each transfer
+	// checks the receipt
+	t.Run("recordsOwnedReceiptOnce", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		_, reader := installTestMetrics(t)
 		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
 		txHash := submitTestTransaction(ctx, t, txSubmitter, eth)
 		receipt := successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000))
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(receipt, nil).Twice()
+		eth.EXPECT().TransactionReceipt(ctx, common.HexToHash(txHash)).Return(receipt, nil).Twice()
 		expectBalance(t, eth, txSubmitter.address.String(), big.NewInt(0))
 
-		// ACT #1
-		retry, err := txSubmitter.ShouldRetry(ctx, "0x01", time.Now())
+		// ACT
+		for range 2 {
+			retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
+			require.NoError(t, err)
+			assert.False(t, retry)
+		}
 
-		// ASSERT #1
-		require.NoError(t, err)
-		assert.False(t, retry)
-
-		// ACT #2
-		retry, err = txSubmitter.ShouldRetry(ctx, txHash, time.Now())
-
-		// ASSERT #2
-		require.NoError(t, err)
-		assert.False(t, retry)
-
-		// ACT #3
+		// ASSERT
 		sum := collectEVMGasSpent(ctx, t, reader)
-
-		// ASSERT #3
 		require.Len(t, sum.DataPoints, 1)
 		assert.InDelta(t, 0.000042, sum.DataPoints[0].Value, 1e-12)
 		assert.ElementsMatch(t, []string{
 			"chain_id=1",
 			"wallet=" + txSubmitter.address.String(),
 		}, metricAttributes(t, sum.DataPoints[0].Attributes))
+	})
+
+	// a recv tx discovered on chain was sent by another relayer and still
+	// reaches ShouldRetry
+	t.Run("ignoresForeignReceipt", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		_, reader := installTestMetrics(t)
+		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
+		foreignHash := common.HexToHash("0x01").String()
+		eth.EXPECT().TransactionReceipt(ctx, common.HexToHash(foreignHash)).
+			Return(successfulReceipt(t, foreignHash, 21_000, big.NewInt(2_000_000_000)), nil).Once()
+		expectBalance(t, eth, txSubmitter.address.String(), big.NewInt(0))
+
+		// ACT
+		retry, err := txSubmitter.ShouldRetry(ctx, foreignHash, time.Now())
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.False(t, retry)
+		assert.Equal(t, map[chainWallet]float64{
+			{chainID: chainIDEth, wallet: txSubmitter.address.String()}: 0,
+		}, evmGasSpentValues(t, collectEVMGasSpent(ctx, t, reader)))
 	})
 
 	t.Run("accumulatesExactWeiAndSeparatesAttributes", func(t *testing.T) {
@@ -122,16 +138,18 @@ func TestEVMGasSpent(t *testing.T) {
 	})
 
 	for _, tt := range []struct {
-		name    string
-		owned   bool
-		receipt *types.Receipt
+		name        string
+		owned       bool
+		receipt     *types.Receipt
+		expectedWei int64
 	}{
 		{
-			name:    "ignoresUnownedReceipt",
-			receipt: successfulReceipt(t, "0x01", 21_000, big.NewInt(2_000_000_000)),
+			name:        "ignoresUnownedReceipt",
+			receipt:     successfulReceipt(t, "0x01", 21_000, big.NewInt(2_000_000_000)),
+			expectedWei: 0,
 		},
 		{
-			name:  "clearsFailedReceipt",
+			name:  "countsFailedReceipt",
 			owned: true,
 			receipt: &types.Receipt{
 				TxHash:            common.HexToHash("0x02"),
@@ -139,6 +157,7 @@ func TestEVMGasSpent(t *testing.T) {
 				GasUsed:           21_000,
 				EffectiveGasPrice: big.NewInt(2_000_000_000),
 			},
+			expectedWei: 42_000_000_000_000,
 		},
 		{
 			name:  "clearsNilEffectiveGasPrice",
@@ -148,13 +167,15 @@ func TestEVMGasSpent(t *testing.T) {
 				Status:  types.ReceiptStatusSuccessful,
 				GasUsed: 21_000,
 			},
+			expectedWei: 0,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// ARRANGE
-			ctx := context.Background()
-			instruments, reader := installTestMetrics(t)
+			instruments, _ := installTestMetrics(t)
 			txHash := tt.receipt.TxHash.String()
+			instruments.setWallet(chainIDEth, "wallet-a", mocks.NewMockTxSubmitterETHClient(t))
+			expected := big.NewInt(tt.expectedWei)
 			if tt.owned {
 				instruments.startTx(chainIDEth, "wallet-a", txHash)
 			}
@@ -163,13 +184,15 @@ func TestEVMGasSpent(t *testing.T) {
 			instruments.endTx(chainIDEth, tt.receipt)
 
 			// ASSERT #1
-			assert.Empty(t, collectEVMGasSpent(ctx, t, reader).DataPoints)
+			assert.Equal(t, expected, gasTotalWei(t, instruments, chainIDEth, "wallet-a"))
+			assert.Empty(t, instruments.txOwners)
 
 			// ACT #2
 			instruments.endTx(chainIDEth, successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000)))
 
 			// ASSERT #2
-			assert.Empty(t, collectEVMGasSpent(ctx, t, reader).DataPoints)
+			assert.Equal(t, expected, gasTotalWei(t, instruments, chainIDEth, "wallet-a"))
+			assert.Empty(t, instruments.txOwners)
 		})
 	}
 

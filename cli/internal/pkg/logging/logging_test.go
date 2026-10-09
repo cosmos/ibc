@@ -28,6 +28,7 @@ func TestDefaultLevel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := Default(false, tt.inputLevel)
 			assert.True(t, logger.Enabled(context.Background(), tt.configuredLevel))
+			assert.False(t, logger.Enabled(context.Background(), tt.configuredLevel-1))
 		})
 	}
 }

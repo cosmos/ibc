@@ -12,14 +12,14 @@ between them.
 
 ## Prerequisites
 
-- [Go](https://go.dev/doc/install) 1.26.4 or later
+- [Go](https://go.dev/doc/install) 1.26.6 or later
 
 ## Support
 
 | | Supported |
 | --- | --- |
 | Chain types | `evm` |
-| Light client types | `attestation` |
+| Light client types | `attestation`, `besu-qbft` |
 
 ## CLI Commands
 
@@ -46,8 +46,8 @@ make build
 # deploy IBC between two configured chains (idempotent; a rerun continues a partial deployment)
 ./bin/ibc deploy core --chain <chainA> --yes
 ./bin/ibc deploy core --chain <chainB> --yes
-./bin/ibc deploy client --chain <chainA> --counterparty-chain <chainB> --yes
-./bin/ibc deploy client --chain <chainB> --counterparty-chain <chainA> --yes
+./bin/ibc deploy client attestation --chain <chainA> --counterparty-chain <chainB> --yes
+./bin/ibc deploy client attestation --chain <chainB> --counterparty-chain <chainA> --yes
 
 # deploy the GMP app on each chain, so contracts can be called across the connection
 ./bin/ibc deploy gmp --chain <chainA> --yes

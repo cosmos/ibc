@@ -30,8 +30,13 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, ChainTypeEVM, config.Chains[0].Type())
 
 		assert.Equal(t, 3*time.Second, *config.Relayer.DispatchPollInterval)
+		assert.False(t, *config.Relayer.ClearOnStart)
+		assert.Equal(t, 10*time.Minute, *config.Relayer.ClearInterval)
 		require.Len(t, config.Relayer.ChainOverrides, 2)
 		chain := config.Relayer.ChainOverrides[0]
+		assert.Equal(t, 15*time.Minute, *chain.ClearInterval)
+		require.NotNil(t, chain.AbandonUnrecoverablePackets)
+		assert.True(t, *chain.AbandonUnrecoverablePackets)
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
 		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
@@ -192,6 +197,22 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".dispatchPollInterval: must be positive",
 			},
 			{
+				name: "non-positive clear interval",
+				patch: func(c *Config) {
+					interval := time.Duration(0)
+					c.Relayer.ClearInterval = &interval
+				},
+				errContains: "relayer.clearInterval: must be positive",
+			},
+			{
+				name: "non-positive chain override clear interval",
+				patch: func(c *Config) {
+					interval := -time.Minute
+					c.Relayer.ChainOverrides[0].ClearInterval = &interval
+				},
+				errContains: "relayer.chainOverrides[0].clearInterval: must be positive",
+			},
+			{
 				name: "negative tx submission delay",
 				patch: func(c *Config) {
 					delay := -time.Second
@@ -232,7 +253,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.Type = "tendermint"
 				},
-				errContains: `unknown client type: "tendermint"`,
+				errContains: `.clientA.type: unknown client type: "tendermint"`,
 			},
 			{
 				name: "duplicate client",
@@ -397,17 +418,20 @@ func TestClientEndParams(t *testing.T) {
 	const base = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\n"
 
 	for _, tt := range []struct {
-		name    string
-		doc     string
-		wantURL string
-		wantErr string
+		name       string
+		doc        string
+		wantURL    string
+		wantParams ClientParams
+		wantErr    string
 	}{
 		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
 		{name: "remote without params", doc: "type: remote\n", wantErr: "params.url: required"},
 		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: "params.url: required"},
 		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
-		{name: "attestation", doc: "type: attestation\n"},
+		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
 		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuQBFTParams{}},
+		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -427,11 +451,86 @@ func TestClientEndParams(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.wantURL == "" {
-				require.IsType(t, &AttestationParams{}, params)
+				require.IsType(t, tt.wantParams, params)
 				return
 			}
 
 			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
+		})
+	}
+}
+
+func TestRelayerConfigClearOnStartEnabled(t *testing.T) {
+	for name, tt := range map[string]struct {
+		config string
+		want   bool
+	}{
+		// nothing configured is the case an operator has not thought about, and
+		// starting cold without clearing is the one that loses packets
+		"unset":    {config: "db:\n  type: sqlite\n  url: ibc.db\n", want: true},
+		"enabled":  {config: "relayer:\n  clearOnStart: true\n", want: true},
+		"disabled": {config: "relayer:\n  clearOnStart: false\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// ARRANGE
+			config, err := LoadFromFile(writeTestConfig(t, tt.config), true)
+			require.NoError(t, err)
+
+			// ACT / ASSERT
+			assert.Equal(t, tt.want, config.Relayer.ClearOnStartEnabled())
+		})
+	}
+}
+
+func TestRelayerConfigClearIntervalFor(t *testing.T) {
+	config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
+	require.NoError(t, err)
+
+	for name, tt := range map[string]struct {
+		chainID string
+		want    time.Duration
+	}{
+		"chain with a clearInterval override": {chainID: "1", want: 15 * time.Minute},
+		"chain without one":                   {chainID: "8453", want: 10 * time.Minute},
+		"unconfigured chain":                  {chainID: "999", want: 10 * time.Minute},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, config.Relayer.ClearIntervalFor(tt.chainID))
+		})
+	}
+
+	t.Run("unset falls back to the default", func(t *testing.T) {
+		// ARRANGE
+		path := writeTestConfig(t, `
+db:
+  type: sqlite
+  url: ibc.db
+`)
+
+		// ACT
+		config, err := LoadFromFile(path, true)
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.Equal(t, DefaultClearInterval, config.Relayer.ClearIntervalFor("1"))
+	})
+}
+
+func TestRelayerConfigAbandonUnrecoverablePacketsFor(t *testing.T) {
+	config, err := LoadFromFile(filepath.Join("testdata", "sample.yml"), true)
+	require.NoError(t, err)
+
+	// a packet is only abandoned where an operator asked for it
+	for name, tt := range map[string]struct {
+		chainID string
+		want    bool
+	}{
+		"chain that asked for it":    {chainID: "1", want: true},
+		"chain with other overrides": {chainID: "8453"},
+		"chain with no override":     {chainID: "999"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, config.Relayer.AbandonUnrecoverablePacketsFor(tt.chainID))
 		})
 	}
 }

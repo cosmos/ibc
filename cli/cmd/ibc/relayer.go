@@ -50,8 +50,12 @@ var (
 	}
 )
 
+// flagClearOnStart shared by the flag declaration and the config override.
+const flagClearOnStart = "clear-on-start"
+
 var (
 	flagRelayerNoMigrate     bool
+	flagRelayerClearOnStart  bool
 	flagRelayerHost          string
 	flagRelayerTxHash        string
 	flagRelayerSourceChainID string
@@ -88,6 +92,8 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	applyClearOnStart(cmd, &cfg)
+
 	otel.GlobalSetup(ctx, cfg.Observability, slog.Default())
 
 	app, err := bootstrap.BuildRelayer(cfg)
@@ -118,7 +124,7 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 	}
 
 	if err := app.RelayerService.Start(); err != nil {
-		app.Logger.Error("Failed to start relayer loop", "err", err)
+		app.Logger.Error("Failed to start relayer background loops", "err", err)
 		_ = app.Server.Stop()
 		return err
 	}
@@ -259,4 +265,11 @@ func optional[T comparable](value T) *T {
 	}
 
 	return &value
+}
+
+// applyClearOnStart optional --clear-on-start overrides the config
+func applyClearOnStart(cmd *cobra.Command, cfg *config.Config) {
+	if cmd.Flags().Changed(flagClearOnStart) {
+		cfg.Relayer.ClearOnStart = &flagRelayerClearOnStart
+	}
 }

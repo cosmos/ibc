@@ -3,14 +3,19 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
@@ -130,8 +135,8 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
 	require.Empty(t, out.Chains[1].EVM.RPC)
 
-	require.Len(t, out.Relayer.Connections, 2)
-	conn := out.Relayer.Connections[0]
+	require.Len(t, out.Connections, 2)
+	conn := out.Connections[0]
 	require.Equal(t, "1-2", conn.Alias)
 	require.Equal(t, "cli-1-2", conn.ClientA.ClientID)
 	require.Equal(t, "1", conn.ClientA.ChainID)
@@ -144,9 +149,9 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.True(t, *conn.ClientB.AutoRelay.Enabled)
 	require.Equal(t, "signer-b", conn.ClientB.Signer)
 
-	// second connection between the same chain pair gets a seqno suffix
-	conn2 := out.Relayer.Connections[1]
-	require.Equal(t, "1-2-1", conn2.Alias)
+	// Reconciliation allocates unique aliases for new connections.
+	conn2 := out.Connections[1]
+	require.Equal(t, "1-2", conn2.Alias)
 	require.Equal(t, "custom-a", conn2.ClientA.ClientID)
 	require.Equal(t, "custom-b", conn2.ClientB.ClientID)
 
@@ -204,11 +209,8 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	out, err := renderRelayConfig(config.Config{}, a, b, "", "")
 	require.NoError(t, err)
 
-	merged, _ := config.Config{}.WithPatch(config.Patch{
-		Chains:      out.Chains,
-		Connections: out.Relayer.Connections,
-		Attestors:   out.Attestors,
-	})
+	merged, _, err := config.Config{}.ReconcileDeployment(out)
+	require.NoError(t, err)
 
 	rendered := captureStdout(t, func() {
 		require.NoError(t, config.PrintYAMLWithComments(merged, config.CollectComments(merged)))
@@ -236,4 +238,322 @@ func captureStdout(t *testing.T, fn func()) string {
 	require.NoError(t, err)
 
 	return string(bz)
+}
+
+func TestRenderRelayConfigBesuQBFT(t *testing.T) {
+	a := manifest.New("1", "evm")
+	a.Core.Router = "0xrouterA"
+	a.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+	})
+	b := manifest.New("2", "evm")
+	b.Core.Router = "0xrouterB"
+	b.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+	})
+
+	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
+	require.NoError(t, err)
+	require.Len(t, out.Connections, 1)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
+	require.Empty(t, out.Connections[0].ClientA.Params)
+	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+}
+
+func TestBesuQBFTParamsFlags(t *testing.T) {
+	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
+	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
+	const router = "0x00000000000000000000000000000000000000bb"
+	for _, tc := range []struct {
+		name    string
+		period  time.Duration
+		drift   time.Duration
+		router  string
+		wantErr string
+	}{
+		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
+		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
+		{name: "finite", period: 2 * time.Hour, router: router},
+		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},
+		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router: invalid EVM address"},
+		{
+			name: "zero router", period: 2 * time.Hour,
+			router: "0x0000000000000000000000000000000000000000", wantErr: "evm.ics26Router: must not be the zero address",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flagDeployTrustingPeriod, flagDeployMaxClockDrift = tc.period, time.Minute
+			if tc.drift != 0 {
+				flagDeployMaxClockDrift = tc.drift
+			}
+			source := &besuHeadTarget{}
+			params, err := besuQBFTParams(t.Context(), tc.router, source)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				require.False(t, source.called)
+				return
+			}
+			require.NoError(t, err)
+			require.True(t, source.called)
+			require.Equal(t, deploy.BesuQBFTParams{
+				IBCRouter:             common.HexToAddress(tc.router),
+				InitialHeight:         besuHeadHeight,
+				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
+				TrustingPeriod:        uint64(tc.period / time.Second),
+				MaxClockDrift:         60,
+			}, params)
+		})
+	}
+
+	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
+	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+}
+
+func TestWholeSeconds(t *testing.T) {
+	for _, tc := range []struct {
+		d       time.Duration
+		want    uint64
+		wantErr string
+	}{
+		{d: 2 * time.Hour, want: 7200},
+		{d: 0, want: 0},
+		{d: -time.Second, wantErr: "must not be negative"},
+		{d: 1500 * time.Millisecond, want: 1},
+	} {
+		got, err := wholeSeconds(tc.d)
+		if tc.wantErr != "" {
+			require.ErrorContains(t, err, tc.wantErr, tc.d)
+			continue
+		}
+		require.NoError(t, err, tc.d)
+		require.Equal(t, tc.want, got, tc.d)
+	}
+}
+
+const (
+	besuHeadHeight    = 112
+	besuHeadTimestamp = 1788200000
+)
+
+// besuHeadTarget is a Besu chain whose head is besuHeadHeight.
+type besuHeadTarget struct {
+	deploy.Target
+	called bool
+}
+
+func (t *besuHeadTarget) BesuQBFTHead(context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	t.called = true
+	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
+}
+
+// hostOnlyTarget is a chain that cannot serve Besu consensus states.
+type hostOnlyTarget struct {
+	deploy.Target
+}
+
+func TestRenderConfigRejectsDuplicateSignerAliasesBeforeRendering(t *testing.T) {
+	home := setupRenderConfigTest(t)
+	cfg := config.DefaultConfig()
+	// No credentials or manifests are needed to detect ambiguous aliases.
+	cfg.Signers = config.Signers{{Alias: "key"}, {Alias: "key"}}
+	path := filepath.Join(home, "ibc.yml")
+	require.NoError(t, cfg.StoreToFile(path))
+	original, err := os.ReadFile(path)
+	require.NoError(t, err)
+	flagDeployRenderSignerA = "key"
+	require.ErrorContains(t, deployRenderConfig(nil, []string{"1", "2"}), "duplicate alias")
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, original, got)
+}
+
+func TestPopulatePermitsIncompleteDraft(t *testing.T) {
+	previous := globalFlags
+	t.Cleanup(func() { globalFlags = previous })
+	globalFlags = config.DefaultFlagSet()
+	globalFlags.Home = t.TempDir()
+	globalFlags.Quiet = true
+	cfg := config.DefaultConfig()
+	cfg.Chains = config.Chains{{ChainID: "1", EVM: &config.EVMChainConfig{}}}
+	require.Error(t, cfg.Validate())
+	stderr := os.Stderr
+	reader, writer, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = writer
+	t.Cleanup(func() { os.Stderr = stderr })
+	require.NoError(t, populateRenderedConfig(cfg))
+	require.NoError(t, writer.Close())
+	os.Stderr = stderr
+	warning, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.NoError(t, reader.Close())
+	require.Contains(t, string(warning), "Config is not runnable yet:")
+	path, err := globalFlags.ConfigPath()
+	require.NoError(t, err)
+	loaded, err := config.LoadFromFile(path, false)
+	require.NoError(t, err)
+	require.Len(t, loaded.Chains, 1)
+}
+
+func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
+	setupRenderConfigTest(t)
+
+	key, _ := newLocalSignerConfig(t, "existing-relayer")
+	cfg := config.DefaultConfig()
+	cfg.Signers = []config.SignerConfig{key}
+	for _, id := range []string{"1", "2"} {
+		cfg.Chains = append(cfg.Chains, config.ChainConfig{
+			ChainID: id,
+			EVM: &config.EVMChainConfig{
+				RPC:         "http://localhost:8545",
+				ICS26Router: "0x0000000000000000000000000000000000000001",
+			},
+		})
+	}
+	cfg.Relayer.Connections = []config.ConnectionConfig{{
+		Alias:   "custom-route",
+		ClientA: config.ClientEnd{ChainID: "2", ClientID: "b", Signer: key.Alias, Type: config.ClientTypeAttestation},
+		ClientB: config.ClientEnd{ChainID: "1", ClientID: "a", Signer: key.Alias, Type: config.ClientTypeAttestation},
+	}}
+	require.NoError(t, cfg.Validate())
+	path, err := globalFlags.ConfigPath()
+	require.NoError(t, err)
+	require.NoError(t, cfg.StoreToFile(path))
+	for _, pair := range [][4]string{{"1", "a", "2", "b"}, {"2", "b", "1", "a"}} {
+		m := manifest.New(pair[0], "evm")
+		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
+		m.UpsertClient(manifest.Client{
+			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
+			Type: deploy.ClientTypeAttestation,
+		})
+		require.NoError(t, m.Save(flagDeployManifestDir))
+	}
+	require.NoError(t, deployRenderConfig(nil, []string{"1", "2"}))
+	loaded, err := config.LoadFromFile(path, true)
+	require.NoError(t, err)
+	require.Equal(t, cfg.Relayer.Connections, loaded.Relayer.Connections)
+
+	flagDeployRenderSignerA = "unknown"
+	require.ErrorContains(t, deployRenderConfig(nil, []string{"1", "2"}), "signer \"unknown\" not found")
+}
+
+func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
+	home := setupRenderConfigTest(t)
+	run := func(signerA, signerB string) error {
+		// Each invocation starts with normal validation defaults, like a new CLI process.
+		globalFlags = config.DefaultFlagSet()
+		globalFlags.Home = home
+		globalFlags.Quiet = true
+		flagDeployRenderSignerA, flagDeployRenderSignerB = signerA, signerB
+		return deployRenderConfig(nil, []string{"1", "2"})
+	}
+	relayerKey, _ := newLocalSignerConfig(t, "relayer")
+	attestorKey, attestorAddress := newLocalSignerConfig(t, "watcher-key")
+	cfg := config.DefaultConfig()
+	cfg.Signers = config.Signers{relayerKey}
+	for _, id := range []string{"1", "2"} {
+		cfg.Chains = append(cfg.Chains, config.ChainConfig{
+			ChainID: id,
+			EVM: &config.EVMChainConfig{
+				RPC: "http://localhost:8545", WS: "ws://localhost:8546",
+				ICS26Router: "0x0000000000000000000000000000000000000001",
+			},
+		})
+	}
+	path := filepath.Join(home, "ibc.yml")
+	require.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.StoreToFile(path))
+	for _, pair := range [][4]string{{"1", "a", "2", "b"}, {"2", "b", "1", "a"}} {
+		m := manifest.New(pair[0], "evm")
+		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
+		m.UpsertClient(manifest.Client{
+			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
+			Type:   deploy.ClientTypeAttestation,
+			Params: map[string]any{"attestors": []any{attestorAddress}},
+		})
+		require.NoError(t, m.Save(flagDeployManifestDir))
+	}
+
+	require.NoError(t, run("", ""))
+	draft, err := config.LoadFromFile(path, false)
+	require.NoError(t, err)
+	require.Error(t, draft.Validate())
+	require.Len(t, draft.Relayer.Connections, 1)
+	require.Empty(t, draft.Relayer.Connections[0].ClientA.Signer)
+	require.Empty(t, draft.Relayer.Connections[0].ClientB.Signer)
+	require.Len(t, draft.Attestors, 2)
+	for _, a := range draft.Attestors {
+		require.Empty(t, a.Signer)
+	}
+
+	// A key becomes available after the draft was written; preserve user settings.
+	draft.Signers = append(draft.Signers, attestorKey)
+	draft.Relayer.Connections[0].Alias = "custom-route"
+	draft.Attestors[0].FinalityOffset = 42
+	require.NoError(t, draft.StoreToFile(path))
+	require.NoError(t, run(relayerKey.Alias, relayerKey.Alias))
+	repaired, err := config.LoadFromFile(path, true)
+	require.NoError(t, err)
+	require.Len(t, repaired.Relayer.Connections, 1)
+	require.Equal(t, "custom-route", repaired.Relayer.Connections[0].Alias)
+	require.Equal(t, relayerKey.Alias, repaired.Relayer.Connections[0].ClientA.Signer)
+	require.Equal(t, relayerKey.Alias, repaired.Relayer.Connections[0].ClientB.Signer)
+	require.Len(t, repaired.Attestors, 2)
+	for i, a := range repaired.Attestors {
+		require.Equal(t, attestorKey.Alias, a.Signer)
+		require.Equal(t, draft.Attestors[i].Name, a.Name)
+		require.Equal(t, draft.Attestors[i].FinalityOffset, a.FinalityOffset)
+	}
+	require.NoError(t, run("", ""))
+	repeated, err := config.LoadFromFile(path, true)
+	require.NoError(t, err)
+	require.Equal(t, repaired, repeated)
+
+	// Draft loading still rejects identity conflicts and unknown YAML fields before writing.
+	duplicate := repaired.Attestors[0]
+	duplicate.Name = "duplicate"
+	repaired.Attestors = append(repaired.Attestors, duplicate)
+	require.NoError(t, repaired.StoreToFile(path))
+	invalid, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.ErrorContains(t, run("", ""), "duplicate local attestor signer")
+	unchanged, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, invalid, unchanged)
+
+	invalid = append(invalid, []byte("\nunknownField: true\n")...)
+	require.NoError(t, os.WriteFile(path, invalid, 0o600))
+	require.Error(t, run("", ""))
+	unchanged, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, invalid, unchanged)
+}
+
+func setupRenderConfigTest(t *testing.T) string {
+	t.Helper()
+	previousFlags := globalFlags
+	previousDir := flagDeployManifestDir
+	previousA, previousB := flagDeployRenderSignerA, flagDeployRenderSignerB
+	previousPopulate, previousYes := flagDeployRenderPopulate, flagDeployYes
+	t.Cleanup(func() {
+		globalFlags = previousFlags
+		flagDeployManifestDir = previousDir
+		flagDeployRenderSignerA, flagDeployRenderSignerB = previousA, previousB
+		flagDeployRenderPopulate, flagDeployYes = previousPopulate, previousYes
+	})
+	home := t.TempDir()
+	t.Chdir(home)
+	globalFlags = config.DefaultFlagSet()
+	globalFlags.Home = home
+	globalFlags.Quiet = true
+	flagDeployManifestDir = filepath.Join(home, "deployments")
+	flagDeployRenderSignerA, flagDeployRenderSignerB = "", ""
+	flagDeployRenderPopulate, flagDeployYes = true, true
+
+	return home
 }

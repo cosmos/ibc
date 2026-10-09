@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,11 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/iftbatchtransfershim"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/iftsendcallconstructor"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/testerc20"
 )
 
@@ -63,10 +64,17 @@ type Route struct {
 	SkipDestinationIFTBridge bool
 }
 
-const routeAtoB RouteID = "route-a-to-b"
+const (
+	routeAtoB RouteID = "route-a-to-b"
+	routeBtoA RouteID = "route-b-to-a"
+)
 
 func AtoB(a, b environment.ChainID) Route {
 	return Route{ID: routeAtoB, Source: a, Destination: b}
+}
+
+func BtoA(b, a environment.ChainID) Route {
+	return Route{ID: routeBtoA, Source: b, Destination: a}
 }
 
 func ManualAtoB(a, b environment.ChainID) Route {
@@ -85,10 +93,13 @@ type ChainDeployment struct {
 	ICS26Router            common.Address
 }
 
-// RouteClients holds the protocol client IDs for one directed route.
+// RouteClients holds the protocol client IDs and light client kinds for one
+// directed route.
 type RouteClients struct {
-	SourceClientID string
-	DestClientID   string
+	SourceClientID   string
+	DestClientID     string
+	SourceClientKind clientkind.Kind
+	DestClientKind   clientkind.Kind
 }
 
 // Deployment is the e2e traffic-layer view of protocol apps and test tokens.
@@ -167,21 +178,30 @@ func DeployWithRelayerConfig(
 }
 
 // StartRelayer starts the test relayer and registers idempotent teardown.
-func StartRelayer(
-	t testing.TB,
-	driver *ibccli.Driver,
-	env *environment.Environment,
-) *ibccli.Relayer {
+func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environment) *ibccli.Relayer {
 	t.Helper()
+
 	require.NotNil(t, driver, "e2etest: driver is required")
 	require.NotNil(t, env, "e2etest: Environment is required")
 
+	// opt-on dump for debugging
+	dumpRelayer := func() {
+		if environment.DumpEnabled() {
+			environment.DumpTestDirectory(t, env.RunID(), driver.ConfigHome())
+		}
+	}
+
 	relayer, err := driver.StartRelayer(t.Context())
-	require.NoError(t, err, "e2etest: start relayer")
+	if err != nil {
+		dumpRelayer()
+		t.Fatalf("e2etest: start relayer: %v", err)
+	}
+
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), relayerStopTimeout)
 		defer cancel()
 		assert.NoError(t, relayer.Stop(ctx), "e2etest: stop relayer")
+		dumpRelayer()
 	})
 
 	connected := make(map[string]struct{}, len(relayer.Ready().ChainsConnected))
@@ -246,7 +266,7 @@ func deployApps(
 			t.Context(),
 			evmAccess,
 			deployer.account,
-			iftsendcallconstructor.EVMIFTSendCallConstructorMetaData,
+			evmiftsendcall.ContractMetaData,
 		)
 		require.NoError(t, err, "e2etest: deploy IFT send-call constructor on Chain %q", id)
 
@@ -275,8 +295,10 @@ func deployApps(
 		sourceClient, destClient, err := resolveRouteClients(env, route)
 		require.NoError(t, err, "e2etest: resolve clients for route %q", route.ID)
 		deployment.routes[route.ID] = RouteClients{
-			SourceClientID: sourceClient,
-			DestClientID:   destClient,
+			SourceClientID:   sourceClient.ID(),
+			DestClientID:     destClient.ID(),
+			SourceClientKind: sourceClient.Kind(),
+			DestClientKind:   destClient.Kind(),
 		}
 	}
 
@@ -358,10 +380,11 @@ func buildConfig(
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
 		FinalityOffset: ibccli.HarnessFinalityOffset,
+		ClearOnStart:   false,
+		ClearInterval:  5 * time.Second,
 	}
 	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
-		ManualRoutes: make(map[string]bool, len(routes)),
 		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
 	}
 	for _, id := range env.Chains() {
@@ -394,7 +417,7 @@ func buildConfig(
 		})
 	}
 
-	connections := map[string]int{}
+	connections := map[[2]string]int{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)
 		require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
@@ -406,40 +429,47 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
 		}
-		options.ManualRoutes[string(route.ID)] = route.Manual
 		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
 		connection := ibccli.RelayerConnection{
-			ChainA:  sourceChain,
-			ClientA: clients.SourceClientID,
-			ChainB:  destinationChain,
-			ClientB: clients.DestClientID,
+			A: ibccli.RelayerClientEnd{
+				ChainID:    sourceChain,
+				ClientID:   clients.SourceClientID,
+				ClientType: clients.SourceClientKind,
+				AutoRelay:  !route.Manual,
+			},
+			B: ibccli.RelayerClientEnd{
+				ChainID:    destinationChain,
+				ClientID:   clients.DestClientID,
+				ClientType: clients.DestClientKind,
+			},
 		}
-		if connection.ChainB+"/"+connection.ClientB < connection.ChainA+"/"+connection.ClientA {
-			connection.ChainA, connection.ClientA, connection.ChainB, connection.ClientB = connection.ChainB, connection.ClientB, connection.ChainA, connection.ClientA
-		}
-		key := connection.ChainA + "/" + connection.ClientA
-
-		index, seen := connections[key]
-		if !seen {
-			index = len(config.Connections)
-			connections[key] = index
-			config.Connections = append(config.Connections, connection)
-		}
-
-		// the reverse route shares this connection, so each direction turns on
-		// the end it is sent from rather than the whole connection
-		if !route.Manual {
-			if config.Connections[index].ClientA == clients.SourceClientID {
-				config.Connections[index].AutoRelayA = true
-			} else {
-				config.Connections[index].AutoRelayB = true
-			}
-		}
+		mergeRelayerConnection(&config, connections, connection)
 	}
 	return config, options
+}
+
+// mergeRelayerConnection combines directional routes into one reciprocal pair.
+func mergeRelayerConnection(
+	config *ibccli.RelayerConfig,
+	indices map[[2]string]int,
+	connection ibccli.RelayerConnection,
+) {
+	if connection.B.ChainID < connection.A.ChainID ||
+		(connection.B.ChainID == connection.A.ChainID && connection.B.ClientID < connection.A.ClientID) {
+		connection.A, connection.B = connection.B, connection.A
+	}
+	key := [2]string{connection.A.ChainID, connection.A.ClientID}
+	if index, seen := indices[key]; seen {
+		existing := &config.Connections[index]
+		existing.A.AutoRelay = existing.A.AutoRelay || connection.A.AutoRelay
+		existing.B.AutoRelay = existing.B.AutoRelay || connection.B.AutoRelay
+		return
+	}
+	indices[key] = len(config.Connections)
+	config.Connections = append(config.Connections, connection)
 }
 
 func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
@@ -457,22 +487,22 @@ func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
 func resolveRouteClients(
 	env *environment.Environment,
 	route Route,
-) (string, string, error) {
+) (*environment.IBCClient, *environment.IBCClient, error) {
 	for _, id := range env.Connections() {
 		connection, err := env.Connection(id)
 		if err != nil {
-			return "", "", err
+			return nil, nil, err
 		}
 		aChain := connection.A().IBCInstance().Chain().ID()
 		bChain := connection.B().IBCInstance().Chain().ID()
 		switch {
 		case aChain == route.Source && bChain == route.Destination:
-			return connection.A().ID(), connection.B().ID(), nil
+			return connection.A(), connection.B(), nil
 		case bChain == route.Source && aChain == route.Destination:
-			return connection.B().ID(), connection.A().ID(), nil
+			return connection.B(), connection.A(), nil
 		}
 	}
-	return "", "", fmt.Errorf(
+	return nil, nil, fmt.Errorf(
 		"no IBC Connection links Chain %q to Chain %q",
 		route.Source,
 		route.Destination,
@@ -500,8 +530,16 @@ func deployAndMintToken(
 	return token, nil
 }
 
+// IFT rate limit settings, generous so that e2e flows never hit them. IFT
+// rejects every transfer until a rate limit is set.
+var (
+	iftRateLimitCapacity = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+	iftRateLimitWindow   = big.NewInt(24 * 60 * 60)
+)
+
 // deployIFTToken deploys the IFT token (a UUPS implementation behind an
-// ERC1967 proxy) and mints the initial supply to the sender.
+// ERC1967 proxy), sets its rate limit and mints the initial supply to the
+// sender.
 func deployIFTToken(
 	ctx context.Context,
 	client *environment.EVM,
@@ -521,6 +559,15 @@ func deployIFTToken(
 	token, err := deployContract(ctx, client, sender, erc1967proxy.ContractMetaData, implementation, initialize)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("e2etest: deploy IFT proxy: %w", err)
+	}
+	rateLimit, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftTransactor.SetIFTRateLimit(opts, iftRateLimitCapacity, iftRateLimitWindow)
+	})
+	if err != nil {
+		return common.Address{}, fmt.Errorf("e2etest: pack IFT setIFTRateLimit: %w", err)
+	}
+	if _, broadcastErr := client.BroadcastTx(ctx, sender, &token, rateLimit, nil); broadcastErr != nil {
+		return common.Address{}, fmt.Errorf("e2etest: set IFT rate limit: %w", broadcastErr)
 	}
 	mint, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return iftTransactor.Mint(opts, sender.Address(), initialTokenSupply)

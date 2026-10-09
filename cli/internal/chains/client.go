@@ -36,6 +36,22 @@ type Client interface {
 	// timed out.
 	IsPacketCommitted(ctx context.Context, sourceClientID string, sequence uint64) (bool, error)
 
+	// LatestPacketSequence returns the highest sequence ever assigned on
+	// sourceClientID at height. Sequences in use are 1..N, so zero means nothing
+	// has been sent on the client.
+	LatestPacketSequence(ctx context.Context, sourceClientID string, height uint64) (uint64, error)
+
+	// PacketCommitments returns the subset of sequences whose packet commitment
+	// is still live on the source chain at height. It is all or nothing: an
+	// absent commitment means the packet settled, so a partial result would
+	// write off outstanding packets and any failure returns an error instead.
+	PacketCommitments(ctx context.Context, sourceClientID string, sequences []uint64, height uint64) ([]uint64, error)
+
+	// FindSendPackets returns the send packet events for sequences on
+	// sourceClientID. Sequences whose event cannot be found are omitted rather
+	// than errored, since a pruned log index is not a reason to fail the rest.
+	FindSendPackets(ctx context.Context, sourceClientID string, sequences []uint64) ([]v2.PacketEvent, error)
+
 	FindRecvTx(ctx context.Context, destClientID string, sequence uint64) (*v2.Tx, error)
 	FindAckTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)
 	FindTimeoutTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)
