@@ -21,6 +21,7 @@ import (
 	"connectrpc.com/connect"
 
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 	"github.com/cosmos/ibc/e2e/internal/loadtest/session"
@@ -228,19 +229,11 @@ func seed(ctx context.Context, s *session.Session, attestor *environment.Attesto
 	if err != nil {
 		return nil, fmt.Errorf("seed transfers: %w", err)
 	}
-	source, ok := s.Deployment.Chain(route.Source)
-	if !ok {
-		return nil, fmt.Errorf("no deployment on Chain %q", route.Source)
-	}
-	// Each SendPacket log's data is its packet's encoding as attested.
-	sent, err := traffic.SentPackets(batch.Receipt(), source.ICS26Router)
-	if err != nil {
-		return nil, err
-	}
 	height := batch.Receipt().BlockNumber.Uint64()
-	packets := make([]attestablePacket, len(sent))
-	for i, event := range sent {
-		packets[i] = attestablePacket{height: height, encoded: event.Raw.Data}
+	encoded := batch.EncodedPackets()
+	packets := make([]attestablePacket, len(encoded))
+	for i, packet := range encoded {
+		packets[i] = attestablePacket{height: height, encoded: packet}
 	}
 	if err := awaitAttestable(ctx, s, attestor, route.Source, height); err != nil {
 		return nil, err
@@ -265,20 +258,22 @@ func awaitAttestable(
 	timing := chain.Timing()
 	ctx, cancel := context.WithTimeout(ctx, timing.CompletionBudget)
 	defer cancel()
-	ticker := time.NewTicker(timing.PollInterval)
-	defer ticker.Stop()
-	for {
-		latest, err := attestor.LatestHeight(ctx)
-		if err == nil && latest >= height {
-			return nil
+	var (
+		latest  uint64
+		lastErr error
+	)
+	err = poll.Until(ctx, timing.PollInterval, func(ctx context.Context) (bool, error) {
+		var got uint64
+		if got, lastErr = attestor.LatestHeight(ctx); lastErr == nil {
+			latest = got
 		}
-		select {
-		case <-ctx.Done():
-			return errors.Join(fmt.Errorf("attestor latest height %d never reached seed height %d: %w",
-				latest, height, ctx.Err()), err)
-		case <-ticker.C:
-		}
+		return latest >= height, nil
+	})
+	if err != nil {
+		return errors.Join(fmt.Errorf("attestor latest height %d never reached seed height %d: %w",
+			latest, height, err), lastErr)
 	}
+	return nil
 }
 
 // packetCall attests a random seeded packet at its send height.

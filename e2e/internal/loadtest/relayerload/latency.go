@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"golang.org/x/sync/errgroup"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
@@ -119,25 +120,20 @@ func fetchAll[K comparable, V any](
 	var (
 		mu       sync.Mutex
 		values   = make(map[K]V, len(keys))
-		firstErr error
-		fetchers sync.WaitGroup
+		fetchers errgroup.Group
 	)
-	slots := make(chan struct{}, latencyFetchers)
+	fetchers.SetLimit(latencyFetchers)
 	for key := range keys {
-		slots <- struct{}{}
-		fetchers.Go(func() {
-			defer func() { <-slots }()
+		fetchers.Go(func() error {
 			value, err := fetch(ctx, key)
+			if err != nil {
+				return err
+			}
 			mu.Lock()
 			defer mu.Unlock()
-			switch {
-			case err == nil:
-				values[key] = value
-			case firstErr == nil:
-				firstErr = err
-			}
+			values[key] = value
+			return nil
 		})
 	}
-	fetchers.Wait()
-	return values, firstErr
+	return values, fetchers.Wait()
 }

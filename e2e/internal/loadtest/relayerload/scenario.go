@@ -53,8 +53,20 @@ func (d Direction) route() traffic.Route {
 	return traffic.AtoB(traffic.ChainA, traffic.ChainB)
 }
 
+// LightClient names the light clients the Chains verify each other with.
+type LightClient string
+
+const (
+	// LightClientAttested clients trust attestors.
+	LightClientAttested LightClient = "attested"
+	// LightClientBesuQBFT clients verify sealed Besu QBFT headers; both
+	// Chains must run Besu.
+	LightClientBesuQBFT LightClient = "besu-qbft"
+)
+
 // Config shapes one relayer scenario run. The CLI validates it.
 type Config struct {
+	LightClient LightClient
 	// Packets is the total across all directions, split evenly.
 	Packets    int
 	Wallets    int
@@ -63,14 +75,16 @@ type Config struct {
 }
 
 // SessionOptions adds what cfg needs to base: the routes of its directions and
-// a started relayer with load-sized batches, exporting telemetry if base does.
+// a started relayer with load-sized batches.
 func SessionOptions(base session.Options, cfg Config) session.Options {
 	for _, direction := range cfg.Directions {
 		base.Routes = append(base.Routes, direction.route())
 	}
+	if cfg.LightClient == LightClientBesuQBFT {
+		base.Mesh = traffic.QBFTMesh
+	}
 	base.StartRelayer = true
 	base.ConfigureRelayer = func(config *ibccli.RelayerConfig) {
-		config.Observability = base.Observability
 		config.ClearInterval = clearInterval
 		config.ClearOnStart = true
 		for i := range config.Chains {
@@ -91,11 +105,12 @@ var ErrLoadNotDelivered = errors.New("load not delivered")
 // ErrLoadNotDelivered if a direction sent fewer packets than its target.
 func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
 	report := &Report{
-		Scenario: "relayer",
-		Provider: string(s.Provider),
-		Wallets:  cfg.Wallets,
-		PerBlock: cfg.PerBlock,
-		Packets:  cfg.Packets,
+		Scenario:    "relayer",
+		Provider:    string(s.Provider),
+		LightClient: string(cfg.LightClient),
+		Wallets:     cfg.Wallets,
+		PerBlock:    cfg.PerBlock,
+		Packets:     cfg.Packets,
 	}
 	err := verdict(report, run(ctx, s, cfg, report))
 	return report, err
@@ -112,7 +127,7 @@ func verdict(report *Report, failures error) error {
 				d.Route, d.Sent, d.Target, d.SendFailures, d.FirstSendError))
 		}
 	}
-	report.LoadDelivered = report.Passed && len(shortfalls) == 0
+	report.LoadDelivered = len(shortfalls) == 0
 	err := failures
 	if err == nil && len(shortfalls) > 0 {
 		err = fmt.Errorf("%w: %w", ErrLoadNotDelivered, errors.Join(shortfalls...))
@@ -317,10 +332,10 @@ func runDirection(
 			d.Rejected++
 		case relayerv2.PacketState_PACKET_STATE_RELAY_FAILED:
 			d.RelayFailed++
-		default:
-			d.Unresolved++
 		}
 	}
+	// Includes packets sent after the sweep gave up, which it never tracked.
+	d.Unresolved = d.Sent - d.Succeeded - d.TimedOut - d.Rejected - d.RelayFailed
 	if failed := d.TimedOut + d.Rejected + d.RelayFailed; failed > 0 {
 		problems = append(problems, fmt.Errorf("%d packets did not succeed: timed_out=%d rejected=%d relay_failed=%d",
 			failed, d.TimedOut, d.Rejected, d.RelayFailed))

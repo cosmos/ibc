@@ -26,7 +26,7 @@ func TestSimpleLoad(t *testing.T) {
 
 		assert.Equal(t, calls.Load(), result.Sent)
 		assert.Equal(t, result.Sent, result.Succeeded)
-		assert.InDelta(t, 50, result.Sent, 6, "100 rps for 0.5s")
+		assert.EqualValues(t, 50, result.Sent, "100 rps for 0.5s")
 		assert.InDelta(t, 500, result.DurationMS, 50)
 		assert.InDelta(t, 100, result.AchievedRPS, 12)
 		assert.Equal(t, int(result.Succeeded), result.Latency.Count)
@@ -57,9 +57,18 @@ func TestSimpleLoad(t *testing.T) {
 			return nil
 		})
 
-		assert.InDelta(t, 20, result.Sent, 4, "open loop: slow calls do not hold back sends")
+		assert.EqualValues(t, 20, result.Sent, "open loop: slow calls do not hold back sends")
 		assert.Equal(t, result.Sent, result.Succeeded)
 		assert.GreaterOrEqual(t, time.Since(started), 400*time.Millisecond, "waits for calls in flight")
+	})
+
+	t.Run("sendsEveryCallAtRatesAboveTheTick", func(t *testing.T) {
+		spec := Spec{Duration: 50 * time.Millisecond, RatePerSecond: 100_000}
+
+		result := SimpleLoad(t.Context(), spec, func(context.Context) error { return nil })
+
+		assert.EqualValues(t, 5000, result.Sent)
+		assert.Equal(t, result.Sent, result.Succeeded)
 	})
 
 	t.Run("endsEarlyWhenTheRunEnds", func(t *testing.T) {

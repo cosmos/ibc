@@ -135,6 +135,24 @@ func TestSweepGivesUpWhenListingKeepsFailing(t *testing.T) {
 	require.ErrorContains(t, err, "last listing error: unavailable")
 }
 
+func TestSweepForgetsAListingErrorOnceListingRecovers(t *testing.T) {
+	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {pending}}}
+	failed := false
+	list := func(ctx context.Context) ([]*relayerv2.PacketStatus, error) {
+		if !failed {
+			failed = true
+			return nil, errors.New("unavailable")
+		}
+		return relayer.list(ctx)
+	}
+
+	_, err := sweep(t.Context(), "test", time.Millisecond, 20*time.Millisecond, list,
+		sendAll(sentPacket{key: packetKey{"client-0", 1}}))
+
+	require.ErrorContains(t, err, "no relay progress for 20ms")
+	require.NotContains(t, err.Error(), "unavailable")
+}
+
 func TestSweepExplainsAnInterruption(t *testing.T) {
 	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {pending}}}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
@@ -258,6 +276,10 @@ func TestVerdictSeparatesTheRelayerFromTheLoad(t *testing.T) {
 	assert.False(t, report.Passed)
 
 	report = &Report{Directions: []*DirectionReport{{Target: 5, Sent: 5}}}
+	require.Error(t, verdict(report, errors.New("a-to-b: 1 packets did not succeed")))
+	assert.True(t, report.LoadDelivered, "the load was delivered though the relayer failed")
+
+	report = &Report{Directions: []*DirectionReport{{Target: 5, Sent: 5}}}
 	require.NoError(t, verdict(report, nil))
 	assert.True(t, report.Passed)
 	assert.True(t, report.LoadDelivered)
@@ -265,7 +287,7 @@ func TestVerdictSeparatesTheRelayerFromTheLoad(t *testing.T) {
 
 func TestReportJSONAndText(t *testing.T) {
 	report := &Report{
-		Scenario: "relayer", Provider: "anvil", Wallets: 4, PerBlock: 2, Packets: 10,
+		Scenario: "relayer", Provider: "anvil", LightClient: "attested", Wallets: 4, PerBlock: 2, Packets: 10,
 		WallTimeMS: 5000, Throughput: 2, Error: "b-to-a: sent 4 of 5 packets",
 		Directions: []*DirectionReport{{
 			Route: "a-to-b", Source: "chain-a", Destination: "chain-b", Target: 5, Sent: 5, Succeeded: 5,
@@ -283,13 +305,15 @@ func TestReportJSONAndText(t *testing.T) {
 	direction := decoded["directions"].([]any)[0].(map[string]any)
 	assert.InDelta(t, 5, direction["succeeded"], 0)
 	assert.InDelta(t, 1000, direction["send_to_recv"].(map[string]any)["p50_ms"], 0)
-	assert.NotContains(t, direction, "relayDone")
 
 	var out bytes.Buffer
 	require.NoError(t, report.WriteText(&out))
 	text := out.String()
-	assert.Contains(t, text,
-		"Relayer load: FAIL (anvil, 4 wallets, 2 per block interval): 10 packets in 5s, 2.0 packets/s")
+	assert.Contains(
+		t,
+		text,
+		"Relayer load: FAIL (anvil, attested clients, 4 wallets, 2 per block interval): 10 packets in 5s, 2.0 packets/s",
+	)
 	assert.Contains(t, text, "[a-to-b] chain-a -> chain-b")
 	assert.Regexp(t, `send->recv +\(block time\): +n=1 p50=1s`, text)
 	assert.Contains(t, text, "b-to-a: sent 4 of 5 packets")

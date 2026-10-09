@@ -6,8 +6,9 @@
 
 `e2e/cmd/loadtest` is a command-line binary that puts load on a local IBC environment built by
 the e2e [harness](../../internal/harness/AGENTS.md): two managed EVM Chains (Anvil by default,
-Besu with `--provider besu`) joined by an attested mesh with one Attestor per Client, the
-traffic test applications, and the real `ibc` relayer with auto-relay. Every run starts a
+Besu with `--provider besu`) joined by an attested mesh with one Attestor per Client (or,
+for the relayer with `--light-client besu-qbft`, by Besu QBFT light clients), the traffic
+test applications, and the real `ibc` relayer with auto-relay. Every run starts a
 fresh environment and tears it down at the end, including on Ctrl-C (unless
 `--keep-on-failure` keeps a failed run's environment).
 
@@ -33,8 +34,8 @@ was built from; `IBC_BIN` overrides it.
 
 The report goes to stdout (text, or JSON with `--json`) and progress logs to stderr. The exit
 status is 0 only when the scenario met its target, 1 when it did not or setup failed, 2 on bad
-usage, and 3 when a relayer run is inconclusive (below); invalid flag values are rejected
-before anything starts. A run that is interrupted
+usage, and 3 when a relayer run is inconclusive (below), whether or not `--keep-on-failure`
+keeps the environment; invalid flag values are rejected before anything starts. A run that is interrupted
 or exceeds `--timeout` still reports what it measured.
 
 ### Common flags
@@ -55,6 +56,8 @@ or exceeds `--timeout` still reports what it measured.
 status API. The defaults are a short, dense burst: `--packets 3000` (split evenly across
 directions), `--wallets 200`, and `--per-block 150`. `--packets 8000 --per-block 20` is a
 sustained, light run. Only the selected directions' routes are deployed and relayed.
+`--light-client besu-qbft` (with `--provider besu`) joins the Chains with Besu QBFT light
+clients, which verify each other's sealed headers, instead of attested ones.
 
 The relayer runs with `ClearOnStart`, a 1s clear interval, and per-Chain packet batches of 64
 with a 1s batch timeout.
@@ -72,8 +75,9 @@ How a direction runs:
    slots, and submits a transfer through the harness sender, which waits for its receipt. So
    each wallet has at most one transaction in flight, which Besu's per-sender pool limit
    needs. The sender retries requests the node leaves unanswered (a dropped connection, a
-   stalled request, an empty latest block) and gives submission and inclusion one completion
-   budget each. A transfer that still fails (the node refuses it, it reverts, or it is not
+   stalled request, an empty latest block, an HTTP 5xx or 429) and gives submission and
+   inclusion one completion budget each. A node that refuses a resend after an unanswered
+   attempt is believed only if it does not hold the transaction. A transfer that still fails (the node refuses it, it reverts, or it is not
    included in time) counts as a `send_failure` and retires that wallet, and the first such
    error is reported; one cut short by an interruption does not count.
 4. **Achieved pacing.** The receipts' block numbers show how the sends landed: blocks with at
@@ -87,7 +91,8 @@ How a direction runs:
    (`SUCCEEDED`, `TIMED_OUT`, `REJECTED`, `RELAY_FAILED`). It gives up when relaying stalls:
    no packet sent and none newly terminal for the route's completion budget (20 block
    intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
-   stops the direction's senders. Packets still not terminal then are `unresolved`. Packets
+   stops the direction's senders. Packets sent but not terminal when it ends are
+   `unresolved`, so a direction's outcomes add up to its sent packets. Packets
    time out after 23 hours (the router allows at most a day), well past any realistic run.
 6. **Latency.** After the sweep, each succeeded packet's relay is measured from chain data:
    the receipts of its relayer-reported receive and acknowledgement transactions and the
@@ -128,9 +133,10 @@ applications (once), seeds 10 IFT transfers from chain A in one batch transactio
 until the Attestor's latest height reaches its block; the packets are never relayed. A
 `state`-only run deploys nothing.
 
-The load is open loop: a ticker starts one call per `1/rps` whether or not earlier calls have
-returned, so an attestor that cannot keep up shows as latency and timeouts, not as fewer
-calls. Each call has a 3s timeout. At the phase deadline no new calls start and the phase
+The load is open loop: every 10ms the phase starts the calls due by then at `rps`, whether or
+not earlier calls have returned, so an attestor that cannot keep up shows as latency and
+timeouts, not as fewer calls, and a full phase sends exactly `rps` calls per second (a late
+check sends the calls due as a burst). Each call has a 3s timeout. At the phase deadline no new calls start and the phase
 waits for those in flight. Latency covers succeeded calls. A phase passes when at least one
 call succeeded and failed plus timed-out calls are at most `--max-error-rate` (default 0.01)
 of the calls sent. A phase that cannot start, or an interruption, ends the run; an

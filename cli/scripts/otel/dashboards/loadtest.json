@@ -291,7 +291,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[5s]))",
+                        "expr": "sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -888,7 +888,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime, signer, operation) (increase(signer_operation_milliseconds_count{result=\"error\"}[5s]))",
+                        "expr": "sum by (service_runtime, signer, operation) (increase(signer_operation_milliseconds_count{result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2783,7 +2783,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (attestor) (increase(attestor_operation_milliseconds_count{caller=\"rpc\", result=\"error\"}[5s]))",
+                        "expr": "sum by (attestor) (increase(attestor_operation_milliseconds_count{caller=\"rpc\", result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2903,7 +2903,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, code) (increase(evm_operation_dur_milliseconds_count{result=\"error\"}[5s]))",
+                        "expr": "sum by (chain_id, code) (increase(evm_operation_dur_milliseconds_count{result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",

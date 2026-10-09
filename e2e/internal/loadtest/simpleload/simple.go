@@ -16,6 +16,9 @@ import (
 // Timeout bounds a single call.
 const Timeout = 3 * time.Second
 
+// tick spaces the checks for calls that are due.
+const tick = 10 * time.Millisecond
+
 // Spec shapes one load run. The CLI validates it: both fields positive.
 type Spec struct {
 	Duration      time.Duration `json:"-"`
@@ -44,12 +47,14 @@ type Result struct {
 
 // SimpleLoad sends spec.RatePerSecond calls per second for spec.Duration,
 // each on its own goroutine however many are in flight, so a slow service
-// shows as latency and timeouts rather than as fewer calls. It stops sending
-// early when ctx ends. A call's Timeout context is detached from ctx's
-// cancellation: calls in flight when sending stops run to completion, and
-// SimpleLoad waits for them.
+// shows as latency and timeouts rather than as fewer calls. Every tick it
+// starts the calls due by then, so a late tick sends a burst rather than
+// fewer calls, and a full run sends exactly RatePerSecond per second. It
+// stops sending early when ctx ends. A call's Timeout context is detached
+// from ctx's cancellation: calls in flight when sending stops run to
+// completion, and SimpleLoad waits for them.
 func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
-	ticker := time.NewTicker(time.Second / time.Duration(spec.RatePerSecond))
+	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 	phase := time.NewTimer(spec.Duration)
 	defer phase.Stop()
@@ -85,15 +90,21 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 	}
 
 	started := time.Now()
+	total := int64(spec.Duration.Seconds() * float64(spec.RatePerSecond))
+	sendUpTo := func(due int64) {
+		for ; result.Sent < due; result.Sent++ {
+			wg.Go(send)
+		}
+	}
 	for sending := true; sending; {
 		select {
 		case <-ctx.Done():
 			sending = false
 		case <-phase.C:
+			sendUpTo(total)
 			sending = false
 		case <-ticker.C:
-			result.Sent++
-			wg.Go(send)
+			sendUpTo(min(total, int64(time.Since(started).Seconds()*float64(spec.RatePerSecond))))
 		}
 	}
 	elapsed := time.Since(started)

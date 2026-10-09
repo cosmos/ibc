@@ -43,7 +43,8 @@ type DirectionReport struct {
 	TimedOut    int `json:"timed_out"`
 	Rejected    int `json:"rejected"`
 	RelayFailed int `json:"relay_failed"`
-	Unresolved  int `json:"unresolved"`
+	// Unresolved packets were sent but not terminal when the sweep ended.
+	Unresolved int `json:"unresolved"`
 	// RelayDrainMS runs from the last sent packet to the end of the sweep.
 	RelayDrainMS int64 `json:"relay_drain_ms"`
 	// Relay latencies of succeeded packets, from block timestamps.
@@ -60,15 +61,17 @@ type DirectionReport struct {
 
 // Report is the outcome of the relayer scenario.
 type Report struct {
-	Scenario string `json:"scenario"`
-	Provider string `json:"provider"`
-	Wallets  int    `json:"wallets"`
-	PerBlock int    `json:"per_block"`
+	Scenario    string `json:"scenario"`
+	Provider    string `json:"provider"`
+	LightClient string `json:"light_client"`
+	Wallets     int    `json:"wallets"`
+	PerBlock    int    `json:"per_block"`
 	// Passed reports that the relayer relayed every packet sent to
 	// SUCCEEDED, without a stall or an interruption.
 	Passed bool `json:"passed"`
-	// LoadDelivered reports that every direction also sent its target; a
-	// run that Passed without it is inconclusive.
+	// LoadDelivered reports that every direction sent its target, whether
+	// or not the relayer passed; a run that Passed without it is
+	// inconclusive.
 	LoadDelivered bool `json:"load_delivered"`
 	// Packets is the target across directions.
 	Packets int `json:"packets"`
@@ -92,8 +95,9 @@ func (r *Report) WriteText(w io.Writer) error {
 		verdict = "INCONCLUSIVE (load not delivered)"
 	}
 	wall := time.Duration(r.WallTimeMS) * time.Millisecond
-	fmt.Fprintf(&out, "\nRelayer load: %s (%s, %d wallets, %d per block interval): %d packets in %s, %.1f packets/s\n",
-		verdict, r.Provider, r.Wallets, r.PerBlock, r.Packets, wall, r.Throughput)
+	fmt.Fprintf(&out,
+		"\nRelayer load: %s (%s, %s clients, %d wallets, %d per block interval): %d packets in %s, %.1f packets/s\n",
+		verdict, r.Provider, r.LightClient, r.Wallets, r.PerBlock, r.Packets, wall, r.Throughput)
 	for _, d := range r.Directions {
 		fmt.Fprintf(&out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)
 		fmt.Fprintf(&out, "  sends:    target=%d sent=%d send_failures=%d backpressure=%d send_phase=%s\n",

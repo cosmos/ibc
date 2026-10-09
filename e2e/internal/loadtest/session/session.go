@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package session starts and tears down the environment a load scenario runs
-// against: two managed EVM Chains joined by an attested mesh, the traffic
-// applications, and optionally an auto-relaying relayer.
+// against: two managed EVM Chains joined by a mesh, attested by default, the
+// traffic applications, and optionally an auto-relaying relayer.
 package session
 
 import (
@@ -21,6 +21,8 @@ import (
 // Options shape the environment.
 type Options struct {
 	Provider environment.EVMProvider
+	// Mesh joins the Chains; nil is traffic.AttestedMesh.
+	Mesh func(chains ...environment.ChainSpec) (environment.Spec, environment.Runtime)
 	// Observability exports OTel telemetry from every managed IBC CLI process
 	// (attestors and the relayer) to the local LGTM stack.
 	Observability bool
@@ -57,7 +59,11 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	spec, runtime := traffic.AttestedMesh(chains...)
+	mesh := opts.Mesh
+	if mesh == nil {
+		mesh = traffic.AttestedMesh
+	}
+	spec, runtime := mesh(chains...)
 	runtime.Observability = opts.Observability
 
 	started := time.Now()
@@ -94,9 +100,13 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	if s.dir, err = os.MkdirTemp("", "ibc-loadtest-"); err != nil {
 		return s, fmt.Errorf("create deployment directory: %w", err)
 	}
-	driver, deployment, err := traffic.Deploy(
-		ctx, s.Env, s.dir, s.Deployer, relayerSigner, opts.ConfigureRelayer, opts.Routes...,
-	)
+	configure := func(config *ibccli.RelayerConfig) {
+		config.Observability = opts.Observability
+		if opts.ConfigureRelayer != nil {
+			opts.ConfigureRelayer(config)
+		}
+	}
+	driver, deployment, err := traffic.Deploy(ctx, s.Env, s.dir, s.Deployer, relayerSigner, configure, opts.Routes...)
 	if err != nil {
 		return s, fmt.Errorf("deploy: %w", err)
 	}
@@ -111,9 +121,18 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	return s, nil
 }
 
-// Dir is the relayer's deployment directory (config, database, and log), or
-// "" without a relayer.
-func (s *Session) Dir() string { return s.dir }
+// Keep leaves the session's resources running for inspection and logs how
+// to find them.
+func (s *Session) Keep(ctx context.Context) {
+	var kept []any
+	if s.Env != nil {
+		kept = append(kept, "run_id", s.Env.RunID())
+	}
+	if s.dir != "" {
+		kept = append(kept, "dir", s.dir)
+	}
+	slog.WarnContext(ctx, "kept the environment for inspection; run `make -C e2e clean` when done", kept...)
+}
 
 // Close stops the relayer, closes the Environment, and removes the
 // deployment directory. It runs on a context detached from ctx's

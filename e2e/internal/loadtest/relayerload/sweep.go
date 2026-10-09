@@ -92,6 +92,7 @@ func sweep(
 			listErr = err
 			slog.WarnContext(ctx, "list relayer packets", "direction", label, "err", err)
 		} else {
+			listErr = nil
 			for _, status := range statuses {
 				key := packetKey{clientID: status.GetSourceClientId(), sequence: status.GetSequenceNumber()}
 				if p, ok := tracked[key]; ok {

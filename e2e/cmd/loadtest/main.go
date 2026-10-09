@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command loadtest drives load against a local two-Chain IBC environment
-// built by the harness: Anvil (or Besu) Chains joined by an attested mesh,
-// the IBC CLI relayer, and its attestors. See README.md.
+// built by the harness: Anvil (or Besu) Chains joined by an attested (or Besu
+// QBFT) mesh, the IBC CLI relayer, and its attestors. See README.md.
 package main
 
 import (
@@ -135,10 +135,17 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 		"in flight per direction")
 	perBlock := fs.Int("per-block", 150, "transfers offered per source block interval and direction")
 	directions := fs.String("directions", "both", "a-to-b, b-to-a, or both")
+	lightClient := fs.String("light-client", string(relayerload.LightClientAttested),
+		"light clients between the Chains: attested, or besu-qbft (needs --provider besu)")
 	if err := parse(fs, args); err != nil {
 		return parseExit(err)
 	}
-	cfg := relayerload.Config{Packets: *packets, Wallets: *wallets, PerBlock: *perBlock}
+	cfg := relayerload.Config{
+		LightClient: relayerload.LightClient(*lightClient),
+		Packets:     *packets,
+		Wallets:     *wallets,
+		PerBlock:    *perBlock,
+	}
 	switch *directions {
 	case "both":
 		cfg.Directions = []relayerload.Direction{relayerload.DirectionAtoB, relayerload.DirectionBtoA}
@@ -149,6 +156,10 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 	}
 	var err error
 	switch {
+	case cfg.LightClient != relayerload.LightClientAttested && cfg.LightClient != relayerload.LightClientBesuQBFT:
+		err = fmt.Errorf("unknown light client %q: want attested or besu-qbft", cfg.LightClient)
+	case cfg.LightClient == relayerload.LightClientBesuQBFT && c.provider != string(environment.EVMProviderBesu):
+		err = errors.New("--light-client besu-qbft needs --provider besu")
 	case cfg.Packets < len(cfg.Directions):
 		err = fmt.Errorf("--packets must be at least the number of directions (%d)", len(cfg.Directions))
 	case cfg.Wallets <= 0:
@@ -234,13 +245,14 @@ type report interface {
 // execute wires logging, the run budget, and signal
 // handling around a scenario, starts its session, writes the scenario's
 // report to stdout, and tears the session down unless setup or the run
-// failed and --keep-on-failure asks to keep it.
+// failed and --keep-on-failure asks to keep it. Teardown is deferred, so a
+// panic tears down too.
 func execute(
 	c common,
 	stdout, stderr io.Writer,
 	opts session.Options,
 	scenario func(context.Context, *session.Session) (report, error),
-) int {
+) (code int) {
 	level := slog.LevelInfo
 	if c.verbose {
 		level = slog.LevelDebug
@@ -274,34 +286,38 @@ func execute(
 	}()
 
 	s, err := session.Start(ctx, opts)
+	// finish sets the exit code once the run ends, after a panic too.
+	defer func() { code = finish(ctx, s, err, c.keepOnFailure) }()
 	if err != nil {
 		slog.Error("setup failed", "err", err)
-	} else {
-		var r report
-		if r, err = scenario(ctx, s); err != nil {
-			slog.Error("run did not pass", "err", err)
+		return code
+	}
+	var r report
+	if r, err = scenario(ctx, s); err != nil {
+		slog.Error("run did not pass", "err", err)
+	}
+	if writeErr := writeReport(stdout, r, c.jsonOut); writeErr != nil {
+		slog.Error("write report", "err", writeErr)
+		err = errors.Join(err, writeErr)
+	}
+	return code
+}
+
+// finish keeps s if err is set and keep asks to, closes it otherwise, and
+// returns the exit code for err. A failed teardown fails the run.
+func finish(ctx context.Context, s *session.Session, err error, keep bool) int {
+	code := exitCode(err)
+	switch {
+	case s == nil:
+	case err != nil && keep:
+		s.Keep(ctx)
+	default:
+		if closeErr := s.Close(ctx); closeErr != nil {
+			slog.Error("teardown failed", "err", closeErr)
+			code = exitFailed
 		}
-		if writeErr := writeReport(stdout, r, c.jsonOut); writeErr != nil {
-			slog.Error("write report", "err", writeErr)
-			err = errors.Join(err, writeErr)
-		}
 	}
-	if s == nil {
-		return exitFailed
-	}
-	if err != nil && c.keepOnFailure {
-		kept := []any{"run_id", s.Env.RunID()}
-		if s.Dir() != "" {
-			kept = append(kept, "dir", s.Dir())
-		}
-		slog.Warn("kept the environment for inspection; run `make -C e2e clean` when done", kept...)
-		return exitFailed
-	}
-	if closeErr := s.Close(ctx); closeErr != nil {
-		slog.Error("teardown failed", "err", closeErr)
-		return exitFailed
-	}
-	return exitCode(err)
+	return code
 }
 
 func exitCode(err error) int {
