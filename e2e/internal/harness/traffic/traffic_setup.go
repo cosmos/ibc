@@ -34,12 +34,17 @@ const RelayerStopTimeout = 15 * time.Second
 
 const weiPerEther int64 = 1_000_000_000_000_000_000
 
-var initialTokenSupply = mustBigInt("1000000000000000000000000")
+// Coins returns n whole tokens (n * 10^18 base units) of an 18-decimal token.
+func Coins(n int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(n), big.NewInt(weiPerEther))
+}
+
+var initialTokenSupply = Coins(1_000_000)
 
 // RequiredSignerBalance is the minimum balance external Chains must provision
 // for each test actor before deployment.
 func RequiredSignerBalance() *big.Int {
-	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
+	return Coins(1_000)
 }
 
 // ProtocolAuthorityAddress is the deployer funded for IBC Instance realization.
@@ -710,12 +715,4 @@ func ensureSignerBalances(ctx context.Context, env *environment.Environment, sig
 		}
 	}
 	return nil
-}
-
-func mustBigInt(s string) *big.Int {
-	v, ok := new(big.Int).SetString(s, 10)
-	if !ok {
-		panic(fmt.Sprintf("traffic: invalid big.Int literal %q", s))
-	}
-	return v
 }

@@ -15,9 +15,8 @@ corroborates outcomes by reading chain state with its own clients.
   ICS20, GMP, and IFT packets. It never imports `testing`: functions that do I/O take a
   `context.Context`, failures are returned as errors, files go under a caller-supplied directory, and
   started processes are returned to the caller, who stops them before removing that directory and
-  closing the Environment. E2e tests call it directly, through thin `testing.TB` wrappers in
-  `e2e/internal/e2etest` only for the resource-owning calls and `NewSigner`; the load-test binary
-  consumes it directly.
+  closing the Environment. E2e tests and the load-test binary call it directly (`e2e/README.md`
+  describes the few `testing.TB` wrappers in `e2e/internal/e2etest`).
   Harness non-test code never imports `testing`.
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and

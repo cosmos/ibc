@@ -228,6 +228,12 @@ func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (r
 
 func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
 
+// Done is closed once the relayer process exits.
+func (d *Relayer) Done() <-chan struct{} { return d.h.doneCh() }
+
+// Err is how the relayer process exited once Done is closed, and nil before.
+func (d *Relayer) Err() error { return d.h.err() }
+
 // WaitPolicy returns the configured packet wait policy for routeID.
 func (d *Relayer) WaitPolicy(routeID string) (WaitPolicy, bool) {
 	policy, ok := d.waitPolicies[routeID]

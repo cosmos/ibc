@@ -14,11 +14,10 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
-// This file wraps for testing.TB the traffic calls that own resources, plus
-// NewSigner, which nearly every test calls: each fails the test on error, and
-// those that start resources register their cleanup, so t.Cleanup's LIFO
-// order stops processes before their directories are removed and before the
-// Environment closes. Tests call the rest of the traffic layer directly.
+// This file holds the testing.TB wrappers e2e/README.md describes. Those that
+// start resources register their cleanup, so t.Cleanup's LIFO order stops
+// processes before their directories are removed and before the Environment
+// closes.
 
 // NewSigner generates a randomly-keyed local identity.
 func NewSigner(t testing.TB) traffic.Signer {
@@ -88,7 +87,7 @@ func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environm
 // StartProver writes the prover's config and runs it.
 func StartProver(t testing.TB, env *environment.Environment, signer traffic.Signer) *ibccli.Prover {
 	t.Helper()
-	prover, err := traffic.StartProver(env, signer, t.TempDir())
+	prover, err := traffic.StartProver(t.Context(), env, signer, t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, prover.Stop(), "e2etest: stop prover service") })
 	return prover

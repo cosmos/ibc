@@ -4,6 +4,7 @@ package ibccli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/netip"
@@ -35,9 +36,9 @@ func (p *Prover) Address() string {
 	return p.address
 }
 
-// StartProver runs the test prover on an ephemeral port, waiting for it to
-// announce the one it got
-func StartProver(configPath string) (*Prover, error) {
+// StartProver runs the test prover on an ephemeral port, waiting until ctx
+// ends for it to announce the one it got
+func StartProver(ctx context.Context, configPath string) (*Prover, error) {
 	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", loopbackAnyPort)
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -53,7 +54,7 @@ func StartProver(configPath string) (*Prover, error) {
 
 	prover := &Prover{cmd: cmd}
 
-	address, err := awaitProverAddress(stdout)
+	address, err := awaitProverAddress(ctx, stdout)
 	if err != nil {
 		_ = prover.Stop()
 
@@ -78,7 +79,7 @@ func (p *Prover) Stop() error {
 }
 
 // awaitProverAddress reads the address announced on the prover's first stdout line.
-func awaitProverAddress(stdout io.ReadCloser) (string, error) {
+func awaitProverAddress(ctx context.Context, stdout io.ReadCloser) (string, error) {
 	type result struct {
 		address string
 		err     error
@@ -118,6 +119,8 @@ func awaitProverAddress(stdout io.ReadCloser) (string, error) {
 		return got.address, nil
 	case <-time.After(proverReadyWait):
 		return "", fmt.Errorf("ibc prover: did not announce an address within %s", proverReadyWait)
+	case <-ctx.Done():
+		return "", fmt.Errorf("ibc prover: startup canceled: %w", ctx.Err())
 	}
 }
 

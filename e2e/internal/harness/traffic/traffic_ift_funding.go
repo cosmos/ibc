@@ -18,18 +18,14 @@ import (
 // stays well inside a block's gas limit.
 const fundChunk = 64
 
-// Coins returns n whole tokens (n * 10^18 base units) of an 18-decimal token.
-func Coins(n int64) *big.Int {
-	return new(big.Int).Mul(big.NewInt(n), big.NewInt(weiPerEther))
-}
-
 // FundWallets pays every wallet tokenEach of the route's source IFT, out of
 // the batch shim's IFT balance (the shim is minted the initial supply at
-// deployment), and weiEach native coin (none if nil), on the source Chain.
-// The route's sender first tops its own balance up to cover every wallet's
-// native value through the Chain's funding capability, so the source Chain
-// must be managed, then submits one payable fund transaction per 64
-// wallets. A failed chunk stops funding, leaving earlier chunks paid.
+// deployment), and weiEach native coin (none if nil), on the source Chain. It
+// submits one payable fund transaction per 64 wallets from the route's
+// sender, which must hold weiEach for every wallet plus gas. A failed chunk
+// stops funding, leaving earlier chunks paid. Since the tokens leave the
+// shim, do not fund wallets between a SendBatch and its VerifyBurned or
+// VerifyState, which compare the shim's balance with the one before sending.
 func (i *IFT) FundWallets(ctx context.Context, wallets []common.Address, tokenEach, weiEach *big.Int) error {
 	tokenEach, err := validAmount(tokenEach)
 	if err != nil {
@@ -37,20 +33,6 @@ func (i *IFT) FundWallets(ctx context.Context, wallets []common.Address, tokenEa
 	}
 	if weiEach == nil {
 		weiEach = new(big.Int)
-	}
-	if len(wallets) == 0 {
-		return nil
-	}
-
-	funding, err := i.source.chain.Funding()
-	if err != nil {
-		return fmt.Errorf("traffic: fund wallets on route %q: %w", i.routeID, err)
-	}
-	// The sender keeps its documented minimum after paying every wallet.
-	minimum := new(big.Int).Mul(weiEach, big.NewInt(int64(len(wallets))))
-	minimum.Add(minimum, RequiredSignerBalance())
-	if err := funding.EnsureEOABalance(ctx, i.sender.Address(), minimum); err != nil {
-		return fmt.Errorf("traffic: fund wallet funder %s on route %q: %w", i.sender.Address(), i.routeID, err)
 	}
 	for start := 0; start < len(wallets); start += fundChunk {
 		chunk := wallets[start:min(start+fundChunk, len(wallets))]

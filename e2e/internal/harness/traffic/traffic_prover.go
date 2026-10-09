@@ -3,6 +3,7 @@
 package traffic
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -85,9 +86,9 @@ func buildProverConfig(
 }
 
 // StartProver writes the prover's config, key, and database under dir and
-// runs it. The caller owns the returned prover and stops it with Stop before
-// removing dir.
-func StartProver(env *environment.Environment, signer Signer, dir string) (*ibccli.Prover, error) {
+// runs it, waiting until ctx ends for it to be ready. The caller owns the
+// returned prover and stops it with Stop before removing dir.
+func StartProver(ctx context.Context, env *environment.Environment, signer Signer, dir string) (*ibccli.Prover, error) {
 	if env == nil {
 		return nil, errors.New("traffic: Environment is required")
 	}
@@ -109,7 +110,7 @@ func StartProver(env *environment.Environment, signer Signer, dir string) (*ibcc
 		return nil, fmt.Errorf("traffic: write prover config: %w", err)
 	}
 
-	prover, err := ibccli.StartProver(configPath)
+	prover, err := ibccli.StartProver(ctx, configPath)
 	if err != nil {
 		return nil, fmt.Errorf("traffic: start prover service: %w", err)
 	}
