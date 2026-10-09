@@ -4,10 +4,8 @@ package config
 
 import (
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -33,10 +31,6 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 		return Config{}, err
 	}
 
-	if err := rejectNullTLS([]byte(expanded)); err != nil {
-		return Config{}, err
-	}
-
 	if validate {
 		if err := config.Validate(); err != nil {
 			return Config{}, err
@@ -46,57 +40,6 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 	config.originalFilePath = path
 
 	return config, nil
-}
-
-// rejectNullTLS fails on a `tls:` key with no value. It decodes to the same
-// nil as an absent block, so a block whose fields are all commented out would
-// otherwise silently drop its settings, and for a bare host:port or a signer
-// target, TLS itself. It walks the generically decoded document
-// so quoted keys, tags and aliases resolve exactly as they do for the config.
-func rejectNullTLS(bz []byte) error {
-	var doc any
-	if err := yaml.Unmarshal(bz, &doc); err != nil {
-		return err
-	}
-
-	if path := findNullTLS(doc, ""); path != "" {
-		return errors.Errorf(
-			"%s: empty; use `tls: {}` for default TLS settings, or remove the key",
-			path,
-		)
-	}
-
-	return nil
-}
-
-// findNullTLS returns the path of the first null `tls` value under node, in
-// key order so the result is deterministic.
-func findNullTLS(node any, path string) string {
-	switch n := node.(type) {
-	case map[string]any:
-		for _, key := range slices.Sorted(maps.Keys(n)) {
-			child := key
-			if path != "" {
-				child = path + "." + key
-			}
-
-			if key == "tls" && n[key] == nil {
-				return child
-			}
-
-			if found := findNullTLS(n[key], child); found != "" {
-				return found
-			}
-		}
-	case []any:
-		for i, v := range n {
-			if found := findNullTLS(v, fmt.Sprintf("%s[%d]", path, i)); found != "" {
-				return found
-			}
-		}
-	}
-
-	return ""
 }
 
 // KeyFileFallbacks returns the paths tried for a local signer key file.

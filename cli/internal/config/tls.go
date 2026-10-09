@@ -15,12 +15,13 @@ import (
 
 // TLSClientConfig holds the settings for an outbound TLS connection.
 //
-// Whether TLS is used is decided by the endpoint's scheme, not by this block.
-// For an endpoint configured as a bare host:port (remote attestors, and remote
-// provers without a scheme) the block's presence selects https over http. A
-// remote prover configured with an https:// URL uses TLS with Go's defaults
-// even without the block. A remote signer's gRPC target uses TLS only when the
-// block is present.
+// The block carries settings. Whether TLS is used depends on the endpoint:
+//   - a remote prover url with a scheme: the scheme. https:// uses TLS with
+//     Go's defaults even without the block; the block with http:// is rejected.
+//   - a remote attestor grpc address, or a remote prover url written as a bare
+//     host:port: the block's presence, which selects https over http.
+//   - a remote signer grpc target: the block's presence, which selects TLS
+//     credentials over plaintext, whatever scheme the target has.
 //
 // An empty block (`tls: {}`) is valid and means system roots and no client
 // certificate.
