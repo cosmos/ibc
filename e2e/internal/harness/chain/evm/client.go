@@ -322,12 +322,12 @@ func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *type
 		return err
 	}
 	known, lookupErr := Retry(ctx, wait, func(ctx context.Context) (bool, error) {
-		_, _, err := e.client.TransactionByHash(ctx, signed.Hash())
-		if errors.Is(err, ethereum.NotFound) {
+		_, _, lookupErr := e.client.TransactionByHash(ctx, signed.Hash())
+		if errors.Is(lookupErr, ethereum.NotFound) {
 			// The node answered that it lacks the transaction.
 			return false, nil
 		}
-		return err == nil, err
+		return lookupErr == nil, lookupErr
 	})
 	if lookupErr == nil && known {
 		return nil

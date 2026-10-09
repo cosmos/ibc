@@ -91,7 +91,8 @@ func (c Config) Validate(provider environment.EVMProvider) error {
 	}
 	switch {
 	case c.LightClient != LightClientAttested && c.LightClient != LightClientBesuQBFT:
-		return fmt.Errorf("unknown light client %q: want %s or %s", c.LightClient, LightClientAttested, LightClientBesuQBFT)
+		return fmt.Errorf("unknown light client %q: want %s or %s",
+			c.LightClient, LightClientAttested, LightClientBesuQBFT)
 	case c.LightClient == LightClientBesuQBFT && provider != environment.EVMProviderBesu:
 		return fmt.Errorf("%s light clients need %s Chains", LightClientBesuQBFT, environment.EVMProviderBesu)
 	case c.Packets < len(c.Directions):
