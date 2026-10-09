@@ -4,6 +4,7 @@ package relayerload
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"golang.org/x/sync/errgroup"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
@@ -30,7 +30,8 @@ type chainReader interface {
 // receive transaction minus the source block that included the transfer;
 // receive to acknowledgement and send to acknowledgement end at the source
 // block that included the acknowledgement. Block timestamps have one-second
-// resolution, so precision is the Chains' block time.
+// resolution, so precision is the Chains' block time. A failed read skips the
+// packets that need it and is returned alongside the other packets' samples.
 func relayLatencies(
 	ctx context.Context,
 	source, destination chainReader,
@@ -59,20 +60,18 @@ func relayLatencies(
 			return receipt.BlockNumber.Uint64(), nil
 		}
 	}
-	recvBlocks, err := fetchAll(ctx, recvTxs, inclusionBlock(destination))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	ackBlocks, err := fetchAll(ctx, ackTxs, inclusionBlock(source))
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	recvBlocks, recvErr := fetchAll(ctx, recvTxs, inclusionBlock(destination))
+	ackBlocks, ackErr := fetchAll(ctx, ackTxs, inclusionBlock(source))
 
 	sourceBlocks, destinationBlocks := map[uint64]struct{}{}, map[uint64]struct{}{}
 	for _, p := range succeeded {
 		sourceBlocks[p.sendBlock] = struct{}{}
-		sourceBlocks[ackBlocks[p.status.GetAckTx().GetTxHash()]] = struct{}{}
-		destinationBlocks[recvBlocks[p.status.GetRecvTx().GetTxHash()]] = struct{}{}
+		if block, ok := ackBlocks[p.status.GetAckTx().GetTxHash()]; ok {
+			sourceBlocks[block] = struct{}{}
+		}
+		if block, ok := recvBlocks[p.status.GetRecvTx().GetTxHash()]; ok {
+			destinationBlocks[block] = struct{}{}
+		}
 	}
 	blockTime := func(chain chainReader) func(context.Context, uint64) (time.Time, error) {
 		return func(ctx context.Context, number uint64) (time.Time, error) {
@@ -83,48 +82,62 @@ func relayLatencies(
 			return time.Unix(int64(header.Time), 0), nil
 		}
 	}
-	sourceTimes, err := fetchAll(ctx, sourceBlocks, blockTime(source))
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	destinationTimes, err := fetchAll(ctx, destinationBlocks, blockTime(destination))
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	sourceTimes, sourceErr := fetchAll(ctx, sourceBlocks, blockTime(source))
+	destinationTimes, destinationErr := fetchAll(ctx, destinationBlocks, blockTime(destination))
 
 	for _, p := range succeeded {
-		sent := sourceTimes[p.sendBlock]
-		received := destinationTimes[recvBlocks[p.status.GetRecvTx().GetTxHash()]]
-		acked := sourceTimes[ackBlocks[p.status.GetAckTx().GetTxHash()]]
+		sent, sentOK := sourceTimes[p.sendBlock]
+		received, receivedOK := timeOf(destinationTimes, recvBlocks, p.status.GetRecvTx().GetTxHash())
+		acked, ackedOK := timeOf(sourceTimes, ackBlocks, p.status.GetAckTx().GetTxHash())
+		if !sentOK || !receivedOK || !ackedOK {
+			continue
+		}
 		sendToRecv = append(sendToRecv, max(0, received.Sub(sent)))
 		recvToAck = append(recvToAck, max(0, acked.Sub(received)))
 		sendToAck = append(sendToAck, max(0, acked.Sub(sent)))
 	}
-	return sendToRecv, recvToAck, sendToAck, nil
+	return sendToRecv, recvToAck, sendToAck, errors.Join(recvErr, ackErr, sourceErr, destinationErr)
 }
 
-// fetchAll fetches every key with bounded concurrency; the first error
-// cancels the rest.
+// timeOf is the timestamp of the block that included the transaction hash.
+func timeOf(times map[uint64]time.Time, blocks map[string]uint64, hash string) (time.Time, bool) {
+	block, ok := blocks[hash]
+	if !ok {
+		return time.Time{}, false
+	}
+	at, ok := times[block]
+	return at, ok
+}
+
+// fetchAll fetches every key with bounded concurrency. It returns the values
+// fetched and the first error; a failed key is absent from the values.
 func fetchAll[K comparable, V any](
 	ctx context.Context,
 	keys map[K]struct{},
 	fetch func(context.Context, K) (V, error),
 ) (map[K]V, error) {
-	group, ctx := errgroup.WithContext(ctx)
-	group.SetLimit(latencyFetchers)
-	var mu sync.Mutex
-	values := make(map[K]V, len(keys))
+	var (
+		mu       sync.Mutex
+		values   = make(map[K]V, len(keys))
+		firstErr error
+		fetchers sync.WaitGroup
+	)
+	slots := make(chan struct{}, latencyFetchers)
 	for key := range keys {
-		group.Go(func() error {
+		slots <- struct{}{}
+		fetchers.Go(func() {
+			defer func() { <-slots }()
 			value, err := fetch(ctx, key)
-			if err != nil {
-				return err
-			}
 			mu.Lock()
-			values[key] = value
-			mu.Unlock()
-			return nil
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				values[key] = value
+			case firstErr == nil:
+				firstErr = err
+			}
 		})
 	}
-	return values, group.Wait()
+	fetchers.Wait()
+	return values, firstErr
 }

@@ -16,12 +16,11 @@ import (
 	"math/big"
 	"math/rand/v2"
 	"net/http"
+	"slices"
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
 	attestoribc "github.com/cosmos/ibc/cli/attestor/evm/ibc"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -43,7 +42,8 @@ const (
 type Config struct {
 	Packets simpleload.Spec
 	State   simpleload.Spec
-	// Phases selects which of PhasePackets and PhaseState run, in order.
+	// Phases selects which of PhasePackets and PhaseState run; packets
+	// runs first.
 	Phases []string
 	// MaxErrorRate is the largest share of sent calls that may fail or time
 	// out in a phase that passes.
@@ -69,10 +69,13 @@ type Report struct {
 	Phases       []*PhaseReport `json:"phases"`
 }
 
-// SessionOptions adds what the scenario needs to base: the A-to-B route's
-// applications, and no relayer.
-func SessionOptions(base session.Options) session.Options {
-	base.Routes = []traffic.Route{traffic.AtoB(traffic.ChainA, traffic.ChainB)}
+// SessionOptions adds what cfg needs to base: the A-to-B route's applications
+// when the packets phase seeds packets, and no relayer.
+func SessionOptions(base session.Options, cfg Config) session.Options {
+	base.Routes = nil
+	if slices.Contains(cfg.Phases, PhasePackets) {
+		base.Routes = []traffic.Route{traffic.AtoB(traffic.ChainA, traffic.ChainB)}
+	}
 	base.StartRelayer = false
 	return base
 }
@@ -84,7 +87,9 @@ type attestablePacket struct {
 
 // Run runs the selected phases, writes the report to w, and returns nil only
 // if every phase passed: at least one call succeeded and failed plus timed-out
-// calls stayed within MaxErrorRate of those sent.
+// calls stayed within MaxErrorRate of those sent. A phase that cannot start,
+// or an interruption, ends the run; the report still covers the phases that
+// completed.
 func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error {
 	// The Client on chain B tracks chain A, so its Attestor observes chain A.
 	attestor, err := s.Env.Attestor(traffic.MeshAttestorFor(traffic.ChainB, traffic.ChainA))
@@ -110,32 +115,10 @@ func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error
 	}
 	var errs []error
 	for _, phase := range cfg.Phases {
-		var spec simpleload.Spec
-		var call simpleload.Call
-		switch phase {
-		case PhasePackets:
-			packets, seedErr := seed(ctx, s, attestor)
-			if seedErr != nil {
-				return seedErr
-			}
-			spec, call = cfg.Packets, packetCall(rpc, name, packets)
-		case PhaseState:
-			latest, heightErr := attestor.LatestHeight(ctx)
-			if heightErr != nil {
-				return fmt.Errorf("attestor latest height: %w", heightErr)
-			}
-			if latest == 0 {
-				return errors.New("attestor reports no attestable height")
-			}
-			spec, call = cfg.State, stateCall(rpc, name, latest)
-		default:
-			return fmt.Errorf("unknown phase %q", phase)
-		}
-		slog.InfoContext(ctx, "attestor load phase", "phase", phase, "duration", spec.Duration,
-			"rps", spec.RatePerSecond, "concurrency", spec.Concurrency)
-		result := simpleload.SimpleLoad(ctx, spec, call)
-		if ctx.Err() != nil {
-			return ctx.Err()
+		result, phaseErr := runPhase(ctx, s, attestor, rpc, name, phase, cfg)
+		if phaseErr != nil {
+			errs = append(errs, phaseErr)
+			break
 		}
 		errored := result.Failed + result.TimedOut
 		p := &PhaseReport{
@@ -157,6 +140,46 @@ func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error
 	return errors.Join(err, report.write(w, cfg.JSON))
 }
 
+// runPhase prepares phase and offers its load. It fails if the phase cannot
+// start or ctx ends.
+func runPhase(
+	ctx context.Context,
+	s *session.Session,
+	attestor *environment.Attestor,
+	rpc attestorv2.AttestationServiceClient,
+	name, phase string,
+	cfg Config,
+) (simpleload.Result, error) {
+	var spec simpleload.Spec
+	var call simpleload.Call
+	switch phase {
+	case PhasePackets:
+		packets, err := seed(ctx, s, attestor)
+		if err != nil {
+			return simpleload.Result{}, err
+		}
+		spec, call = cfg.Packets, packetCall(rpc, name, packets)
+	case PhaseState:
+		latest, err := attestor.LatestHeight(ctx)
+		if err != nil {
+			return simpleload.Result{}, fmt.Errorf("attestor latest height: %w", err)
+		}
+		if latest == 0 {
+			return simpleload.Result{}, errors.New("attestor reports no attestable height")
+		}
+		spec, call = cfg.State, stateCall(rpc, name, latest)
+	default:
+		return simpleload.Result{}, fmt.Errorf("unknown phase %q", phase)
+	}
+	slog.InfoContext(ctx, "attestor load phase", "phase", phase, "duration", spec.Duration,
+		"rps", spec.RatePerSecond, "concurrency", spec.Concurrency)
+	result := simpleload.SimpleLoad(ctx, spec, call)
+	if err := ctx.Err(); err != nil {
+		return simpleload.Result{}, fmt.Errorf("%s: %w", phase, err)
+	}
+	return result, nil
+}
+
 func (r *Report) write(w io.Writer, asJSON bool) error {
 	var out bytes.Buffer
 	if asJSON {
@@ -173,8 +196,8 @@ func (r *Report) write(w io.Writer, asJSON bool) error {
 		fmt.Fprintf(&out, "\nAttestor load: %s (%s, attestor %s, max error rate %g)\n",
 			verdict, r.Provider, r.Attestor, r.MaxErrorRate)
 		for _, p := range r.Phases {
-			fmt.Fprintf(&out, "\n[%s] %s at %d rps, %d callers\n", p.Phase,
-				time.Duration(p.DurationMS)*time.Millisecond, p.RatePerSecond, p.Concurrency)
+			fmt.Fprintf(&out, "\n[%s] %s: achieved %.1f of %d rps offered, %d callers\n", p.Phase,
+				time.Duration(p.DurationMS)*time.Millisecond, p.AchievedRPS, p.RatePerSecond, p.Concurrency)
 			fmt.Fprintf(&out, "  calls:   offered=%d sent=%d dropped=%d succeeded=%d failed=%d timed_out=%d\n",
 				p.Offered, p.Sent, p.Dropped, p.Succeeded, p.Failed, p.TimedOut)
 			fmt.Fprintf(&out, "  latency: %s\n", p.Latency)
@@ -218,7 +241,7 @@ func seed(ctx context.Context, s *session.Session, attestor *environment.Attesto
 	height := batch.Receipt().BlockNumber.Uint64()
 	packets := make([]attestablePacket, len(sent))
 	for i, packet := range sent {
-		encoded, err := attestoribc.EncodePacket(routerPacket(packet))
+		encoded, err := attestoribc.EncodeRouterPacket(packet)
 		if err != nil {
 			return nil, fmt.Errorf("encode packet %d: %w", packet.Sequence, err)
 		}
@@ -260,26 +283,6 @@ func awaitAttestable(
 				latest, height, ctx.Err()), err)
 		case <-ticker.C:
 		}
-	}
-}
-
-func routerPacket(p ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
-	payloads := make([]channeltypesv2.Payload, len(p.Payloads))
-	for i, item := range p.Payloads {
-		payloads[i] = channeltypesv2.Payload{
-			SourcePort:      item.SourcePort,
-			DestinationPort: item.DestPort,
-			Version:         item.Version,
-			Encoding:        item.Encoding,
-			Value:           item.Value,
-		}
-	}
-	return channeltypesv2.Packet{
-		Sequence:          p.Sequence,
-		SourceClient:      p.SourceClient,
-		DestinationClient: p.DestClient,
-		TimeoutTimestamp:  p.TimeoutTimestamp,
-		Payloads:          payloads,
 	}
 }
 

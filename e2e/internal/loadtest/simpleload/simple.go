@@ -36,10 +36,13 @@ type Result struct {
 	Offered int64 `json:"offered"`
 	Sent    int64 `json:"sent"`
 	// Dropped slots found every caller busy.
-	Dropped   int64 `json:"dropped"`
-	Succeeded int64 `json:"succeeded"`
-	Failed    int64 `json:"failed"`
-	TimedOut  int64 `json:"timed_out"`
+	Dropped int64 `json:"dropped"`
+	// AchievedRPS is the calls sent per second of the phase: the rate that
+	// reached the service, at most RatePerSecond.
+	AchievedRPS float64 `json:"achieved_rps"`
+	Succeeded   int64   `json:"succeeded"`
+	Failed      int64   `json:"failed"`
+	TimedOut    int64   `json:"timed_out"`
 	// Latency summarizes the succeeded calls.
 	Latency    stats.Summary `json:"latency"`
 	FirstError string        `json:"first_error,omitempty"`
@@ -97,6 +100,7 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 	}
 	wg.Wait()
 	result.Offered = result.Sent + result.Dropped
+	result.AchievedRPS = float64(result.Sent) / spec.Duration.Seconds()
 	result.Latency = stats.Summarize(latencies)
 	return result
 }

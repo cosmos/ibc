@@ -28,19 +28,21 @@ type Options struct {
 	// Observability exports OTel telemetry from every managed IBC CLI process
 	// (attestors and the relayer) to the local LGTM stack.
 	Observability bool
-	// Routes the applications are deployed for and the relayer serves.
+	// Routes the applications are deployed for and the relayer serves. With
+	// none, nothing is deployed.
 	Routes []traffic.Route
 	// ConfigureRelayer adjusts the generated relayer configuration.
 	ConfigureRelayer func(*ibccli.RelayerConfig)
-	// StartRelayer starts the relayer after deployment. Without it the
-	// relayer configuration is written but no relayer runs.
+	// StartRelayer configures and starts a relayer for Routes. Without it
+	// only the applications are deployed.
 	StartRelayer bool
 }
 
 // Session holds every resource a scenario uses. Close releases them.
 type Session struct {
-	Provider   environment.EVMProvider
-	Env        *environment.Environment
+	Provider environment.EVMProvider
+	Env      *environment.Environment
+	// Deployment is nil when Options.Routes is empty.
 	Deployment *traffic.Deployment
 	// Relayer is nil unless Options.StartRelayer.
 	Relayer *ibccli.Relayer
@@ -50,10 +52,11 @@ type Session struct {
 	dir string
 }
 
-// Start realizes the environment, deploys the applications and relayer
-// configuration for opts.Routes, and starts the relayer if asked. On error
-// every resource acquired so far is released.
-func Start(ctx context.Context, opts Options) (_ *Session, err error) {
+// Start realizes the environment, deploys the applications for opts.Routes,
+// and configures and starts the relayer if asked. On error it returns the
+// session built so far, which the caller closes or keeps for inspection; the
+// session is nil only if nothing was acquired.
+func Start(ctx context.Context, opts Options) (*Session, error) {
 	chains, err := environment.ManagedEVMChains(opts.Provider, traffic.ChainA, traffic.ChainB)
 	if err != nil {
 		return nil, err
@@ -66,45 +69,48 @@ func Start(ctx context.Context, opts Options) (_ *Session, err error) {
 		return nil, fmt.Errorf("create deployment directory: %w", err)
 	}
 	s := &Session{Provider: opts.Provider, dir: dir}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, s.Close(ctx))
-		}
-	}()
 
 	started := time.Now()
 	slog.InfoContext(ctx, "starting environment", "provider", opts.Provider, "observability", opts.Observability)
 	s.Env, err = environment.Start(ctx, spec, runtime)
 	if err != nil {
-		return nil, fmt.Errorf("start environment: %w", err)
+		return s, fmt.Errorf("start environment: %w", err)
 	}
 	slog.InfoContext(ctx, "environment started", "run_id", s.Env.RunID(), "elapsed", since(started))
 
 	s.Deployer, err = traffic.NewSigner()
 	if err != nil {
-		return nil, err
+		return s, err
 	}
-	relayerSigner, err := traffic.NewSigner()
-	if err != nil {
-		return nil, err
+	if len(opts.Routes) == 0 {
+		return s, nil
 	}
 
 	started = time.Now()
-	driver, deployment, err := traffic.DeployWithRelayerConfig(
+	if !opts.StartRelayer {
+		s.Deployment, err = traffic.DeployApps(ctx, s.Env, s.Deployer, opts.Routes...)
+		if err != nil {
+			return s, fmt.Errorf("deploy: %w", err)
+		}
+		slog.InfoContext(ctx, "applications deployed", "elapsed", since(started))
+		return s, nil
+	}
+	relayerSigner, err := traffic.NewSigner()
+	if err != nil {
+		return s, err
+	}
+	driver, deployment, err := traffic.Deploy(
 		ctx, s.Env, dir, s.Deployer, relayerSigner, opts.ConfigureRelayer, opts.Routes...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("deploy: %w", err)
+		return s, fmt.Errorf("deploy: %w", err)
 	}
 	s.Deployment = deployment
 	slog.InfoContext(ctx, "applications deployed", "dir", dir, "elapsed", since(started))
 
-	if !opts.StartRelayer {
-		return s, nil
-	}
 	s.Relayer, err = traffic.StartRelayer(ctx, driver, s.Env)
 	if err != nil {
-		return nil, fmt.Errorf("start relayer: %w", err)
+		return s, fmt.Errorf("start relayer: %w", err)
 	}
 	slog.InfoContext(ctx, "relayer started", "http", s.Relayer.Ready().HTTP)
 	return s, nil

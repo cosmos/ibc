@@ -146,7 +146,8 @@ func TestBlockCounts(t *testing.T) {
 	assert.Equal(t, []int{0, 0, 0, 0, 0}, []int{blocks, span, low, median, high})
 }
 
-// The sender waits for its receipt; a canceled run must not leave senders behind.
+// The sender waits for its receipt; a canceled run must not leave senders
+// behind, nor count the interrupted transfers as failures.
 func TestGenerateStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	var once sync.Once
@@ -158,4 +159,5 @@ func TestGenerateStopsOnCancel(t *testing.T) {
 	r := &DirectionReport{Route: "test", Target: 10}
 	generate(ctx, fakeTicks(t, time.Millisecond), 2, 2, send, make(chan sentPacket, 10), r)
 	assert.Zero(t, r.Sent)
+	assert.Zero(t, r.SendFailures)
 }

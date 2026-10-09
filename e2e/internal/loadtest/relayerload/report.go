@@ -25,7 +25,7 @@ type DirectionReport struct {
 	SendFailures int `json:"send_failures"`
 	Backpressure int `json:"backpressure"`
 	Ticks        int `json:"ticks"`
-	// SendPhaseMS runs from the first submission to the last receipt.
+	// SendPhaseMS runs from the first offered send to the last receipt.
 	SendPhaseMS int64 `json:"send_phase_ms"`
 	// SubmitToReceipt is wall clock from submitting a transfer to holding
 	// its receipt.
@@ -50,6 +50,9 @@ type DirectionReport struct {
 	SendToRecv stats.Summary `json:"send_to_recv"`
 	RecvToAck  stats.Summary `json:"recv_to_ack"`
 	SendToAck  stats.Summary `json:"send_to_ack"`
+	// LatencyError is the first failed chain read of the latency
+	// measurement; the packets that needed it have no samples.
+	LatencyError string `json:"latency_error,omitempty"`
 
 	lastSend  time.Time
 	relayDone time.Time
@@ -108,6 +111,9 @@ func (r *Report) text(out *bytes.Buffer) {
 		fmt.Fprintf(out, "  send->recv  (block time):     %s\n", d.SendToRecv)
 		fmt.Fprintf(out, "  recv->ack   (block time):     %s\n", d.RecvToAck)
 		fmt.Fprintf(out, "  send->ack   (block time):     %s\n", d.SendToAck)
+		if d.LatencyError != "" {
+			fmt.Fprintf(out, "  latency error: %s\n", d.LatencyError)
+		}
 	}
 	fmt.Fprintf(out, "\nRelay latencies come from block timestamps, so their precision is one block.\n")
 	if r.Error != "" {

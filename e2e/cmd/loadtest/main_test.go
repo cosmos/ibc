@@ -12,11 +12,10 @@ import (
 // Invalid values are rejected at parse time, before any environment starts.
 func TestRejectsInvalidFlags(t *testing.T) {
 	for name, args := range map[string][]string{
-		"one wallet":         {"relayer", "--wallets", "1"},
+		"zero wallets":       {"relayer", "--wallets", "0"},
 		"zero per-block":     {"relayer", "--per-block", "0"},
 		"zero packets":       {"relayer", "--packets", "0"},
 		"bad direction":      {"relayer", "--directions", "up"},
-		"bad preset":         {"relayer", "--preset", "huge"},
 		"stray argument":     {"relayer", "extra"},
 		"zero timeout":       {"relayer", "--timeout", "0s"},
 		"zero rps":           {"attestor", "--packets-rps", "0"},

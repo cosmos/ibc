@@ -43,57 +43,51 @@ type listFunc func(ctx context.Context) ([]*relayerv2.PacketStatus, error)
 
 // sweep tracks every packet from sent and, every poll, lists the relayer's
 // statuses and records those of tracked packets. It returns once sent is
-// closed and every tracked packet is terminal, or at the deadline: the last
-// sent packet's arrival plus budget once per batchSize packets tracked,
-// because under load a packet can queue behind every relayer batch ahead of
-// it. The deadline arms only once sent closes. Packets still non-terminal
-// when sweep returns are unresolved.
+// closed and every tracked packet is terminal. It gives up when relaying
+// stalls, no packet sent and none newly terminal for stall, or when ctx ends.
+// Packets still non-terminal when sweep returns are unresolved.
 func sweep(
 	ctx context.Context,
 	label string,
-	poll, budget time.Duration,
-	batchSize int,
+	poll, stall time.Duration,
 	list listFunc,
 	sent <-chan sentPacket,
 ) ([]*trackedPacket, error) {
 	var (
-		tracked  = map[packetKey]*trackedPacket{}
-		order    []*trackedPacket
-		lastSend = time.Now()
-		deadline <-chan time.Time
-		listErr  error
-		logged   = time.Now()
+		tracked = map[packetKey]*trackedPacket{}
+		order   []*trackedPacket
+		settled int
+		listErr error
+		logged  = time.Now()
 	)
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
+	stalled := time.NewTimer(stall)
+	defer stalled.Stop()
+	// unresolved explains why sweep gave up with packets still in flight.
+	unresolved := func(cause error) error {
+		err := fmt.Errorf("%d of %d packets not terminal: %w", len(order)-settled, len(order), cause)
+		if listErr != nil {
+			err = fmt.Errorf("%w (last listing error: %w)", err, listErr)
+		}
+		return err
+	}
 	for {
 		select {
 		case <-ctx.Done():
-			return order, ctx.Err()
+			return order, unresolved(ctx.Err())
 		case packet, ok := <-sent:
 			if !ok {
 				sent = nil
-				batches := max(1, (len(order)+batchSize-1)/batchSize)
-				deadline = time.After(time.Until(lastSend.Add(budget * time.Duration(batches))))
 				continue
 			}
 			p := &trackedPacket{key: packet.key, sendBlock: packet.block}
 			tracked[packet.key] = p
 			order = append(order, p)
-			lastSend = time.Now()
+			stalled.Reset(stall)
 			continue
-		case <-deadline:
-			unresolved := 0
-			for _, p := range order {
-				if !p.terminal() {
-					unresolved++
-				}
-			}
-			err := fmt.Errorf("%d of %d packets not terminal by the relay deadline", unresolved, len(order))
-			if listErr != nil {
-				err = fmt.Errorf("%w (last listing error: %w)", err, listErr)
-			}
-			return order, err
+		case <-stalled.C:
+			return order, unresolved(fmt.Errorf("no relay progress for %s", stall))
 		case <-ticker.C:
 		}
 
@@ -109,11 +103,15 @@ func sweep(
 				p.status = status
 			}
 		}
-		settled := 0
+		terminal := 0
 		for _, p := range order {
 			if p.terminal() {
-				settled++
+				terminal++
 			}
+		}
+		if terminal > settled {
+			settled = terminal
+			stalled.Reset(stall)
 		}
 		if sent == nil && settled == len(order) {
 			return order, nil

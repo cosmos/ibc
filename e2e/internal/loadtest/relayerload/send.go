@@ -55,13 +55,17 @@ func generate(
 		mu        sync.Mutex
 		samples   []time.Duration
 		perBlocks = map[uint64]int{}
-		firstSend time.Time
+		started   = time.Now()
 	)
 	record := func(packet sentPacket, submitted time.Time, err error) {
 		now := time.Now()
 		mu.Lock()
 		defer mu.Unlock()
-		if err != nil {
+		switch {
+		case err != nil && ctx.Err() != nil:
+			// Interrupted, not a failed transfer.
+			return
+		case err != nil:
 			r.SendFailures++
 			slog.WarnContext(ctx, "transfer failed; retiring wallet", "direction", r.Route, "err", err)
 			return
@@ -69,9 +73,6 @@ func generate(
 		r.Sent++
 		samples = append(samples, now.Sub(submitted))
 		perBlocks[packet.block]++
-		if firstSend.IsZero() {
-			firstSend = submitted
-		}
 		r.lastSend = now
 		out <- packet
 	}
@@ -111,8 +112,8 @@ func generate(
 	senders.Wait()
 
 	r.SubmitToReceipt = stats.Summarize(samples)
-	if !firstSend.IsZero() {
-		r.SendPhaseMS = r.lastSend.Sub(firstSend).Milliseconds()
+	if !r.lastSend.IsZero() {
+		r.SendPhaseMS = r.lastSend.Sub(started).Milliseconds()
 	}
 	r.BlocksWithTxs, r.BlockSpan, r.PerBlockMin, r.PerBlockP50, r.PerBlockMax = blockCounts(perBlocks)
 }

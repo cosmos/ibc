@@ -79,7 +79,7 @@ func TestSweepEndsWhenEveryPacketIsTerminal(t *testing.T) {
 		sentPacket{key: packetKey{"client-0", 2}, block: 8},
 	)
 
-	packets, err := sweep(t.Context(), "test", time.Millisecond, time.Minute, 64, relayer.list, sent)
+	packets, err := sweep(t.Context(), "test", time.Millisecond, time.Minute, relayer.list, sent)
 
 	require.NoError(t, err)
 	require.Len(t, packets, 2)
@@ -95,7 +95,7 @@ func TestSweepWaitsForSendingToFinish(t *testing.T) {
 	sent <- sentPacket{key: packetKey{"client-0", 1}}
 	done := make(chan []*trackedPacket)
 	go func() {
-		packets, _ := sweep(t.Context(), "test", time.Millisecond, time.Minute, 64, relayer.list, sent)
+		packets, _ := sweep(t.Context(), "test", time.Millisecond, time.Minute, relayer.list, sent)
 		done <- packets
 	}()
 	time.Sleep(20 * time.Millisecond)
@@ -109,22 +109,32 @@ func TestSweepWaitsForSendingToFinish(t *testing.T) {
 	assert.Len(t, <-done, 2)
 }
 
-func TestSweepGivesUpAtTheDeadline(t *testing.T) {
-	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {succeeded}, 2: {pending}}}
-	// Three packets at a batch size of two: two batches of a 20ms budget.
+func TestSweepGivesUpWhenRelayingStalls(t *testing.T) {
+	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {pending, succeeded}, 2: {pending}}}
 	sent := sendAll(
 		sentPacket{key: packetKey{"client-0", 1}},
 		sentPacket{key: packetKey{"client-0", 2}},
 		sentPacket{key: packetKey{"client-0", 3}},
 	)
-	started := time.Now()
 
-	packets, err := sweep(t.Context(), "test", time.Millisecond, 20*time.Millisecond, 2, relayer.list, sent)
+	packets, err := sweep(t.Context(), "test", time.Millisecond, 20*time.Millisecond, relayer.list, sent)
 
-	require.ErrorContains(t, err, "2 of 3 packets not terminal")
-	assert.GreaterOrEqual(t, time.Since(started), 40*time.Millisecond)
-	assert.Nil(t, packets[2].status, "never listed")
+	require.ErrorContains(t, err, "2 of 3 packets not terminal: no relay progress for 20ms")
+	assert.Equal(t, succeeded, packets[0].state(), "progress before the stall is kept")
 	assert.False(t, packets[1].terminal())
+	assert.Nil(t, packets[2].status, "never listed")
+}
+
+func TestSweepExplainsAnInterruption(t *testing.T) {
+	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {pending}}}
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := sweep(ctx, "test", time.Millisecond, time.Minute, relayer.list,
+		sendAll(sentPacket{key: packetKey{"client-0", 1}}))
+
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorContains(t, err, "1 of 1 packets not terminal")
 }
 
 // fakeChain serves receipts and headers from maps.
@@ -188,13 +198,33 @@ func TestRelayLatencies(t *testing.T) {
 	assert.Equal(t, 1+1, destination.reads)
 }
 
-func TestRelayLatenciesReportsFetchErrors(t *testing.T) {
-	packets := []*trackedPacket{{status: &relayerv2.PacketStatus{
-		State: succeeded, RecvTx: &relayerv2.TransactionInfo{TxHash: "0x01"},
-		AckTx: &relayerv2.TransactionInfo{TxHash: "0x02"},
-	}}}
-	_, _, _, err := relayLatencies(t.Context(), &fakeChain{}, &fakeChain{}, packets)
+func TestRelayLatenciesSkipsPacketsWithFailedReads(t *testing.T) {
+	status := func(recv string) *relayerv2.PacketStatus {
+		return &relayerv2.PacketStatus{
+			State:  succeeded,
+			RecvTx: &relayerv2.TransactionInfo{TxHash: recv},
+			AckTx:  &relayerv2.TransactionInfo{TxHash: "0xa1"},
+		}
+	}
+	source := &fakeChain{
+		blocks: map[common.Hash]uint64{common.HexToHash("0xa1"): 20},
+		times:  map[uint64]uint64{10: 1000, 20: 1010},
+	}
+	destination := &fakeChain{
+		blocks: map[common.Hash]uint64{common.HexToHash("0xb1"): 5},
+		times:  map[uint64]uint64{5: 1004},
+	}
+	packets := []*trackedPacket{
+		{sendBlock: 10, status: status("0xb1")},
+		// Its receive receipt is missing.
+		{sendBlock: 10, status: status("0xdead")},
+	}
+
+	sendToRecv, _, sendToAck, err := relayLatencies(t.Context(), source, destination, packets)
+
 	require.ErrorContains(t, err, "not found")
+	assert.Equal(t, []time.Duration{4 * time.Second}, sendToRecv, "the other packet is still measured")
+	assert.Equal(t, []time.Duration{10 * time.Second}, sendToAck)
 }
 
 func TestReportJSONAndText(t *testing.T) {
@@ -225,6 +255,6 @@ func TestReportJSONAndText(t *testing.T) {
 	assert.Contains(t, text,
 		"Relayer load: FAIL (anvil, 4 wallets, 2 per block interval): 10 packets in 5s, 2.0 packets/s")
 	assert.Contains(t, text, "[a-to-b] chain-a -> chain-b")
-	assert.Contains(t, text, "send->recv  (block time):     n=1 p50=1s")
+	assert.Regexp(t, `send->recv +\(block time\): +n=1 p50=1s`, text)
 	assert.Contains(t, text, "b-to-a: sent 4 of 5 packets")
 }

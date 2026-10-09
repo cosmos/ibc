@@ -28,6 +28,7 @@ func TestSimpleLoad(t *testing.T) {
 		assert.Equal(t, result.Sent, result.Succeeded)
 		assert.Equal(t, result.Sent+result.Dropped, result.Offered)
 		assert.InDelta(t, 50, result.Offered, 6, "100 rps for 0.5s")
+		assert.InDelta(t, float64(result.Sent)*2, result.AchievedRPS, 0.001)
 		assert.Zero(t, result.Dropped)
 		assert.Equal(t, int(result.Succeeded), result.Latency.Count)
 	})
