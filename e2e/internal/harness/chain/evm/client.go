@@ -118,6 +118,13 @@ type EVMClient struct {
 	txGatesMu sync.Mutex
 	txGates   map[common.Address]chan struct{}
 
+	// nonceFloors holds, per account, one past the highest nonce whose
+	// transaction this client saw included. A node can briefly report an
+	// older pending nonce right after the inclusion (Besu once did); the
+	// floor keeps it from being reused.
+	nonceMu     sync.Mutex
+	nonceFloors map[common.Address]uint64
+
 	// The last fee reading, shared by concurrent senders for feeMaxAge.
 	feeMu      sync.Mutex
 	feeRead    time.Time
@@ -213,6 +220,8 @@ func (e *EVMClient) BroadcastTx(
 	if err != nil {
 		return nil, err
 	}
+	// Included, so its nonce is spent, even if it reverted.
+	e.raiseNonceFloor(from.addr, signed.Nonce()+1)
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		return nil, fmt.Errorf("tx %s reverted on-chain (status %d)", signed.Hash(), receipt.Status)
 	}
@@ -259,7 +268,7 @@ func (e *EVMClient) signAndSend(
 		return nil, err
 	}
 	if err := e.send(ctx, wait, signed); err != nil {
-		return nil, fmt.Errorf("send tx: %w", err)
+		return nil, fmt.Errorf("send tx with nonce %d (%s): %w", signed.Nonce(), e.nonceEvidence(ctx, from.addr), err)
 	}
 	return signed, nil
 }
@@ -319,6 +328,7 @@ func (e *EVMClient) buildSignedTx(
 	if err != nil {
 		return nil, fmt.Errorf("pending nonce: %w", err)
 	}
+	nonce = max(nonce, e.nonceFloor(from.addr))
 
 	val := new(big.Int)
 	if value != nil {
@@ -367,6 +377,38 @@ func (e *EVMClient) buildSignedTx(
 		return nil, fmt.Errorf("sign tx: %w", err)
 	}
 	return signed, nil
+}
+
+func (e *EVMClient) nonceFloor(account common.Address) uint64 {
+	e.nonceMu.Lock()
+	defer e.nonceMu.Unlock()
+	return e.nonceFloors[account]
+}
+
+// raiseNonceFloor only raises: receipts of one account's transactions can
+// arrive out of order.
+func (e *EVMClient) raiseNonceFloor(account common.Address, floor uint64) {
+	e.nonceMu.Lock()
+	defer e.nonceMu.Unlock()
+	if e.nonceFloors == nil {
+		e.nonceFloors = map[common.Address]uint64{}
+	}
+	e.nonceFloors[account] = max(e.nonceFloors[account], floor)
+}
+
+// nonceEvidence describes the node's view of account's nonce now, so a
+// refused send shows whether the nonce it used was stale.
+func (e *EVMClient) nonceEvidence(ctx context.Context, account common.Address) string {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	pending, pendingErr := e.client.PendingNonceAt(ctx, account)
+	latest, latestErr := e.client.NonceAt(ctx, account, nil)
+	head, headErr := e.client.BlockNumber(ctx)
+	if err := errors.Join(pendingErr, latestErr, headErr); err != nil {
+		return fmt.Sprintf("node nonce unknown: %v", err)
+	}
+	return fmt.Sprintf("floor %d; node now: pending nonce %d, latest nonce %d at block %d",
+		e.nonceFloor(account), pending, latest, head)
 }
 
 // fees returns the tip and the latest base fee (nil before EIP-1559), read at

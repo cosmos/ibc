@@ -31,18 +31,28 @@ type fakeNode struct {
 	mu      sync.Mutex
 	scripts map[string][]reply
 	calls   map[string]int
+	// sentNonces are the nonces of the raw transactions sent, in order.
+	sentNonces []uint64
 }
 
 func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID     json.RawMessage `json:"id"`
-		Method string          `json:"method"`
+		ID     json.RawMessage   `json:"id"`
+		Method string            `json:"method"`
+		Params []json.RawMessage `json:"params"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	n.mu.Lock()
+	if req.Method == "eth_sendRawTransaction" && len(req.Params) == 1 {
+		var raw string
+		var tx types.Transaction
+		if json.Unmarshal(req.Params[0], &raw) == nil && tx.UnmarshalBinary(common.FromHex(raw)) == nil {
+			n.sentNonces = append(n.sentNonces, tx.Nonce())
+		}
+	}
 	script := n.scripts[req.Method]
 	call := n.calls[req.Method]
 	n.calls[req.Method]++
@@ -115,8 +125,13 @@ func broadcast(t *testing.T, client *EVMClient) error {
 	t.Helper()
 	from, err := NewAccount()
 	require.NoError(t, err)
+	return broadcastFrom(t, client, from)
+}
+
+func broadcastFrom(t *testing.T, client *EVMClient, from Account) error {
+	t.Helper()
 	to := common.HexToAddress("0x02")
-	_, err = client.BroadcastTx(t.Context(), testWait, from, &to, nil, nil)
+	_, err := client.BroadcastTx(t.Context(), testWait, from, &to, nil, nil)
 	return err
 }
 
@@ -185,4 +200,40 @@ func receiptReply(t *testing.T) reply {
 	})
 	require.NoError(t, err)
 	return reply{result: json.RawMessage(receipt)}
+}
+
+func TestBroadcastTxNeverReusesAnIncludedNonce(t *testing.T) {
+	// The node keeps reporting nonce 0, as a stale pending read would.
+	reverted, err := json.Marshal(&types.Receipt{
+		Status: types.ReceiptStatusFailed, TxHash: common.HexToHash("0x01"), Logs: []*types.Log{},
+	})
+	require.NoError(t, err)
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionReceipt": {receiptReply(t), {result: json.RawMessage(reverted)}, receiptReply(t)},
+	})
+	from, err := NewAccount()
+	require.NoError(t, err)
+
+	require.NoError(t, broadcastFrom(t, client, from))
+	require.ErrorContains(t, broadcastFrom(t, client, from), "reverted")
+	require.NoError(t, broadcastFrom(t, client, from))
+	require.NoError(t, broadcast(t, client), "another account has its own floor")
+
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	assert.Equal(t, []uint64{0, 1, 2, 0}, node.sentNonces, "a reverted transaction spends its nonce too")
+}
+
+func TestBroadcastTxRefusalReportsTheNodesNonce(t *testing.T) {
+	_, client := newFakeNode(t, map[string][]reply{
+		"eth_sendRawTransaction":  {{nodeErr: "Nonce too low"}},
+		"eth_getTransactionCount": {{result: "0x3"}},
+		"eth_blockNumber":         {{result: "0x9"}},
+	})
+
+	err := broadcast(t, client)
+
+	require.ErrorContains(t, err,
+		"send tx with nonce 3 (floor 0; node now: pending nonce 3, latest nonce 3 at block 9)")
+	require.ErrorContains(t, err, "Nonce too low")
 }
