@@ -104,16 +104,16 @@ func (_c *MockTxSubmitter_HasPending_Call) RunAndReturn(run func(ctx context.Con
 }
 
 // Start provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) Start(ctx context.Context) error {
-	ret := _mock.Called(ctx)
+func (_mock *MockTxSubmitter) Start() error {
+	ret := _mock.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for Start")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) error); ok {
-		r0 = returnFunc(ctx)
+	if returnFunc, ok := ret.Get(0).(func() error); ok {
+		r0 = returnFunc()
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -126,20 +126,13 @@ type MockTxSubmitter_Start_Call struct {
 }
 
 // Start is a helper method to define mock.On call
-//   - ctx context.Context
-func (_e *MockTxSubmitter_Expecter) Start(ctx any) *MockTxSubmitter_Start_Call {
-	return &MockTxSubmitter_Start_Call{Call: _e.mock.On("Start", ctx)}
+func (_e *MockTxSubmitter_Expecter) Start() *MockTxSubmitter_Start_Call {
+	return &MockTxSubmitter_Start_Call{Call: _e.mock.On("Start")}
 }
 
-func (_c *MockTxSubmitter_Start_Call) Run(run func(ctx context.Context)) *MockTxSubmitter_Start_Call {
+func (_c *MockTxSubmitter_Start_Call) Run(run func()) *MockTxSubmitter_Start_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		run(
-			arg0,
-		)
+		run()
 	})
 	return _c
 }
@@ -149,7 +142,7 @@ func (_c *MockTxSubmitter_Start_Call) Return(err error) *MockTxSubmitter_Start_C
 	return _c
 }
 
-func (_c *MockTxSubmitter_Start_Call) RunAndReturn(run func(ctx context.Context) error) *MockTxSubmitter_Start_Call {
+func (_c *MockTxSubmitter_Start_Call) RunAndReturn(run func() error) *MockTxSubmitter_Start_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -52,14 +52,14 @@ func findPacketEventAtOrBeforeHeight(
 	return event, nil
 }
 
-// proofKindFor maps relayKind to the proof claim it requires
-func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
-	switch relayKind {
-	case v2.RelayKindRecv:
+// proofKindFor maps operationType to the proof claim it requires
+func proofKindFor(operationType v2.OperationType) v2.ProofKind {
+	switch operationType {
+	case v2.OperationTypeRecv:
 		return v2.ProofKindPacketCommitment
-	case v2.RelayKindAck:
+	case v2.OperationTypeAck:
 		return v2.ProofKindAcknowledgement
-	case v2.RelayKindTimeout:
+	case v2.OperationTypeTimeout:
 		return v2.ProofKindReceiptAbsence
 	default:
 		return v2.ProofKindUnknown
@@ -78,7 +78,7 @@ func relayPackets(
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,
 	sourceChainID string,
-	relayKind v2.RelayKind,
+	operationType v2.OperationType,
 	proofHeight uint64,
 	events []v2.PacketEvent,
 ) error {
@@ -87,7 +87,16 @@ func relayPackets(
 		sequences[i] = event.Packet.Sequence
 	}
 
-	logger = logger.With("kind", relayKind, "clientID", clientID, "proofHeight", proofHeight, "sequences", sequences)
+	logger = logger.With(
+		"kind",
+		operationType,
+		"clientID",
+		clientID,
+		"proofHeight",
+		proofHeight,
+		"sequences",
+		sequences,
+	)
 	logger.Debug("Relaying packets")
 
 	clientUpdatePayloads, err := prover.ClientUpdatePayloads(ctx, proofHeight)
@@ -97,17 +106,17 @@ func relayPackets(
 
 	packets := make([]channeltypesv2.Packet, len(events))
 	var acknowledgements []channeltypesv2.Acknowledgement
-	if relayKind == v2.RelayKindAck {
+	if operationType == v2.OperationTypeAck {
 		acknowledgements = make([]channeltypesv2.Acknowledgement, len(events))
 	}
 	for i, event := range events {
 		packets[i] = event.Packet
-		if relayKind == v2.RelayKindAck {
+		if operationType == v2.OperationTypeAck {
 			acknowledgements[i] = channeltypesv2.NewAcknowledgement(event.Acks...)
 		}
 	}
 
-	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets, acknowledgements)
+	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(operationType), packets, acknowledgements)
 	if err != nil {
 		return errors.Wrap(err, "generating packet proofs")
 	}
@@ -115,7 +124,7 @@ func relayPackets(
 	items := make([]v2.PacketRelayItem, len(events))
 	for i, event := range events {
 		items[i] = v2.PacketRelayItem{
-			Kind:        relayKind,
+			Type:        operationType,
 			Packet:      event.Packet,
 			Acks:        event.Acks,
 			Proof:       packetProofs[i],
@@ -142,7 +151,7 @@ func relayPackets(
 			SourceChainID:  sourceChainID,
 			SourceClientID: item.Packet.SourceClient,
 			Sequence:       item.Packet.Sequence,
-			Kind:           relayKind,
+			Type:           operationType,
 		}
 	}
 	err = txSubmitter.Submit(ctx, v2.TxIntent{

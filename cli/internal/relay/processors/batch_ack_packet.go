@@ -124,7 +124,7 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 
 	err = relayPackets(
 		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, p.route.SourceChainID, v2.RelayKindAck,
+		p.route.SourceClientID, p.route.SourceChainID, v2.OperationTypeAck,
 		proofHeight, events,
 	)
 	if err != nil {

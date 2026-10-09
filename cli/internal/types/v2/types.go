@@ -58,24 +58,24 @@ func (k ProofKind) CommitmentPath(packet channeltypesv2.Packet) ([]byte, error) 
 	}
 }
 
-// RelayKind the packet operation one PacketRelayItem asks to perform.
-type RelayKind int
+// OperationType identifies the action performed on a packet.
+type OperationType int
 
-// Relay kinds
+// Operation types
 const (
-	RelayKindUnknown RelayKind = iota
-	RelayKindRecv
-	RelayKindAck
-	RelayKindTimeout
+	OperationTypeUnknown OperationType = iota
+	OperationTypeRecv
+	OperationTypeAck
+	OperationTypeTimeout
 )
 
-func (k RelayKind) String() string {
-	switch k {
-	case RelayKindRecv:
+func (t OperationType) String() string {
+	switch t {
+	case OperationTypeRecv:
 		return "recv"
-	case RelayKindAck:
+	case OperationTypeAck:
 		return "ack"
-	case RelayKindTimeout:
+	case OperationTypeTimeout:
 		return "timeout"
 	default:
 		return "unknown"
@@ -85,9 +85,9 @@ func (k RelayKind) String() string {
 // PacketRelayItem one packet operation to include in a relay tx, along with
 // the membership/non-membership proof authorizing it.
 type PacketRelayItem struct {
-	Kind        RelayKind
+	Type        OperationType
 	Packet      channeltypesv2.Packet
-	Acks        [][]byte // one per payload, order preserved; only set for RelayKindAck
+	Acks        [][]byte // one per payload, order preserved; only set for OperationTypeAck
 	Proof       []byte
 	ProofHeight uint64
 }
@@ -125,7 +125,7 @@ type Tx struct {
 	RelayerAddress string
 }
 
-// TxIntent groups operations of one relay kind into a transaction.
+// TxIntent describes a transaction and optional operation metadata.
 type TxIntent struct {
 	Operations []OperationMetadata
 	To         string
@@ -137,5 +137,5 @@ type OperationMetadata struct {
 	SourceChainID  string
 	SourceClientID string
 	Sequence       uint64
-	Kind           RelayKind
+	Type           OperationType
 }

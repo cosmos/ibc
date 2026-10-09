@@ -115,7 +115,7 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if err = app.TxSubmitters.Start(ctx); err != nil {
+	if err = app.TxSubmitters.Start(); err != nil {
 		return err
 	}
 	defer func() {

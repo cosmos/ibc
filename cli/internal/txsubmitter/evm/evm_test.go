@@ -177,7 +177,7 @@ func newManager(t *testing.T) (*TxSubmitter, *testRPC, store.Store) {
 
 func pendingAttempts(t *testing.T, c *TxSubmitter) []store.TxAttempt {
 	t.Helper()
-	attempts, err := c.db.ListPendingTxAttempts(t.Context(), c.chainID, c.address.Hex())
+	attempts, err := c.db.ListUnresolvedTxAttempts(t.Context(), c.chainID, c.address.Hex(), 0)
 	require.NoError(t, err)
 	return attempts
 }
@@ -203,7 +203,7 @@ func packetIntent(t *testing.T, db store.Store, sequence uint64) v2.TxIntent {
 		To:   toAddress,
 		Data: []byte{0xde, 0xad},
 		Operations: []v2.OperationMetadata{
-			{SourceChainID: "2", SourceClientID: "source", Sequence: sequence, Kind: v2.RelayKindRecv},
+			{SourceChainID: "2", SourceClientID: "source", Sequence: sequence, Type: v2.OperationTypeRecv},
 		},
 	}
 }
@@ -217,9 +217,9 @@ func TestPersistBeforeBroadcast(t *testing.T) {
 		raw, err := tx.MarshalBinary()
 		require.NoError(t, err)
 		require.Equal(t, raw, a.SignedTx)
-		packets, err := db.ListTxPackets(t.Context(), a.ID)
+		operations, err := db.ListTxOperations(t.Context(), a.ID)
 		require.NoError(t, err)
-		require.Len(t, packets, 1)
+		require.Len(t, operations, 1)
 		saved, err := db.ListPacketsBySourceTx(t.Context(), "2", "0xsend")
 		require.NoError(t, err)
 		require.Nil(t, saved[0].RecvTxHash)
@@ -235,16 +235,74 @@ func TestPersistBeforeBroadcast(t *testing.T) {
 	require.True(t, status)
 }
 
+func TestMixedOperationsSurviveRestartAndRepricing(t *testing.T) {
+	c, rpc, db := newManager(t)
+	intent := packetIntent(t, db, 1)
+	ack := packetIntent(t, db, 2).Operations[0]
+	ack.Type = v2.OperationTypeAck
+	samePacketAck := intent.Operations[0]
+	samePacketAck.Type = v2.OperationTypeAck
+	intent.Operations = append(intent.Operations, ack, samePacketAck)
+	require.NoError(t, c.Start())
+	t.Cleanup(func() { require.NoError(t, c.Stop()) })
+	require.NoError(t, c.Submit(t.Context(), intent))
+	require.NoError(t, c.Stop())
+
+	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
+	require.NoError(t, err)
+	for _, op := range intent.Operations {
+		pending, lookupErr := restarted.HasPending(t.Context(), op)
+		require.NoError(t, lookupErr)
+		require.True(t, pending)
+	}
+	absent := ack
+	absent.Type = v2.OperationTypeRecv
+	pending, err := restarted.HasPending(t.Context(), absent)
+	require.NoError(t, err)
+	require.False(t, pending)
+
+	restarted.opts.RepriceInterval = time.Nanosecond
+	restarted.reconciler.reconcile(t.Context())
+	attempts := pendingAttempts(t, restarted)
+	require.Len(t, attempts, 2)
+	want := []store.TxOperation{
+		{
+			PacketKey: store.PacketKey{SourceChainID: "2", SourceClientID: "source", Sequence: 1},
+			Type:      store.OperationTypeRecv,
+		},
+		{
+			PacketKey: store.PacketKey{SourceChainID: "2", SourceClientID: "source", Sequence: 2},
+			Type:      store.OperationTypeAck,
+		},
+		{
+			PacketKey: store.PacketKey{SourceChainID: "2", SourceClientID: "source", Sequence: 1},
+			Type:      store.OperationTypeAck,
+		},
+	}
+	for _, attempt := range attempts {
+		operations, lookupErr := db.ListTxOperations(t.Context(), attempt.ID)
+		require.NoError(t, lookupErr)
+		require.ElementsMatch(t, want, operations)
+	}
+	require.Equal(t, rpc.sent[0].Data(), rpc.sent[1].Data())
+	require.Equal(t, rpc.sent[0].Nonce(), rpc.sent[1].Nonce())
+}
+
 func saveIntentAtNonce(t *testing.T, c *TxSubmitter, intent v2.TxIntent, nonce uint64) *types.Transaction {
 	t.Helper()
 	tx, err := c.buildAndSignTransaction(t.Context(), intent.To, intent.Data, nonce)
 	require.NoError(t, err)
-	op := intent.Operations[0]
-	p := &pendingTx{packets: []store.PacketKey{{
-		SourceChainID: op.SourceChainID, SourceClientID: op.SourceClientID, Sequence: op.Sequence,
-	}}}
+	p := &pendingTx{}
+	for _, op := range intent.Operations {
+		p.operations = append(p.operations, store.TxOperation{
+			PacketKey: store.PacketKey{
+				SourceChainID: op.SourceChainID, SourceClientID: op.SourceClientID, Sequence: op.Sequence,
+			},
+			Type: op.Type.String(),
+		})
+	}
 	require.NoError(t, saveAttempt(t.Context(), c.db, tx, store.TxAttempt{
-		ChainID: c.chainID, Sender: c.address.Hex(), Kind: op.Kind.String(), SubmittedAt: time.Now().UTC(),
+		ChainID: c.chainID, Sender: c.address.Hex(), SubmittedAt: time.Now().UTC(),
 	}, p))
 	return p.latest().tx
 }
@@ -256,7 +314,7 @@ func TestDatabaseFailureDoesNotBroadcast(t *testing.T) {
 	err := c.submit(t.Context(), intent)
 	require.ErrorContains(t, err, "not found")
 	require.Empty(t, rpc.sent)
-	attempts, err := db.ListPendingTxAttempts(t.Context(), chainIDEth, c.address.Hex())
+	attempts, err := db.ListUnresolvedTxAttempts(t.Context(), chainIDEth, c.address.Hex(), 0)
 	require.NoError(t, err)
 	require.Empty(t, attempts)
 }
@@ -457,7 +515,7 @@ func TestConcurrentSubmissionsAllocateDistinctNonces(t *testing.T) {
 	for i := range intents {
 		intents[i] = packetIntent(t, db, uint64(i+1))
 	}
-	require.NoError(t, c.Start(t.Context()))
+	require.NoError(t, c.Start())
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
 	results := make(chan error, len(intents))
 	for _, intent := range intents {
@@ -635,7 +693,7 @@ func TestRepeatedAndOverlappingSubmissionsUseDistinctNonces(t *testing.T) {
 	second := packetIntent(t, db, 2)
 	second.Operations = append(second.Operations, first.Operations...)
 	first.Operations = append(first.Operations, packetIntent(t, db, 3).Operations...)
-	require.NoError(t, c.Start(t.Context()))
+	require.NoError(t, c.Start())
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
 	require.NoError(t, c.Submit(t.Context(), first))
 	require.NoError(t, c.Submit(t.Context(), second))
@@ -697,7 +755,7 @@ func TestCallerCancellationBeforeJournalDoesNotBroadcast(t *testing.T) {
 	c.signer = key
 	c.reconciler.signer = c.signer
 	intent := packetIntent(t, db, 1)
-	require.NoError(t, c.Start(t.Context()))
+	require.NoError(t, c.Start())
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
 	caller, cancel := context.WithCancel(t.Context())
 	result := make(chan error, 1)
@@ -732,7 +790,7 @@ func TestCancellationWhileWaitingDoesNotSubmit(t *testing.T) {
 	c.reconciler.signer = c.signer
 	first := packetIntent(t, db, 1)
 	second := packetIntent(t, db, 2)
-	require.NoError(t, c.Start(t.Context()))
+	require.NoError(t, c.Start())
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
 	result := make(chan error, 1)
 	go func() { result <- c.Submit(t.Context(), first) }()
@@ -763,7 +821,7 @@ func TestStopCancelsSubmission(t *testing.T) {
 	c.signer = key
 	c.reconciler.signer = c.signer
 	intent := packetIntent(t, db, 1)
-	require.NoError(t, c.Start(t.Context()))
+	require.NoError(t, c.Start())
 	result := make(chan error, 1)
 	go func() { result <- c.Submit(t.Context(), intent) }()
 	select {
@@ -806,7 +864,7 @@ func TestCancellationAfterJournalSurvivesRestart(t *testing.T) {
 	require.Nil(t, attempts[0].LastBroadcastAt)
 	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
 	require.NoError(t, err)
-	require.NoError(t, restarted.Start(t.Context()))
+	require.NoError(t, restarted.Start())
 	t.Cleanup(func() { require.NoError(t, restarted.Stop()) })
 	require.Eventually(t, func() bool { return rpc.sendCount() == 1 }, time.Second, time.Millisecond)
 	rpc.mu.Lock()
@@ -823,16 +881,17 @@ type failedJournalReadStore struct {
 	once sync.Once
 }
 
-func (s *failedJournalReadStore) ListPendingTxAttempts(
+func (s *failedJournalReadStore) ListUnresolvedTxAttempts(
 	ctx context.Context,
 	chainID, sender string,
+	minedNonce uint64,
 ) ([]store.TxAttempt, error) {
 	var err error
 	s.once.Do(func() { err = errors.New("journal unavailable") })
 	if err != nil {
 		return nil, err
 	}
-	return s.Store.ListPendingTxAttempts(ctx, chainID, sender)
+	return s.Store.ListUnresolvedTxAttempts(ctx, chainID, sender, minedNonce)
 }
 
 func TestStartupRetriesJournalReadFailure(t *testing.T) {
@@ -843,7 +902,7 @@ func TestStartupRetriesJournalReadFailure(t *testing.T) {
 	c.db = &failedJournalReadStore{Store: db}
 	c.reconciler.db = c.db
 	c.opts.PollInterval = time.Millisecond
-	require.NoError(t, c.Start(t.Context()))
+	require.NoError(t, c.Start())
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
 	require.Eventually(t, func() bool {
 		pending, err := c.HasPending(t.Context(), intent.Operations[0])
@@ -956,7 +1015,7 @@ func TestReorgBeforeResolutionResumesBroadcast(t *testing.T) {
 }
 
 func TestReorgAfterResolutionRestoresAttempts(t *testing.T) {
-	for _, status := range []string{store.TxConfirmed, store.TxReverted, store.TxConsumed} {
+	for _, status := range []string{store.TxConfirmed, store.TxFailed, store.TxConsumed} {
 		t.Run(status, func(t *testing.T) {
 			c, rpc, db := newManager(t)
 			c.opts.RepriceInterval = time.Nanosecond
@@ -969,7 +1028,7 @@ func TestReorgAfterResolutionRestoresAttempts(t *testing.T) {
 			rpc.mined = 1
 			if status != store.TxConsumed {
 				receiptStatus := types.ReceiptStatusSuccessful
-				if status == store.TxReverted {
+				if status == store.TxFailed {
 					receiptStatus = types.ReceiptStatusFailed
 				}
 				rpc.receipts[first.Hash()] = &types.Receipt{
@@ -1027,7 +1086,7 @@ func TestReorgAfterResolutionRestoresAttempts(t *testing.T) {
 }
 
 func TestLaggingRPCDoesNotReopenResolvedAttempts(t *testing.T) {
-	for _, status := range []string{store.TxConfirmed, store.TxReverted, store.TxConsumed} {
+	for _, status := range []string{store.TxConfirmed, store.TxFailed, store.TxConsumed} {
 		t.Run(status, func(t *testing.T) {
 			c, rpc, db := newManager(t)
 			c.opts.RepriceInterval = time.Nanosecond
@@ -1037,7 +1096,7 @@ func TestLaggingRPCDoesNotReopenResolvedAttempts(t *testing.T) {
 			rpc.mined = 1
 			if status != store.TxConsumed {
 				receiptStatus := types.ReceiptStatusSuccessful
-				if status == store.TxReverted {
+				if status == store.TxFailed {
 					receiptStatus = types.ReceiptStatusFailed
 				}
 				rpc.receipts[first.Hash()] = &types.Receipt{
@@ -1052,20 +1111,13 @@ func TestLaggingRPCDoesNotReopenResolvedAttempts(t *testing.T) {
 			require.NoError(t, err)
 			restarted.ctx = t.Context()
 			rpc.mined = 0
-			for _, height := range []int64{9, 10, 11} {
-				rpc.head.Number = big.NewInt(height)
-				restarted.reconciler.reconcile(t.Context())
-				require.Empty(
-					t,
-					pendingAttempts(t, restarted),
-					"lower nonce alone must not reopen at height %d",
-					height,
-				)
-				require.Len(t, rpc.sent, 2, "no rebroadcast or repricing of resolved attempts")
-				attempt, err := db.GetTxAttempt(t.Context(), chainIDEth, first.Hash().Hex())
-				require.NoError(t, err)
-				require.Equal(t, status, attempt.Status)
-			}
+			rpc.head.Number = big.NewInt(9)
+			restarted.reconciler.reconcile(t.Context())
+			require.Empty(t, pendingAttempts(t, restarted))
+			require.Len(t, rpc.sent, 2, "no rebroadcast or repricing of resolved attempts")
+			attempt, err := db.GetTxAttempt(t.Context(), chainIDEth, first.Hash().Hex())
+			require.NoError(t, err)
+			require.Equal(t, status, attempt.Status)
 		})
 	}
 }
@@ -1085,7 +1137,7 @@ func TestReorgDuringResolutionKeepsAttemptPending(t *testing.T) {
 	require.Empty(t, resolutions)
 }
 
-func TestReorgDuringReopeningPreservesResolution(t *testing.T) {
+func TestReorgDuringReopeningRecoversOnNextPass(t *testing.T) {
 	c, rpc, db := newManager(t)
 	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
 	rpc.mined = 1
@@ -1095,13 +1147,14 @@ func TestReorgDuringReopeningPreservesResolution(t *testing.T) {
 	rpc.head.Extra = []byte("first reorg")
 	rpc.afterNonce = func() {
 		rpc.head.Extra = []byte("second reorg")
+		rpc.mined = 1
 	}
 	c.reconciler.reconcile(t.Context())
-	require.Empty(t, pendingAttempts(t, c), "reopening waits for a consistent chain observation")
-	require.Len(t, rpc.sent, 1)
+	require.Len(t, pendingAttempts(t, c), 1)
+	require.Len(t, rpc.sent, 2)
 	rpc.afterNonce = nil
 	c.reconciler.reconcile(t.Context())
-	require.Len(t, pendingAttempts(t, c), 1)
+	require.Empty(t, pendingAttempts(t, c))
 	require.Len(t, rpc.sent, 2)
 }
 
@@ -1187,7 +1240,7 @@ func TestMinedRevertAllowsPacketReconciliation(t *testing.T) {
 	require.Equal(t, store.TxReplaced, loser.Status)
 	winner, err := db.GetTxAttempt(t.Context(), chainIDEth, tx.Hash().Hex())
 	require.NoError(t, err)
-	require.Equal(t, store.TxReverted, winner.Status)
+	require.Equal(t, store.TxFailed, winner.Status)
 }
 
 type malformedSigner struct{ signer.Signer }
@@ -1212,14 +1265,14 @@ func TestPacketStatusSurvivesRestartWithoutPacketHash(t *testing.T) {
 	require.Nil(t, saved[0].RecvTxHash)
 	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
 	require.NoError(t, err)
-	require.NoError(t, restarted.Start(t.Context()))
+	require.NoError(t, restarted.Start())
 	t.Cleanup(func() { require.NoError(t, restarted.Stop()) })
 	status, err := restarted.HasPending(t.Context(), intent.Operations[0])
 	require.NoError(t, err)
 	require.True(t, status)
 	require.NoError(t, restarted.Submit(t.Context(), intent))
 	timeout := intent.Operations[0]
-	timeout.Kind = v2.RelayKindTimeout
+	timeout.Type = v2.OperationTypeTimeout
 	status, err = restarted.HasPending(t.Context(), timeout)
 	require.NoError(t, err)
 	require.False(t, status)
@@ -1260,7 +1313,7 @@ func TestNewSubmissionAfterResolutionIsPending(t *testing.T) {
 	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
 	old, err := db.GetTxAttempt(t.Context(), chainIDEth, first.Hash().Hex())
 	require.NoError(t, err)
-	require.Equal(t, store.TxReverted, old.Status)
+	require.Equal(t, store.TxFailed, old.Status)
 }
 
 type failedResolutionStore struct{ store.Store }
@@ -1308,7 +1361,7 @@ func TestSlowPollingDoesNotBlockSubmission(t *testing.T) {
 	require.NoError(t, c.submit(t.Context(), first))
 	rpc.mined = 1
 	started := make(chan error, 1)
-	go func() { started <- c.Start(t.Context()) }()
+	go func() { started <- c.Start() }()
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
 	select {
 	case err := <-started:

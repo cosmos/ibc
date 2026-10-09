@@ -17,45 +17,58 @@ func (db *PostgresDB) InsertTxAttempt(ctx context.Context, a TxAttempt) (int64, 
 		return 0, err
 	}
 	id, err := db.repo.InsertTxAttempt(ctx, repo.InsertTxAttemptParams{
-		TxHash: a.Hash, ChainID: a.ChainID, TxType: a.Kind, RelayerAddress: a.Sender,
+		TxHash: a.Hash, ChainID: a.ChainID, RelayerAddress: a.Sender,
 		SubmittedAt: pgtype.Timestamptz{Time: a.SubmittedAt, Valid: true}, Nonce: int64(a.Nonce), SignedTx: a.SignedTx,
 	})
 	return id, errNormalize(err)
 }
 
-func (db *PostgresDB) LinkTxPacket(ctx context.Context, id int64, key PacketKey) error {
-	count, err := db.repo.LinkTxPacket(
+func (db *PostgresDB) InsertTxOperation(ctx context.Context, id int64, operation TxOperation) error {
+	if err := operation.Validate(); err != nil {
+		return err
+	}
+	count, err := db.repo.InsertTxOperation(
 		ctx,
-		repo.LinkTxPacketParams{
+		repo.InsertTxOperationParams{
 			SubmissionID:   id,
-			SourceChainID:  key.SourceChainID,
-			SourceClientID: key.SourceClientID,
-			Sequence:       int64(key.Sequence),
+			SourceChainID:  operation.SourceChainID,
+			SourceClientID: operation.SourceClientID,
+			Sequence:       int64(operation.Sequence),
+			Type:           operation.Type,
 		},
 	)
 	if err != nil {
 		return errNormalize(err)
 	}
 	if count != 1 {
-		return fmt.Errorf("packet %v not found for transaction %d", key, id)
+		return fmt.Errorf("packet %v not found for transaction %d", operation.PacketKey, id)
 	}
 	return nil
 }
 
-func (db *PostgresDB) ListTxPackets(ctx context.Context, id int64) ([]PacketKey, error) {
-	rows, err := db.repo.ListTxPackets(ctx, id)
+func (db *PostgresDB) ListTxOperations(ctx context.Context, id int64) ([]TxOperation, error) {
+	rows, err := db.repo.ListTxOperations(ctx, id)
 	if err != nil {
 		return nil, errNormalize(err)
 	}
-	keys := make([]PacketKey, 0, len(rows))
+	operations := make([]TxOperation, 0, len(rows))
 	for _, r := range rows {
-		keys = append(keys, PacketKey{r.SourceChainID, r.PacketSourceClientID, uint64(r.PacketSequenceNumber)})
+		operations = append(operations, TxOperation{
+			PacketKey: PacketKey{r.SourceChainID, r.PacketSourceClientID, uint64(r.PacketSequenceNumber)},
+			Type:      r.Type,
+		})
 	}
-	return keys, nil
+	return operations, nil
 }
 
-func (db *PostgresDB) ListPendingTxAttempts(ctx context.Context, chainID, sender string) ([]TxAttempt, error) {
-	rows, err := db.repo.ListPendingTxAttempts(ctx, chainID, sender)
+func (db *PostgresDB) ListUnresolvedTxAttempts(
+	ctx context.Context,
+	chainID, sender string,
+	minedNonce uint64,
+) ([]TxAttempt, error) {
+	rows, err := db.repo.ListUnresolvedTxAttempts(ctx, repo.ListUnresolvedTxAttemptsParams{
+		ChainID: chainID, RelayerAddress: sender, MinedNonce: int64(minedNonce),
+	})
 	if err != nil {
 		return nil, errNormalize(err)
 	}
@@ -122,10 +135,13 @@ func (db *PostgresDB) ReopenTxAttempts(ctx context.Context, chainID, sender stri
 	}))
 }
 
-func (db *PostgresDB) HasPendingPacketSubmission(ctx context.Context, key PacketKey, kind string) (bool, error) {
-	pending, err := db.repo.HasPendingPacketSubmission(ctx, repo.HasPendingPacketSubmissionParams{
-		SourceChainID: key.SourceChainID, SourceClientID: key.SourceClientID,
-		Sequence: int64(key.Sequence), TxType: kind,
+func (db *PostgresDB) HasPendingOperation(ctx context.Context, operation TxOperation) (bool, error) {
+	if err := operation.Validate(); err != nil {
+		return false, err
+	}
+	pending, err := db.repo.HasPendingOperation(ctx, repo.HasPendingOperationParams{
+		SourceChainID: operation.SourceChainID, SourceClientID: operation.SourceClientID,
+		Sequence: int64(operation.Sequence), Type: operation.Type,
 	})
 	return pending, errNormalize(err)
 }
@@ -157,7 +173,6 @@ func txAttemptPostgresDB(r repo.RelayerTxSubmission) TxAttempt {
 		ChainID:         r.ChainID,
 		Sender:          r.RelayerAddress,
 		Hash:            r.TxHash,
-		Kind:            r.TxType,
 		Nonce:           uint64(r.Nonce),
 		SignedTx:        r.SignedTx,
 		SubmittedAt:     r.SubmittedAt.Time,
@@ -169,5 +184,11 @@ func txAttemptPostgresDB(r repo.RelayerTxSubmission) TxAttempt {
 func (db *PostgresDB) SetTxBroadcast(ctx context.Context, chainID, hash string, at time.Time) error {
 	return errNormalize(db.repo.SetTxBroadcast(ctx, repo.SetTxBroadcastParams{
 		ChainID: chainID, TxHash: hash, LastBroadcastAt: pgtype.Timestamptz{Time: at, Valid: true},
+	}))
+}
+
+func (db *PostgresDB) AbandonTxAttempts(ctx context.Context, chainID, sender string, nonce uint64) error {
+	return errNormalize(db.repo.AbandonTxAttempts(ctx, repo.AbandonTxAttemptsParams{
+		ChainID: chainID, RelayerAddress: sender, Nonce: int64(nonce),
 	}))
 }

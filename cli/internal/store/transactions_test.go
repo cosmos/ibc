@@ -21,24 +21,37 @@ func testTransactionJournal(t *testing.T, db Store) {
 			PacketTimeoutTimestamp: time.Now().Add(time.Hour),
 		}))
 		a := TxAttempt{
-			ChainID: "target", Sender: "sender", Hash: "first", Kind: "recv", Nonce: 7,
+			ChainID: "target", Sender: "sender", Hash: "first", Nonce: 7,
 			SignedTx: []byte{1, 2, 3}, SubmittedAt: time.Now().UTC(),
 		}
 		missing := key
 		missing.Sequence = 999
-		_, err := SaveTxAttempt(ctx, db, a, []PacketKey{key, missing})
+		_, err := SaveTxAttempt(
+			ctx,
+			db,
+			a,
+			[]TxOperation{{PacketKey: key, Type: OperationTypeRecv}, {PacketKey: missing, Type: OperationTypeRecv}},
+		)
 		require.Error(t, err)
 		_, err = db.GetTxAttempt(ctx, a.ChainID, a.Hash)
 		require.ErrorIs(t, err, ErrNotFound)
-		pending, err := db.HasPendingPacketSubmission(ctx, key, "recv")
+		pending, err := db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeRecv})
 		require.NoError(t, err)
 		require.False(t, pending, "packet associations must roll back with the attempt")
 
-		id, err := SaveTxAttempt(ctx, db, a, []PacketKey{key})
+		_, err = SaveTxAttempt(ctx, db, a, []TxOperation{
+			{PacketKey: key, Type: OperationTypeRecv},
+			{PacketKey: key, Type: "unknown"},
+		})
+		require.ErrorContains(t, err, "invalid operation type")
+		_, err = db.GetTxAttempt(ctx, a.ChainID, a.Hash)
+		require.ErrorIs(t, err, ErrNotFound)
+
+		id, err := SaveTxAttempt(ctx, db, a, []TxOperation{{PacketKey: key, Type: OperationTypeRecv}})
 		require.NoError(t, err)
-		links, err := db.ListTxPackets(ctx, id)
+		links, err := db.ListTxOperations(ctx, id)
 		require.NoError(t, err)
-		require.Equal(t, []PacketKey{key}, links)
+		require.Equal(t, []TxOperation{{PacketKey: key, Type: OperationTypeRecv}}, links)
 		found, err := db.GetTxAttempt(ctx, a.ChainID, a.Hash)
 		require.NoError(t, err)
 		require.Equal(t, a.SignedTx, found.SignedTx)
@@ -51,19 +64,19 @@ func testTransactionJournal(t *testing.T, db Store) {
 
 		replacement := a
 		replacement.Hash, replacement.SignedTx = "second", []byte{4, 5, 6}
-		_, err = SaveTxAttempt(ctx, db, replacement, []PacketKey{key})
+		_, err = SaveTxAttempt(ctx, db, replacement, []TxOperation{{PacketKey: key, Type: OperationTypeRecv}})
 		require.NoError(t, err)
 		next := a
 		next.Hash, next.Nonce = "third", 8
-		_, err = SaveTxAttempt(ctx, db, next, []PacketKey{key})
+		_, err = SaveTxAttempt(ctx, db, next, []TxOperation{{PacketKey: key, Type: OperationTypeRecv}})
 		require.NoError(t, err)
 		nonces, err := db.ListTxNoncesFrom(ctx, a.ChainID, a.Sender, 7)
 		require.NoError(t, err)
 		require.Equal(t, []uint64{7, 8}, nonces)
-		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
+		pending, err = db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeRecv})
 		require.NoError(t, err)
 		require.True(t, pending)
-		pending, err = db.HasPendingPacketSubmission(ctx, key, "ack")
+		pending, err = db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeAck})
 		require.NoError(t, err)
 		require.False(t, pending)
 
@@ -88,7 +101,7 @@ func testTransactionJournal(t *testing.T, db Store) {
 			require.Equal(t, status, resolved.Status)
 			require.NotEmpty(t, resolved.SignedTx, "history remains available")
 		}
-		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
+		pending, err = db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeRecv})
 		require.NoError(t, err)
 		require.True(t, pending, "another nonce still owns this operation")
 		require.NoError(
@@ -105,10 +118,10 @@ func testTransactionJournal(t *testing.T, db Store) {
 				},
 			),
 		)
-		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
+		pending, err = db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeRecv})
 		require.NoError(t, err)
 		require.False(t, pending)
-		attempts, err := db.ListPendingTxAttempts(ctx, a.ChainID, a.Sender)
+		attempts, err := db.ListUnresolvedTxAttempts(ctx, a.ChainID, a.Sender, 0)
 		require.NoError(t, err)
 		require.Empty(t, attempts)
 		packets, err := db.ListPacketsBySourceTx(ctx, key.SourceChainID, "send")
@@ -132,7 +145,7 @@ func testTransactionJournal(t *testing.T, db Store) {
 			{Nonce: 7, BlockNumber: 11, BlockHash: "block"},
 		} {
 			require.NoError(t, db.ReopenTxAttempts(ctx, a.ChainID, a.Sender, stale))
-			attempts, err = db.ListPendingTxAttempts(ctx, a.ChainID, a.Sender)
+			attempts, err = db.ListUnresolvedTxAttempts(ctx, a.ChainID, a.Sender, 0)
 			require.NoError(t, err)
 			require.Empty(t, attempts, "stale observations must not overwrite another resolution")
 		}
@@ -140,7 +153,7 @@ func testTransactionJournal(t *testing.T, db Store) {
 			t,
 			db.ReopenTxAttempts(ctx, a.ChainID, a.Sender, TxResolution{Nonce: 7, BlockNumber: 10, BlockHash: "block"}),
 		)
-		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
+		pending, err = db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeRecv})
 		require.NoError(t, err)
 		require.True(t, pending, "reopened attempts retain their packet associations")
 		found, err = db.GetTxAttempt(ctx, a.ChainID, a.Hash)
@@ -161,7 +174,107 @@ func testTransactionJournal(t *testing.T, db Store) {
 		require.NoError(t, err)
 		require.Equal(t, []TxResolution{{Nonce: 8, BlockNumber: 10, BlockHash: "block"}}, resolutions)
 	})
-	for _, status := range []string{TxConfirmed, TxReverted, TxConsumed} {
+	t.Run("mixedOperations", func(t *testing.T) {
+		ctx := t.Context()
+		key := PacketKey{SourceChainID: "mixed", SourceClientID: "source", Sequence: 1}
+		require.NoError(t, db.UpsertPacket(ctx, UpsertPacket{
+			Status: RelayStatusPending, SourceChainID: key.SourceChainID, DestinationChainID: "target",
+			SourceTxHash: "send", SourceTxTime: time.Now().UTC(), PacketSequenceNumber: key.Sequence,
+			PacketSourceClientID: key.SourceClientID, PacketDestinationClientID: "dest",
+			PacketTimeoutTimestamp: time.Now().Add(time.Hour),
+		}))
+		operations := []TxOperation{
+			{PacketKey: key, Type: OperationTypeRecv},
+			{PacketKey: key, Type: OperationTypeAck},
+		}
+		attempt := TxAttempt{
+			ChainID: "target", Sender: "sender", Hash: "mixed",
+			SignedTx: []byte{1}, SubmittedAt: time.Now().UTC(),
+		}
+		id, err := SaveTxAttempt(ctx, db, attempt, operations)
+		require.NoError(t, err)
+		stored, err := db.ListTxOperations(ctx, id)
+		require.NoError(t, err)
+		require.ElementsMatch(t, operations, stored)
+		for _, operation := range operations {
+			pending, lookupErr := db.HasPendingOperation(ctx, operation)
+			require.NoError(t, lookupErr)
+			require.True(t, pending)
+		}
+		pending, err := db.HasPendingOperation(ctx, TxOperation{PacketKey: key, Type: OperationTypeTimeout})
+		require.NoError(t, err)
+		require.False(t, pending)
+		require.NoError(t, db.ResolveTxNonce(ctx, TxOutcome{
+			ChainID: attempt.ChainID, Sender: attempt.Sender, Nonce: attempt.Nonce,
+			Hash: attempt.Hash, Status: TxConfirmed, BlockNumber: 1, BlockHash: "block",
+		}))
+		for _, operation := range operations {
+			pending, lookupErr := db.HasPendingOperation(ctx, operation)
+			require.NoError(t, lookupErr)
+			require.False(t, pending)
+		}
+	})
+	t.Run("abandonment", func(t *testing.T) {
+		ctx := t.Context()
+		key := PacketKey{SourceChainID: "abandonment", SourceClientID: "source", Sequence: 1}
+		require.NoError(t, db.UpsertPacket(ctx, UpsertPacket{
+			Status: RelayStatusPending, SourceChainID: key.SourceChainID, DestinationChainID: "target",
+			SourceTxHash: "send", SourceTxTime: time.Now().UTC(), PacketSequenceNumber: key.Sequence,
+			PacketSourceClientID: key.SourceClientID, PacketDestinationClientID: "dest",
+			PacketTimeoutTimestamp: time.Now().Add(time.Hour),
+		}))
+		operation := TxOperation{PacketKey: key, Type: OperationTypeRecv}
+		first := TxAttempt{
+			ChainID: "abandonment", Sender: "sender", Hash: "first", Nonce: 1,
+			SignedTx: []byte{1}, SubmittedAt: time.Now().UTC().Add(-time.Hour),
+		}
+		id, err := SaveTxAttempt(ctx, db, first, []TxOperation{operation})
+		require.NoError(t, err)
+		second := first
+		second.Hash = "replacement"
+		_, err = SaveTxAttempt(ctx, db, second, []TxOperation{operation})
+		require.NoError(t, err)
+		next := first
+		next.Hash, next.Nonce = "next", 2
+		_, err = SaveTxAttempt(ctx, db, next, nil)
+		require.NoError(t, err)
+
+		require.NoError(t, db.AbandonTxAttempts(ctx, first.ChainID, first.Sender, first.Nonce))
+		pending, err := db.HasPendingOperation(ctx, operation)
+		require.NoError(t, err)
+		require.False(t, pending)
+		nonces, err := db.ListTxNoncesFrom(ctx, first.ChainID, first.Sender, 0)
+		require.NoError(t, err)
+		require.Equal(t, []uint64{2}, nonces)
+		unresolved, err := db.ListUnresolvedTxAttempts(ctx, first.ChainID, first.Sender, 1)
+		require.NoError(t, err)
+		require.Len(t, unresolved, 1)
+		require.Equal(t, next.Hash, unresolved[0].Hash)
+		unresolved, err = db.ListUnresolvedTxAttempts(ctx, first.ChainID, first.Sender, 2)
+		require.NoError(t, err)
+		require.Len(t, unresolved, 3, "consumed abandoned nonces still need receipt reconciliation")
+
+		first.SubmittedAt = time.Now().UTC()
+		reusedID, err := SaveTxAttempt(ctx, db, first, []TxOperation{operation})
+		require.NoError(t, err)
+		require.Equal(t, id, reusedID)
+		operations, err := db.ListTxOperations(ctx, id)
+		require.NoError(t, err)
+		require.Equal(t, []TxOperation{operation}, operations)
+		pending, err = db.HasPendingOperation(ctx, operation)
+		require.NoError(t, err)
+		require.True(t, pending)
+		require.NoError(t, db.ResolveTxNonce(ctx, TxOutcome{
+			ChainID: first.ChainID, Sender: first.Sender, Nonce: first.Nonce,
+			Hash: second.Hash, Status: TxConfirmed, BlockNumber: 10, BlockHash: "block",
+		}))
+		for hash, status := range map[string]string{first.Hash: TxReplaced, second.Hash: TxConfirmed, next.Hash: TxPending} {
+			attempt, readErr := db.GetTxAttempt(ctx, first.ChainID, hash)
+			require.NoError(t, readErr)
+			require.Equal(t, status, attempt.Status)
+		}
+	})
+	for _, status := range []string{TxConfirmed, TxFailed, TxConsumed} {
 		t.Run("resolveNonce/"+status, func(t *testing.T) {
 			ctx := t.Context()
 			attempts := []TxAttempt{
@@ -172,7 +285,7 @@ func testTransactionJournal(t *testing.T, db Store) {
 				{ChainID: status + "-other", Sender: "sender", Hash: "other-chain"},
 			}
 			for _, a := range attempts {
-				a.Kind, a.SignedTx, a.SubmittedAt = TxKindRecv, []byte{1}, time.Now().UTC()
+				a.SignedTx, a.SubmittedAt = []byte{1}, time.Now().UTC()
 				_, err := db.InsertTxAttempt(ctx, a)
 				require.NoError(t, err)
 			}

@@ -270,7 +270,7 @@ func testAcknowledgementLifecycle(t *testing.T, ack v2.WriteAckStatus, terminal 
 	mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 	env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 	env.dstTxSubmitter.EXPECT().
-		HasPending(mock.Anything, mock.MatchedBy(func(op v2.OperationMetadata) bool { return op.Kind == v2.RelayKindRecv })).
+		HasPending(mock.Anything, mock.MatchedBy(func(op v2.OperationMetadata) bool { return op.Type == v2.OperationTypeRecv })).
 		Return(false, nil)
 	env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
 		Run(func(context.Context, v2.TxIntent) { received.Store(true) }).Return(nil).Once()
@@ -283,7 +283,7 @@ func testAcknowledgementLifecycle(t *testing.T, ack v2.WriteAckStatus, terminal 
 	mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 	env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 	env.srcTxSubmitter.EXPECT().
-		HasPending(mock.Anything, mock.MatchedBy(func(op v2.OperationMetadata) bool { return op.Kind == v2.RelayKindAck })).
+		HasPending(mock.Anything, mock.MatchedBy(func(op v2.OperationMetadata) bool { return op.Type == v2.OperationTypeAck })).
 		Return(false, nil)
 	env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
 		Run(func(context.Context, v2.TxIntent) { settled.Store(true) }).Return(nil).Once()
@@ -325,7 +325,7 @@ func TestPipelineTimeout(t *testing.T) {
 	mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{event}, "0xrouter")
 	env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 	env.srcTxSubmitter.EXPECT().
-		HasPending(mock.Anything, mock.MatchedBy(func(op v2.OperationMetadata) bool { return op.Kind == v2.RelayKindTimeout })).
+		HasPending(mock.Anything, mock.MatchedBy(func(op v2.OperationMetadata) bool { return op.Type == v2.OperationTypeTimeout })).
 		Return(false, nil)
 	env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
 		Run(func(context.Context, v2.TxIntent) { settled.Store(true) }).Return(nil).Once()
@@ -431,11 +431,11 @@ func TestPipelineExcludesPendingPacketFromNextBatch(t *testing.T) {
 	env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil)
 	env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Twice()
 	env.dstTxSubmitter.EXPECT().
-		HasPending(mock.Anything, v2.OperationMetadata{SourceChainID: "1", SourceClientID: testRoute.SourceClientID, Sequence: 42, Kind: v2.RelayKindRecv}).
+		HasPending(mock.Anything, v2.OperationMetadata{SourceChainID: "1", SourceClientID: testRoute.SourceClientID, Sequence: 42, Type: v2.OperationTypeRecv}).
 		Return(true, nil).
 		Once()
 	env.dstTxSubmitter.EXPECT().
-		HasPending(mock.Anything, v2.OperationMetadata{SourceChainID: "1", SourceClientID: testRoute.SourceClientID, Sequence: 43, Kind: v2.RelayKindRecv}).
+		HasPending(mock.Anything, v2.OperationMetadata{SourceChainID: "1", SourceClientID: testRoute.SourceClientID, Sequence: 43, Type: v2.OperationTypeRecv}).
 		Return(false, nil).
 		Once()
 	mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(43)}, "0xrouter")

@@ -129,7 +129,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("recv", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		txs, err := client.BuildRelayTxs(clientUpdate, items)
@@ -177,7 +177,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("ackRequiresAckBytes", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindAck, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeAck, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		_, err := client.BuildRelayTxs(clientUpdate, items)
@@ -186,7 +186,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("ack", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindAck, Packet: packet, Acks: [][]byte{{0xac}}, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeAck, Packet: packet, Acks: [][]byte{{0xac}}, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		txs, err := client.BuildRelayTxs(clientUpdate, items)
@@ -196,7 +196,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("timeout", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindTimeout, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeTimeout, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		txs, err := client.BuildRelayTxs(clientUpdate, items)
@@ -206,7 +206,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("unsupportedKind", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindUnknown, Packet: packet},
+			{Type: v2.OperationTypeUnknown, Packet: packet},
 		}
 
 		_, err := client.BuildRelayTxs(clientUpdate, items)
@@ -218,7 +218,7 @@ func TestBuildRelayTxs(t *testing.T) {
 		multiPayloadPacket.Payloads = append(multiPayloadPacket.Payloads, multiPayloadPacket.Payloads[0])
 
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: multiPayloadPacket, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeRecv, Packet: multiPayloadPacket, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 
 		_, err := client.BuildRelayTxs(clientUpdate, items)

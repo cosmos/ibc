@@ -19,7 +19,7 @@ import (
 // TxSubmitter signs and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
-	Start(ctx context.Context) error
+	Start() error
 	Stop() error
 
 	// Submit prepares and journals synchronously. Cancellation cannot revoke journaled work.
@@ -95,9 +95,9 @@ func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set
 }
 
 // Start launches transaction recovery for each submitter.
-func (s *Set) Start(ctx context.Context) error {
+func (s *Set) Start() error {
 	for _, submitter := range s.txSubmitters {
-		if err := submitter.Start(ctx); err != nil {
+		if err := submitter.Start(); err != nil {
 			_ = s.Stop()
 			return err
 		}

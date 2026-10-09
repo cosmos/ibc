@@ -11,8 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const abandonTxAttempts = `-- name: AbandonTxAttempts :exec
+UPDATE relayer_tx_submissions SET status = 'ABANDONED'
+WHERE chain_id = $1 AND relayer_address = $2
+AND nonce = $3 AND status = 'PENDING'
+`
+
+type AbandonTxAttemptsParams struct {
+	ChainID        string
+	RelayerAddress string
+	Nonce          int64
+}
+
+func (q *Queries) AbandonTxAttempts(ctx context.Context, arg AbandonTxAttemptsParams) error {
+	_, err := q.db.Exec(ctx, abandonTxAttempts, arg.ChainID, arg.RelayerAddress, arg.Nonce)
+	return err
+}
+
 const getTxAttempt = `-- name: GetTxAttempt :one
-SELECT id, tx_hash, chain_id, tx_type, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
+SELECT id, tx_hash, chain_id, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
 WHERE chain_id = $1 AND tx_hash = $2
 `
 
@@ -23,7 +40,6 @@ func (q *Queries) GetTxAttempt(ctx context.Context, chainID string, txHash strin
 		&i.ID,
 		&i.TxHash,
 		&i.ChainID,
-		&i.TxType,
 		&i.RelayerAddress,
 		&i.SubmittedAt,
 		&i.ResolvedAt,
@@ -39,31 +55,31 @@ func (q *Queries) GetTxAttempt(ctx context.Context, chainID string, txHash strin
 	return i, err
 }
 
-const hasPendingPacketSubmission = `-- name: HasPendingPacketSubmission :one
+const hasPendingOperation = `-- name: HasPendingOperation :one
 SELECT EXISTS (
 SELECT 1 FROM relayer_tx_submissions a
-JOIN packet_tx_submissions s ON a.id = s.submission_id
+JOIN relayer_tx_operations s ON a.id = s.submission_id
 JOIN packets p ON p.id = s.packet_id
 WHERE p.source_chain_id = $1
 AND p.packet_source_client_id = $2
 AND p.packet_sequence_number = $3
-AND a.tx_type = $4 AND a.status = 'PENDING'
+AND s.type = $4 AND a.status = 'PENDING'
 )
 `
 
-type HasPendingPacketSubmissionParams struct {
+type HasPendingOperationParams struct {
 	SourceChainID  string
 	SourceClientID string
 	Sequence       int64
-	TxType         string
+	Type           string
 }
 
-func (q *Queries) HasPendingPacketSubmission(ctx context.Context, arg HasPendingPacketSubmissionParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasPendingPacketSubmission,
+func (q *Queries) HasPendingOperation(ctx context.Context, arg HasPendingOperationParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasPendingOperation,
 		arg.SourceChainID,
 		arg.SourceClientID,
 		arg.Sequence,
-		arg.TxType,
+		arg.Type,
 	)
 	var exists bool
 	err := row.Scan(&exists)
@@ -73,15 +89,17 @@ func (q *Queries) HasPendingPacketSubmission(ctx context.Context, arg HasPending
 const insertTxAttempt = `-- name: InsertTxAttempt :one
 
 INSERT INTO relayer_tx_submissions
-(tx_hash, chain_id, tx_type, relayer_address, submitted_at, status, nonce, signed_tx)
-VALUES ($1, $2, $3, $4, $5, 'PENDING', $6, $7)
+(tx_hash, chain_id, relayer_address, submitted_at, status, nonce, signed_tx)
+VALUES ($1, $2, $3, $4, 'PENDING', $5, $6)
+ON CONFLICT (chain_id, tx_hash) DO UPDATE
+SET status = 'PENDING', submitted_at = excluded.submitted_at, last_broadcast_at = NULL
+WHERE relayer_tx_submissions.status = 'ABANDONED'
 RETURNING id
 `
 
 type InsertTxAttemptParams struct {
 	TxHash         string
 	ChainID        string
-	TxType         string
 	RelayerAddress string
 	SubmittedAt    pgtype.Timestamptz
 	Nonce          int64
@@ -93,7 +111,6 @@ func (q *Queries) InsertTxAttempt(ctx context.Context, arg InsertTxAttemptParams
 	row := q.db.QueryRow(ctx, insertTxAttempt,
 		arg.TxHash,
 		arg.ChainID,
-		arg.TxType,
 		arg.RelayerAddress,
 		arg.SubmittedAt,
 		arg.Nonce,
@@ -104,24 +121,27 @@ func (q *Queries) InsertTxAttempt(ctx context.Context, arg InsertTxAttemptParams
 	return id, err
 }
 
-const linkTxPacket = `-- name: LinkTxPacket :execrows
-INSERT INTO packet_tx_submissions (packet_id, submission_id)
-SELECT id, $1 FROM packets
-WHERE source_chain_id = $2
-AND packet_source_client_id = $3
-AND packet_sequence_number = $4
+const insertTxOperation = `-- name: InsertTxOperation :execrows
+INSERT INTO relayer_tx_operations (packet_id, submission_id, type)
+SELECT id, $1, $2 FROM packets
+WHERE source_chain_id = $3
+AND packet_source_client_id = $4
+AND packet_sequence_number = $5
+ON CONFLICT (packet_id, submission_id, type) DO UPDATE SET type = excluded.type
 `
 
-type LinkTxPacketParams struct {
+type InsertTxOperationParams struct {
 	SubmissionID   int64
+	Type           string
 	SourceChainID  string
 	SourceClientID string
 	Sequence       int64
 }
 
-func (q *Queries) LinkTxPacket(ctx context.Context, arg LinkTxPacketParams) (int64, error) {
-	result, err := q.db.Exec(ctx, linkTxPacket,
+func (q *Queries) InsertTxOperation(ctx context.Context, arg InsertTxOperationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertTxOperation,
 		arg.SubmissionID,
+		arg.Type,
 		arg.SourceChainID,
 		arg.SourceClientID,
 		arg.Sequence,
@@ -132,53 +152,11 @@ func (q *Queries) LinkTxPacket(ctx context.Context, arg LinkTxPacketParams) (int
 	return result.RowsAffected(), nil
 }
 
-const listPendingTxAttempts = `-- name: ListPendingTxAttempts :many
-SELECT id, tx_hash, chain_id, tx_type, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
-WHERE chain_id = $1 AND relayer_address = $2
-AND status = 'PENDING'
-ORDER BY nonce, id
-`
-
-func (q *Queries) ListPendingTxAttempts(ctx context.Context, chainID string, relayerAddress string) ([]RelayerTxSubmission, error) {
-	rows, err := q.db.Query(ctx, listPendingTxAttempts, chainID, relayerAddress)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []RelayerTxSubmission
-	for rows.Next() {
-		var i RelayerTxSubmission
-		if err := rows.Scan(
-			&i.ID,
-			&i.TxHash,
-			&i.ChainID,
-			&i.TxType,
-			&i.RelayerAddress,
-			&i.SubmittedAt,
-			&i.ResolvedAt,
-			&i.GasCostAmount,
-			&i.Status,
-			&i.ExecutionError,
-			&i.Nonce,
-			&i.SignedTx,
-			&i.LastBroadcastAt,
-			&i.ResolvedBlockNumber,
-			&i.ResolvedBlockHash,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTxNoncesFrom = `-- name: ListTxNoncesFrom :many
 SELECT DISTINCT nonce FROM relayer_tx_submissions
 WHERE chain_id = $1 AND relayer_address = $2
 AND nonce >= $3
+AND status != 'ABANDONED'
 ORDER BY nonce
 `
 
@@ -208,28 +186,34 @@ func (q *Queries) ListTxNoncesFrom(ctx context.Context, arg ListTxNoncesFromPara
 	return items, nil
 }
 
-const listTxPackets = `-- name: ListTxPackets :many
-SELECT p.source_chain_id, p.packet_source_client_id, p.packet_sequence_number
-FROM packets p JOIN packet_tx_submissions s ON p.id = s.packet_id
+const listTxOperations = `-- name: ListTxOperations :many
+SELECT p.source_chain_id, p.packet_source_client_id, p.packet_sequence_number, s.type
+FROM packets p JOIN relayer_tx_operations s ON p.id = s.packet_id
 WHERE s.submission_id = $1
 `
 
-type ListTxPacketsRow struct {
+type ListTxOperationsRow struct {
 	SourceChainID        string
 	PacketSourceClientID string
 	PacketSequenceNumber int64
+	Type                 string
 }
 
-func (q *Queries) ListTxPackets(ctx context.Context, submissionID int64) ([]ListTxPacketsRow, error) {
-	rows, err := q.db.Query(ctx, listTxPackets, submissionID)
+func (q *Queries) ListTxOperations(ctx context.Context, submissionID int64) ([]ListTxOperationsRow, error) {
+	rows, err := q.db.Query(ctx, listTxOperations, submissionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListTxPacketsRow
+	var items []ListTxOperationsRow
 	for rows.Next() {
-		var i ListTxPacketsRow
-		if err := rows.Scan(&i.SourceChainID, &i.PacketSourceClientID, &i.PacketSequenceNumber); err != nil {
+		var i ListTxOperationsRow
+		if err := rows.Scan(
+			&i.SourceChainID,
+			&i.PacketSourceClientID,
+			&i.PacketSequenceNumber,
+			&i.Type,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -244,7 +228,7 @@ const listTxResolutionsFrom = `-- name: ListTxResolutionsFrom :many
 SELECT DISTINCT nonce, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
 WHERE chain_id = $1 AND relayer_address = $2
 AND nonce >= $3
-AND status IN ('CONFIRMED', 'REVERTED', 'REPLACED', 'CONSUMED')
+AND status IN ('CONFIRMED', 'FAILED', 'REPLACED', 'CONSUMED')
 AND resolved_block_number IS NOT NULL AND resolved_block_hash IS NOT NULL
 ORDER BY nonce
 `
@@ -281,12 +265,60 @@ func (q *Queries) ListTxResolutionsFrom(ctx context.Context, arg ListTxResolutio
 	return items, nil
 }
 
+const listUnresolvedTxAttempts = `-- name: ListUnresolvedTxAttempts :many
+SELECT id, tx_hash, chain_id, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
+WHERE chain_id = $1 AND relayer_address = $2
+AND (status = 'PENDING' OR (status = 'ABANDONED' AND nonce < $3))
+ORDER BY nonce, submitted_at, id
+`
+
+type ListUnresolvedTxAttemptsParams struct {
+	ChainID        string
+	RelayerAddress string
+	MinedNonce     int64
+}
+
+func (q *Queries) ListUnresolvedTxAttempts(ctx context.Context, arg ListUnresolvedTxAttemptsParams) ([]RelayerTxSubmission, error) {
+	rows, err := q.db.Query(ctx, listUnresolvedTxAttempts, arg.ChainID, arg.RelayerAddress, arg.MinedNonce)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RelayerTxSubmission
+	for rows.Next() {
+		var i RelayerTxSubmission
+		if err := rows.Scan(
+			&i.ID,
+			&i.TxHash,
+			&i.ChainID,
+			&i.RelayerAddress,
+			&i.SubmittedAt,
+			&i.ResolvedAt,
+			&i.GasCostAmount,
+			&i.Status,
+			&i.ExecutionError,
+			&i.Nonce,
+			&i.SignedTx,
+			&i.LastBroadcastAt,
+			&i.ResolvedBlockNumber,
+			&i.ResolvedBlockHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reopenTxAttempts = `-- name: ReopenTxAttempts :exec
 UPDATE relayer_tx_submissions
 SET status = 'PENDING', resolved_at = NULL, last_broadcast_at = NULL,
 resolved_block_number = NULL, resolved_block_hash = NULL
 WHERE chain_id = $1 AND relayer_address = $2
-AND nonce = $3 AND status IN ('CONFIRMED', 'REVERTED', 'REPLACED', 'CONSUMED')
+AND nonce = $3 AND status IN ('CONFIRMED', 'FAILED', 'REPLACED', 'CONSUMED')
 AND resolved_block_number = $4
 AND resolved_block_hash = $5
 `
@@ -318,7 +350,7 @@ SET status = CASE
 END, resolved_at = $3,
 resolved_block_number = $4, resolved_block_hash = $5
 WHERE chain_id = $6 AND relayer_address = $7
-AND nonce = $8 AND status = 'PENDING'
+AND nonce = $8 AND status IN ('PENDING', 'ABANDONED')
 `
 
 type ResolveTxNonceParams struct {
