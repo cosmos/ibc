@@ -19,10 +19,19 @@ const Timeout = 3 * time.Second
 // tick spaces the checks for calls that are due.
 const tick = 10 * time.Millisecond
 
-// Spec shapes one load run. The CLI validates it: both fields positive.
+// Spec shapes one load run.
 type Spec struct {
 	Duration      time.Duration `json:"-"`
 	RatePerSecond int           `json:"rate_per_second"`
+}
+
+// Calls is how many calls a full run sends.
+func (s Spec) Calls() int64 { return s.callsBy(s.Duration) }
+
+// callsBy is how many calls are due elapsed into a run: RatePerSecond per
+// second, rounded down.
+func (s Spec) callsBy(elapsed time.Duration) int64 {
+	return int64(elapsed * time.Duration(s.RatePerSecond) / time.Second)
 }
 
 // Call is one request. Its context carries the per-call Timeout.
@@ -90,10 +99,7 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 	}
 
 	started := time.Now()
-	due := func(elapsed time.Duration) int64 {
-		return int64(elapsed * time.Duration(spec.RatePerSecond) / time.Second)
-	}
-	total := due(spec.Duration)
+	total := spec.Calls()
 	sendUpTo := func(due int64) {
 		for ; result.Sent < due; result.Sent++ {
 			wg.Go(send)
@@ -107,7 +113,7 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 			sendUpTo(total)
 			sending = false
 		case <-ticker.C:
-			sendUpTo(min(total, due(time.Since(started))))
+			sendUpTo(min(total, spec.callsBy(time.Since(started))))
 		}
 	}
 	elapsed := time.Since(started)

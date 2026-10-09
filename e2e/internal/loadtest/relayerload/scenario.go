@@ -44,7 +44,7 @@ const (
 	DirectionBtoA Direction = "b-to-a"
 )
 
-// route panics on an unknown direction, which the CLI rejects.
+// route panics on an unknown direction, which Config.Validate rejects.
 func (d Direction) route() traffic.Route {
 	switch d {
 	case DirectionAtoB:
@@ -67,7 +67,7 @@ const (
 	LightClientBesuQBFT LightClient = "besu-qbft"
 )
 
-// Config shapes one relayer scenario run. The CLI validates it.
+// Config shapes one relayer scenario run.
 type Config struct {
 	LightClient LightClient
 	// Packets is the total across all directions, split evenly.
@@ -75,6 +75,33 @@ type Config struct {
 	Wallets    int
 	PerBlock   int
 	Directions []Direction
+}
+
+// Validate rejects a Config that Run cannot run on Chains of provider: an
+// unknown direction or light client, Besu QBFT clients between other Chains,
+// fewer packets than directions, or no wallets or sends per block.
+func (c Config) Validate(provider environment.EVMProvider) error {
+	if len(c.Directions) == 0 {
+		return errors.New("no directions")
+	}
+	for _, d := range c.Directions {
+		if d != DirectionAtoB && d != DirectionBtoA {
+			return fmt.Errorf("unknown direction %q: want %s or %s", d, DirectionAtoB, DirectionBtoA)
+		}
+	}
+	switch {
+	case c.LightClient != LightClientAttested && c.LightClient != LightClientBesuQBFT:
+		return fmt.Errorf("unknown light client %q: want %s or %s", c.LightClient, LightClientAttested, LightClientBesuQBFT)
+	case c.LightClient == LightClientBesuQBFT && provider != environment.EVMProviderBesu:
+		return fmt.Errorf("%s light clients need %s Chains", LightClientBesuQBFT, environment.EVMProviderBesu)
+	case c.Packets < len(c.Directions):
+		return fmt.Errorf("%d packets is fewer than the %d directions", c.Packets, len(c.Directions))
+	case c.Wallets <= 0:
+		return errors.New("the wallet count must be positive")
+	case c.PerBlock <= 0:
+		return errors.New("the transfers per block must be positive")
+	}
+	return nil
 }
 
 // SessionOptions adds what cfg needs to base: the routes of its directions and

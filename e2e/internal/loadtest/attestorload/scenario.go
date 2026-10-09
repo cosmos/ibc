@@ -37,7 +37,7 @@ const (
 	PhaseState   = "state"
 )
 
-// Config shapes one attestor scenario run. The CLI validates it.
+// Config shapes one attestor scenario run.
 type Config struct {
 	Packets simpleload.Spec
 	State   simpleload.Spec
@@ -46,6 +46,41 @@ type Config struct {
 	// MaxErrorRate is the largest share of sent calls that may fail or time
 	// out in a phase that passes.
 	MaxErrorRate float64
+}
+
+// Validate rejects a Config that names an unknown phase, has a phase that
+// would send no calls, or has an error rate outside 0 to 1. A phase that
+// does not run is not checked.
+func (c Config) Validate() error {
+	if len(c.Phases) == 0 {
+		return errors.New("no phases to run")
+	}
+	for _, phase := range c.Phases {
+		spec, ok := c.spec(phase)
+		if !ok {
+			return fmt.Errorf("unknown phase %q: want %s or %s", phase, PhasePackets, PhaseState)
+		}
+		if spec.Calls() < 1 {
+			return fmt.Errorf("the %s phase would send no calls: %d per second for %s",
+				phase, spec.RatePerSecond, spec.Duration)
+		}
+	}
+	// Written to reject NaN, which fails every comparison.
+	if !(c.MaxErrorRate >= 0 && c.MaxErrorRate <= 1) {
+		return fmt.Errorf("max error rate %g is not between 0 and 1", c.MaxErrorRate)
+	}
+	return nil
+}
+
+func (c Config) spec(phase string) (simpleload.Spec, bool) {
+	switch phase {
+	case PhasePackets:
+		return c.Packets, true
+	case PhaseState:
+		return c.State, true
+	default:
+		return simpleload.Spec{}, false
+	}
 }
 
 // PhaseReport is the outcome of one phase.
@@ -155,7 +190,10 @@ func runPhase(
 	name, phase string,
 	cfg Config,
 ) (*simpleload.Result, error) {
-	var spec simpleload.Spec
+	spec, ok := cfg.spec(phase)
+	if !ok {
+		return nil, fmt.Errorf("unknown phase %q", phase)
+	}
 	var call simpleload.Call
 	switch phase {
 	case PhasePackets:
@@ -163,7 +201,7 @@ func runPhase(
 		if err != nil {
 			return nil, err
 		}
-		spec, call = cfg.Packets, packetCall(rpc, name, packets)
+		call = packetCall(rpc, name, packets)
 	case PhaseState:
 		latest, err := attestor.LatestHeight(ctx)
 		if err != nil {
@@ -172,9 +210,7 @@ func runPhase(
 		if latest == 0 {
 			return nil, errors.New("attestor reports no attestable height")
 		}
-		spec, call = cfg.State, stateCall(rpc, name, latest)
-	default:
-		return nil, fmt.Errorf("unknown phase %q", phase)
+		call = stateCall(rpc, name, latest)
 	}
 	slog.InfoContext(ctx, "attestor load phase", "phase", phase, "duration", spec.Duration,
 		"rps", spec.RatePerSecond)

@@ -352,7 +352,7 @@ func TestReportJSONAndText(t *testing.T) {
 	assert.Contains(
 		t,
 		text,
-		"Relayer load: FAIL (anvil, attested clients, 4 wallets, 2 per block interval): 10 packets in 5s, 2.0 packets/s",
+		"Relayer load: FAIL (anvil, attested clients, 4 wallets, 2 per block interval): 5 of 10 packets succeeded in 5s, 2.0 packets/s",
 	)
 	assert.Contains(t, text, "[a-to-b] chain-a -> chain-b")
 	assert.Regexp(t, `send->recv +\(block time\): +n=1 p50=1s`, text)

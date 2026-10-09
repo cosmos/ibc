@@ -31,6 +31,7 @@ func TestRejectsInvalidFlags(t *testing.T) {
 		"NaN error rate":     {"attestor", "--max-error-rate", "NaN"},
 		"zero selected rps":  {"attestor", "--phases", "state", "--state-rps", "0"},
 		"bad phase":          {"attestor", "--phases", "packets,blocks"},
+		"no whole call":      {"attestor", "--phases", "state", "--duration", "500ms", "--state-rps", "1"},
 		"unknown flag":       {"attestor", "--rps", "5"},
 		"unknown scenario":   {"prover"},
 	} {
@@ -54,7 +55,10 @@ func TestIgnoresTheRateOfAnUnselectedPhase(t *testing.T) {
 func TestExitCodes(t *testing.T) {
 	assert.Equal(t, exitOK, exitCode(nil))
 	assert.Equal(t, exitFailed, exitCode(errors.New("relay stalled")))
-	assert.Equal(t, exitInconclusive, exitCode(fmt.Errorf("%w: a-to-b", relayerload.ErrLoadNotDelivered)))
+	inconclusive := fmt.Errorf("%w: a-to-b", relayerload.ErrLoadNotDelivered)
+	assert.Equal(t, exitInconclusive, exitCode(inconclusive))
+	assert.Equal(t, exitFailed, exitCode(errors.Join(inconclusive, errReportNotWritten)),
+		"an unwritten report fails an inconclusive run")
 }
 
 // Keeping the environment changes only teardown, not the exit code.

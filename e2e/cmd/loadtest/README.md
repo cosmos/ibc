@@ -35,8 +35,9 @@ was built from; `IBC_BIN` overrides it.
 The report goes to stdout (text, or JSON with `--json`) and progress logs to stderr. The exit
 status is 0 only when the scenario met its target, 1 when it did not or setup failed, 2 on bad
 usage, and 3 when a relayer run is inconclusive (below), whether or not `--keep-on-failure`
-keeps the environment; a failed teardown exits 1 whatever the verdict. Invalid flag values
-are rejected before anything starts. A run that is interrupted or exceeds `--timeout` still
+keeps the environment; a failed teardown or a report that could not be written exits 1
+whatever the verdict. Invalid flag values, including an attestor phase too short to send a
+single call at its rate, are rejected before anything starts. A run that is interrupted or exceeds `--timeout` still
 reports what it measured.
 
 ### Common flags

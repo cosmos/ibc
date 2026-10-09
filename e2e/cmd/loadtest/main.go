@@ -145,32 +145,15 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 		Packets:     *packets,
 		Wallets:     *wallets,
 		PerBlock:    *perBlock,
+		Directions:  []relayerload.Direction{relayerload.Direction(*directions)},
 	}
-	switch *directions {
-	case "both":
+	if *directions == "both" {
 		cfg.Directions = []relayerload.Direction{relayerload.DirectionAtoB, relayerload.DirectionBtoA}
-	case string(relayerload.DirectionAtoB), string(relayerload.DirectionBtoA):
-		cfg.Directions = []relayerload.Direction{relayerload.Direction(*directions)}
-	default:
-		return usageError(stderr, fmt.Errorf("unknown directions %q: want a-to-b, b-to-a, or both", *directions))
-	}
-	var err error
-	switch {
-	case cfg.LightClient != relayerload.LightClientAttested && cfg.LightClient != relayerload.LightClientBesuQBFT:
-		err = fmt.Errorf("unknown light client %q: want attested or besu-qbft", cfg.LightClient)
-	case cfg.LightClient == relayerload.LightClientBesuQBFT && c.provider != string(environment.EVMProviderBesu):
-		err = errors.New("--light-client besu-qbft needs --provider besu")
-	case cfg.Packets < len(cfg.Directions):
-		err = fmt.Errorf("--packets must be at least the number of directions (%d)", len(cfg.Directions))
-	case cfg.Wallets <= 0:
-		err = errors.New("--wallets must be positive")
-	case cfg.PerBlock <= 0:
-		err = errors.New("--per-block must be positive")
-	}
-	if err != nil {
-		return usageError(stderr, err)
 	}
 	opts, err := c.sessionOptions()
+	if err == nil {
+		err = cfg.Validate(opts.Provider)
+	}
 	if err != nil {
 		return usageError(stderr, err)
 	}
@@ -204,25 +187,13 @@ func runAttestor(args []string, stdout, stderr io.Writer) int {
 		State:        simpleload.Spec{Duration: *duration, RatePerSecond: *stateRPS},
 		MaxErrorRate: *maxErrorRate,
 	}
-	if *duration <= 0 {
-		return usageError(stderr, errors.New("--duration must be positive"))
-	}
-	rates := map[string]int{attestorload.PhasePackets: *packetsRPS, attestorload.PhaseState: *stateRPS}
 	for phase := range strings.SplitSeq(*phases, ",") {
-		phase = strings.TrimSpace(phase)
-		switch rate, ok := rates[phase]; {
-		case !ok:
-			return usageError(stderr, fmt.Errorf("unknown phase %q: want packets or state", phase))
-		case rate <= 0:
-			return usageError(stderr, fmt.Errorf("--%s-rps must be positive", phase))
-		}
-		cfg.Phases = append(cfg.Phases, phase)
-	}
-	// Written to reject NaN, which fails every comparison.
-	if !(cfg.MaxErrorRate >= 0 && cfg.MaxErrorRate <= 1) {
-		return usageError(stderr, errors.New("--max-error-rate must be between 0 and 1"))
+		cfg.Phases = append(cfg.Phases, strings.TrimSpace(phase))
 	}
 	opts, err := c.sessionOptions()
+	if err == nil {
+		err = cfg.Validate()
+	}
 	if err != nil {
 		return usageError(stderr, err)
 	}
@@ -292,10 +263,14 @@ func execute(
 	}
 	if writeErr := writeReport(stdout, r, c.jsonOut); writeErr != nil {
 		slog.Error("write report", "err", writeErr)
-		err = errors.Join(err, writeErr)
+		err = errors.Join(err, fmt.Errorf("%w: %w", errReportNotWritten, writeErr))
 	}
 	return code
 }
+
+// errReportNotWritten fails a run whatever its verdict, as a failed teardown
+// does.
+var errReportNotWritten = errors.New("report not written")
 
 // finish keeps s if err is set and keep asks to, closes it otherwise, and
 // returns the exit code for err. A failed teardown fails the run.
@@ -318,6 +293,8 @@ func exitCode(err error) int {
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.Is(err, errReportNotWritten):
+		return exitFailed
 	case errors.Is(err, relayerload.ErrLoadNotDelivered):
 		return exitInconclusive
 	default:

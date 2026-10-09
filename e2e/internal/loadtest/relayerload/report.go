@@ -94,10 +94,15 @@ func (r *Report) WriteText(w io.Writer) error {
 	case !r.LoadDelivered:
 		verdict = "INCONCLUSIVE (load not delivered)"
 	}
+	succeeded := 0
+	for _, d := range r.Directions {
+		succeeded += d.Succeeded
+	}
 	wall := time.Duration(r.WallTimeMS) * time.Millisecond
 	fmt.Fprintf(&out,
-		"\nRelayer load: %s (%s, %s clients, %d wallets, %d per block interval): %d packets in %s, %.1f packets/s\n",
-		verdict, r.Provider, r.LightClient, r.Wallets, r.PerBlock, r.Packets, wall, r.Throughput)
+		"\nRelayer load: %s (%s, %s clients, %d wallets, %d per block interval): "+
+			"%d of %d packets succeeded in %s, %.1f packets/s\n",
+		verdict, r.Provider, r.LightClient, r.Wallets, r.PerBlock, succeeded, r.Packets, wall, r.Throughput)
 	for _, d := range r.Directions {
 		fmt.Fprintf(&out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)
 		fmt.Fprintf(&out, "  sends:    target=%d sent=%d send_failures=%d backpressure=%d send_phase=%s\n",
