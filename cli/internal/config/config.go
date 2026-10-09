@@ -161,7 +161,8 @@ type AttestorConfig struct {
 	// or userinfo.
 	GRPC string `yaml:"grpc,omitempty"`
 
-	// TLS remote only. Present enables TLS to this attestor.
+	// TLS remote only. Present selects https over http for grpc, see
+	// TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
@@ -186,7 +187,8 @@ type SignerConfig struct {
 	// RemoteKeyID KMS key ID for a remote signer
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 
-	// TLS remote only. Present enables TLS to the KMS.
+	// TLS remote only. Present selects TLS credentials over plaintext for grpc,
+	// whatever scheme the target has, see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 

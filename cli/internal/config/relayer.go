@@ -112,8 +112,9 @@ type AutoRelayConfig struct {
 
 // RemoteParams is the params block a remote client declares.
 type RemoteParams struct {
-	// URL is the ProverService endpoint: an http(s):// URL, or a bare
-	// host:port whose scheme the tls block's presence picks.
+	// URL is the ProverService endpoint: an http(s):// URL, whose scheme
+	// decides TLS, or a bare host:port, which is https with a tls block and
+	// http without one.
 	URL string `yaml:"url"`
 
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`

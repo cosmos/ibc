@@ -386,7 +386,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L173](cli/internal/config/config.go#L173) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -416,7 +416,7 @@ signers:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L173](cli/internal/config/config.go#L173) -->
 
 <!-- GEN:config:signers:remote END -->
 
@@ -437,7 +437,13 @@ attestors:
       keyFile: /etc/ibc/tls/client.key
 ```
 
-Whether TLS is used depends on the endpoint's scheme; the block only carries settings. A remote attestor's `grpc`, and a remote prover `url` given as a bare `host:port`, are dialed as `https://` with a `tls` block and `http://` without one. <!-- [cli/internal/config/endpoint.go: endpointURL] --> A remote prover `url` that already has a scheme keeps it: an `https://` url uses TLS with system roots even without a `tls` block, and a `tls` block with an `http://` url is rejected. <!-- [cli/internal/config/relayer.go: RemoteParams.Validate] --> A remote signer's `grpc` target is passed to gRPC as written, with TLS credentials when the block is present. <!-- [cli/internal/service/signer/remote.go: newGRPCClient] --> `tls: {}` means TLS with system roots and no client certificate. An empty `tls:` key is rejected, so a block whose fields are all commented out is never silently ignored. <!-- [cli/internal/config/file.go: rejectNullTLS] -->
+The `tls` block carries settings. Whether TLS is used depends on the endpoint:
+
+- A remote prover `url` with a scheme keeps it: an `https://` url uses TLS with system roots even without a `tls` block, and a `tls` block with an `http://` url is rejected. <!-- [cli/internal/config/relayer.go: RemoteParams.Validate] -->
+- A remote attestor's `grpc`, and a remote prover `url` given as a bare `host:port`, are dialed as `https://` with a `tls` block and `http://` without one. <!-- [cli/internal/config/endpoint.go: endpointURL] -->
+- A remote signer's `grpc` target is passed to gRPC as written, with TLS credentials when the block is present and plaintext otherwise, whatever scheme the target has. <!-- [cli/internal/service/signer/remote.go: newGRPCClient] -->
+
+`tls: {}` means TLS with system roots and no client certificate. <!-- [cli/internal/config/tls.go: TLSClientConfig] -->
 
 Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. An expired client certificate fails validation. <!-- [cli/internal/config/tls.go: TLSClientConfig.TLSConfig] -->
 
