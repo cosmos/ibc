@@ -24,11 +24,28 @@ WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_addre
 AND status = 'PENDING'
 ORDER BY nonce, id;
 
--- name: ListPendingTxNonces :many
+-- name: ListTxNoncesFrom :many
 SELECT DISTINCT nonce FROM relayer_tx_submissions
 WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
-AND status = 'PENDING'
+AND nonce >= sqlc.arg(mined_nonce)
 ORDER BY nonce;
+
+-- name: ListTxResolutionsFrom :many
+SELECT DISTINCT nonce, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
+WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
+AND nonce >= sqlc.arg(mined_nonce)
+AND status IN ('CONFIRMED', 'REVERTED', 'REPLACED', 'CONSUMED')
+AND resolved_block_number IS NOT NULL AND resolved_block_hash IS NOT NULL
+ORDER BY nonce;
+
+-- name: ReopenTxAttempts :exec
+UPDATE relayer_tx_submissions
+SET status = 'PENDING', resolved_at = NULL, last_broadcast_at = NULL,
+resolved_block_number = NULL, resolved_block_hash = NULL
+WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
+AND nonce = sqlc.arg(nonce) AND status IN ('CONFIRMED', 'REVERTED', 'REPLACED', 'CONSUMED')
+AND resolved_block_number = sqlc.arg(resolved_block_number)
+AND resolved_block_hash = sqlc.arg(resolved_block_hash);
 
 -- name: GetTxAttempt :one
 SELECT * FROM relayer_tx_submissions
@@ -50,7 +67,8 @@ UPDATE relayer_tx_submissions
 SET status = CASE
     WHEN sqlc.arg(status) = 'CONSUMED' OR tx_hash = sqlc.arg(tx_hash) THEN sqlc.arg(status)
     ELSE 'REPLACED'
-END, resolved_at = sqlc.arg(resolved_at)
+END, resolved_at = sqlc.arg(resolved_at),
+resolved_block_number = sqlc.arg(resolved_block_number), resolved_block_hash = sqlc.arg(resolved_block_hash)
 WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
 AND nonce = sqlc.arg(nonce) AND status = 'PENDING';
 

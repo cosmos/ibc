@@ -153,11 +153,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				ICS26Router: chain.ICS26Router,
 			},
 		})
-		// Test chains use one-block inclusion; application proof finality is configured separately.
 		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
 			ChainID:            chain.ChainID,
-			TxSubmissionDelay:  "10ms",
-			EVM:                txManagerFileConfig{Confirmations: 1},
 			PacketBatchSize:    batchSize,
 			PacketBatchTimeout: chain.PacketBatchTimeout,
 		})
@@ -242,16 +239,10 @@ type relayerFileConfig struct {
 	Connections          []connectionFileConfig    `yaml:"connections"`
 }
 
-type txManagerFileConfig struct {
-	Confirmations uint64 `yaml:"confirmations"`
-}
-
 type chainOverrideFileConfig struct {
-	EVM                txManagerFileConfig `yaml:"evm"`
-	ChainID            string              `yaml:"chainId"`
-	TxSubmissionDelay  string              `yaml:"txSubmissionDelay"`
-	PacketBatchSize    int                 `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration       `yaml:"packetBatchTimeout,omitempty"`
+	ChainID            string        `yaml:"chainId"`
+	PacketBatchSize    int           `yaml:"packetBatchSize"`
+	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
 }
 
 type connectionFileConfig struct {

@@ -35,7 +35,9 @@ type Repository interface {
 	LinkTxPacket(ctx context.Context, attemptID int64, key PacketKey) error
 	ListTxPackets(ctx context.Context, attemptID int64) ([]PacketKey, error)
 	ListPendingTxAttempts(ctx context.Context, chainID, sender string) ([]TxAttempt, error)
-	ListPendingTxNonces(ctx context.Context, chainID, sender string) ([]uint64, error)
+	ListTxNoncesFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]uint64, error)
+	ListTxResolutionsFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxResolution, error)
+	ReopenTxAttempts(ctx context.Context, chainID, sender string, resolution TxResolution) error
 	GetTxAttempt(ctx context.Context, chainID, hash string) (TxAttempt, error)
 	HasPendingPacketSubmission(ctx context.Context, key PacketKey, kind string) (bool, error)
 	ResolveTxNonce(ctx context.Context, outcome TxOutcome) error

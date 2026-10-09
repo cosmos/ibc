@@ -50,7 +50,6 @@ type RelayerConfig struct {
 type RelayerChainOverride struct {
 	ChainID            string            `yaml:"chainId"`
 	EVM                *RelayerEVMConfig `yaml:"evm,omitempty"`
-	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
 
@@ -65,8 +64,6 @@ type RelayerChainOverride struct {
 
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
-	// Confirmations is the required block depth; zero waits for the finalized block tag.
-	Confirmations uint64 `yaml:"confirmations,omitempty"`
 	// MaxFeePerGas caps each transaction's fee per gas, in wei.
 	MaxFeePerGas *uint64 `yaml:"maxFeePerGas,omitempty"`
 
@@ -194,8 +191,6 @@ func (c RelayerChainOverride) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errPathf("chainId", "required")
-	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
-		return errPathf("txSubmissionDelay", "must not be negative")
 	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
 		return errPathf("packetBatchSize", "must be positive")
 	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:

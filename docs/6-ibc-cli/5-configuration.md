@@ -289,7 +289,6 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
-| `chainOverrides[].txSubmissionDelay` | `duration` | `0s` | Minimum delay between two transaction submissions on the chain. |
 | `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
@@ -308,7 +307,6 @@ relayer:
   dispatchPollInterval: 5s
   chainOverrides:
     - chainId: "41002"
-      txSubmissionDelay: 3s
       packetBatchSize: 25
       packetBatchTimeout: 15s
       evm:

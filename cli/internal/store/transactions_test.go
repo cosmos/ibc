@@ -57,7 +57,7 @@ func testTransactionJournal(t *testing.T, db Store) {
 		next.Hash, next.Nonce = "third", 8
 		_, err = SaveTxAttempt(ctx, db, next, []PacketKey{key})
 		require.NoError(t, err)
-		nonces, err := db.ListPendingTxNonces(ctx, a.ChainID, a.Sender)
+		nonces, err := db.ListTxNoncesFrom(ctx, a.ChainID, a.Sender, 7)
 		require.NoError(t, err)
 		require.Equal(t, []uint64{7, 8}, nonces)
 		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
@@ -71,7 +71,15 @@ func testTransactionJournal(t *testing.T, db Store) {
 			t,
 			db.ResolveTxNonce(
 				ctx,
-				TxOutcome{ChainID: a.ChainID, Sender: a.Sender, Nonce: a.Nonce, Hash: a.Hash, Status: TxConfirmed},
+				TxOutcome{
+					BlockNumber: 10,
+					BlockHash:   "block",
+					ChainID:     a.ChainID,
+					Sender:      a.Sender,
+					Nonce:       a.Nonce,
+					Hash:        a.Hash,
+					Status:      TxConfirmed,
+				},
 			),
 		)
 		for hash, status := range map[string]string{a.Hash: TxConfirmed, replacement.Hash: TxReplaced} {
@@ -87,7 +95,14 @@ func testTransactionJournal(t *testing.T, db Store) {
 			t,
 			db.ResolveTxNonce(
 				ctx,
-				TxOutcome{ChainID: next.ChainID, Sender: next.Sender, Nonce: next.Nonce, Status: TxConsumed},
+				TxOutcome{
+					BlockNumber: 10,
+					BlockHash:   "block",
+					ChainID:     next.ChainID,
+					Sender:      next.Sender,
+					Nonce:       next.Nonce,
+					Status:      TxConsumed,
+				},
 			),
 		)
 		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
@@ -99,6 +114,52 @@ func testTransactionJournal(t *testing.T, db Store) {
 		packets, err := db.ListPacketsBySourceTx(ctx, key.SourceChainID, "send")
 		require.NoError(t, err)
 		require.Nil(t, packets[0].RecvTxHash, "resolving a nonce does not establish packet completion")
+
+		nonces, err = db.ListTxNoncesFrom(ctx, a.ChainID, a.Sender, 7)
+		require.NoError(t, err)
+		require.Equal(t, []uint64{7, 8}, nonces, "resolved nonces remain owned if mining rolls back")
+		nonces, err = db.ListTxNoncesFrom(ctx, a.ChainID, a.Sender, 8)
+		require.NoError(t, err)
+		require.Equal(t, []uint64{8}, nonces)
+		resolutions, err := db.ListTxResolutionsFrom(ctx, a.ChainID, a.Sender, 7)
+		require.NoError(t, err)
+		require.Equal(t, []TxResolution{
+			{Nonce: 7, BlockNumber: 10, BlockHash: "block"},
+			{Nonce: 8, BlockNumber: 10, BlockHash: "block"},
+		}, resolutions, "one resolution per nonce, including consumed outcomes")
+		for _, stale := range []TxResolution{
+			{Nonce: 7, BlockNumber: 10, BlockHash: "different block"},
+			{Nonce: 7, BlockNumber: 11, BlockHash: "block"},
+		} {
+			require.NoError(t, db.ReopenTxAttempts(ctx, a.ChainID, a.Sender, stale))
+			attempts, err = db.ListPendingTxAttempts(ctx, a.ChainID, a.Sender)
+			require.NoError(t, err)
+			require.Empty(t, attempts, "stale observations must not overwrite another resolution")
+		}
+		require.NoError(
+			t,
+			db.ReopenTxAttempts(ctx, a.ChainID, a.Sender, TxResolution{Nonce: 7, BlockNumber: 10, BlockHash: "block"}),
+		)
+		pending, err = db.HasPendingPacketSubmission(ctx, key, "recv")
+		require.NoError(t, err)
+		require.True(t, pending, "reopened attempts retain their packet associations")
+		found, err = db.GetTxAttempt(ctx, a.ChainID, a.Hash)
+		require.NoError(t, err)
+		require.Nil(t, found.LastBroadcastAt, "reopened attempts are eligible for immediate rebroadcast")
+		require.Equal(t, a.SignedTx, found.SignedTx)
+		require.WithinDuration(t, a.SubmittedAt, found.SubmittedAt, time.Microsecond)
+		require.NoError(t, db.SetTxBroadcast(ctx, a.ChainID, a.Hash, broadcast))
+		require.NoError(
+			t,
+			db.ReopenTxAttempts(ctx, a.ChainID, a.Sender, TxResolution{Nonce: 7, BlockNumber: 10, BlockHash: "block"}),
+		)
+		found, err = db.GetTxAttempt(ctx, a.ChainID, a.Hash)
+		require.NoError(t, err)
+		require.NotNil(t, found.LastBroadcastAt, "repeated recovery preserves pending broadcast timing")
+		require.WithinDuration(t, broadcast, *found.LastBroadcastAt, time.Microsecond)
+		resolutions, err = db.ListTxResolutionsFrom(ctx, a.ChainID, a.Sender, 7)
+		require.NoError(t, err)
+		require.Equal(t, []TxResolution{{Nonce: 8, BlockNumber: 10, BlockHash: "block"}}, resolutions)
 	})
 	for _, status := range []string{TxConfirmed, TxReverted, TxConsumed} {
 		t.Run("resolveNonce/"+status, func(t *testing.T) {
@@ -115,7 +176,14 @@ func testTransactionJournal(t *testing.T, db Store) {
 				_, err := db.InsertTxAttempt(ctx, a)
 				require.NoError(t, err)
 			}
-			outcome := TxOutcome{ChainID: status, Sender: "sender", Hash: "winner", Status: status}
+			outcome := TxOutcome{
+				BlockNumber: 10,
+				BlockHash:   "block",
+				ChainID:     status,
+				Sender:      "sender",
+				Hash:        "winner",
+				Status:      status,
+			}
 			loserStatus := TxReplaced
 			if status == TxConsumed {
 				outcome.Hash = ""
@@ -123,8 +191,45 @@ func testTransactionJournal(t *testing.T, db Store) {
 			}
 			require.NoError(t, db.ResolveTxNonce(ctx, outcome))
 			// Repeating resolution must preserve terminal outcomes.
-			require.NoError(t, db.ResolveTxNonce(ctx, TxOutcome{ChainID: status, Sender: "sender", Status: TxConsumed}))
+			require.NoError(
+				t,
+				db.ResolveTxNonce(
+					ctx,
+					TxOutcome{
+						BlockNumber: 10,
+						BlockHash:   "block",
+						ChainID:     status,
+						Sender:      "sender",
+						Status:      TxConsumed,
+					},
+				),
+			)
 			for i, want := range []string{status, loserStatus, TxPending, TxPending, TxPending} {
+				a, err := db.GetTxAttempt(ctx, attempts[i].ChainID, attempts[i].Hash)
+				require.NoError(t, err)
+				require.Equal(t, want, a.Status)
+			}
+
+			for _, a := range attempts[2:] {
+				require.NoError(t, db.ResolveTxNonce(ctx, TxOutcome{
+					BlockNumber: 10, BlockHash: "block",
+					ChainID: a.ChainID, Sender: a.Sender, Nonce: a.Nonce, Status: TxConsumed,
+				}))
+			}
+			require.NoError(
+				t,
+				db.ReopenTxAttempts(ctx, status, "sender", TxResolution{Nonce: 1, BlockNumber: 10, BlockHash: "block"}),
+			)
+			for i, want := range []string{status, loserStatus, TxPending, TxConsumed, TxConsumed} {
+				a, err := db.GetTxAttempt(ctx, attempts[i].ChainID, attempts[i].Hash)
+				require.NoError(t, err)
+				require.Equal(t, want, a.Status, "only unmined nonces for this account reopen")
+			}
+			require.NoError(
+				t,
+				db.ReopenTxAttempts(ctx, status, "sender", TxResolution{Nonce: 0, BlockNumber: 10, BlockHash: "block"}),
+			)
+			for i, want := range []string{TxPending, TxPending, TxPending, TxConsumed, TxConsumed} {
 				a, err := db.GetTxAttempt(ctx, attempts[i].ChainID, attempts[i].Hash)
 				require.NoError(t, err)
 				require.Equal(t, want, a.Status)

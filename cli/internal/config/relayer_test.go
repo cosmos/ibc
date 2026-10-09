@@ -38,7 +38,6 @@ func TestRelayerConfig(t *testing.T) {
 		require.NotNil(t, chain.AbandonUnrecoverablePackets)
 		assert.True(t, *chain.AbandonUnrecoverablePackets)
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
-		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
 		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
@@ -211,14 +210,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.ChainOverrides[0].ClearInterval = &interval
 				},
 				errContains: "relayer.chainOverrides[0].clearInterval: must be positive",
-			},
-			{
-				name: "negative tx submission delay",
-				patch: func(c *Config) {
-					delay := -time.Second
-					c.Relayer.ChainOverrides[0].TxSubmissionDelay = &delay
-				},
-				errContains: ".txSubmissionDelay: must not be negative",
 			},
 			{
 				name: "missing router contract is allowed -- it's a deploy output, not operator input",

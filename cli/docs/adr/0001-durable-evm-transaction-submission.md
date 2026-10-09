@@ -64,7 +64,13 @@ These are compatibility checks, not a restart, reorg, throughput, or IBC packet 
 
 ## Decision
 
-Keep `internal/txsubmitter` as a durable broadcaster. The pipeline determines packet outcomes from chain state; the submitter tracks pending work and records confirmed transaction outcomes. Use upstream geth, the existing signers, and the existing SQLite/PostgreSQL Store.
+Keep `internal/txsubmitter` as a durable broadcaster. The pipeline determines packet outcomes from chain state; the submitter tracks pending work and records mined transaction outcomes. Use upstream geth, the existing signers, and the existing SQLite/PostgreSQL Store.
+
+### Implementation boundaries
+
+`TxSubmitter` owns synchronous submission, nonce allocation, and service startup/shutdown. A private `transactionReconciler` owns the polling loop, outcome reconciliation, reorg recovery, rebroadcasting, and repricing backoff. Each reconciliation pass receives a context; the RPC client, signer, Store, and clock are injected so the reconciler can be tested without starting the submitter.
+
+`evm.go` contains submission and nonce allocation; `reconciler.go` contains chain observations and recovery. Both components use the existing `ETHClient` and `signer.Signer` interfaces directly. `txops.go` contains transaction construction, fee estimation, signing, attempt persistence, and broadcasting. Submission and reconciliation use the Store directly, sharing helpers to save signed attempts and broadcast. The reconciler loads pending attempts grouped by nonce. Attempts and operation associations are saved atomically before broadcasting. Transaction lifecycle metrics are deferred; existing gas metrics remain.
 
 ### Ownership and API
 
@@ -78,7 +84,7 @@ There is no internal submission queue, operation deduplication, unsigned reserva
 
 ### Journal
 
-Save each signed attempt and its operation associations atomically before broadcast. Retain signed bytes, hash, nonce, creation time, last broadcast attempt time, and state. Attempts begin `PENDING`. A canonical receipt at the confirmation boundary identifies a `CONFIRMED` or `REVERTED` attempt; the other attempts at that nonce become `REPLACED` in the same update. If the nonce is confirmed consumed but all known receipts are missing, mark the attempts `CONSUMED` with an unknown execution outcome. Older signed attempts remain available for diagnosis; no separate winning hash or provisional receipt is persisted.
+Save each signed attempt and its operation associations atomically before broadcast. Retain signed bytes, hash, nonce, creation time, last broadcast attempt time, and state. Attempts begin `PENDING`. A canonical mined receipt identifies a `CONFIRMED` or `REVERTED` attempt; the other attempts at that nonce become `REPLACED` in the same update. `CONFIRMED` means successful mined execution, not finality. If the mined nonce has advanced but all known receipts are missing, mark the attempts `CONSUMED` with an unknown execution outcome. Persist the number and hash of the block used to observe nonce consumption with every resolved outcome, including `CONSUMED`. Older signed attempts remain available for diagnosis; no separate winning hash or provisional receipt is persisted.
 
 A failed journal write prevents broadcast. An uncertain commit is recovered by querying the journal before the next allocation. Broadcast errors retain signed work. Recording the last broadcast is best effort: if it fails, the next pass may resend the same bytes safely.
 
@@ -86,40 +92,43 @@ A failed journal write prevents broadcast. An uncertain commit is recovered by q
 
 Under the account lock:
 
-1. Query the mined account nonce and distinct pending journal nonces.
+1. Query the mined account nonce and distinct journaled nonces at or above it, regardless of status. Resolved attempts retain ownership until polling can reopen them after a reorg.
 2. Select the first unowned nonce at or above the mined nonce. Both reads must succeed. Do not use the node's pending nonce or depend on a previous polling pass.
-3. Bound the selected nonce to a window of 16 nonces starting at the mined nonce. This permits filling holes below later journal entries without an extra capacity exception. Mined but unconfirmed entries remain journaled without occupying the allocation window.
+3. Bound the selected nonce to a window of 16 nonces starting at the mined nonce. This permits filling holes below later journal entries without an extra capacity exception. Mined entries awaiting receipt reconciliation do not occupy the allocation window.
 4. Estimate fees and gas, sign, and commit the attempt and packet links.
 5. Attempt broadcast and return. After a successful journal commit, cancellation or a broadcast error leaves recovery to polling.
 
-The window limits how far new submissions run ahead of mining, not the number of entries awaiting finality. Reorgs can leave existing entries outside the window; retain those entries and continue recovery. Alert if confirmation progress stalls and the unresolved journal grows.
+The window limits how far new submissions run ahead of mining. Receipt lookup failures can leave additional mined entries pending. Reorgs can leave unresolved entries outside the window; retain those entries and continue recovery.
 
 ### Recovery
 
-Each polling pass loads pending attempts and reads mined and confirmed account nonces. The confirmed read uses the configured finality policy and checks the RPC-reported block hash before and after the nonce query. It does not maintain head history. RPC-reported hashes are required because geth's computed header hash differs from Besu QBFT hashes.
+Each polling pass selects a mined block and reads the account nonce at its hash with `requireCanonical: true`. It checks resolved attempts at or above that nonce for reorgs, then loads pending attempts. Receipt checks use RPC-reported block hashes because geth's computed header hash differs from Besu QBFT hashes. Receipts newer than the selected block cannot resolve an outcome in that pass.
 
-- **Nonce below the confirmed nonce:** check known attempts for a canonical receipt at or below the confirmation height and record the outcome. RPC errors or invalid receipts leave work pending for retry unless another attempt has a valid winning receipt. If all attempts return receipt-not-found, resolve to `CONSUMED`. Each resolved outcome permits the pipeline to recheck packet state.
-- **Nonce below the mined nonce but not confirmed:** keep the journal entries and wait.
+- **Nonce below the mined nonce:** check known attempts for a canonical mined receipt and record the outcome. RPC errors or invalid receipts leave work pending for retry unless another attempt has a valid winning receipt. If all attempts return receipt-not-found, resolve to `CONSUMED`. Each resolved outcome permits the pipeline to recheck packet state.
 - **Unmined nonce:** rebroadcast the latest signed bytes when due. Reprice only the lowest blocking nonce after the repricing interval, preserving destination, value, calldata, gas limit, and nonce.
 
-There is no need to persist receipt appearance/disappearance or classify every broadcast error. If a transaction is reorged out before confirmation, its retained journal entry becomes eligible for broadcast again. Recovery beyond the configured confirmation boundary is outside this guarantee.
+A lower nonce alone does not establish a reorg. Reopen an outcome only when the node has reached its saved resolution height and reports a different canonical hash there. If the saved block remains canonical, the node is behind, or a lookup fails, leave the outcome resolved. Recheck the selected block before changing journal status; if it has changed, retry on a later pass.
 
-Polling can miss newly inserted attempts until the next pass, and concurrent broadcasts can send the same bytes twice. If polling resolves a nonce between submission's mined-nonce read and journal query, submission may use that already-consumed nonce. Normal resolution releases the operation for packet-state reconciliation and retry. These races do not require another lock or persisted state.
+Reopening atomically clears the saved resolution block and resolution/broadcast timestamps while preserving signed bytes and packet associations. The update matches the previously read resolution block so it cannot overwrite a newer resolution. Recovery then resumes rebroadcasting and repricing the latest attempt. It works across restarts even when no attempts were pending.
 
-Receipt lookups and outcome persistence share a bounded request context per nonce. A failed nonce lookup does not prevent processing later nonce groups. Gas telemetry uses the winning receipt after the outcome is saved. Gas accounting can undercount when receipts are unavailable or the process exits between persistence and telemetry; the journal is not a billing ledger.
+A shorter replacement chain must reach the saved resolution height before recovery resumes. The submitter trusts its RPC's canonical chain view; it does not establish agreement between endpoints on competing forks. It does not revise resolved outcomes if another transaction has already consumed the same nonce on the new chain. Packet reconciliation and proof finality remain with the relay and attestation layers.
+
+Polling can miss newly inserted attempts until the next pass, and concurrent broadcasts can send the same bytes twice. Querying all journaled nonces keeps allocation independent of concurrent resolution and reopening. No additional lock or persisted state is needed.
+
+Receipt lookups and outcome persistence share a bounded request context per nonce. A failed receipt lookup does not prevent processing later nonce groups. Gas telemetry uses the winning receipt after the outcome is saved. Gas accounting can undercount when receipts are unavailable or the process exits between persistence and telemetry; reorg recovery can count gas again after re-inclusion. These metrics are not a billing ledger.
 
 ### Policies and accepted tradeoffs
 
 - Bound RPC and signer calls to 10 seconds. Poll every 3 seconds and reprice after 1 minute. These remain internal defaults.
 - Increase both fee caps by at least 20% and one wei, using current estimates if higher. Enforce the maximum fee and gas limits. Cap exhaustion or insufficient funds leaves pending work visible for operator recovery.
-- Preserve `confirmations` and `maxFeePerGas` as the only new YAML settings. Zero confirmations selects the finalized block tag; positive values select block depth. Optional submission pacing defaults to zero and is not needed for nonce correctness.
+- Keep `maxFeePerGas` as the only new YAML setting. Resolve transaction outcomes from mined state without waiting for finality or additional blocks.
 - Accept occasional redundant relays and their gas cost when concurrent checks race. Router packet semantics provide idempotency; the submitter does not promise exactly-once execution.
 - New relay work may replace an external transaction at an unowned nonce. Dedicated keys avoid this conflict. Do not generate cancellation transactions or self-transfers. Without new work, an unowned gap requires operator recovery.
 - Use the journal for restart recovery and packet records to rebuild unsigned work. Do not support legacy transaction records, multiple active processes sharing a signer, or recovery from lost journal data without operator reconciliation.
 
 ## Validation
 
-Tests must cover atomic persistence, uncertain commits and broadcasts, concurrent nonce allocation, nonce gaps/window limits, restart, same-nonce repricing, fee-cap exhaustion, older attempts winning, reverts, missing receipts, pre-confirmation reorgs, and changing confirmation anchors. Pending checks must survive restart and distinguish relay kinds. Outcome resolution must never write packet transaction hashes.
+Tests must cover atomic persistence, uncertain commits and broadcasts, concurrent nonce allocation, nonce gaps/window limits, restart, same-nonce repricing, fee-cap exhaustion, older attempts winning, reverts, missing or noncanonical receipts, and reorgs before and after resolution, including recovery after restart and allocation before reopening. Lagging RPCs, unchanged resolution blocks, and a block changing during reconciliation must not reopen resolved outcomes. Pending checks must survive restart and distinguish relay kinds. Outcome resolution must never write packet transaction hashes.
 
 Run journal tests against SQLite and PostgreSQL, race tests over submission and polling, and the real receive/acknowledgement/timeout recovery E2Es. Load/soak qualification and independent security review remain release readiness work.
 

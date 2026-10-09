@@ -71,14 +71,10 @@ func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set
 			return nil, errors.Errorf("unknown signer %q for chain %q", pair.SignerAlias, pair.ChainID)
 		}
 
-		opts := evm.ChainOptions{TxSubmissionDelay: evm.DefaultTxSubmissionDelay}
+		var opts evm.ChainOptions
 		if override, ok := cfg.Relayer.ChainOverride(pair.ChainID); ok {
-			if override.TxSubmissionDelay != nil {
-				opts.TxSubmissionDelay = *override.TxSubmissionDelay
-			}
 			if override.EVM != nil {
 				e := override.EVM
-				opts.Confirmations = e.Confirmations
 				if e.MaxFeePerGas != nil {
 					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
 				}
@@ -98,7 +94,7 @@ func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set
 	return NewSet(txSubmitters), nil
 }
 
-// Start restores nonce ownership before the relay dispatcher starts accepting work.
+// Start launches transaction recovery for each submitter.
 func (s *Set) Start(ctx context.Context) error {
 	for _, submitter := range s.txSubmitters {
 		if err := submitter.Start(ctx); err != nil {
